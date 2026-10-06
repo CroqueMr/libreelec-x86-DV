@@ -1,5 +1,5 @@
 name: Playback or hardware report
-description: Report an issue with this CB1 community build.
+description: Report an issue with this LibreELEC community build.
 body:
   - type: input
     id: release
