@@ -1,0 +1,15 @@
+name: CB1 integration checks
+on: [push, pull_request]
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test source staging
+        run: python3 -m unittest discover -s tests/cb1 -p 'test_*.py'
+      - name: Verify bundled engine and model
+        run: |
+          python3 CB1/tools/verify.py
+          python3 scripts/cb1-stage.py --check
+      - name: Check whitespace
+        run: git diff --check

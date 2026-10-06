@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
+# Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+
+PKG_NAME="autoconf"
+PKG_VERSION="2.73"
+PKG_SHA256="9fd672b1c8425fac2fa67fa0477b990987268b90ff36d5f016dae57be0d6b52e"
+PKG_LICENSE="GPL-3.0-or-later"
+PKG_SITE="https://www.gnu.org/software/autoconf/"
+PKG_URL="https://ftpmirror.gnu.org/autoconf/${PKG_NAME}-${PKG_VERSION}.tar.xz"
+PKG_DEPENDS_HOST="ccache:host m4:host gettext:host"
+PKG_LONGDESC="A GNU tool for automatically configuring source code."
+PKG_BUILD_FLAGS="-cfg-libs:host"
+
+PKG_CONFIGURE_OPTS_HOST="EMACS=no \
+                         ac_cv_path_M4=${TOOLCHAIN}/bin/m4 \
+                         ac_cv_prog_gnu_m4_gnu=no \
+                         --target=${TARGET_NAME}"
+
+post_makeinstall_host() {
+  make prefix=${SYSROOT_PREFIX}/usr install
+}

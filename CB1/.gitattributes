@@ -1,0 +1,3 @@
+* -text
+*.patch -whitespace
+models/l1l3/data/*.txt -whitespace

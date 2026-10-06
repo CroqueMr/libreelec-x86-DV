@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+
+. /etc/profile
+
+oe_setup_addon service.ttyd
+
+LD_LIBRARY_PATH=$ADDON_DIR/lib.private:$LD_LIBRARY_PATH
+
+if [ "$TTYD_NOLOGIN" = "true" ]; then
+  TTYD_NOLOGIN="bash"
+elif [ "$TTYD_NOLOGIN" = "false" ]; then
+  TTYD_NOLOGIN="login root"
+fi
+
+[ -f "$ADDON_HOME/service.log" ] && mv -f "$ADDON_HOME/service.log" "$ADDON_HOME/service.old.log"
+exec $ADDON_DIR/bin/ttyd -W -O -T xterm -p ${TTYD_WEBPORT} ${TTYD_NOLOGIN} &>$ADDON_HOME/service.log

@@ -1,0 +1,4 @@
+KODI_AUDIO_ARGS=@KODI_AUDIO_ARGS@
+HOME=/storage
+KODI_TEMP=/storage/.kodi/temp
+KODI_HOME=/usr/share/kodi/

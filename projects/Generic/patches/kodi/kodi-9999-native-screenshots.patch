@@ -1,0 +1,229 @@
+diff --git a/xbmc/rendering/capture/CaptureMetadata.cpp b/xbmc/rendering/capture/CaptureMetadata.cpp
+--- a/xbmc/rendering/capture/CaptureMetadata.cpp
++++ b/xbmc/rendering/capture/CaptureMetadata.cpp
+@@ -10,6 +10,9 @@
+ 
+ #include "windowing/GraphicContext.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "windowing/gbm/DVBridgeCapture.h"
++#endif
+ 
+ extern "C"
+ {
+@@ -30,6 +33,15 @@
+   using KODI::UTILS::Colorimetry;
+   using KODI::UTILS::Eotf;
+   ImageColorMetadata color;
++#ifdef HAVE_DVBRIDGE
++  if (KODI::WINDOWING::GBM::HasDVBridgeScreenshot(winSystem))
++  {
++    color.primaries = AVCOL_PRI_BT2020;
++    color.transfer = AVCOL_TRC_SMPTE2084;
++    color.range = AVCOL_RANGE_JPEG;
++    return color;
++  }
++#endif
+   color.primaries = AVCOL_PRI_BT709;
+   const Colorimetry colorimetry = winSystem.GetColorimetry();
+   if (colorimetry == Colorimetry::BT2020_RGB || colorimetry == Colorimetry::BT2020_YCC ||
+diff --git a/xbmc/rendering/capture/CaptureReadback.cpp b/xbmc/rendering/capture/CaptureReadback.cpp
+--- a/xbmc/rendering/capture/CaptureReadback.cpp
++++ b/xbmc/rendering/capture/CaptureReadback.cpp
+@@ -11,6 +11,8 @@
+ #include "utils/log.h"
+ 
+ #include <cstddef>
++#include <algorithm>
++#include <cmath>
+ 
+ #if defined(HAS_GL) || defined(HAS_GLES)
+ #include "system_gl.h"
+@@ -75,17 +77,34 @@
+       avFormat = AV_PIX_FMT_RGBA64LE;
+       rowBytes = width * 8;
+     }
++    else if (readFormat == GL_RGBA && (readType == GL_FLOAT || readType == GL_HALF_FLOAT))
++    {
++      glType = GL_FLOAT;
++      avFormat = AV_PIX_FMT_RGBA64LE;
++      rowBytes = width * 8;
++    }
+     // else: no deep readback offered; fall through to the 8-bit RGBA defaults
+ #endif
+   }
+ 
+   out.pixels.reset(new uint8_t[static_cast<size_t>(rowBytes) * height]);
++  const size_t samples = static_cast<size_t>(width) * height * 4;
++  std::unique_ptr<float[]> floats;
++  if (glType == GL_FLOAT)
++    floats = std::make_unique<float[]>(samples);
+   glReadPixels(x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat, glType,
+-               out.pixels.get());
++               floats ? static_cast<void*>(floats.get()) : out.pixels.get());
+   if (glGetError() != GL_NO_ERROR)
+   {
+     CLog::LogF(LOGWARNING, "capture readback: glReadPixels failed");
+     return false;
++  }
++  if (floats)
++  {
++    auto* values = reinterpret_cast<uint16_t*>(out.pixels.get());
++    for (size_t i = 0; i < samples; ++i)
++      values[i] = std::isfinite(floats[i]) ? static_cast<uint16_t>(
++          std::lround(std::clamp(floats[i], 0.0f, 1.0f) * 65535.0f)) : 0;
+   }
+ 
+   out.width = width;
+diff --git a/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp b/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
+--- a/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
++++ b/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
+@@ -11,6 +11,9 @@
+ #include "rendering/capture/CaptureReadback.h"
+ #include "utils/Screenshot.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "windowing/gbm/DVBridgeCapture.h"
++#endif
+ 
+ #include <memory>
+ 
+@@ -34,12 +37,34 @@
+   GLint viewport[4];
+   glGetIntegerv(GL_VIEWPORT, viewport);
+ 
++  bool logicalPQ = false;
++#ifdef HAVE_DVBRIDGE
++  GLint previousReadFramebuffer = 0;
++  logicalPQ = KODI::WINDOWING::GBM::HasDVBridgeScreenshot(ctx.winSystem);
++  if (logicalPQ)
++  {
++    const auto framebuffer = KODI::WINDOWING::GBM::GetDVBridgeScreenshotFramebuffer(ctx.winSystem);
++    if (!framebuffer)
++      return false;
++    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
++    viewport[0] = viewport[1] = 0;
++    viewport[2] = 3840;
++    viewport[3] = 2160;
++  }
++#endif
++
+   // window rows are bottom-up: flip to top-down. The shared readback negotiates
+   // the deep type and delivers 8-bit when the driver offers nothing deeper.
+   ReadbackBuffer buffer;
+-  if (!ReadFramebufferRegion(viewport[0], viewport[1], static_cast<unsigned int>(viewport[2]),
++  const bool read = ReadFramebufferRegion(viewport[0], viewport[1], static_cast<unsigned int>(viewport[2]),
+                              static_cast<unsigned int>(viewport[3]),
+-                             ctx.winSystem.GetOutputBitDepth(), true, buffer))
++                             logicalPQ ? 16 : ctx.winSystem.GetOutputBitDepth(), !logicalPQ, buffer);
++#ifdef HAVE_DVBRIDGE
++  if (logicalPQ)
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, previousReadFramebuffer);
++#endif
++  if (!read)
+     return false;
+ 
+   m_width = static_cast<int>(buffer.width);
+diff --git a/xbmc/windowing/gbm/DVBridgeCapture.h b/xbmc/windowing/gbm/DVBridgeCapture.h
+--- /dev/null
++++ b/xbmc/windowing/gbm/DVBridgeCapture.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++
++class CWinSystemBase;
++
++namespace KODI::WINDOWING::GBM
++{
++bool HasDVBridgeScreenshot(CWinSystemBase& window);
++unsigned int GetDVBridgeScreenshotFramebuffer(CWinSystemBase& window);
++}
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -49,6 +49,8 @@
+ #include <cstring>
+ #ifdef HAVE_DVBRIDGE
+ #include "ServiceBroker.h"
++#include "DVBridgeCapture.h"
++#include "rendering/capture/CaptureService.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
+@@ -1407,6 +1409,18 @@
+   return true;
+ }
+ 
++bool KODI::WINDOWING::GBM::HasDVBridgeScreenshot(CWinSystemBase& window)
++{
++  auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
++  return gbm && gbm->HasDVBridgeScreenshot();
++}
++
++unsigned int KODI::WINDOWING::GBM::GetDVBridgeScreenshotFramebuffer(CWinSystemBase& window)
++{
++  auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
++  return gbm ? gbm->GetDVBridgeScreenshotFramebuffer() : 0;
++}
++
+ bool CWinSystemGbmGLESContext::RenderDVBridge(const CDVBridgeGLES::Layer& layer,
+                                             std::shared_ptr<AVFrame> enhancement,
+                                             DVBRIDGE::SourceBinding enhancementBinding,
+@@ -1416,7 +1430,11 @@
+   m_dvFrame = false;
+   if (!BeginDVBridge())
+     return false;
+-  const bool overlayFree = (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
++  const auto capture = CServiceBroker::GetCaptureService();
++  const bool capturing = capture && !capture->TakeActive(
++      KODI::RENDERING::CAPTURE::CaptureContent::COMPOSITE).empty();
++  const bool overlayFree = !capturing &&
++      (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+   const auto policy = m_dvSelection.policy;
+ #ifdef CB1_HAS_HDR10_AI
+@@ -1463,7 +1481,27 @@
+         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+     }
+   }
+-#endif
++  else
++#endif
++  if (capturing)
++  {
++    // A one-shot capture must finish preparing before Kodi's composite tap.
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
++    while ((status == CDVBridgeGLES::FrameStatus::Pending ||
++            status == CDVBridgeGLES::FrameStatus::Busy) &&
++           std::chrono::steady_clock::now() < deadline)
++    {
++      if (status == CDVBridgeGLES::FrameStatus::Pending)
++      {
++        if (m_dvBridge->PollReady())
++          status = CDVBridgeGLES::FrameStatus::Ready;
++      }
++      else
++        status = prepare();
++      if (status != CDVBridgeGLES::FrameStatus::Ready)
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++  }
+   // A paused final surface is already committed scanout, not a fresh resolve.
+   const bool reused = status == CDVBridgeGLES::FrameStatus::Reused;
+   m_dvFrame = status == CDVBridgeGLES::FrameStatus::Ready;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -83,6 +83,11 @@
+   bool ConfigureHDR10Conversion(const VideoPicture& picture);
+   bool SupportsHDR10Conversion();
+   void SetDVBridgeOverlays(bool visible) { m_dvOverlays = visible; }
++  bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
++  unsigned int GetDVBridgeScreenshotFramebuffer()
++  {
++    return m_dvFrame && m_dvBridge ? m_dvBridge->GetPQFramebuffer() : 0;
++  }
+   bool RenderDVBridge(const CDVBridgeGLES::Layer& layer, std::shared_ptr<AVFrame> enhancement,
+                        DVBRIDGE::SourceBinding enhancementBinding,
+                        const CDVMetadataBuffer& metadata,

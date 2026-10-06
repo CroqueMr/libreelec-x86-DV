@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "lightgbm": {
+    "repository": "https://github.com/lightgbm-org/LightGBM",
+    "version": "4.7.0",
+    "commit": "8f7036f03627054d5a54a6f965b13f4b9ff2cb63",
+    "source_archive": {
+      "url": "https://files.pythonhosted.org/packages/63/8e/4db5e29290d7e619c307fdb8dab0a0514090af2ce3ec483050e024ec6126/lightgbm-4.7.0.tar.gz",
+      "sha256": "f8e20f682c9aabd000bcf4a7ed8aa6f473c1adfecccae34ec24e823d156f4af0",
+      "packaging_only_difference": "external_libs/fmt/CMakeLists.txt",
+      "packaging_only_sha256": "965c79b0d15bb8e811b991b35696ceaa0cea34ed0e17f0cf6757ed4d8c6acb21"
+    },
+    "c_api_sha256": "bd6b54d582a5ba14000dc0aa425d62115b4973ae6eb1552b916010c3fcde76fc",
+    "license_sha256": "ca70f15d841f7e76c8bbd284d25300cd4ae2ef1035e7e5252b13b73449464305",
+    "submodules": {
+      "external_libs/compute": "36350b7de849300bd3d72a05d8bf890ca405a014",
+      "external_libs/eigen": "3147391d946bb4b6c68edd901f2add6ac1f31f8c",
+      "external_libs/fast_double_parser": "252029ddac664370bdda3f0761675785d92a1573",
+      "external_libs/fmt": "8303d140a1a11f19b982a9f664bbe59a1ccda3f4",
+      "external_libs/nanoarrow": "a579fbf5d192e85b6249935e117de7d02a6dc4e9"
+    },
+    "cmake": {
+      "BUILD_CLI": "OFF",
+      "USE_OPENMP": "OFF",
+      "USE_GPU": "OFF",
+      "USE_CUDA": "OFF",
+      "USE_MPI": "OFF",
+      "INSTALL_HEADERS": "ON"
+    }
+  },
+  "model": {
+    "backend": "LightGBM",
+    "backend_version": "4.7.0",
+    "heads": 6,
+    "features": 222,
+    "redistribution_cleared": false,
+    "version": "0.1",
+    "artifact_id": "acfab5e0e94c1ab0be011d809dd6b5c98f9b9d7a79ff2e28c9993a1da3ebcc26",
+    "files": {
+      "models/l1l3/contract/cb1_l1l3_bundle.h": "e61652df0c99b8e81c81432dc023f2efabdb9fcb6e6def2d88436a6fe1d3aaec",
+      "models/l1l3/data/cb1_l1l3_schema.h": "a00fc1458454e06c93e7773403ea1c1b747c9e70c998746cd0f5cbbd8fabce4d",
+      "models/l1l3/data/field-0.txt": "8e1ff25b467f12b4f320758154b87177ed95f42a8341c18098d6126d9ef8a943",
+      "models/l1l3/data/field-1.txt": "c1da9741f31b6822e678aba329f959d55d2e920f166a3e96ad2491b674a329f8",
+      "models/l1l3/data/field-2.txt": "3a10b541625bf9049aac8cc4b323a0a8cec433d47510eab88ccc4c99f5fc451b",
+      "models/l1l3/data/field-3.txt": "e1f64c242d8db26046d51f35effa94c32c1d4744a60f2cbb610e2f1a4e054902",
+      "models/l1l3/data/field-4.txt": "d23edb3eca9ca96bcb03485f6df2a66f1294efbf9f72b5e4562816ebf9077fb5",
+      "models/l1l3/data/field-5.txt": "268511e8c7a23efbc3a26ff67ba505132ec31c616e15df33b05a20f2f7a14209",
+      "models/l1l3/data/manifest.json": "9c1562083f3f8bd573b5a4ba6d72045560753057a78978e1e60f773e05e74ae3",
+      "models/l1l3/data/normalization.f32": "05895b3b41bcc8fe0ef01a48504dbf1b0bdd2d1ec4dbfef298ccf071c3d2aacf"
+    }
+  }
+}

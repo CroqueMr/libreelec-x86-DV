@@ -1,0 +1,14 @@
+[Unit]
+Description=ttyd
+After=graphical.target
+
+[Service]
+ExecStart=/storage/.kodi/addons/service.ttyd/bin/ttyd.start
+TimeoutStopSec=2
+Restart=always
+RestartSec=4
+StartLimitInterval=0
+Type=exec
+
+[Install]
+WantedBy=kodi.target

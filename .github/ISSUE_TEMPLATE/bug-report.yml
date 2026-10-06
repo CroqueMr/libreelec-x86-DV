@@ -1,0 +1,28 @@
+name: Playback or hardware report
+description: Report an issue with this CB1 community build.
+body:
+  - type: input
+    id: release
+    attributes:
+      label: Release version
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and HDMI route
+      description: CPU, GPU, TV, receiver and any adapters.
+    validations:
+      required: true
+  - type: textarea
+    id: playback
+    attributes:
+      label: Playback mode and behavior
+      description: Source profile, codec, resolution, frame rate, selected mode and reproduction steps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Kodi log
+      description: Attach kodi.log. Remove personal data and credentials. Do not upload movies or SDKs.

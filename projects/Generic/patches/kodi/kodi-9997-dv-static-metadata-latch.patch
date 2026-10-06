@@ -1,0 +1,131 @@
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+index 0f38caa3a17b870367746ddb829e319314b41833..6b4c17f505e6287e8be42409a858f7343c54ddda 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -349,6 +349,9 @@ bool CDVDVideoCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
+   m_options = options;
+ #ifdef HAVE_DVBRIDGE
+   m_dvNativeOutput = DVBRIDGE::RetainsDVSource(hints);
++  m_dvSourceOwner.BeginStream();
++  m_dvHasStreamDisplayMetadata = false;
++  m_dvHasStreamLightMetadata = false;
+ #endif
+ 
+   const AVCodec* pCodec = nullptr;
+@@ -741,6 +744,8 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPi
+       if (!result)
+         return VC_NONE;
+       base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
++      // The pairing owner consumed the exact EL from this stream/reset epoch.
++      base->doviEnhancementBinding = base->doviMetadata.Binding();
+       pVideoPicture->CopyRef(*base);
+       m_dvPending.pop_front();
+       return VC_PICTURE;
+@@ -1075,6 +1080,7 @@ bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
+ void CDVDVideoCodecFFmpeg::Reset()
+ {
+ #ifdef HAVE_DVBRIDGE
++  m_dvSourceOwner.Seek();
+   m_dvPending.clear();
+   dvbridge_fel_reset(m_dvFel.get());
+   m_dvFailed = false;
+@@ -1259,7 +1265,23 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+   {
+     pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
+     pVideoPicture->hasDisplayMetadata = true;
++#ifdef HAVE_DVBRIDGE
++    m_dvStreamDisplayMetadata = pVideoPicture->displayMetadata;
++    m_dvHasStreamDisplayMetadata = true;
++#endif
++  }
++#ifdef HAVE_DVBRIDGE
++  // HDR10 static metadata describes the whole stream, but encoders may carry
++  // its SEI only on the first IRAP. Without it a later frame compares as a
++  // format change, the renderer is rebuilt and native DV output is restarted
++  // (two full HDMI modesets mid-playback). Keep the last in-band values for
++  // the rest of this DV stream; a new SEI still replaces them.
++  else if (m_dvNativeOutput && m_dvHasStreamDisplayMetadata)
++  {
++    pVideoPicture->displayMetadata = m_dvStreamDisplayMetadata;
++    pVideoPicture->hasDisplayMetadata = true;
+   }
++#endif
+   else if (m_hints.masteringMetadata)
+   {
+     pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
+@@ -1270,7 +1292,18 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+   {
+     pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
+     pVideoPicture->hasLightMetadata = true;
++#ifdef HAVE_DVBRIDGE
++    m_dvStreamLightMetadata = pVideoPicture->lightMetadata;
++    m_dvHasStreamLightMetadata = true;
++#endif
+   }
++#ifdef HAVE_DVBRIDGE
++  else if (m_dvNativeOutput && m_dvHasStreamLightMetadata)
++  {
++    pVideoPicture->lightMetadata = m_dvStreamLightMetadata;
++    pVideoPicture->hasLightMetadata = true;
++  }
++#endif
+   else if (m_hints.contentLightMetadata)
+   {
+     pVideoPicture->lightMetadata = *m_hints.contentLightMetadata.get();
+@@ -1278,13 +1311,38 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+   }
+ 
+   pVideoPicture->doviMetadata.Reset();
++  pVideoPicture->doviSourceBinding = {};
++#ifdef HAVE_DVBRIDGE
++  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
++    pVideoPicture->doviSourceBinding = m_dvSourceOwner.NextPicture();
++#endif
++  pVideoPicture->doviSourceInfo = {m_hints.dovi.dv_profile,m_hints.dovi.dv_level,
++      m_hints.dovi.dv_version_major,m_hints.dovi.dv_version_minor,
++      static_cast<unsigned>(pVideoPicture->colorBits),m_pFrame->format,
++      bool(m_hints.dovi.bl_present_flag),bool(m_hints.dovi.el_present_flag),
++      bool(m_hints.dovi.rpu_present_flag),false,
++      pVideoPicture->hasLightMetadata,
++      0.0,0.0,
++      pVideoPicture->hasLightMetadata ? pVideoPicture->lightMetadata.MaxCLL : 0u,
++      pVideoPicture->hasLightMetadata ? pVideoPicture->lightMetadata.MaxFALL : 0u};
++  const auto& sourceMastering = pVideoPicture->displayMetadata;
++  auto& sourceInfo = pVideoPicture->doviSourceInfo;
++  sourceInfo.compatibility = m_hints.dovi.dv_bl_signal_compatibility_id;
++  sourceInfo.mastering = pVideoPicture->hasDisplayMetadata && sourceMastering.has_luminance &&
++      sourceMastering.max_luminance.den > 0 && sourceMastering.min_luminance.den > 0;
++  if (sourceInfo.mastering)
++  {
++    sourceInfo.maxLuma = av_q2d(sourceMastering.max_luminance);
++    sourceInfo.minLuma = av_q2d(sourceMastering.min_luminance);
++  }
+   pVideoPicture->doviSourcePts = m_pFrame->best_effort_timestamp;
+   if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
+   {
+     sd = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_METADATA);
+     if (sd)
+     {
+-      if (!pVideoPicture->doviMetadata.Assign(sd->data, sd->size) ||
++      const auto binding = pVideoPicture->doviSourceBinding;
++      if (!pVideoPicture->doviMetadata.Assign(sd->data, sd->size,binding) ||
+           !dvbridge_metadata_bounds(pVideoPicture->doviMetadata.Data(),
+                                     pVideoPicture->doviMetadata.Size()))
+       {
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+index 3c6375c8d030c1c07a427e511fb6a924bbe4d1b9..904b3f60385bade060a43d17d4ee83692ed3500d 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+@@ -64,6 +64,12 @@ protected:
+   std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
+   bool m_dvFailed{false};
+   bool m_dvNativeOutput{false};
++  DVBRIDGE::SourceOwner m_dvSourceOwner;
++  // Last in-band HDR10 static metadata of this stream (see GetPictureCommon).
++  bool m_dvHasStreamDisplayMetadata{false};
++  AVMasteringDisplayMetadata m_dvStreamDisplayMetadata{};
++  bool m_dvHasStreamLightMetadata{false};
++  AVContentLightMetadata m_dvStreamLightMetadata{};
+ #endif
+   void Dispose();
+   CDVDVideoCodec::VCReturn HandleHwFatal();

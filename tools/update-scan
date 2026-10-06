@@ -1,0 +1,226 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2020-present Team LibreELEC (https://libreelec.tv)
+
+set -e
+
+. config/options ""
+
+# check if depends are available
+command -v curl >/dev/null 2>&1 || die "please install curl"
+command -v jq >/dev/null 2>&1 || die "please install jq"
+
+# check for autoupdate argument
+[[ "${AUTO_UPDATE}" == "yes" ]] && echo "running as auto update" >&2
+
+# global vars
+PACKAGES_CURRENT=""
+PACKAGES_IGNORED=""
+PACKAGES_NOT_REGISTERED=""
+github_api_token=""
+github_api="no"
+
+test_github_api() {
+  # check for github user and token present at ~/.libreelec/options to activate github api checks
+  if [[ -n "${github_token}" || -n "${github_user}" ]]; then
+    github_api_token="-u ${github_user}:${github_token}"
+    # check if token works
+    if curl -m 5 -sL -I "${github_api_token}" https://api.github.com/user | grep -q -e "^[Ss]tatus: 200" -e "^HTTP/2 200"; then
+      echo "Github api usage activated"
+      github_api="yes"
+    else
+      msg=$(curl -m 5 -sL -I "${github_api_token}" https://api.github.com/user || true)
+      message="\n your Github token is not working\n"
+      message+=" github_token=${github_token}\n"
+      message+=" github_user=${github_user}\n"
+      message+=" ${msg}\n"
+      die "${message}"
+    fi
+  else
+    message="\n | Github API not in use. Some features are disabled.\n"
+    message+=" |==============================================================================\n"
+    message+=" | Create your \"Personal access token\" here: https://github.com/settings/tokens\n"
+    message+=" | Add your token and username to ~/.libreelec/options\n"
+    message+=" | github_token=\"your_github_token_here\"\n"
+    message+=" | github_user=\"your_github_username_here\"\n"
+    echo -e "${message}"
+  fi
+}
+
+check_for_update() {
+  local PKG_NAME PKG_URL PKG_VERSION RMO_API_RESPONSE GH_API_TAG
+
+  # source variables from package.mk
+  PKG_NAME="$(grep -oP -m 1 '(?<=PKG_NAME=\").*(?=\")' ${1} || true)"
+  eval PKG_URL="$(grep -oP -m 1 '(?<=PKG_URL=\").*(?=\")' ${1} || true)"
+  case ${PKG_NAME} in
+    jellyfin)
+      PKG_VERSION="$(grep -oP -m 1 '(?<=PKG_VERSION_NUMBER=\").*(?=\")' ${1} || true)"
+      ;;
+    *)
+      PKG_VERSION="$(grep -oP -m 1 '(?<=PKG_VERSION=\").*(?=\")' ${1} || true)"
+      ;;
+  esac
+
+  # check the version of some packages even if they do not have a PKG_URL
+  # the PKG_WITHOUT_URLS is space separated
+  PKGS_WITHOUT_URLS="jellyfin"
+  if [[ ! " ${PKG_NAME} " == *" ${PKGS_WITHOUT_URLS} "* ]]; then
+    # check if version and url are empty or self hosted by us and ignore those packages
+    if [ -z "${PKG_VERSION}" ] || [[ ${PKG_VERSION} == '$(get_pkg_version '* ]] || [ -z "${PKG_URL}" ] || [[ "${PKG_URL}" == "$DISTRO_SRC"* ]]; then
+      PACKAGES_IGNORED+="${PKG_NAME} "
+      return
+    fi
+  fi
+
+  upstream_version=""
+
+  if [[ "${github_api}" = "yes" ]]; then
+    # get aspnet??-runtime version from github (not Anitya)
+    aspnet_ver=$(echo ${PKG_NAME} | sed -n 's/aspnet\(.*\)-runtime/\1/p')
+    if [[ ! -z "${aspnet_ver}" ]]; then
+      page_num=1
+      while [ ${page_num} -le 10 ]; do
+        curl_output="$(curl -m 5 -sL ${github_api_token} https://api.github.com/repos/dotnet/runtime/releases?per_page=100\&page=${page_num})"
+        upstream_version="$(echo ${curl_output} | jq -r "[.[] | select(.prerelease==false) | select(.tag_name | match(\"v${aspnet_ver}.0\")) | .tag_name][0] | sub(\"v\";\"\")?")"
+        [[ $(echo "${curl_output}" | jq 'length == 0') ]] && break
+        [[ -z "${upstream_version}" ]] && ((page_num++)) || break
+      done
+    fi
+  fi
+
+  if [ -z "${upstream_version}" ]; then
+    case ${PKG_NAME} in
+      tvheadend43)
+        upstream_version=$(curl -m 5 -sL "${github_api_token}" "https://api.github.com/repos/tvheadend/tvheadend/git/refs/heads/master" | jq -r '.object.sha' || true)
+        [[ -z "${upstream_version}" || "${upstream_version}" = "null" ]] && upstream_version="! unable to read github head !"
+        ;;
+      *)
+        # check if package exists at tracker
+        RMO_API_RESPONSE=$(curl -m 5 -sL "https://release-monitoring.org/api/v2/packages/?name=${PKG_NAME}&distribution=LibreELEC" || true)
+        upstream_version=$(echo "${RMO_API_RESPONSE}" | jq -r '.items[0].version' || true)
+
+        # special handling based on release-monitoring formatting
+        case ${PKG_NAME} in
+          krb5)
+            upstream_version=${upstream_version//-final/}
+            ;;
+          lm_sensors)
+            upstream_version=${upstream_version//-/.}
+            ;;
+        esac
+        ;;
+    esac
+  fi
+
+  # if pkg_version is a githash on github and github api available - always check against latest
+  if [[ ${PKG_VERSION} =~ ^[a-z0-9]{40} ]] &&
+    [[ ${PKG_URL} =~ ^.*(github\.com).*$ ]] &&
+    [[ "${github_api}" = "yes" ]]; then
+
+    github_repos=$(echo "${PKG_URL}" | grep -oP '(?<=https:\/\/github.com\/)?[0-9A-Za-z._-]+\/[0-9A-Za-z._-]+(?=/archive|/tags|/releases)')
+    le_master_version_date="Commit date: $(curl -m 5 -sL ${github_api_token} https://api.github.com/repos/${github_repos}/git/commits/${PKG_VERSION} | jq -r '.committer.date')"
+    upstream_default_branch=$(curl -m 5 -sL "${github_api_token}" "https://api.github.com/repos/${github_repos}" | jq -r '.default_branch')
+    upstream_latest_commit=$(curl -m 5 -sL "${github_api_token}" "https://api.github.com/repos/${github_repos}/git/refs/heads/${upstream_default_branch}" | jq -r '.object.url' || true)
+    upstream_latest_commit_date=$(curl -m 5 -sL "${github_api_token}" "${upstream_latest_commit}" | jq -r '.committer.date' || true)
+    GH_API_TAG=$(curl -m 5 -sL "${github_api_token}" "https://api.github.com/repos/${github_repos}/tags")
+    upstream_latest_tag=$(echo "${GH_API_TAG}" | jq -r '.[0].name')
+    upstream_latest_tag_url=$(echo "${GH_API_TAG}" | jq -r '.[0].commit.url')
+    upstream_latest_tag_date=$(curl -m 5 -sL "${github_api_token}" "${upstream_latest_tag_url}" | jq -r '.commit.committer.date')
+
+    # compare upstream with local version
+    if [ "${PKG_VERSION}" != "${upstream_latest_commit##*/}" ]; then
+      # get upstream tag information
+      if [ "${upstream_latest_tag}" != "null" ]; then
+        tag=" | TAG: ${upstream_latest_tag} (${upstream_latest_tag_date%T*})"
+      else
+        tag=" | TAG: no tags"
+      fi
+      [[ "${upstream_version}" = "null" ]] && upstream_version="" || upstream_version+=" | "
+      upstream_version="${upstream_version}GitHead: ${upstream_latest_commit_date%T*}${tag}"
+      PKG_VERSION="${le_master_version_date%T*} | ${PKG_VERSION:0:7}"
+    else
+      upstream_version="${upstream_latest_commit##*/}"
+    fi
+  elif [ "${upstream_version}" = "null" ]; then
+    if [[ $(echo "${RMO_API_RESPONSE}" | jq -r '.total_items') =~ "0" ]]; then
+      # package is not on tracker or github
+      PACKAGES_NOT_REGISTERED+="${PKG_NAME} "
+      return
+    else
+      # package exist at tracker but has no version
+      upstream_version="! broken at release tracker !"
+    fi
+  fi
+
+  # print version output line
+  if [[ "${AUTO_UPDATE}" == "yes" ]] && [ "${PKG_VERSION}" != "${upstream_version}" ]; then
+    echo "${PKG_NAME} ${PKG_VERSION} ${upstream_version}"
+  elif [ ! -z "${API}" ]; then
+    printf "%s %s %s" "${PKG_NAME}" "${PKG_VERSION}" "${upstream_version}"
+    printf '\n'
+  elif [ "${PKG_VERSION}" != "${upstream_version}" ]; then
+    printf "%-35s | %-40s | %-20s" "${PKG_NAME}" "${PKG_VERSION}" "${upstream_version}"
+    printf '\n'
+  else
+    PACKAGES_CURRENT+="${PKG_NAME} "
+  fi
+}
+
+# create list of packages
+if [ $# -gt 0 ]; then
+  for pkg in $*; do
+    for dir in $(find packages/ -type d -name ${pkg}); do
+      if [ -f "${dir}/package.mk" ]; then
+        PACKAGE_LIST+=" ${dir}/package.mk"
+      fi
+    done
+  done
+  if [ -z "${PACKAGE_LIST}" ]; then
+    die "Packages not found: $*"
+  fi
+else
+  PACKAGE_LIST="$(
+    find packages/ -type f -name package.mk \
+      ! -path "packages/addons/addon-depends/adafruit-libraries-depends/*" \
+      ! -path "packages/emulation/*" \
+      ! -path "packages/linux/*" \
+      ! -path "packages/mediacenter/*" |
+      awk '{FS="/" ; $0=$0 ; print $(NF-1)"|"$0}' | sort | cut -d"|" -f2
+  )"
+fi
+
+if [[ "${AUTO_UPDATE}" == "yes" ]]; then
+  for check_version in ${PACKAGE_LIST}; do
+    check_for_update "${check_version}"
+  done
+elif [ -z "${API}" ]; then
+  # test github api availability
+  test_github_api
+
+  # output
+  echo -e "\nUpdates found:\n"
+  printf "%-35s | %-40s | %-20s" "Package" "LE git master" "upstream location"
+  printf '\n'
+  echo -e ''$_{1..140}'\b-'
+
+  for check_version in ${PACKAGE_LIST}; do
+    check_for_update "${check_version}"
+  done
+
+  echo ""
+  if [ -n "${PACKAGES_CURRENT}" ]; then
+    echo -e "\nCurrent $(echo ${PACKAGES_CURRENT} | wc -w):\n${PACKAGES_CURRENT}\n"
+  fi
+  if [ -n "${PACKAGES_IGNORED}" ]; then
+    echo -e "\nIgnored $(echo ${PACKAGES_IGNORED} | wc -w):\n${PACKAGES_IGNORED}"
+  fi
+  if [ -n "${PACKAGES_NOT_REGISTERED}" ]; then
+    echo -e "\nPackages not known at tracker $(echo ${PACKAGES_NOT_REGISTERED} | wc -w):\n${PACKAGES_NOT_REGISTERED}\n"
+  fi
+else
+  for check_version in ${PACKAGE_LIST}; do
+    check_for_update "${check_version}"
+  done
+fi

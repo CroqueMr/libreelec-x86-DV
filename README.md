@@ -1,126 +1,144 @@
-# Intel Dolby Vision for LibreELEC
+# LibreELEC with Dolby Vision support for Intel and AMD iGPU
 
-Experimental Native Dolby Vision playback in Kodi on compatible Intel HDMI systems.
+**R1.0.0 Beta1**
 
-An independent **LibreELEC Generic x86_64 community build**, using Kodi's own
-VideoPlayer, VAAPI decoder and GBM/GLES display path. **No external player, or proprietary Dolby SDK is required.**
+LibreELEC Generic x86_64 community build with Dolby Vision playback and HDR10
+conversion in Kodi's native VideoPlayer.
 
-**R0.3.0.** Built on LibreELEC 13 development sources and
-Kodi 22 Beta 2, not on a stable LibreELEC release. Not affiliated with or
-certified by LibreELEC, Kodi, Dolby or Intel. Report this build's issues here,
-not to upstream projects unless reproduced with their unmodified releases.
-
-## New in R0.3.0
-
-- Convert Dolby Vision to HDR10, including Profile 7 FEL reconstruction and L1-guided tone mapping.
-- Choose Standard Dolby Vision (TV-Led), HDR10 conversion, or Disable Dolby Vision support in **Kodi > Settings > Player > Videos**, at the **Basic** level.
-- Optional **Player information** panel with source format, bit depth, DV metadata and GPU render usage. Press **O** during playback.
-- Lightweight automatic diagnostics for frame drops, skips and playback transitions.
-
-Standard Dolby Vision remains the default. LibreELEC Settings is unmodified.
-See [release notes](docs/releases/0.3.0.md) and [conversion details](docs/OUTPUT-MODES.md).
-
-## What changes
-
-| Component | Base used | Patches | Purpose |
-| --- | --- | ---: | --- |
-| Linux / Intel display driver | 7.2.6 | 14 | Match Standard-DV signaling, protect byte-exact scanout, and require deep color for opt-in HDR10 conversion. |
-| FFmpeg | 9.0 | 3 | Preserve extended DV metadata and recognize DV AV1 container tags. |
-| libplacebo | 7.372.0, pinned commit | 9 | Preserve rendering precision, correct neutral FEL residual rounding and support an exact, lower-overhead GPU path. |
-| Kodi + shared DV renderer | 22.0 Beta 2, pinned commit | 5 | Reconstruct video layers, select Standard DV or L1-guided HDR10, and expose optional playback information. |
-| LibreELEC build recipes | 13.0-devel, pinned commit | 2 recipe overrides | Build and link the matching components. |
-| Mesa / Intel Media Driver / libva | 26.2.3 / 26.3.5 / 2.24.1 | 0 | Use the existing graphics and hardware-decoding stack. |
-| LibreELEC Settings | Pinned source | 0 | Unmodified. Playback preferences use Kodi's native settings. |
-| Kodi Estuary skin | Included in Kodi patch | 0 separate | Optional three-column Player information; the stock panel remains available. |
-
-**31 patches**, with no separate licensing-only patch series.
-The two recipe overrides are counted separately, not as patches.
-The shared renderer is included in the Kodi patch; it is not another player.
-See [every patch and changed file](docs/CHANGES.md), [exact source versions](docs/VERSIONS.md)
-and [architecture](docs/ARCHITECTURE.md).
-
-Black screen or playback problem? DV diagnostics are recorded automatically;
-share `kodi.log` without enabling global debug logging.
-[Diagnostic collection](docs/DIAGNOSTICS.md) includes relevant kernel evidence;
-nothing is uploaded automatically.
-
-## Player information
-
-Optional playback information with source pixel format, bit depth, metadata,
-output mode and Kodi GPU render usage. SDR and HDR10 hide irrelevant DV fields.
-The original Kodi panel remains available.
-
-### Dolby Vision Profile 7 FEL
-
-![Player information during Profile 7 FEL TV-led playback](docs/images/ppi-dv-profile7.png)
-
-### Dolby Vision without FEL
-
-![Player information during Avatar Dolby Vision playback without FEL](docs/images/ppi-dv-avatar.png)
-
-Real playback captures, delivered at 1920x1080 and enlarged from the television's
-960x540 capture. Capture brightness and colors
-are not a reference for the television's actual rendering.
+Powered by **CB1 0.1**, an open-source Dolby Vision processing engine. No external
+player or proprietary Dolby SDK is required.
 
 ## Dolby Vision profiles
 
-| Source profile | Supported |
+| Profile | Support |
 | --- | --- |
 | 5 | Yes |
-| 7 MEL / FEL | Yes |
-| 8.1 / 8.2 / 8.4 | Yes |
-| 10 (AV1) | Yes |
-| 9 | No |
-| Legacy profiles 0–4 and 6 | No |
-| 20 | No |
+| 7 MEL | Yes |
+| 7 FEL | Yes, including enhancement-layer reconstruction |
+| 8.1 | Yes |
+| 8.2 | Yes |
+| 8.4 | Yes |
+| 10 | Yes |
+| 9, legacy profiles, 20 | No |
 
-CM2.9 and CM4 metadata transport are implemented. These names describe metadata
-generations, not additional video profiles. The HDMI output is **Standard DV**
-(TV-led), not LLDV. The television performs display management; this project
-does not claim Dolby certification or compatibility with every authored stream.
+CM2.9 and CM4 metadata are supported. Full supported FEL reconstruction occurs
+before conversion. Creative-control application depends on the selected mode
+and the metadata present in the source.
 
-Hardware performance and compatibility vary. [Validation and limits](docs/VALIDATION.md)
-describe the available evidence.
+## Playback controls
 
-## Intel hardware
+Settings are in **Player > Videos**. The selector shows modes for the current
+source; unsupported DV output is unavailable. Modes can change during playback.
 
-The driver gate is Intel **display generation 12 or later**, not a CPU-name
-allowlist. A suitable native HDMI route and Standard-DV display are also needed.
+With **Player information** enabled, press **O** to cycle:
 
-| Family | Example CPUs | Release status |
-| --- | --- | --- |
-| Tiger Lake / Iris Xe | Core i7-11390H, i5-1135G7, i7-1165G7 | Tested on 11390H; other models untested. |
-| Rocket Lake | Core i5-11500, i7-11700 with enabled iGPU | Driver-eligible candidate; to be tested |
-| Alder Lake / Raptor Lake / refresh | 12th–14th-generation Core with supported iGPU | Driver-eligible candidate; to be tested  |
-| Alder Lake-N / Twin Lake | N95, N97, N100, N200, N150, N250 | Driver-eligible candidate; to be tested  |
-| Meteor Lake / Arrow Lake | Core Ultra 100 / 200 H, U or S where the display stack qualifies | Driver-eligible candidate; to be tested  |
-| Lunar Lake | Core Ultra 200V | Tested on 226V; other models untested. |
+1. Player information.
+2. Quick rendering mode selection.
+3. Video only.
 
-**Performance must be analyzed on every setup**, including resolution,
-frame rate, FEL workload, subtitles and cooling. Eligibility is not a promise
-of real-time 4K playback. Intel F/KF CPUs without an iGPU, older unsupported
-display engines, non-Intel GPUs, active DP-to-HDMI/LSPCON paths and LLDV-only
-displays are outside the supported DV route. See [hardware requirements](docs/HARDWARE.md).
+Play/pause and seek remain available while either panel is open. Turning off
+Player information restores Kodi's stock panel and disables the quick selector.
+The optional startup mode notification is off by default.
 
-## Get started
+### Player information
 
-Download [R0.3.0](https://github.com/CroqueMr/intel-dv-libreelec/releases/tag/R0.3.0):
-the installation `.img.gz` or the manual-update `.tar`; only one is needed.
-See [video output preferences and conversion limits](docs/OUTPUT-MODES.md).
-The larger [complete source bundle](docs/SOURCE-BUNDLE.md) is for developers and
-redistribution, not installation.
+Video/audio source and output, DV profile and CM version, BL/EL/FEL state,
+metadata blocks, active circuit, drops/skips and GPU render-engine usage.
+HDR10 and SDR show their relevant fields without empty DV sections.
 
-- [Install, update and recover](docs/INSTALL.md): use a spare device first.
-- [Build from the pinned sources](docs/BUILD.md): the repository contains the patches and recipes.
-- [Validation and limitations](docs/VALIDATION.md).
-- [Licenses and source attribution](docs/LICENSING.md).
+![Player information during Dolby Vision playback](docs/cb1/images/player-information-dv.png)
 
+Screenshots are 1080p SDR previews of the HDR interface.
+
+GPU usage measures Kodi's render engine, including visible GUI rendering,
+not the whole GPU or video decoder. Source audio and PCM/passthrough output
+are shown separately. Playback diagnostics are recorded in `kodi.log`.
+
+## Rendering modes by source
+
+| Source | Mode | Output | Result | TV profile |
+| --- | --- | --- | --- | --- |
+| Dolby Vision | DV Standard (TV-Led) | DV | Preserve the authored Dolby Vision presentation, with final mapping by the TV | Not required |
+| Dolby Vision | DV Enhanced - Natural and Signature | DV | Adapt highlight and color response to the display profile, with two presets: Natural or Signature | Required |
+| Dolby Vision | DV Disabled (native Kodi) | Native Kodi | Retain Kodi's original playback without custom DV processing | Not required |
+| Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile | Not required |
+| Dolby Vision | HDR10 Reference Expert | HDR10 | Match HDR10 conversion to the display's peak and gamut, using available creative controls | Required |
+| HDR10 | DV Reference (AI) | DV | Enable TV-Led Dolby Vision from HDR10 while preserving the source image | Not required |
+| HDR10 | DV Enhanced (AI) - Natural and Signature | DV | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output, with two presets: Natural or Signature | Required |
+| HDR10 | HDR10 Native | HDR10 | Keep the original HDR10 presentation and Kodi playback | Not required |
+| HLG / SDR | Native | HLG / SDR | Keep the original presentation and Kodi playback | Not required |
+
+For more details, see [rendering modes and algorithms](docs/cb1/PROCESSING.md).
+
+Standard Dolby Vision is the default. DV outputs are TV-Led. Expert and Enhanced
+use the display peak and gamut entered in the TV profile. HDR10-to-Dolby Vision
+AI modes use the CB1-L1L3 0.1 LightGBM model included in CB1 and staged by the build.
+
+### Quick settings
+
+Source format in the header, full mode names and DV outputs before HDR10 outputs.
+All source-compatible modes fit in a two-column grid. TV profile configuration
+stays in Player settings.
+
+![Quick rendering mode selection](docs/cb1/images/quick-display-dv.png)
+
+## Documentation
+
+- [Processing and metadata](docs/cb1/PROCESSING.md): rendering logic and mode differences.
+- [Output modes](docs/cb1/PLAYBACK.md): controls and display-profile settings.
+- [Build](docs/cb1/BUILD.md), [versions](docs/cb1/VERSIONS.md) and [licensing](docs/cb1/LICENSING.md).
+
+## Components
+
+| Component | Changes |
+| --- | --- |
+| Linux display drivers | Native HDMI capability checks, DV signaling and protected scanout |
+| Kodi | CB1 adapter, frame pairing, output selection, controls, information and diagnostics |
+| CB1, included in this repository | Reconstruction, rendering policies, conversions and metadata |
+| FFmpeg / libplacebo | Matched CB1 metadata and rendering patches |
+| Mesa / media drivers / libva | Existing decoding and graphics stack, unmodified |
+
+## Build and install
+
+Release assets are an installation `.img.gz` and a native-update `.tar`.
+Only one is needed. [Build instructions](docs/cb1/BUILD.md).
 
 ## Repository layout
 
-- `patches/` - changes to Linux, FFmpeg, libplacebo and Kodi.
-- `overlay/` - LibreELEC package recipes.
-- `tools/` - scripts to apply, build-check and export the sources.
-- `config/` - pinned versions and patch/overlay manifests.
-- `docs/` - build guides, hardware notes and [release notes](docs/releases/0.3.0.md).
-- `LICENSES/` - license texts and third-party notices.
+| Path | Content |
+| --- | --- |
+| `projects/Generic/patches/linux/` | Display-driver changes |
+| `projects/Generic/patches/kodi/` | Kodi integration |
+| `packages/` | Native LibreELEC build recipes |
+| `config/cb1-*.json` | Source locks, component versions and patch descriptions |
+| `CB1/` | Processing engine, dependency patches and LightGBM model |
+| `scripts/cb1-stage.py` | Stage the bundled CB1 sources |
+| `docs/cb1/` | Playback, processing, build and licensing documentation |
+| `tests/cb1/` | Source-staging and display-policy regression checks |
+| `licenses/` | Upstream and additional retained notices |
+
+## Hardware
+
+| CPU generation / series with integrated graphics | Support |
+| --- | --- |
+| Intel Core 8th gen and newer | Dolby Vision output |
+| Intel Core Ultra Series 1 / 2, including 200V | Dolby Vision output |
+| Intel N-series, including N100 / N150 | Dolby Vision output |
+| AMD Ryzen APUs: 2000G / 3000G, 4000 / 5000, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Experimental driver support |
+| Other hardware | DV processing to HDR10 where GPU processing is available; no custom DV HDMI output |
+
+Newly enabled Intel families require hardware testing.
+
+Performance may vary by hardware. Report problems with the exact CPU/GPU,
+display model, connection chain, build version and `kodi.log`.
+[Hardware list](docs/cb1/HARDWARE.md).
+
+## Known issues
+
+- Some frame drops with Profile 7 FEL on a small number of files on N100/N150.
+
+Report issues for this modified build here. Contact upstream projects only when
+the issue also reproduces with their unmodified builds. No affiliation with or
+certification by LibreELEC, Kodi, Dolby, Intel or AMD.
+
+[Upstream LibreELEC README](docs/cb1/UPSTREAM.md)

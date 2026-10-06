@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
+
+PKG_NAME="libbpf"
+PKG_VERSION="1.7.0"
+PKG_SHA256="7ab5feffbf78557f626f2e3e3204788528394494715a30fc2070fcddc2051b7b"
+PKG_LICENSE="LGPL-2.1-only OR BSD-2-Clause"
+PKG_SITE="https://github.com/libbpf/libbpf"
+PKG_URL="https://github.com/libbpf/libbpf/archive/refs/tags/v${PKG_VERSION}.tar.gz"
+PKG_DEPENDS_TARGET="toolchain elfutils"
+PKG_LONGDESC="libbpf supports building BPF CO-RE-enabled applications"
+PKG_TOOLCHAIN="make"
+
+make_target() {
+  make BUILD_STATIC_ONLY=1 \
+       PREFIX=${SYSROOT_PREFIX}/usr \
+       -C src
+}
+
+makeinstall_target() {
+  make BUILD_STATIC_ONLY=1 \
+       PREFIX=${SYSROOT_PREFIX}/usr \
+       -C src install
+}

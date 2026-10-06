@@ -1,0 +1,151 @@
+<?xml version="1.0" ?>
+<settings version="1">
+	<section id="service.minisatip">
+		<category id="hardware" label="30000" help="">
+			<group id="1">
+				<setting id="WAIT_FOR_FEINIT" type="boolean" label="30001" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="NUM_ADAPTERS" type="integer" label="30002" help="">
+					<level>0</level>
+					<default>1</default>
+					<constraints>
+						<minimum>1</minimum>
+						<maximum>16</maximum>
+					</constraints>
+					<dependencies>
+						<dependency type="enable">
+							<condition operator="is" setting="WAIT_FOR_FEINIT">true</condition>
+						</dependency>
+					</dependencies>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+				<setting id="REMOVE_MODULES" type="string" label="30003" help="">
+					<level>0</level>
+					<default/>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30003</heading>
+					</control>
+				</setting>
+				<setting id="WORKAROUND_SLEEP" type="boolean" label="30004" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="WORKAROUND_SLEEP_TIME" type="integer" label="30005" help="">
+					<level>0</level>
+					<default>1</default>
+					<constraints>
+						<minimum>1</minimum>
+						<maximum>30</maximum>
+					</constraints>
+					<dependencies>
+						<dependency type="enable">
+							<condition operator="is" setting="WORKAROUND_SLEEP">true</condition>
+						</dependency>
+					</dependencies>
+					<control type="slider" format="integer">
+						<popup>false</popup>
+					</control>
+				</setting>
+			</group>
+		</category>
+		<category id="minisatip" label="30006" help="">
+			<group id="1">
+				<setting id="MINISATIP_SATIP_TCP" type="boolean" label="30007" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="MINISATIP_CLEANPSI" type="boolean" label="30008" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="MINISATIP_DVBAPI_IP" type="string" label="30009" help="">
+					<level>0</level>
+					<default>127.0.0.1</default>
+					<dependencies>
+						<dependency type="enable">
+							<condition operator="is" setting="MINISATIP_CLEANPSI">true</condition>
+						</dependency>
+					</dependencies>
+					<control type="edit" format="ip">
+						<heading>30009</heading>
+					</control>
+				</setting>
+				<setting id="MINISATIP_DVBAPI_PORT" type="string" label="30010" help="">
+					<level>0</level>
+					<default>9000</default>
+					<dependencies>
+						<dependency type="enable">
+							<condition operator="is" setting="MINISATIP_CLEANPSI">true</condition>
+						</dependency>
+					</dependencies>
+					<control type="edit" format="string">
+						<heading>30010</heading>
+					</control>
+				</setting>
+				<setting id="MINISATIP_RTSP_PORT" type="string" label="30011" help="">
+					<level>0</level>
+					<default>554</default>
+					<control type="edit" format="string">
+						<heading>30011</heading>
+					</control>
+				</setting>
+				<setting id="MINISATIP_WEBPORT" type="string" label="30012" help="">
+					<level>0</level>
+					<default>9999</default>
+					<control type="edit" format="string">
+						<heading>30012</heading>
+					</control>
+				</setting>
+			</group>
+		</category>
+		<category id="debugging" label="30013" help="">
+			<group id="1">
+				<setting id="MINISATIP_DEBUG" type="boolean" label="30014" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="MINISATIP_TESTMODE" type="boolean" label="30015" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+			</group>
+		</category>
+		<category id="advanced options" label="30016" help="">
+			<group id="1">
+				<setting id="MINISATIP_STARTUP" type="boolean" label="30017" help="">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
+				<setting id="MINISATIP_STARTUP_ARGS" type="string" label="30018" help="">
+					<level>0</level>
+					<default/>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<dependencies>
+						<dependency type="enable">
+							<condition operator="is" setting="MINISATIP_STARTUP">true</condition>
+						</dependency>
+					</dependencies>
+					<control type="edit" format="string">
+						<heading>30018</heading>
+					</control>
+				</setting>
+			</group>
+		</category>
+	</section>
+</settings>

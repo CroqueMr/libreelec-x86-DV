@@ -1,0 +1,145 @@
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -4283,6 +4283,19 @@
+ 		state->infoframes.hdmi.vendor.hdmi.dolby_vision;
+ }
+ 
++static int intel_dv_lab_scanout_reject(struct intel_crtc *crtc,
++				     const char *stage, unsigned int reasons)
++{
++	/* Shared budget also bounds TEST_ONLY retries and alternating CRTCs. */
++	static DEFINE_RATELIMIT_STATE(limit, 30 * HZ, 4);
++
++	if (__ratelimit(&limit))
++		drm_err(to_intel_display(crtc)->drm,
++			"DVBridge: scanout rejected errno=%d crtc=%u stage=%s reasons=0x%x\n",
++			-EINVAL, crtc->base.base.id, stage, reasons);
++	return -EINVAL;
++}
++
+ static int intel_dv_lab_scanout_check(struct intel_atomic_state *state,
+ 				     struct intel_crtc *crtc)
+ {
+@@ -4292,29 +4305,41 @@
+ 	const struct intel_plane_state *ip;
+ 	unsigned int w = s->hw.adjusted_mode.hdisplay;
+ 	unsigned int h = s->hw.adjusted_mode.vdisplay;
++	unsigned int reasons;
+ 
+ 	if (!s->hw.active || !intel_dv_lab_active(s))
+ 		return 0;
+ 	/* Refuse color processing/compositing, do not silently bypass a user's LUT. */
+-	if (s->hw.ctm || s->hw.degamma_lut || s->hw.gamma_lut || s->pre_csc_lut ||
+-	    s->post_csc_lut || s->gamma_enable || s->csc_enable || s->dither ||
+-	    s->vrr.enable || s->dsc.compression_enable || s->scaler_state.scaler_users ||
+-	    s->uapi.plane_mask != drm_plane_mask(primary))
+-		return -EINVAL;
++	/* Reason bits: color, dither, VRR, DSC, scaler, plane mask. */
++	reasons = (!!(s->hw.ctm || s->hw.degamma_lut || s->hw.gamma_lut ||
++		       s->pre_csc_lut || s->post_csc_lut || s->gamma_enable || s->csc_enable)) |
++		 (!!s->dither << 1) | (!!s->vrr.enable << 2) |
++		 (!!s->dsc.compression_enable << 3) | (!!s->scaler_state.scaler_users << 4) |
++		 ((s->uapi.plane_mask != drm_plane_mask(primary)) << 5);
++	if (reasons)
++		return intel_dv_lab_scanout_reject(crtc, "crtc", reasons);
+ 	p = drm_atomic_get_new_plane_state(&state->base, primary);
+ 	if (!p)
+ 		p = primary->state; /* unchanged plane, serialized by this CRTC's lock */
+-	if (!p || !p->fb || p->crtc != &crtc->base || !p->visible ||
+-	    p->fb->format->format != DRM_FORMAT_XRGB8888 ||
+-	    p->fb->width != w || p->fb->height != h ||
+-	    p->src_x || p->src_y || p->src_w != (w << 16) || p->src_h != (h << 16) ||
+-	    p->crtc_x || p->crtc_y || p->crtc_w != w || p->crtc_h != h ||
+-	    p->rotation != DRM_MODE_ROTATE_0 || p->alpha != 0xffff)
+-		return -EINVAL;
++	if (!p || !p->fb)
++		return intel_dv_lab_scanout_reject(crtc, "primary-missing", 1);
++	/* Reason bits: route/visible, format, allocation, source, destination,
++	 * rotation, alpha. Preserve the original admission conditions exactly.
++	 */
++	reasons = (p->crtc != &crtc->base || !p->visible) |
++		 ((p->fb->format->format != DRM_FORMAT_XRGB8888) << 1) |
++		 ((p->fb->width != w || p->fb->height != h) << 2) |
++		 ((p->src_x || p->src_y || p->src_w != (w << 16) || p->src_h != (h << 16)) << 3) |
++		 ((p->crtc_x || p->crtc_y || p->crtc_w != w || p->crtc_h != h) << 4) |
++		 ((p->rotation != DRM_MODE_ROTATE_0) << 5) | ((p->alpha != 0xffff) << 6);
++	if (reasons)
++		return intel_dv_lab_scanout_reject(crtc, "primary-layout", reasons);
+ 	ip = to_intel_plane_state(p);
+-	if (ip->hw.ctm || ip->hw.degamma_lut || ip->hw.gamma_lut || ip->hw.lut_3d ||
+-	    ip->scaler_id >= 0 || ip->force_black || ip->planar_linked_plane)
+-		return -EINVAL;
++	/* Reason bits: color processing, scaler, forced black, linked plane. */
++	reasons = (!!(ip->hw.ctm || ip->hw.degamma_lut || ip->hw.gamma_lut || ip->hw.lut_3d)) |
++		 ((ip->scaler_id >= 0) << 1) | (!!ip->force_black << 2) | (!!ip->planar_linked_plane << 3);
++	if (reasons)
++		return intel_dv_lab_scanout_reject(crtc, "plane-processing", reasons);
+ 	return 0;
+ }
+ 
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -28,6 +28,7 @@
+ 
+ #include <linux/pm_qos.h>
+ #include <linux/pwm.h>
++#include <linux/ratelimit.h>
+ 
+ #include <drm/display/drm_dp_dual_mode_helper.h>
+ #include <drm/display/drm_dp_mst_helper.h>
+@@ -523,4 +524,6 @@
+ 	struct drm_property *dv_lab_property;
++	/* Diagnostics only: no influence on DV admission or recovery. */
++	struct ratelimit_state dv_log_limit;
+ 	/*
+ 	 * The fixed encoder this connector is connected to.
+ 	 */
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2495,6 +2495,11 @@
+ 		drm_dbg_kms(display->drm,
+ 			    "unsupported HDMI clock (%d kHz), rejecting mode\n",
+ 			    pipe_config->hw.adjusted_mode.crtc_clock);
++		if (to_intel_digital_connector_state(conn_state)->dv_lab_standard &&
++		    __ratelimit(&connector->dv_log_limit))
++			drm_err(display->drm,
++				"DVBridge: HDMI format/clock rejected errno=%d connector=%u clock_khz=%d\n",
++				ret, connector->base.base.id, adjusted_mode->crtc_clock);
+ 		return ret;
+ 	}
+ 
+@@ -2538,8 +2543,25 @@
+ 		if (!ret && link.width == 3840 && link.rounded_refresh > 30 &&
+ 		    !caps.supports_2160p60)
+ 			ret = -EOPNOTSUPP;
+-		if (ret)
++		if (ret) {
++			/* First cause, then at most once per 30 seconds per connector.
++			 * Atomic TEST_ONLY requests also pass here. No per-frame dump.
++			 */
++			if (__ratelimit(&connector->dv_log_limit))
++				drm_err(display->drm,
++					"DVBridge: link rejected errno=%d connector=%u display_ver=%u enabled=%d edid=%s version=%u legacy_vsif=%d sink60=%d native_hdmi=%d lspcon=%d dual_mode=%d vbt_dual_mode=%d hdmi=%d rgb=%d limited=%d hdr_blob=%d cloned=%d progressive=%d bpc=%u pipe_bpp=%u colorspace=%u mode=%ux%u@%u\n",
++					ret, connector->base.base.id, DISPLAY_VER(display),
++					link.lab_enabled, dvbridge_edid_reason(caps.status),
++					caps.version, caps.legacy_vsif, caps.supports_2160p60,
++					link.native_hdmi, enc_to_dig_port(encoder)->lspcon.active,
++					enc_to_intel_hdmi(encoder)->dp_dual_mode.type,
++					intel_bios_encoder_supports_dp_dual_mode(encoder->devdata),
++					link.hdmi, link.rgb, link.limited_range, link.hdr_blob,
++					link.cloned, link.progressive, link.requested_bpc,
++					link.pipe_bpp, link.colorspace, link.width, link.height,
++					link.rounded_refresh);
+ 			return ret;
++		}
+ 		pipe_config->dither_force_disable = true;
+ 	}
+ 
+@@ -2837,6 +2859,7 @@
+ 
+ 	if (display->params.enable_dv_lab &&
+ 	    intel_dv_lab_platform_supported(DISPLAY_VER(display))) {
++		ratelimit_state_init(&connector->dv_log_limit, 30 * HZ, 1);
+ 		connector->dv_lab_property = drm_property_create_bool(display->drm,
+ 			DRM_MODE_PROP_ATOMIC, "DVBRIDGE_DV_STANDARD_LAB");
+ 		if (connector->dv_lab_property)

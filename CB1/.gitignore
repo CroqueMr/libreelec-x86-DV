@@ -1,0 +1,6 @@
+/.evidence/
+/build*/
+__pycache__/
+/.worktrees/
+/.superpowers/
+/private-models/

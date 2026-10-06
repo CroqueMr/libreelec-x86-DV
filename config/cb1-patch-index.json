@@ -1,0 +1,489 @@
+{
+  "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": {
+    "summary": "Expose the validated Dolby Vision connector control",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Expose/read/write the per-connector DV property in atomic state."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": {
+    "summary": "Protect Dolby Vision transport from display processing",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display.c": "Validate byte-preserving scanout and reject incompatible display processing."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": {
+    "summary": "Retain the low-level Dolby Vision recovery parameter",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display_params.c": "Describe the low-level recovery control; no user-facing activation menu."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-03-drivers__gpu__drm__i915__display__intel_display_params.h.patch": {
+    "summary": "Enable automatic eligible Dolby Vision in this image",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display_params.h": "Default the dedicated LE image to automatic capability detection."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-04-drivers__gpu__drm__i915__display__intel_display_types.h.patch": {
+    "summary": "Track Dolby Vision state on Intel HDMI connectors",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store DV property and transport state on the Intel connector."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-05-drivers__gpu__drm__i915__display__intel_dv_lab_policy.h.patch": {
+    "summary": "Validate TV capabilities and supported Dolby Vision modes",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Admit Intel display9+ while validating byte-safe modes and native HDMI topology."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-06-drivers__gpu__drm__i915__display__intel_dvbridge_hdr_policy.h.patch": {
+    "summary": "Preserve HDR10 precision when HDMI bandwidth is limited",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_dvbridge_hdr_policy.h": "Retry eligible HDR10 links in deep-color 4:2:0 instead of losing precision to 8-bit RGB; exclude the DV tunnel."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-07-drivers__gpu__drm__i915__display__intel_hdmi.c.patch": {
+    "summary": "Connect Intel HDMI negotiation to Dolby Vision output",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Connect hardware eligibility, HDMI timing, signaling and HDR precision policy."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-08-drivers__video__hdmi.c.patch": {
+    "summary": "Encode and validate Dolby Vision HDMI signaling",
+    "component": "linux",
+    "files": {
+      "drivers/video/hdmi.c": "Initialize, validate, pack and unpack the HDMI DV vendor information frame."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9900-09-include__linux__hdmi.h.patch": {
+    "summary": "Define shared Dolby Vision HDMI signaling structures",
+    "component": "linux",
+    "files": {
+      "include/linux/hdmi.h": "Define the HDMI DV signaling fields shared by the driver helpers."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9901-native-hdmi-level-shifter.patch": {
+    "summary": "Recognize native HDMI level shifters without allowing active DP conversion",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Validate EDID, modes and native-HDMI topology, including level shifters.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Connect hardware eligibility, HDMI timing, signaling and HDR precision policy."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": {
+    "summary": "Integrate native Dolby Vision playback, exact GPU transport and optional HDR10 analysis lifetimes",
+    "component": "kodi",
+    "files": {
+      "CMakeLists.txt": "Require the external engine source path for enabled rendering and shared validation headers.",
+      "LICENSES/README.md": "Retain the existing DV-enabled combined-build licensing notice.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.cpp": "Select the native DV decoder only when the stream and output are eligible.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt": "Use external shared validation headers in both enabled and disabled builds.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Copy/reset owned DV metadata and enhancement-layer references with video pictures.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Add owned metadata and enhancement-surface state to the video picture.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Carry frame metadata and pair the hardware-decoded enhancement layer across decode/flush/seek.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Declare the decoder-side DV metadata and layer-pairing state.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp": "Preserve decoded DV frame metadata through the native hardware surface path.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h": "Expose source codec parameters required for enhancement-layer decoding.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Capture the original stream parameters for the DV decode pipeline.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.cpp": "Copy and compare the additional stream parameters consistently.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Own the stream parameters passed from demuxing to decoding.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Keep native DV routing and source stream state consistent during playback setup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Import hardware planes and submit eligible frames to the DV renderer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Declare native hardware DV render integration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp": "Retain original decoder imports through GPU retirement and size their native cache at configuration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h": "Declare shared import ownership and the native-default cache capacity.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Preserve the ordinary renderer path and guarded DV routing.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Declare the guarded rendering hook without changing ordinary output.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Handle software/native texture input and choose DV output only when eligible.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Track DV geometry and texture-rendering state.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Choose DV-aware modes and retain full composition when player overlays are visible.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Pass the DV mode requirement through the existing render configuration.",
+      "xbmc/guilib/guiinfo/VideoGUIInfo.cpp": "Extend the existing stream-information value with active HDMI DV, FEL and CM generation.",
+      "xbmc/platform/linux/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
+      "xbmc/utils/DisplayInfo.cpp": "Parse and expose Standard-DV display capability from the existing EDID information.",
+      "xbmc/utils/DisplayInfo.h": "Store the detected DV display capability.",
+      "xbmc/utils/EGLUtils.cpp": "Stage output drawables and retain the exact EGL tuple until transactional rollback or GPU retirement permits destruction.",
+      "xbmc/utils/EGLUtils.h": "Declare explicit output-surface transactions and transferable native EGL retirement ownership.",
+      "xbmc/windowing/Resolution.cpp": "Constrain DV mode selection while keeping the existing non-DV policy.",
+      "xbmc/windowing/Resolution.h": "Declare the DV-aware mode-selection parameter.",
+      "xbmc/windowing/gbm/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Manage explicit front-buffer ownership for safe presentation/rollback.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Declare the buffer lifecycle used by atomic presentation.",
+      "xbmc/windowing/gbm/DVWindowRetirement.h": "Retain the exact EGL/GBM/DRM tuple and borrowed source owners through bounded GPU retirement or process-lifetime quarantine.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Report native DV eligibility and preserve normal output outside the DV path.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose the native-output capability to VideoPlayer.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Allow the DV transport to request the required EGL output depth.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Declare the output-depth hook used by the GLES DV adapter.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Compose GUI before packing, present DV transactionally and complete native display-resume notifications for every output route.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Own native DV rendering, composition and presentation state.",
+      "xbmc/windowing/gbm/drm/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Perform checked atomic test/commit and preserve state on presentation failure.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Declare the atomic property and transaction operations.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Discover the connector DV property and expose native output support.",
+      "xbmc/windowing/gbm/drm/DRMUtils.h": "Declare DV connector capability queries.",
+      "LICENSES/GPL-3.0-or-later": "Retain the existing combined-build GPLv3 license text.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h": "Own and bounds-check metadata independently of decoder buffer reuse.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h": "Bound optional HDR10 anticipation slots without changing native buffer counts.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Retain identity-bound decoded textures until asynchronous analysis completes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h": "Declare source leases and the shared-context analysis owner.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Publish coherent active-output information only after successful presentation.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h": "Keep probes, interlaced/stereo and ineligible outputs outside the native DV path.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Integrate exact reconstruction/packing with native textures, FEL surfaces and GUI composition.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Define the native renderer lifecycle and frame/layer input contract.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeShaders.h.in": "Embed the shared transport shaders at build time.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Snapshot, stage and restore DRM properties without leaking state between streams.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Define ownership of the connector/property transaction."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9993-fel-presentation-pairing.patch": {
+    "component": "kodi",
+    "summary": "Pair FEL pictures and recover both layers after seeks",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Preserve the requested seek position while feeding native DV decoder preroll; leave non-DV seeks unchanged.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/CMakeLists.txt": "Add the private DV helper include path only when the bridge is built.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Discard pre-anchor pictures and handle exhausted enhancement streams through the native player."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9902-hdmi-compatibility.patch": {
+    "summary": "Align Standard DV sink detection and legacy HDMI signaling",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/dvbridge_edid.h": "Validate complete EDIDs and distinguish Standard DV v0/v1/v2, legacy signaling and LLDV-only sinks.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Recognize both modern and legacy Standard DV packets for byte-safe scanout and modeset guards.",
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Use shared sink eligibility while preserving existing byte-safe transport restrictions.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Choose valid Standard DV HDMI signaling and enforce advertised timing capabilities.",
+      "drivers/video/hdmi.c": "Pack and validate the legacy Standard DV vendor packet without changing ordinary HDMI packets.",
+      "include/linux/hdmi.h": "Represent the opt-in legacy Standard DV vendor packet explicitly."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9903-diagnostics.patch": {
+    "summary": "Retain bounded kernel rejection reasons without verbose DRM logging",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display.c": "Report bounded scanout safety rejection reasons without changing admission decisions.",
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store connector-local diagnostic rate limits, separate from output policy.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Log the first DV link/clock rejection and rate-limit repeats per connector."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": {
+    "summary": "Share sink validation and bound activation retries to one restored transient retry",
+    "component": "kodi",
+    "files": {
+      "xbmc/utils/DVBridgeEdid.h": "Use the exact same side-effect-free sink parser as the kernel.",
+      "xbmc/utils/DVBridgeOutputRetry.h": "Allow one additional activation only for EAGAIN, EINTR or EBUSY after coherent restoration; exclude engine BUSY.",
+      "xbmc/utils/DisplayInfo.cpp": "Derive native DV eligibility from the shared EDID validation result.",
+      "xbmc/utils/DisplayInfo.h": "Retain the validated sink capabilities alongside native display information.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep ordinary restoration separate from transport activation accounting.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Recover rejected DV transactions while keeping ordinary Kodi atomic commits unchanged.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Keep DV recovery state independent from diagnostics and normal output state."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9995-diagnostics.patch": {
+    "summary": "Provide lightweight automatic DV diagnostics in the normal Kodi log",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Report setup failures, first frame and coarse rendering summaries without GPU queries.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Keep lightweight renderer diagnostic counters separate from frame state.",
+      "xbmc/utils/DVBridgeDiagnosticState.h": "Bound failure/recovery reports and one sustained-render Reference hint without changing policy or retries.",
+      "xbmc/utils/DVBridgeKernelLog.h": "Filter recent kernel-origin DV and Intel display faults, deduplicate content and expose lost/truncated evidence.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Log stream eligibility and rate-limited native DV setup failures.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Store the native setup diagnostic limiter.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Report committed signal changes, bounded output failures, truthful restoration errno in the shared snapshot and asynchronous kernel evidence.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Report driver identity during the existing DRM version setup query without additional polling.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Declare isolated diagnostic accounting and first-snapshot state.",
+      "xbmc/windowing/gbm/drm/DVBridgeKernelLogReader.h": "Collect bounded kernel causes asynchronously and explicitly report truncated or lost evidence."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9996-output-modes-and-info.patch": {
+    "component": "kodi",
+    "summary": "Add source-aware conversion, native playback information and bounded live mode controls",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Provide concise localized playback/profile/menu labels, minimum-depth format and HDR10-only TV-mapping advice without GPU-cost estimates.",
+      "addons/skin.estuary/xml/DialogPlayerProcessInfo.xml": "Select the enhanced information panel or retain the stock Estuary panel.",
+      "addons/skin.estuary/xml/DialogSelect.xml": "Select a compact bottom layout only for the playback-mode dialog.",
+      "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Reuse native list navigation, textures and focus states for source-specific playback choices.",
+      "addons/skin.estuary/xml/Variables.xml": "Use native disabled text colors in the playback-mode selector.",
+      "addons/skin.estuary/xml/IncludesDVProcessInfo.xml": "Show committed treatment, partial Expert block coverage and distinct AI estimates/output metadata in the native panel.",
+      "CMakeLists.txt": "Expose the optional native HDR10 AI build contract without enabling it by default.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Carry the existing decoder reopen request for optional anticipation capacity.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Reopen the same decoder when selected HDR10 preparation requires a larger pool.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Track optional pool capacity in the native decoder owner.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h": "Bind readiness to stream and policy revision with a cumulative one-second recovery budget.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp": "Grow the existing decode surface pool only for eligible HDR10 conversion.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h": "Bound optional decode pool ownership while preserving native defaults.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h": "Declare the optional anticipation request in the native renderer interface.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Expose capacity and identity facts from the existing VAAPI texture import.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Size overlay slots consistently with the selected native render queue.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h": "Reserve bounded optional overlay capacity without changing native defaults.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Prepare queued HDR10 pictures and start playback from the first ready timestamp.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Track the selected queue capacity and readiness through native playback resets.",
+      "system/settings/settings.xml": "Expose native Player output, information, mode-menu and startup-toast preferences; hide unconsumed profile controls, preserve explicit gamut values and default new gamut preferences to P3-D65.",
+      "system/keymaps/keyboard.xml": "Route O to close the native playback-mode selector; remove its separate keyboard shortcut.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Snapshot complete preferences and revisions at frame boundaries; share its lock with coherent native menu/profile writes.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Distinguish confirmed HDR10 presentation from Standard DV presentation.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h": "Arm once per file and match retained-buffer generation plus actual rendered stream/picture before accepted native startup; reject stale ordinary markers.",
+      "xbmc/cores/VideoPlayer/Buffers/VideoBuffer.h": "Retain a feature-guarded passive file reporting generation with existing video-buffer ownership.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Retain committed output metadata separately from AI source estimates; collect native panel counters only while visible.",
+      "xbmc/cores/VideoPlayer/CMakeLists.txt": "Link the native policy-header consumer to the shared engine only when enabled.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use selected native-output policy for presentation cadence; arm startup reporting after prior-file flush and cancel it on stop or natural end.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Declare the internal selected-output presentation decision used by the native player call site.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Record bounded playback health and capture startup reporting identity at actual stream open, retaining it on existing delivered video buffers.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.h": "Keep per-stream diagnostic baselines and passive startup reporting generation.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Reuse layer reconstruction, track accepted output and prove mode-compatible pending/committed processing identities across route, admission and geometry observations without changing rendering or saved preferences.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Declare HDR10 render state, resolve operations and accepted-mode selection identity facts.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Select eligible output setup and passively mark successful native/ordinary renders with retained file identity without altering rendering operators.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIME.cpp": "Passively mark successfully prepared ordinary direct-plane video with the bridge's actual retained-buffer file identity.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VideoLayerBridgeDRMPRIME.cpp": "Passively accumulate every existing property-add result and expose the actually prepared buffer generation without changing calls, early returns or presentation sequencing.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VideoLayerBridgeDRMPRIME.h": "Expose feature-guarded passive prepared-buffer generation for reporting.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Retain the original source tuple and lease across native policy refreshes and paused reuse.",
+      "xbmc/dialogs/DVPixelFormat.h": "Describe source chroma subsampling separately from hardware surfaces and HDMI transport.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Use native source-specific playback modes with the shared enhanced-information switch.",
+      "xbmc/dialogs/DVPlaybackModes.h": "Declare the optional native menu/profile setting-action helper.",
+      "xbmc/dialogs/CMakeLists.txt": "Link the native policy-header consumer to the shared engine only when enabled.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Display committed playback information and close its observer before opening playback modes with O.",
+      "xbmc/dialogs/GUIDialogSelect.h": "Declare the targeted native selector action handler.",
+      "xbmc/settings/CMakeLists.txt": "Propagate the canonical policy-header dependency to the native settings module when CB1 is enabled.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.h": "Declare the optional information refresh lifecycle.",
+      "xbmc/settings/SettingConditions.cpp": "Build native output options from shared admission facts without rewriting unavailable saved preferences.",
+      "xbmc/settings/SettingConditions.h": "Declare native option availability decoration over preserved static enums.",
+      "xbmc/settings/Settings.cpp": "Register and unregister the native independent TV profile setting action when enabled.",
+      "xbmc/input/actions/ActionIDs.h": "Reserve a distinct native playback-mode action without colliding with audio/subtitle actions.",
+      "xbmc/input/actions/ActionTranslator.cpp": "Register the PlaybackModeMenu keymap action.",
+      "xbmc/video/PlayerController.cpp": "Dispatch the optional native mode selector only during video playback.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Expose the same native selector in playback video settings while its toggle is enabled.",
+      "xbmc/settings/windows/GUIControlSettings.cpp": "Decorate only the two native DV option vectors while retaining static enum validation and selected-value ordering.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Deny opt-in disabled rows for keyboard and mouse selection while preserving normal and cancel behavior.",
+      "xbmc/utils/DVRenderUsage.h": "Measure shared Kodi render-engine occupancy including GUI work from deduplicated, byte/record-bounded DRM fdinfo samples.",
+      "xbmc/utils/CMakeLists.txt": "Link native GBM helper-header consumers to the shared engine only when enabled.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Expose existing HDR10 conversion capability and use the deep-color display clock when conversion is active.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Declare the existing HDR10 conversion capability hook.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Promote or roll back the staged native EGL/GBM output tuple only after actual submit and bounded last-use retirement.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Declare transactional native output owners and matching implicit teardown state.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish coherent activation latch epochs under the existing capability mutex, latch automatic HDR10 fallback, retain render-side processing admission, bound activation recovery, complete pending GUI output on stop before new video setup and restore native display state.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Declare source-aware output selection, private coherent-snapshot handoffs and HDR10 presentation state.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Import opaque 10-bit framebuffers without changing their pixel layout.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Passively record the result of the existing ordinary page commit without altering operators or retries.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Expose the last ordinary commit result only when CB1 reporting is enabled.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Select a source-compatible effective DV/HDR10 policy from immutable preferences and known admissions.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Reuse source-bound BL imports and size the cache for bounded AI anticipation; preserve native capacity."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": {
+    "component": "linux",
+    "summary": "Require a deep-color HDMI link only for explicitly selected HDR10 conversion",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Track and validate the opt-in HDR10 deep-color connector state independently of the DV enable switch.",
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store the optional HDR10 connector property and atomic state.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Expose the independent display12+ HDR10 guard; require PQ/BT.2020 and reject sub-10-bit conversion links without overriding bandwidth."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9997-dv-static-metadata-latch.patch": {
+    "component": "kodi",
+    "summary": "Retain in-band HDR10 static metadata across missing SEI in custom DV playback",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Keep the last in-band mastering and content-light metadata until replaced or a new stream opens. Ordinary playback is unchanged.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Store independent per-stream mastering and content-light metadata."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-activeae-sink-retry.patch": {
+    "component": "kodi",
+    "summary": "Retry opening the audio sink after a failed initialization",
+    "files": {
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp": "Require a successful sink reopen before configuring buffers after a transient initialization failure.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h": "Track failed sink initialization until a successful reopen."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-6-centered-lanczos.patch": {
+    "summary": "Avoid redundant interpolation of aligned Lanczos3 taps",
+    "component": "libplacebo",
+    "files": {
+      "src/shaders/sampling.c": "Use exact texel fetches for eligible Lanczos3 taps; retain linear sampling for unaligned or other filter configurations."
+    }
+  },
+  "CB1/patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch": {
+    "summary": "Preserve extended Dolby Vision metadata during decoding",
+    "component": "ffmpeg",
+    "files": {
+      "libavcodec/dovi_rpudec.c": "Retain parsed extension bytes so the output stage can preserve CM4 metadata."
+    }
+  },
+  "CB1/patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch": {
+    "summary": "Recognize Dolby Vision AV1 tracks in MP4 containers",
+    "component": "ffmpeg",
+    "files": {
+      "libavformat/isom_tags.c": "Recognize the dav1 MP4 sample entry for DV AV1 tracks."
+    }
+  },
+  "CB1/patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": {
+    "summary": "Carry extended Dolby Vision metadata to the player",
+    "component": "ffmpeg",
+    "files": {
+      "libavutil/dovi_meta.h": "Carry validated original extension bytes alongside parsed metadata."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9900-0-src__dispatch.c.patch": {
+    "summary": "Optimize eligible full-screen GPU rendering passes",
+    "component": "libplacebo",
+    "files": {
+      "src/dispatch.c": "Optimize eligible dispatch and emit custom GLSL extension directives in the required order."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9900-1-src__opengl__gpu.c.patch": {
+    "summary": "Discover supported OpenGL subgroup capabilities",
+    "component": "libplacebo",
+    "files": {
+      "src/opengl/gpu.c": "Expose actual subgroup, float texture, filtering and framebuffer capabilities."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-0.patch": {
+    "summary": "Expose supported full-precision GLES render targets",
+    "component": "libplacebo",
+    "files": {
+      "src/opengl/formats.c": "Advertise renderable float textures and filtering only when GLES supports them."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-1.patch": {
+    "summary": "Preserve high-bit-depth texture sampling precision",
+    "component": "libplacebo",
+    "files": {
+      "src/dispatch.c": "Optimize eligible dispatch and emit custom GLSL extension directives in the required order."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-2.patch": {
+    "summary": "Require full-precision intermediate rendering when requested",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/renderer.h": "Expose an explicit minimum intermediate precision without silently reducing quality.",
+      "src/renderer.c": "Honor full-precision intermediate render-target requirements."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-3.patch": {
+    "summary": "Enable float texture filtering only when supported",
+    "component": "libplacebo",
+    "files": {
+      "src/opengl/formats.c": "Advertise renderable float textures and filtering only when GLES supports them."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-4.patch": {
+    "summary": "Prevent rounding noise from creating false FEL residuals",
+    "component": "libplacebo",
+    "files": {
+      "src/shaders/colorspace.c": "Keep neutral FEL residuals zero despite normalization/filtering roundoff."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-5-custom-prelude.patch": {
+    "summary": "Place custom GLES extension directives before shader declarations",
+    "component": "libplacebo",
+    "files": {
+      "src/dispatch.c": "Optimize eligible dispatch and emit custom GLSL extension directives in the required order."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-7-policy-identity-sampling.patch": {
+    "summary": "Use exact identity sampling for policy reconstruction",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/renderer.h": "Expose an opt-in marker for exact identity sampling.",
+      "src/renderer.c": "Select the existing nearest sampler for eligible policy identity planes."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-8-policy-tone-lut-fp32.patch": {
+    "summary": "Require FP32 tone-LUT storage for policy rendering",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/shaders/colorspace.h": "Expose the default-off FP32 tone-LUT option.",
+      "src/shaders/colorspace.c": "Use FP32 storage when policy rendering requests it."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9910-9-policy-stable-pq.patch": {
+    "summary": "Emit policy PQ values with stable FP32 arithmetic",
+    "component": "libplacebo",
+    "files": {
+      "src/dispatch.c": "Propagate the opt-in stable-PQ marker through dispatch.",
+      "src/include/libplacebo/dispatch.h": "Declare the dispatch marker used by policy rendering.",
+      "src/include/libplacebo/renderer.h": "Expose the default-off renderer marker.",
+      "src/include/libplacebo/shaders.h": "Declare shader marker propagation for PQ emission.",
+      "src/renderer.c": "Propagate the renderer option into shader dispatch.",
+      "src/shaders/colorspace.c": "Apply the original PQ equations with stable FP32 evaluation."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9911-0-policy-scaler-lut-fp32.patch": {
+    "summary": "Require FP32 scaler LUT storage for policy rendering",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/renderer.h": "Expose the default-off FP32 scaler-LUT option.",
+      "src/renderer.c": "Select the FP32 scaler LUT when requested.",
+      "src/include/libplacebo/shaders/sampling.h": "Declare the FP32 sampling-LUT option.",
+      "src/shaders/sampling.c": "Use FP32 LUT storage for policy rendering."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9910-common-dv-policy.patch": {
+    "summary": "Share Standard-DV eligibility without changing Intel legacy-sink policy",
+    "component": "linux",
+    "files": {
+      "include/drm/drm_dvbridge.h": "Provide side-effect-free shared transport admission and CTA timing checks.",
+      "include/drm/drm_dvbridge_edid.h": "Validate complete Standard-DV v0/v1/v2 EDIDs and reject malformed, duplicate and LLDV-only blocks.",
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Forward Intel policy to the shared checks while retaining native topology and platform admission.",
+      "drivers/gpu/drm/i915/display/dvbridge_edid.h": "Use the shared EDID parser through the existing Intel include path."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": {
+    "summary": "Feed separate Blu-ray Dolby Vision layers into the existing decoder",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Retain the native FFmpeg layer group, preserve audio routing and reset layer ownership on seeks.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h": "Own the Blu-ray layer joiner in the existing demuxer.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Preserve independent layer decode order and pair unchanged RPU by exact presentation time."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": {
+    "summary": "Protect Standard-DV v2 transport on explicit AMD DCN native HDMI families",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/Makefile": "Build the native AMD Standard-DV adapter with Display Core.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Attach independent DV/HDR10 properties; validate HDR metadata before stream construction and final depth after native DC validation; require affected state and modesets at opt-in transitions.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h": "Track connector-local independent boolean DV and HDR10 properties with scalar atomic lifecycle.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Keep explicit native DCN/DV-v2 admission; expose HDR10 independently of DV and map final DC depth explicitly; preserve packets and native format/bandwidth selection.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h": "Declare native DV and independent HDR10 metadata/final-depth validation interfaces.",
+      "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Retain the packed RGB8 tunnel marker independently of normal color state.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Treat DV transport entry and exit as timing changes requiring reprogramming."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": {
+    "summary": "Capture the logical HDR composite before Dolby Vision transport packing",
+    "component": "kodi",
+    "files": {
+      "xbmc/rendering/capture/CaptureMetadata.cpp": "Tag offscreen DV captures as full-range PQ BT.2020.",
+      "xbmc/rendering/capture/CaptureReadback.cpp": "Read floating-point HDR surfaces into deep PNG-compatible samples.",
+      "xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp": "Read the logical PQ surface with correct orientation and restore GL bindings.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Use an unpacked image and bounded readiness wait only while a native capture is pending.",
+      "xbmc/windowing/gbm/DVBridgeCapture.h": "Expose logical capture without importing engine headers into native capture modules.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the render-owned logical capture surface."
+    }
+  },
+  "packages/mediacenter/kodi/patches/9902-headers-only.patch": {
+    "summary": "Rebase native LibreELEC addon-header installation onto Kodi RC1",
+    "component": "kodi",
+    "files": {
+      "CMakeLists.txt": "Keep the existing headers-only host build.",
+      "cmake/scripts/linux/ExtraTargets.cmake": "Avoid player targets in a header build.",
+      "cmake/scripts/linux/Install.cmake": "Install addon CMake files in headers-only builds."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": {
+    "summary": "Use the effective creative-hook color space for policy color management",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/renderer.h": "Declare the default-off hook-domain policy field.",
+      "src/renderer.c": "Map the current hook color domain only when explicitly requested."
+    }
+  }
+}

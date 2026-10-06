@@ -1,0 +1,20 @@
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -519,6 +519,8 @@
+ 
+ struct intel_connector {
+ 	struct drm_connector base;
++	/* Private experimental property; gated by enable_dv_lab. */
++	struct drm_property *dv_lab_property;
+ 	/*
+ 	 * The fixed encoder this connector is connected to.
+ 	 */
+@@ -613,6 +615,8 @@
+ 
+ struct intel_digital_connector_state {
+ 	struct drm_connector_state base;
++	/* Scalar copy/reset lifecycle, no property-blob reference to leak. */
++	bool dv_lab_standard;
+ 
+ 	enum hdmi_force_audio force_audio;
+ 	int broadcast_rgb;

@@ -1,14 +1,50 @@
+# build directories
+/build.*/
+/builds
+/.fakeroot.*
+
+# automatically downloaded source files
+/sources/
+
+# prebuild target binarys to provide
+/target/
+
+# mkpkg temp
+mkpkg-temp
+
+# options
+/.libreelec
+
+# private working directory
+/.work/
+
+# dedicated filesystem
+/lost+found/
+
+# symlinks...
+/sources
+/.work
+
+# ccache
+/.ccache/
+
+# backup files
+*.orig
+
+# crap
+.DS_Store
+.directory
+
+# ignore git repos from update scripts
+tools/mkpkg/*.git
+
+# ignore old linux configs
+projects/**/*.old
+
+# External CB1 build inputs
+/packages/mediacenter/kodi/cb1/
+/packages/mediacenter/kodi/cb1-model/
+/projects/Generic/patches/ffmpeg/ffmpeg-99*.patch
+/packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-99*.patch
 __pycache__/
 *.pyc
-host-tests/
-build-output/
-*.img
-*.img.gz
-*.system
-*.kernel
-*.tar
-*.zip
-*.mkv
-*.mp4
-*.hevc
-*.log

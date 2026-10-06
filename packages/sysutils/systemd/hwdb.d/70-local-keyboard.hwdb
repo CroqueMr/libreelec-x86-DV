@@ -1,0 +1,81 @@
+# auvipal g9f remote
+evdev:input:b0005v045Ep0041*
+ KEYBOARD_KEY_70071=l
+ KEYBOARD_KEY_70070=g
+ KEYBOARD_KEY_7006f=x
+ KEYBOARD_KEY_7006e=i
+
+# buzztv bt-300/bt-400 smart remote
+evdev:input:b0005v0957p1001*
+ KEYBOARD_KEY_70040=z
+ KEYBOARD_KEY_70041=esc
+ KEYBOARD_KEY_70042=t
+ KEYBOARD_KEY_70043=e
+ KEYBOARD_KEY_70044=o
+ KEYBOARD_KEY_70045=volumeup
+ KEYBOARD_KEY_70069=volumedown
+
+# Gmyle / Hama Vista Remote Control
+evdev:input:b0003v05A4p9881*
+ KEYBOARD_KEY_90002=info # "i" and "right mouse" buttons, originally BTN_RIGHT
+
+# all osmc remotes
+evdev:input:b0003v2252p17*
+ KEYBOARD_KEY_7000c=kpleftparen
+ KEYBOARD_KEY_70006=kprightparen
+
+evdev:input:b0003v2252p1069*
+ KEYBOARD_KEY_7002e=volumeup
+ KEYBOARD_KEY_7002d=volumedown
+ KEYBOARD_KEY_7000c=kpleftparen
+ KEYBOARD_KEY_70006=kprightparen
+
+evdev:input:b0003v2017p1690*
+ KEYBOARD_KEY_7002e=volumeup
+ KEYBOARD_KEY_7002d=volumedown
+ KEYBOARD_KEY_7000c=kpleftparen
+ KEYBOARD_KEY_70006=kprightparen
+
+evdev:input:b0003v2017p1689*
+ KEYBOARD_KEY_7002e=volumeup
+ KEYBOARD_KEY_7002d=volumedown
+ KEYBOARD_KEY_7000c=kpleftparen
+ KEYBOARD_KEY_70006=kprightparen
+
+evdev:input:b0003v2017p1688*
+ KEYBOARD_KEY_7004a=esc
+ KEYBOARD_KEY_c0060=kpleftparen
+ KEYBOARD_KEY_10084=kprightparen
+ KEYBOARD_KEY_7002e=volumeup
+ KEYBOARD_KEY_7002d=volumedown
+
+evdev:input:b0003v2252p1037*
+ KEYBOARD_KEY_7004a=esc
+ KEYBOARD_KEY_c0060=kpleftparen
+ KEYBOARD_KEY_10084=kprightparen
+
+# zidoo v12 remote
+evdev:input:b0005v5A44p5A44*
+ KEYBOARD_KEY_7001e=one #1
+ KEYBOARD_KEY_7001f=two #2
+ KEYBOARD_KEY_70020=three #3
+ KEYBOARD_KEY_70021=four #4
+ KEYBOARD_KEY_70022=five #5
+ KEYBOARD_KEY_70023=six #6
+ KEYBOARD_KEY_70024=seven #7
+ KEYBOARD_KEY_70025=eight #8
+ KEYBOARD_KEY_70026=nine #9
+ KEYBOARD_KEY_70027=zero #0
+ KEYBOARD_KEY_7002a=backspace
+ KEYBOARD_KEY_7003a=l #sub
+ KEYBOARD_KEY_70045=m #square key with lines
+ KEYBOARD_KEY_7009a=o #tv out
+ KEYBOARD_KEY_700b7=power #tv out green
+ KEYBOARD_KEY_c006d=c #zoom
+ KEYBOARD_KEY_c00bc=repeat
+ KEYBOARD_KEY_c01bd=i #info
+ KEYBOARD_KEY_c01b7=leftquote #audio
+ KEYBOARD_KEY_c00e2=volume_mute
+ KEYBOARD_KEY_c00e9=period #vol-up
+ KEYBOARD_KEY_c00ea=comma #vol-down
+

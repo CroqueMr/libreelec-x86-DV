@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
+# Copyright (C) 2019-present Team LibreELEC (https://libreelec.tv)
+
+PKG_NAME="libtirpc"
+PKG_VERSION="1.3.8"
+PKG_SHA256="8839959bfcc7a0f4c609d8e4f53f1c67ae33de23775ec35beb39ff15adf11920"
+PKG_LICENSE="BSD-3-Clause"
+PKG_SITE="https://sourceforge.net/projects/libtirpc/"
+PKG_URL="https://downloads.sourceforge.net/project/libtirpc/libtirpc/${PKG_VERSION}/${PKG_NAME}-${PKG_VERSION}.tar.bz2"
+PKG_DEPENDS_TARGET="toolchain"
+PKG_LONGDESC="A port of Suns Transport-Independent RPC library to Linux."
+PKG_BUILD_FLAGS="+pic"
+
+PKG_CONFIGURE_OPTS_TARGET="--enable-static --disable-shared \
+                           --disable-silent-rules \
+                           --enable-ipv6 \
+                           --disable-gssapi \
+                           --with-gnu-ld"

@@ -1,0 +1,374 @@
+diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619ecc613c0c
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
+@@ -0,0 +1,134 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cstring>
++#include <deque>
++#include <map>
++#include <memory>
++#include <vector>
++extern "C"
++{
++#include <libavcodec/packet.h>
++#include <libavutil/avutil.h>
++#include <libavutil/error.h>
++}
++
++// Present separate Blu-ray layers as the joined HEVC stream consumed by CB1.
++class CBlurayDovi
++{
++public:
++  void Reset()
++  {
++    m_base.clear();
++    m_enhancement.clear();
++    m_rpu.clear();
++    m_bytes = 0;
++  }
++
++  bool Push(const AVPacket* packet, bool enhancement)
++  {
++    if (!packet || packet->pts == AV_NOPTS_VALUE || packet->size <= 0 ||
++        static_cast<size_t>(packet->size) > MAX_BYTES - m_bytes)
++      return false;
++    if (!enhancement)
++    {
++      if (m_base.size() >= MAX_PACKETS)
++        return false;
++      Packet owned(av_packet_clone(packet));
++      if (!owned)
++        return false;
++      m_bytes += packet->size;
++      m_base.push_back(std::move(owned));
++      return true;
++    }
++    if (m_enhancement.size() >= MAX_PACKETS || m_rpu.size() >= MAX_PACKETS ||
++        m_rpu.contains(packet->pts))
++      return false;
++
++    std::vector<uint8_t> layer, rpu;
++    auto begin = Start(packet->data, packet->size, 0);
++    if (begin[0] != 0)
++      return false;
++    while (begin[0] < packet->size)
++    {
++      const auto next = Start(packet->data, packet->size, begin[1]);
++      const int size = next[0] - begin[1];
++      if (size < 2 || packet->data[begin[1]] & 0x80 || !(packet->data[begin[1]+1] & 7))
++        return false;
++      const int type = (packet->data[begin[1]] >> 1) & 63;
++      auto& destination = type == 62 ? rpu : layer;
++      destination.insert(destination.end(), {0, 0, 0, 1});
++      if (type != 62)
++        destination.insert(destination.end(), {0x7e, 1});
++      destination.insert(destination.end(), packet->data + begin[1], packet->data + next[0]);
++      if (layer.size() + rpu.size() > MAX_BYTES - m_bytes)
++        return false;
++      begin = next;
++    }
++    if (layer.empty() || rpu.empty())
++      return false;
++    Packet owned(av_packet_alloc());
++    if (!owned || av_new_packet(owned.get(), layer.size()) < 0)
++      return false;
++    std::memcpy(owned->data, layer.data(), layer.size());
++    m_bytes += layer.size() + rpu.size();
++    m_enhancement.push_back(std::move(owned));
++    m_rpu.emplace(packet->pts, std::move(rpu));
++    return true;
++  }
++
++  int Take(AVPacket* output)
++  {
++    if (m_base.empty() || m_enhancement.empty())
++      return AVERROR(EAGAIN);
++    auto rpu = m_rpu.find(m_base.front()->pts);
++    if (rpu == m_rpu.end())
++      return AVERROR(EAGAIN);
++    const auto& layer = m_enhancement.front();
++    const int baseSize = m_base.front()->size;
++    const size_t extra = layer->size + rpu->second.size();
++    if (extra > MAX_BYTES - static_cast<size_t>(baseSize))
++      return AVERROR_INVALIDDATA;
++    Packet joined(av_packet_clone(m_base.front().get()));
++    if (!joined || av_grow_packet(joined.get(), extra) < 0)
++      return AVERROR(ENOMEM);
++    std::memcpy(joined->data + baseSize, layer->data, layer->size);
++    std::memcpy(joined->data + baseSize + layer->size, rpu->second.data(), rpu->second.size());
++    m_bytes -= baseSize + extra;
++    av_packet_move_ref(output, joined.get());
++    m_base.pop_front();
++    m_enhancement.pop_front();
++    m_rpu.erase(rpu);
++    return 0;
++  }
++
++  bool Pending() const { return !m_base.empty() || !m_enhancement.empty() || !m_rpu.empty(); }
++
++private:
++  static constexpr size_t MAX_PACKETS = 32;
++  static constexpr size_t MAX_BYTES = 64u * 1024u * 1024u;
++  struct Release { void operator()(AVPacket* p) const { av_packet_free(&p); } };
++  using Packet = std::unique_ptr<AVPacket, Release>;
++
++  // Return the prefix and payload positions of the next Annex-B NAL.
++  static std::array<int, 2> Start(const uint8_t* data, int size, int from)
++  {
++    for (int i = from; i < size - 2; ++i)
++    {
++      if (data[i] || data[i+1])
++        continue;
++      if (data[i+2] == 1)
++        return {i, i+3};
++      if (i < size - 3 && !data[i+2] && data[i+3] == 1)
++        return {i, i+4};
++    }
++    return {size, size};
++  }
++
++  std::deque<Packet> m_base, m_enhancement;
++  // Keep each layer's decode order; associate RPU only by presentation time.
++  std::map<int64_t, std::vector<uint8_t>> m_rpu;
++  size_t m_bytes{0};
++};
+diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
+index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a67467a018f4 100644
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include "DVDDemuxUtils.h"
+ #ifdef HAVE_DVBRIDGE
++#include "BlurayDovi.h"
+ #include "cores/VideoPlayer/DVDStreamInfo.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+ extern "C"
+@@ -730,6 +731,10 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool
+ 
+ void CDVDDemuxFFmpeg::Dispose()
+ {
++#ifdef HAVE_DVBRIDGE
++  m_blurayDovi.reset();
++  m_blurayBase = m_blurayEnhancement = -1;
++#endif
+   m_pkt.result = -1;
+   av_packet_unref(&m_pkt.pkt);
+ 
+@@ -767,6 +772,10 @@ bool CDVDDemuxFFmpeg::Reset()
+ 
+ void CDVDDemuxFFmpeg::Flush()
+ {
++#ifdef HAVE_DVBRIDGE
++  if (m_blurayDovi)
++    m_blurayDovi->Reset();
++#endif
+   if (m_pFormatContext)
+   {
+     if (m_pFormatContext->pb)
+@@ -1106,7 +1115,12 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
+ 
+         // timeout reads after 100ms
+         m_timeout.Set(20s);
++#ifdef HAVE_DVBRIDGE
++        m_pkt.result = m_blurayDovi ? ReadBlurayDovi(&m_pkt.pkt) :
++            av_read_frame(m_pFormatContext, &m_pkt.pkt);
++#else
+         m_pkt.result = av_read_frame(m_pFormatContext, &m_pkt.pkt);
++#endif
+         m_timeout.SetInfinite();
+       }
+ 
+@@ -1645,6 +1659,9 @@ double CDVDDemuxFFmpeg::SelectAspect(AVStream* st, bool& forced)
+ 
+ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
+ {
++#ifdef HAVE_DVBRIDGE
++  InitBlurayDovi(program);
++#endif
+   // changes must keep increasing across rebuilds; consumers detect a rebuild by comparing values
+   std::map<int, int> prevChanges;
+   for (const auto& [streamIdx, stream] : m_streams)
+@@ -1703,7 +1720,11 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
+       for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
+       {
+         m_pFormatContext->streams[i]->discard = AVDISCARD_NONE;
+-        if (GetStream(i) == nullptr)
++        if (GetStream(i) == nullptr
++#ifdef HAVE_DVBRIDGE
++            && static_cast<int>(i) != m_blurayEnhancement
++#endif
++        )
+           m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
+       }
+     }
+@@ -2252,8 +2273,13 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
+       // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
+       if (pStream->id == 0x1015)
+       {
++#ifdef HAVE_DVBRIDGE
++        if (streamIdx != m_blurayEnhancement)
++#endif
++        {
+         CLog::Log(LOGDEBUG, "CDVDDemuxFFmpeg::AddStream - discarding Dolby Vision stream");
+         pStream->discard = AVDISCARD_ALL;
++        }
+         delete stream;
+         return nullptr;
+       }
+@@ -2499,8 +2525,12 @@ bool CDVDDemuxFFmpeg::IsProgramChange()
+ 
+   for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
+   {
+-    int idx = m_pFormatContext->programs[m_program]->stream_index[i];
+-    if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
++      int idx = m_pFormatContext->programs[m_program]->stream_index[i];
++#ifdef HAVE_DVBRIDGE
++      if (idx == m_blurayEnhancement)
++        continue;
++#endif
++      if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
+       continue;
+     CDemuxStream* stream = GetStream(idx);
+     if (!stream)
+@@ -2885,6 +2915,106 @@ void CDVDDemuxFFmpeg::GetL16Parameters(int &channels, int &samplerate)
+   }
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
++{
++  m_blurayDovi.reset();
++  m_blurayBase = m_blurayEnhancement = -1;
++  if (!m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
++    return;
++  const auto component = CServiceBroker::GetSettingsComponent();
++  const auto settings = component ? component->GetSettings() : nullptr;
++  if (settings && settings->GetInt("dvbridge.outputmode") == 2)
++    return;
++  if (program >= m_pFormatContext->nb_programs)
++  {
++    program = 0;
++    while (program < m_pFormatContext->nb_programs &&
++           !m_pFormatContext->programs[program]->nb_stream_indexes)
++      ++program;
++  }
++  for (unsigned int i = 0; i < m_pFormatContext->nb_stream_groups; ++i)
++  {
++    const auto* group = m_pFormatContext->stream_groups[i];
++    if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION || group->nb_streams != 2)
++      continue;
++    const auto elIndex = group->params.layered_video->el_index;
++    if (elIndex > 1)
++      continue;
++    AVStream* el = group->streams[elIndex];
++    AVStream* bl = group->streams[1 - elIndex];
++    if (bl->codecpar->codec_id != AV_CODEC_ID_HEVC || el->codecpar->codec_id != AV_CODEC_ID_HEVC)
++      continue;
++    if (program < m_pFormatContext->nb_programs)
++    {
++      const auto* selected = m_pFormatContext->programs[program];
++      const auto end = selected->stream_index + selected->nb_stream_indexes;
++      if (std::find(selected->stream_index, end, bl->index) == end ||
++          std::find(selected->stream_index, end, el->index) == end)
++        continue;
++    }
++    if (av_cmp_q(bl->time_base, el->time_base))
++    {
++      CLog::Log(LOGWARNING, "DV Blu-ray: incompatible layer time bases");
++      return;
++    }
++    auto* config = av_packet_side_data_new(&bl->codecpar->coded_side_data,
++        &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF,
++        sizeof(AVDOVIDecoderConfigurationRecord), 0);
++    if (!config)
++      return;
++    auto* dv = reinterpret_cast<AVDOVIDecoderConfigurationRecord*>(config->data);
++    // HDMV dual-layer HEVC is Profile 7. Blu-ray does not signal a DV level.
++    *dv = {};
++    dv->dv_version_major = 1;
++    dv->dv_profile = 7;
++    dv->rpu_present_flag = dv->el_present_flag = dv->bl_present_flag = 1;
++    dv->dv_bl_signal_compatibility_id = 6;
++    if (el->codecpar->extradata && el->codecpar->extradata_size >= 23)
++    {
++      auto* extra = av_packet_side_data_new(&bl->codecpar->coded_side_data,
++          &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF,
++          el->codecpar->extradata_size, 0);
++      if (!extra)
++        return;
++      std::memcpy(extra->data, el->codecpar->extradata, extra->size);
++    }
++    m_blurayBase = bl->index;
++    m_blurayEnhancement = el->index;
++    bl->discard = el->discard = AVDISCARD_NONE;
++    m_blurayDovi = std::make_unique<CBlurayDovi>();
++    CLog::Log(LOGINFO, "DV Blu-ray: joined Profile 7 input, BL={} EL={}", bl->id, el->id);
++    return;
++  }
++}
++
++int CDVDDemuxFFmpeg::ReadBlurayDovi(AVPacket* packet)
++{
++  int result = m_blurayDovi->Take(packet);
++  while (result == AVERROR(EAGAIN))
++  {
++    result = av_read_frame(m_pFormatContext, packet);
++    if (result < 0)
++    {
++      if (result == AVERROR_EOF && m_blurayDovi->Pending())
++        CLog::Log(LOGWARNING, "DV Blu-ray: incomplete layer pair at end of stream");
++      return result;
++    }
++    if (packet->stream_index != m_blurayBase && packet->stream_index != m_blurayEnhancement)
++      return result;
++    const bool accepted = m_blurayDovi->Push(packet, packet->stream_index == m_blurayEnhancement);
++    av_packet_unref(packet);
++    if (!accepted)
++    {
++      CLog::Log(LOGERROR, "DV Blu-ray: invalid layer packet or pairing queue exceeded");
++      return AVERROR_INVALIDDATA;
++    }
++    result = m_blurayDovi->Take(packet);
++  }
++  return result;
++}
++#endif
++
+ StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
+ {
+   StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
+diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
+index 541e2e4efb7283d7891a821ef9c1cae5760b7e70..626017a0d42d8b84a1d4f50ff8ed17c066f17cd5 100644
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
+@@ -20,6 +20,9 @@ extern "C" {
+ }
+ 
+ class CDVDDemuxFFmpeg;
++#ifdef HAVE_DVBRIDGE
++class CBlurayDovi;
++#endif
+ class CDVDInputStream;
+ class CURL;
+ struct ChapterFFmpeg;
+@@ -149,6 +152,13 @@ protected:
+ 
+   StreamHdrType DetermineHdrType(AVStream* pStream);
+ 
++#ifdef HAVE_DVBRIDGE
++  void InitBlurayDovi(unsigned int program);
++  int ReadBlurayDovi(AVPacket* packet);
++  std::unique_ptr<CBlurayDovi> m_blurayDovi;
++  int m_blurayBase{-1}, m_blurayEnhancement{-1};
++#endif
++
+   CCriticalSection m_critSection;
+   std::map<int, CDemuxStream*> m_streams;
+   std::map<int, std::unique_ptr<CDemuxParserFFmpeg>> m_parsers;

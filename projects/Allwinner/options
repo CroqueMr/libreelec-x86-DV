@@ -1,0 +1,66 @@
+################################################################################
+# setup system defaults
+################################################################################
+
+  # Bootloader to use (syslinux / u-boot / bcm2835-bootloader)
+    BOOTLOADER="u-boot"
+
+  # Additional kernel make parameters (for example to specify the u-boot loadaddress)
+    KERNEL_MAKE_EXTRACMD="dtbs"
+
+  # Additional kernel dependencies
+    KERNEL_EXTRA_DEPENDS_TARGET=""
+
+  # Kernel to use. values can be:
+  # default:  default mainline kernel
+    LINUX="default"
+
+    EXTRA_CMDLINE="console=ttyS0,115200 console=tty1"
+
+################################################################################
+# setup build defaults
+################################################################################
+
+  # Project CFLAGS
+    PROJECT_CFLAGS=""
+
+  # SquashFS compression method (gzip / lzo / xz / zstd)
+    SQUASHFS_COMPRESSION="zstd"
+
+################################################################################
+# setup project defaults
+################################################################################
+
+  # OpenGL implementation to use (no / mesa)
+    OPENGL="no"
+
+  # Vulkan implementation to use (vulkan-loader / no)
+    VULKAN="no"
+
+  # Displayserver to use (wl / no)
+    DISPLAYSERVER="no"
+
+  # Windowmanager to use (weston / no)
+    WINDOWMANAGER="no"
+
+  # Graphic drivers to use (all / lima,panfrost)
+  # Space separated list is supported,
+  # e.g. GRAPHIC_DRIVERS="lima panfrost"
+    GRAPHIC_DRIVERS="lima panfrost"
+
+  # use the kernel CEC framework for libcec (yes / no)
+    CEC_FRAMEWORK_SUPPORT="yes"
+
+  # additional Firmware to use (dvb-firmware, misc-firmware, wlan-firmware)
+  # Space separated list is supported,
+  # e.g. FIRMWARE="dvb-firmware misc-firmware wlan-firmware"
+    FIRMWARE="misc-firmware wlan-firmware dvb-firmware brcmfmac_sdio-firmware"
+
+  # build with installer (yes / no)
+    INSTALLER_SUPPORT="no"
+
+  # additional packages to install:
+    ADDITIONAL_PACKAGES+=" dt-overlays"
+
+  # debug tty path
+    DEBUG_TTY="/dev/console"

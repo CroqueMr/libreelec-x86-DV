@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
+
+PKG_NAME="oscam"
+PKG_VERSION="11966"
+PKG_SHA256="44097b27d5d4baf749da419564efbe59e5e120bc4aa4296559dd1435ea2b76fa"
+PKG_REV="9"
+PKG_ARCH="any"
+PKG_LICENSE="GPL-3.0-only"
+PKG_SITE="https://git.streamboard.tv/common/oscam/-/wikis"
+PKG_URL="https://git.streamboard.tv/common/oscam/-/archive/${PKG_VERSION}/oscam-${PKG_VERSION}.tar.gz"
+PKG_DEPENDS_TARGET="toolchain openssl pcsc-lite"
+PKG_SECTION="service.softcam"
+PKG_SHORTDESC="OSCam: an Open Source Conditional Access Modul"
+PKG_LONGDESC="OSCam is a software to be used to decrypt digital television channels, as an alternative for a conditional access module."
+
+PKG_IS_ADDON="yes"
+PKG_ADDON_NAME="OSCam"
+PKG_ADDON_ICON_NAME="none"
+PKG_ADDON_ICON_SIZE="250"
+PKG_ADDON_ICON_OFFSET='+5'
+PKG_ADDON_TYPE="xbmc.service"
+
+PKG_CMAKE_OPTS_TARGET="\
+  `#Building` \
+  -DLIBUSBDIR=${SYSROOT_PREFIX}/usr \
+  -DOPTIONAL_INCLUDE_DIR=${SYSROOT_PREFIX}/usr/include \
+  \
+  `#Readers` \
+  -DCARDREADER_DB2COM=OFF \
+  -DCARDREADER_DRECAS=ON \
+  -DCARDREADER_INTERNAL=OFF \
+  -DCARDREADER_MP35=ON \
+  -DCARDREADER_PHOENIX=ON \
+  -DCARDREADER_SC8IN1=ON \
+  -DCARDREADER_SMARGO=ON \
+  -DCARDREADER_STAPI5=OFF \
+  -DCARDREADER_STAPI=OFF \
+  -DCARDREADER_STINGER=ON \
+  \
+  `#Protocol` \
+  -DMODULE_CAMD33=OFF \
+  -DMODULE_CAMD35=ON \
+  -DMODULE_CAMD35_TCP=ON \
+  -DMODULE_CCCAM=ON \
+  -DMODULE_CCCSHARE=ON \
+  -DMODULE_CONSTCW=ON \
+  -DMODULE_GBOX=ON \
+  -DMODULE_GHTTP=ON \
+  -DMODULE_NEWCAMD=ON \
+  -DMODULE_PANDORA=ON \
+  -DMODULE_RADEGAST=ON \
+  -DMODULE_SCAM=ON \
+  -DMODULE_SERIAL=ON \
+  \
+  `#Features` \
+  -DCLOCKFIX=0 \
+  -DCS_ANTICASC=ON \
+  -DCS_CACHEEX=ON \
+  -DCW_CYCLE_CHECK=ON \
+  -DHAVE_DVBAPI=1 \
+  -DHAVE_LIBCRYPTO=1 \
+  -DSTATIC_LIBCRYPTO=0 \
+  -DHAVE_LIBUSB=1 \
+  -DSTATIC_LIBUSB=1 \
+  -DHAVE_PCSC=1 \
+  -DSTATIC_PCSC=0 \
+  -DWEBIF=1 \
+  -DWEBIF_LIVELOG=1 \
+  -DWEBIF_JQUERY=1 \
+  -DWITH_DEBUG=0 \
+  -DWITH_SSL=1 \
+  -DSTATIC_SSL=0 \
+  -DWITH_STAPI=0"
+
+makeinstall_target() {
+  :
+}
+
+addon() {
+  mkdir -p ${ADDON_BUILD}/${PKG_ADDON_ID}/{bin,lib.private}
+    cp -P ${PKG_BUILD}/.${TARGET_NAME}/oscam ${ADDON_BUILD}/${PKG_ADDON_ID}/bin
+    cp -P ${PKG_BUILD}/.${TARGET_NAME}/utils/list_smargo ${ADDON_BUILD}/${PKG_ADDON_ID}/bin
+    cp -L $(get_install_dir pcsc-lite)/usr/lib/libpcsclite.so.1 ${ADDON_BUILD}/${PKG_ADDON_ID}/lib.private
+    cp -L $(get_install_dir pcsc-lite)/usr/lib/libpcsclite_real.so.1 ${ADDON_BUILD}/${PKG_ADDON_ID}/lib.private
+
+  patchelf --add-rpath '${ORIGIN}/../lib.private' ${ADDON_BUILD}/${PKG_ADDON_ID}/bin/oscam
+  patchelf --add-rpath '${ORIGIN}/../lib.private' ${ADDON_BUILD}/${PKG_ADDON_ID}/lib.private/libpcsclite.so.1
+}
