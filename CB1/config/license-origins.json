@@ -1,0 +1,12 @@
+{
+  "files": {
+    "LICENSES/UPSTREAM-NOTICES.txt": "a44befd1a6360e47ad2677d30882e89d75febdb69bd4a9c9dd8ca1bcb947361e",
+    "LICENSES/LGPL-2.1.txt": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+    "LICENSES/MIT-project.txt": "ed8160409354e01f499bd82f970ea8c016ac6caa020478ff35f9430e5d2cd780",
+    "LICENSES/GPL-2.0.txt": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+    "LICENSES/MIT-dovi-tool.txt": "caccf5c54e2ce8f99d9f87f4251ce7bdc3122d68dd12fe8fa79592091bc3a6d6",
+    "LICENSES/MIT-kernel.txt": "323c587d0ccf10e376f8bf9a7f31fb4ca6078105194b42e0b1e0ee2bc9bde71f",
+    "LICENSES/GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "LICENSES/canonical-checksums.json": "af9e09d2c8232cf42712cdb20c269fd4e20a3e882ddbacc78361fcf4be52a783"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "ownership": {
+    "ffmpeg": "CB1 canonical patches",
+    "libplacebo": "CB1 canonical patches"
+  },
+  "ffmpeg": {
+    "version": "9.0",
+    "upstream_release_reference": "d32b387f2b0a484599d4587d651891f0c63c4238",
+    "upstream_tag": "n9.0",
+    "upstream_tag_object": "5b9252abfe2fda0ccb71ed45cd7a954cc45d2b6f",
+    "inherited_notice_revision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+    "source_authority": "The exact pinned archive digest is authoritative; release-tag reference is not an archive byte-equivalence claim. Inherited notice locator is a later 9.0.2 commit and is not the extraction source.",
+    "known_release_reference_divergence": "The pinned archive dovi_rpudec.c lacks the n9.0 VALIDATE(mapping->num_x_partitions, 1, 0xFFFF) and VALIDATE(mapping->num_y_partitions, 1, 0xFFFF) lines. Metadata header and isom_tags.c match the n9.0 reference. No source pin, patch or algorithm was changed.",
+    "official_archive_verification": "A fresh HTTPS retrieval from source_url on 2026-10-01 has the exact archive_sha256 and byte-identical parser. Both official and pinned archives lack the two Git-reference lines; no cache/official-archive divergence was found.",
+    "source_url": "https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz",
+    "archive": "ffmpeg-9.0.tar.xz",
+    "archive_sha256": "7f607a00dd0d28a729d5a4811205812eef01cf6ef6155025febb6f36a9062d52",
+    "modified": true,
+    "interfaces": [
+      "AVDOVIDmData.dvbridge_raw_magic",
+      "AVDOVIDmData.dvbridge_original_length",
+      "AVDOVIDmData.dvbridge_original_bytes[32]",
+      "AVDOVIMetadata.ext_block_size",
+      "ff_dovi_attach_side_data"
+    ],
+    "compatibility": "Matched pinned modified headers and producer/consumer only; arbitrary binary mixes unsupported"
+  },
+  "libplacebo": {
+    "version": "7.372.0",
+    "upstream_revision": "e2972fdd09adacd383656738d7d280f0cd84a761",
+    "source_url": "https://github.com/haasn/libplacebo/archive/e2972fdd09adacd383656738d7d280f0cd84a761.tar.gz",
+    "archive": "libplacebo-e2972fdd09adacd383656738d7d280f0cd84a761.tar.gz",
+    "archive_sha256": "2dc029b7686455054fb5e76dd8c084cbf4fa4159f33364c5b7f9afc8b3611811",
+    "modified": true,
+    "numerical_realization": "Existing default-off cb1_stable_pq uses the original ST2084 operator/constants/domain. Its shared inverse helper uses a fixed general expm1 P5(z/16) seed and four deficit doublings, an explicitly bounded primitive approximation, not an exact identity or fitted curve. Original nonpositive-to-zero behavior is retained with positive-only log; negative super-white deficits and the final power remain. Forward emission and native/Basic are unchanged.",
+    "interfaces": [
+      "pl_render_params.min_fbo_precision",
+      "pl_render_params.cb1_nearest_identity (default off, matched policy ABI required)",
+      "pl_color_map_params.cb1_fp32_tone_lut (default off, matched policy ABI required)",
+      "pl_render_params.cb1_stable_pq and pl_shader_params.cb1_stable_pq (default off)",
+      "pl_dispatch_mark_cb1_stable_pq (matched renderer/shader/dispatch ABI required)",
+      "pl_render_params.cb1_fp32_scaler_lut and pl_sample_filter_params.cb1_fp32_lut (default off)",
+      "pl_render_params.cb1_hook_color_space (default off, matched renderer ABI; effective hook domain)",
+      "pl_sample_filter_cb1_fp32_lut_format (matched orthogonal sampler format ABI)",
+      "Custom shader prelude extension ordering and FP32 reconstruction changes"
+    ]
+  },
+  "patches": {
+    "patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch": "b83a9f89befad875d90bd483dd5fdea4e293af037ac2f8c16ebf1bd26d30e2c4",
+    "patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch": "c86fe701ec00bb74fee4b7d8e87133d2d7cb43ce3d217f3ec128f8bcc9487fbb",
+    "patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": "953cfb01339263c02c7932eb67e30ea6603613a1800fa4041f46b5f3ffb10fe0",
+    "patches/libplacebo/libplacebo-9900-0-src__dispatch.c.patch": "6011006138e5c40670e4d7eb83cf86523354e23d4ca7ea2a622eafd4dee581bb",
+    "patches/libplacebo/libplacebo-9900-1-src__opengl__gpu.c.patch": "acc0e901671fc8a0c7fa442dbb69ef149d524c1af47ad40b6d7da919d3f820ad",
+    "patches/libplacebo/libplacebo-9910-0.patch": "75a501531aa22280cd635fbb2220b72c1a1205236111bece10ec9dba6c0e311a",
+    "patches/libplacebo/libplacebo-9910-1.patch": "0ede69e48f924f9cfd0de765d2e45408eb5c3f5b6db7f3fafa2b876efb7046bf",
+    "patches/libplacebo/libplacebo-9910-2.patch": "7e9fab2583738a76464505bdd8356a3fae02305ba3a027b0a42ab2d878f2ac13",
+    "patches/libplacebo/libplacebo-9910-3.patch": "8bd556c5db4b2e1612bb374ef48148275b652fb287cb1d89d40d5d4b3690a173",
+    "patches/libplacebo/libplacebo-9910-4.patch": "69c953b17a4a54b637d1dea07e56a203a14bd437b7e1b8a95bcf769766131070",
+    "patches/libplacebo/libplacebo-9910-5-custom-prelude.patch": "f42648f811f1029882e4abe5ecc4d5ace9c88758866e5771f72e947209e12e5f",
+    "patches/libplacebo/libplacebo-9910-6-centered-lanczos.patch": "308ddc9d1c8747358e87b8833388cc3289d20a8d45311562ace48e8c9b66c06f",
+    "patches/libplacebo/libplacebo-9910-7-policy-identity-sampling.patch": "a12aa852479defcc937b034dcfaef0b4ea437084024b0f710dea6d56cd462486",
+    "patches/libplacebo/libplacebo-9910-8-policy-tone-lut-fp32.patch": "5e8b6ee90a0dedda976773fefb22bf6b1f0c425c5127817dc91917ae931998b4",
+    "patches/libplacebo/libplacebo-9910-9-policy-stable-pq.patch": "4dbdd0923a3111e51eb4c7ceccb0c12bb29d1aa1cd371186c46535180474d1be",
+    "patches/libplacebo/libplacebo-9911-0-policy-scaler-lut-fp32.patch": "ae6335437763c5cf451618675338cc180e72d375f49a146a907b368cfa0d20e4",
+    "patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": "496c5c1bcfadcecdd62e6bae738448ca43b795987a19d936f7be00c72eacb345"
+  },
+  "modified_sources": {
+    "ffmpeg/libavcodec/dovi_rpudec.c": "8c25559492f09b6d114e05c64aee550b00388d9a187dd84176fe508a1dbb348f",
+    "ffmpeg/libavformat/isom_tags.c": "9e93c484c91d4f6e8c6f97c7cbe22058821685ef04f2a0347c316f82ed9dcf4b",
+    "ffmpeg/libavutil/dovi_meta.h": "f860511cb8be3c992b4ef7da6747d8dc9670d64d276aeab3a7e6867112857a02",
+    "libplacebo/src/dispatch.c": "72d72ea25d3a13016b08e3e31fcf3e999199da2578fd255add6f199a0ad7aa26",
+    "libplacebo/src/opengl/gpu.c": "d76e0547129e142966c9825eb8173269ab9ff4f360f8851e2c3e9789b56a2182",
+    "libplacebo/src/opengl/formats.c": "a57ec2a106860a6e7e2ffb0ed992556c9146a37295e5a4790633c93594f9e0c6",
+    "libplacebo/src/include/libplacebo/renderer.h": "7ae59cc3257a228ac299ca9da89099e4d34d06448f927c12d7001179165f9cc1",
+    "libplacebo/src/include/libplacebo/shaders/sampling.h": "7dcdc72af6fd23ff32925433f112dd6bad95267c6ee9ba7e2616011c626c0f57",
+    "libplacebo/src/include/libplacebo/shaders.h": "bdc29cddb6545d09ce4b2c6602237cbb5d50c5ac2c1c55cecf9fa4794086bb60",
+    "libplacebo/src/include/libplacebo/dispatch.h": "2208cbf66dc61069377d645309852319657be4b12fee6297315a2310ceb75d26",
+    "libplacebo/src/renderer.c": "1bd46f73c66bf25d27c2c3b3cfacffcad120435e75e6a7e0d2f005c878617dc1",
+    "libplacebo/src/shaders/colorspace.c": "3935f4574325ed7b2d539b42135f82e9cfdec96ee0b3aaf7b8c61586b2c418bf",
+    "libplacebo/src/include/libplacebo/shaders/colorspace.h": "db4688a39c0c0323a8b8e507672a2ee573b4a7618efcea0d9d8de2db33eb2baa",
+    "libplacebo/src/shaders/sampling.c": "940f3836a3a8e89a0304204ab06e4a6e6f9b325fe6dfd16396f1ee0384675988"
+  }
+}

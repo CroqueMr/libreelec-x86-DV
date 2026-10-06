@@ -1,0 +1,34 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Read-only local collection. Never upload logs or change playback settings.
+set -eu
+umask 077
+if [ "${1:-collect}" != collect ]; then
+    echo 'Usage: dv-diagnostics [collect]'
+    echo 'Detail on/off: Kodi > Settings > System > Logging > Enable debug logging.'
+    exit 2
+fi
+report=$(mktemp -d /storage/dv-diagnostics.XXXXXX)
+cp /storage/.kodi/temp/kodi.log "$report/kodi.log" 2>/dev/null || :
+cp /storage/.kodi/temp/kodi.old.log "$report/kodi.old.log" 2>/dev/null || :
+journalctl -k -b --no-pager > "$report/kernel.log" 2>&1 || :
+uname -a > "$report/system.txt"
+cat /etc/os-release >> "$report/system.txt"
+for connector in /sys/class/drm/card*-*; do
+    [ -f "$connector/status" ] || continue
+    name=${connector##*/}
+    cat "$connector/status" > "$report/$name-status.txt"
+    cat "$connector/modes" > "$report/$name-modes.txt" 2>/dev/null || :
+    cat "$connector/edid" > "$report/$name-edid.bin" 2>/dev/null || :
+done
+for driver in i915 xe; do
+    value=/sys/module/$driver/parameters/enable_dv_lab
+    if [ -r "$value" ]; then
+        printf '%s enable_dv_lab=' "$driver" >> "$report/system.txt"
+        cat "$value" >> "$report/system.txt"
+    fi
+done
+tar -czf "$report.tar.gz" -C "$report" .
+printf 'Saved locally: %s.tar.gz\n' "$report"
+echo 'No upload performed. Logs may contain media paths, addresses and display identifiers.'
+echo 'Review/redact personal data before sharing. Both the folder and archive are retained.'

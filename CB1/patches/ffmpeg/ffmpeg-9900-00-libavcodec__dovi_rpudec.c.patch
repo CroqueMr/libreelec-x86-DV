@@ -1,0 +1,20 @@
+--- a/libavcodec/dovi_rpudec.c
++++ b/libavcodec/dovi_rpudec.c
+@@ -319,6 +319,17 @@
+ 
+         memset(dm, 0, sizeof(*dm));
+         dm->level = level;
++        /* Validate before copying from the bitreader, including non-byte-aligned
++         * block starts. Static/compressed state inherits this trailer naturally. */
++        if (ext_block_length < 0 || ext_block_length > get_bits_left(gb) / 8)
++            return AVERROR_INVALIDDATA;
++        dm->dvbridge_original_length = ext_block_length;
++        if (ext_block_length <= sizeof(dm->dvbridge_original_bytes)) {
++            GetBitContext raw = *gb;
++            for (int j = 0; j < ext_block_length; j++)
++                dm->dvbridge_original_bytes[j] = get_bits(&raw, 8);
++            dm->dvbridge_raw_magic = 0x41424456;
++        }
+         switch (ver) {
+         case 1: ret = parse_ext_v1(s, gb, dm); break;
+         case 2: ret = parse_ext_v2(s, gb, dm, ext_block_length); break;

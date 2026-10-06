@@ -1,0 +1,15 @@
+--- /dev/null
++++ b/drivers/gpu/drm/i915/display/intel_dvbridge_hdr_policy.h
+@@ -0,0 +1,12 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef INTEL_DVBRIDGE_HDR_POLICY_H
++#define INTEL_DVBRIDGE_HDR_POLICY_H
++/* Do not sacrifice HDR precision when 4:2:0 deep colour fits the actual link.
++ * Standard-DV's byte-preserving RGB8 tunnel is deliberately excluded. */
++static inline bool intel_dvbridge_hdr_retry_420(bool lab_hdr, bool strict_limits,
++    bool rgb, int actual_bpp, int requested_bpp, bool allowed, bool mode_also)
++{
++    return lab_hdr && strict_limits && rgb && actual_bpp < 30 &&
++           requested_bpp >= 30 && allowed && mode_also;
++}
++#endif

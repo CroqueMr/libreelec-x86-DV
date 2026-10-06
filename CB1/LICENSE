@@ -1,0 +1,8 @@
+This repository contains differently licensed components.
+
+The shared C engine and marked engine tests retain GPL-3.0-or-later.
+Original extraction tooling and documentation are MIT, unless explicitly marked.
+FFmpeg/libplacebo patches retain the terms of their upstream source.
+
+Read docs/LICENSING.md and LICENSES/ before redistribution.
+No blanket relicensing or independent legal clearance is granted.

@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+#ifndef DVBRIDGE_PACK_SOURCES_H
+#define DVBRIDGE_PACK_SOURCES_H
+/* Existing canonical transport shader text, generated at configure time. */
+static const char cb1_pack_vertex[] = "@CB1_PACK_VERTEX@";
+static const char cb1_pack_fragment[] = "@CB1_PACK_FRAGMENT@";
+#endif

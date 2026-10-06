@@ -1,0 +1,12 @@
+This repository contains differently licensed components.
+
+Original repository tooling, documentation and test harness: MIT; see
+LICENSES/MIT-project.txt. Explicit file notices take precedence.
+
+Patches retain the licenses of their target code and inherited contributions.
+The combined DV-enabled Kodi build is GPL-3.0-or-later. Linux remains a separate
+GPL-2.0-only program. FFmpeg and libplacebo retain their applicable licenses.
+
+Read docs/LICENSING.md and the complete texts/notices in LICENSES/ before
+redistributing sources or binaries. No blanket MIT license is granted over
+third-party code by this file.

@@ -1,0 +1,4 @@
+* -text
+*.patch -whitespace
+licenses/cb1/*.txt -whitespace
+CB1/LICENSES/*.txt -whitespace

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "files": {
+    "GPL-2.0.txt": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+    "GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "LGPL-2.1.txt": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+  },
+  "sources": {
+    "GPL-3.0.txt": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    "GPL-2.0.txt": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
+    "LGPL-2.1.txt": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+  }
+}

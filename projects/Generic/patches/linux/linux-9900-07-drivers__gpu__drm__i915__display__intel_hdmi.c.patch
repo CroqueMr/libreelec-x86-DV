@@ -1,0 +1,169 @@
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -46,6 +46,8 @@
+ 
+ #include "g4x_hdmi.h"
+ #include "intel_atomic.h"
++#include "intel_dv_lab_policy.h"
++#include "intel_dvbridge_hdr_policy.h"
+ #include "intel_audio.h"
+ #include "intel_connector.h"
+ #include "intel_cx0_phy.h"
+@@ -770,6 +772,17 @@
+ 
+ 	drm_hdmi_avi_infoframe_content_type(frame, conn_state);
+ 
++	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
++		/* RGB is a byte tunnel here, not an RGB color-managed picture. */
++		frame->video_code = intel_dv_lab_avi_vic(drm_match_cea_mode(adjusted_mode));
++		if (!frame->video_code)
++			return false;
++		frame->colorspace = HDMI_COLORSPACE_RGB;
++		frame->colorimetry = HDMI_COLORIMETRY_NONE;
++		frame->extended_colorimetry = 0;
++		frame->quantization_range = HDMI_QUANTIZATION_RANGE_FULL;
++	}
++
+ 	/* TODO: handle pixel repetition for YCBCR420 outputs */
+ 
+ 	ret = hdmi_avi_infoframe_check(frame);
+@@ -827,6 +840,21 @@
+ 
+ 	crtc_state->infoframes.enable |=
+ 		intel_hdmi_infoframe_enable(HDMI_INFOFRAME_TYPE_VENDOR);
++
++	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
++		struct hdmi_dolby_vendor_infoframe *dv =
++			&crtc_state->infoframes.hdmi.vendor.dolby;
++
++		/* AVI carries the CTA timing. Reserve the vendor slot for Dolby;
++		 * do not generate HDMI-1.4's competing 4K VIC vendor packet.
++		 */
++		if (!intel_dv_lab_avi_vic(drm_match_cea_mode(&crtc_state->hw.adjusted_mode)) ||
++		    (crtc_state->hw.adjusted_mode.flags & DRM_MODE_FLAG_3D_MASK))
++			return false;
++		hdmi_dolby_vendor_infoframe_init(dv);
++		dv->signal = true;
++		return hdmi_dolby_vendor_infoframe_check(dv) == 0;
++	}
+ 
+ 	ret = drm_hdmi_vendor_infoframe_from_display_mode(frame,
+ 							  conn_state->connector,
+@@ -2298,6 +2326,21 @@
+ 	return intel_hdmi_compute_clock(encoder, crtc_state, respect_downstream_limits);
+ }
+ 
++static bool intel_dvbridge_hdr_deep_requested(struct intel_display *display,
++					 const struct drm_connector_state *state)
++{
++	const struct hdr_output_metadata *hdr;
++
++	if (!display->params.enable_dv_lab || !display->platform.lunarlake ||
++	    to_intel_digital_connector_state(state)->dv_lab_standard ||
++	    state->max_requested_bpc < 10 || !state->hdr_output_metadata ||
++	    state->hdr_output_metadata->length < sizeof(*hdr))
++		return false;
++	hdr = state->hdr_output_metadata->data;
++	return hdr->metadata_type == 0 &&
++		hdr->hdmi_metadata_type1.eotf == HDMI_EOTF_SMPTE_ST2084;
++}
++
+ static int intel_hdmi_compute_formats(struct intel_encoder *encoder,
+ 				      struct intel_crtc_state *crtc_state,
+ 				      const struct drm_connector_state *conn_state,
+@@ -2307,6 +2350,7 @@
+ 	struct intel_connector *connector = to_intel_connector(conn_state->connector);
+ 	const struct drm_display_mode *adjusted_mode = &crtc_state->hw.adjusted_mode;
+ 	const struct drm_display_info *info = &connector->base.display_info;
++	int requested_bpp = crtc_state->pipe_bpp;
+ 	int ret;
+ 
+ 	if (drm_mode_is_420_only(info, adjusted_mode)) {
+@@ -2326,6 +2370,22 @@
+ 		ret = intel_hdmi_compute_output_format(encoder, crtc_state, connector,
+ 						       respect_downstream_limits,
+ 						       INTEL_OUTPUT_FORMAT_RGB);
++
++		if (!ret && intel_dvbridge_hdr_retry_420(
++			    intel_dvbridge_hdr_deep_requested(display, conn_state),
++			    respect_downstream_limits,
++			    crtc_state->sink_format == INTEL_OUTPUT_FORMAT_RGB,
++			    crtc_state->pipe_bpp, requested_bpp,
++			    connector->base.ycbcr_420_allowed,
++			    drm_mode_is_420_also(info, adjusted_mode))) {
++			/* Keep upstream format and link validation, but do not reuse
++			 * the precision reduced by the first RGB attempt. */
++			crtc_state->pipe_bpp = requested_bpp;
++			ret = intel_hdmi_compute_output_format(encoder, crtc_state,
++				connector, true, INTEL_OUTPUT_FORMAT_YCBCR420);
++			if (ret || crtc_state->pipe_bpp < 30)
++				return ret ? ret : -EINVAL;
++		}
+ 
+ 		if (ret && drm_mode_is_420_also(info, adjusted_mode))
+ 			ret = intel_hdmi_compute_output_format(encoder, crtc_state, connector,
+@@ -2408,7 +2468,9 @@
+ 	 * that fails assume the user might know something we don't.
+ 	 */
+ 	ret = intel_hdmi_compute_formats(encoder, pipe_config, conn_state, true);
+-	if (ret)
++	/* Experimental DV/HDR must never override the sink bandwidth limit. */
++	if (ret && !to_intel_digital_connector_state(conn_state)->dv_lab_standard &&
++	    !intel_dvbridge_hdr_deep_requested(display, conn_state))
+ 		ret = intel_hdmi_compute_formats(encoder, pipe_config, conn_state, false);
+ 	if (ret) {
+ 		drm_dbg_kms(display->drm,
+@@ -2423,6 +2485,38 @@
+ 
+ 	pipe_config->limited_color_range =
+ 		intel_hdmi_limited_color_range(pipe_config, conn_state);
++
++	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
++		const struct drm_property_blob *edid = connector->base.edid_blob_ptr;
++		struct intel_dv_lab_link link = {
++			.requested = true,
++			.lab_enabled = display->params.enable_dv_lab &&
++				intel_dv_lab_platform_supported(DISPLAY_VER(display)),
++			.sink_standard_v2 = edid && intel_dv_lab_edid(edid->data, edid->length),
++			.hdmi = pipe_config->has_hdmi_sink && pipe_config->has_infoframe &&
++				connector->base.display_info.has_hdmi_infoframe,
++			.native_hdmi = !enc_to_dig_port(encoder)->lspcon.active &&
++				enc_to_intel_hdmi(encoder)->dp_dual_mode.type == DRM_DP_DUAL_MODE_NONE,
++			.rgb = pipe_config->output_format == INTEL_OUTPUT_FORMAT_RGB &&
++				pipe_config->sink_format == INTEL_OUTPUT_FORMAT_RGB,
++			.limited_range = pipe_config->limited_color_range,
++			.hdr_blob = !!conn_state->hdr_output_metadata,
++			.cloned = intel_hdmi_is_cloned(pipe_config),
++			.progressive = !(adjusted_mode->flags & (DRM_MODE_FLAG_INTERLACE |
++				DRM_MODE_FLAG_DBLSCAN | DRM_MODE_FLAG_DBLCLK | DRM_MODE_FLAG_3D_MASK)),
++			.requested_bpc = conn_state->max_requested_bpc,
++			.pipe_bpp = pipe_config->pipe_bpp,
++			.colorspace = conn_state->colorspace,
++			.width = adjusted_mode->hdisplay,
++			.height = adjusted_mode->vdisplay,
++			.rounded_refresh = drm_mode_vrefresh(adjusted_mode),
++		};
++
++		ret = intel_dv_lab_validate(&link);
++		if (ret)
++			return ret;
++		pipe_config->dither_force_disable = true;
++	}
+ 
+ 	if (conn_state->picture_aspect_ratio)
+ 		adjusted_mode->picture_aspect_ratio =
+@@ -2713,6 +2808,14 @@
+ {
+ 	struct intel_connector *connector = to_intel_connector(_connector);
+ 	struct intel_display *display = to_intel_display(intel_hdmi);
++
++	if (display->params.enable_dv_lab &&
++	    intel_dv_lab_platform_supported(DISPLAY_VER(display))) {
++		connector->dv_lab_property = drm_property_create_bool(display->drm,
++			DRM_MODE_PROP_ATOMIC, "DVBRIDGE_DV_STANDARD_LAB");
++		if (connector->dv_lab_property)
++			drm_object_attach_property(&_connector->base, connector->dv_lab_property, 0);
++	}
+ 
+ 	intel_attach_force_audio_property(&connector->base);
+ 	intel_attach_broadcast_rgb_property(&connector->base);

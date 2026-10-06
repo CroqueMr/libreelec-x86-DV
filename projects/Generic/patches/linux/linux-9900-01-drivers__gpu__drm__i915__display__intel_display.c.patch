@@ -1,0 +1,75 @@
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -4274,6 +4274,47 @@
+ 	return 0;
+ }
+ 
++static bool intel_dv_lab_active(const struct intel_crtc_state *state)
++{
++	return state->infoframes.hdmi.vendor.any.oui == HDMI_DOLBY_IEEE_OUI &&
++		state->infoframes.hdmi.vendor.dolby.signal;
++}
++
++static int intel_dv_lab_scanout_check(struct intel_atomic_state *state,
++				     struct intel_crtc *crtc)
++{
++	const struct intel_crtc_state *s = intel_atomic_get_new_crtc_state(state, crtc);
++	struct drm_plane *primary = crtc->base.primary;
++	const struct drm_plane_state *p;
++	const struct intel_plane_state *ip;
++	unsigned int w = s->hw.adjusted_mode.hdisplay;
++	unsigned int h = s->hw.adjusted_mode.vdisplay;
++
++	if (!s->hw.active || !intel_dv_lab_active(s))
++		return 0;
++	/* Refuse color processing/compositing, do not silently bypass a user's LUT. */
++	if (s->hw.ctm || s->hw.degamma_lut || s->hw.gamma_lut || s->pre_csc_lut ||
++	    s->post_csc_lut || s->gamma_enable || s->csc_enable || s->dither ||
++	    s->vrr.enable || s->dsc.compression_enable || s->scaler_state.scaler_users ||
++	    s->uapi.plane_mask != drm_plane_mask(primary))
++		return -EINVAL;
++	p = drm_atomic_get_new_plane_state(&state->base, primary);
++	if (!p)
++		p = primary->state; /* unchanged plane, serialized by this CRTC's lock */
++	if (!p || !p->fb || p->crtc != &crtc->base || !p->visible ||
++	    p->fb->format->format != DRM_FORMAT_XRGB8888 ||
++	    p->fb->width != w || p->fb->height != h ||
++	    p->src_x || p->src_y || p->src_w != (w << 16) || p->src_h != (h << 16) ||
++	    p->crtc_x || p->crtc_y || p->crtc_w != w || p->crtc_h != h ||
++	    p->rotation != DRM_MODE_ROTATE_0 || p->alpha != 0xffff)
++		return -EINVAL;
++	ip = to_intel_plane_state(p);
++	if (ip->hw.ctm || ip->hw.degamma_lut || ip->hw.gamma_lut || ip->hw.lut_3d ||
++	    ip->scaler_id >= 0 || ip->force_black || ip->planar_linked_plane)
++		return -EINVAL;
++	return 0;
++}
++
+ static int intel_crtc_atomic_check(struct intel_atomic_state *state,
+ 				   struct intel_crtc *crtc)
+ {
+@@ -4336,7 +4377,7 @@
+ 	if (ret)
+ 		return ret;
+ 
+-	return 0;
++	return intel_dv_lab_scanout_check(state, crtc);
+ }
+ 
+ static int bpc_to_bpp(int bpc)
+@@ -5815,6 +5856,15 @@
+ 	struct intel_display *display = to_intel_display(new_crtc_state);
+ 	struct intel_crtc *crtc = to_intel_crtc(new_crtc_state->uapi.crtc);
+ 
++	/* Never transition the private vendor mode through the HDR-only fastset. */
++	if (intel_dv_lab_active(old_crtc_state) != intel_dv_lab_active(new_crtc_state)) {
++		new_crtc_state->uapi.mode_changed = true;
++		new_crtc_state->update_lrr = false;
++		new_crtc_state->update_m_n = false;
++		intel_crtc_flag_modeset(new_crtc_state);
++		return;
++	}
++
+ 	/* only allow LRR when the timings stay within the VRR range */
+ 	if (old_crtc_state->vrr.in_range != new_crtc_state->vrr.in_range)
+ 		new_crtc_state->update_lrr = false;

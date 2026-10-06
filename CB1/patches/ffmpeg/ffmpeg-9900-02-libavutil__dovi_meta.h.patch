@@ -1,0 +1,14 @@
+--- a/libavutil/dovi_meta.h
++++ b/libavutil/dovi_meta.h
+@@ -332,6 +332,11 @@
+         AVDOVIDmLevel254 l254; /* static */
+         AVDOVIDmLevel255 l255; /* static */
+     };
++    /* Dvbridge isolated-lab trailer. Preserve presence even when value is zero.
++     * Original RPU block bytes are bit-packed, NOT HDMI payload bytes. */
++    uint32_t dvbridge_raw_magic;
++    uint32_t dvbridge_original_length;
++    uint8_t dvbridge_original_bytes[32];
+ } AVDOVIDmData;
+ 
+ /**

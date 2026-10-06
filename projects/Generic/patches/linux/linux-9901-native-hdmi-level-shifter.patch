@@ -1,0 +1,35 @@
+--- a/drivers/gpu/drm/i915/display/intel_dv_lab_policy.h
++++ b/drivers/gpu/drm/i915/display/intel_dv_lab_policy.h
+@@ -56,6 +56,17 @@
+ 	return found == 1 && standard;
+ }
+ 
++/* Native HDMI ports can expose a dual-mode level-shifter ID. Match the
++ * topology distinction used by intel_hdmi_dp_dual_mode_detect(), rather
++ * than treating that ID alone as proof of an external DP conversion.
++ * Active LSPCON conversion remains outside the supported transport path.
++ */
++static inline bool intel_dv_lab_native_hdmi(bool lspcon_active,
++					 bool dual_mode_detected, bool vbt_dual_mode)
++{
++	return !lspcon_active && (!dual_mode_detected || !vbt_dual_mode);
++}
++
+ struct intel_dv_lab_link {
+ 	bool requested, lab_enabled, sink_standard_v2, hdmi, native_hdmi;
+ 	bool rgb, limited_range, hdr_blob, cloned, progressive;
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2494,8 +2494,10 @@
+ 			.sink_standard_v2 = edid && intel_dv_lab_edid(edid->data, edid->length),
+ 			.hdmi = pipe_config->has_hdmi_sink && pipe_config->has_infoframe &&
+ 				connector->base.display_info.has_hdmi_infoframe,
+-			.native_hdmi = !enc_to_dig_port(encoder)->lspcon.active &&
+-				enc_to_intel_hdmi(encoder)->dp_dual_mode.type == DRM_DP_DUAL_MODE_NONE,
++			.native_hdmi = intel_dv_lab_native_hdmi(
++				enc_to_dig_port(encoder)->lspcon.active,
++				enc_to_intel_hdmi(encoder)->dp_dual_mode.type != DRM_DP_DUAL_MODE_NONE,
++				intel_bios_encoder_supports_dp_dual_mode(encoder->devdata)),
+ 			.rgb = pipe_config->output_format == INTEL_OUTPUT_FORMAT_RGB &&
+ 				pipe_config->sink_format == INTEL_OUTPUT_FORMAT_RGB,
+ 			.limited_range = pipe_config->limited_color_range,

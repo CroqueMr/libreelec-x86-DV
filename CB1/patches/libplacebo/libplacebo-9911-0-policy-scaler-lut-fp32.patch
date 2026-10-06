@@ -1,0 +1,80 @@
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -352,6 +352,10 @@
+     // CB policy-only equivalent ST2084 FP32 realization, default off.
+     // Requires matched renderer/shader/dispatch headers and library.
+     bool cb1_stable_pq;
++    // CB policy-only orthogonal scaler-LUT FP32 storage, default off.
++    // Weights and sampling stay unchanged. Requires matched sampling ABI.
++    bool cb1_fp32_scaler_lut;
++
+ 
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+     // with any compile-time constants being replaced by runtime-adjustable
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -750,6 +750,7 @@
+         .filter      = *info.config,
+         .antiring    = params->antiringing_strength,
+         .no_widening = params->skip_anti_aliasing && usage != SAMPLER_LOWPASS,
++        .cb1_fp32_lut = params->cb1_fp32_scaler_lut,
+         .lut         = lut,
+     };
+ 
+--- a/src/include/libplacebo/shaders/sampling.h
++++ b/src/include/libplacebo/shaders/sampling.h
+@@ -165,6 +165,10 @@
+     bool no_compute;
+     // Disable the use of filter widening / anti-aliasing (for downscaling)
+     bool no_widening;
++    // CB policy-only orthogonal LUT FLOAT4 depth32 LINEAR format, default off.
++    // Requires matched CB-patched headers/library. No polar-path change.
++    bool cb1_fp32_lut;
++
+ 
+     // This shader object is used to store the LUT, and will be recreated
+     // if necessary. To avoid thrashing the resource, users should avoid trying
+@@ -207,6 +211,11 @@
+ PL_API bool pl_shader_sample_ortho2(pl_shader sh, const struct pl_sample_src *src,
+                                     const struct pl_sample_filter_params *params);
+ 
++// Exact format capability used by cb1_fp32_lut. NULL means unsupported;
++// the opted-in orthogonal sampler fails rather than using half precision.
++// This real lookup also identifies the matching CB sampling library ABI.
++PL_API pl_fmt pl_sample_filter_cb1_fp32_lut_format(pl_gpu gpu);
++
+ struct pl_distort_params {
+     // An arbitrary 2x2 affine transformation to apply to the input image.
+     // For simplicity, the input image is explicitly centered and scaled such
+--- a/src/shaders/sampling.c
++++ b/src/shaders/sampling.c
+@@ -954,6 +954,12 @@
+     SEP_PASSES
+ };
+ 
++pl_fmt pl_sample_filter_cb1_fp32_lut_format(pl_gpu gpu)
++{
++    return pl_find_fmt(gpu, PL_FMT_FLOAT, 4, 32, 32,
++                       PL_FMT_CAP_SAMPLEABLE | PL_FMT_CAP_LINEAR);
++}
++
+ bool pl_shader_sample_ortho2(pl_shader sh, const struct pl_sample_src *src,
+                              const struct pl_sample_filter_params *params)
+ {
+@@ -1053,9 +1059,16 @@
+ 
+     int N = obj->filter->row_size; // number of samples to convolve
+     int width = obj->filter->row_stride / 4; // width of the LUT texture
++    pl_fmt lut_fmt = params->cb1_fp32_lut ?
++        pl_sample_filter_cb1_fp32_lut_format(gpu) : NULL;
++    if (params->cb1_fp32_lut && !lut_fmt) {
++        SH_FAIL(sh, "CB policy requires FP32 linear orthogonal LUT storage!");
++        return false;
++    }
+     ident_t lut = sh_lut(sh, sh_lut_params(
+         .object     = &obj->lut,
+         .var_type   = PL_VAR_FLOAT,
++        .fmt        = lut_fmt,
+         .method     = SH_LUT_LINEAR,
+         .width      = width,
+         .height     = SCALER_LUT_SIZE,

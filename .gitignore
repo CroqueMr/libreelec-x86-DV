@@ -40,3 +40,11 @@ tools/mkpkg/*.git
 
 # ignore old linux configs
 projects/**/*.old
+
+# External CB1 build inputs
+/packages/mediacenter/kodi/cb1/
+/packages/mediacenter/kodi/cb1-model/
+/projects/Generic/patches/ffmpeg/ffmpeg-99*.patch
+/packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-99*.patch
+__pycache__/
+*.pyc
