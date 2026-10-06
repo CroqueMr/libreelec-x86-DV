@@ -6657,7 +6657,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    const auto failure = [this](const char* stage) {
      if (DVBRIDGE::DiagnosticsEnabled() &&
          m_dvSetupFailures.Record(DVBRIDGE::DiagnosticNowMs(), stage))
-@@ -542,51 +1133,401 @@
+@@ -542,51 +1133,405 @@
            GetOutputBitDepth(), m_renderableType);
      return false;
    };
@@ -6706,6 +6706,8 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  ResetDVActivation(picture);
 +  const auto capabilities = GetDVOutputCapabilities(picture);
 +  if (picture && capabilities.isDV && preferences.output != DVBRIDGE::OutputMode::Disabled &&
++      (capabilities.nativeDV || capabilities.hdr10 ||
++       picture->hdrType != StreamHdrType::HDR_TYPE_HDR10) &&
 +      (!capabilities.processingKnown || (picture->strDVELType == "FEL" && !picture->doviEnhancement)))
 +    return true; // Configure must reach UploadTexture before source-dependent activation.
 +  m_dvSelection = SelectedDVOutput(picture);
@@ -6795,6 +6797,8 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +      m_dvContext && !m_dvContext->StopHDR10AI()) return false;
 +#endif
 +  if (capabilities.isDV && preferences.output != DVBRIDGE::OutputMode::Disabled &&
++      (capabilities.nativeDV || capabilities.hdr10 ||
++       picture.hdrType != StreamHdrType::HDR_TYPE_HDR10) &&
 +      (!capabilities.processingKnown || (picture.strDVELType == "FEL" && !picture.doviEnhancement)))
 +    return false;
 +  auto selectionCapabilities = capabilities;
@@ -7072,7 +7076,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      return true;
    if (m_dvState.Captured())
    {
-@@ -596,7 +1537,7 @@
+@@ -596,7 +1541,7 @@
      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
      glClearColor(0, 0, 0, 1);
      glClear(GL_COLOR_BUFFER_BIT);
@@ -7081,7 +7085,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      if (!m_eglContext.TrySwapBuffers() || !FlipDVBridgePage(m_dvState, true))
      {
        if (DVBRIDGE::DiagnosticsEnabled() &&
-@@ -606,8 +1547,13 @@
+@@ -606,8 +1551,13 @@
        return false;
      }
    }
@@ -7096,7 +7100,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (DVBRIDGE::DiagnosticsEnabled() &&
        m_dvSetupFailures.Recovered(DVBRIDGE::DiagnosticNowMs()))
      CLog::Log(LOGINFO, "DVBridge: normal display restored after failures={}", m_dvSetupFailures.Count());
-@@ -620,7 +1566,38 @@
+@@ -620,7 +1570,38 @@
    if (!EndDVBridge())
      return false;
    m_dvBridge.reset();
@@ -7136,7 +7140,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  #endif
  
-@@ -636,5 +1613,15 @@
+@@ -636,5 +1617,15 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
