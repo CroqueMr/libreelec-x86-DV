@@ -54,17 +54,17 @@ not the whole GPU or video decoder. Playback diagnostics are recorded in `kodi.l
 
 ## Rendering modes by source
 
-| Source | Mode | Output | Result | TV profile |
+| Source | Mode | Output | Processing | TV profile |
 | --- | --- | --- | --- | --- |
-| Dolby Vision | DV Standard (TV-Led) | DV | Preserve the authored Dolby Vision presentation, with final mapping by the TV | Not required |
-| Dolby Vision | DV Enhanced - Natural and Signature | DV | Adapt highlight and color response to the display profile, with two presets: Natural or Signature | Required |
-| Dolby Vision | DV Disabled (native Kodi) | Native Kodi | Retain Kodi's original playback without custom DV processing | Not required |
-| Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile | Not required |
-| Dolby Vision | HDR10 Reference Expert | HDR10 | Match HDR10 conversion to the display's peak and gamut, using available creative controls | Required |
-| HDR10 | DV Reference (AI) | DV | Enable TV-Led Dolby Vision from HDR10 while preserving the source image | Not required |
-| HDR10 | DV Enhanced (AI) - Natural and Signature | DV | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output, with two presets: Natural or Signature | Required |
-| HDR10 | HDR10 Native | HDR10 | Keep the original HDR10 presentation and Kodi playback | Not required |
-| HLG / SDR | Native | HLG / SDR | Keep the original presentation and Kodi playback | Not required |
+| Dolby Vision | DV Standard (TV-Led) | DV | Reconstruct the image, including FEL; forward source DV metadata to the TV | Not required |
+| Dolby Vision | DV Enhanced - Natural and Signature | DV | Adjust existing L2/L8 creative controls using the TV peak; two presets: Natural or Signature | Required |
+| Dolby Vision | DV Disabled (native Kodi) | Native Kodi | Use Kodi's native playback without CB1 DV processing | Not required |
+| Dolby Vision | HDR10 Reference Basic | HDR10 | Convert to HDR10 using L1 scene data and source mastering metadata | Not required |
+| Dolby Vision | HDR10 Reference Expert | HDR10 | Map to the TV peak and gamut; apply available L2/L8 creative controls | Required |
+| HDR10 | DV Reference (AI) | DV | Generate L1/L3 metadata with LightGBM; retain the HDR10 source pixels | Not required |
+| HDR10 | DV Enhanced (AI) - Natural and Signature | DV | Map pixels to the TV peak and gamut, then generate DV scene metadata; two presets: Natural or Signature | Required |
+| HDR10 | HDR10 Native | HDR10 | Use Kodi's native HDR10 playback | Not required |
+| HLG / SDR | Native | HLG / SDR | Use Kodi's native HLG or SDR playback | Not required |
 
 For more details, see [rendering modes and algorithms](docs/cb1/PROCESSING.md).
 
@@ -73,8 +73,9 @@ HDR10-to-Dolby Vision AI modes use the CB1-L1L3 0.1 LightGBM model included in C
 
 ### Quick settings
 
-All source-compatible modes fit in a two-column grid. TV profile configuration
-stays in Player settings.
+A compact bottom-right list shows the modes available for the current source.
+Its height follows the number of modes. TV profile configuration stays in
+Player settings.
 
 ![Quick rendering mode selection](docs/cb1/images/quick-display-dv.png)
 

@@ -24,7 +24,7 @@ before output conversion. Missing or mismatched FEL is not reported as complete
 BL-only reconstruction. Active-area borders follow L5 and output geometry.
 
 | Field | Content | Use |
-| --- | --- |
+| --- | --- | --- |
 | RPU mapping | Polynomial/MMR reshaping, transforms and residual parameters | Reconstruct source pixels before DV output or HDR10 conversion |
 | L1 | Scene minimum, maximum and average PQ | Basic/Expert scene mapping; Enhanced scene-strength calculation |
 | L3 | Offsets to L1 | Compute effective scene values once in Expert/Enhanced |
