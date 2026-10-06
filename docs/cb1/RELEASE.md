@@ -5,6 +5,7 @@
 - Dolby Vision-to-HDR10 Basic and Expert conversion, including FEL reconstruction.
 - HDR10-to-Dolby Vision AI conversion with the included LightGBM model.
 - Player information and source-aware rendering selection, available with **O**.
+- Compact bottom-right rendering selector, sized to the available modes.
 - Expanded Intel driver families and experimental AMD iGPU support.
 
 Settings: **Player > Videos**. Standard Dolby Vision is the default.
