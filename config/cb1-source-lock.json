@@ -1,6 +1,5 @@
 {
   "schema": 1,
-  "publication_ready": false,
   "engine": {
     "name": "CB1",
     "version": "0.1",
