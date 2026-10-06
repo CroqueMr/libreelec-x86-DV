@@ -48,11 +48,9 @@ HDR10 and SDR show their relevant fields without empty DV sections.
 
 ![Player information during Dolby Vision playback](docs/cb1/images/player-information-dv.png)
 
-Screenshots are 1080p SDR previews of the HDR interface.
 
 GPU usage measures Kodi's render engine, including visible GUI rendering,
-not the whole GPU or video decoder. Source audio and PCM/passthrough output
-are shown separately. Playback diagnostics are recorded in `kodi.log`.
+not the whole GPU or video decoder. Playback diagnostics are recorded in `kodi.log`.
 
 ## Rendering modes by source
 
@@ -70,13 +68,11 @@ are shown separately. Playback diagnostics are recorded in `kodi.log`.
 
 For more details, see [rendering modes and algorithms](docs/cb1/PROCESSING.md).
 
-Standard Dolby Vision is the default. DV outputs are TV-Led. Expert and Enhanced
-use the display peak and gamut entered in the TV profile. HDR10-to-Dolby Vision
-AI modes use the CB1-L1L3 0.1 LightGBM model included in CB1 and staged by the build.
+Standard Dolby Vision is the default. 
+HDR10-to-Dolby Vision AI modes use the CB1-L1L3 0.1 LightGBM model included in CB1 and staged by the build.
 
 ### Quick settings
 
-Source format in the header, full mode names and DV outputs before HDR10 outputs.
 All source-compatible modes fit in a two-column grid. TV profile configuration
 stays in Player settings.
 
