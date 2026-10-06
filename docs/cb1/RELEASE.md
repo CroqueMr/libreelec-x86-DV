@@ -16,6 +16,9 @@ Settings: **Player > Videos**. Standard Dolby Vision is the default.
 - Source archives: matching build sources, dependency downloads and license notices.
   Not needed for installation.
 
+Source builders should extract both source archives into the same directory.
+See [build instructions](BUILD.md).
+
 Keep a backup before updating. Performance depends on hardware and content.
 
 ## Known issues

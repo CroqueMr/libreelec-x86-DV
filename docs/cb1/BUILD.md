@@ -36,3 +36,22 @@ Set `CB1_HDR10_AI=no` to build without AI conversion.
 python3 -m unittest discover -s tests/cb1 -p 'test_*.py'
 git diff --check
 ```
+
+## Complete build inputs
+
+The release's `sources.tar.zst` contains this repository and the matching
+dependency downloads. `vendor-inputs.tar.zst` contains the firmware and NVIDIA
+package downloads used by the standard Generic image. Their upstream licenses
+are retained. Extract both into the same directory:
+
+```sh
+tar --zstd -xf R1.0.0-Beta1-sources.tar.zst
+tar --zstd -xf R1.0.0-Beta1-vendor-inputs.tar.zst
+cd libreelec-x86-DV
+git init
+git remote add origin https://github.com/CroqueMr/libreelec-x86-DV.git
+python3 scripts/cb1-stage.py
+CUSTOM_GIT_HASH="$(cat RELEASE-COMMIT)" PROJECT=Generic ARCH=x86_64 OFFICIAL=no make image
+```
+
+No test videos, training dataset, credentials or Dolby SDK are included.
