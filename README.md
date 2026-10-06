@@ -6,7 +6,7 @@ LibreELEC Generic x86_64 community build with Dolby Vision playback and HDR10
 conversion in Kodi's native VideoPlayer.
 
 Powered by **CB1 0.1**, an open-source Dolby Vision processing engine. No external
-player or proprietary Dolby SDK is required.
+player or proprietary Dolby SDK is required or used.
 
 ## Dolby Vision profiles
 
