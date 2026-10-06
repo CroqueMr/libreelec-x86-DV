@@ -486,90 +486,67 @@ diff --git a/addons/skin.estuary/xml/IncludesDVProcessInfo.xml b/addons/skin.est
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
-@@ -1273,4 +1273,85 @@
+@@ -1273,4 +1273,62 @@
  			</control>
  		</control>
  	</include>
 +  <include name="CB1PlaybackModeLayout">
-+    <control type="group">
-+      <left>180</left><bottom>24</bottom><width>1560</width><height>330</height>
-+      <control type="image">
-+        <left>-20</left><top>-20</top><width>1600</width><height>370</height>
++    <control type="group" id="9100">
++      <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
++      <control type="image" id="9101">
++        <left>0</left><top>0</top><width>660</width><height>412</height>
 +        <texture colordiffuse="dialog_tint">colors/white.png</texture>
 +      </control>
 +      <control type="label" id="1">
-+        <left>20</left><top>8</top><width>1520</width><height>42</height><font>font14</font>
++        <left>20</left><top>12</top><width>620</width><height>40</height><font>font12</font><scroll>true</scroll>
 +      </control>
 +      <control type="label" id="2"><visible>false</visible></control>
-+      <control type="panel" id="3">
-+        <left>20</left><top>64</top><width>1520</width><height>252</height>
++      <control type="list" id="3">
++        <left>20</left><top>64</top><width>620</width><height>300</height>
 +        <orientation>vertical</orientation><scrolltime>150</scrolltime>
-+        <onleft>3</onleft><onright>3</onright><onup>3</onup><ondown>3</ondown>
-+        <itemlayout width="760" height="84">
-+          <control type="label">
-+            <left>12</left><top>8</top><width>728</width><height>34</height>
-+            <font>font12</font><label>$INFO[ListItem.Label]</label>
-+            <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
-+          </control>
-+          <control type="textbox">
-+            <left>12</left><top>44</top><width>728</width><height>28</height>
-+            <font>font10</font><label>$INFO[ListItem.Label2]</label>
-+            <textcolor>grey</textcolor><autoscroll>false</autoscroll>
-+          </control>
-+        </itemlayout>
-+        <focusedlayout width="760" height="84">
-+          <control type="image">
-+            <left>0</left><top>0</top><width>752</width><height>76</height>
-+            <texture colordiffuse="button_focus">lists/focus.png</texture>
-+            <visible>!ListItem.Property(disabled)</visible>
-+          </control>
-+          <control type="label">
-+            <left>12</left><top>8</top><width>728</width><height>34</height>
-+            <font>font12</font><label>$INFO[ListItem.Label]</label>
-+            <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
-+          </control>
-+          <control type="textbox">
-+            <left>12</left><top>44</top><width>728</width><height>28</height>
-+            <font>font10</font><label>$INFO[ListItem.Label2]</label>
-+            <textcolor>grey</textcolor><autoscroll>false</autoscroll>
-+          </control>
-+        </focusedlayout>
++        <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
++        <include>CB1PlaybackModeRows</include>
 +      </control>
-+      <control type="panel" id="6">
-+        <left>20</left><top>64</top><width>1520</width><height>252</height>
++      <control type="list" id="6">
++        <left>20</left><top>64</top><width>620</width><height>300</height>
 +        <orientation>vertical</orientation><scrolltime>150</scrolltime>
-+        <onleft>6</onleft><onright>6</onright><onup>6</onup><ondown>6</ondown>
-+        <itemlayout width="760" height="84">
-+          <control type="label">
-+            <left>12</left><top>8</top><width>728</width><height>34</height>
-+            <font>font12</font><label>$INFO[ListItem.Label]</label>
-+            <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
-+          </control>
-+          <control type="textbox">
-+            <left>12</left><top>44</top><width>728</width><height>28</height>
-+            <font>font10</font><label>$INFO[ListItem.Label2]</label>
-+            <textcolor>grey</textcolor><autoscroll>false</autoscroll>
-+          </control>
-+        </itemlayout>
-+        <focusedlayout width="760" height="84">
-+          <control type="image">
-+            <left>0</left><top>0</top><width>752</width><height>76</height>
-+            <texture colordiffuse="button_focus">lists/focus.png</texture>
-+            <visible>!ListItem.Property(disabled)</visible>
-+          </control>
-+          <control type="label">
-+            <left>12</left><top>8</top><width>728</width><height>34</height>
-+            <font>font12</font><label>$INFO[ListItem.Label]</label>
-+            <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
-+          </control>
-+          <control type="textbox">
-+            <left>12</left><top>44</top><width>728</width><height>28</height>
-+            <font>font10</font><label>$INFO[ListItem.Label2]</label>
-+            <textcolor>grey</textcolor><autoscroll>false</autoscroll>
-+          </control>
-+        </focusedlayout>
++        <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
++        <include>CB1PlaybackModeRows</include>
++      </control>
++      <control type="textbox" id="9102">
++        <left>20</left><top>370</top><width>620</width><height>38</height>
++        <font>font10</font><textcolor>grey</textcolor>
++        <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
 +      </control>
 +    </control>
++  </include>
++  <include name="CB1PlaybackModeRows">
++    <itemlayout width="620" height="50">
++      <control type="image">
++        <left>10</left><top>14</top><width>22</width><height>22</height>
++        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
++      </control>
++      <control type="label">
++        <left>42</left><top>5</top><width>566</width><height>40</height>
++        <font>font12</font><label>$INFO[ListItem.Label]</label>
++        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
++      </control>
++    </itemlayout>
++    <focusedlayout width="620" height="50">
++      <control type="image">
++        <left>0</left><top>1</top><width>620</width><height>48</height>
++        <texture colordiffuse="button_focus">lists/focus.png</texture>
++      </control>
++      <control type="image">
++        <left>10</left><top>14</top><width>22</width><height>22</height>
++        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
++      </control>
++      <control type="label">
++        <left>42</left><top>5</top><width>566</width><height>40</height>
++        <font>font12</font><label>$INFO[ListItem.Label]</label>
++        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
++      </control>
++    </focusedlayout>
 +  </include>
  </includes>
 diff --git a/addons/skin.estuary/xml/Variables.xml b/addons/skin.estuary/xml/Variables.xml
@@ -5179,7 +5156,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.h b/xbmc/dialogs/GUIDialogP
 diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 --- a/xbmc/dialogs/GUIDialogSelect.cpp
 +++ b/xbmc/dialogs/GUIDialogSelect.cpp
-@@ -12,6 +12,7 @@
+@@ -12,9 +12,13 @@
  #include "FileItemList.h"
  #include "ServiceBroker.h"
  #include "guilib/GUIMessage.h"
@@ -5187,6 +5164,12 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  #include "input/actions/ActionIDs.h"
  #include "resources/LocalizeStrings.h"
  #include "resources/ResourcesComponent.h"
++#ifdef HAVE_DVBRIDGE
++#include "DVPlaybackMenuLayout.h"
++#endif
+ #include "utils/StringUtils.h"
+ 
+ #include <memory>
 @@ -45,6 +46,23 @@
  
  CGUIDialogSelect::~CGUIDialogSelect(void) = default;
@@ -5220,6 +5203,47 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
              if (m_multiSelection)
                item->Select(!item->IsSelected());
              else
+@@ -380,5 +400,22 @@
+ void CGUIDialogSelect::OnInitWindow()
+ {
++#ifdef HAVE_DVBRIDGE
++  if (GetProperty("CB1.PlaybackModes").asBoolean())
++  {
++    if (auto* group = GetControl(9100))
++    {
++      const float rowsHeight = DVBRIDGE::PlaybackMenuRowsHeight(m_vecList->Size());
++      const float height = 112.0f + rowsHeight;
++      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
++      group->SetHeight(height);
++      if (auto* background = GetControl(9101)) background->SetHeight(height);
++      for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
++        if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
++      if (auto* help = GetControl(9102))
++        help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
++    }
++  }
++#endif
+   m_viewControl.SetItems(*m_vecList);
+   m_selectedItems.clear();
+   for(int i = 0 ; i < m_vecList->Size(); i++)
+diff --git a/xbmc/dialogs/DVPlaybackMenuLayout.h b/xbmc/dialogs/DVPlaybackMenuLayout.h
+new file mode 100644
+--- /dev/null
++++ b/xbmc/dialogs/DVPlaybackMenuLayout.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#pragma once
++
++#include <algorithm>
++
++namespace DVBRIDGE
++{
++// Cap the visible list at six rows; longer lists retain native scrolling.
++constexpr int PlaybackMenuRowsHeight(int count)
++{
++  return 50 * std::clamp(count, 1, 6);
++}
++}
 diff --git a/xbmc/dialogs/GUIDialogSelect.h b/xbmc/dialogs/GUIDialogSelect.h
 --- a/xbmc/dialogs/GUIDialogSelect.h
 +++ b/xbmc/dialogs/GUIDialogSelect.h
