@@ -67,6 +67,7 @@ not the whole GPU or video decoder. Playback diagnostics are recorded in `kodi.l
 | HLG / SDR | Native | HLG / SDR | Use Kodi's native HLG or SDR playback | Not required |
 
 For more details, see [rendering modes and algorithms](docs/cb1/PROCESSING.md).
+**DV/HDR10 enhanced and references rendering profile require a capable GPU** 
 
 Standard Dolby Vision is the default. 
 HDR10-to-Dolby Vision AI modes use the CB1-L1L3 0.1 LightGBM model included in CB1 and staged by the build.
@@ -126,7 +127,7 @@ Only one is needed. [Build instructions](docs/cb1/BUILD.md).
 
 Newly enabled Intel families require hardware testing.
 
-Performance may vary by hardware. Report problems with the exact CPU/GPU,
+Performance may vary by hardware. Report problems with the exact CPU/GPU, **DV/HDR10 enhanced and reference rendering profiles require a capable GPU** 
 display model, connection chain, build version and `kodi.log`.
 [Hardware list](docs/cb1/HARDWARE.md).
 
