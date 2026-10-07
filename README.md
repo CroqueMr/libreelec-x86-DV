@@ -28,7 +28,7 @@ and the metadata present in the source.
 ## Playback controls
 
 Settings are in **Player > Videos**. The selector shows modes for the current
-source; unsupported DV output is unavailable. Modes can change during playback.
+source. Modes can change during playback.
 
 With **Player information** enabled, press **O** to cycle:
 
