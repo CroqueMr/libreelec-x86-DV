@@ -62,7 +62,7 @@ struct dvbridge_creative_coverage {
     uint32_t present, applied, preserved, edited, one_anchor;
 };
 #define DVBRIDGE_CM4_ALGORITHM "cb1-cm4-v1"
-#define DVBRIDGE_DV_ENHANCED_ALGORITHM "cb1-dve-v3"
+#define DVBRIDGE_DV_ENHANCED_ALGORITHM "cb1-dve-v6"
 struct dvbridge_creative_edit_report {
     enum dvbridge_creative_status status;
     enum dvbridge_creative_reason reason;
@@ -103,6 +103,7 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
 enum dvbridge_creative_status dvbridge_creative_edit(void **output, size_t *output_bytes,
     const void *metadata, size_t bytes, const struct dvbridge_creative_plan *plan,
     struct dvbridge_creative_edit_report *report);
+double dvbridge_creative_scene_weight(const struct dvbridge_creative_plan *plan);
 /* Trim-only scalar reference, absolute linear nits before output gamut mapping. */
 bool dvbridge_creative_trim_rgb(const struct dvbridge_creative_plan *plan,
     const double input[3], double output[3]);

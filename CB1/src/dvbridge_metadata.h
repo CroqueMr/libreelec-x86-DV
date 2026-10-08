@@ -13,6 +13,29 @@
 #include "mpv_dvbridge_cm4.h"
 #include <stdio.h>
 
+static const int16_t dvbridge_output_ycc[9] = {9574,0,13802,9574,-1540,-5348,9574,17610,0};
+static const uint16_t dvbridge_output_lms[9] = {7222,8771,390,2654,12430,1300,0,422,15962};
+#define DVBRIDGE_SOURCE_TRANSPORT 1
+/* Only an exact transform match can retain the source-domain samples. */
+static inline bool dvbridge_dv_source_matches_output(const AVDOVIMetadata *m)
+{
+    const AVDOVIColorMetadata *c=av_dovi_get_color(m);
+    const AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
+    if(h->vdr_bit_depth!=12 || c->signal_bit_depth!=12 || c->signal_color_space ||
+       c->signal_full_range_flag!=1 || c->signal_eotf!=65535 ||
+       c->signal_eotf_param0 || c->signal_eotf_param1 || c->signal_eotf_param2)return false;
+    for(int i=0;i<9;i++) {
+        AVRational a=c->ycc_to_rgb_matrix[i],b=c->rgb_to_lms_matrix[i];
+        if(a.den<=0 || b.den<=0 || (int64_t)a.num*8192!=(int64_t)dvbridge_output_ycc[i]*a.den ||
+           (int64_t)b.num*16384!=(int64_t)dvbridge_output_lms[i]*b.den)return false;
+    }
+    for(int i=0;i<3;i++) {
+        AVRational a=c->ycc_to_rgb_offset[i];
+        if(a.den<=0 || (int64_t)a.num*(i?2:16)!=a.den)return false;
+    }
+    return true;
+}
+
 struct dvbridge_dv {
     uint8_t payload[512], previous[512];
     unsigned size, previous_size, id;
@@ -103,11 +126,9 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
     d->size = 0;
     d->payload[d->size++] = 0;
     d->payload[d->size++] = force_refresh ? 1 : repeat ? d->previous[1] : refresh ? 1 : c->scene_refresh_flag;
-    const int matrix[] = {9574,0,13802,9574,-1540,-5348,9574,17610,0};
-    const unsigned lms[] = {7222,8771,390,2654,12430,1300,0,422,15962};
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, (uint16_t)matrix[i]);
+    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, (uint16_t)dvbridge_output_ycc[i]);
     dvbridge_dv_u32(d, 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, lms[i]);
+    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, dvbridge_output_lms[i]);
     dvbridge_dv_u16(d, 65535); dvbridge_dv_u32(d, 0); dvbridge_dv_u32(d, 0);
     d->payload[d->size++] = 12; d->payload[d->size++] = 0;
     d->payload[d->size++] = 1; d->payload[d->size++] = 1;

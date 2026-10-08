@@ -1,7 +1,7 @@
 # CM4 processing scope
 
 HDR10 Expert uses the independent `cb1-cm4-v1` operator. Authored-DV Enhanced
-uses `cb1-dve-v3`, preserving reconstructed pixels and coherently editing
+uses `cb1-dve-v6`, preserving reconstructed pixels and coherently editing
 eligible existing primary controls.
 
 | Operation | Processing |

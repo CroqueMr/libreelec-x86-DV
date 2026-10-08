@@ -1,6 +1,6 @@
 # LibreELEC with Dolby Vision support for Intel and AMD iGPU
 
-**R1.0.0 Beta1**
+**R1.0.0 Beta2 - Major performance improvements**
 
 LibreELEC Generic x86_64 community build with Dolby Vision playback and HDR10
 conversion in Kodi's native VideoPlayer.
@@ -30,14 +30,16 @@ and the metadata present in the source.
 Settings are in **Player > Videos**. The selector shows modes for the current
 source; unsupported DV output is unavailable. Modes can change during playback.
 
-With **Player information** enabled, press **O** to cycle:
+Press **O** to cycle:
 
 1. Player information.
 2. Quick rendering mode selection.
 3. Video only.
 
-Play/pause and seek remain available while either panel is open. Turning off
-Player information restores Kodi's stock panel and disables the quick selector.
+Play/pause and seek remain available while either panel is open. **Enhanced
+Player information** and **Quick rendering switch** are independent and enabled
+by default. Disable the enhanced panel to use Kodi's stock information panel;
+disable the quick switch to skip mode selection in the cycle.
 The optional startup mode notification is off by default.
 
 ### Player information
@@ -132,7 +134,11 @@ display model, connection chain, build version and `kodi.log`.
 
 ## Known issues
 
-- Some frame drops with Profile 7 FEL on a small number of files on N100/N150.
+- On lower-powered GPUs such as Intel N100, displaying the GUI over Dolby Vision playback can cause stuttering.
+- Some 59.94 FPS Dolby Vision sources still drop frames on N100.
+- Enhanced presets need further tuning to produce a more noticeable visual effect.
+- Profile 5 black-screen reports on some AMD and Intel Xe configurations remain under investigation.
+- Newly enabled Intel families and AMD support require hardware testing.
 
 Report issues for this modified build here. Contact upstream projects only when
 the issue also reproduces with their unmodified builds. No affiliation with or

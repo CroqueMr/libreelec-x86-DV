@@ -1,12 +1,28 @@
-# R1.0.0 Beta1
+# R1.0.0 Beta2 - Major performance improvements
 
-- Kodi 22 RC1 with CB1 0.1 integrated into the native player.
-- Dolby Vision Standard and Enhanced, with Natural or Signature presets.
-- Dolby Vision-to-HDR10 Basic and Expert conversion, including FEL reconstruction.
-- HDR10-to-Dolby Vision AI conversion with the included LightGBM model.
-- Player information and source-aware rendering selection, available with **O**.
-- Compact bottom-right rendering selector, sized to the available modes.
-- Expanded Intel driver families and experimental AMD iGPU support.
+Changes since Beta1.
+
+## Playback and performance
+
+- Improved frame pacing for native Dolby Vision and DV Enhanced, including Profile 7 FEL with subtitles.
+- Added optional asynchronous frame preparation, limited to one next frame.
+- Reduced redundant GPU processing and repeated Enhanced metadata calculations.
+- Improved recovery after seeks, pause/resume and rendering-mode changes.
+- Fixed DV frame preparation remaining disabled after an HDR10 AI fallback.
+
+## Rendering and controls
+
+- Refined Natural and Signature processing.
+- Automatically selects a compatible 2160p Dolby Vision output when the interface runs at 1080p.
+- Separate settings for Enhanced Player information and Quick rendering switch.
+- **O** cycles through player information, rendering selection and fullscreen video. Kodi's native information panel is also supported.
+
+## Diagnostics
+
+- Added lightweight HDMI and display-route logging, including converter information when available.
+
+Optimizations apply to compatible CB1 rendering paths. Native Kodi and fallback
+scheduling remain unchanged.
 
 Settings: **Player > Videos**. Standard Dolby Vision is the default.
 
@@ -24,7 +40,10 @@ Keep a backup before updating. Performance depends on hardware and content.
 
 ## Known issues
 
-- Some frame drops with Profile 7 FEL on a small number of files on N100/N150.
+- On lower-powered GPUs such as Intel N100, displaying the GUI over Dolby Vision playback can cause stuttering.
+- Some 59.94 FPS Dolby Vision sources still drop frames on N100.
+- Enhanced presets need further tuning to produce a more noticeable visual effect.
+- Profile 5 black-screen reports on some AMD and Intel Xe configurations remain under investigation.
 - Newly enabled Intel families and AMD support require hardware testing.
 
 Report issues with the CPU/GPU, display, connection chain, build version and

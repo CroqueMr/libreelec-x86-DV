@@ -1,8 +1,8 @@
 {
   "Release": {
-    "version": "R1.0.0 Beta1",
-    "tag": "R1.0.0-Beta1",
-    "image": "LibreELEC-Generic.x86_64-13.0-R1.0.0-Beta1"
+    "version": "R1.0.0 Beta2",
+    "tag": "R1.0.0-Beta2",
+    "image": "LibreELEC-Generic.x86_64-13.0-R1.0.0-Beta2"
   },
   "LibreELEC": {
     "version": "13.0-devel",
@@ -41,7 +41,7 @@
   },
   "CB1": {
     "version": "0.1",
-    "revision": "R1.0.0-Beta1:CB1/",
+    "revision": "R1.0.0-Beta2:CB1/",
     "base_revision": "b852bd0b5e4c1422e0aa5e005520bca765dcb00a",
     "modified": true
   },

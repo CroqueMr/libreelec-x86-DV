@@ -2,7 +2,7 @@
 
 | Component | Version / revision |
 | --- | --- |
-| Release | R1.0.0 Beta1, tag `R1.0.0-Beta1` |
+| Release | R1.0.0 Beta2, tag `R1.0.0-Beta2` |
 | LibreELEC | 13.0-devel, `3de4708704041ead8ae1531092efb7ea5da9d355` |
 | Kodi | 22.0 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
 | Linux | 7.2.6 |

@@ -34,7 +34,7 @@ No kernel, driver, display query, player UI, audio or scheduling patch is includ
 ## Processing scope
 
 HDR10 Expert uses the independent `cb1-cm4-v1` scalar/spatial operator.
-DV Enhanced uses `cb1-dve-v3`. Fixed linear-nits goals derive from the unedited
+DV Enhanced uses `cb1-dve-v6`. Fixed linear-nits goals derive from the unedited
 authored response. A bounded fit adjusts existing primary controls within
 512 codes of their source, preserving secondary controls and target descriptions.
 Black/near-black values, source detail, PQ error, chroma and hue remain guarded.

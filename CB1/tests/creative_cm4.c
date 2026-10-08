@@ -273,6 +273,7 @@ static void custom_target_edit(void)
     struct dvbridge_creative_edit_report report;
     assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_NEUTRAL);
     assert(report.candidate_evaluations && report.reason==DVBRIDGE_CREATIVE_OK);
+    assert(report.candidate_evaluations<=3 && "An exact identity must not run the trim search");
     assert(edited_bytes==bytes && !memcmp(m,edited,bytes));av_free(edited);
     b->l10.target_primary_index=b->dvbridge_original_bytes[4]=99;
     assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
@@ -364,6 +365,10 @@ static void fit_contract(bool emit)
                 e->l8.trim_power,e->l8.trim_chroma_weight,e->l8.trim_saturation_gain);
         }
         assert(status==DVBRIDGE_CREATIVE_NEUTRAL || status==DVBRIDGE_CREATIVE_READY);
+        if(!preset && j<=2)
+            assert(report.candidate_evaluations<=3 && "Natural identity must have bounded validation-only work");
+        if(preset)
+            assert(report.candidate_evaluations<=4 && "A valid edited seed must not run the trim search");
         {
             policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;policy.tv.peak_nits=fit_nits(3079.0/4095);
             struct dvbridge_creative_plan q;dvbridge_creative_resolve(&q,edited,bytes,&policy);
@@ -375,7 +380,7 @@ static void fit_contract(bool emit)
                 double peak=fit_nits(3079.0/4095),x=value/peak,gate=fmin(1,value);
                 gate=gate*gate*(3-2*gate);
                 double high=fmax(0,fmin(1,(x-.25)/.75));high=high*high*(3-2*high);
-                double wanted=value+gate*(preset?.04:.04*fmax(0,headroom)*high)*value*(1-x);
+                double wanted=value+gate*(preset?.02:.04*fmax(0,headroom)*high)*value*(1-x);
                 assert(fabs(fit_pq(out[0])-fit_pq(wanted))<=2.0/1024);
             }
         }
@@ -509,9 +514,31 @@ static void protected_authored(void)
     AVDOVIDmData *second=av_dovi_get_ext(m,1);
     second->l2.target_max_pq=3200;second->l2.trim_slope=3072;second->l2.trim_offset=2100;
     dvbridge_creative_resolve(&p,m,bytes,&policy);
-    assert(dvbridge_creative_edit(&edited,&count,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_UNSUPPORTED);
-    assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
-    assert(!report.l2_coverage.edited && !report.l8_coverage.edited && !memcmp(edited,m,bytes));
+    enum dvbridge_creative_status status=dvbridge_creative_edit(&edited,&count,m,bytes,&p,&report);
+    assert(status==DVBRIDGE_CREATIVE_READY || status==DVBRIDGE_CREATIVE_UNSUPPORTED);
+    if(status==DVBRIDGE_CREATIVE_UNSUPPORTED){
+        assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
+        assert(!report.l2_coverage.edited && !report.l8_coverage.edited && !memcmp(edited,m,bytes));
+    }else{
+        assert(report.l2_coverage.edited && !report.l8_coverage.edited);
+        struct dvbridge_policy expert=policy;expert.mode=DVBRIDGE_MODE_HDR10_EXPERT;
+        for(unsigned anchor=0;anchor<2;anchor++){
+            expert.tv.peak_nits=fit_nits(av_dovi_get_ext(m,anchor)->l2.target_max_pq/4095.0);
+            struct dvbridge_creative_plan source,result;
+            dvbridge_creative_resolve(&source,m,bytes,&expert);
+            dvbridge_creative_resolve(&result,edited,count,&expert);
+            double last=0;
+            for(unsigned i=0;i<=256;i++){
+                double value=expert.tv.peak_nits*i/256,input[3]={value,value,value},a0[3],a1[3];
+                assert(dvbridge_creative_trim_rgb(&source,input,a0));
+                assert(dvbridge_creative_trim_rgb(&result,input,a1));
+                double q0=fit_pq(a0[0]),q1=fit_pq(a1[0]);
+                if(!i)assert(fabs(q1-q0)<=2e-5);
+                if(value<=1)assert(fabs(q1-q0)<=2.0/1024);
+                assert(q1>=last-1e-12);last=q1;
+            }
+        }
+    }
     av_free(edited);av_free(m);
 }
 

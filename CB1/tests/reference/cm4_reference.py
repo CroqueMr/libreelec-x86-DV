@@ -188,7 +188,7 @@ def enhanced_objective(rgb_nits, peak_nits, headroom, scene, preset, primaries=B
     x=clamp(y/peak_nits)
     gate=clamp(y);gate=gate*gate*(3-2*gate)
     high=clamp((x-.25)/.75);high=high*high*(3-2*high)
-    gain=scene*gate*(.04 if preset=='Signature' else .04*max(0,headroom)*high)
+    gain=scene*gate*(.02 if preset=='Signature' else .04*max(0,headroom)*high)
     mapped=y+gain*max(0,y)*(1-x)
     maximum=max(rgb_nits)
     if max(rgb_nits)-min(rgb_nits)>1e-12:
@@ -198,6 +198,6 @@ def enhanced_objective(rgb_nits, peak_nits, headroom, scene, preset, primaries=B
     if max(rgb)-min(rgb)<=1e-12:
         return rgb
     ipt=to_ipt(rgb,c)
-    saturation=2**(scene*(64 if preset=='Signature' else 32*max(0,headroom))*clamp(1-maximum/peak_nits)/4096)
+    saturation=2**(scene*(32 if preset=='Signature' else 32*max(0,headroom))*clamp(1-maximum/peak_nits)/4096)
     ipt[1]*=saturation;ipt[2]*=saturation
     return from_ipt(ipt,c)

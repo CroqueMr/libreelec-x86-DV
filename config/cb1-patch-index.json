@@ -485,5 +485,52 @@
       "src/include/libplacebo/renderer.h": "Declare the default-off hook-domain policy field.",
       "src/renderer.c": "Map the current hook color domain only when explicitly requested."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": {
+      "summary": "Bound CB1 preparation, select compatible output modes and separate playback panels",
+    "component": "kodi",
+    "files": {
+        "addons/resource.language.en_gb/resources/strings.po": "Label frame preparation and independent playback-panel settings.",
+        "system/settings/settings.xml": "Expose CB1 preparation and independent information/quick-switch controls.",
+      "system/shaders/GLES/2.0/gles_gui_composite.frag": "Preserve the existing PQ subtitle layer without a second transfer conversion.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp": "Read the native free-stream message payload directly.",
+        "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Read independent playback-panel and CB1 preparation settings.",
+        "xbmc/dialogs/DVPlaybackModes.cpp": "Enable the quick rendering switch independently of the information panel.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Prepare one next picture with fenced source ownership and presentation-bound metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Declare bounded preparation and cancellation interfaces.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Retire CB1 playback before renderer teardown.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Route eligible subtitle composition through the CB1 transport layer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp": "Render the native subtitle layer in the matching PQ domain.",
+        "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Prepare one next CB1 picture and select its transport mode without changing native scheduling.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Track bounded CB1 frame preparation and presentation phase.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.cpp": "Select the already-PQ subtitle composition input.",
+        "xbmc/rendering/gles/GuiCompositeShaderGLES.h": "Declare the PQ composition input switch.",
+        "xbmc/utils/DVBridgeKernelLog.h": "Recognize bounded connector and display-converter diagnostics.",
+        "xbmc/windowing/Resolution.cpp": "Select an available progressive 2160p CB1 transport mode at a compatible cadence.",
+        "xbmc/windowing/Resolution.h": "Declare the shared CB1 transport refresh-rate check.",
+      "xbmc/windowing/gbm/DVWindowRetirement.h": "Stop playback through the existing native window owner.",
+        "xbmc/windowing/gbm/WinSystemGbm.cpp": "Separate available transport modes from the active mode and retire native display state.",
+        "xbmc/windowing/gbm/WinSystemGbm.h": "Expose CB1 mode availability and bounded retirement.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Retain EGL ownership until playback retirement is safe.",
+        "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present matched video/metadata, preflight available output modes and bound modeset failures.",
+        "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Track preparation readiness, cached mode availability and native-output ownership.",
+        "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Keep one outstanding KMS commit and validate the actually accepted display mode.",
+        "xbmc/windowing/gbm/drm/DRMAtomic.h": "Expose accepted-mode evidence and bounded commit completion.",
+        "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Log the selected display route on connection and mode changes.",
+        "xbmc/windowing/gbm/drm/DVBridgeKernelLogReader.h": "Collect relevant kernel events off the render thread with a shared record budget.",
+        "xbmc/windowing/gbm/drm/DVBridgeDisplayRoute.h": "Read bounded selected-connector route evidence without guessing converter identity."
+    }
+  },
+  "CB1/patches/libplacebo/libplacebo-9912-native-transport.patch": {
+    "summary": "Reduce eligible Dolby Vision reconstruction and scaler work",
+    "component": "libplacebo",
+    "files": {
+      "src/include/libplacebo/renderer.h": "Expose default-off transport, exact scaler-cache and active-row interfaces.",
+      "src/include/libplacebo/shaders/colorspace.h": "Declare opponent-domain Dolby Vision reconstruction.",
+      "src/include/libplacebo/shaders/sampling.h": "Expose the opt-in exact scaler LUT cache.",
+      "src/renderer.c": "Avoid redundant RGB conversion and inactive-row work in eligible CB1 transport.",
+      "src/shaders/colorspace.c": "Share unchanged reconstruction math before display-management conversion.",
+      "src/shaders/sampling.c": "Reuse exact native-transport scaler coefficients under matching inputs."
+    }
   }
 }

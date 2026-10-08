@@ -117,7 +117,7 @@ def verify(root, dependency_roots=None, prefix=None):
     if actual_sources != origins['files'].keys() | owned.keys():
         raise ValueError('Unexpected or missing runtime source')
     patches = {p.relative_to(root).as_posix() for p in (root / 'patches').rglob('*.patch')}
-    if patches != dependencies['patches'].keys() or len(patches) != 17:
+    if patches != dependencies['patches'].keys() or len(patches) != 18:
         raise ValueError('Unexpected or missing dependency patch')
     receipt = json.loads(checked(root, 'src/PROVENANCE.json').read_text())
     for name, digest in receipt['files'].items():

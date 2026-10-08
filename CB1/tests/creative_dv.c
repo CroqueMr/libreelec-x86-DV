@@ -55,6 +55,15 @@ int main(void)
     assert(out->value.creative_edit.cache_hit && !out->value.creative_edit.fit_ns && !out->value.creative_edit.candidate_evaluations);
     assert(out->value.identity.picture==id.picture && !memcmp(edited_before,out->output_metadata,bytes));
     assert(out->value.creative_edit.maximum_pq_error==first.maximum_pq_error);av_free(edited_before);
+    retire(r);l1->l1.min_pq++;l1->l1.max_pq--;
+    av_dovi_get_color(m)->scene_refresh_flag=1;
+    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    out=dvbridge_render_dv_policy_output(r);assert(out && out->value.creative_edit.cache_hit);
+    assert(!memcmp(av_dovi_get_ext(out->output_metadata,0),l1,sizeof(*l1)));
+    assert(av_dovi_get_color(out->output_metadata)->scene_refresh_flag==1);
+    retire(r);l1->l1.avg_pq=3000;
+    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    out=dvbridge_render_dv_policy_output(r);assert(out && !out->value.creative_edit.cache_hit);
     retire(r);l2->l2.trim_power++;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
     out=dvbridge_render_dv_policy_output(r);assert(out && !out->value.creative_edit.cache_hit);

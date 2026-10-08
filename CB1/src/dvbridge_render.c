@@ -5,6 +5,7 @@
 /* Reconstruct video at full precision, then pack the HDMI transport with frame-matched metadata. */
 #include "dvbridge_render.h"
 #include "dvbridge_placebo.h"
+#include "dvbridge_metadata.h"
 #include "dvbridge_gl_pack.h"
 #include "dvbridge_pack_sources.h"
 #include "cb1_hdr10_ai.h"
@@ -21,6 +22,8 @@
 #include <EGL/egl.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 struct dvbridge_dv_slot {
     bool active, retiring, ready, quarantined, allocated;
@@ -38,6 +41,8 @@ struct dvbridge_dv_slot {
     const uint32_t *mapped;
     void *source_metadata;
     unsigned groups;
+    pl_tex packed_target;
+    bool packed_flip;
 };
 struct dvbridge_retirement_owner {
     pl_gpu gpu;
@@ -50,6 +55,7 @@ struct creative_fit_cache {
     struct fit_byte *edits; /* Encoded changed words, not picture or GPU state. */
     struct dvbridge_policy policy;
     struct dvbridge_creative_edit_report report;
+    double scene;
 };
 
 struct dvbridge_renderer {
@@ -59,12 +65,12 @@ struct dvbridge_renderer {
     struct dvbridge_context *context;
     struct dvbridge_candidate *pending;
     bool ready;
-    bool packed, fragment_quad;
+    bool packed, fragment_quad, exact_scaler_cache;
     struct pl_color_space reconstructed_color;
     struct dvbridge_hdr10_policy_output policy_pending, policy_committed;
     bool policy_ready, policy_has_committed;
     struct dvbridge_retirement_owner *owner;
-    struct dvbridge_dv_slot dv;
+    struct dvbridge_dv_slot dv, retired_packed;
     GLuint dv_analysis_program;
     struct dvbridge_gl_packer *dv_transport_packer;
     struct dvbridge_dv_policy_snapshot dv_committed;
@@ -411,7 +417,9 @@ struct active_mask {
     const uint32_t *packets;
     uint32_t count, flip;
     pl_shader native_shader;
-    bool early_mask;
+    bool early_mask, source_domain;
+    const struct dvbridge_native_overlay *overlay;
+    float nonlinear[9], offset[3], linear[9];
 };
 
 static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
@@ -423,16 +431,23 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
         {.var={.name="early_words", .type=PL_VAR_UINT, .dim_v=4, .dim_m=1, .dim_a=128},
          .data=mask->packets, .dynamic=true},
         {.var=pl_var_uint("early_count"), .data=&mask->count, .dynamic=true},
-        {.var=pl_var_uint("early_flip"), .data=&mask->flip, .dynamic=true}};
+        {.var=pl_var_uint("early_flip"), .data=&mask->flip, .dynamic=true},
+        {.var=pl_var_vec4("early_overlay"), .data=mask->overlay ? mask->overlay->rect : mask->rect,
+         .dynamic=true}};
     struct pl_custom_shader shader = {
         .input=PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
         .description="Skip reconstruction outside the DV active picture",
-        .variables=vars, .num_variables=4,
+        .header=mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
+        .variables=vars, .num_variables=5,
         .body=
         "ivec2 ep=ivec2(gl_FragCoord.xy); if(early_flip!=0u) ep.y=2159-ep.y;\n"
         // Keep boundary pairs together: their chroma also uses the active neighbor.
         "int ex=ep.x&~1;\n"
-        "if(float(ex+1)<early_area.x || float(ex)>=early_area.z || float(ep.y)<early_area.y || float(ep.y)>=early_area.w){\n"
+        "bool outside=float(ex+1)<early_area.x || float(ex)>=early_area.z || float(ep.y)<early_area.y || float(ep.y)>=early_area.w;\n"
+        "#ifdef CB1_NATIVE_OVERLAY\n"
+        "outside=outside && !(float(ex)>=early_overlay.x && float(ex)<early_overlay.z && float(ep.y)>=early_overlay.y && float(ep.y)<early_overlay.w);\n"
+        "#endif\n"
+        "if(outside){\n"
         "uint ei=uint(ep.y*3840+ep.x), ek=ei/3072u, ev=0u;\n"
         "if(ek<early_count){uint eb=ei%1024u, ew=ek*128u+eb/8u;\n"
         "ev=(early_words[ew/4u][int(ew%4u)]>>(7u-eb%8u))&1u;}\n"
@@ -455,17 +470,89 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         {.var = {.name="metadata_words", .type=PL_VAR_UINT, .dim_v=4, .dim_m=1, .dim_a=128},
          .data=mask->packets, .dynamic=true},
         {.var=pl_var_uint("packet_count"), .data=&mask->count, .dynamic=true},
-        {.var=pl_var_uint("flip_y"), .data=&mask->flip, .dynamic=true}};
+        {.var=pl_var_uint("flip_y"), .data=&mask->flip, .dynamic=true},
+        {.var=pl_var_vec4("overlay_area"), .data=mask->overlay ? mask->overlay->rect : mask->rect, .dynamic=true},
+        {.var=pl_var_mat3("overlay_decode"), .data=mask->nonlinear, .dynamic=true},
+        {.var=pl_var_vec3("overlay_offset"), .data=mask->offset, .dynamic=true},
+        {.var=pl_var_mat3("overlay_linear"), .data=mask->linear, .dynamic=true}};
+    struct pl_shader_desc desc[3]={0};
+    if(mask->overlay) {
+        const char *names[]={"subtitle_gui","subtitle_degamma","subtitle_pq"};
+        pl_tex textures[]={mask->overlay->texture,mask->overlay->degamma,mask->overlay->pq};
+        for(int i=0;i<3;i++) {
+            desc[i].desc.name=names[i];desc[i].desc.type=PL_DESC_SAMPLED_TEX;
+            desc[i].binding.object=textures[i];
+            desc[i].binding.sample_mode=PL_TEX_SAMPLE_LINEAR;
+            desc[i].binding.address_mode=PL_TEX_ADDRESS_CLAMP;
+        }
+    }
+    char header[128];
+    snprintf(header,sizeof(header),"%s%s%s",
+        mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
+        mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
+        mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "");
     struct pl_custom_shader shader = {
         .prelude="#extension GL_KHR_shader_subgroup_basic : require\n"
                  "#extension GL_KHR_shader_subgroup_quad : require\n",
+        .header=header,
         .input=PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
         .description="Exact full-raster DV transport without intermediate image",
-        .variables=vars, .num_variables=4,
+        .variables=vars, .num_variables=mask->overlay ? 8 : 4,
+        .descriptors=desc, .num_descriptors=mask->overlay ? 3 : 0,
         .body=
         "ivec2 p=ivec2(gl_FragCoord.xy); if(flip_y!=0u) p.y=2159-p.y;\n"
-        "if(float(p.x)<active_area.x || float(p.x)>=active_area.z || float(p.y)<active_area.y || float(p.y)>=active_area.w) color=vec4(0,0,0,1);\n"
-        "vec3 self_rgb=clamp(color.rgb,0.0,1.0);\n"
+        "bool inactive=float(p.x)<active_area.x || float(p.x)>=active_area.z || float(p.y)<active_area.y || float(p.y)>=active_area.w;\n"
+        "vec3 self_rgb=vec3(0); bool compose=false; vec4 gui=vec4(0);\n"
+        "#ifdef CB1_SOURCE_DOMAIN\n"
+        "if(inactive) color=vec4(.0625,.5,.5,1.0);\n"
+        "vec3 self_ycc=clamp(color.rgb,0.0,1.0);\n"
+        "vec3 peer_ycc=subgroupQuadSwapHorizontal(self_ycc);\n"
+        "#else\n"
+        "self_rgb=inactive?vec3(0):clamp(color.rgb,0.0,1.0);\n"
+        "#endif\n"
+        "#ifdef CB1_NATIVE_OVERLAY\n"
+        "compose=float(p.x)>=overlay_area.x && float(p.x)<overlay_area.z && float(p.y)>=overlay_area.y && float(p.y)<overlay_area.w;\n"
+        "if(compose) gui=texture(subtitle_gui,vec2((float(p.x)+.5)/3840.0,(2159.0-float(p.y)+.5)/2160.0));\n"
+        "float peer_alpha=subgroupQuadSwapHorizontal(gui.a);\n"
+        "compose=compose && (gui.a>0.0 || peer_alpha>0.0);\n"
+        "#endif\n"
+        "#ifdef CB1_SOURCE_DOMAIN\n"
+        // Keep the direct transport values out of the subtitle colour branch.
+        "if(!compose){\n"
+        "uint y=uint(floor(4095.0*self_ycc.x+.5));\n"
+        "float chroma=(p.x&1)==0?self_ycc.y+peer_ycc.y:self_ycc.z+peer_ycc.z;\n"
+        "uint c=uint(floor(2047.5*chroma+.5));\n"
+        "uint index=uint(p.y*3840+p.x), packet=index/3072u;\n"
+        "if(packet<packet_count){uint bit=index%1024u, byte_index=packet*128u+bit/8u;\n"
+        "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;\n"
+        "uint parity=uint(bitCount(c>>1u)+bitCount(y))&1u; c=(c&4094u)|(value^parity);}\n"
+        "return vec4(float(c>>4u),float(y>>4u),float((y&15u)|((c&15u)<<4u)),255.0)/255.0;}\n"
+        "#endif\n"
+        "#ifdef CB1_NATIVE_OVERLAY\n"
+        "if(compose){\n"
+        "#ifdef CB1_SOURCE_DOMAIN\n"
+        // libplacebo's post-reconstruction color decode, restricted to subtitle pairs.
+        "if(!inactive){\n"
+        "self_rgb=overlay_decode*color.rgb+overlay_offset;\n"
+        "self_rgb=pow(max(self_rgb,0.0),vec3(1.0/(2523.0/32.0)));\n"
+        "self_rgb=max(self_rgb-vec3(3424.0/4096.0),0.0)/(vec3(2413.0/128.0)-vec3(2392.0/128.0)*self_rgb);\n"
+        "self_rgb=pow(self_rgb,vec3(1.0/(2610.0/16384.0)));\n"
+        "self_rgb=overlay_linear*self_rgb;\n"
+        "self_rgb=pow(max(self_rgb,0.0),vec3(2610.0/16384.0));\n"
+        "self_rgb=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*self_rgb)/(vec3(1.0)+vec3(2392.0/128.0)*self_rgb);\n"
+        "self_rgb=pow(self_rgb,vec3(2523.0/32.0));}\n"
+        "#endif\n"
+        "#ifdef CB1_OVERLAY_PQ\n"
+        "self_rgb=clamp(gui.rgb+self_rgb*(1.0-gui.a),0.0,1.0);\n"
+        "#else\n"
+        "vec3 linear=vec3(texture(subtitle_degamma,vec2(gui.r,.5)).r,texture(subtitle_degamma,vec2(gui.g,.5)).r,texture(subtitle_degamma,vec2(gui.b,.5)).r);\n"
+        "linear=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*linear;\n"
+        "vec3 gui_pq=vec3(texture(subtitle_pq,vec2(linear.r,.5)).r,texture(subtitle_pq,vec2(linear.g,.5)).r,texture(subtitle_pq,vec2(linear.b,.5)).r);\n"
+        "self_rgb=clamp(gui_pq*gui.a+self_rgb*(1.0-gui.a),0.0,1.0);\n"
+        "#endif\n"
+        "}\n"
+        "#endif\n"
+        // Subtitle admission keeps each horizontal pair together.
         "vec3 peer_rgb=subgroupQuadSwapHorizontal(self_rgb);\n"
         "vec3 a=(p.x&1)==0?self_rgb:peer_rgb, b=(p.x&1)==0?peer_rgb:self_rgb;\n"
         "float ya=dot(a,vec3(.2627,.6780,.0593)), yb=dot(b,vec3(.2627,.6780,.0593));\n"
@@ -513,6 +600,13 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
     // Query just the operation used here. libplacebo's global subgroup flag
     // requires arithmetic/clustered features that this fragment hook never uses.
     pl_opengl gl = pl_opengl_get(gpu);
+    if (gl) {
+        const char *vendor = (const char *)glGetString(GL_VENDOR);
+        const char *renderer = (const char *)glGetString(GL_RENDERER);
+        // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
+        r->exact_scaler_cache = vendor && !strcmp(vendor, "Intel") &&
+                                renderer && strstr(renderer, "(ADL-N)");
+    }
     if (gl && pl_opengl_has_ext(gl, "GL_KHR_shader_subgroup")) {
         GLint size=0, stages=0, features=0;
         glGetIntegerv(0x9532, &size);
@@ -548,7 +642,7 @@ void dvbridge_renderer_reset(struct dvbridge_renderer *r)
     r->packed = false;
     r->policy_ready = r->policy_has_committed = false;
     dvbridge_reset(r->context);
-    if (r->renderer && !r->dv.active) {
+    if (r->renderer && !r->dv.active && !r->retired_packed.active) {
         pl_renderer_flush_cache(r->renderer);
         pl_renderer_reset_errors(r->renderer, NULL);
     }
@@ -562,7 +656,7 @@ void dvbridge_renderer_destroy(struct dvbridge_renderer *r)
     if (r->owner) {
         struct dvbridge_retirement_owner *owner=r->owner;
         owner->attached=NULL;
-        if (r->dv.active) { owner->lease=r;return; }
+        if (r->dv.active || r->retired_packed.active) { owner->lease=r;return; }
     }
     renderer_free(r);
 }
@@ -586,7 +680,8 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry, pl_tex packed, bool flip,
                         const struct dvbridge_hdr10_session *session,
-                        const struct dvbridge_policy *policy)
+                        const struct dvbridge_policy *policy,
+                        const struct dvbridge_native_overlay *overlay,bool force_refresh)
 {
     if (!r)
         return false;
@@ -644,8 +739,8 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
             if (av_dovi_get_ext(m, i)->level == 1 && ++l1_count > 1)
                 return false;
     } else if (!policy) {
-        r->pending = dvbridge_prepare(r->context, metadata, bytes, pts, geometry,
-                                     paired && mapped.dovi.nlq_active);
+        r->pending = dvbridge_prepare_output(r->context, metadata, bytes, pts, geometry,
+                                     paired && mapped.dovi.nlq_active,force_refresh);
         if (!dvbridge_active_area(r->pending, margins))
             return false;
     }
@@ -730,6 +825,31 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     params.border = PL_CLEAR_SKIP;
     struct active_mask mask = {.rect = {margins[0], margins[2],
                                        3840 - margins[1], 2160 - margins[3]}};
+    mask.overlay=overlay;
+    mask.source_domain=packed && !session && !policy && paired && mapped.dovi.nlq_active &&
+        geometry.source_width==3840 && geometry.source_height==2160 && !geometry.x && !geometry.y &&
+        geometry.width==3840 && geometry.height==2160 && dvbridge_dv_source_matches_output(metadata);
+    params.cb1_dovi_transport=mask.source_domain;
+    params.cb1_exact_scaler_cache=mask.source_domain && r->exact_scaler_cache;
+    if(overlay && mask.source_domain) {
+        struct pl_color_repr post=mapped.repr;
+        pl_color_repr_normalize(&post);
+        pl_transform3x3 tr=pl_color_repr_decode(&post,NULL);
+        pl_matrix3x3 linear={{{3.06441879f,-2.16597676f,.10155818f},
+            {-.65612108f,1.78554118f,-.12943749f},{.01736321f,-.04725154f,1.03004253f}}};
+        pl_matrix3x3_mul(&linear,&mapped.dovi.linear);
+        for(int i=0;i<3;i++) {
+            mask.offset[i]=tr.c[i];
+            for(int j=0;j<3;j++) {
+                mask.nonlinear[j*3+i]=tr.mat.m[i][j];
+                mask.linear[j*3+i]=linear.m[i][j];
+            }
+        }
+    }
+    if(mask.source_domain) {
+        params.disable_linear_scaling=true;
+        params.sigmoid_params=NULL;
+    }
     mask.flip = flip;
     mask.packets = dvbridge_packets(r->pending, &mask.count);
     mask.early_mask = packed && geometry.source_width == 3840 && geometry.source_height == 2160 &&
@@ -822,7 +942,10 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     }
     if (!packed && (geometry.x || geometry.y || geometry.width != 3840 || geometry.height != 2160))
         pl_tex_clear(r->gpu, r->rgb, (float[4]){0, 0, 0, 1});
-    bool rendered = pl_render_image(r->renderer, &image, &target, &params);
+    bool rendered = mask.source_domain && mask.early_mask ?
+        pl_render_image_cb1_active_rows(r->renderer, &image, &target, &params,
+                                      margins[2], 2160-margins[3]) :
+        pl_render_image(r->renderer, &image, &target, &params);
     r->ready = rendered && (policy ? reference.called && !reference.failed : mask.called && !mask.failed);
     /* An EL sampling failure can otherwise return a successfully rendered BL-only frame. */
     struct pl_render_errors errors = pl_renderer_get_errors(r->renderer);
@@ -846,7 +969,7 @@ bool dvbridge_render_rgb(struct dvbridge_renderer *r, const struct pl_frame *sou
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry)
 {
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL, NULL,false);
 }
 
 bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
@@ -859,12 +982,19 @@ bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
         dvbridge_renderer_reset(r);
         return false;
     }
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL, NULL,false);
 }
 
 bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *source,
                            const void *metadata, size_t bytes, double pts, double el_pts,
                            struct dvbridge_geometry geometry, pl_tex target, bool flip)
+{
+    return dvbridge_render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,NULL);
+}
+
+static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
+    pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay,bool force_refresh)
 {
     if (r && r->dv.active)
         dvbridge_render_dv_policy_cancel(r);
@@ -880,6 +1010,18 @@ bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *
     for (int c = 0; c < 4; ++c)
         if (target->params.format->component_depth[c] != 8)
             return false;
+    if(overlay) {
+        if(!overlay->texture || !overlay->texture->params.sampleable ||
+           !overlay->degamma || !overlay->pq || !overlay->degamma->params.sampleable ||
+           !overlay->pq->params.sampleable ||
+           overlay->texture->params.w!=3840 ||
+           overlay->texture->params.h!=2160) return false;
+        for(int i=0;i<4;i++) if(!isfinite(overlay->rect[i])) return false;
+        if(overlay->rect[0]<0 || overlay->rect[1]<0 || overlay->rect[2]>3840 ||
+           overlay->rect[3]>2160 || overlay->rect[0]>overlay->rect[2] ||
+           overlay->rect[1]>overlay->rect[3] || fmodf(overlay->rect[0],2) ||
+           fmodf(overlay->rect[2],2)) return false;
+    }
     // Transport bytes must not inherit GUI blending, dithering or write masks.
     // libplacebo owns viewport/scissor while rendering; preserve the caller's
     // enable state, just as the separate transport packer does.
@@ -895,7 +1037,7 @@ bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *
         glDisable(caps[i]);
     }
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL);
+    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh);
     ok = glGetError() == GL_NO_ERROR && ok;
     glColorMask(mask[0], mask[1], mask[2], mask[3]);
     for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
@@ -904,6 +1046,13 @@ bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *
     }
     r->ready = ok && glGetError() == GL_NO_ERROR;
     return r->ready;
+}
+
+bool dvbridge_render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
+    pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
+{
+    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false);
 }
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
@@ -980,7 +1129,7 @@ bool dvbridge_render_hdr10_policy_rgb(struct dvbridge_renderer *r,
         !pl_find_fmt(r->gpu, PL_FMT_UNORM, 4, 16, 16, PL_FMT_CAP_LINEAR) ||
         !pl_find_fmt(r->gpu, PL_FMT_FLOAT, 1, 32, 32, PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR))
         return false;
-    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy))
+    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy, NULL,false))
         return false;
     r->policy_pending.identity = *identity;
     return true;
@@ -1119,9 +1268,8 @@ static GLuint dv_compute_program(void)
     if(!ok){glDeleteProgram(program);return 0;}return program;
 }
 
-static void dv_release(struct dvbridge_renderer *r)
+static void dv_release_slot(struct dvbridge_dv_slot *s)
 {
-    struct dvbridge_dv_slot *s=&r->dv;
     if(s->fence)s->delete_sync(s->fence);
     if(s->mapped){GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[2]);glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -1133,16 +1281,37 @@ static void dv_release(struct dvbridge_renderer *r)
     av_free(s->output_metadata);
     memset(s,0,sizeof(*s));
 }
+static void dv_release(struct dvbridge_renderer *r) { dv_release_slot(&r->dv); }
 
-static enum dvbridge_dv_policy_status dv_retire(struct dvbridge_renderer *r)
+static enum dvbridge_dv_policy_status dv_retire_slot(struct dvbridge_dv_slot *s)
 {
-    struct dvbridge_dv_slot *s=&r->dv;
     if(s->quarantined)return DVBRIDGE_DV_FAILED;
     if(!s->active)return DVBRIDGE_DV_IDLE;
     if(s->fence){GLenum result=s->wait_sync(s->fence,0,0);
         if(result==GL_TIMEOUT_EXPIRED)return DVBRIDGE_DV_BUSY;
         if(result!=GL_ALREADY_SIGNALED && result!=GL_CONDITION_SATISFIED){s->quarantined=true;return DVBRIDGE_DV_FAILED;}}
-    dv_release(r);return DVBRIDGE_DV_IDLE;
+    dv_release_slot(s);return DVBRIDGE_DV_IDLE;
+}
+static enum dvbridge_dv_policy_status dv_retire(struct dvbridge_renderer *r)
+{
+    enum dvbridge_dv_policy_status status=dv_retire_slot(&r->retired_packed);
+    return status==DVBRIDGE_DV_IDLE?dv_retire_slot(&r->dv):status;
+}
+
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_advance(struct dvbridge_renderer *r)
+{
+    if(!r)return DVBRIDGE_DV_FAILED;
+    enum dvbridge_dv_policy_status status=dv_retire_slot(&r->retired_packed);
+    if(status!=DVBRIDGE_DV_IDLE)return status;
+    struct dvbridge_dv_slot *s=&r->dv;
+    if(!s->retiring || !s->packed_target || s->mapped || s->source_metadata ||
+       s->buffers[0] || s->buffers[1] || s->buffers[2] || s->sampler || s->programs[1])
+        return dvbridge_render_dv_policy_poll(r);
+    status=dv_retire_slot(s);
+    if(status!=DVBRIDGE_DV_BUSY)return status;
+    r->retired_packed=*s;
+    memset(s,0,sizeof(*s));
+    return DVBRIDGE_DV_IDLE;
 }
 
 struct dvbridge_retirement_owner *dvbridge_retirement_owner_create(pl_gpu gpu)
@@ -1447,13 +1616,29 @@ static bool fit_policy_equal(const struct dvbridge_policy *a,const struct dvbrid
         a->tv.peak_nits==b->tv.peak_nits && a->tv.panel==b->tv.panel && a->tv.gamut==b->tv.gamut;
 }
 /* Call only after original raw/parsed resolution succeeds for this picture. */
+static bool fit_inputs_equal(const struct creative_fit_cache *c,const AVDOVIMetadata *m,
+    const struct dvbridge_creative_plan *p)
+{
+    const AVDOVIMetadata *prior=c->source;
+    if(c->scene!=dvbridge_creative_scene_weight(p) ||
+       prior->ext_block_offset!=m->ext_block_offset || prior->ext_block_size!=m->ext_block_size ||
+       prior->num_ext_blocks!=m->num_ext_blocks ||
+       av_dovi_get_color(prior)->source_max_pq!=av_dovi_get_color(m)->source_max_pq)return false;
+    for(int i=0;i<m->num_ext_blocks;i++){
+        const AVDOVIDmData *a=av_dovi_get_ext(prior,i),*b=av_dovi_get_ext(m,i);
+        if(a->level!=b->level || ((b->level==2 || b->level==8 || b->level==10) &&
+            memcmp(a,b,sizeof(*b))))return false;
+    }
+    return true;
+}
+
 static enum dvbridge_creative_status fit_cached(struct dvbridge_renderer *r,void **output,
     size_t *output_bytes,const void *metadata,size_t bytes,const struct dvbridge_creative_plan *p,
     struct dvbridge_creative_edit_report *report)
 {
     struct creative_fit_cache *c=&r->fit_cache;
     if(c->source && c->bytes==bytes && fit_policy_equal(&c->policy,&p->policy) &&
-       !memcmp(c->source,metadata,bytes)){
+       fit_inputs_equal(c,metadata,p)){
         uint8_t *copy=av_memdup(metadata,bytes);
         if(!copy){*output=NULL;*output_bytes=0;return DVBRIDGE_CREATIVE_INVALID;}
         for(size_t i=0;i<c->count;i++)copy[c->edits[i].offset]=c->edits[i].value;
@@ -1471,18 +1656,21 @@ static enum dvbridge_creative_status fit_cached(struct dvbridge_renderer *r,void
     if(!key || (count && !edits)){av_free(key);av_free(edits);return status;}
     size_t n=0;for(size_t i=0;i<bytes;i++)if(source[i]!=edited[i])
         edits[n++]=(struct fit_byte){.offset=i,.value=edited[i]};
-    *c=(struct creative_fit_cache){.source=key,.bytes=bytes,.count=count,.edits=edits,.policy=p->policy,.report=*report};
+    *c=(struct creative_fit_cache){.source=key,.bytes=bytes,.count=count,.edits=edits,.policy=p->policy,
+        .report=*report,.scene=dvbridge_creative_scene_weight(p)};
     return status;
 }
 
-enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(struct dvbridge_renderer *r,
+static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct dvbridge_identity *id,const struct pl_frame *source,
-    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry)
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
+    pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
     if(!r)return DVBRIDGE_DV_FAILED;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return r->dv.quarantined?DVBRIDGE_DV_FAILED:DVBRIDGE_DV_BUSY;}
     dvbridge_render_policy_cancel(r);
     if(!r->owner)return DVBRIDGE_DV_UNSUPPORTED;
+    if(packed && !r->fragment_quad)return DVBRIDGE_DV_UNSUPPORTED;
     if(!policy || !id || policy->mode!=DVBRIDGE_MODE_ENHANCED_DV || id->revision!=policy->revision ||
        !isfinite(pts) || !isfinite(el_pts) || !source || source->num_overlays ||
        (source->enhancement_layer && source->enhancement_layer->num_overlays))return DVBRIDGE_DV_FAILED;
@@ -1498,14 +1686,17 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(struct dvbridge
     enum dvbridge_creative_status edit=fit_cached(r,&output,&output_bytes,metadata,bytes,&creative,&edit_report);
     if(edit==DVBRIDGE_CREATIVE_INVALID){dv_release(r);return DVBRIDGE_DV_FAILED;}
     s->output_metadata=output;s->output_bytes=output_bytes;
-    bool ok=render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,NULL);
+    bool force=!r->dv_has_committed || r->dv_committed.identity.stream!=id->stream ||
+        r->dv_committed.identity.revision!=id->revision;
+    bool ok=packed ? render_packed_overlay(r,source,output,output_bytes,pts,el_pts,geometry,packed,flip,overlay,force) :
+        render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,NULL,NULL,false);
     s->active=true;s->pts=pts;
     if(!ok){dv_last_use(r);dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}
     bool fel=color.dovi.nlq_active && source->enhancement_layer && pts==el_pts;
-    dvbridge_candidate_destroy(r->pending);
-    bool force=!r->dv_has_committed || r->dv_committed.identity.stream!=id->stream ||
-        r->dv_committed.identity.revision!=id->revision;
-    r->pending=dvbridge_prepare_output(r->context,output,output_bytes,pts,geometry,fel,force);
+    if(!packed){
+        dvbridge_candidate_destroy(r->pending);
+        r->pending=dvbridge_prepare_output(r->context,output,output_bytes,pts,geometry,fel,force);
+    }
     if(!r->pending || !dv_last_use(r)){dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}
     const AVDOVIColorMetadata *c=av_dovi_get_color(output);
     const AVDOVIDmData *l1=av_dovi_find_level(output,1);
@@ -1519,9 +1710,26 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(struct dvbridge
         .l1={l1?l1->l1.min_pq:0,l1?l1->l1.max_pq:0,l1?l1->l1.avg_pq:0},.source_pq={c->source_min_pq,c->source_max_pq}};
     memcpy(s->output.value.margins,margins,sizeof(margins));
     s->output.output_metadata=output;s->output.bytes=output_bytes;
-    s->output.candidate=r->pending;s->output.intermediate=r->rgb;
+    s->output.candidate=r->pending;s->output.intermediate=packed?NULL:r->rgb;
+    s->packed_target=packed;s->packed_flip=flip;
     r->policy_ready=false;s->ready=r->ready=true;
     return DVBRIDGE_DV_READY;
+}
+
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct dvbridge_identity *id,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry)
+{
+    return dv_policy_prepare(r,policy,id,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL);
+}
+
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare_packed(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct dvbridge_identity *id,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
+    pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
+{
+    if(!target)return DVBRIDGE_DV_FAILED;
+    return dv_policy_prepare(r,policy,id,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay);
 }
 
 
@@ -1529,8 +1737,8 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_poll(struct dvbridge_re
 {
     if(!r)return DVBRIDGE_DV_FAILED;
     struct dvbridge_dv_slot *s=&r->dv;
-    if(s->quarantined)return DVBRIDGE_DV_FAILED;
-    if(!s->active)return DVBRIDGE_DV_IDLE;
+    if(s->quarantined || r->retired_packed.quarantined)return DVBRIDGE_DV_FAILED;
+    if(!s->active)return dv_retire(r);
     if(s->retiring)return dv_retire(r);
     if(s->ready)return DVBRIDGE_DV_READY;
     GLenum status=s->wait_sync(s->fence,0,0);
@@ -1584,6 +1792,12 @@ bool dvbridge_render_dv_policy_resolve(struct dvbridge_renderer *r,pl_tex target
         break;
     }
     if(!dv_final_framebuffer(framebuffer,alpha_bits)){dvbridge_render_dv_policy_cancel(r);return false;}
+    if(r->dv.packed_target){
+        if(r->dv.packed_target!=target || r->dv.packed_flip!=flip){dvbridge_render_dv_policy_cancel(r);return false;}
+        r->dv.output.value.resolved=true;r->dv.output.value.final_target=target;
+        r->dv.output.value.final_framebuffer=framebuffer;
+        r->dv.output.resolve_serial=++r->resolve_serial;return true;
+    }
     unsigned texture_target,count;
     unsigned texture=pl_opengl_unwrap(r->gpu,r->rgb,&texture_target,NULL,NULL);
     const uint32_t *packets=dvbridge_packets(r->pending,&count);

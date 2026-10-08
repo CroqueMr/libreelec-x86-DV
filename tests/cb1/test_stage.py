@@ -12,6 +12,16 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/cb1-stage.py"
 
 
 class StagingTests(unittest.TestCase):
+    def test_libplacebo_patches_use_the_native_flat_patch_directory(self):
+        tree = SCRIPT.parents[1]
+        lock = json.loads((tree / "config/cb1-source-lock.json").read_text())
+        prefix = "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/"
+        patches = [(name, record) for name, record in lock["staging"].items()
+                   if record["source"].startswith("patches/libplacebo/")]
+        self.assertTrue(patches)
+        for destination, record in patches:
+            self.assertEqual(destination, prefix + Path(record["source"]).name)
+
     def test_defaults_to_bundled_engine(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

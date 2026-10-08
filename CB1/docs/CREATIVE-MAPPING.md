@@ -47,7 +47,7 @@ lift content black; active-area borders remain signal black.
 ## Enhanced control policy
 
 Natural and Signature keep reconstructed pixels, L1/L3, mastering descriptors
-and target anchors unchanged. The `cb1-dve-v3` recipe fits the five existing L2/L8
+and target anchors unchanged. The `cb1-dve-v6` recipe fits the five existing L2/L8
 primary controls to fixed goals derived from the unedited authored response in
 linear nits. Each change is bounded to 512 codes from its source. Secondary
 controls remain unchanged. L2 and L8 are evaluated in their own reference domains
@@ -57,8 +57,9 @@ The treatment reference is at least 1000 nits without changing the actual TV
 profile or source target descriptions. Natural can remain neutral at a matching
 reference. Natural preserves midtones and expands eligible highlights. Signature
 raises eligible midtones and applies a stronger bounded color response.
-At most 183 evaluations per anchor refine the controls deterministically; repeated
-inputs use the existing cache. Black/near-black values, grayscale monotonicity and
+Two local coordinate-search passes refine the controls, with early acceptance
+only after full validation. Exact repeated inputs reuse accepted fits while each
+frame keeps its fresh metadata payload. Black/near-black values, grayscale monotonicity and
 authored plateaus are protected. PQ, chroma and hue error ceilings are unchanged.
 These controls do not guarantee actual panel luminance or licensed Dolby
 equivalence. No metadata blocks, CM version or mastering peak are invented.
@@ -124,7 +125,7 @@ describes creative intent, not a complete numerical mapper. Independent CM4
 reference outputs and tolerances qualify this project's numerical contract only.
 
 HDR10 Expert implements the independent CM4 scalar/spatial reference.
-DV Enhanced Natural/Signature use the `cb1-dve-v3` authored-response contract.
+DV Enhanced Natural/Signature use the `cb1-dve-v6` authored-response contract.
 Unsupported targets preserve coherent source metadata rather than a partial edit.
 These implementations do not establish equivalence to a licensed Dolby mapper.
 

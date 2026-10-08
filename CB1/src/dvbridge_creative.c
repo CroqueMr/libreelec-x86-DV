@@ -351,7 +351,7 @@ struct trim_fit {
     double scene;
     bool cm4, signature;
     double gray_input[257], gray_source[257], gray_goal[257];
-    double colour_input[18][3], colour_goal[18][3];
+    double colour_input[24][3], colour_goal[24][3], colour_rgb_goal[24][3];
 };
 
 static double enhanced_nits(double value,double peak,double headroom,double scene,bool signature)
@@ -359,7 +359,7 @@ static double enhanced_nits(double value,double peak,double headroom,double scen
     double x=bound(value/peak),gate=bound(value);
     gate=gate*gate*(3-2*gate);
     double highlight=bound((x-.25)/.75);highlight=highlight*highlight*(3-2*highlight);
-    double gain=scene*gate*(signature?.04:.04*fmax(0,headroom)*highlight);
+    double gain=scene*gate*(signature?.02:.04*fmax(0,headroom)*highlight);
     return value+gain*fmax(0,value)*(1-x);
 }
 
@@ -396,9 +396,15 @@ static bool fit_samples(struct trim_fit *f,double headroom,double scene)
         f->gray_goal[i]=pq(enhanced_nits(rgb[0],f->c.peak_nits,headroom,scene,f->signature))/4095;
     }
     static const double vertices[6][3]={{1,0,0},{1,1,0},{0,1,0},{0,1,1},{0,0,1},{1,0,1}};
-    for(int i=0;i<18;i++){
+    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
         double value=cm4_eotf(q*(.1+.4*(i%3))),rgb[3],goal[3],y=0;
-        for(int j=0;j<3;j++)f->colour_input[i][j]=value*vertices[i/3][j];
+        if(i<18)for(int j=0;j<3;j++)f->colour_input[i][j]=value*vertices[i/3][j];
+        else{
+            /* Mixed near-black colours expose errors hidden by gamut vertices. */
+            static const unsigned channels[6][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
+            const double low[3]={fmin(10,f->c.peak_nits*.01),fmin(1,f->c.peak_nits*.001),0};
+            for(int j=0;j<3;j++)f->colour_input[i][j]=low[channels[i-18][j]];
+        }
         if(!fit_response(f,f->source,f->colour_input[i],rgb))return false;
         for(int j=0;j<3;j++)y+=rgb[j]*f->c.luma[j];
         double mapped=enhanced_nits(y,f->c.peak_nits,headroom,scene,f->signature);
@@ -407,8 +413,9 @@ static bool fit_samples(struct trim_fit *f,double headroom,double scene)
         mapped=y+(mapped-y)*room;
         for(int j=0;j<3;j++)goal[j]=y>0?rgb[j]*mapped/y:rgb[j];
         cm4_to_ipt(&f->c,goal,f->colour_goal[i]);
-        double gain=exp2(scene*(f->signature?64:32*fmax(0,headroom))*bound(1-maximum/f->c.peak_nits)/4096);
+        double gain=exp2(scene*32*(f->signature?1:fmax(0,headroom))*bound(1-maximum/f->c.peak_nits)/4096);
         f->colour_goal[i][1]*=gain;f->colour_goal[i][2]*=gain;
+        cm4_from_ipt(&f->c,f->colour_goal[i],f->colour_rgb_goal[i]);
     }
     return true;
 }
@@ -442,8 +449,10 @@ static bool validate_words(const struct trim_fit *f,const unsigned words[5],
             if(hypot(ipt[1],ipt[2])>1e-7)return false;
         }
     }
-    for(int i=0;i<18;i++){
+    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
         double rgb[3],ipt[3];if(!fit_response(f,words,f->colour_input[i],rgb))return false;
+        if(i>=18)for(int j=0;j<3;j++)report->maximum_pq_error=fmax(report->maximum_pq_error,
+            fabs(pq(fmax(0,rgb[j]))/4095-pq(fmax(0,f->colour_rgb_goal[i][j]))/4095));
         cm4_to_ipt(&f->c,rgb,ipt);
         report->maximum_pq_error=fmax(report->maximum_pq_error,fabs(ipt[0]-f->colour_goal[i][0]));
         double a=hypot(ipt[1],ipt[2]),b=hypot(f->colour_goal[i][1],f->colour_goal[i][2]);
@@ -458,7 +467,8 @@ static bool validate_words(const struct trim_fit *f,const unsigned words[5],
 static double fit_error(const struct trim_fit *f,const unsigned words[5])
 {
     double error=0,last=0;
-    for(int i=0;i<257;i+=4){
+    /* Search and validation use the same shadow and clipping constraints. */
+    for(int i=0;i<257;i++){
         double in=f->gray_input[i],rgb[3];
         if(!fit_response(f,words,(double[3]){in,in,in},rgb))return INFINITY;
         double q=pq(fmax(0,rgb[0]))/4095,d=(q-f->gray_goal[i])*1024/2;
@@ -468,13 +478,17 @@ static double fit_error(const struct trim_fit *f,const unsigned words[5])
            (!f->signature && in<=f->c.peak_nits/4 && fabs(q-f->gray_source[i])>2.0/1024) ||
            (f->signature && q<f->gray_source[i]-2e-5) ||
            (i && (q<last-1e-12 ||
-            (fabs(f->gray_source[i]-f->gray_source[i-4])<=1e-12 && fabs(q-last)>2e-5) ||
-            (f->gray_source[i]-f->gray_source[i-4]>2e-5 && q-last<=1e-12))))return INFINITY;
+            (fabs(f->gray_source[i]-f->gray_source[i-1])<=1e-12 && fabs(q-last)>2e-5) ||
+            (f->gray_source[i]-f->gray_source[i-1]>2e-5 && q-last<=1e-12))))return INFINITY;
         last=q;
         error=fmax(error,d*d);
     }
-    for(int i=0;i<18;i++){
+    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
         double rgb[3],ipt[3];if(!fit_response(f,words,f->colour_input[i],rgb))return INFINITY;
+        if(i>=18)for(int j=0;j<3;j++){
+            double d=(pq(fmax(0,rgb[j]))-pq(fmax(0,f->colour_rgb_goal[i][j])))/4095*1024/2;
+            error=fmax(error,d*d);
+        }
         cm4_to_ipt(&f->c,rgb,ipt);
         double chroma=hypot(f->colour_goal[i][1],f->colour_goal[i][2]);
         for(int j=0;j<3;j++){
@@ -485,28 +499,43 @@ static double fit_error(const struct trim_fit *f,const unsigned words[5])
     return error;
 }
 
+static bool accept_fit(const struct trim_fit *f,const unsigned words[5],double error,
+                       unsigned evaluations,struct dvbridge_creative_edit_report *report)
+{
+    if(!(error<=1 && (error<=1e-18 || memcmp(words,f->source,sizeof(f->source)))))return false;
+    struct dvbridge_creative_edit_report accepted=*report;
+    if(!validate_words(f,words,&accepted) || accepted.maximum_pq_error>2.0/1024 ||
+       accepted.maximum_relative_chroma_error>.02 || accepted.maximum_hue_error>.5)return false;
+    accepted.candidate_evaluations+=evaluations;*report=accepted;return true;
+}
+
 static bool fit_words(struct trim_fit *f,unsigned words[5],struct dvbridge_creative_edit_report *report)
 {
     memcpy(words,f->source,sizeof(f->source));
     double best=fit_error(f,words);unsigned evaluations=1;
     if(f->signature){
         unsigned seed[5];memcpy(seed,words,sizeof(seed));
-        seed[0]=fmin(4095,seed[0]+floor(96*f->scene+.5));
-        seed[4]=fmin(4095,seed[4]+floor(64*f->scene+.5));
+        seed[0]=fmin(4095,seed[0]+floor(48*f->scene+.5));
+        seed[4]=fmin(4095,seed[4]+floor(32*f->scene+.5));
         double error=fit_error(f,seed);evaluations++;
         if(error<best){best=error;memcpy(words,seed,sizeof(seed));}
     }
-    /* Fixed work budget; no image readback or additional rendering pass. */
-    for(unsigned pass=0;pass<2;pass++)for(unsigned step=256;step;step/=2)for(int j=0;j<5;j++){
-        unsigned selected=words[j],trial[5];
-        for(int direction=-1;direction<=1;direction+=2){
-            int value=(int)words[j]+direction*(int)step;
-            if(value<0 || value>4095 || abs(value-(int)f->source[j])>512)continue;
-            memcpy(trial,words,sizeof(trial));trial[j]=value;
-            double error=fit_error(f,trial);evaluations++;
-            if(error<best){best=error;selected=value;}
+    /* Stop only after full validation of an identity or a modified solution. */
+    if(accept_fit(f,words,best,evaluations,report))return true;
+    /* Enhanced trims need local changes, not a coarse display-mapping search. */
+    for(unsigned pass=0;pass<2;pass++)for(unsigned step=16;step;step/=2){
+        for(int j=0;j<5;j++){
+            unsigned selected=words[j],trial[5];
+            for(int direction=-1;direction<=1;direction+=2){
+                int value=(int)words[j]+direction*(int)step;
+                if(value<0 || value>4095 || abs(value-(int)f->source[j])>512)continue;
+                memcpy(trial,words,sizeof(trial));trial[j]=value;
+                double error=fit_error(f,trial);evaluations++;
+                if(error<best){best=error;selected=value;}
+            }
+            words[j]=selected;
         }
-        words[j]=selected;
+        if(accept_fit(f,words,best,evaluations,report))return true;
     }
     report->candidate_evaluations+=evaluations;
     return validate_words(f,words,report) && report->maximum_pq_error<=2.0/1024 &&
@@ -680,6 +709,14 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
     *out=p;return p.status;
 }
 
+double dvbridge_creative_scene_weight(const struct dvbridge_creative_plan *p)
+{
+    if(!p->l1_present)return 1;
+    if(!p->analysis[1])return 0;
+    double t=bound((cm4_eotf(p->analysis[2]/4095.0)/cm4_eotf(p->analysis[1]/4095.0)-.1)/.4);
+    return 1-.5*t*t*(3-2*t);
+}
+
 enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *output_bytes,
     const void *metadata,size_t bytes,const struct dvbridge_creative_plan *p,
     struct dvbridge_creative_edit_report *report)
@@ -697,12 +734,8 @@ enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *outpu
     struct timespec start,end;bool timed=clock_gettime(CLOCK_MONOTONIC,&start)==0;
     bool changed=false,rejected=false,unresolved=false;
     double reference_pq=floor(pq(fmax(1000,p->policy.tv.peak_nits))+.5);
-    double headroom=fmax(-.5,fmin(.5,(reference_pq-p->master_pq)/fmax(p->master_pq,1e-6))),scene=1;
-    if(p->l1_present){
-        if(!p->analysis[1])scene=0;
-        else {double t=bound((cm4_eotf(p->analysis[2]/4095.0)/cm4_eotf(p->analysis[1]/4095.0)-.1)/.4);
-            scene=1-.5*t*t*(3-2*t);}
-    }
+    double headroom=fmax(-.5,fmin(.5,(reference_pq-p->master_pq)/fmax(p->master_pq,1e-6)));
+    double scene=dvbridge_creative_scene_weight(p);
     /* Resolve every family before mutation; compatibility cannot hide an unknown L8. */
     for(int i=0;i<m->num_ext_blocks;i++){
         AVDOVIDmData *e=av_dovi_get_ext(m,i);if(e->level!=2 && e->level!=8)continue;

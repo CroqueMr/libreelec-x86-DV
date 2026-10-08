@@ -18,7 +18,7 @@ files. It does not fetch, build, install or publish anything. Rebuild affected
 packages with LibreELEC's native clean/build commands after changing sources.
 
 Output: installation `.img.gz` and native-update `.tar` under `target/`.
-The default build version is `R1.0.0-Beta1`, displayed as R1.0.0 Beta1 in the
+The default build version is `R1.0.0-Beta2`, displayed as R1.0.0 Beta2 in the
 release description. `CUSTOM_VERSION` can override the build identifier.
 The AI model is included. No media or training dataset is included.
 
@@ -45,8 +45,8 @@ package downloads used by the standard Generic image. Their upstream licenses
 are retained. Extract both into the same directory:
 
 ```sh
-tar --zstd -xf R1.0.0-Beta1-sources.tar.zst
-tar --zstd -xf R1.0.0-Beta1-vendor-inputs.tar.zst
+tar --zstd -xf R1.0.0-Beta2-sources.tar.zst
+tar --zstd -xf R1.0.0-Beta2-vendor-inputs.tar.zst
 cd libreelec-x86-DV
 git init
 git remote add origin https://github.com/CroqueMr/libreelec-x86-DV.git

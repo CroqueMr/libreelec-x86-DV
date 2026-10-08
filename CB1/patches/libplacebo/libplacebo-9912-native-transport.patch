@@ -1,0 +1,518 @@
+diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -358,6 +358,12 @@
+     // CB policy opt-in: colour management consumes the current hook domain.
+     // Default false retains original source-domain handling. Matched ABI only.
+     bool cb1_hook_color_space;
++    // CB native transport opt-in. Reconstruct opponent components instead of
++    // RGB; a caller-provided output hook packs them with matching DM matrices.
++    // Requires 1:1 geometry, no color operations/overlays and matched headers.
++    bool cb1_dovi_transport;
++    // Exact native transport sampler cache, default off. Validated GPU only.
++    bool cb1_exact_scaler_cache;
+ 
+ 
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+@@ -759,6 +765,14 @@
+                             const struct pl_frame *target,
+                             const struct pl_render_params *params);
+ 
++// CB1 full-raster 4K transport only. The output hook must replace all rows
++// outside [active_y0, active_y1), including any subtitle/background composition.
++// Intermediate separable plane scalers may omit those rows. Active filtering
++// and the ordinary pl_render_image path are unchanged.
++PL_API bool pl_render_image_cb1_active_rows(pl_renderer rr, const struct pl_frame *image,
++                            const struct pl_frame *target,
++                            const struct pl_render_params *params, int active_y0, int active_y1);
++
+ // Flushes the internal state of this renderer. This is normally not needed,
+ // even if the image parameters, colorspace or target configuration change,
+ // since libplacebo will internally detect such circumstances and recreate
+diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplacebo/shaders/colorspace.h
+--- a/src/include/libplacebo/shaders/colorspace.h
++++ b/src/include/libplacebo/shaders/colorspace.h
+@@ -41,6 +41,12 @@
+ // automatically by `pl_shader_decode_color` for PL_COLOR_SYSTEM_DOLBYVISION.
+ PL_API void pl_shader_dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data);
+ 
++// Reconstruct normalized opponent components, without display-management color
++// conversion. Caller owns their representation and subsequent transport.
++#define PL_HAVE_CB1_DOVI_TRANSPORT 1
++PL_API void pl_shader_dovi_reconstruct(pl_shader sh, struct pl_color_repr *repr,
++                                        pl_shader enhancement_layer);
++
+ // Arguments for the `pl_shader_decode_color_ex` call.
+ struct pl_color_decode_args {
+     // Input color representation. Mutated to reflect the decode. Required.
+diff --git a/src/include/libplacebo/shaders/sampling.h b/src/include/libplacebo/shaders/sampling.h
+--- a/src/include/libplacebo/shaders/sampling.h
++++ b/src/include/libplacebo/shaders/sampling.h
+@@ -168,6 +168,8 @@
+     // CB policy-only orthogonal LUT FLOAT4 depth32 LINEAR format, default off.
+     // Requires matched CB-patched headers/library. No polar-path change.
+     bool cb1_fp32_lut;
++    // Opt-in cache for the validated native transport interpolation behavior.
++    bool cb1_exact_lut_cache;
+ 
+ 
+     // This shader object is used to store the LUT, and will be recreated
+diff --git a/src/renderer.c b/src/renderer.c
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -343,6 +343,7 @@
+     pl_renderer rr;
+     const struct pl_render_params *params;
+     struct pl_render_info info; // for info callback
++    float cb1_active_rows[2];
+ 
+     // Represents the "current" image which we're in the process of rendering.
+     // This is initially set by pass_read_image, and all of the subsequent
+@@ -690,11 +691,35 @@
+     return info;
+ }
+ 
++static bool skip_inactive_rows(struct pass_state *pass, pl_shader sh, int height, bool target_coordinates)
++{
++    if (height != 2160 || pass->cb1_active_rows[1] <= pass->cb1_active_rows[0])
++        return true;
++    enum pl_shader_sig signature = sh->output;
++    if (!sh_require(sh, signature, 0, 0))
++        return false;
++    sh->output = signature;
++    float bounds[2] = {pass->cb1_active_rows[0], pass->cb1_active_rows[1]};
++    if (target_coordinates && pass->target.planes[0].flipped) {
++        bounds[0] = 2160-pass->cb1_active_rows[1];
++        bounds[1] = 2160-pass->cb1_active_rows[0];
++    }
++    ident_t rows = sh_var(sh, (struct pl_shader_var) {
++        .var = pl_var_vec2("cb1_active_rows"),
++        .data = bounds, .dynamic = true,
++    });
++    GLSL("if(gl_FragCoord.y < "$".x || gl_FragCoord.y >= "$".y) "
++         "return vec4(0.0,0.0,0.0,1.0);\n", rows, rows);
++    return true;
++}
++
+ static void dispatch_sampler(struct pass_state *pass, pl_shader sh,
+                              struct sampler *sampler, enum sampler_usage usage,
+                              pl_tex target_tex, const struct pl_sample_src *src)
+ {
+     const struct pl_render_params *params = pass->params;
++    if (usage == SAMPLER_PLANE && !skip_inactive_rows(pass, sh, src->new_h, true))
++        return;
+     if (!sampler)
+         goto fallback;
+ 
+@@ -751,6 +776,7 @@
+         .antiring    = params->antiringing_strength,
+         .no_widening = params->skip_anti_aliasing && usage != SAMPLER_LOWPASS,
+         .cb1_fp32_lut = params->cb1_fp32_scaler_lut,
++        .cb1_exact_lut_cache = params->cb1_dovi_transport && params->cb1_exact_scaler_cache,
+         .lut         = lut,
+     };
+ 
+@@ -774,6 +800,11 @@
+         src2.rect.y1 = src1.new_h;
+ 
+         pl_shader tsh = pl_dispatch_begin(rr->dp);
++        if (usage == SAMPLER_PLANE && !skip_inactive_rows(pass, tsh, src1.new_h, false)) {
++            pl_dispatch_abort(rr->dp, &tsh);
++            ok = false;
++            goto done;
++        }
+         ok = pl_shader_sample_ortho2(tsh, &src1, &fparams);
+         if (!ok) {
+             pl_dispatch_abort(rr->dp, &tsh);
+@@ -2096,11 +2127,18 @@
+             }
+         }
+ #endif
+-        pl_shader_decode_color_ex(sh, pl_color_decode_args(
+-            .repr              = &pass->img.repr,
+-            .color_adjustment  = params->color_adjustment,
+-            .enhancement_layer = el_sh,
+-        ));
++        if (params->cb1_dovi_transport) {
++            pl_shader_dovi_reconstruct(sh, &pass->img.repr, el_sh);
++            // Internal carrier only. The output hook owns opponent encoding.
++            pass->img.repr.sys = PL_COLOR_SYSTEM_RGB;
++            pass->img.repr.levels = PL_COLOR_LEVELS_FULL;
++        } else {
++            pl_shader_decode_color_ex(sh, pl_color_decode_args(
++                .repr              = &pass->img.repr,
++                .color_adjustment  = params->color_adjustment,
++                .enhancement_layer = el_sh,
++            ));
++        }
+         pl_dispatch_abort(rr->dp, &el_sh);
+     }
+ 
+@@ -2319,6 +2357,8 @@
+ static void pass_convert_colors(struct pass_state *pass)
+ {
+     const struct pl_render_params *params = pass->params;
++    if (params->cb1_dovi_transport)
++        return;
+     const struct pl_frame *image = &pass->image;
+     const struct pl_frame *target = &pass->target;
+     pl_renderer rr = pass->rr;
+@@ -3641,9 +3681,9 @@
+     return true;
+ }
+ 
+-bool pl_render_image(pl_renderer rr, const struct pl_frame *pimage,
++static bool render_image(pl_renderer rr, const struct pl_frame *pimage,
+                      const struct pl_frame *ptarget,
+-                     const struct pl_render_params *params)
++                     const struct pl_render_params *params, int active_y0, int active_y1)
+ {
+     params = PL_DEF(params, &pl_render_default_params);
+     pl_dispatch_mark_dynamic(rr->dp, params->dynamic_constants);
+@@ -3657,6 +3697,7 @@
+         .image = *pimage,
+         .target = *ptarget,
+         .info.stage = PL_RENDER_STAGE_FRAME,
++        .cb1_active_rows = {active_y0, active_y1},
+     };
+ 
+     if (!pass_init(&pass, true))
+@@ -3684,6 +3725,27 @@
+     PL_ERR(rr, "Failed rendering image!");
+     pass_uninit(&pass);
+     return false;
++}
++
++bool pl_render_image(pl_renderer rr, const struct pl_frame *image,
++                     const struct pl_frame *target, const struct pl_render_params *params)
++{
++    return render_image(rr, image, target, params, 0, 0);
++}
++
++bool pl_render_image_cb1_active_rows(pl_renderer rr, const struct pl_frame *image,
++                     const struct pl_frame *target, const struct pl_render_params *params,
++                     int active_y0, int active_y1)
++{
++    if (!image || !target || image->rotation || target->rotation ||
++        image->num_overlays || target->num_overlays ||
++        image->crop.x0 || image->crop.y0 || image->crop.x1 != 3840 || image->crop.y1 != 2160 ||
++        target->crop.x0 || target->crop.y0 || target->crop.x1 != 3840 || target->crop.y1 != 2160 ||
++        target->num_planes != 1 || !target->planes[0].texture ||
++        target->planes[0].texture->params.w != 3840 || target->planes[0].texture->params.h != 2160 ||
++        active_y0 < 0 || active_y1 > 2160 || active_y0 >= active_y1)
++        return false;
++    return render_image(rr, image, target, params, active_y0, active_y1);
+ }
+ 
+ const struct pl_frame *pl_frame_mix_current(const struct pl_frame_mix *mix)
+diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
+--- a/src/shaders/colorspace.c
++++ b/src/shaders/colorspace.c
+@@ -90,7 +90,7 @@
+ 
+     assert(min_order <= max_order);
+     if (min_order < max_order)
+-        GLSL("uint order = uint(coeffs.w); \n");
++        GLSL("int order = int(coeffs.w); \n");
+ 
+     GLSL("vec4 sigX;                            \n"
+          "s = coeffs.x;                         \n"
+@@ -130,6 +130,40 @@
+ static inline void reshape_poly(pl_shader sh)
+ {
+     GLSL("s = (coeffs.z * s + coeffs.y) * s + coeffs.x; \n");
++}
++
++static bool reshape_univariate_mmr(pl_shader sh, const struct pl_reshape_data *comp,
++                                  int channel)
++{
++    if (comp->num_pivots != 2 || comp->method[0] != 1 ||
++        comp->mmr_order[0] < 1 || comp->mmr_order[0] > 3)
++        return false;
++    for (int order = 0; order < comp->mmr_order[0]; order++) {
++        for (int term = 0; term < 7; term++) {
++            if (term != channel && comp->mmr_coeffs[0][order][term] != 0.0f)
++                return false;
++        }
++    }
++
++    float values[4] = {comp->mmr_constant[0]};
++    for (int order = 0; order < comp->mmr_order[0]; order++)
++        values[order + 1] = comp->mmr_coeffs[0][order][channel];
++    ident_t coeff = sh_var(sh, (struct pl_shader_var) {
++        .var = pl_var_vec4("univariate_mmr"), .data = values,
++    });
++    float bounds[2] = {comp->pivots[0], comp->pivots[1]};
++    ident_t limits = sh_var(sh, (struct pl_shader_var) {
++        .var = pl_var_vec2("univariate_bounds"), .data = bounds,
++    });
++    // Preserve order-by-order accumulation, not a Horner polynomial rewrite.
++    GLSL("{ float x = sig[%d]; s = "$".x; s += "$".y * x; \n",
++         channel, coeff, coeff);
++    if (comp->mmr_order[0] >= 2)
++        GLSL("float x2 = x * x; s += "$".z * x2; \n", coeff);
++    if (comp->mmr_order[0] >= 3)
++        GLSL("s += "$".w * (x2 * x); \n", coeff);
++    GLSL("color[%d] = clamp(s, "$".x, "$".y); } \n", channel, limits, limits);
++    return true;
+ }
+ #endif
+ 
+@@ -204,6 +238,42 @@
+             continue;
+ 
+         pl_assert(comp->num_pivots >= 2 && comp->num_pivots <= 9);
++        struct pl_reshape_data compact;
++        bool polynomial = comp->num_pivots > 2;
++        for (int i = 0; polynomial && i < comp->num_pivots - 1; i++)
++            polynomial = comp->method[i] == 0;
++        if (polynomial) {
++            compact = *comp;
++            int segments = 1;
++            for (int i = 1; i < comp->num_pivots - 1; i++) {
++                // Adjacent bit-identical polynomials share one interval.
++                if (!memcmp(comp->poly_coeffs[i], compact.poly_coeffs[segments - 1],
++                            sizeof(comp->poly_coeffs[i])))
++                    continue;
++                compact.pivots[segments] = comp->pivots[i];
++                memcpy(compact.poly_coeffs[segments], comp->poly_coeffs[i],
++                       sizeof(comp->poly_coeffs[i]));
++                segments++;
++            }
++            compact.pivots[segments] = comp->pivots[comp->num_pivots - 1];
++            compact.num_pivots = segments + 1;
++            comp = &compact;
++        }
++        // Identity segments need no coefficient selection or polynomial evaluation.
++        bool identity = comp->pivots[0] == 0.0f &&
++                        comp->pivots[comp->num_pivots - 1] == 1.0f;
++        for (int i = 0; identity && i < comp->num_pivots - 1; i++) {
++            identity = comp->method[i] == 0 &&
++                       comp->poly_coeffs[i][0] == 0.0f &&
++                       comp->poly_coeffs[i][1] == 1.0f &&
++                       comp->poly_coeffs[i][2] == 0.0f;
++        }
++        if (identity) {
++            GLSL("color[%d] = sig[%d]; \n", c, c);
++            continue;
++        }
++        if (reshape_univariate_mmr(sh, comp, c))
++            continue;
+         GLSL("s = sig[%d]; \n", c);
+ 
+         // Prepare coefficients for GPU
+@@ -280,19 +350,24 @@
+                 },
+             });
+ 
+-            // Efficiently branch into the correct set of coefficients
+-            GLSL("#define test(i) bvec4(s >= "$"[i])                \n"
+-                 "#define coef(i) "$"[i]                            \n"
+-                 "coeffs = mix(mix(mix(coef(0), coef(1), test(0)),  \n"
+-                 "                 mix(coef(2), coef(3), test(2)),  \n"
+-                 "                 test(1)),                        \n"
+-                 "             mix(mix(coef(4), coef(5), test(4)),  \n"
+-                 "                 mix(coef(6), coef(7), test(6)),  \n"
+-                 "                 test(5)),                        \n"
+-                 "             test(3));                            \n"
+-                 "#undef test                                       \n"
+-                 "#undef coef                                       \n",
+-                 pivots, coeffs);
++            if (comp->num_pivots <= 4) {
++                GLSL("coeffs = mix("$"[0], "$"[1], bvec4(s >= "$"[0])); \n",
++                     coeffs, coeffs, pivots);
++                if (comp->num_pivots == 4)
++                    GLSL("coeffs = mix(coeffs, "$"[2], bvec4(s >= "$"[1])); \n",
++                         coeffs, pivots);
++            } else {
++                // Select one segment with three comparisons instead of seven vec4 mixes.
++                GLSL("{                                                \n"
++                 "#define pivot(i) "$"[i]                          \n"
++                 "int segment = int(s >= pivot(3)) * 4;             \n"
++                 "segment += int(s >= pivot(segment + 1)) * 2;      \n"
++                 "segment += int(s >= pivot(segment));              \n"
++                 "coeffs = "$"[segment];                           \n"
++                 "#undef pivot                                      \n"
++                 "}                                                 \n",
++                     pivots, coeffs);
++            }
+ 
+         } else {
+ 
+@@ -350,36 +425,37 @@
+ #endif
+ }
+ 
++void pl_shader_dovi_reconstruct(pl_shader sh, struct pl_color_repr *repr,
++                                 pl_shader enhancement_layer)
++{
++    if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0))
++        return;
++    if (!repr || repr->sys != PL_COLOR_SYSTEM_DOLBYVISION || !repr->dovi) {
++        SH_FAIL(sh, "DOVI reconstruction requires source representation and metadata");
++        return;
++    }
++    ident_t scale = SH_FLOAT(pl_color_repr_normalize(repr));
++    GLSL("color.rgb *= vec3("$"); \n", scale);
++    pl_shader_dovi_reshape(sh, repr->dovi);
++    if (enhancement_layer && repr->dovi->nlq_active) {
++        ident_t el = sh_subpass(sh, enhancement_layer);
++        if (el)
++            sh_dovi_compose_nlq(sh, repr->dovi, el);
++    }
++}
++
+ void pl_shader_decode_color_ex(pl_shader sh,
+                                const struct pl_color_decode_args *args)
+ {
+     struct pl_color_repr *repr = args->repr;
+     const struct pl_color_adjustment *params = args->color_adjustment;
+-
+     if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0))
+         return;
+-
+     sh_describe(sh, "color decoding");
+     GLSL("// pl_shader_decode_color \n"
+          "{ \n");
+-
+     if (repr->sys == PL_COLOR_SYSTEM_DOLBYVISION)
+-    {
+-        ident_t scale = SH_FLOAT(pl_color_repr_normalize(repr));
+-        GLSL("color.rgb *= vec3("$"); \n", scale);
+-    }
+-
+-    if (repr->sys == PL_COLOR_SYSTEM_DOLBYVISION)
+-        pl_shader_dovi_reshape(sh, repr->dovi);
+-
+-    // Dolby Vision FEL composition
+-    if (args->enhancement_layer && repr->sys == PL_COLOR_SYSTEM_DOLBYVISION &&
+-        repr->dovi && repr->dovi->nlq_active)
+-    {
+-        ident_t el = sh_subpass(sh, args->enhancement_layer);
+-        if (el)
+-            sh_dovi_compose_nlq(sh, repr->dovi, el);
+-    }
++        pl_shader_dovi_reconstruct(sh, repr, args->enhancement_layer);
+ 
+     enum pl_color_system orig_sys = repr->sys;
+     pl_transform3x3 tr = pl_color_repr_decode(repr, params);
+diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
+--- a/src/shaders/sampling.c
++++ b/src/shaders/sampling.c
+@@ -560,6 +560,7 @@
+ struct sh_sampler_obj {
+     pl_filter filter;
+     pl_shader_obj lut;
++    pl_shader_obj exact_lut;
+     pl_shader_obj pass2; // for pl_shader_sample_ortho
+ };
+ 
+@@ -570,6 +571,7 @@
+ {
+     struct sh_sampler_obj *obj = ptr;
+     pl_shader_obj_destroy(&obj->lut);
++    pl_shader_obj_destroy(&obj->exact_lut);
+     pl_shader_obj_destroy(&obj->pass2);
+     pl_filter_free(&obj->filter);
+     *obj = (struct sh_sampler_obj) {0};
+@@ -938,6 +940,36 @@
+         size_t entries = SCALER_LUT_SIZE * filt->row_stride;
+         pl_assert(params->width * params->height * params->comps == entries);
+         memcpy(data, filt->weights, entries * sizeof(float));
++    }
++}
++
++static float half_rtz(float x)
++{
++    union { _Float16 h; uint16_t u; } value = {.h=x};
++    if (fabsf((float)value.h) > fabsf(x)) value.u--;
++    return value.h;
++}
++
++static void fill_exact_lut(void *data, const struct sh_lut_params *params)
++{
++    const struct sh_sampler_obj *obj = params->priv;
++    const pl_filter f = obj->filter;
++    float *dst = data;
++    for (int q = 0; q <= 256; q++) {
++        const float t = q / 256.0f;
++        for (int row = 0; row < 256; row++) {
++            float sum = 0;
++            for (int k = 0; k < 6; k++) {
++                float a = half_rtz(f->weights[row * f->row_stride + k]);
++                float b = half_rtz(f->weights[PL_MIN(row + 1,255) * f->row_stride + k]);
++                volatile float lo = (1.0f-t)*a, hi = t*b;
++                dst[k] = lo + hi;
++                sum += dst[k];
++            }
++            dst[6] = sum;
++            dst[7] = 0;
++            dst += 8;
++        }
+     }
+ }
+ 
+@@ -1098,6 +1130,19 @@
+     bool use_ar = cfg.antiring > 0 && ratio[pass] > 1.0;
+     bool use_linear = obj->filter->radius == obj->filter->radius_zero;
+     use_ar &= !use_linear; // filter has no negative weights
++    bool exact_cache = params->cb1_exact_lut_cache && centered &&
++        !use_linear && N == 6 && !params->cb1_fp32_lut &&
++        (ratio[pass] == 2.0f || ratio[pass] == 4.0f);
++    ident_t exact_lut = 0;
++    if (exact_cache) {
++        exact_lut = sh_lut(sh, sh_lut_params(
++            .object=&obj->exact_lut, .var_type=PL_VAR_FLOAT,
++            .lut_type=SH_LUT_TEXTURE, .method=SH_LUT_NONE,
++            .fmt=pl_find_fmt(gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE),
++            .width=512,.height=257,.comps=4,
++            .update=update,.fill=fill_exact_lut,.priv=obj));
++        if (!exact_lut) return false;
++    }
+ 
+ #pragma GLSL /* pl_shader_sample_ortho */                                       \
+     vec4 color = vec4(0.0, 0.0, 0.0, 1.0);                                      \
+@@ -1109,7 +1154,7 @@
+     vec2 fcoord2 = fract(pos * size - vec2(0.5));                               \
+     float fcoord = dot(fcoord2, dir);                                           \
+     vec2 base = pos - fcoord * pt - pt * vec2(${const float: N / 2 - 1});       \
+-    vec4 ws;                                                                    \
++    PRECISE vec4 ws;                                                            \
+     float off;                                                                  \
+     ${vecType: comps} c;                                                        \
+     /* Mark the accumulators as `precise` to avoid accumulating the error. */   \
+@@ -1119,10 +1164,19 @@
+         ${vecType: comps} hi = ${vecType: comps}(0.0);                          \
+         ${vecType: comps} lo = ${vecType: comps}(1e9);                          \
+     @}                                                                          \
++    @if (exact_cache) {                                                        \
++        float cache_row = (fcoord * 0.99609375 + 0.001953125) * 256.0 - 0.5;  \
++        ivec2 cache_index = ivec2(clamp(floor(cache_row),0.0,255.0),           \
++                                  clamp(floor(fract(cache_row)*256.0+0.5),0.0,256.0)); \
++    @}                                                                        \
+     #pragma unroll 4                                                            \
+     for (uint n = 0u; n < ${uint: N}; n += ${const uint: use_linear ? 2u : 1u}) { \
+-        if (n % 4u == 0u)                                                        \
+-            ws = $lut(vec2(float(n / 4u) / ${const float: denom}, fcoord));     \
++        if (n % 4u == 0u) {                                                     \
++            @if (exact_cache)                                                 \
++                ws = $exact_lut(ivec2(2*cache_index.x+int(n / 4u),cache_index.y)); \
++            @else                                                              \
++                ws = $lut(vec2(float(n / 4u) / ${const float: denom}, fcoord)); \
++        }                                                                      \
+         off = float(n);                                                         \
+         @if (use_linear)                                                        \
+             off += ws[n % 4u + 1u];                                             \
+@@ -1134,8 +1188,11 @@
+             }                                                                   \
+         @}                                                                      \
+         ca += ws[n % 4u] * c;                                                   \
+-        wsum += ws[n % 4u];                                                     \
++        @if (!exact_cache)                                                     \
++            wsum += ws[n % 4u];                                                 \
+     }                                                                           \
++    @if (exact_cache)                                                          \
++        wsum = ws.z;                                                           \
+     /* Renormalize by the actual sum of weights. */                             \
+     ca /= wsum;                                                                 \
+     @if (use_ar)                                                                \

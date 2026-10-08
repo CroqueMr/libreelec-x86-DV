@@ -153,9 +153,9 @@ For authored luminance `v` at an anchor peak `A`, define
 
 | Calculation | Natural | Signature |
 | --- | --- | --- |
-| Luminance gain `g` | `S*B*0.04*max(0,h)*H((x-0.25)/0.75)` | `S*B*0.04` |
+| Luminance gain `g` | `S*B*0.04*max(0,h)*H((x-0.25)/0.75)` | `S*B*0.02` |
 | Luminance goal | `v + g*max(0,v)*(1-x)` | Same formula |
-| Chroma coefficient `C` | `32*max(0,h)` | `64` |
+| Chroma coefficient `C` | `32*max(0,h)` | `32` |
 | Chroma multiplier | `2^(S*C*clamp(1-maxRGB/A,0,1)/4096)` | Same formula |
 | Tonal range | Highlight-weighted; low/mid tones protected | Broader response above near-black |
 | Reference at/below source mastering peak | Neutral goal | Bounded treatment remains possible |
@@ -169,7 +169,7 @@ Natural headroom. It is not stretched to fill the TV's range.
 ### Metadata fitting
 
 Five words are fitted: slope, offset, power, chroma weight and saturation gain.
-Two coordinate-search passes use steps from 256 down to 1. Each result stays in
+Two coordinate-search passes use steps from 16 down to 1. Each result stays in
 0..4095 and within 512 codes of its original word. Validation limits are:
 
 - PQ error: `2/1024`.
@@ -180,6 +180,10 @@ Black/near-black, grayscale monotonicity and authored plateaus are protected.
 L2/L8 edits commit together. A rejected fit or unresolved target preserves the
 source family. Secondary controls, L1/L3, mastering and target descriptors are
 unchanged. L1-only input receives no invented creative trims.
+
+An exact-key cache reuses accepted control fits only when the source metadata,
+policy and display reference match. Each frame retains its own fresh metadata
+payload. Cached controls never replace frame-specific transport metadata.
 
 ## HDR10 to Dolby Vision with AI
 

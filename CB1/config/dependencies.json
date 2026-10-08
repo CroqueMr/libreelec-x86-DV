@@ -43,7 +43,10 @@
       "pl_render_params.cb1_fp32_scaler_lut and pl_sample_filter_params.cb1_fp32_lut (default off)",
       "pl_render_params.cb1_hook_color_space (default off, matched renderer ABI; effective hook domain)",
       "pl_sample_filter_cb1_fp32_lut_format (matched orthogonal sampler format ABI)",
-      "Custom shader prelude extension ordering and FP32 reconstruction changes"
+      "Custom shader prelude extension ordering and FP32 reconstruction changes",
+      "pl_render_params.cb1_dovi_transport and cb1_exact_scaler_cache (default off)",
+      "pl_sample_filter_params.cb1_exact_lut_cache (default off)",
+      "pl_shader_dovi_reconstruct and pl_render_image_cb1_active_rows (explicit CB1 transport only)"
     ]
   },
   "patches": {
@@ -63,7 +66,8 @@
     "patches/libplacebo/libplacebo-9910-8-policy-tone-lut-fp32.patch": "5e8b6ee90a0dedda976773fefb22bf6b1f0c425c5127817dc91917ae931998b4",
     "patches/libplacebo/libplacebo-9910-9-policy-stable-pq.patch": "4dbdd0923a3111e51eb4c7ceccb0c12bb29d1aa1cd371186c46535180474d1be",
     "patches/libplacebo/libplacebo-9911-0-policy-scaler-lut-fp32.patch": "ae6335437763c5cf451618675338cc180e72d375f49a146a907b368cfa0d20e4",
-    "patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": "496c5c1bcfadcecdd62e6bae738448ca43b795987a19d936f7be00c72eacb345"
+    "patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": "496c5c1bcfadcecdd62e6bae738448ca43b795987a19d936f7be00c72eacb345",
+    "patches/libplacebo/libplacebo-9912-native-transport.patch": "cd5120ac299f7d85441db7d92ccae770e9e452e10ae296aa738a421c38f636e2"
   },
   "modified_sources": {
     "ffmpeg/libavcodec/dovi_rpudec.c": "8c25559492f09b6d114e05c64aee550b00388d9a187dd84176fe508a1dbb348f",
@@ -72,13 +76,13 @@
     "libplacebo/src/dispatch.c": "72d72ea25d3a13016b08e3e31fcf3e999199da2578fd255add6f199a0ad7aa26",
     "libplacebo/src/opengl/gpu.c": "d76e0547129e142966c9825eb8173269ab9ff4f360f8851e2c3e9789b56a2182",
     "libplacebo/src/opengl/formats.c": "a57ec2a106860a6e7e2ffb0ed992556c9146a37295e5a4790633c93594f9e0c6",
-    "libplacebo/src/include/libplacebo/renderer.h": "7ae59cc3257a228ac299ca9da89099e4d34d06448f927c12d7001179165f9cc1",
-    "libplacebo/src/include/libplacebo/shaders/sampling.h": "7dcdc72af6fd23ff32925433f112dd6bad95267c6ee9ba7e2616011c626c0f57",
+    "libplacebo/src/include/libplacebo/renderer.h": "1f15e5c10b2b5d415b83f1b92be75a47ec3a78d67a6394e525c3e3bc23776faa",
+    "libplacebo/src/include/libplacebo/shaders/sampling.h": "d5fc6b8a669c0c5fe29e0bd8900d4f5fae51c57de1961a7521a703477d4a48ce",
     "libplacebo/src/include/libplacebo/shaders.h": "bdc29cddb6545d09ce4b2c6602237cbb5d50c5ac2c1c55cecf9fa4794086bb60",
     "libplacebo/src/include/libplacebo/dispatch.h": "2208cbf66dc61069377d645309852319657be4b12fee6297315a2310ceb75d26",
-    "libplacebo/src/renderer.c": "1bd46f73c66bf25d27c2c3b3cfacffcad120435e75e6a7e0d2f005c878617dc1",
-    "libplacebo/src/shaders/colorspace.c": "3935f4574325ed7b2d539b42135f82e9cfdec96ee0b3aaf7b8c61586b2c418bf",
-    "libplacebo/src/include/libplacebo/shaders/colorspace.h": "db4688a39c0c0323a8b8e507672a2ee573b4a7618efcea0d9d8de2db33eb2baa",
-    "libplacebo/src/shaders/sampling.c": "940f3836a3a8e89a0304204ab06e4a6e6f9b325fe6dfd16396f1ee0384675988"
+    "libplacebo/src/renderer.c": "fb8d88ec34baca4362fc3e9e54b69778eff16b52766e5232e2010e4657b2d010",
+    "libplacebo/src/shaders/colorspace.c": "c61067e0f4153253a04259844c548ffac0a2eb265580b0179bb623af1a7b722c",
+    "libplacebo/src/include/libplacebo/shaders/colorspace.h": "d06079cf3b79f1ef1ce0d88b3016c1a4da66c963a79789572b7cb03522151686",
+    "libplacebo/src/shaders/sampling.c": "9cea111ed767379aa5c87e5db04fe787ed379b5b651cb2ea05cde259bc3cc5b6"
   }
 }

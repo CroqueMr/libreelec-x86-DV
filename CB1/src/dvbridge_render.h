@@ -97,6 +97,20 @@ bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *renderer,
 bool dvbridge_render_packed(struct dvbridge_renderer *renderer, const struct pl_frame *source,
                            const void *metadata, size_t bytes, double pts, double el_pts,
                            struct dvbridge_geometry geometry, pl_tex target, bool flip_y);
+#define DVBRIDGE_NATIVE_OVERLAY_API 1
+/* Borrowed Kodi subtitle texture and sRGB transfer LUTs. Row zero is the logical bottom;
+ * rect is a clipped, even-x screen rectangle in top-down 3840x2160 coordinates.
+ * An all-zero rectangle keeps the same shader ready without drawing a subtitle.
+ * The caller retains textures until GPU completion. Video metadata is unchanged. */
+struct dvbridge_native_overlay {
+    pl_tex texture, degamma, pq;
+    float rect[4];
+    bool input_pq; /* Premultiplied BT.2020 PQ; LUTs remain bound but unused. */
+};
+bool dvbridge_render_packed_overlay(struct dvbridge_renderer *renderer,
+    const struct pl_frame *source, const void *metadata, size_t bytes,
+    double pts, double el_pts, struct dvbridge_geometry geometry,
+    pl_tex target, bool flip_y, const struct dvbridge_native_overlay *overlay);
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *renderer);
 /* Quantize the composed PQ image without applying tone mapping again. */
 bool dvbridge_render_hdr10(struct dvbridge_renderer *renderer, pl_tex target,
@@ -129,7 +143,19 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(
     struct dvbridge_renderer *renderer,const struct dvbridge_policy *policy,
     const struct dvbridge_identity *identity,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry);
+#define DVBRIDGE_ENHANCED_PACKED_API 1
+/* Same metadata adjustment with native full-raster packing and optional subtitles.
+ * Other GUI/capture composition retains the RGB intermediate prepare above. */
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare_packed(
+    struct dvbridge_renderer *renderer,const struct dvbridge_policy *policy,
+    const struct dvbridge_identity *identity,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
+    pl_tex target,bool flip_y,const struct dvbridge_native_overlay *overlay);
 enum dvbridge_dv_policy_status dvbridge_render_dv_policy_poll(struct dvbridge_renderer *renderer);
+#define CB1_PACKED_AHEAD_API 1
+/* Retain one committed packed frame's GPU lease while preparing the next.
+ * Other paths keep normal polling; a third outstanding frame returns Busy. */
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_advance(struct dvbridge_renderer *renderer);
 const struct dvbridge_dv_policy_output *dvbridge_render_dv_policy_output(const struct dvbridge_renderer *renderer);
 /* target/FBO pair is the caller's matching-context assertion for opaque output.
  * Store the FBO when wrapping output; never guess zero from unwrap failure.

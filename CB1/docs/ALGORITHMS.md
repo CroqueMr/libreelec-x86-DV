@@ -193,7 +193,7 @@ as two creative passes.
 
 ## Authored DV Enhanced: Natural and Signature
 
-The `cb1-dve-v3` policy keeps Standard-equivalent reconstructed pixels. It fits
+The `cb1-dve-v6` policy keeps Standard-equivalent reconstructed pixels. It fits
 the five existing L2/L8 primary controls to a bounded objective. L1/L3,
 mastering descriptors, target descriptions and secondary controls remain intact.
 
@@ -218,14 +218,14 @@ x = clamp(v/A)
 black_gate = H(v)                       // transition from 0 to 1 nit
 highlight_gate = H((x-0.25)/0.75)
 Natural gain = S * black_gate * 0.04 * max(0,h) * highlight_gate
-Signature gain = S * black_gate * 0.04
+Signature gain = S * black_gate * 0.02
 goal = v + gain * max(0,v) * (1-x)
 ```
 
 An additional channel-headroom factor prevents the luminance goal from pushing
 the largest RGB component beyond the anchor peak. The goal's chroma multiplier
 is `2^(S*C*clamp(1-maxRGB/A)/4096)`, with `C=32*max(0,h)` for Natural and
-`C=64` for Signature.
+`C=32` for Signature.
 
 Natural protects low/mid tones and expands eligible highlights; it can remain
 neutral at a matching or lower reference. Signature permits a stronger bounded
