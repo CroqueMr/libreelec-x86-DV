@@ -12,6 +12,41 @@
 #include "dvbridge_metadata_bounds.h"
 #include "mpv_dvbridge_cm4.h"
 #include <stdio.h>
+#include <limits.h>
+
+static inline bool dvbridge_dv_wire_rational(AVRational a, int64_t scale,
+                                            int64_t low, int64_t high)
+{
+    if (a.den <= 0) return false;
+    int64_t v=(int64_t)a.num*scale;
+    return v%a.den==0 && v/a.den>=low && v/a.den<=high;
+}
+
+/* Full-raster opponent transport. Other encodings retain RGB conversion. */
+static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *m)
+{
+    const AVDOVIColorMetadata *c=av_dovi_get_color(m);
+    const AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
+    if (h->vdr_bit_depth!=12 || c->signal_bit_depth!=12 || c->signal_color_space ||
+        c->signal_chroma_format || c->signal_full_range_flag!=1 || c->signal_eotf!=65535 ||
+        c->signal_eotf_param0 || c->signal_eotf_param1 || c->signal_eotf_param2) return false;
+    for (int i=0;i<9;i++)
+        if (!dvbridge_dv_wire_rational(c->ycc_to_rgb_matrix[i],8192,INT16_MIN,INT16_MAX) ||
+            !dvbridge_dv_wire_rational(c->rgb_to_lms_matrix[i],16384,INT16_MIN,INT16_MAX)) return false;
+    for (int i=0;i<3;i++) {
+        AVRational a=c->ycc_to_rgb_offset[i];
+        if (a.den<=0 || (int64_t)a.num*(i?2:16)!=a.den) return false;
+    }
+    /* Singular matrices cannot describe a reversible source colour volume. */
+    const AVRational *matrices[]={c->ycc_to_rgb_matrix,c->rgb_to_lms_matrix};
+    for (int n=0;n<2;n++) {
+        double v[9];
+        for (int i=0;i<9;i++) v[i]=(double)matrices[n][i].num/matrices[n][i].den;
+        double det=v[0]*(v[4]*v[8]-v[5]*v[7])-v[1]*(v[3]*v[8]-v[5]*v[6])+v[2]*(v[3]*v[7]-v[4]*v[6]);
+        if (!isfinite(det) || fabs(det)<1e-8) return false;
+    }
+    return true;
+}
 
 static const int16_t dvbridge_output_ycc[9] = {9574,0,13802,9574,-1540,-5348,9574,17610,0};
 static const uint16_t dvbridge_output_lms[9] = {7222,8771,390,2654,12430,1300,0,422,15962};
@@ -43,7 +78,7 @@ struct dvbridge_dv {
     uint64_t frames, changes;
     double last_pts;
     int source_w, source_h, dest_x, dest_y, dest_w, dest_h;
-    bool fel_verified;
+    bool fel_verified, source_transport;
     unsigned compatibility_omissions;
 };
 #define DV_REQUIRE(x) do { if (!(x)) return false; } while (0)
@@ -126,14 +161,19 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
     d->size = 0;
     d->payload[d->size++] = 0;
     d->payload[d->size++] = force_refresh ? 1 : repeat ? d->previous[1] : refresh ? 1 : c->scene_refresh_flag;
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, (uint16_t)dvbridge_output_ycc[i]);
+    DV_REQUIRE(!d->source_transport || dvbridge_dv_source_transport(m));
+    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
+        (uint16_t)((int64_t)c->ycc_to_rgb_matrix[i].num*8192/c->ycc_to_rgb_matrix[i].den) :
+        (uint16_t)dvbridge_output_ycc[i]);
     dvbridge_dv_u32(d, 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, dvbridge_output_lms[i]);
+    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
+        (uint16_t)((int64_t)c->rgb_to_lms_matrix[i].num*16384/c->rgb_to_lms_matrix[i].den) :
+        dvbridge_output_lms[i]);
     dvbridge_dv_u16(d, 65535); dvbridge_dv_u32(d, 0); dvbridge_dv_u32(d, 0);
     d->payload[d->size++] = 12; d->payload[d->size++] = 0;
     d->payload[d->size++] = 1; d->payload[d->size++] = 1;
     dvbridge_dv_u16(d, c->source_min_pq); dvbridge_dv_u16(d, c->source_max_pq);
-    dvbridge_dv_u16(d, 42);
+    dvbridge_dv_u16(d, d->source_transport ? c->source_diagonal : 42);
     unsigned count_pos = d->size++;
     d->payload[count_pos] = 0;
     unsigned l1 = 0, area = 0, targets[AV_DOVI_MAX_EXT_BLOCKS], ntargets = 0;

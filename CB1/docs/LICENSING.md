@@ -7,7 +7,8 @@ CB1 is distributed under GPLv3 with each file's notices retained.
 | Engine, shaders and marked tests | GPL-3.0-or-later |
 | Creative module, modified renderer and scalar reference | GPL-3.0-only |
 | Original tooling, build wiring and documentation | MIT |
-| FFmpeg and libplacebo modifications | LGPL-2.1-or-later; FFmpeg build options may enable GPL/version3 |
+| FFmpeg and original libplacebo changes | LGPL-2.1-or-later; FFmpeg build options may enable GPL/version3 |
+| CB1 libplacebo processing additions | GPL-3.0-or-later; combined modified library distributed under GPLv3-compatible terms |
 | LightGBM | MIT |
 | CB1-L1L3 model assets | GPL-3.0-or-later |
 | NumPy-derived duration summation | BSD-3-Clause |
@@ -17,7 +18,7 @@ License texts and credits are in `LICENSES/`. Source origins are recorded in
 `src/PROVENANCE.json` and `config/extraction-origins.json`.
 
 References and adapted work include dovi_tool, PGenerator-Plus,
-ofxRPI4Window, DoViBaker, MPC Video Renderer and ETSI GS CCM 001.
+ofxRPI4Window, DoViBaker, MPC Video Renderer, YBLOD and ETSI GS CCM 001.
 [Creative-source attribution](CREATIVE-MAPPING.md) records source revisions
 and retained notices.
 

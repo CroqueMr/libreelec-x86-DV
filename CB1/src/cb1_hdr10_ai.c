@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "cb1_hdr10_ai.h"
 #include "cb1_hdr10_ingress.h"
+extern enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *,const struct pl_frame *,pl_tex *);
 #include "cb1_hdr10_statistics.h"
 #include "cb1_hdr10_quantiles.h"
 #include "cb1_hdr10_spatial.h"
@@ -10,6 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <GLES3/gl31.h>
+extern enum cb1_ai_status cb1_hdr10_statistics_queue_pending(struct cb1_hdr10_statistics *,pl_tex,pl_tex,struct cb1_ai_identity);
+extern enum cb1_ai_status cb1_hdr10_quantiles_queue_pending(struct cb1_hdr10_quantiles *,pl_tex,pl_tex,struct cb1_ai_identity);
 
 struct cb1_hdr10_ai {
     struct cb1_l1l3_model *model;
@@ -25,6 +29,7 @@ struct cb1_hdr10_ai {
     struct cb1_ai_identity id,last;
     double pts,last_pts;
     pl_tex rgb;
+    struct cb1_hdr10_bounds bounds;
     struct cb1_hdr10_descriptor descriptor;
     struct cb1_hdr10_spatial_result spatial_result;
     float quantile_values[7];
@@ -86,27 +91,19 @@ static enum cb1_ai_status collect(struct cb1_hdr10_ai *c)
     if(!c->pending)return CB1_AI_READY;
     enum cb1_ai_status status;
     if(!c->bounded){
-        struct cb1_hdr10_bounds bounds;
-        status=cb1_hdr10_extrema_poll(c->extrema,c->id,&bounds);
+        status=cb1_hdr10_extrema_poll(c->extrema,c->id,&c->bounds);
         if(status==CB1_AI_PENDING)return status;
         if(status!=CB1_AI_READY)goto fail;
         c->metrics.readback_bytes+=16;
-        const uint64_t dispatch=now_ns();
-        ++c->metrics.gpu_submissions;
-        status=cb1_hdr10_statistics_submit(c->statistics,c->rgb,bounds,c->id);
-        if(status!=CB1_AI_PENDING)goto fail;
-        status=cb1_hdr10_quantiles_submit(c->quantiles,c->rgb,bounds,c->id);
-        if(status!=CB1_AI_PENDING)goto fail;
         c->bounded=true;
-        c->metrics.analysis_submit_ns+=elapsed_ns(dispatch);
     }
     if(!c->statistics_ready){
-        status=cb1_hdr10_statistics_poll(c->statistics,c->id,c->descriptor.global);
+        status=cb1_hdr10_statistics_poll_bounds(c->statistics,c->id,c->bounds,c->descriptor.global);
         if(status!=CB1_AI_READY && status!=CB1_AI_PENDING)goto fail;
         if(status==CB1_AI_READY){c->statistics_ready=true;c->metrics.readback_bytes+=128;}
     }
     if(!c->quantiles_ready){
-        status=cb1_hdr10_quantiles_poll(c->quantiles,c->id,c->quantile_values);
+        status=cb1_hdr10_quantiles_poll_bounds(c->quantiles,c->id,c->bounds,c->quantile_values);
         if(status!=CB1_AI_READY && status!=CB1_AI_PENDING)goto fail;
         if(status==CB1_AI_READY){c->quantiles_ready=true;c->metrics.readback_bytes+=56;}
     }
@@ -141,9 +138,15 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     const uint64_t dispatch=now_ns();
     ++c->metrics.gpu_submissions;
     status=cb1_hdr10_ingress_rgb(c->ingress,frame,&c->rgb);if(status!=CB1_AI_READY)goto submit_fail;
-    pl_tex small;
-    status=cb1_hdr10_ingress_small(c->ingress,frame,&small);if(status!=CB1_AI_READY)goto submit_fail;
+    /* Keep dependent analysis on the GPU; collect only final records. */
     status=cb1_hdr10_extrema_submit(c->extrema,c->rgb,id);if(status!=CB1_AI_PENDING)goto submit_fail;
+    pl_tex bounds=cb1_hdr10_extrema_pending(c->extrema,id);
+    status=cb1_hdr10_statistics_queue_pending(c->statistics,c->rgb,bounds,id);
+    if(status!=CB1_AI_PENDING)goto submit_fail;
+    status=cb1_hdr10_quantiles_queue_pending(c->quantiles,c->rgb,bounds,id);
+    if(status!=CB1_AI_PENDING)goto submit_fail;
+    pl_tex small;
+    status=cb1_hdr10_ingress_preview_u16(c->ingress,frame,&small);if(status!=CB1_AI_READY)goto submit_fail;
     status=cb1_hdr10_spatial_submit(c->spatial,small,id);
     if(status!=CB1_AI_PENDING)goto submit_fail;
     c->id=id;c->pts=pts;c->descriptor=(struct cb1_hdr10_descriptor){.pts=pts};
@@ -151,6 +154,7 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     c->submitted_ns=dispatch;c->metrics.analysis_submit_ns+=elapsed_ns(dispatch);
     c->pending=true;return CB1_AI_PENDING;
 submit_fail:
+    glFlush();
     c->failed=true;return status;
 }
 enum cb1_ai_status cb1_hdr10_ai_advance(struct cb1_hdr10_ai *c,double pts)

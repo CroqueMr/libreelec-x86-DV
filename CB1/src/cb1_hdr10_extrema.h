@@ -21,6 +21,8 @@ void cb1_hdr10_extrema_destroy(struct cb1_hdr10_extrema **ctx);
 void cb1_hdr10_extrema_reset(struct cb1_hdr10_extrema *ctx, uint64_t stream, uint64_t revision);
 enum cb1_ai_status cb1_hdr10_extrema_submit(struct cb1_hdr10_extrema *ctx, pl_tex pq,
                                           struct cb1_ai_identity id);
+/* Private dependency, available only for the matching pending picture. */
+pl_tex cb1_hdr10_extrema_pending(struct cb1_hdr10_extrema *ctx,struct cb1_ai_identity id);
 /* Non-blocking query; invalid/pending leaves out unchanged. Reads 16 bytes. */
 enum cb1_ai_status cb1_hdr10_extrema_poll(struct cb1_hdr10_extrema *ctx,
                                        struct cb1_ai_identity id,

@@ -11,6 +11,11 @@ struct cb1_hdr10_quantiles;
  * Caller supplies bounds validated by the full-resolution extrema pass.
  * No image readback; only fourteen exact order-statistic codes are transferred. */
 struct cb1_hdr10_quantiles *cb1_hdr10_quantiles_create(pl_gpu gpu);
+/* GPU bounds and RGB must belong to the same retained picture. */
+enum cb1_ai_status cb1_hdr10_quantiles_submit_pending(struct cb1_hdr10_quantiles *ctx,pl_tex pq,
+    pl_tex bounds,struct cb1_ai_identity id);
+enum cb1_ai_status cb1_hdr10_quantiles_poll_bounds(struct cb1_hdr10_quantiles *ctx,
+    struct cb1_ai_identity id,struct cb1_hdr10_bounds bounds,float out[7]);
 void cb1_hdr10_quantiles_destroy(struct cb1_hdr10_quantiles **ctx);
 void cb1_hdr10_quantiles_reset(struct cb1_hdr10_quantiles *ctx, uint64_t stream, uint64_t revision);
 enum cb1_ai_status cb1_hdr10_quantiles_submit(struct cb1_hdr10_quantiles *ctx, pl_tex pq,

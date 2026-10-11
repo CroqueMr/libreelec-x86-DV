@@ -1,6 +1,6 @@
 # Algorithms and metadata
 
-This reference describes **CB1 0.1** and the circuits listed in
+This reference describes **CB1 0.2** and the circuits listed in
 [CIRCUITS.md](CIRCUITS.md). Equations describe the implemented processing
 contract, not a certified reproduction of Dolby's proprietary display mapper.
 
@@ -47,7 +47,7 @@ display peak or an output brightness cap.
 
 ## Metadata use
 
-| Metadata | Standard DV | HDR10 conversion | Authored-DV Enhanced |
+| Metadata | Standard Dolby Vision | HDR10 conversion | Authored Dolby Vision Enhanced |
 | --- | --- | --- | --- |
 | RPU reconstruction data | Reconstruct and transport | Reconstruct before conversion | Same reconstruction as Standard |
 | L1 min/max/average | Transport | Maximum/average guide scene mapping; minimum validated and retained | Retained; scene ratio guides trim adjustment |
@@ -191,7 +191,7 @@ peak exceeds the output reference and the weight is nonzero. Otherwise it is
 retained but not reported as applied. L2 compatibility and L8 are never stacked
 as two creative passes.
 
-## Authored DV Enhanced: Natural and Signature
+## Authored Dolby Vision Enhanced: Natural and Signature
 
 The `cb1-dve-v6` policy keeps Standard-equivalent reconstructed pixels. It fits
 the five existing L2/L8 primary controls to a bounded objective. L1/L3,

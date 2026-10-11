@@ -23,7 +23,7 @@ bool dvbridge_gl_frame_import(struct dvbridge_gl_frame *out, pl_gpu gpu,
     if (out->gpu)
         return false;
     int depth, shift, storage;
-    bool planar = false, subsampled = true;
+    bool planar = false, subsampled = true, packed = false;
     switch (layout) {
     case DVBRIDGE_NV12: depth = storage = 8; shift = 0; break;
     case DVBRIDGE_P010: depth = 10; storage = 16; shift = 6; break;
@@ -32,10 +32,12 @@ bool dvbridge_gl_frame_import(struct dvbridge_gl_frame *out, pl_gpu gpu,
     case DVBRIDGE_YUV420P10: depth = 10; storage = 16; shift = 0; planar = true; break;
     case DVBRIDGE_YUV444P10:
         depth = 10; storage = 16; shift = 0; planar = true; subsampled = false; break;
+    case DVBRIDGE_Y416:
+        depth = 10; storage = 16; shift = 6; packed = true; subsampled = false; break;
     default: return false;
     }
     struct dvbridge_gl_frame candidate = {.gpu = gpu};
-    candidate.frame.num_planes = planar ? 3 : 2;
+    candidate.frame.num_planes = packed ? 1 : planar ? 3 : 2;
     candidate.frame.crop = (pl_rect2df){0, 0, width, height};
     candidate.frame.repr.bits = (struct pl_bit_encoding){
         .sample_depth = storage, .color_depth = depth, .bit_shift = shift};
@@ -48,7 +50,7 @@ bool dvbridge_gl_frame_import(struct dvbridge_gl_frame *out, pl_gpu gpu,
             planes[i].width != tw || planes[i].height != th || tw > 4096 || th > 2304)
             goto fail;
         int components = !planar && i == 1 ? 2 : 1;
-        int format = storage == 8 ? (components == 2 ? GL_RG8 : GL_R8) :
+        int format = packed ? 0x805B : storage == 8 ? (components == 2 ? GL_RG8 : GL_R8) :
                                    (components == 2 ? 0x822C : 0x822A); /* RG16/R16 */
         struct pl_plane *plane = &candidate.frame.planes[i];
         plane->texture = pl_opengl_wrap(gpu, pl_opengl_wrap_params(
@@ -60,6 +62,13 @@ bool dvbridge_gl_frame_import(struct dvbridge_gl_frame *out, pl_gpu gpu,
         plane->component_mapping[0] = i;
         if (components == 2)
             plane->component_mapping[1] = 2;
+        if (packed) {
+            plane->components = 3;
+            plane->component_mapping[0] = 1;
+            plane->component_mapping[1] = 0;
+            plane->component_mapping[2] = 2;
+            plane->shift_x = -0.5f;
+        }
     }
     *out = candidate;
     return true;

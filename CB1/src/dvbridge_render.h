@@ -8,12 +8,26 @@
 
 struct dvbridge_renderer;
 struct cb1_ai_result;
+struct dvbridge_native_overlay;
+#define CB1_AI_OVERLAY_API 1
 #define CB1_HDR10_AI_RENDER_API 1
 /* Borrowed intermediate. DV preparation may still need its existing poll;
  * resolve and successful presentation remain separate from this call. */
 pl_tex dvbridge_render_hdr10_ai_rgb(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
     const struct pl_frame *source,const struct dvbridge_geometry *geometry);
+/* Private Standard-AI full-raster output. The target/FBO pair is the caller's
+ * existing resolve ownership assertion; false can follow GPU submission.
+ * Retain source imports and poll normal retirement before RGB fallback. */
+bool dvbridge_render_hdr10_ai_packed(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
+    const struct pl_frame *source,const struct dvbridge_geometry *geometry,
+    pl_tex target,unsigned framebuffer,bool flip_y);
+/* Final Standard-AI composition only; GUI never enters metadata analysis. */
+bool dvbridge_render_hdr10_ai_packed_overlay(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
+    const struct pl_frame *source,const struct dvbridge_geometry *geometry,
+    pl_tex target,unsigned framebuffer,bool flip_y,const struct dvbridge_native_overlay *overlay);
 struct dvbridge_retirement_owner;
 #define DVBRIDGE_CM4_GPU_API 1
 /* Trim-only shader in linear 203-nit units. The caller retains the shader. */
@@ -74,6 +88,15 @@ struct dvbridge_hdr10_policy_output {
 struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu);
 void dvbridge_renderer_destroy(struct dvbridge_renderer *renderer);
 void dvbridge_renderer_reset(struct dvbridge_renderer *renderer);
+#define CB1_OPTIMIZED_DV_API 1
+/* Select the next picture's DV composition. Default false; HDR10 is unchanged. */
+void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *renderer, bool enabled);
+#define CB1_FAST_CHROMA_API 1
+/* Next-picture input chroma filter for every CB1 circuit. Default false; luma is unchanged. */
+void dvbridge_renderer_set_fast_chroma(struct dvbridge_renderer *renderer, bool enabled);
+
+#define CB1_PROCESSING_OPTIMIZATIONS_API 1
+void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *renderer, bool enabled);
 
 /* Requires the renderer's current borrowed GL context. GPU requirements only;
  * source/TV policy, allocation success and HDMI admission are separate checks.

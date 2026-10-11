@@ -17,10 +17,10 @@ class ReleaseTests(unittest.TestCase):
         script = "unset " + " ".join(keys) + "\n" + defaults
         script += '\nprintf "%s\\n" "$CUSTOM_VERSION" "$BUILDER_VERSION" "$CB1_HDR10_AI"'
         result = subprocess.check_output(["bash", "-c", script], text=True).splitlines()
-        self.assertEqual(result, ["R1.0.0-Beta2", "R1.0.0 Beta2", "yes"])
+        self.assertEqual(result, ["DV-R1.0.0-Beta3", "DV-R1.0.0 Beta3", "yes"])
         versions = json.loads((ROOT / "config/cb1-versions.json").read_text())
         self.assertEqual(versions["Release"]["version"], result[1])
-        self.assertEqual(versions["Release"]["tag"], result[0])
+        self.assertEqual(versions["Release"]["tag"], "R1.0.0-Beta3")
 
 
 if __name__ == "__main__":

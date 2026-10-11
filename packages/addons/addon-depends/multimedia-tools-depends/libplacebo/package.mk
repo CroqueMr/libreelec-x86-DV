@@ -4,7 +4,7 @@
 PKG_NAME="libplacebo"
 PKG_VERSION="e2972fdd09adacd383656738d7d280f0cd84a761"
 PKG_SHA256="2dc029b7686455054fb5e76dd8c084cbf4fa4159f33364c5b7f9afc8b3611811"
-PKG_LICENSE="LGPL-2.1-or-later"
+PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://code.videolan.org/videolan/libplacebo"
 PKG_URL="https://github.com/haasn/libplacebo/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain glad:host Jinja2:host"

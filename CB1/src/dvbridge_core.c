@@ -64,11 +64,15 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
     return true;
 }
 
-struct dvbridge_candidate *dvbridge_prepare_output(
+static struct dvbridge_candidate *prepare_output(
     const struct dvbridge_context *context, const void *metadata, size_t bytes,
-    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh,
+    bool source_transport)
 {
     if (!context || !dvbridge_dv_bounds(metadata, bytes)) return NULL;
+    if (source_transport && (!dvbridge_dv_source_transport(metadata) ||
+        geometry.source_width!=3840 || geometry.source_height!=2160 || geometry.x || geometry.y ||
+        geometry.width!=3840 || geometry.height!=2160)) return NULL;
     unsigned margins[4];
     if (!dvbridge_frame_area(margins, metadata, bytes, geometry)) return NULL;
     struct dvbridge_candidate *candidate = calloc(1, sizeof(*candidate));
@@ -77,6 +81,7 @@ struct dvbridge_candidate *dvbridge_prepare_output(
     candidate->owner = context;
     candidate->revision = context->revision;
     candidate->state.fel_verified = fel_reconstructed;
+    candidate->state.source_transport = source_transport;
     if (!dvbridge_dv_geometry(&candidate->state, geometry.source_width, geometry.source_height,
             geometry.x, geometry.y, geometry.width, geometry.height) ||
         !dvbridge_dv_metadata_output(&candidate->state, metadata, pts, margins, force_refresh)) {
@@ -85,6 +90,20 @@ struct dvbridge_candidate *dvbridge_prepare_output(
     }
     memcpy(candidate->margins, margins, sizeof(margins));
     return candidate;
+}
+
+struct dvbridge_candidate *dvbridge_prepare_output(
+    const struct dvbridge_context *context, const void *metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
+{
+    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,false);
+}
+
+struct dvbridge_candidate *dvbridge_prepare_source_output(
+    const struct dvbridge_context *context, const void *metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
+{
+    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,true);
 }
 
 struct dvbridge_candidate *dvbridge_prepare(

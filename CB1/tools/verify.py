@@ -73,12 +73,15 @@ def verify(root, dependency_roots=None, prefix=None):
     # Historical extraction attribution is immutable; owned additions use current digests.
     owned = json.loads(checked(root, 'config/owned-sources.json').read_text())
     if set(owned) != {'src/CMakeLists.txt', 'src/dvbridge_policy.c', 'src/dvbridge_policy.h',
+                      'src/dvbridge_gl_frame.c', 'src/dvbridge_gl_frame.h',
+                      'src/dvbridge_fel_vpp.c', 'src/dvbridge_fel_vpp.h',
                       'src/dvbridge_placebo.c', 'src/dvbridge_placebo.h',
                       'src/dvbridge_render.c', 'src/dvbridge_render.h', 'src/dvbridge_gl_pack.c',
                       'src/dvbridge_core.c', 'src/dvbridge_core.h',
                       'src/dvbridge_metadata.h', 'src/dvbridge_pack_sources.h.in',
                       'src/dvbridge_creative.c', 'src/dvbridge_creative.h',
                       'src/cb1_circuit.c', 'src/cb1_circuit.h',
+                      'src/cb1_processing.c', 'src/cb1_processing.h',
                       'src/cb1_l1l3_model.c', 'src/cb1_l1l3_model.h',
                       'src/cb1_hdr10_features.c', 'src/cb1_hdr10_features.h',
                       'src/cb1_hdr10_extrema.c', 'src/cb1_hdr10_extrema.h',
@@ -88,7 +91,7 @@ def verify(root, dependency_roots=None, prefix=None):
                       'src/cb1_hdr10_filter.c', 'src/cb1_hdr10_filter.h',
                       'src/cb1_hdr10_spatial.c', 'src/cb1_hdr10_spatial.h',
                       'src/cb1_hdr10_temporal.c', 'src/cb1_hdr10_temporal.h',
-                      'src/cb1_hdr10_ai.c', 'src/cb1_hdr10_ai.h'}:
+                      'src/cb1_hdr10_ai.c', 'src/cb1_hdr10_ai.h', 'src/cb1_hdr10_grid.h'}:
         raise ValueError('Unexpected owned source identity')
     expected = {name: record['sha256'] for name, record in origins['files'].items()}
     expected.update(owned)
@@ -117,7 +120,7 @@ def verify(root, dependency_roots=None, prefix=None):
     if actual_sources != origins['files'].keys() | owned.keys():
         raise ValueError('Unexpected or missing runtime source')
     patches = {p.relative_to(root).as_posix() for p in (root / 'patches').rglob('*.patch')}
-    if patches != dependencies['patches'].keys() or len(patches) != 18:
+    if patches != dependencies['patches'].keys() or len(patches) != 21:
         raise ValueError('Unexpected or missing dependency patch')
     receipt = json.loads(checked(root, 'src/PROVENANCE.json').read_text())
     for name, digest in receipt['files'].items():

@@ -1,0 +1,186 @@
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -6757,9 +6757,12 @@
+ 	if (!mode)
+ 		return;
+ 
+-	/* Full screen scaling by default */
+-	src.width = mode->hdisplay;
+-	src.height = mode->vdisplay;
++	/* Full screen scaling by default. A frame-packed 3D mode scans out the
++	 * doubled timing (two eyes plus the active space), so take the CRTC
++	 * height, not the per-eye vdisplay: with 1080 here against a 2205-line
++	 * destination the aspect fit keeps 1080 lines and centres them, showing
++	 * the first eye across both eye windows and none of the second. */
++	drm_mode_get_hv_timing(mode, &src.width, &src.height);
+ 	dst.width = stream->timing.h_addressable;
+ 	dst.height = stream->timing.v_addressable;
+ 
+@@ -7033,7 +7036,29 @@
+ 	else
+ 		timing_out->pixel_encoding = PIXEL_ENCODING_RGB;
+ 
+-	timing_out->timing_3d_format = TIMING_3D_FORMAT_NONE;
++	switch (mode_in->flags & DRM_MODE_FLAG_3D_MASK) {
++	/* SBS/TAB: the application packs both eyes into a 2D frame, so the
++	 * display core scans out plain 2D; only the VSIF says 3D (see
++	 * create_stream_for_sink). Any DC stereo format here makes the hardware
++	 * treat the plane as two views and paint the whole frame into each. */
++	case DRM_MODE_FLAG_3D_TOP_AND_BOTTOM:
++	case DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF:
++	case DRM_MODE_FLAG_3D_SIDE_BY_SIDE_FULL:
++		timing_out->timing_3d_format = TIMING_3D_FORMAT_NONE;
++		stream->view_format = VIEW_3D_FORMAT_NONE;
++		break;
++	/* Frame packing likewise: the doubled 2205-line frame is already laid
++	 * out by the application (eye, 45-line gap, eye), so scan it out as 2D
++	 * too; DC's stereo programming would re-pack it. */
++	case DRM_MODE_FLAG_3D_FRAME_PACKING:
++		timing_out->timing_3d_format = TIMING_3D_FORMAT_NONE;
++		stream->view_format = VIEW_3D_FORMAT_NONE;
++		break;
++	default:
++		timing_out->timing_3d_format = TIMING_3D_FORMAT_NONE;
++		stream->view_format = VIEW_3D_FORMAT_NONE;
++		break;
++	}
+ 	timing_out->display_color_depth = convert_color_depth_from_display_info(
+ 		connector,
+ 		(timing_out->pixel_encoding == PIXEL_ENCODING_YCBCR420),
+@@ -7642,8 +7667,13 @@
+ 
+ 	if (amdgpu_dm_hdr10_validate(dm_state))
+ 		return NULL;
++	/* Dolby Vision and stereoscopic HDMI use different VSIF payloads. */
++	if (dm_state->dv_standard && (drm_mode->flags & DRM_MODE_FLAG_3D_MASK))
++		return NULL;
+ 
+ 	drm_mode_init(&mode, drm_mode);
++	if (mode.flags & DRM_MODE_FLAG_3D_FRAME_PACKING)
++		drm_mode_set_crtcinfo(&mode, CRTC_STEREO_DOUBLE);
+ 	memset(&saved_mode, 0, sizeof(saved_mode));
+ 
+ 	if (connector->connector_type != DRM_MODE_CONNECTOR_WRITEBACK) {
+@@ -7723,7 +7753,9 @@
+ 	}
+ 
+ 	if (recalculate_timing)
+-		drm_mode_set_crtcinfo(&saved_mode, 0);
++		drm_mode_set_crtcinfo(&saved_mode,
++				      (saved_mode.flags & DRM_MODE_FLAG_3D_FRAME_PACKING) ?
++				      CRTC_STEREO_DOUBLE : 0);
+ 
+ 	/*
+ 	 * If scaling is enabled and refresh rate didn't change
+@@ -7767,8 +7799,34 @@
+ 	update_stream_signal(stream, sink);
+ 
+ 	if (stream->signal == SIGNAL_TYPE_HDMI_TYPE_A ||
+-	    stream->signal == SIGNAL_TYPE_HDMI_FRL)
++	    stream->signal == SIGNAL_TYPE_HDMI_FRL) {
++		/* Side-by-side and top-and-bottom are packed by the application
++		 * into an ordinary 2D frame: the display core scans it out as 2D
++		 * and only the vendor infoframe tells the sink about the layout. */
++		enum dc_timing_3d_format saved_3d = stream->timing.timing_3d_format;
++		enum view_3d_format saved_view = stream->view_format;
++
++		switch (mode.flags & DRM_MODE_FLAG_3D_MASK) {
++		case DRM_MODE_FLAG_3D_TOP_AND_BOTTOM:
++			stream->timing.timing_3d_format = TIMING_3D_FORMAT_TB_SW_PACKED;
++			stream->view_format = VIEW_3D_FORMAT_TOP_AND_BOTTOM;
++			break;
++		case DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF:
++		case DRM_MODE_FLAG_3D_SIDE_BY_SIDE_FULL:
++			stream->timing.timing_3d_format = TIMING_3D_FORMAT_SBS_SW_PACKED;
++			stream->view_format = VIEW_3D_FORMAT_SIDE_BY_SIDE;
++			break;
++		case DRM_MODE_FLAG_3D_FRAME_PACKING:
++			stream->timing.timing_3d_format = TIMING_3D_FORMAT_SW_FRAME_PACKING;
++			stream->view_format = VIEW_3D_FORMAT_FRAME_SEQUENTIAL;
++			break;
++		default:
++			break;
++		}
+ 		mod_build_hf_vsif_infopacket(stream, &stream->vsp_infopacket, false, false);
++		stream->timing.timing_3d_format = saved_3d;
++		stream->view_format = saved_view;
++	}
+ 
+ 	if (stream->signal == SIGNAL_TYPE_DISPLAY_PORT ||
+ 	    stream->signal == SIGNAL_TYPE_DISPLAY_PORT_MST ||
+@@ -8655,7 +8713,9 @@
+ 	if (!test_mode)
+ 		goto fail;
+ 
+-	drm_mode_set_crtcinfo(test_mode, 0);
++	drm_mode_set_crtcinfo(test_mode,
++			      (test_mode->flags & DRM_MODE_FLAG_3D_FRAME_PACKING) ?
++			      CRTC_STEREO_DOUBLE : 0);
+ 
+ 	stream = create_validate_stream_for_sink(connector, test_mode,
+ 						 to_dm_connector_state(connector->state),
+@@ -9465,7 +9525,8 @@
+ 	aconnector->dc_link = link;
+ 	aconnector->base.interlace_allowed = false;
+ 	aconnector->base.doublescan_allowed = false;
+-	aconnector->base.stereo_allowed = false;
++	/* HDMI only: DP->HDMI dongles reject 3D timings in link validation */
++	aconnector->base.stereo_allowed = connector_type == DRM_MODE_CONNECTOR_HDMIA;
+ 	aconnector->base.dpms = DRM_MODE_DPMS_OFF;
+ 	aconnector->hpd.hpd = AMDGPU_HPD_NONE; /* not used */
+ 	aconnector->audio_inst = -1;
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+@@ -1101,18 +1101,23 @@
+ 	if (fb && state->crtc) {
+ 		/* Validate viewport to cover the case when only the position changes */
+ 		if (state->plane->type != DRM_PLANE_TYPE_CURSOR) {
++			int mode_hdisplay, mode_vdisplay;
+ 			int viewport_width = state->crtc_w;
+ 			int viewport_height = state->crtc_h;
+ 
++			/* frame-packed 3D scans out the doubled timing */
++			drm_mode_get_hv_timing(&new_crtc_state->mode,
++					       &mode_hdisplay, &mode_vdisplay);
++
+ 			if (state->crtc_x < 0)
+ 				viewport_width += state->crtc_x;
+-			else if (state->crtc_x + state->crtc_w > new_crtc_state->mode.crtc_hdisplay)
+-				viewport_width = new_crtc_state->mode.crtc_hdisplay - state->crtc_x;
++			else if (state->crtc_x + state->crtc_w > mode_hdisplay)
++				viewport_width = mode_hdisplay - state->crtc_x;
+ 
+ 			if (state->crtc_y < 0)
+ 				viewport_height += state->crtc_y;
+-			else if (state->crtc_y + state->crtc_h > new_crtc_state->mode.crtc_vdisplay)
+-				viewport_height = new_crtc_state->mode.crtc_vdisplay - state->crtc_y;
++			else if (state->crtc_y + state->crtc_h > mode_vdisplay)
++				viewport_height = mode_vdisplay - state->crtc_y;
+ 
+ 			if (viewport_width < 0 || viewport_height < 0) {
+ 				DRM_DEBUG_ATOMIC("Plane completely outside of screen\n");
+--- a/drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c
++++ b/drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c
+@@ -608,6 +608,9 @@
+ 
+ 	if (timing->timing_3d_format != TIMING_3D_FORMAT_NONE &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_HW_FRAME_PACKING &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_SW_FRAME_PACKING &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_SBS_SW_PACKED &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_TB_SW_PACKED &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_TOP_AND_BOTTOM &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_SIDE_BY_SIDE &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_FRAME_ALTERNATE &&
+--- a/drivers/gpu/drm/amd/display/modules/info_packet/info_packet.c
++++ b/drivers/gpu/drm/amd/display/modules/info_packet/info_packet.c
+@@ -556,6 +556,10 @@
+ 			case TIMING_3D_FORMAT_TOP_AND_BOTTOM:
+ 			case TIMING_3D_FORMAT_TB_SW_PACKED:
+ 				info_packet->sb[5] = (0x6 << 4);
++				/* Some sinks (JVC D-ILA) only engage TAB when the
++				 * 3D_Ext_Data byte is present, as Amlogic sources send it.
++				 */
++				length = 6;
+ 				break;
+ 
+ 			default:

@@ -33,6 +33,12 @@ struct dvbridge_candidate *dvbridge_prepare(
 struct dvbridge_candidate *dvbridge_prepare_output(
     const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
+#define DVBRIDGE_SOURCE_OUTPUT_API 1
+/* Pixels remain in the source opponent domain; preserve their colour matrices.
+ * Full-raster 1:1 transport only. No state advances on rejection. */
+struct dvbridge_candidate *dvbridge_prepare_source_output(
+    const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
 void dvbridge_candidate_destroy(struct dvbridge_candidate *candidate);
 bool dvbridge_commit(struct dvbridge_context *context, const struct dvbridge_candidate *candidate);
 const uint32_t *dvbridge_packets(const struct dvbridge_candidate *candidate, unsigned *count);

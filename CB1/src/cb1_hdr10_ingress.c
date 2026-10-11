@@ -3,6 +3,7 @@
 #include "cb1_hdr10_filter.h"
 #include <libplacebo/dispatch.h>
 #include <libplacebo/shaders/custom.h>
+#include <libplacebo/shaders/sampling.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +28,7 @@ static const char header[]=
     "return vec4(vec3(clamp(value,ivec3(0),ivec3(65535)))/65535.0,1.0);}";
 
 struct cb1_hdr10_ingress {
-    pl_gpu gpu;pl_dispatch dispatch;pl_tex texture, horizontal, small, filters[4];pl_fmt format;
+    pl_gpu gpu;pl_dispatch dispatch;pl_tex texture, horizontal, small, filters[4], preview[18];pl_fmt format;
     int width,height,subsampled,counts[4];
 };
 
@@ -47,6 +48,7 @@ void cb1_hdr10_ingress_destroy(struct cb1_hdr10_ingress **ctx)
     pl_tex_destroy((*ctx)->gpu,&(*ctx)->texture);pl_dispatch_destroy(&(*ctx)->dispatch);
     pl_tex_destroy((*ctx)->gpu,&(*ctx)->horizontal);pl_tex_destroy((*ctx)->gpu,&(*ctx)->small);
     for(unsigned i=0;i<4;++i)pl_tex_destroy((*ctx)->gpu,&(*ctx)->filters[i]);
+    for(unsigned i=0;i<18;++i)pl_tex_destroy((*ctx)->gpu,&(*ctx)->preview[i]);
     free(*ctx);*ctx=NULL;
 }
 
@@ -154,6 +156,8 @@ static const char small_header[]=
     "int start=coefficient(HY,0,p.x);"
     "for(int j=0;j<hy_count;j++)y+=sample_y(ivec2(start+j,p.y))*coefficient(HY,j+1,p.x);"
     "int x=subsampled!=0u?p.x/2:p.x;start=coefficient(HC,0,x);"
+    /* The vertical chroma filter only reads the original chroma rows. */
+    "if(subsampled==0u || p.y<int(height)/2)"
     "for(int j=0;j<hc_count;j++)uv+=sample_uv(ivec2(start+j,min(p.y,int(height)/(subsampled!=0u?2:1)-1)))*coefficient(HC,j+1,x);"
     "return vec4(float(min(y>>(depth_shift+3),524287)),"
     "vec2(min(uv>>ivec2(depth_shift+3),ivec2(524287))),1);}"
@@ -216,5 +220,89 @@ enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
         if(ok)ok=pl_dispatch_finish(ctx->dispatch,pl_dispatch_params(.shader=&shader,.target=pass?ctx->small:ctx->horizontal));
         pl_dispatch_abort(ctx->dispatch,&shader);if(!ok)return CB1_AI_INVALID;
     }
+    *out=ctx->small;return CB1_AI_READY;
+}
+
+/* Private experiment: filter source planes before RGB clipping. */
+enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *ctx,
+    const struct pl_frame *source, pl_tex *out)
+{
+    if (!out) return CB1_AI_INVALID;
+    enum cb1_ai_status status=admissible(ctx,source);
+    if (status!=CB1_AI_READY) return status;
+    bool sub=source->planes[1].texture->params.w==source->planes[0].texture->params.w/2;
+    bool packed=source->num_planes==2;
+    /* Avoid bilinear footprints outside a crop when a source plane is enlarged. */
+    if (source->crop.x1-source->crop.x0<128 || source->crop.y1-source->crop.y0<(sub?144:72))
+        return cb1_hdr10_ingress_small(ctx,source,out);
+    pl_tex planes[3]={0};
+    for (int p=0; p<source->num_planes; ++p) {
+        pl_tex input=source->planes[p].texture;
+        if (!(input->params.format->caps & PL_FMT_CAP_LINEAR)) return CB1_AI_INCOMPATIBLE;
+        pl_fmt fmt=pl_find_fmt(ctx->gpu,PL_FMT_UNORM,p==1 && packed?2:1,16,16,
+            PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_LINEAR);
+        if (!fmt) return CB1_AI_INCOMPATIBLE;
+        int divisor=p && sub?2:1;
+        pl_rect2df rect=source->crop;
+        rect.x0/=divisor;rect.x1/=divisor;rect.y0/=divisor;rect.y1/=divisor;
+        int width=(int)(rect.x1-rect.x0),height=(int)(rect.y1-rect.y0),target_w=p && sub?64:128;
+        for (unsigned pass=0; pass<6; ++pass) {
+            int w=(width+1)/2,h=(height+1)/2;
+            if (w<target_w) w=target_w;
+            if (h<72) h=72;
+            pl_tex *target=&ctx->preview[p*6+pass];
+            if (!pl_tex_recreate(ctx->gpu,target,pl_tex_params(.w=w,.h=h,.format=fmt,
+                .sampleable=true,.renderable=true))) return CB1_AI_INCOMPATIBLE;
+            pl_shader shader=pl_dispatch_begin(ctx->dispatch);
+            bool ok=pl_shader_sample_bilinear(shader,pl_sample_src(.tex=input,.rect=rect,.new_w=w,.new_h=h));
+            /* Normalize low-aligned words before quantizing the first target.
+             * Later passes then retain ~16 significant bits, not only 10/12.
+             * All following planes/steps share the exact same normalized scale. */
+#ifndef CB1_PROBE_U16_NO_NORMALIZE
+            if (ok && pass==0) {
+                float gain=(float)(1<<(16-source->repr.bits.color_depth-source->repr.bits.bit_shift));
+                struct pl_shader_var normalization={.var=pl_var_float("preview_gain"),.data=&gain,.dynamic=true};
+                ok=pl_shader_custom(shader,&(struct pl_custom_shader){
+                    .input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+                    .variables=&normalization,.num_variables=1,.body="color.rgb*=preview_gain;"});
+            }
+#endif
+            if (ok) ok=pl_dispatch_finish(ctx->dispatch,pl_dispatch_params(.shader=&shader,.target=*target));
+            pl_dispatch_abort(ctx->dispatch,&shader);
+            if (!ok) return CB1_AI_INVALID;
+            input=*target;width=w;height=h;rect=(pl_rect2df){0,0,w,h};
+            if (w==target_w && h==72) { planes[p]=input;break; }
+        }
+        if (!planes[p]) return CB1_AI_INVALID;
+    }
+    pl_fmt fmt=pl_find_fmt(ctx->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
+    if (!fmt || !pl_tex_recreate(ctx->gpu,&ctx->small,pl_tex_params(.w=128,.h=72,
+        .format=fmt,.sampleable=true,.renderable=true))) return CB1_AI_INCOMPATIBLE;
+    struct pl_shader_desc descriptors[]={
+        {.desc={.name="Y_small",.type=PL_DESC_SAMPLED_TEX},.binding={.object=planes[0],.sample_mode=PL_TEX_SAMPLE_NEAREST}},
+        {.desc={.name="U_small",.type=PL_DESC_SAMPLED_TEX},.binding={.object=planes[1],.sample_mode=PL_TEX_SAMPLE_NEAREST}},
+        {.desc={.name="V_small",.type=PL_DESC_SAMPLED_TEX},.binding={.object=packed?planes[1]:planes[2],.sample_mode=PL_TEX_SAMPLE_NEAREST}}};
+    int divisor=sub?2:1,bit_shift=16-source->repr.bits.color_depth,depth_shift=source->repr.bits.color_depth-8;
+    unsigned uv_packed=packed;
+    struct pl_shader_var variables[]={
+        {.var=pl_var_int("divisor"),.data=&divisor,.dynamic=true},
+        {.var=pl_var_int("bit_shift"),.data=&bit_shift,.dynamic=true},
+        {.var=pl_var_int("depth_shift"),.data=&depth_shift,.dynamic=true},
+        {.var=pl_var_uint("packed"),.data=&uv_packed,.dynamic=true}};
+    pl_shader shader=pl_dispatch_begin(ctx->dispatch);
+    bool ok=pl_shader_custom(shader,&(struct pl_custom_shader){.output=PL_SHADER_SIG_COLOR,
+        .prelude=packed?"#define V_small U_small\n":NULL,
+        .descriptors=descriptors,.num_descriptors=packed?2:3,.variables=variables,.num_variables=4,
+        .body="ivec2 p=ivec2(gl_FragCoord.xy),q=ivec2(p.x/divisor,p.y);"
+              "float scale=65535.0/float(1<<bit_shift);"
+              "float y=texelFetch(Y_small,p,0).r*scale-16.0*float(1<<depth_shift);"
+              "vec2 uv=vec2(texelFetch(U_small,q,0).r,packed!=0u?texelFetch(U_small,q,0).g:texelFetch(V_small,q,0).r)*scale"
+              "-vec2(128.0*float(1<<depth_shift));"
+              "vec3 rgb=vec3(y*9539.0+uv.y*13752.0,y*9539.0-uv.x*1535.0-uv.y*5328.0,y*9539.0+uv.x*17545.0);"
+              "rgb=clamp(rgb/(float(1<<(depth_shift+5))*65535.0),vec3(0),vec3(1));"
+              "color=vec4(unpackHalf2x16(packHalf2x16(rgb.rg)),unpackHalf2x16(packHalf2x16(rgb.bb)).x,1);"});
+    if (ok) ok=pl_dispatch_finish(ctx->dispatch,pl_dispatch_params(.shader=&shader,.target=ctx->small));
+    pl_dispatch_abort(ctx->dispatch,&shader);
+    if (!ok) return CB1_AI_INVALID;
     *out=ctx->small;return CB1_AI_READY;
 }

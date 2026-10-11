@@ -9,6 +9,11 @@ struct cb1_hdr10_statistics;
 /* Caller-confined GLES 3.1 context. One RGB48-compatible job at a time.
  * Quantile slots 4..10 remain zero, supplied by the exact histogram helper. */
 struct cb1_hdr10_statistics *cb1_hdr10_statistics_create(pl_gpu gpu);
+/* GPU bounds and RGB must belong to the same retained picture. */
+enum cb1_ai_status cb1_hdr10_statistics_submit_pending(struct cb1_hdr10_statistics *ctx,pl_tex pq,
+    pl_tex bounds,struct cb1_ai_identity id);
+enum cb1_ai_status cb1_hdr10_statistics_poll_bounds(struct cb1_hdr10_statistics *ctx,
+    struct cb1_ai_identity id,struct cb1_hdr10_bounds bounds,float out[35]);
 void cb1_hdr10_statistics_destroy(struct cb1_hdr10_statistics **ctx);
 void cb1_hdr10_statistics_reset(struct cb1_hdr10_statistics *ctx,uint64_t stream,uint64_t revision);
 enum cb1_ai_status cb1_hdr10_statistics_submit(struct cb1_hdr10_statistics *ctx,pl_tex texture,
