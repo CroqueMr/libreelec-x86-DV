@@ -1,11 +1,10 @@
 # LibreELEC with Dolby Vision support for Intel and AMD iGPU
 
-**R1.0.0 Beta2 - Major performance improvements**
 
 LibreELEC Generic x86_64 community build with Dolby Vision playback and HDR10
 conversion in Kodi's native VideoPlayer.
 
-Powered by **CB1 0.1**, an open-source Dolby Vision processing engine. No external
+Powered by **CB1**, an open-source Dolby Vision processing engine. No external
 player or proprietary Dolby SDK is required or used.
 
 ## Dolby Vision profiles
@@ -135,10 +134,7 @@ display model, connection chain, build version and `kodi.log`.
 
 ## Known issues
 
-- On lower-powered GPUs such as Intel N100, displaying the GUI over Dolby Vision playback can cause stuttering.
-- Some 59.94 FPS Dolby Vision sources still drop frames on N100.
 - Enhanced presets need further tuning to produce a more noticeable visual effect.
-- Profile 5 black-screen reports on some AMD and Intel Xe configurations remain under investigation.
 - Newly enabled Intel families and AMD support require hardware testing.
 
 Report issues for this modified build here. Contact upstream projects only when
