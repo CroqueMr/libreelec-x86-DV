@@ -39,6 +39,13 @@ struct dvbridge_candidate *dvbridge_prepare_output(
 struct dvbridge_candidate *dvbridge_prepare_source_output(
     const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
+#define DVBRIDGE_OVERLAY_METADATA_API 1
+/* Applies to pictures prepared after the call; default false. While GUI or
+ * subtitles are composed over the picture, the outgoing L5 reports the full
+ * raster so the display does not mask controls drawn in letterbox bars.
+ * Video masking, dvbridge_active_area() and the caller's metadata keep the
+ * source margins. A change from the presented state requests a refresh. */
+void dvbridge_set_overlay_visible(struct dvbridge_context *context, bool visible);
 void dvbridge_candidate_destroy(struct dvbridge_candidate *candidate);
 bool dvbridge_commit(struct dvbridge_context *context, const struct dvbridge_candidate *candidate);
 const uint32_t *dvbridge_packets(const struct dvbridge_candidate *candidate, unsigned *count);

@@ -97,6 +97,10 @@ void dvbridge_renderer_set_fast_chroma(struct dvbridge_renderer *renderer, bool 
 
 #define CB1_PROCESSING_OPTIMIZATIONS_API 1
 void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *renderer, bool enabled);
+#define CB1_OVERLAY_METADATA_API 1
+/* Next picture: GUI or subtitles will be composed over it. Outgoing DV
+ * metadata then reports a full-raster L5; see dvbridge_set_overlay_visible(). */
+void dvbridge_renderer_set_overlay_visible(struct dvbridge_renderer *renderer, bool visible);
 
 /* Requires the renderer's current borrowed GL context. GPU requirements only;
  * source/TV policy, allocation success and HDMI admission are separate checks.

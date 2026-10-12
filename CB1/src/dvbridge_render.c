@@ -731,6 +731,11 @@ void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *r,
     if (r) r->processing_optimizations = enabled;
 }
 
+void dvbridge_renderer_set_overlay_visible(struct dvbridge_renderer *r, bool visible)
+{
+    if (r) dvbridge_set_overlay_visible(r->context, visible);
+}
+
 void dvbridge_renderer_destroy(struct dvbridge_renderer *r)
 {
     if (!r)

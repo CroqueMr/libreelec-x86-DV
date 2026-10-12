@@ -22,6 +22,9 @@ No player-led/LLDV output is implemented. The TV performs final mapping for DV.
 Profile 7 FEL reconstruction combines BL, RPU and the applicable matched EL
 before output conversion. Missing or mismatched FEL is not reported as complete
 BL-only reconstruction. Active-area borders follow L5 and output geometry.
+While Kodi's OSD, menus or subtitles are on screen, the transmitted L5 reports
+the full raster so the TV does not mask them in letterbox bars; the video keeps
+its source active area and black borders.
 
 | Field | Content | Use |
 | --- | --- | --- |

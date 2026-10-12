@@ -6,6 +6,7 @@
 struct dvbridge_context {
     struct dvbridge_dv state;
     uint64_t revision;
+    bool overlay_visible, overlay_presented;
 };
 
 struct dvbridge_candidate {
@@ -13,6 +14,7 @@ struct dvbridge_candidate {
     unsigned margins[4];
     const struct dvbridge_context *owner;
     uint64_t revision;
+    bool overlay_visible;
 };
 
 struct dvbridge_context *dvbridge_create(void)
@@ -29,7 +31,13 @@ void dvbridge_reset(struct dvbridge_context *context)
 {
     if (!context) return;
     memset(&context->state, 0, sizeof(context->state));
+    context->overlay_presented = false;
     ++context->revision;
+}
+
+void dvbridge_set_overlay_visible(struct dvbridge_context *context, bool visible)
+{
+    if (context) context->overlay_visible = visible;
 }
 
 bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes,
@@ -82,13 +90,20 @@ static struct dvbridge_candidate *prepare_output(
     candidate->revision = context->revision;
     candidate->state.fel_verified = fel_reconstructed;
     candidate->state.source_transport = source_transport;
+    /* Only the transmitted L5 changes; the caller masks with the source margins
+     * before composing overlays. Both visibility edges refresh the display. */
+    static const unsigned full_raster[4];
+    const bool overlay = context->overlay_visible;
+    const bool edge = context->state.frames && overlay != context->overlay_presented;
     if (!dvbridge_dv_geometry(&candidate->state, geometry.source_width, geometry.source_height,
             geometry.x, geometry.y, geometry.width, geometry.height) ||
-        !dvbridge_dv_metadata_output(&candidate->state, metadata, pts, margins, force_refresh)) {
+        !dvbridge_dv_metadata_output(&candidate->state, metadata, pts,
+            overlay ? full_raster : margins, force_refresh || edge)) {
         free(candidate);
         return NULL;
     }
     memcpy(candidate->margins, margins, sizeof(margins));
+    candidate->overlay_visible = overlay;
     return candidate;
 }
 
@@ -123,6 +138,7 @@ bool dvbridge_commit(struct dvbridge_context *context, const struct dvbridge_can
     if (!context || !candidate || candidate->owner != context ||
         candidate->revision != context->revision) return false;
     context->state = candidate->state;
+    context->overlay_presented = candidate->overlay_visible;
     ++context->revision;
     return true;
 }

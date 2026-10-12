@@ -42,3 +42,17 @@ DV to HDR10 and HDR10 to DV AI. Off restores the reference chroma filter. Luma,
 including enlarged FEL luma, RGB/output scaling, reshaping, FEL VPP, metadata and
 intermediate precision remain unchanged. The default library preference is off;
 Kodi supplies its user preference. Native Kodi and vanilla fallback do not use it.
+
+## Overlay visibility
+
+`dvbridge_renderer_set_overlay_visible` (or `dvbridge_set_overlay_visible` on a
+core context) tells CB1 that GUI or subtitles will be composed over the next
+prepared picture. While set, the transmitted L5 reports the full raster, so the
+display does not mask or crop controls and subtitles drawn in letterbox bars.
+Only the outgoing DV metadata copy changes: the active-area video mask, which
+runs before overlay composition, `dvbridge_active_area`, policy snapshots and
+the caller's RPU keep the source margins. A change from the presented state
+sets the scene-refresh flag, including on a paused, repeated picture. Invalid,
+truncated or duplicate L5 is still rejected before any output is produced. The
+default is off; HDR10 output is unaffected. Kodi sets it from GUI and subtitle
+visibility.
