@@ -1,0 +1,78 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+index 41450bcb6590b957f3fb95e29a58ef7bf12528db..534339222c4305c55ae9478ce3ff03d7ef80e66f 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -541,6 +541,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(const Layer& base,
+   dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
+   dvbridge_renderer_set_fast_chroma(m_renderer,preferences.fastChroma);
+   dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
++  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
+   m_pendingOverlayRevision = m_nativeOverlayRevision;
+   m_sourceGeometry = geometry;m_geometryKnown = true;
+   m_pendingBinding = base.binding;m_pendingSourceInfo = base.sourceInfo;
+@@ -656,6 +657,14 @@ CDVBridgeGLES::~CDVBridgeGLES()
+   }
+ }
+ 
++void CDVBridgeGLES::SetOverlayVisible(bool visible)
++{
++  // Outgoing L5 differs, so a paused or packed picture must be prepared again.
++  if (visible != m_overlayVisible)
++    ++m_nativeOverlayRevision;
++  m_overlayVisible = visible;
++}
++
+ bool CDVBridgeGLES::SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
+                                     const CRect& bounds, uint64_t content, bool inputPQ)
+ {
+@@ -803,6 +812,7 @@ bool CDVBridgeGLES::Prepare(const Layer& base, const Layer* enhancement,
+   dvbridge_renderer_set_optimized_dv(m_renderer,m_requested.optimizedDV);
+   dvbridge_renderer_set_fast_chroma(m_renderer,m_requested.fastChroma);
+   dvbridge_renderer_set_processing_optimizations(m_renderer,m_requested.processingOptimizations);
++  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
+   dvbridge_gl_frame bl{}, el{};
+   if (!dvbridge_gl_frame_import(&bl, m_gl->gpu, base.layout, base.width, base.height, base.planes))
+     return Failure("base-import");
+@@ -994,6 +1004,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+   dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
+   dvbridge_renderer_set_fast_chroma(m_renderer,preferences.fastChroma);
+   dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
++  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
+   m_fallback = fallback;
+   m_asyncEligible = eligible;
+   const auto previousMode=m_effectiveMode;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+index d4d0f07ab7d02c6e46a8fa1a44c6b1cfba0e5e5f..a10f25de04eff288f14083b9ba0c07d3f20b8ee1 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -129,6 +129,8 @@ public:
+                         const CRect& bounds, uint64_t content, bool inputPQ);
+   bool NativeOverlayComposed() const { return m_direct && m_nativeOverlayEnabled; }
+   bool NativeOverlayPrimed() const { return m_nativeOverlayPrimed; }
++  // GUI or subtitles will cover the next picture: send a full-raster L5.
++  void SetOverlayVisible(bool visible);
+   bool SupportsMode(dvbridge_mode mode) const { return dvbridge_renderer_supports_mode(m_renderer, mode); }
+   bool SupportsHDR10AI(dvbridge_mode mode) const { return dvbridge_renderer_supports_hdr10_ai(m_renderer, mode); }
+   bool HasRenderer() const { return m_renderer != nullptr; }
+@@ -217,7 +219,7 @@ private:
+   bool m_directUsable = true;
+   dvbridge_native_overlay m_nativeOverlay{};
+   unsigned m_nativeOverlayTextures[3]{};
+-  bool m_nativeOverlayEnabled{}, m_nativeOverlayPrimed{};
++  bool m_nativeOverlayEnabled{}, m_nativeOverlayPrimed{}, m_overlayVisible{};
+   uint64_t m_nativeOverlayContent{};
+   uint64_t m_nativeOverlayRevision{}, m_pendingOverlayRevision{}, m_committedOverlayRevision{};
+   bool m_prepared = false;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index aac67f7f07f6681d02e6805cf976722d8b402e3d..e7ab1ea6c11fdad995da9d22f758c7d67b485947 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1691,6 +1691,8 @@ bool CWinSystemGbmGLESContext::RenderDVBridge(const CDVBridgeGLES::Layer& layer,
+   const bool fullGUI = m_guiWillRender && GetGUIElementCount() &&
+       CDVBridgeGLES::CanComposeSDRGUI(preferences.optimizedDV,m_hdrConversion,capturing,
+           m_guiFboWidth,m_guiFboHeight,m_dvPQSubtitleDraws);
++  // The TV masks L5 margins. Keep controls/subtitles in letterbox bars visible.
++  m_dvBridge->SetOverlayVisible((m_guiWillRender && GetGUIElementCount()) || m_dvOverlays);
+   // Prime the subtitle shader once; empty frames retain the lean native shader.
+   const bool nativeOverlay = !m_hdrConversion &&
+       (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&

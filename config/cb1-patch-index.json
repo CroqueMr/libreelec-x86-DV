@@ -629,6 +629,15 @@
       "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzz-l5-overlay-visibility.patch": {
+    "summary": "Keep the OSD and subtitles visible over letterboxed Dolby Vision",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pass overlay visibility to CB1 and prepare the picture again when it changes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Track GUI and subtitle visibility for the next picture.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Report GUI elements or subtitles composed over the current picture."
+    }
+  },
   "projects/Generic/patches/linux/linux-9930-amd-3d.patch": {
     "summary": "Signal display-advertised AMD HDMI 3D modes",
     "component": "linux",
