@@ -1,31 +1,63 @@
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-index 41450bcb6590b957f3fb95e29a58ef7bf12528db..534339222c4305c55ae9478ce3ff03d7ef80e66f 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -541,6 +541,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(const Layer& base,
+@@ -502,13 +502,14 @@
+       sameGeometry && (!m_direct || allowPacked))
+     return FrameStatus::Reused;
+   if (m_pending)
+   {
+     if (base.binding == m_pendingBinding && prediction.id.revision == m_pendingIdentity.revision &&
+         preferences.revision == m_requested.revision && m_requested.SameValues(preferences) &&
+-        m_pendingOverlayRevision == m_nativeOverlayRevision && sameGeometry &&
++        (!m_direct || m_pendingOverlayRevision == m_nativeOverlayRevision) && sameGeometry &&
++        m_pendingOverlayVisible == m_overlayVisible &&
+         (!m_direct || allowPacked))
+       return PollReady() ? FrameStatus::Ready : FrameStatus::Pending;
+     Cancel();
+   }
+   if (m_dvPolicyActive)
+   {
+@@ -538,13 +539,15 @@
+   m_fallback = policy.mode != preferences.HDR10Policy().mode;
+   m_effectiveMode = policy.mode;
+   m_requested = preferences;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
    dvbridge_renderer_set_fast_chroma(m_renderer,preferences.fastChroma);
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
 +  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
    m_pendingOverlayRevision = m_nativeOverlayRevision;
++  m_pendingOverlayVisible = m_overlayVisible;
    m_sourceGeometry = geometry;m_geometryKnown = true;
    m_pendingBinding = base.binding;m_pendingSourceInfo = base.sourceInfo;
-@@ -656,6 +657,14 @@ CDVBridgeGLES::~CDVBridgeGLES()
+   m_pendingMetadata = {};
+   m_pendingIdentity = {prediction.id.stream,prediction.id.picture,prediction.id.revision};
+   m_pendingInfo = CDVPlaybackInfo::HDMI;
+   m_dvPolicyActive = true;
+@@ -651,12 +654,20 @@
+   {
+     pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.texture);
+     pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.degamma);
+     pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.pq);
+     pl_tex_destroy(m_gl->gpu, &m_scanout);
    }
- }
- 
++}
++
 +void CDVBridgeGLES::SetOverlayVisible(bool visible)
 +{
 +  // Outgoing L5 differs, so a paused or packed picture must be prepared again.
 +  if (visible != m_overlayVisible)
 +    ++m_nativeOverlayRevision;
 +  m_overlayVisible = visible;
-+}
-+
+ }
+ 
  bool CDVBridgeGLES::SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
                                      const CRect& bounds, uint64_t content, bool inputPQ)
  {
-@@ -803,6 +812,7 @@ bool CDVBridgeGLES::Prepare(const Layer& base, const Layer* enhancement,
+   float nextRect[4]{};
+@@ -800,12 +811,13 @@
+     return Failure("hdr10-session-unavailable");
+   if (!metadata.Data())
+     return Failure("metadata-unavailable");
    dvbridge_renderer_set_optimized_dv(m_renderer,m_requested.optimizedDV);
    dvbridge_renderer_set_fast_chroma(m_renderer,m_requested.fastChroma);
    dvbridge_renderer_set_processing_optimizations(m_renderer,m_requested.processingOptimizations);
@@ -33,7 +65,35 @@ index 41450bcb6590b957f3fb95e29a58ef7bf12528db..534339222c4305c55ae9478ce3ff03d7
    dvbridge_gl_frame bl{}, el{};
    if (!dvbridge_gl_frame_import(&bl, m_gl->gpu, base.layout, base.width, base.height, base.planes))
      return Failure("base-import");
-@@ -994,6 +1004,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+   double elPts = std::numeric_limits<double>::quiet_NaN();
+   if (enhancement)
+   {
+@@ -955,13 +967,14 @@
+       m_failedIdentity.picture == base.binding.picture && m_failedIdentity.revision == revision)
+     return FrameStatus::Failed;
+   if (m_pending)
+   {
+     if (base.binding == m_pendingBinding && revision == m_pendingIdentity.revision &&
+         policy.mode == m_effectiveMode && (allowPacked || !m_direct) &&
+-        m_pendingOverlayRevision == m_nativeOverlayRevision)
++        m_pendingOverlayVisible == m_overlayVisible &&
++        (!m_direct || m_pendingOverlayRevision == m_nativeOverlayRevision))
+       return PollReady() ? FrameStatus::Ready : FrameStatus::Pending;
+     Cancel();
+   }
+   const bool eligible = allowAsync && asyncSetting && !fallback && !m_fallback && !m_pendingHDR10Fallback &&
+       policy.mode != DVBRIDGE_MODE_DISABLED && m_hasCommitted && sameGeometry &&
+       base.lease && (!enhancement || enhancement->lease) && m_directUsable &&
+@@ -986,17 +999,19 @@
+   m_live = true;
+ #ifdef CB1_HAS_HDR10_AI
+   m_aiFrame = m_aiOutputAccepted = false;
+ #endif
+   m_guiComposed = false;
+   m_pendingOverlayRevision = m_nativeOverlayRevision;
++  m_pendingOverlayVisible = m_overlayVisible;
+   m_requested = preferences;
+   policy.revision = revision;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
    dvbridge_renderer_set_fast_chroma(m_renderer,preferences.fastChroma);
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
@@ -41,11 +101,16 @@ index 41450bcb6590b957f3fb95e29a58ef7bf12528db..534339222c4305c55ae9478ce3ff03d7
    m_fallback = fallback;
    m_asyncEligible = eligible;
    const auto previousMode=m_effectiveMode;
+   m_effectiveMode = policy.mode;
+   if (policy.mode == DVBRIDGE_MODE_DISABLED) return FrameStatus::Unsupported;
+   m_pendingBinding = base.binding;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-index d4d0f07ab7d02c6e46a8fa1a44c6b1cfba0e5e5f..a10f25de04eff288f14083b9ba0c07d3f20b8ee1 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -129,6 +129,8 @@ public:
+@@ -126,12 +126,14 @@
+   bool Fallback() const { return m_fallback; }
+   bool Advanced() const { return m_advanced; }
+   bool SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
                          const CRect& bounds, uint64_t content, bool inputPQ);
    bool NativeOverlayComposed() const { return m_direct && m_nativeOverlayEnabled; }
    bool NativeOverlayPrimed() const { return m_nativeOverlayPrimed; }
@@ -54,20 +119,31 @@ index d4d0f07ab7d02c6e46a8fa1a44c6b1cfba0e5e5f..a10f25de04eff288f14083b9ba0c07d3
    bool SupportsMode(dvbridge_mode mode) const { return dvbridge_renderer_supports_mode(m_renderer, mode); }
    bool SupportsHDR10AI(dvbridge_mode mode) const { return dvbridge_renderer_supports_hdr10_ai(m_renderer, mode); }
    bool HasRenderer() const { return m_renderer != nullptr; }
-@@ -217,7 +219,7 @@ private:
+   dvbridge_mode EffectiveMode() const { return m_effectiveMode; }
+   DVBRIDGE::SourceBinding SelectionIdentity(DVBRIDGE::SourceBinding binding,
+       const DVBRIDGE::OutputPreferences& preferences, dvbridge_mode mode) const;
+@@ -214,13 +216,13 @@
+   pl_tex m_scanout = nullptr;
+   unsigned m_scanoutFramebuffer{};
+   bool m_direct = false;
    bool m_directUsable = true;
    dvbridge_native_overlay m_nativeOverlay{};
    unsigned m_nativeOverlayTextures[3]{};
 -  bool m_nativeOverlayEnabled{}, m_nativeOverlayPrimed{};
-+  bool m_nativeOverlayEnabled{}, m_nativeOverlayPrimed{}, m_overlayVisible{};
++  bool m_nativeOverlayEnabled{}, m_nativeOverlayPrimed{}, m_overlayVisible{}, m_pendingOverlayVisible{};
    uint64_t m_nativeOverlayContent{};
    uint64_t m_nativeOverlayRevision{}, m_pendingOverlayRevision{}, m_committedOverlayRevision{};
    bool m_prepared = false;
+   bool m_packed = false;
+   unsigned m_pendingInfo = 0;
+   unsigned int m_framebuffer = 0;
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-index aac67f7f07f6681d02e6805cf976722d8b402e3d..e7ab1ea6c11fdad995da9d22f758c7d67b485947 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -1691,6 +1691,8 @@ bool CWinSystemGbmGLESContext::RenderDVBridge(const CDVBridgeGLES::Layer& layer,
+@@ -1688,12 +1688,14 @@
+       m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
+       (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
+   const bool pqSubtitles = subtitlesOnly && m_dvPQSubtitleDraws;
    const bool fullGUI = m_guiWillRender && GetGUIElementCount() &&
        CDVBridgeGLES::CanComposeSDRGUI(preferences.optimizedDV,m_hdrConversion,capturing,
            m_guiFboWidth,m_guiFboHeight,m_dvPQSubtitleDraws);
@@ -76,3 +152,6 @@ index aac67f7f07f6681d02e6805cf976722d8b402e3d..e7ab1ea6c11fdad995da9d22f758c7d6
    // Prime the subtitle shader once; empty frames retain the lean native shader.
    const bool nativeOverlay = !m_hdrConversion &&
        (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
+       m_guiFbo.IsValid() && m_guiFboWidth == 3840 && m_guiFboHeight == 2160 && m_compositeShader;
+   const bool nativeSubtitles = m_dvBridge->SetNativeOverlay(
+       nativeOverlay ? (pqSubtitles ? m_dvPQSubtitleFbo.Texture() : m_guiFbo.Texture()) : 0,
