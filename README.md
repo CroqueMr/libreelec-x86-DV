@@ -126,7 +126,7 @@ build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 | --- | --- |
 | Linux display drivers | Dolby Vision signaling, output validation and HDMI transport |
 | Kodi | Playback, audio, frame pairing, controls, information and CB1 integration |
-| CB1 | Reconstruction, conversion, Adaptive processing and output metadata |
+| CB1 | Dolby Vision open-source engine: reconstruction, conversion, Adaptive processing and output metadata |
 | FFmpeg / libplacebo | Matched metadata, decoding integration and rendering patches |
 
 - [Processing and algorithms](docs/cb1/PROCESSING.md)
