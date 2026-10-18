@@ -116,6 +116,7 @@ build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
 - Dedicated AMD and NVIDIA GPU support is experimental.
+- HDR10 Support issue on Intel 8th & 9th gen.
 
 ## Components and documentation
 
