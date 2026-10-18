@@ -1,4 +1,9 @@
-# CB1 numerical contracts
+# Archived CB1 numerical contracts
+
+These contracts include earlier Natural/Intense experiments, not the current
+playback menu. For active behavior and versions, use [Algorithms](ALGORITHMS.md)
+and [Circuits](CIRCUITS.md). The numerical reference material below is retained
+without reinterpretation.
 
 Status: Task 6A offline image composition and state contract reviewed and
 sponsor-approved. Task 6B experimental transformed TV-Led contract is declared,
@@ -263,9 +268,9 @@ struct dvbridge_dv_policy_snapshot {
     struct pl_color_space container;
     struct dvbridge_geometry geometry;
     double nominal_max_nits; /* ceil(requested double peak), not measured */
-    double statistics[3]; /* rounded min,avg,max normalized PQ */
+    double statistics[3]; /* min,avg,max in the analysis_model domain */
     double raw_statistics[3]; /* min,binary64 sum/count,max before selection */
-    float raw_sum; /* original FP32 reduction */
+    float raw_sum; /* original FP32 reduction in the same domain */
     uint32_t sample_count;
     uint16_t l1[3]; /* min,max,avg wire codes */
     uint16_t source_pq[2]; /* nominal output envelope codes */
@@ -311,6 +316,11 @@ enum dvbridge_dv_policy_status dvbridge_retirement_owner_poll(
     struct dvbridge_retirement_owner *owner);
 bool dvbridge_retirement_owner_destroy(struct dvbridge_retirement_owner **owner);
 ```
+
+`analysis_model` identifies the statistics domain. The
+`cb1-authored-scene-curve-linear-guard-v1` model reports min/mean/max of linear
+maximum LMS divided by 10000 nits; its `raw_sum` uses the same domain. Other
+existing models retain normalized PQ statistics. Authored L1 remains scene-derived.
 
 The output/snapshot contain value copies of identity, policy, source generation,
 output generation, nominal envelope/gamut, BT2020/PQ descriptor, rounded

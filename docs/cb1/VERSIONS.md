@@ -1,30 +1,22 @@
 # Versions
 
-| Component | Version / revision |
+| Component | Beta4 version |
 | --- | --- |
-| Release | DV-R1.0.0 Beta3, tag `R1.0.0-Beta3` |
-| LibreELEC | 13.0-devel, `3de4708704041ead8ae1531092efb7ea5da9d355` |
-| Kodi | 22.0 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
+| Release | R1.0.0 Beta4, tag `R1.0.0-Beta4` |
+| LibreELEC | 13.0-devel |
+| Kodi | 22 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
+| CB1 | 0.3 |
 | Linux | 7.2.6 |
-| FFmpeg | 9.0, matched CB1 patches |
-| libplacebo | 7.372.0, `e2972fdd09adacd383656738d7d280f0cd84a761`, matched CB1 patches |
-| Mesa | 26.2.3, unmodified |
-| Intel Media Driver | 26.3.5, unmodified |
-| libva | 2.24.1, unmodified |
-| CB1 | Engine 0.2, bundled in this release |
+| FFmpeg | 9.0 |
+| libplacebo | 7.372.0 |
+| Mesa | 26.2.3 |
+| Intel Media Driver | 26.3.5 |
+| libva | 2.24.1 |
+| NVIDIA | 615.78.08 |
 
-`config/cb1-source-lock.json` identifies the exact staged sources.
-`config/cb1-patch-index.json` describes each patch and modified file.
-Circuit versions are defined by CB1 and displayed by Kodi.
+CB1 circuit versions are defined in the engine and shown in Player information.
+The corresponding-source archives record the exact component inventories and
+build inputs. [Build instructions](BUILD.md) · [Circuit versions](../../CB1/docs/CIRCUITS.md).
 
-## Repository management
-
-- `CB1/` owns the engine and FFmpeg/libplacebo patches.
-- LibreELEC owns Linux/Kodi integration, recipes and images in this repository.
-- Engine changes require updated source hashes and image qualification.
-- Driver/UI-only changes do not change rendering circuit versions.
-- Upstream updates are reviewed separately; CB1 never follows a floating branch.
-
-The Beta3 release assets include the matching component sources. The original
-Beta3 tag points to the Beta2 base; Beta3 source integration is on `main`.
-LibreELEC ancestry and the previous repository history are retained.
+AMD HDMI 3D changes are part of the matched Linux/Kodi sources, not a separate
+CB1 circuit. [3D support](3D.md).

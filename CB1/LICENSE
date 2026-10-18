@@ -1,8 +1,18 @@
-This repository contains differently licensed components.
+This source tree contains separately licensed parts.
 
-The shared C engine and marked engine tests retain GPL-3.0-or-later.
-Original extraction tooling and documentation are MIT, unless explicitly marked.
-FFmpeg/libplacebo patches retain the terms of their upstream source.
+Metadata/transport, FEL, Master Reference, processing API and AI runtime files
+marked GPL-3.0-or-later retain that license.
+
+dvbridge_creative.c/.h, cb1_dv_enhanced.c/.h, cb1_dv_enhanced_shader.h and
+dvbridge_render.c are GPL-3.0-only. The shared static-library combination is
+therefore conveyed under GPL-3.0-only, retaining each file's original notices.
+
+Original tooling/documentation is MIT where declared. The FFmpeg-derived filter
+retains LGPL-2.1-or-later. Dependency patches include both inherited LGPL code and
+explicit GPL-3.0-or-later additions; see docs/LICENSE-MAP.md.
+
+Model assets carry a GPL-3.0-or-later declaration, but their recorded
+redistribution clearance remains unresolved. LightGBM itself is MIT.
 
 Read docs/LICENSING.md and LICENSES/ before redistribution.
-No blanket relicensing or independent legal clearance is granted.
+This index does not relicense any existing file or grant third-party rights.

@@ -1,144 +1,139 @@
-# LibreELEC with Dolby Vision support for Intel and AMD iGPU
+# LibreELEC with Dolby Vision and AMD 3D support
 
+Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
+open-source Dolby Vision processing engine. Intel and AMD integrated graphics
+are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
 
-LibreELEC Generic x86_64 community build with Dolby Vision playback and HDR10
-conversion in Kodi's native VideoPlayer.
+**R1.0.0 Beta4** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
 
-Powered by **CB1**, an open-source Dolby Vision processing engine. No external
-player or proprietary Dolby SDK is required or used.
+[Download Beta4](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta4)
+· [Release notes](docs/cb1/RELEASE.md)
+· [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
 
-## Dolby Vision profiles
+No external player or proprietary Dolby SDK is required.
+
+## Supported Dolby Vision profiles
 
 | Profile | Support |
 | --- | --- |
 | 5 | Yes |
 | 7 MEL | Yes |
 | 7 FEL | Yes, including enhancement-layer reconstruction |
-| 8.1 | Yes |
-| 8.2 | Yes |
-| 8.4 | Yes |
+| 8.1 / 8.2 / 8.4 | Yes |
 | 10 | Yes |
 | 9, legacy profiles, 20 | No |
 
-CM2.9 and CM4 metadata are supported. Full supported FEL reconstruction occurs
-before conversion. Creative-control application depends on the selected mode
-and the metadata present in the source.
+CM2.9 and CM4 metadata are supported. Mode availability depends on the source
+format and the active output capabilities.
 
-## Playback controls
+## Rendering modes
 
-Settings are in **Player > Videos**. The selector shows modes for the current
-source. Modes can change during playback.
+| Source | Mode | Output | Purpose |
+| --- | --- | --- | --- |
+| Dolby Vision | **Dolby Vision Standard** | Dolby Vision, TV-Led | Prioritize performance with near-imperceptible image differences |
+| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | Preserve original pixels and metadata as accurately as possible, aiming for bit-perfect playback |
+| Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
+| Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
+| Dolby Vision | **HDR10 Reference Expert** | HDR10 | Map to the configured TV peak and gamut using compatible creative metadata |
+| Dolby Vision | **Dolby Vision Disabled (native Kodi)** | Native Kodi output | Use Kodi's original playback and fallback behavior |
+| HDR10 | **Dolby Vision Reference (AI)** | Dolby Vision, TV-Led | Generate L1/L3 scene metadata using image analysis and LightGBM, without an enhancement grade |
+| HDR10 | **Dolby Vision Adaptive HDR Mapping (AI)** | Dolby Vision, TV-Led | Combine AI scene metadata with controlled highlight expansion |
+| HDR10 | **HDR10 Native** | HDR10 | Keep native Kodi HDR10 playback |
+| SDR / HLG | **Native** | Native SDR / HLG | Keep native Kodi playback |
 
-Press **O** to cycle:
+Adaptive HDR Mapping and HDR10 Expert require a TV profile. Standard, Master
+Reference, Basic and Reference AI do not.
 
-1. Player information.
-2. Quick rendering mode selection.
-3. Video only.
+For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
 
-Play/pause and seek remain available while either panel is open. **Enhanced
-Player information** and **Quick rendering switch** are independent and enabled
-by default. Disable the enhanced panel to use Kodi's stock information panel;
-disable the quick switch to skip mode selection in the cycle.
-The optional startup mode notification is off by default.
+### Quick rendering selection
+
+Change rendering mode during playback. The bottom-right menu shows the choices
+for the current source and explains unavailable modes.
+
+![Beta4 quick rendering menu on Avatar with Master Reference active](docs/cb1/images/quick-display-dv.png)
+
+Press **O** to cycle through **Player information**, **rendering selection** and
+**video only**. Play/pause and seek remain available with either panel open.
 
 ### Player information
 
-Video/audio source and output, DV profile and CM version, BL/EL/FEL state,
-metadata blocks, active circuit, drops/skips and GPU render-engine usage.
-HDR10 and SDR show their relevant fields without empty DV sections.
+Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
+metadata, active rendering mode, Fast state and supported GPU render-engine usage.
+HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
-![Player information during Dolby Vision playback](docs/cb1/images/player-information-dv.png)
+![Beta4 Player information on Avatar in Master Reference with its audio track](docs/cb1/images/player-information-dv.png)
 
+GPU usage is Kodi's render-engine load, including visible menus. It is not total
+GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
 
-GPU usage measures Kodi's render engine, including visible GUI rendering,
-not the whole GPU or video decoder. Playback diagnostics are recorded in `kodi.log`.
+## Install or update
 
-## Rendering modes by source
+Download one binary asset from [Beta4](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta4):
 
-| Source | Mode | Output | Processing | TV profile |
-| --- | --- | --- | --- | --- |
-| Dolby Vision | DV Standard (TV-Led) | DV | Reconstruct the image, including FEL; forward source DV metadata to the TV | Not required |
-| Dolby Vision | DV Enhanced - Natural and Signature | DV | Adjust existing L2/L8 creative controls using the TV peak; two presets: Natural or Signature | Required |
-| Dolby Vision | DV Disabled (native Kodi) | Native Kodi | Use Kodi's native playback without CB1 DV processing | Not required |
-| Dolby Vision | HDR10 Reference Basic | HDR10 | Convert to HDR10 using L1 scene data and source mastering metadata | Not required |
-| Dolby Vision | HDR10 Reference Expert | HDR10 | Map to the TV peak and gamut; apply available L2/L8 creative controls | Required |
-| HDR10 | DV Reference (AI) | DV | Generate L1/L3 metadata with LightGBM; retain the HDR10 source pixels | Not required |
-| HDR10 | DV Enhanced (AI) - Natural and Signature | DV | Map pixels to the TV peak and gamut, then generate DV scene metadata; two presets: Natural or Signature | Required |
-| HDR10 | HDR10 Native | HDR10 | Use Kodi's native HDR10 playback | Not required |
-| HLG / SDR | Native | HLG / SDR | Use Kodi's native HLG or SDR playback | Not required |
-
-For more details, see [rendering modes and algorithms](docs/cb1/PROCESSING.md).
-**DV/HDR10 enhanced and references rendering profile require a capable GPU** 
-
-Standard Dolby Vision is the default. 
-HDR10-to-Dolby Vision AI modes use the CB1-L1L3 0.1 LightGBM model included in CB1 and staged by the build.
-
-### Quick settings
-
-A compact bottom-right list shows the modes available for the current source.
-Its height follows the number of modes. TV profile configuration stays in
-Player settings.
-
-![Quick rendering mode selection](docs/cb1/images/quick-display-dv.png)
-
-## Documentation
-
-- [Processing and metadata](docs/cb1/PROCESSING.md): rendering logic and mode differences.
-- [Output modes](docs/cb1/PLAYBACK.md): controls and display-profile settings.
-- [Build](docs/cb1/BUILD.md), [versions](docs/cb1/VERSIONS.md) and [licensing](docs/cb1/LICENSING.md).
-
-## Components
-
-| Component | Changes |
+| File | Use |
 | --- | --- |
-| Linux display drivers | Native HDMI capability checks, DV signaling and protected scanout |
-| Kodi | CB1 adapter, frame pairing, output selection, controls, information and diagnostics |
-| CB1, included in this repository | Reconstruction, rendering policies, conversions and metadata |
-| FFmpeg / libplacebo | Matched CB1 metadata and rendering patches |
-| Mesa / media drivers / libva | Existing decoding and graphics stack, unmodified |
+| `.img.gz` | Write to installation media for a fresh installation |
+| `.tar` | Copy into LibreELEC's update directory and reboot |
+| `sources.tar.zst` + `vendor-inputs.tar.zst` | Rebuild the release; not required for installation |
 
-## Build and install
+Settings are in **Kodi > Settings > Player > Videos**.
+Standard Dolby Vision is the default. Fast rendering defaults to Auto for the
+other eligible CB1 modes. [Build instructions](docs/cb1/BUILD.md).
 
-Release assets are an installation `.img.gz` and a native-update `.tar`.
-Only one is needed. [Build instructions](docs/cb1/BUILD.md).
+## AMD HDMI 3D
 
-## Repository layout
-
-| Path | Content |
+| Source | Playback |
 | --- | --- |
-| `projects/Generic/patches/linux/` | Display-driver changes |
-| `projects/Generic/patches/kodi/` | Kodi integration |
-| `packages/` | Native LibreELEC build recipes |
-| `config/cb1-*.json` | Source locks, component versions and patch descriptions |
-| `CB1/` | Processing engine, dependency patches and LightGBM model |
-| `scripts/cb1-stage.py` | Stage the bundled CB1 sources |
-| `docs/cb1/` | Playback, processing, build and licensing documentation |
-| `tests/cb1/` | Source-staging and display-policy regression checks |
-| `licenses/` | Upstream and additional retained notices |
+| MVC Blu-ray ISO | Decode both views and use HDMI frame packing on compatible displays |
+| Side-by-side / top-and-bottom | Native Kodi stereoscopic playback and output selection |
+| 1080p half-SBS | Additional HDMI stereo modes at 24, 50 and 60 Hz |
+
+3D uses Kodi's native playback path, not CB1 conversion or Adaptive processing.
+A 3D-capable display and suitable glasses are required.
+[3D setup and compatibility](docs/cb1/3D.md).
 
 ## Hardware
 
-| CPU generation / series with integrated graphics | Support |
+| Hardware | Dolby Vision support |
 | --- | --- |
-| Intel Core 8th gen and newer | Dolby Vision output |
-| Intel Core Ultra Series 1 / 2, including 200V | Dolby Vision output |
-| Intel N-series, including N100 / N150 | Dolby Vision output |
-| AMD Ryzen APUs: 2000G / 3000G, 4000 / 5000, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Experimental driver support |
-| Other hardware | DV processing to HDR10 where GPU processing is available; no custom DV HDMI output |
+| Intel iGPU: Core 8th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
+| AMD iGPU: Ryzen 2000G / 3000G and corresponding mobile APUs, 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
+| AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Experimental |
+| NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Experimental |
+| Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
-Newly enabled Intel families require hardware testing.
+Performance depends on hardware, content and rendering mode. The N100 handles all
+tested Master Reference sources, including 4K FEL remuxes and 4K60 content.
+Heavier conversions require more GPU performance.
 
-Performance may vary by hardware. Report problems with the exact CPU/GPU, **DV/HDR10 enhanced and reference rendering profiles require a capable GPU** 
-display model, connection chain, build version and `kodi.log`.
-[Hardware list](docs/cb1/HARDWARE.md).
+For problems, open an issue with the exact CPU/GPU, display, connection chain,
+build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 
 ## Known issues
 
-- Enhanced presets need further tuning to produce a more noticeable visual effect.
-- Newly enabled Intel families and AMD support require hardware testing.
+- Screenshots are unavailable in Dolby Vision Master Reference.
+- Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
+- Adaptive HDR Mapping remains subject to visual refinement.
+- Dedicated AMD and NVIDIA GPU support is experimental.
+- Repeated timing warnings have been reported on some MVC Blu-ray ISOs; investigation is ongoing.
 
-Report issues for this modified build here. Contact upstream projects only when
-the issue also reproduces with their unmodified builds. No affiliation with or
-certification by LibreELEC, Kodi, Dolby, Intel or AMD.
+## Components and documentation
 
-[Upstream LibreELEC README](docs/cb1/UPSTREAM.md)
+[Documentation index](docs/cb1/README.md).
+
+| Component | Role |
+| --- | --- |
+| Linux display drivers | Dolby Vision signaling, output validation and HDMI transport |
+| Kodi | Playback, audio, frame pairing, controls, information and CB1 integration |
+| CB1 | Reconstruction, conversion, Adaptive processing and output metadata |
+| FFmpeg / libplacebo | Matched metadata, decoding integration and rendering patches |
+
+- [Processing and algorithms](docs/cb1/PROCESSING.md)
+- [Playback and settings](docs/cb1/PLAYBACK.md)
+- [Hardware support](docs/cb1/HARDWARE.md) and [AMD HDMI 3D](docs/cb1/3D.md)
+- [Build](docs/cb1/BUILD.md) and [versions](docs/cb1/VERSIONS.md)
+- [Licensing and credits](docs/cb1/LICENSING.md)
+- [Upstream LibreELEC README](docs/cb1/UPSTREAM.md)
+
+No affiliation with or certification by LibreELEC, Kodi, Dolby, Intel, AMD or NVIDIA.

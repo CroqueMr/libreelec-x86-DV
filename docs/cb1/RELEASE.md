@@ -1,68 +1,59 @@
-# DV-R1.0.0-Beta3 - Major stability and performance improvements, plus AMD Blu-ray 3D support
+# R1.0.0 Beta4 - Major pipeline optimizations, Master Reference and NVIDIA support
 
-Smooth Dolby Vision playback on N100, from demanding 4K 60 FPS remuxes to 4K FEL remuxes. Drop-free steady-state playback was achieved on the tested content, with Dolby Vision fast rendering enabled for demanding 60 FPS playback.
+## Rendering modes
 
-Changes since Beta2.
+- **Dolby Vision Standard**: accepts near-imperceptible image differences to deliver substantially higher rendering performance.
+- **Dolby Vision Master Reference**: new TV-Led pipeline aiming for bit-perfect playback, preserving the original pixels and metadata. The N100 handles all tested sources in this mode, including 4K FEL remuxes and 4K60 content.
+- **Dolby Vision Adaptive HDR Mapping**: replaces Natural and Signature with a single mode. Expands highlights and selected midtones using the original metadata and configured display capabilities, with shadow protection and temporal stabilization.
+- Adaptive processing also supports **HDR10 input through AI-generated Dolby Vision metadata**.
 
-## Rendering and performance
+## Performance
 
-- Optimized Dolby Vision HDMI packing, avoiding redundant colour-conversion and PQ processing.
-- Reused the active HDMI mode during playback instead of requesting a modeset for every frame.
-- Optimized menu and subtitle composition, overlay caching and transparent-colour blending.
-- Reduced repeated metadata reshaping calculations by merging identical MMR intervals without changing their coefficients.
-- Added automatic VAAPI FEL upscaling where supported, with shader fallback. Applies to Dolby Vision Native, Enhanced and HDR10 conversion.
-- Added **Dolby Vision fast rendering**, disabled by default. Significantly reduces rendering load with fine colour-detail differences expected to be almost imperceptible during playback. Disabling it restores the reference chroma filter.
-- Isolated CB1 rendering from Kodi picture adjustments. Native playback and fallback retain Kodi's settings.
+- **AMD Performance**, performance improvement on AMD CPUs thanks to dedicated rendering pipelines optimization.
+- **Major performance improvements to HDR10 to Dolby Vision AI**, reducing analysis overhead, redundant processing and preparation delays.
+- **Substantially optimized Dolby Vision to HDR10 Basic and Expert**, including FEL reconstruction and direct presentation.
+- Optimized Master Reference by removing redundant reconstruction, intermediate surfaces and copies without changing the reference calculations.
+- Improved Adaptive processing through reduced memory traffic, streamlined shaders and earlier FEL preparation.
+- Added **automatic fast rendering**, using a 2.5 ms presentation-margin threshold. Player information reports its active state.
+- Master Reference remains non-Fast. Automatic performance recovery can switch to Standard when necessary, with a notification.
 
-Dolby Vision transport and GUI optimizations incorporate work from [dangerouslaser](https://github.com/dangerouslaser/libreelec-yblod/tree/yblod-0.2-pre2), adapted to the shared CB1 rendering pipeline.
+## Image processing
 
-## Dolby Vision detection and output
+- Corrected Expert output-volume limiting, including BT.2020 peak-brightness overshoot.
+- Improved Expert handling of missing or inconsistent L1 statistics and compatible L8 trims.
+- Corrected the processing domain of CM4 trim commands in HDR10 Expert.
+- Improved Adaptive pixel/metadata consistency and addressed reported darkening and brightness instability.
 
-- Fixed rendering modes incorrectly marked unavailable when the Kodi interface runs at 1080p. [#20](https://github.com/CroqueMr/libreelec-x86-DV/issues/20)
-- Fixed redundant Dolby Vision HDMI handshakes at playback startup. [#21](https://github.com/CroqueMr/libreelec-x86-DV/issues/21)
-- Fixed output-surface cleanup when switching to native HDR10, HLG or SDR, including crashes during subsequent interface-resolution changes.
-- Improved startup-frame cancellation and GPU-resource cleanup when stopping playback or recreating the renderer.
-- Improved audio-engine acknowledgement during HDMI display changes when the audio sink is not yet configured.
-- Retained previous Profile 5, 1080p playback, Enhanced stability and Blu-ray ISO Dolby Vision detection fixes.
+## Hardware and 3D
 
-## HDR10-to-Dolby-Vision AI
+- Added an **NVIDIA backend for Turing and newer**, including NVDEC integration, HDMI Dolby Vision signaling and shared CB1 processing.
+- Improved Dolby Vision capability detection on supported Intel HDMI paths.
+- Corrected Blu-ray 3D stereo-output selection when native HDMI 3D modes are unavailable.
+- Added progressive 1080p half-side-by-side HDMI modes at 24, 50 and 60 Hz.
+- Retained separate native 3D playback, outside Dolby Vision processing.
 
-- **Major performance improvements** through optimized image analysis, asynchronous scheduling and combined rendering/HDMI packing.
-- Fixed startup sequencing that could block the first video output.
-- Improved prediction-worker scheduling and queue hand-off.
-- Reduced image-analysis overhead using source-plane sampling and deferred statistics/readback.
-- Moved future-frame analysis outside the current-frame presentation lock.
-- Combined rendering and HDMI packing for compatible Standard-AI output.
-- Fixed reuse of failed output preparations after geometry changes.
-- The LightGBM model and fallback deadlines remain unchanged.
+## Playback and interface
 
-## Controls and diagnostics
-
-- Fixed live presentation counters incorrectly reporting zero. [#22](https://github.com/CroqueMr/libreelec-x86-DV/issues/22)
-- Added bounded AI fallback diagnostics covering processing stage, status, queue coverage and preparation counters.
-
-## Blu-ray 3D playback on AMD
-
-- Added software H.264 MVC decoding and Kodi Blu-ray 3D playback.
-- Added paired-eye presentation, eye swapping, mono fallback and native stereo-output selection.
-- Preserved authored subtitle-depth information where available.
-- Added AMD HDMI 3D signalling for display-advertised modes.
-- Kept 3D sources outside CB1, including mono playback: no Dolby Vision conversion, AI processing or FEL upscaling.
-- Added malformed-MVC parser checks and recovery from rejected stereo-output transitions.
-
-3D support incorporates work from [CinemaOne](https://github.com/cinema-ONE/LibreELEC.tv/tree/8f7810a9d203856c2475d3fd947c013151aff786) and [popcornmix](https://github.com/popcornmix).
+- Fixed an L10 metadata-parser freeze affecting some Dolby Vision files.
+- Improved startup, seeking, BL/EL pairing and recovery after interrupted preparation.
+- Fixed rendering-mode transitions, stale textures and unfinished-frame cancellation.
+- Corrected L5 handling with menus and overlays.
+- Improved native Kodi format reporting for skin integration.
+- Simplified Player information: actual TV-Led/Fast state, relevant display-profile fields and supported render-engine usage.
+- Quick rendering selection remains available through the **O** panel cycle.
 
 ## Known issues
 
-- Lower-powered GPUs such as N100/N150 can stutter when displaying the GUI over Dolby Vision playback.
-- HDR10-to-Dolby-Vision AI conversion may fall back to native HDR10 when processing cannot keep up.
-- Enhanced presets need further tuning for a more noticeable effect.
-- AMD HDMI 3D output and retail MVC disc navigation require hardware testing.
+- Screenshots are unavailable in Dolby Vision Master Reference.
+- Heavy conversions and visible menus can still exceed N100 rendering capacity, particularly at 60 FPS.
+- Adaptive rendering remains subject to visual refinement.
+- Dedicated AMD Radeon RX 5000/6000/7000 and NVIDIA GeForce GTX 16 / RTX 20/30/40/50 support is experimental.
+- Repeated timing warnings have been reported on some MVC Blu-ray ISOs; investigation is ongoing.
 
-## Next focuses
+[Current hardware coverage](HARDWARE.md) · [AMD HDMI 3D setup](3D.md)
 
-- Improve the efficiency of HDR-to-Dolby-Vision and Dolby-Vision-to-HDR conversion pipelines.
-- Make the Enhanced rendering modes fully functional.
-- Integrate compatibility fixes and address newly reported support issues.
+## Credits
 
-Report issues with the CPU/GPU, display, connection chain, build version and `kodi.log`.
+- **[dangerouslaser](https://github.com/dangerouslaser)**: Global rendering-engine optimizations.
+- **[hadesdevls](https://github.com/hadesdevls)**: NVIDIA support, adapted from LibreELEC Hades.
+- **[CinemaOne](https://github.com/cinema-ONE)** and **[popcornmix](https://github.com/popcornmix)**: upstream Blu-ray 3D work used for the AMD integration and stereo-output fixes.

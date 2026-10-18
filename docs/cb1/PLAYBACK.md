@@ -1,63 +1,93 @@
-# Playback
+# Playback and settings
 
-Controls are in **Kodi > Settings > Player > Videos**. Output selection and
-the independent information and quick-switch controls are available at Basic level. Method, preset and manual
-display profile appear at Advanced level when applicable.
+Open **Kodi > Settings > Player > Videos**. Only source-compatible rendering
+modes appear during playback. Unavailable modes show their blocking reason.
 
-| Mode | Result |
+## TV profile
+
+Configure the display characteristics for **Adaptive HDR Mapping** or **HDR10
+Expert**, including the display peak in nits and the supported gamut. These
+settings are hidden when the selected mode does not use them.
+
+P3-D65 is the default gamut. Keep it unless the display profile calls for another
+gamut. The configured peak is a processing reference, not a measurement made by
+the player.
+
+For **HDR10 Expert**, disable the TV's dynamic tone mapping to avoid a second
+dynamic mapping stage. Dolby Vision output remains TV-Led: the TV still performs
+its Dolby Vision display mapping.
+
+## Fast rendering
+
+**Dolby Vision fast rendering** is at Advanced level, with **Off**, **On** and
+**Auto**. Auto is the default and uses a 2.5 ms presentation-margin threshold.
+Player information shows the effective state. Transitions are recorded in
+`kodi.log`; the automatic state resets for each video.
+
+| Mode | Fast behavior |
 | --- | --- |
-| DV Standard (TV-Led) | Reconstructed source video and frame-matched metadata; TV display mapping |
-| DV Enhanced - Natural | Highlight-weighted treatment of existing metadata; source pixels preserved |
-| DV Enhanced - Signature | Broader bounded treatment of existing metadata; source pixels preserved |
-| DV Disabled (native Kodi) | Native Kodi playback and HDR handling |
-| HDR10 Reference Basic | Source-derived HDR10 conversion; no manual TV profile |
-| HDR10 Reference Expert | Creative metadata processing with a manual HDR10 display reference |
+| Dolby Vision Standard | Always On, including when the saved preference is Off |
+| Dolby Vision Master Reference | Always Off, including when the saved preference is On |
+| Other eligible CB1 modes | Follow Off / On / Auto |
+| Native Kodi / fallback | Unchanged |
 
-HDR10 sources offer native HDR10 and, when compiled and available, AI-assisted
-Reference or Enhanced DV. SDR/HLG retain native playback. The selector does not
-offer source-incompatible circuits.
+In Auto, insufficient Master Reference presentation margin can switch the current
+playback to Standard. A notification confirms the accepted switch; the saved
+Master Reference selection is retained.
 
-The quick selector header shows `Source: Dolby Vision` or `Source: HDR10`.
-DV modes precede HDR10 modes. HDR10 sources offer `DV Reference (AI)`,
-`DV Enhanced (AI) - Natural`, `DV Enhanced (AI) - Signature` and `HDR10 Native`.
-Unavailable output remains disabled with its reason. SDR/HLG have no custom
-conversion selector.
+Fast uses a cheaper input-chroma interpolation path. Image differences are
+usually very small and may be visible near fine colored edges or highlights.
+It is not the reference reconstruction path.
 
-All source-compatible choices are visible in a compact bottom-right list. Configure the
-TV profile in **Player > Videos**, not in the playback selector.
+## FEL upscaling and frame preparation
 
-Enhanced uses a treatment reference of at least 1000 nits without changing the
-stored TV profile. Natural is restrained; Signature uses stronger bounded
-treatment. Unsupported metadata is preserved. L1-only sources retain the
-existing fallback rather than synthesizing missing creative controls.
+At Expert level:
 
-For Expert HDR10, disable TV dynamic tone mapping to avoid an additional mapping
-stage. TV-Led DV still uses the TV's display mapper. Output mode changes are
-committed at an accepted presentation boundary.
+- **FEL upscaling**: VAAPI or Nearest neighbour (GPU). Other modes can use the GPU
+  path when VAAPI is unavailable. The enhancement layer is not discarded.
+- **Asynchronous frame preparation**: enabled by default. Eligible CB1 modes
+  prepare at most one next image while the current image is displayed. Changes
+  apply to the next video. Native Kodi and fallback scheduling are unchanged.
 
-## Player information
+Master Reference uses its own reference FEL filters, independently of the saved
+VAAPI/Nearest preference.
 
-**O** cycles:
+## Playback panels
+
+Press **O**:
 
 1. Player information.
-2. Playback mode selection, when applicable.
-3. Video only, without panel sampling.
+2. Quick rendering selection, when applicable.
+3. Video only.
 
-Play/pause and playback controls remain available. **Enhanced Player information**
-and **Quick rendering switch** are independent and enabled by default. Disabling
-the enhanced panel restores Kodi's stock information panel. Disabling the quick
-switch skips mode selection in the cycle.
+Play/pause and seek remain available. Quick rendering selection is always
+enabled. Disable **Enhanced Player information** to use Kodi's original panel
+without removing the quick selector.
 
-GPU render usage is this Kodi process's render-engine occupancy, including the
-visible interface. It is not whole-GPU load or hardware decoder usage. Source
-audio format is separate from decoded PCM/passthrough output.
+![Dolby Vision rendering selection](images/quick-display-dv.png)
 
-Automatic playback diagnostics are stored in `kodi.log`. No upload is performed.
+![HDR10 rendering selection](images/quick-display-hdr10.png)
 
-## Frame preparation
+**Enhanced Player information** and **Show playback mode at start** are at Advanced
+level. The startup notification is off by default and does not repeat on manual
+mode changes.
 
-**Player > Videos > Asynchronous frame preparation** is enabled by default at
-Advanced level. Eligible CB1 paths prepare at most one next picture while the
-current picture is displayed. One HDMI commit can be pending. Native Kodi and
-fallback playback keep their original scheduling. A changed setting applies to
-the next video.
+GPU usage is Kodi's render-engine occupancy, including visible GUI. Unsupported
+counters remain hidden. Source audio format and PCM/passthrough output are
+reported separately.
+
+## AMD HDMI 3D
+
+MVC Blu-ray ISO, side-by-side and top-and-bottom use native Kodi stereo controls,
+not CB1 rendering modes. Configure **Playback mode of stereoscopic 3D videos**
+under **Player > Videos** and the preferred output under **System > Display**.
+[3D setup](3D.md).
+
+## Refresh rate and diagnostics
+
+Use Kodi's native **Adjust display refresh rate: On start/stop** and whitelist the
+display's supported video modes. Native audio, subtitle and fallback controls
+remain Kodi-owned.
+
+Automatic diagnostics are recorded in `kodi.log`. Attach it to an issue with the
+build version, CPU/GPU, display and HDMI route. No automatic upload is performed.

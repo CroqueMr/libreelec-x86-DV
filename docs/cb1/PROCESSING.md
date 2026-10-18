@@ -1,271 +1,211 @@
 # Processing and metadata
 
-**CB1 0.1** reconstructs DV sources, processes the selected rendering mode and
-prepares output metadata. Kodi handles decoding, audio and playback timing.
+CB1 reconstructs source images, applies the selected processing mode and prepares
+output metadata. Kodi retains decoding, audio, subtitles and playback timing.
 
-## Conversion paths
+Native HDR10/HLG/SDR and [stereoscopic 3D](3D.md) remain outside CB1 conversion.
+See [hardware support](HARDWARE.md) for integrated and experimental dedicated GPUs.
 
-| Source and mode | Pixel processing | Metadata processing | Output |
+## Standard and Master Reference
+
+Both modes reconstruct the Dolby Vision source, including the applicable matched
+FEL, and send TV-Led Dolby Vision with the source display-management metadata.
+
+| Mode | Reconstruction | Fast | TV profile |
 | --- | --- | --- | --- |
-| Dolby Vision: DV Standard (TV-Led) | RPU reconstruction and applicable matched FEL | Transport source display-management metadata | DV, TV-Led |
-| Dolby Vision: DV Enhanced - Natural or Signature | Same reconstructed pixels as Standard | Fit existing L2/L8 primary controls | DV, TV-Led |
-| Dolby Vision: HDR10 Reference Basic | Reconstruction, spline tone mapping and perceptual gamut mapping | L1 scene guidance and source mastering reference | HDR10 |
-| Dolby Vision: HDR10 Reference Expert | Reconstruction, display-reference mapping and eligible creative controls | Effective L1/L3 and CM2.9/CM4 controls | HDR10 |
-| HDR10: DV Reference (AI) | Preserve HDR10 source pixels | Estimate L1/L3 with LightGBM | DV, TV-Led |
-| HDR10: DV Enhanced (AI) - Natural or Signature | Display-profile processing, Natural or Signature | AI scene guidance; measure L1 after processing | DV, TV-Led |
+| Dolby Vision Standard | Performance-oriented reconstruction and cheaper chroma interpolation | Always On | Not required |
+| Dolby Vision Master Reference | Source-domain reference arithmetic and dedicated FEL filters | Always Off | Not required |
 
-Native HDR10/HLG/SDR and disabled DV support retain Kodi's existing behavior.
-No player-led/LLDV output is implemented. The TV performs final mapping for DV.
+Standard accepts very small image differences for substantially higher rendering
+performance. Master Reference aims for bit-perfect playback within its admitted
+source/output contract. It does not establish equality to a certified player's
+physical HDMI output. Resizing is a spatial operation, not an identity transform.
 
-## Metadata and reconstruction
+Master Reference has its own format checks. Global profile support does not mean
+every profile is accepted by every rendering mode. Unsupported Master inputs use
+the existing output-selection fallback; they are not silently reconstructed by
+the reference algorithm.
 
-Profile 7 FEL reconstruction combines BL, RPU and the applicable matched EL
-before output conversion. Missing or mismatched FEL is not reported as complete
-BL-only reconstruction. Active-area borders follow L5 and output geometry.
-While Kodi's OSD, menus or subtitles are on screen, the transmitted L5 reports
-the full raster so the TV does not mask them in letterbox bars; the video keeps
-its source active area and black borders.
+The source-tree focus is [Master Reference](../../CB1/docs/MASTER-REFERENCE.md).
 
-| Field | Content | Use |
-| --- | --- | --- |
-| RPU mapping | Polynomial/MMR reshaping, transforms and residual parameters | Reconstruct source pixels before DV output or HDR10 conversion |
-| L1 | Scene minimum, maximum and average PQ | Basic/Expert scene mapping; Enhanced scene-strength calculation |
-| L3 | Offsets to L1 | Compute effective scene values once in Expert/Enhanced |
-| L2 | CM2.9 creative trims and target peak | Expert applies eligible trims to pixels; DV Enhanced fits existing primary words |
-| L5 | Left/right/top/bottom active-area offsets | Preserve active picture and signal-black borders |
-| L6 | Mastering and content-light descriptors | Basic source reference and HDR10 static metadata |
-| L8 | CM4 primary, midtone, clipping and six-color controls | Expert applies eligible fields; DV Enhanced edits only the five primary words |
-| L9 | Source mastering primaries | Expert source-gamut interpretation |
-| L10 | Custom CM4 target descriptors | Resolve compatible L8 target anchors |
+## Metadata use
 
-PQ metadata codes use 0..4095. Peak mastering metadata is not measured scene
-brightness. Gamut, target transfer and field presence are checked independently.
-Absent creative blocks are not synthesized. Standard transports source controls
-for the TV to apply; "forwarded" does not mean applied to pixels by CB1.
+| Metadata | Standard / Master | HDR10 Basic | HDR10 Expert | Adaptive |
+| --- | --- | --- | --- | --- |
+| RPU mapping / residual | Reconstruct source | Reconstruct source | Reconstruct source | Reconstruct source |
+| L1 scene min/max/average | Forward to TV | Scene guidance | Scene guidance | Expansion strength and output scene descriptors |
+| L3 offsets | Forward to TV | No Expert trim pass | Apply once with valid L1 | Apply once before curve construction |
+| L2 CM2.9 trims | Forward to TV | Not applied | Compatible creative controls | Guide added light and color restraint |
+| L5 active area | Preserve picture/borders | Preserve picture/borders | Preserve picture/borders | Exclude borders from expansion/analysis |
+| L6 mastering / light levels | Forward when applicable | Source reference / HDR10 signaling | Static fallback / signaling | Source descriptors |
+| L8 CM4 trims | Forward to TV | Not applied | Compatible HDR controls | Target responses and color restraint |
+| L9 / L10 | Forward when applicable | No creative anchor selection | Resolve gamut / target anchors | Resolve compatible creative anchors |
 
-## Source reconstruction
+Visible menus and subtitles use full-raster output L5 signaling so the TV does
+not hide them in the black bars. This does not expand the source picture.
 
-BL is the base layer; EL is the enhancement layer. For FEL, the decoded EL is
-paired to the BL picture by picture identity and presentation timestamp, then
-used with the RPU residual parameters. Layer decode order may differ from
-presentation order. MEL does not add a full residual.
+## Units
 
-Reshaping, residual reconstruction and source color transforms precede every
-DV-derived rendering mode. HDR10 conversion does not discard an applicable FEL.
-
-## DV to HDR10 Reference Basic
-
-Basic uses a source-derived mastering reference and valid L1 scene information,
-not a manual TV peak. It does not force dim scenes to fill the output range.
-The pipeline is reconstruction, scene-guided spline tone mapping, perceptual
-gamut mapping and BT.2020/PQ encoding. Valid L1 maximum/average guide the mapper;
-otherwise it uses static source descriptors. Inverse tone mapping is off.
-Basic does not apply L2/L8 creative trims or use the manual TV profile.
-
-## DV to HDR10 Reference Expert
-
-Expert uses the manual display peak `T` and gamut: BT.709, P3-D65 or BT.2020.
-P3-D65 is the default. Disable the TV's dynamic tone mapping for this mode.
-
-L3 modifies the scene descriptors once:
+L1 values are **12-bit PQ codes, not nits**. With `E` as inverse ST 2084:
 
 ```text
-effective L1[i] = L1[i] + L3[i] - 2048
+scene luminance = E(L1_code / 4095)
 ```
 
-Valid maximum/average guide tone mapping. Minimum is retained, not used as a
-measured display black level. Creative anchors interpolate in PQ distance:
+`M` is the source mastering/reference maximum. `T` is the configured display
+peak. Neither is a direct measurement of the current scene or the physical TV.
+
+## Dolby Vision to HDR10 Basic
+
+Basic uses source mastering information and valid scene statistics. It reconstructs
+the Dolby Vision image, applies scene-guided spline tone mapping and perceptual
+gamut mapping, then encodes BT.2020/PQ HDR10.
+
+- No manual TV profile and no invented display peak.
+- No L2/L8 creative trim pass.
+- No inverse tone mapping to force dim scenes to the mastering maximum.
+- Missing scene statistics use valid static source descriptors.
+
+Dynamic Dolby Vision metadata cannot be transported as dynamic metadata in a
+standard HDR10 signal. Its contribution must be reflected in pixels before output.
+
+## Dolby Vision to HDR10 Expert
+
+Expert maps to `T` and the configured gamut. P3-D65 is the default. Disable the
+TV's dynamic tone mapping for this mode to avoid a second dynamic mapper.
+
+Effective scene statistics include L3 once:
 
 ```text
-w = clamp((PQ(reference) - PQ(lower)) / (PQ(upper) - PQ(lower)), 0, 1)
+effective_L1 = round(L1 + (L3 - 2048) * 4095 / 2048)
 ```
 
-### CM2.9 controls
+Compatible creative anchors are selected in their target domain and interpolated
+by PQ distance. L2 and L8 are not stacked as two separate creative grades.
 
-For encoded words `c0..c4`, neutral is 2048:
-
-```text
-slope = c0/4096 + 0.5
-offset = c1/4096 - 0.5
-power = c2/4096 + 0.5
-chroma = c3/4096 - 0.5
-gain = c4/4096 - 0.5
-v[i] = T * clamp(input[i]/T * slope + offset, 0, 1)^power
-Y = 0.22897*v[R] + 0.69174*v[G] + 0.07929*v[B]
-output[i] = v[i] * ((1+chroma)*v[i]/Y)^gain
-```
-
-Zero luminance/components bypass unsafe division. With no usable creative
-anchor, Expert still performs display-reference mapping. L2 spatial weight is
-preserved, not applied.
-
-### CM4 controls
-
-L8 targets use their preset or corresponding L10 descriptor. Compatible
-gamut/transfer anchors are selected; decoded coefficients are interpolated.
-L2 compatibility and L8 are not stacked as two creative passes.
-
-| Control | Calculation |
+| Controls | Expert processing |
 | --- | --- |
-| Slope / offset / power | Primary decoding above |
-| Chroma base | `2^((c3-2048)/4096)` |
-| Saturation gain | `2^((c4-2048)/4096)` |
-| Midtone exponent `m` | `2^((mid-2048)/2048)` |
-| Highlight strength `k` | `0.25*(clip-2048)/2048` |
-| Six-color saturation | `2^((sat[i]-128)/256)` |
-| Six-color rotation | `(pi/12)*(hue[i]-128)/128` radians |
-| Spatial detail | `0.30*(weight-2048)/2048`, active during peak compression |
+| Slope / offset / power | Decode and apply compatible primary controls |
+| Chroma / saturation | Apply the compatible HDR color operation |
+| CM4 midtone / clipping | Apply the decoded luminance controls |
+| CM4 six-color saturation / hue | Preserve but do not execute SDR-only commands in HDR10 Expert |
+| Spatial detail | Use the existing detail path when peak compression is active |
 
-After the primary operation, let `x = clamp(Y/T, 0, 1)`:
+Missing or unusable L1 uses valid static source descriptors without leaving
+Expert or retaining the previous scene's statistics. Unknown extra L8 targets
+do not discard other usable anchors. Corrupt or contradictory metadata remains
+guarded.
 
-```text
-midtone Y' = T * x^m / (x^m + (1-x)^m)
-highlight Y' = T * clamp(x + k*x*H((x-0.5)/0.5), 0, 1)
-```
+The creative output performs tone mapping once. Final gamut conversion and PQ
+encoding do not add another scene tone map. BT.2020 out-of-volume colors are
+limited even when no creative anchor is available. A higher configured peak does
+not by itself multiply the whole film to that brightness.
 
-`H` is clamped smoothstep: `H(x)=x*x*(3-2*x)`. RGB scales by `Y'/Y`.
-Color controls use IPT/PQ, smooth six-hue weights and bounded chroma changes.
-Absent fields stay neutral. Spatial detail uses libplacebo's native base/detail
-path only when the input peak exceeds the display reference.
+## Adaptive HDR Mapping from Dolby Vision
 
-The creative output hook performs tone mapping once. The final stage performs
-gamut conversion and PQ encoding, not a second scene tone map.
+Adaptive transforms reconstructed linear BT.2020 pixels, then updates scene
+metadata to describe the transformed image. It is not a metadata-only filter.
+The TV still performs its final Dolby Vision display mapping.
 
-## DV Enhanced
+### Source guidance
 
-Natural and Signature adjust existing creative metadata, not reconstructed
-pixels. The treatment reference is `max(1000, manual peak)` without changing the
-saved TV profile or source mastering peak.
+- L1/L3 provide effective scene brightness.
+- Compatible L8 anchors take precedence over L2; up to two anchors bracket the
+  display reference using PQ-distance weights.
+- Trim responses are evaluated in their own target domain, rather than applying
+  the creative grade twice.
+- With usable L1 but no creative trims, neutral trim guidance permits expansion.
+  No L2/L8 creative controls are fabricated.
+- Missing usable scene analysis or failed source-bound validation retains the
+  original image/metadata pair.
 
-Let `P` convert nits to normalized ST 2084 PQ and `E` convert normalized PQ to
-nits. The treatment reference and headroom are:
+### Expansion
 
-```text
-R = max(1000, manual peak)
-h = clamp((round(4095*P(R)) - source_master_PQ) / source_master_PQ, -0.5, 0.5)
-r = E(effective_L1_average/4095) / E(effective_L1_maximum/4095)
-t = clamp((r-0.1)/0.4, 0, 1)
-S = 1 - 0.5*t*t*(3-2*t)
-```
-
-`S` reduces treatment strength for scenes with a high average relative to their
-maximum. Missing L1 uses `S=1`; zero maximum uses `S=0`.
-
-For authored luminance `v` at an anchor peak `A`, define
-`x=clamp(v/A,0,1)` and `B=H(clamp(v,0,1))`, a near-black gate from 0 to 1 nit:
-
-| Calculation | Natural | Signature |
-| --- | --- | --- |
-| Luminance gain `g` | `S*B*0.04*max(0,h)*H((x-0.25)/0.75)` | `S*B*0.02` |
-| Luminance goal | `v + g*max(0,v)*(1-x)` | Same formula |
-| Chroma coefficient `C` | `32*max(0,h)` | `32` |
-| Chroma multiplier | `2^(S*C*clamp(1-maxRGB/A,0,1)/4096)` | Same formula |
-| Tonal range | Highlight-weighted; low/mid tones protected | Broader response above near-black |
-| Reference at/below source mastering peak | Neutral goal | Bounded treatment remains possible |
-
-Channel headroom limits the goal before fitting. These are fitting objectives,
-not guaranteed percentage changes in the TV's physical luminance.
-
-For example, a 4000-nit source with a 2000-nit manual peak gives no positive
-Natural headroom. It is not stretched to fill the TV's range.
-
-### Metadata fitting
-
-Five words are fitted: slope, offset, power, chroma weight and saturation gain.
-Two coordinate-search passes use steps from 16 down to 1. Each result stays in
-0..4095 and within 512 codes of its original word. Validation limits are:
-
-- PQ error: `2/1024`.
-- Relative chroma error: `2%`.
-- Hue error: `0.5` degrees.
-
-Black/near-black, grayscale monotonicity and authored plateaus are protected.
-L2/L8 edits commit together. A rejected fit or unresolved target preserves the
-source family. Secondary controls, L1/L3, mastering and target descriptors are
-unchanged. L1-only input receives no invented creative trims.
-
-An exact-key cache reuses accepted control fits only when the source metadata,
-policy and display reference match. Each frame retains its own fresh metadata
-payload. Cached controls never replace frame-specific transport metadata.
-
-## HDR10 to Dolby Vision with AI
-
-One LightGBM bundle serves Reference, Natural and Signature. GPU analysis builds
-global/spatial luminance and color descriptors plus a motion thumbnail. The
-model estimates L1/L3 from a normalized 222-feature vector:
+For a scene peak `high`, average `mid` and smoothstep `H`, the curve builds 257
+knots. Trim retention `r` is bounded to `[0.5, 1.15]`; absent trims use `r=1`.
 
 ```text
-feature[i] = (descriptor[i] - mean[i]) / scale[i]
-residual[j] = model_head[j](feature) * bundle_strength
-L1[i] = round_even(baseline[i] + residual[i]*4095)
-L3[i] = round_even(2048 +
-    (baseline[i]/4095 + residual[i+3] - L1[i]/4095)*2048)
+S = H(100, 400, high) * (1 - 0.5*H(0.04, 0.30, mid/max(high, epsilon)))
+exponent = 2 + 2*H(0.04, 0.30, mid/max(high, epsilon))
+reference = min(M, max(100, high))
 ```
 
-The model order is min/average/max. Projection enforces legal code bounds,
-ordered L1 values and coverage of measured peaks. It does not generate authored
-L2/L8 creative trims. One second of lookahead stabilizes scene handling; seeks
-and mode changes invalidate old predictions. Native inference uses one CPU
-thread, with no Python playback runtime.
+The integrated retention curve is normalized at `reference`. When the TV has
+headroom above that scene reference, highlights receive additional light.
+A bounded midtone term can add up to the profile's `0.12*(M-10)` scale, weighted
+by scene strength, trim retention and a smooth midtone window. This is a curve
+coefficient, not a fixed 12% increase to every pixel.
 
-### Reference
+Color-control magnitudes restrain added light rather than applying another
+saturation/hue grade. A common RGB gain preserves linear chromaticity. A soft
+shoulder limits added light to available channel headroom without reducing
+source values already above the display target.
 
-Source HDR10 pixels are preserved. Estimated L1/L3 travel with the corresponding
-image in the DV output. These are image-derived estimates, not recovered studio
-metadata.
+Pixels at or below **10 nits**, and pixels outside L5, bypass expansion. Dark
+scenes are not automatically forced to fill the TV's range.
 
-### Enhanced Natural and Signature
+### Output metadata and stability
 
-Pixels are first mapped to the manual peak/gamut using spline tone mapping and
-perceptual gamut mapping. For linear RGB normalized to the reference peak, with
-`b=max(RGB)`:
+Effective authored L1 passes through the applied neutral-axis curve. Output L3
+is neutral after folding; compatible source trims remain present. The declared
+envelope covers the original source and transformed output.
+
+Frame extrema validate the output but do not replace authored L1 every frame.
+Curve/color changes share a time-based budget, advanced only by matching
+presented pictures. This limits brightness pumping; seeks and mode changes reset
+the temporal state. GUI and subtitles are composed after content analysis.
+
+The current display path uses FP16 intermediates where selected by this Adaptive
+policy. It is separate from Master Reference's exact reconstruction contract.
+
+## HDR10 to Dolby Vision AI
+
+One bundled **CB1-L1L3 0.1 LightGBM model** serves Reference and Adaptive AI.
+GPU analysis builds luminance, color, spatial and temporal descriptors. A
+normalized 222-feature vector produces L1/L3 estimates; output projection keeps
+the predictions ordered and covers the measured peak.
+
+Inference uses one CPU thread, without Python during playback. Lookahead and
+scene handling associate predictions with their corresponding pictures. Seeks
+and mode changes invalidate old predictions.
+
+### Reference AI
+
+Reference adds no enhancement grade. It converts the HDR10 source into the
+Dolby Vision transport and sends estimated L1/L3 with the corresponding image.
+It does not recover the studio's original RPU, generate authored L2/L8 trims or
+guarantee a visual improvement over HDR10 on every display. Transport conversion
+is not a promise of bit-identical HDR10 storage.
+
+### Adaptive AI
+
+AI L1/L3 guide the shared expansion executor. There are no authored L2/L8
+anchors, so retention is neutral and trim-derived color restraint is absent.
+The currently wired AI policy uses a cubic curve without the authored-DV
+midtone term:
 
 ```text
-shadow = smoothstep(0.01, 0.02, b)
-onset = smoothstep(start, end, b)
-b' = b + brightness*S*shadow*onset*b*(1-b)
-RGB' = RGB * b'/b
+extra(u) = S * max(T-M, 0) * u^3
 ```
 
-| Parameter | Natural | Signature |
-| --- | --- | --- |
-| Onset | 0.25 to 0.75 of reference peak | 0.02 to 0.25 |
-| Brightness coefficient | 0.20 | 0.35 |
-| Chroma coefficient | 0.04 | 0.08 |
+The GPU interpolates the curve's 257 knots. Shadows at or below 10 nits stay
+protected; `T<=M` selects identity. Output L1 is measured after processing and
+L3 is not applied twice. A missing mastering maximum uses a conservative
+internal bound, not a fabricated mastering claim.
 
-`S` is the scene-strength calculation above. The RGB cube bounds chroma:
+Reference AI and Adaptive AI therefore share the model, but do not apply the
+same pixel treatment. No claim of equivalence to authored Dolby Vision is made.
 
-```text
-g = (min(RGB') + max(RGB')) / 2
-c = (max(RGB') - min(RGB')) / 2
-room = min(g, 1-g)
-t = min(1, c/room)
-factor = min(1 + chroma*shadow*S*4*t*(1-t), room/c)
-RGB'' = g + factor*(RGB' - g)
-```
+## Performance controls and output
 
-Zero cases bypass division. Out-of-range colors contract around neutral instead
-of clipping each channel independently. The result returns to BT.2020/PQ.
-Output L1 is measured after processing; source-estimated L3 is not reused on
-changed pixels. Final DV mapping remains TV-Led.
+Fast changes input-chroma interpolation where supported. Async prepares at most
+one future picture. Neither changes native Kodi/fallback playback scheduling.
+Master uses dedicated FEL filters; other applicable modes retain VAAPI/Nearest
+selection. [Settings](PLAYBACK.md).
 
-## Output and integration
+Dolby Vision uses an RGB8 byte tunnel carrying higher-precision video and
+metadata, not ordinary 8-bit SDR. HDR10 conversion requires a driver-validated
+10-bit-or-higher output. [Hardware](HARDWARE.md).
 
-Standard DV uses an RGB8 byte tunnel carrying higher-precision image/metadata
-information. It is not ordinary 8-bit SDR. HDR10 uses PQ output and an eligible
-10-bit-or-higher scanout path. Mode availability follows the source, renderer
-and active display capabilities; no unsupported signaling is forced.
-
-## Implementation
-
-| CB1 file | Processing |
-| --- | --- |
-| `src/dvbridge_placebo.c` | Source representation and reconstruction |
-| `src/dvbridge_fel.c` | EL decode queue and exact picture pairing |
-| `src/dvbridge_creative.c` | Metadata resolution, creative controls and Enhanced fit |
-| `src/dvbridge_render.c` | Rendering graph, HDR10 mapping and AI output measurement |
-| `src/dvbridge_core.c` | Metadata serialization and DV transport |
-| `src/cb1_hdr10_*.c` | GPU descriptors and temporal analysis |
-| `src/cb1_l1l3_model.c` | LightGBM inference and L1/L3 projection |
-
-[Playback controls](PLAYBACK.md) and [build instructions](BUILD.md).
+Full source equations and execution details are in
+[CB1 algorithms](../../CB1/docs/ALGORITHMS.md).
