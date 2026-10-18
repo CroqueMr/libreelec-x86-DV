@@ -6,9 +6,9 @@ the interface, not HDR/Dolby Vision image fidelity or sustained performance.
 
 | File | Content |
 | --- | --- |
-| `quick-display-dv.png` | Avatar; six rendering choices, Master Reference active |
+| `beta4-quick-rendering-menu.png` | Avatar; six rendering choices, Master Reference active |
 | `quick-display-hdr10.png` | HDR10 source; AI Reference, Adaptive AI and native HDR10 |
-| `player-information-dv.png` | Avatar Profile 8 in Master Reference, with its AC3 audio track |
+| `beta4-player-information-master-reference.png` | Avatar Profile 8 in Master Reference, with its AC3 audio track |
 | `player-information-standard.png` | Profile 8 in Standard |
 
 Master images use the private capture-only fix. Playback processing is unchanged.

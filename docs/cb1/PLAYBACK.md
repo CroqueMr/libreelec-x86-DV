@@ -64,7 +64,7 @@ Play/pause and seek remain available. Quick rendering selection is always
 enabled. Disable **Enhanced Player information** to use Kodi's original panel
 without removing the quick selector.
 
-![Dolby Vision rendering selection](images/quick-display-dv.png)
+![Dolby Vision rendering selection](images/beta4-quick-rendering-menu.png)
 
 ![HDR10 rendering selection](images/quick-display-hdr10.png)
 

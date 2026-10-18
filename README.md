@@ -51,7 +51,7 @@ For metadata use, curves and mode differences, see [processing and algorithms](d
 Change rendering mode during playback. The bottom-right menu shows the choices
 for the current source and explains unavailable modes.
 
-![Beta4 quick rendering menu on Avatar with Master Reference active](docs/cb1/images/quick-display-dv.png)
+![Beta4 quick rendering menu on Avatar with Master Reference active](docs/cb1/images/beta4-quick-rendering-menu.png)
 
 Press **O** to cycle through **Player information**, **rendering selection** and
 **video only**. Play/pause and seek remain available with either panel open.
@@ -62,7 +62,7 @@ Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
 metadata, active rendering mode, Fast state and supported GPU render-engine usage.
 HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
-![Beta4 Player information on Avatar in Master Reference with its audio track](docs/cb1/images/player-information-dv.png)
+![Beta4 Player information on Avatar in Master Reference with its audio track](docs/cb1/images/beta4-player-information-master-reference.png)
 
 GPU usage is Kodi's render-engine load, including visible menus. It is not total
 GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
