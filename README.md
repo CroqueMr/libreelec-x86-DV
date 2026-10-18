@@ -116,7 +116,6 @@ build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
 - Dedicated AMD and NVIDIA GPU support is experimental.
-- Repeated timing warnings have been reported on some MVC Blu-ray ISOs; investigation is ongoing.
 
 ## Components and documentation
 
