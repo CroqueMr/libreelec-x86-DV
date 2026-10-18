@@ -110,13 +110,14 @@ Heavier conversions require more GPU performance.
 For problems, open an issue with the exact CPU/GPU, display, connection chain,
 build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 
-## Known issues
+## Known issues or limitation
 
 - Screenshots are unavailable in Dolby Vision Master Reference.
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
 - Dedicated AMD and NVIDIA GPU support is experimental.
 - HDR10 Support issue on Intel 8th & 9th gen.
+- HDR10+ not supported. 
 
 ## Components and documentation
 
