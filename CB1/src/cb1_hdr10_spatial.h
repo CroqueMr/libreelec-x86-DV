@@ -10,6 +10,8 @@ void cb1_hdr10_spatial_destroy(struct cb1_hdr10_spatial **ctx);
 void cb1_hdr10_spatial_reset(struct cb1_hdr10_spatial *ctx,uint64_t stream,uint64_t revision);
 /* Input is the matched 128x72 binary16-quantized analysis texture. */
 enum cb1_ai_status cb1_hdr10_spatial_submit(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id);
+/* Motion-only continuation after calibration; unused descriptors are zero. */
+enum cb1_ai_status cb1_hdr10_spatial_submit_motion(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id);
 enum cb1_ai_status cb1_hdr10_spatial_poll(struct cb1_hdr10_spatial *ctx,struct cb1_ai_identity id,
     struct cb1_hdr10_spatial_result *out);
 #endif

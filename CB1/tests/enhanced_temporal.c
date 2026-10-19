@@ -72,14 +72,14 @@ int main(void)
     glTexSubImage2D(GL_TEXTURE_2D,0,0,0,2,2,GL_RGBA,GL_FLOAT,(float[16]){.9,.1,.7,1,.9,.1,.7,1,.9,.1,.7,1,.9,.1,.7,1});
     assert(glGetError()==GL_NO_ERROR);glBindTexture(GL_TEXTURE_2D,0);
     for(int i=0;i<3;i++){assert(PREPARE());image(gpu,r,natural,after);assert(!memcmp(before,after,sizeof(before)));}
-    REVISION();policy.enhancement=DVBRIDGE_ENHANCEMENT_INTENSE;assert(PREPARE());image(gpu,r,intense,after);
+    REVISION();assert(PREPARE());image(gpu,r,intense,after);
     assert(dvbridge_render_policy_output(r)->hdr10.max_luminance==saved.hdr10.max_luminance);
     assert(dvbridge_render_policy_output(r)->nominal_target.primaries==saved.nominal_target.primaries);
     assert(dvbridge_render_hdr10_policy_resolve(r,b,false,true,10));
     struct dvbridge_identity stale=id;--stale.revision;assert(!dvbridge_render_policy_commit(r,&stale,b));
     assert(dvbridge_render_policy_committed(r,&snapshot) && snapshot.final_target==a);
     dvbridge_render_policy_cancel(r);assert(!dvbridge_render_texture(r));
-    REVISION();policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;l1->l1.avg_pq=2771;
+    REVISION();l1->l1.avg_pq=2771;
     assert(PREPARE());image(gpu,r,high_key,after);assert(after[8]<before[8]);
     REVISION();l1->l1.avg_pq=1667;policy.tv.gamut=DVBRIDGE_GAMUT_P3_D65;
     assert(PREPARE());image(gpu,r,p3,after);
@@ -103,7 +103,7 @@ int main(void)
     unsigned reference_passes=0;
     for(int mode=0;mode<3;mode++) {
         policy.mode=mode ? DVBRIDGE_MODE_ENHANCED_HDR10 : DVBRIDGE_MODE_HDR10_EXPERT;
-        policy.enhancement=mode==2 ? DVBRIDGE_ENHANCEMENT_INTENSE : DVBRIDGE_ENHANCEMENT_NATURAL;REVISION();
+        REVISION();
         assert(PREPARE()); /* Warm shader/LUT cache before the timed samples. */
         double elapsed[7];
         for(int n=0;n<7;n++){assert(PREPARE());elapsed[n]=measured_ms;

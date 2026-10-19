@@ -392,12 +392,11 @@ def evaluate_image(case):
     return {"rgb": pq, "codes": resolve_image(pq, inputs.get("bits",10), inputs.get("limited",True))}
 
 
-def check_image_integrity(case, actual):
+def check_image_integrity(case, actual, *, hdr_conversion_quality=False):
     """Separate image acceptance from subjective enhancement preference.
 
-    Runtime budget is one 16-bit normalized step, below 1/16 of a 12-bit
-    output code. It is a fixed design requirement, not measured GPU evidence
-    or a guaranteed bound on transcendental implementations.
+    Legacy checks use one normalized 16-bit step. Complete Basic/Expert
+    output can opt into bounded perceptual error; other modes stay strict.
     """
     wanted = case["expected"]["rgb"]
     got = actual["rgb"]
@@ -408,9 +407,18 @@ def check_image_integrity(case, actual):
                             (code_want,lambda v:type(v) is int),(code_got,lambda v:type(v) is int)):
         assert all(isinstance(pixel, list) and len(pixel) == 3 and all(numeric(v) for v in pixel)
                    for pixel in raster), "pixel shape/type"
+    if hdr_conversion_quality:
+        assert case['mode'] in ('Reference Expert', 'HDR10 Basic'), 'HDR-only quality contract'
+        from hdr_conversion_quality import check_hdr_conversion_quality
+        # Input-neutral fixture samples supplement exactly neutral output RGB.
+        neutral = [i for i, pixel in enumerate(case['input']['rgb'])
+                   if len(got) == len(case['input']['rgb']) and max(pixel) == min(pixel)
+                   and max(wanted[i])-min(wanted[i]) <= 2/65535]
+        print('HDR conversion quality', check_hdr_conversion_quality(wanted, got, neutral))
     for index, (left,right) in enumerate(zip(wanted,got)):
         assert all(R.finite_number(v) and 0 <= v <= 1 for v in right), "finite PQ image"
-        assert max(abs(a-b) for a,b in zip(left,right)) <= 1/65535, "GPU PQ budget"
+        if not hdr_conversion_quality:
+            assert max(abs(a-b) for a,b in zip(left,right)) <= 1/65535, "GPU PQ budget"
         if left == [0,0,0]:
             assert right == [0,0,0], "exact black/border"
         # Direction in normalized PQ midpoint-opponent coordinates. This is
@@ -423,7 +431,8 @@ def check_image_integrity(case, actual):
             angle = math.degrees(math.acos(max(-1,min(1,sum(x*y for x,y in zip(a,b))/(ca*cb)))))
             assert angle <= 0.1, "opponent hue acceptance"
         else:
-            assert max(right)-min(right) <= max(left)-min(left)+2/65535, "neutral drift"
+            drift = .25/1023 if hdr_conversion_quality else 2/65535
+            assert max(right)-min(right) <= max(left)-min(left)+drift, "neutral drift"
     # The first eight fixture pixels are the independently chosen gray/detail
     # ramp. Border/GUI fixtures have their own exact component expectations.
     if "active" not in case["input"] and len(got) >= 8:
@@ -431,7 +440,8 @@ def check_image_integrity(case, actual):
             assert max(got[i]) > max(got[i-1]), "lost ramp detail"
     for i,(left,right) in enumerate(zip(case["expected"]["codes"],actual["codes"])):
         for a,b in zip(left,right):
-            assert type(b) is int and abs(a-b) <= 1, "resolve code budget"
+            budget = 4*((1 << case['input'].get('bits', 10))-1)/1023 if hdr_conversion_quality else 1
+            assert type(b) is int and abs(a-b) <= budget, "resolve code budget"
         if wanted[i] == [0,0,0]:
             assert left == right, "black code"
 

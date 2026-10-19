@@ -74,7 +74,7 @@ static inline bool dvbridge_dv_source_matches_output(const AVDOVIMetadata *m)
 struct dvbridge_dv {
     uint8_t payload[512], previous[512];
     unsigned size, previous_size, id;
-    uint32_t packets[512], count;
+    uint32_t packets[640], count;
     uint64_t frames, changes;
     double last_pts;
     int source_w, source_h, dest_x, dest_y, dest_w, dest_h;
@@ -190,7 +190,6 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
     for (int i = 0; i < m->num_ext_blocks; i++) {
         const AVDOVIDmData *e = ordered[i];
         unsigned v[7] = {0}, n = 0;
-        DV_REQUIRE(d->size + 20 < sizeof(d->payload));
         switch (e->level) {
         case 1:
             DV_REQUIRE(!area); l1++; n = 3;
@@ -214,7 +213,7 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
                 fprintf(stderr,"DVBRIDGE_CM4_REJECT level=%d length=%u\n",e->level,e->dvbridge_original_length);
                 return false;
             }
-            DV_REQUIRE(d->size+5+size<=482);
+            DV_REQUIRE(d->size+5+size<=sizeof(d->payload));
             dvbridge_dv_u32(d,size);d->payload[d->size++]=e->level;
             memcpy(d->payload+d->size,wire,size);d->size+=size;d->payload[count_pos]++;
             continue;
@@ -224,24 +223,25 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
         }
         for (unsigned j = 0; j < n; j++)
             DV_REQUIRE(v[j] <= 4095 || (e->level == 2 && j == 6 && v[j] == 65535));
+        DV_REQUIRE(d->size+5+n*2<=sizeof(d->payload));
         dvbridge_dv_u32(d, n * 2); d->payload[d->size++] = e->level;
         for (unsigned j = 0; j < n; j++) dvbridge_dv_u16(d, v[j]);
         d->payload[count_pos]++;
     }
     DV_REQUIRE(l1 == 1);
     if (!area) {
-        DV_REQUIRE(d->size+13 < sizeof(d->payload));
+        DV_REQUIRE(d->size+13 <= sizeof(d->payload));
         dvbridge_dv_u32(d,8);d->payload[d->size++]=5;
         for (int j=0;j<4;j++) dvbridge_dv_u16(d,margins[j]);
         d->payload[count_pos]++;
     }
-    DV_REQUIRE(d->size<=482 && d->payload[count_pos]<=AV_DOVI_MAX_EXT_BLOCKS);
+    DV_REQUIRE(d->size<=sizeof(d->payload) && d->payload[count_pos]<=AV_DOVI_MAX_EXT_BLOCKS);
     if (d->frames && (d->previous_size != d->size || memcmp(d->previous, d->payload, d->size))) {
         d->id = (d->id + 1) & 15; d->changes++;
     }
     memcpy(d->previous, d->payload, d->size); d->previous_size = d->size;
     d->count = d->size <= 119 ? 1 : 1 + (d->size - 119 + 120) / 121;
-    DV_REQUIRE(d->count <= 4);
+    DV_REQUIRE(d->count <= 5);
     memset(d->packets, 0, sizeof(d->packets));
     unsigned off = 0;
     for (unsigned i = 0; i < d->count; i++) {

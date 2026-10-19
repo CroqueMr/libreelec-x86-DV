@@ -175,29 +175,29 @@ def trim_rgb(rgb_nits, coefficients):
     return from_ipt(ipt, c)
 
 
-def enhanced_objective(rgb_nits, peak_nits, headroom, scene, preset, primaries=BT2020):
-    """Independent authored-response objective, in absolute linear nits."""
-    if preset not in ['Natural', 'Signature'] or not math.isfinite(headroom) or not -.5 <= headroom <= .5:
-        raise ValueError('bounded preset objective required')
+def enhanced_objective(rgb_nits, source_peak, target_peak, scene, preset, primaries=BT2020):
+    """Post-content-mapping trim objective, not a complete TV display mapper."""
+    if preset not in ['Natural','Signature'] or not all(
+            math.isfinite(v) and 0 < v <= 10000 for v in (source_peak,target_peak)):
+        raise ValueError('finite source and target luminance required')
     if not math.isfinite(scene) or not 0 <= scene <= 1:
         raise ValueError('bounded scene required')
-    c=decode_controls({},peak_nits,primaries)
     if scene==0:
         return list(rgb_nits)
+    c=decode_controls({},target_peak,primaries)
     y=sum(v*w for v,w in zip(rgb_nits,c['luma']))
-    x=clamp(y/peak_nits)
-    gate=clamp(y);gate=gate*gate*(3-2*gate)
-    high=clamp((x-.25)/.75);high=high*high*(3-2*high)
-    gain=scene*gate*(.02 if preset=='Signature' else .04*max(0,headroom)*high)
-    mapped=y+gain*max(0,y)*(1-x)
+    if max(rgb_nits)==min(rgb_nits):
+        y=rgb_nits[0]
+    x=clamp(y/source_peak)
+    high=clamp((x-.25)/.75)
+    high=high*high*(3-2*high)
+    gate=clamp(y)
+    gate=gate*gate*(3-2*gate)
+    mapped=y*(1+max(0,target_peak/source_peak-1)*high*gate)
+    if preset=='Signature':
+        middle=clamp(y/min(source_peak,target_peak))
+        mapped*=1+.15*gate*4*middle*(1-middle)
     maximum=max(rgb_nits)
-    if max(rgb_nits)-min(rgb_nits)>1e-12:
-        room=clamp((peak_nits-maximum)/max(1e-6,peak_nits-y))
-        mapped=y+(mapped-y)*room
-    rgb=[v*mapped/y for v in rgb_nits] if y>0 else list(rgb_nits)
-    if max(rgb)-min(rgb)<=1e-12:
-        return rgb
-    ipt=to_ipt(rgb,c)
-    saturation=2**(scene*(32 if preset=='Signature' else 32*max(0,headroom))*clamp(1-maximum/peak_nits)/4096)
-    ipt[1]*=saturation;ipt[2]*=saturation
-    return from_ipt(ipt,c)
+    if maximum>0:
+        mapped=min(mapped,y*max(1,target_peak/maximum))
+    return [v*mapped/y for v in rgb_nits] if y>0 else list(rgb_nits)

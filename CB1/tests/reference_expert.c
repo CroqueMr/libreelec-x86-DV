@@ -143,9 +143,9 @@ int main(void)
     policy.tv.peak_nits=1500.000001; assert(PREPARE());
     assert(dvbridge_render_policy_output(r)->hdr10.max_luminance==1501);
     policy.tv.peak_nits=1500;
-    m->num_ext_blocks=1; *l1=(AVDOVIDmData){.level=6,.l6={.max_luminance=1000}}; assert(!PREPARE());
+    m->num_ext_blocks=1; *l1=(AVDOVIDmData){.level=6,.l6={.max_luminance=1000}}; assert(PREPARE());
     memcpy(m,original,bytes); l1=av_dovi_get_ext(m,0); l6=av_dovi_get_ext(m,1);
-    l1->l1.max_pq=0; assert(!PREPARE()); memcpy(m,original,bytes);
+    l1->l1.max_pq=0; assert(PREPARE()); memcpy(m,original,bytes);
     l6->level=1; assert(!PREPARE()); memcpy(m,original,bytes);
     l6->l6.min_luminance=10000; l6->l6.max_luminance=1; assert(!PREPARE()); memcpy(m,original,bytes);
     m->num_ext_blocks=1; assert(PREPARE()); /* Optional L6 absent, RPU mastering. */

@@ -18,7 +18,79 @@
  #include "amdgpu_dm_plane.h"
  #include "amdgpu_dm_crtc.h"
  #include "amdgpu_dm_hdcp.h"
-@@ -7639,6 +7640,9 @@
+@@ -6981,6 +6982,63 @@
+ 	return false;
+ }
+ 
++static void amdgpu_dm_hdr10_select_format(struct dc_stream_state *stream,
++		const struct drm_connector_state *con,
++		const struct drm_display_mode *mode, int requested_bpc)
++{
++	const struct dm_connector_state *state = to_dm_connector_state(con);
++	const struct drm_display_info *info = &con->connector->display_info;
++	struct dc_crtc_timing *timing = &stream->timing;
++	struct dc_crtc_timing candidate;
++
++	/* Only this private HDR10 request may trade chroma for real precision.
++	 * Keep a supported RGB10+ result and leave Vanilla/DV tunnels untouched. */
++	if (!state->hdr10_deep_color || amdgpu_dm_hdr10_validate(state) ||
++	    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A || !stream->link ||
++	    stream->link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A ||
++	    requested_bpc < 10 ||
++	    (timing->pixel_encoding != PIXEL_ENCODING_RGB &&
++	     timing->pixel_encoding != PIXEL_ENCODING_YCBCR420) ||
++	    (timing->pixel_encoding == PIXEL_ENCODING_RGB &&
++	     timing->display_color_depth != COLOR_DEPTH_888 &&
++	     !drm_mode_is_420_only(info, mode)))
++		return;
++
++	/* HDMI 4:2:2 deep color uses the pixel clock's TMDS rate. Native DC
++	 * still validates the source/link; no clocks or bandwidth are forced. */
++	if (timing->pixel_encoding == PIXEL_ENCODING_RGB &&
++	    !drm_mode_is_420_only(info, mode) &&
++	    (info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422)) &&
++	    info->max_tmds_clock > 0 &&
++	    timing->pix_clk_100hz <= (unsigned int)info->max_tmds_clock * 10) {
++		timing->pixel_encoding = PIXEL_ENCODING_YCBCR422;
++		timing->display_color_depth = COLOR_DEPTH_101010;
++		return;
++	}
++	/* A CTA 4:2:0-only timing cannot be sent as RGB or 4:2:2. */
++	if (!drm_mode_is_420(info, mode)) {
++		if (timing->pixel_encoding == PIXEL_ENCODING_YCBCR420)
++			timing->display_color_depth = COLOR_DEPTH_888;
++		return;
++	}
++	/* Recompute from the separate EDID 4:2:0 deep-color capabilities,
++	 * not from the precision already reduced by the RGB attempt. */
++	candidate = *timing;
++	candidate.pixel_encoding = PIXEL_ENCODING_YCBCR420;
++	candidate.display_color_depth =
++		convert_color_depth_from_display_info(con->connector, true, requested_bpc);
++	if (!adjust_colour_depth_from_display_info(&candidate, info))
++		candidate.display_color_depth = COLOR_DEPTH_888;
++	/* Also revalidate native RGB-to-4:2:0 fallback: its depth can still
++	 * reflect RGB EDID caps. Shallow candidates reach the final guard. */
++	if (timing->pixel_encoding == PIXEL_ENCODING_YCBCR420 ||
++	    drm_mode_is_420_only(info, mode) ||
++	    (candidate.display_color_depth == COLOR_DEPTH_101010 ||
++	     candidate.display_color_depth == COLOR_DEPTH_121212 ||
++	     candidate.display_color_depth == COLOR_DEPTH_161616))
++		*timing = candidate;
++}
++
+ static void fill_stream_properties_from_drm_display_mode(
+ 	struct dc_stream_state *stream,
+ 	const struct drm_display_mode *mode_in,
+@@ -7105,6 +7163,7 @@
+ 		}
+ 	}
+ 
++	amdgpu_dm_hdr10_select_format(stream, connector_state, mode_in, requested_bpc);
+ 	stream->output_color_space = get_output_color_space(timing_out, connector_state);
+ 	stream->content_type = get_output_content_type(connector_state);
+ }
+@@ -7639,6 +7698,9 @@
  	struct dc_link *link = NULL;
  	struct dc_sink *sink = NULL;
  
@@ -177,7 +249,7 @@
  	uint8_t underscan_vborder;
 --- /dev/null
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,414 @@
 +// SPDX-License-Identifier: MIT
 +/* Standard-DV transport through native AMD DC HDMI. The player owns pixels
 + * and frame metadata; this adapter only protects and signals their transport.
@@ -319,13 +391,27 @@
 +	return 0;
 +}
 +
++/* Hades RC1 9a06cf50, d1e00b45: the stream owns this sink reference.
++ * A connector EDID blob may be replaced independently during hotplug. Keep
++ * our existing V2-only policy and reject lengths outside the owned buffer.
++ */
++static const struct dc_edid *dv_stream_edid(const struct dc_stream_state *stream)
++{
++	const struct dc_edid *edid;
++
++	if (!stream || !stream->sink)
++		return NULL;
++	edid = &stream->sink->dc_edid;
++	return edid->length && edid->length <= sizeof(edid->raw_edid) ? edid : NULL;
++}
++
 +int amdgpu_dm_dv_configure_stream(struct dc_stream_state *stream,
 +				const struct dm_connector_state *state,
 +				const struct drm_display_mode *mode)
 +{
 +	struct drm_connector *connector = state->base.connector;
 +	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
-+	const struct drm_property_blob *edid = connector->edid_blob_ptr;
++	const struct dc_edid *edid = dv_stream_edid(stream);
 +	struct hdmi_dolby_vendor_infoframe dv;
 +	struct hdmi_avi_infoframe avi;
 +	struct dc_info_packet avi_packet, vsp_packet;
@@ -334,7 +420,7 @@
 +		.requested = state->dv_standard,
 +		.lab_enabled = dv_standard && stream->ctx &&
 +			dv_dcn_supported(stream->ctx->dce_version),
-+		.sink_standard = edid && drm_dvbridge_edid(edid->data, edid->length),
++		.sink_standard = edid && drm_dvbridge_edid(edid->raw_edid, edid->length),
 +		.hdmi = stream->signal == SIGNAL_TYPE_HDMI_TYPE_A &&
 +			connector->display_info.is_hdmi && connector->display_info.has_hdmi_infoframe,
 +		.native_hdmi = connector->connector_type == DRM_MODE_CONNECTOR_HDMIA &&
@@ -357,7 +443,7 @@
 +	if (state->hdr10_deep_color)
 +		return -EINVAL;
 +	/* Legacy sink signaling is qualified separately; do not widen it here. */
-+	if (dvbridge_parse_edid(edid ? edid->data : NULL,
++	if (dvbridge_parse_edid(edid ? edid->raw_edid : NULL,
 +				edid ? edid->length : 0).version != 2)
 +		return -EOPNOTSUPP;
 +	ret = drm_dvbridge_validate(&link);
@@ -532,17 +618,28 @@
 +		    stream->output_color_space != COLOR_SPACE_SRGB ||
 +		    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
 +		    !stream->avi_infopacket.valid || !stream->vsp_infopacket.valid ||
++		    /* Recheck the DC raster after global validation, not only the plane. */
++		    stream->timing.flags.INTERLACE ||
++		    stream->timing.timing_3d_format != TIMING_3D_FORMAT_NONE ||
++		    stream->timing.h_border_left || stream->timing.h_border_right ||
++		    stream->timing.v_border_top || stream->timing.v_border_bottom ||
++		    stream->timing.h_addressable != cs->mode.hdisplay ||
++		    stream->timing.v_addressable != cs->mode.vdisplay ||
++		    stream->src.x || stream->src.y ||
++		    stream->src.width != cs->mode.hdisplay || stream->src.height != cs->mode.vdisplay ||
++		    stream->dst.x || stream->dst.y ||
++		    stream->dst.width != cs->mode.hdisplay || stream->dst.height != cs->mode.vdisplay ||
 +		    stream->timing.pixel_encoding != PIXEL_ENCODING_RGB ||
 +		    stream->timing.display_color_depth != COLOR_DEPTH_888 || stream->timing.flags.DSC)
 +			return -EINVAL;
 +		for_each_new_connector_in_state(state, connector, con, j) {
-+			const struct drm_property_blob *edid = connector->edid_blob_ptr;
++			const struct dc_edid *edid = dv_stream_edid(stream);
 +
 +			if (con->crtc != crtc)
 +				continue;
 +
-+			if (!edid || !drm_dvbridge_edid(edid->data, edid->length) ||
-+			    dvbridge_parse_edid(edid->data, edid->length).version != 2 ||
++			if (!edid || !drm_dvbridge_edid(edid->raw_edid, edid->length) ||
++			    dvbridge_parse_edid(edid->raw_edid, edid->length).version != 2 ||
 +			    connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
 +			    !to_dm_connector_state(con)->dv_standard ||
 +			    to_dm_connector_state(con)->hdr10_deep_color ||

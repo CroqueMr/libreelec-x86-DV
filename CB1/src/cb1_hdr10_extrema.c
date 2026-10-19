@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "cb1_hdr10_extrema.h"
+#include "cb1_hdr10_ingress.h"
 #include <libplacebo/dispatch.h>
 #include <libplacebo/shaders/custom.h>
 #include <libplacebo/opengl.h>
@@ -39,10 +40,10 @@ static const char scan_body[] =
 static const char tiled_scan_body[] =
     "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;bool bad=false;"
-    "uint columns=(dimensions.x+7u)/8u,rows=(dimensions.y+3u)/4u;"
+    "uint columns=(dimensions.x+15u)/16u,rows=(dimensions.y+1u)/2u;"
     "if(group>=columns*rows){color=vec4(-1.0,0.0,65535.0,0.0);}else{"
-    "uvec2 tile_begin=uvec2(group%columns,group/columns)*uvec2(8u,4u);"
-    "uvec2 tile_end=min(tile_begin+uvec2(8u,4u),dimensions);"
+    "uvec2 tile_begin=uvec2(group%columns,group/columns)*uvec2(16u,2u);"
+    "uvec2 tile_end=min(tile_begin+uvec2(16u,2u),dimensions);"
     "uvec2 begin=uvec2(0u),end=dimensions;vec4 bounds=texelFetch(bound_input,ivec2(0),0);"
     "if(cropped!=0u && bounds.x>=0.0){begin=unpack_xy(bounds.x);end=unpack_xy(bounds.y)+1u;}"
     "bool full=cropped!=0u && all(equal(begin,uvec2(0u))) && all(equal(end,dimensions));"
@@ -55,7 +56,7 @@ static const char tiled_scan_body[] =
 #endif
     ")){vec4 r=texelFetch(tile_input,ivec2(group%output_width,group/output_width),0);"
     "color=vec4(pack_xy(tile_begin),pack_xy(tile_end-1u),bounds.z<0.0?-1.0:r.z,r.w);}else{"
-    "for(uint i=0u;i<32u;i++){uvec2 p=tile_begin+uvec2(i%8u,i/8u);"
+    "for(uint i=0u;i<32u;i++){uvec2 p=tile_begin+uvec2(i%16u,i/16u);"
     "if(any(greaterThanEqual(p,tile_end)))continue;"
     "if(cropped!=0u && (any(lessThan(p,begin))||any(greaterThanEqual(p,end))))continue;"
     "vec3 q=texelFetch(pq_input,ivec2(p),0).rgb;"
@@ -68,10 +69,64 @@ static const char tiled_scan_body[] =
 static const char reduce_body[] =
     "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;bool bad=false;"
-    "for(uint i=0u;i<128u;i++){uint index=group*128u+i;if(index>=count)break;"
+    "for(uint i=0u;i<128u;i++){uint index=coalesced!=0u?group+i*((count+127u)/128u):group*128u+i;if(index>=count)break;"
     "vec4 r=texelFetch(pq_input,ivec2(index%input_width,index/input_width),0);"
+    "\n#ifdef CB1_COMPACT_INPUT\nr=unpack_record(r,index,(dimensions.x+3u)/4u);\n#endif\n"
     "merge_record(r,lo,hi,low,high,bad);}"
     "color=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),bad?-1.0:low,high);";
+
+static const char direct_codes[]=
+    "void mark_code(ivec3 code,uvec2 p,inout uvec2 lo,inout uvec2 hi,inout float low,inout float high){"
+    "int minimum=min(code.r,min(code.g,code.b)),maximum=max(code.r,max(code.g,code.b));"
+    "low=min(low,float(minimum));high=max(high,float(maximum));"
+    "if(maximum>1){lo=min(lo,p);hi=max(hi,p);}}";
+static const char direct_tile_body[]=
+    "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
+    "uint columns=(dimensions.x+3u)/4u,rows=(dimensions.y+1u)/2u;"
+    "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;"
+    "if(group<columns*rows){uvec2 tb=uvec2(group%columns,group/columns)*uvec2(4u,2u);"
+    "int row=int(tb.y)/2,last=int(height)/2-1;"
+    "for(uint i=0u;i<2u;i++){uint x=tb.x+2u*i;if(x>=dimensions.x)break;"
+    "ivec2 uv=sample_uv(ivec2(int(x)/2,row));"
+    "ivec2 even=3*uv+sample_uv(ivec2(int(x)/2,max(row-1,0)));"
+    "ivec2 odd=3*uv+sample_uv(ivec2(int(x)/2,min(row+1,last)));"
+    "mark_code(analysis_code(sample_y(ivec2(x,tb.y)),even),uvec2(x,tb.y),lo,hi,low,high);"
+    "mark_code(analysis_code(sample_y(ivec2(x+1u,tb.y)),even),uvec2(x+1u,tb.y),lo,hi,low,high);"
+    "mark_code(analysis_code(sample_y(ivec2(x,tb.y+1u)),odd),uvec2(x,tb.y+1u),lo,hi,low,high);"
+    "mark_code(analysis_code(sample_y(ivec2(x+1u,tb.y+1u)),odd),uvec2(x+1u,tb.y+1u),lo,hi,low,high);}}"
+    "\n#ifdef CB1_COMPACT_OUTPUT\n"
+    "uvec2 tb=uvec2(group%columns,group/columns)*uvec2(4u,2u);"
+    "uint local=lo.x==4096u?0u:1u+(lo.x-tb.x)+4u*(lo.y-tb.y)+8u*(hi.x-tb.x)+32u*(hi.y-tb.y);"
+    "color=vec4(float(local),low,high,0.0)/65535.0;"
+    "\n#else\ncolor=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),low,high);\n#endif\n";
+
+static const char crop_reduce_body[] =
+    "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
+    "vec4 bounds=texelFetch(bound_input,ivec2(0),0);"
+    "uvec2 begin=uvec2(0u),end=dimensions;"
+    "if(bounds.x>=0.0){begin=unpack_xy(bounds.x);end=unpack_xy(bounds.y)+1u;}"
+    "bool full=all(equal(begin,uvec2(0u))) && all(equal(end,dimensions));"
+    "if(full){color=bounds;}else{"
+    "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;bool bad=bounds.z<0.0;"
+    "uint columns=(dimensions.x+3u)/4u,tile_width=uint(textureSize(tile_input,0).x);"
+    "for(uint n=0u;n<128u;n++){uint index=coalesced!=0u?group+n*((count+127u)/128u):group*128u+n;if(index>=count)break;"
+    "uvec2 tb=uvec2(index%columns,index/columns)*uvec2(4u,2u);"
+    "uvec2 te=min(tb+uvec2(4u,2u),dimensions);"
+    "if(any(greaterThanEqual(tb,end)) || any(lessThanEqual(te,begin)))continue;"
+    "if(all(greaterThanEqual(tb,begin)) && all(lessThanEqual(te,end))){"
+    "vec4 r=texelFetch(tile_input,ivec2(index%tile_width,index/tile_width),0);"
+    "\n#ifdef CB1_COMPACT_CROP\nr=unpack_record(r,index,columns);\n#endif\n"
+    "merge_record(vec4(pack_xy(tb),pack_xy(te-1u),r.z,r.w),lo,hi,low,high,bad);"
+    "}else{"
+    "for(uint i=0u;i<8u;i++){uvec2 p=tb+uvec2(i%4u,i/4u);"
+    "if(any(greaterThanEqual(p,te)) || any(lessThan(p,begin)) || any(greaterThanEqual(p,end)))continue;"
+    "vec3 q=source_at(p);"
+    "if(any(isnan(q))||any(isinf(q))||any(lessThan(q,vec3(0.0)))||any(greaterThan(q,vec3(1.0)))){bad=true;continue;}"
+    "vec3 code=roundEven(q*65535.0);"
+    "low=min(low,min(code.r,min(code.g,code.b)));high=max(high,max(code.r,max(code.g,code.b)));"
+    "lo=min(lo,p);hi=max(hi,p);}}}"
+    "color=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),bad?-1.0:low,high);}";
+
 
 struct cb1_hdr10_extrema {
     pl_gpu gpu;
@@ -83,7 +138,7 @@ struct cb1_hdr10_extrema {
     unsigned width, height;
     struct cb1_ai_identity id;
     uint64_t stream, revision;
-    bool pending, failed, active, tiled;
+    bool pending, failed, active, tiled, coalesced, compact;
 };
 
 /* GLES buffer transfers are not exposed by the matched libplacebo backend.
@@ -122,7 +177,7 @@ static bool download(struct cb1_hdr10_extrema *ctx)
 }
 
 static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
-                     unsigned count, bool scan, bool cropped)
+                     unsigned count, bool scan, bool cropped,const struct pl_frame *source)
 {
     struct pl_shader_desc descriptors[3] = {
         {.desc={.name="pq_input",.type=PL_DESC_SAMPLED_TEX},
@@ -130,7 +185,7 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
         {.desc={.name="bound_input",.type=PL_DESC_SAMPLED_TEX},
          .binding={.object=ctx->bounds,.sample_mode=PL_TEX_SAMPLE_NEAREST}},
     };
-    unsigned size[2] = {ctx->width, ctx->height}, crop = cropped;
+    unsigned size[2] = {ctx->width, ctx->height}, crop = cropped, coalesced=ctx->coalesced;
     unsigned input_width = (unsigned)input->params.w, output_width = (unsigned)output->params.w;
     struct pl_shader_var uniforms[] = {
         {.var=pl_var_uvec2("dimensions"),.data=size,.dynamic=true},
@@ -138,22 +193,41 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
         {.var=pl_var_uint("count"),.data=&count,.dynamic=true},
         {.var=pl_var_uint("input_width"),.data=&input_width,.dynamic=true},
         {.var=pl_var_uint("output_width"),.data=&output_width,.dynamic=true},
+        {.var=pl_var_uint("coalesced"),.data=&coalesced,.dynamic=true},
     };
     unsigned descriptor_count=scan?2:1;
+    if(source && scan){descriptors[0]=descriptors[1];descriptor_count=1;}
     char aliased_header[sizeof(header)+64];
     const char *shader_header=header;
-    if (scan && ctx->tiled && !cropped) {
+    if (scan && ctx->tiled && !cropped && !source) {
         snprintf(aliased_header,sizeof(aliased_header),"#define tile_input bound_input\n%s",header);
         shader_header=aliased_header;
     }
     if (scan && ctx->tiled && cropped) descriptors[descriptor_count++]=(struct pl_shader_desc){
         .desc={.name="tile_input",.type=PL_DESC_SAMPLED_TEX},
         .binding={.object=ctx->scan,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
+    static const char decode[]=
+        "vec4 unpack_record(vec4 r,uint index,uint columns){uvec3 code=uvec3(roundEven(r.rgb*65535.0));"
+        "if(code.x==0u)return vec4(-1.0,0.0,float(code.y),float(code.z));"
+        "uint v=code.x-1u;uvec2 tb=uvec2(index%columns,index/columns)*uvec2(4u,2u);"
+        "uvec2 lo=tb+uvec2(v&3u,(v>>2u)&1u),hi=tb+uvec2((v>>3u)&3u,(v>>5u)&1u);"
+        "return vec4(pack_xy(lo),pack_xy(hi),float(code.y),float(code.z));}";
+    char compact_header[sizeof(header)+sizeof(decode)+192];
+    if(ctx->compact){
+        snprintf(compact_header,sizeof(compact_header),"%s%s%s%s%s",
+            source && scan && !cropped?"#define CB1_COMPACT_OUTPUT 1\n":"",
+            input==ctx->scan && !scan?"#define CB1_COMPACT_INPUT 1\n":"",
+            source && cropped?"#define CB1_COMPACT_CROP 1\n":"",shader_header,decode);
+        shader_header=compact_header;
+    }
     pl_shader shader = pl_dispatch_begin(ctx->dispatch);
-    bool ok = pl_shader_custom(shader, &(struct pl_custom_shader){
-        .description="CB1 HDR10 integer bounds",.header=shader_header,.body=scan?(ctx->tiled?tiled_scan_body:scan_body):reduce_body,
+    bool ok = !source || !scan || cb1_hdr10_ingress_source_shader(shader,source);
+    if(ok && source && scan)ok=pl_shader_custom(shader,&(struct pl_custom_shader){
+        .header=direct_codes,.prelude="#define source_at(p) analysis_rgb(ivec2(p)).rgb\n",.output=PL_SHADER_SIG_NONE});
+    if(ok)ok = pl_shader_custom(shader, &(struct pl_custom_shader){
+        .description="CB1 HDR10 integer bounds",.header=shader_header,.body=source && scan?(cropped?crop_reduce_body:direct_tile_body):scan?(ctx->tiled?tiled_scan_body:scan_body):reduce_body,
         .output=PL_SHADER_SIG_COLOR,.descriptors=descriptors,.num_descriptors=descriptor_count,
-        .variables=uniforms,.num_variables=5});
+        .variables=uniforms,.num_variables=6});
     if (ok) ok = pl_dispatch_finish(ctx->dispatch, pl_dispatch_params(.shader=&shader,.target=output));
     pl_dispatch_abort(ctx->dispatch, &shader);
     return ok;
@@ -174,13 +248,13 @@ static bool reduce(struct cb1_hdr10_extrema *ctx, pl_tex input, unsigned count, 
         unsigned groups = (count+127)/128;
         if (groups != 1 && !allocate(ctx, &ctx->temporary[next], groups)) return false;
         pl_tex output = groups == 1 ? final : ctx->temporary[next];
-        if (!dispatch(ctx, input, output, count, false, false)) return false;
+        if (!dispatch(ctx, input, output, count, false, false,NULL)) return false;
         input = output;
         next ^= 1;
         count = groups;
     }
     /* A one-group scan still needs an exact copy into its separate final target. */
-    if (input != final && !dispatch(ctx, input, final, 1, false, false)) return false;
+    if (input != final && !dispatch(ctx, input, final, 1, false, false,NULL)) return false;
     return true;
 }
 
@@ -240,25 +314,36 @@ void cb1_hdr10_extrema_reset(struct cb1_hdr10_extrema *ctx, uint64_t stream, uin
     ctx->active = true;
 }
 
-enum cb1_ai_status cb1_hdr10_extrema_submit(struct cb1_hdr10_extrema *ctx, pl_tex texture,
-                                          struct cb1_ai_identity id)
+bool cb1_hdr10_extrema_set_coalesced(struct cb1_hdr10_extrema *ctx,bool enabled)
 {
-    if (!ctx || ctx->failed || !ctx->active || id.stream != ctx->stream ||
-        id.revision != ctx->revision || !texture || !texture->params.sampleable || texture->params.d ||
-        texture->params.w < 1 || texture->params.h < 1 ||
-        texture->params.w > 4096 || texture->params.h > 4096 ||
-        (size_t)texture->params.w*texture->params.h > 4096*2160 ||
-        texture->params.format->num_components < 3 ||
-        (texture->params.format->type != PL_FMT_FLOAT && texture->params.format->type != PL_FMT_UNORM))
+    if(!ctx || ctx->pending)return false;
+    ctx->coalesced=enabled;return true;
+}
+
+static enum cb1_ai_status submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
+    const struct pl_frame *source,struct cb1_ai_identity id)
+{
+    if(!ctx || ctx->failed || !ctx->active || id.stream!=ctx->stream || id.revision!=ctx->revision)
         return CB1_AI_INVALID;
-    for (unsigned c = 0; c < 3; ++c)
-        if (texture->params.format->component_depth[c] <
-            (texture->params.format->type == PL_FMT_FLOAT ? 32 : 16))
-            return CB1_AI_INCOMPATIBLE;
+    if(!source){
+        if (!texture || !texture->params.sampleable || texture->params.d ||
+            texture->params.w < 1 || texture->params.h < 1 ||
+            texture->params.w > 4096 || texture->params.h > 4096 ||
+            (size_t)texture->params.w*texture->params.h > 4096*2160 ||
+            texture->params.format->num_components < 3 ||
+            (texture->params.format->type != PL_FMT_FLOAT && texture->params.format->type != PL_FMT_UNORM))
+            return CB1_AI_INVALID;
+        for (unsigned c = 0; c < 3; ++c)
+            if (texture->params.format->component_depth[c] <
+                (texture->params.format->type == PL_FMT_FLOAT ? 32 : 16))
+                return CB1_AI_INCOMPATIBLE;
+    }
     if (ctx->pending) return CB1_AI_PENDING;
-    const unsigned count = (unsigned)(texture->params.w*texture->params.h);
-    ctx->width = (unsigned)texture->params.w; ctx->height = (unsigned)texture->params.h;
-    ctx->tiled = ctx->width>=3840 && ctx->height>=2160;
+    const unsigned count=source?(unsigned)((source->crop.x1-source->crop.x0)*(source->crop.y1-source->crop.y0)):
+        (unsigned)(texture->params.w*texture->params.h);
+    ctx->width=source?(unsigned)(source->crop.x1-source->crop.x0):(unsigned)texture->params.w;
+    ctx->height=source?(unsigned)(source->crop.y1-source->crop.y0):(unsigned)texture->params.h;
+    ctx->tiled=source || (ctx->width>=3840 && ctx->height>=1080);
 #ifdef CB1_PROBE_TILED_FORCE_SMALL
     ctx->tiled=true;
 #endif
@@ -266,20 +351,46 @@ enum cb1_ai_status cb1_hdr10_extrema_submit(struct cb1_hdr10_extrema *ctx, pl_te
     extern void cb1_probe_extrema_selected(unsigned,unsigned,bool);
     cb1_probe_extrema_selected(ctx->width,ctx->height,ctx->tiled);
 #endif
-    const unsigned groups = ctx->tiled?((ctx->width+7)/8)*((ctx->height+3)/4):(count+127)/128;
-    if(ctx->tiled && !allocate(ctx,&ctx->cropped_scan,groups)){ctx->failed=true;return CB1_AI_INVALID;}
+    const unsigned tile_width=source?4:16;
+    const unsigned groups=ctx->tiled?((ctx->width+tile_width-1)/tile_width)*((ctx->height+1)/2):(count+127)/128;
+    const unsigned cropped_groups=source?(groups+127)/128:groups;
+    if(ctx->tiled && !allocate(ctx,&ctx->cropped_scan,cropped_groups)){ctx->failed=true;return CB1_AI_INVALID;}
     pl_dispatch_reset_frame(ctx->dispatch);
-    if (!allocate(ctx, &ctx->scan, groups) ||
-        !dispatch(ctx, texture, ctx->scan, count, true, false) ||
-        !reduce(ctx, ctx->scan, groups, ctx->bounds) ||
-        !dispatch(ctx, texture, ctx->tiled?ctx->cropped_scan:ctx->scan, count, true, true) ||
-        !reduce(ctx, ctx->tiled?ctx->cropped_scan:ctx->scan, groups, ctx->final) || !download(ctx)) {
-        ctx->failed = true;
-        return CB1_AI_INVALID;
+    /* Records use alpha as data, not opacity. Preserve the caller's blend state. */
+    GLboolean blend=glIsEnabled(GL_BLEND);glDisable(GL_BLEND);
+    ctx->compact=source && ctx->coalesced;
+    pl_fmt scan_format=ctx->compact?pl_find_fmt(ctx->gpu,PL_FMT_UNORM,4,16,16,
+        PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE):ctx->format;
+    if(!scan_format){ctx->compact=false;scan_format=ctx->format;}
+    unsigned scan_width=groups<256?groups:256;
+    bool ok=scan_format && pl_tex_recreate(ctx->gpu,&ctx->scan,pl_tex_params(.w=scan_width,
+        .h=(groups+scan_width-1)/scan_width,.format=scan_format,.sampleable=true,.renderable=true)) &&
+        dispatch(ctx,texture,ctx->scan,count,true,false,source) &&
+        reduce(ctx,ctx->scan,groups,ctx->bounds) &&
+        dispatch(ctx,texture,ctx->tiled?ctx->cropped_scan:ctx->scan,source?groups:count,true,true,source) &&
+        reduce(ctx,ctx->tiled?ctx->cropped_scan:ctx->scan,cropped_groups,ctx->final) && download(ctx);
+    if(blend)glEnable(GL_BLEND);
+    if(!ok){
+        ctx->failed=true;return CB1_AI_INVALID;
     }
     ctx->pending = true;
     ctx->id = id;
     return CB1_AI_PENDING;
+}
+
+enum cb1_ai_status cb1_hdr10_extrema_submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
+    struct cb1_ai_identity id)
+{ return submit(ctx,texture,NULL,id); }
+
+enum cb1_ai_status cb1_hdr10_extrema_submit_source(struct cb1_hdr10_extrema *ctx,
+    const struct pl_frame *source,struct cb1_ai_identity id)
+{
+    enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);
+    if(status!=CB1_AI_READY)return status;
+    if(source->planes[1].texture->params.w!=source->planes[0].texture->params.w/2 ||
+       source->planes[1].texture->params.h!=source->planes[0].texture->params.h/2)
+        return CB1_AI_INCOMPATIBLE;
+    return submit(ctx,source->planes[0].texture,source,id);
 }
 
 pl_tex cb1_hdr10_extrema_pending(struct cb1_hdr10_extrema *ctx,struct cb1_ai_identity id)

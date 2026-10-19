@@ -38,6 +38,38 @@ class StagingTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertEqual((root / "packages/source.c").read_bytes(), b"source\n")
 
+    def test_rejects_duplicate_dependency_patch_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, engine = Path(tmp) / "le", Path(tmp) / "engine"
+            root.mkdir(); (engine / "patches/ffmpeg").mkdir(parents=True)
+            patch = b"patch\n"
+            (engine / "patches/ffmpeg/test.patch").write_bytes(patch)
+            record = {"source": "patches/ffmpeg/test.patch",
+                      "sha256": hashlib.sha256(patch).hexdigest()}
+            mapping = {"packages/multimedia/ffmpeg/patches/test.patch": record,
+                       "projects/Generic/patches/ffmpeg/test.patch": record}
+            result = self.run_stage(root, engine, mapping)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"Duplicate dependency patch", result.stderr)
+            self.assertFalse((root / "packages").exists())
+            self.assertFalse((root / "projects").exists())
+
+    def test_rejects_stale_common_ffmpeg_patch_with_project_route(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, engine = Path(tmp) / "le", Path(tmp) / "engine"
+            root.mkdir(); (engine / "patches/ffmpeg").mkdir(parents=True)
+            patch = b"patch\n"
+            (engine / "patches/ffmpeg/test.patch").write_bytes(patch)
+            stale = root / "packages/multimedia/ffmpeg/patches/test.patch"
+            stale.parent.mkdir(parents=True); stale.write_bytes(patch)
+            mapping = {"projects/Generic/patches/ffmpeg/test.patch": {
+                "source": "patches/ffmpeg/test.patch", "sha256": hashlib.sha256(patch).hexdigest()}}
+            result = self.run_stage(root, engine, mapping, "--check")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"Duplicate native FFmpeg patch", result.stderr)
+            self.assertEqual(stale.read_bytes(), patch)
+            self.assertFalse((root / "projects").exists())
+
     def test_release_declares_complete_model_from_cb1(self):
         tree = SCRIPT.parents[1]
         lock = json.loads((tree / "config/cb1-source-lock.json").read_text())

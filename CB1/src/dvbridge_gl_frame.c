@@ -4,6 +4,14 @@
 #include <GLES3/gl3.h>
 #include <string.h>
 
+void dvbridge_gl_frame_set_chroma(struct dvbridge_gl_frame *frame, enum pl_chroma_location location)
+{
+    enum pl_color_system system = frame->frame.repr.sys;
+    frame->frame.repr.sys = PL_COLOR_SYSTEM_DOLBYVISION;
+    pl_frame_set_chroma_location(&frame->frame, location);
+    frame->frame.repr.sys = system;
+}
+
 void dvbridge_gl_frame_release(struct dvbridge_gl_frame *frame)
 {
     if (!frame)

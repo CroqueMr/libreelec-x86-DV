@@ -81,7 +81,7 @@ static void prepare(struct dvbridge_renderer *r,const struct pl_frame *source,
                     const void *metadata,size_t bytes,struct dvbridge_identity identity)
 {
     struct dvbridge_policy policy=reference_policy();policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
-    policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;policy.revision=identity.revision;
+    policy.revision=identity.revision;
     assert(dvbridge_render_dv_policy_prepare(r,&policy,&identity,source,metadata,bytes,7,7,
         (struct dvbridge_geometry){2,2,0,0,2,2})==DVBRIDGE_DV_READY);
     enum dvbridge_dv_policy_status status=DVBRIDGE_DV_PENDING;

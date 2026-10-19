@@ -6,6 +6,11 @@
 #include <libplacebo/utils/libav.h>
 #include <math.h>
 
+enum pl_chroma_location dvbridge_map_chroma(enum AVChromaLocation location)
+{
+    return pl_chroma_from_av(location);
+}
+
 bool dvbridge_hdr10_target(struct pl_color_space *out, const void *metadata, size_t bytes)
 {
     if (!out || !metadata || (uintptr_t)metadata % _Alignof(AVDOVIMetadata) ||
@@ -143,8 +148,9 @@ bool dvbridge_reference_map(struct dvbridge_color *out, struct pl_color_space *n
         if (e->level == 1) { if (l1) return false; l1 = e; }
         if (e->level == 6) { if (l6) return false; l6 = e; }
     }
-    if (!l1 || !l1->l1.max_pq || l1->l1.max_pq > 4095 ||
-        l1->l1.min_pq > l1->l1.avg_pq || l1->l1.avg_pq > l1->l1.max_pq)
+    if (policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT &&
+        (!l1 || !l1->l1.max_pq || l1->l1.max_pq > 4095 ||
+         l1->l1.min_pq > l1->l1.avg_pq || l1->l1.avg_pq > l1->l1.max_pq))
         return false;
     if (l6) {
         float minimum = l6->l6.min_luminance / 10000.0f;
@@ -163,6 +169,8 @@ bool dvbridge_reference_map(struct dvbridge_color *out, struct pl_color_space *n
         if(creative.l1_present){
             mapped.color.hdr.max_pq_y=creative.analysis[1]/4095.0f;
             mapped.color.hdr.avg_pq_y=creative.analysis[2]/4095.0f;
+        }else{
+            mapped.color.hdr.max_pq_y=mapped.color.hdr.avg_pq_y=0;
         }
     }
     mapped.color.hdr.max_cll = mapped.color.hdr.max_fall = 0;

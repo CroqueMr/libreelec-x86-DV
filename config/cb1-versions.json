@@ -1,8 +1,8 @@
 {
   "Release": {
-    "version": "DV-R1.0.0 Beta3",
-    "tag": "R1.0.0-Beta3",
-    "image": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-Beta3"
+    "version": "DV-R1.0.0 Beta4",
+    "tag": "R1.0.0-Beta4",
+    "image": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-Beta4"
   },
   "LibreELEC": {
     "version": "13.0-devel",
@@ -40,13 +40,26 @@
     "modified": false
   },
   "CB1": {
-    "version": "0.2",
-    "revision": "R1.0.0-Beta3:CB1/",
+    "version": "0.3",
+    "revision": "R1.0.0-Beta4:CB1/",
     "base_revision": "b852bd0b5e4c1422e0aa5e005520bca765dcb00a",
     "modified": true
   },
   "LibreELEC Settings": {
     "revision": "9cf5f9868c48878a31ee9f97d290af889dd1c879",
+    "modified": false
+  },
+  "NVIDIA": {
+    "version": "615.78.08",
+    "modified": true
+  },
+  "NVIDIA Open Kernel Modules": {
+    "version": "615.78.08",
+    "revision": "1a82fbfda8f321b056eb3568850f9316c5e465c5",
+    "modified": true
+  },
+  "NVIDIA VAAPI Driver": {
+    "revision": "443050726fdb30888a2ced1cea1c5d036ea3b15c",
     "modified": false
   }
 }

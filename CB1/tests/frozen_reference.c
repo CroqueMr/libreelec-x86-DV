@@ -35,6 +35,7 @@ static AVDOVIMetadata *reference_metadata(int category, size_t *bytes)
         if (category == 1)
             map->nlq[c].vdr_in_max = 4096;
         if (category == 2) {
+            map->nlq[c].vdr_in_max = 4096;
             map->nlq[c].nlq_offset = 512;
             map->nlq[c].linear_deadzone_slope = 1;
         }

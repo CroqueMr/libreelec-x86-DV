@@ -15,10 +15,12 @@ struct cb1_hdr10_ai_metrics {
     /* Monotonic dispatch generation, including partially failed GPU batches. */
     uint64_t gpu_submissions;
 };
-/* Caller-confined GLES context; borrowed source planes are consumed only in submit. */
+/* Caller-confined GLES context. Source planes are queued only in submit;
+ * retain them until the accepted job completes or its GPU batch is retired. */
 enum cb1_ai_status cb1_hdr10_ai_create(pl_gpu gpu,const char *bundle_dir,struct cb1_hdr10_ai **out);
 void cb1_hdr10_ai_destroy(struct cb1_hdr10_ai **ctx);
 void cb1_hdr10_ai_reset(struct cb1_hdr10_ai *ctx,uint64_t stream,uint64_t revision);
+bool cb1_hdr10_ai_set_coalesced_bounds(struct cb1_hdr10_ai *ctx,bool enabled);
 /* Pending means retry the same identity; a NULL frame advances that accepted job. */
 enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *ctx,const struct pl_frame *frame,
     struct cb1_ai_identity id,double pts);

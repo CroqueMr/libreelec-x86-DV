@@ -24,7 +24,8 @@ enum dvbridge_creative_reason {
     DVBRIDGE_CREATIVE_CM4_EDIT_UNQUALIFIED, DVBRIDGE_CREATIVE_CM4_RENDER_PARTIAL,
     DVBRIDGE_CREATIVE_SPATIAL_UNQUALIFIED, DVBRIDGE_CREATIVE_DETAIL_NO_COMPRESSION,
     DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE, DVBRIDGE_CREATIVE_EDIT_TARGET_UNRESOLVED,
-    DVBRIDGE_CREATIVE_MASTERING_UNSUPPORTED, DVBRIDGE_CREATIVE_MASTERING_INCONSISTENT
+    DVBRIDGE_CREATIVE_MASTERING_UNSUPPORTED, DVBRIDGE_CREATIVE_MASTERING_INCONSISTENT,
+    DVBRIDGE_CREATIVE_STATIC_MISSING_L1, DVBRIDGE_CREATIVE_STATIC_UNUSABLE_L1
 };
 enum dvbridge_cm4_target_origin {
     DVBRIDGE_CM4_PRESET, DVBRIDGE_CM4_CUSTOM, DVBRIDGE_CM4_MANUAL
@@ -62,12 +63,14 @@ struct dvbridge_creative_coverage {
     uint32_t present, applied, preserved, edited, one_anchor;
 };
 #define DVBRIDGE_CM4_ALGORITHM "cb1-cm4-v1"
-#define DVBRIDGE_DV_ENHANCED_ALGORITHM "cb1-dve-v6"
+#define DVBRIDGE_DV_ENHANCED_ALGORITHM "cb1-dve-v7"
 struct dvbridge_creative_edit_report {
     enum dvbridge_creative_status status;
     enum dvbridge_creative_reason reason;
     struct dvbridge_creative_coverage l2_coverage, l8_coverage;
     double maximum_pq_error, maximum_relative_chroma_error, maximum_hue_error;
+    /* Worst normalized search score; acceptance also checks chroma/hue guards. */
+    double reference_error_before, reference_error_after;
     uint32_t candidate_evaluations;
     uint64_t fit_ns;
     bool cache_hit;
@@ -78,6 +81,22 @@ struct dvbridge_cm4_coefficients {
     double clip_strength, detail_mix, secondary_gain[6], secondary_rotation[6];
     double luma[3], hue_centres[6], rgb_to_lms[9], lms_to_rgb[9];
     uint32_t present, one_anchor;
+};
+#define DVBRIDGE_L2_DETAIL_API 1
+enum dvbridge_detail_state {
+    DVBRIDGE_DETAIL_ABSENT, DVBRIDGE_DETAIL_SENTINEL,
+    DVBRIDGE_DETAIL_NUMERIC, DVBRIDGE_DETAIL_UNRESOLVED
+};
+/* Expert metadata resolution only: no qualified MS-to-spatial operator.
+ * NUMERIC resolves a code, not a native strength; SENTINEL retains -1.
+ * Endpoints are real selected anchors only, never a synthesized master. */
+struct dvbridge_l2_detail {
+    enum dvbridge_detail_state state;
+    uint8_t level, num_anchors;
+    int16_t codes[2];
+    uint16_t target_pq[2];
+    double upper_weight, code; /* Independent CB1 PQ interpolation, if NUMERIC. */
+    bool executed; /* False while the spatial operator remains unqualified. */
 };
 struct dvbridge_creative_plan {
     enum dvbridge_creative_status status;
@@ -96,6 +115,7 @@ struct dvbridge_creative_plan {
     enum dvbridge_cm4_target_status cm4_targets;
     double cm4_weight; /* Bounded PQ distance between matching target anchors. */
     struct dvbridge_creative_coverage l2_coverage, l8_coverage;
+    struct dvbridge_l2_detail l2_detail; /* Expert only; other modes retain zero. */
 };
 enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative_plan *out,
     const void *metadata, size_t bytes, const struct dvbridge_policy *policy);
@@ -109,6 +129,8 @@ bool dvbridge_creative_trim_rgb(const struct dvbridge_creative_plan *plan,
     const double input[3], double output[3]);
 bool dvbridge_creative_cm4_coefficients(struct dvbridge_cm4_coefficients *out,
     const struct dvbridge_creative_plan *plan);
+/* Internal decoded-coefficient sampler; coefficients come from the resolver. */
+bool dvbridge_creative_cm4_apply(const struct dvbridge_cm4_coefficients *, const double[3], double[3]);
 bool dvbridge_creative_cm4_trim_rgb(const struct dvbridge_creative_plan *plan,
     const double input[3], double output[3]);
 #ifdef __cplusplus

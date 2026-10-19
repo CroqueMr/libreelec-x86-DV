@@ -9,10 +9,9 @@ int main(void)
 {
     assert(dvbridge_policy_validate(NULL) == DVBRIDGE_POLICY_INVALID_VALUE);
     for (int mode = DVBRIDGE_MODE_DISABLED; mode <= DVBRIDGE_MODE_ENHANCED_DV; ++mode) {
-        for (int enhancement = DVBRIDGE_ENHANCEMENT_NATURAL;
-             enhancement <= DVBRIDGE_ENHANCEMENT_INTENSE; ++enhancement) {
+        {
             struct dvbridge_policy p = {.revision = UINT64_MAX, .mode = mode,
-                                       .enhancement = enhancement};
+                                       };
             const bool required = mode >= DVBRIDGE_MODE_HDR10_EXPERT;
             assert(dvbridge_policy_validate(&p) == (required ?
                    DVBRIDGE_POLICY_TV_PROFILE_REQUIRED : DVBRIDGE_POLICY_VALID));
@@ -47,13 +46,10 @@ int main(void)
         }
     }
     struct dvbridge_policy p = {0};
-    const int unknown[] = {-1, 5, 99};
+    const int unknown[] = {-1, DVBRIDGE_MODE_COUNT, 99};
     for (unsigned i = 0; i < sizeof(unknown)/sizeof(unknown[0]); ++i) {
         p.mode = unknown[i];
         assert(dvbridge_policy_validate(&p) == DVBRIDGE_POLICY_INVALID_VALUE);
-        p.mode = DVBRIDGE_MODE_DISABLED; p.enhancement = unknown[i];
-        assert(dvbridge_policy_validate(&p) == DVBRIDGE_POLICY_INVALID_VALUE);
-        p.enhancement = DVBRIDGE_ENHANCEMENT_NATURAL;
     }
     puts("PASS: preference bounds, complete profile and immutable validation");
 }

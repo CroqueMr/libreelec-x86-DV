@@ -5,10 +5,15 @@
 #include "dvbridge_core.h"
 #include "dvbridge_placebo.h"
 #include "dvbridge_creative.h"
+#include "cb1_master_reference.h"
 
 struct dvbridge_renderer;
 struct cb1_ai_result;
 struct dvbridge_native_overlay;
+enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *renderer,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
+    const struct dvbridge_native_overlay *overlay);
 #define CB1_AI_OVERLAY_API 1
 #define CB1_HDR10_AI_RENDER_API 1
 /* Borrowed intermediate. DV preparation may still need its existing poll;
@@ -16,14 +21,15 @@ struct dvbridge_native_overlay;
 pl_tex dvbridge_render_hdr10_ai_rgb(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
     const struct pl_frame *source,const struct dvbridge_geometry *geometry);
-/* Private Standard-AI full-raster output. The target/FBO pair is the caller's
+/* Standard-AI and Enhanced-AI transport. Standard retains its geometry rules.
+ * The target/FBO pair is the caller's
  * existing resolve ownership assertion; false can follow GPU submission.
  * Retain source imports and poll normal retirement before RGB fallback. */
 bool dvbridge_render_hdr10_ai_packed(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
     const struct pl_frame *source,const struct dvbridge_geometry *geometry,
     pl_tex target,unsigned framebuffer,bool flip_y);
-/* Final Standard-AI composition only; GUI never enters metadata analysis. */
+/* Final AI composition only; GUI never enters metadata analysis. */
 bool dvbridge_render_hdr10_ai_packed_overlay(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy,const struct cb1_ai_result *prediction,
     const struct pl_frame *source,const struct dvbridge_geometry *geometry,
@@ -32,8 +38,9 @@ struct dvbridge_retirement_owner;
 #define DVBRIDGE_CM4_GPU_API 1
 /* Trim-only shader in linear 203-nit units. The caller retains the shader. */
 bool dvbridge_creative_cm4_shader(pl_shader shader,const struct dvbridge_cm4_coefficients *coefficients);
-#define DVBRIDGE_DV_POLICY_API 5
-enum dvbridge_output_generation { DVBRIDGE_ETSI_LEGACY_LITERAL=1, DVBRIDGE_SOURCE_METADATA=2 };
+#define DVBRIDGE_DV_POLICY_API 6
+enum dvbridge_output_generation { DVBRIDGE_ETSI_LEGACY_LITERAL=1, DVBRIDGE_SOURCE_METADATA=2,
+    DVBRIDGE_RECONSTRUCTED_ENHANCED=3 };
 struct dvbridge_dv_policy_snapshot {
     struct dvbridge_identity identity;
     struct dvbridge_policy policy;
@@ -41,7 +48,7 @@ struct dvbridge_dv_policy_snapshot {
     enum dvbridge_output_generation output_generation;
     struct pl_color_space nominal_target, container;
     struct dvbridge_geometry geometry;
-    double nominal_max_nits, statistics[3]; /* Legacy analysis fields; zero for source-metadata output. */
+    double nominal_max_nits, statistics[3]; /* Analysis-model domain; zero for source-metadata output. */
     double raw_statistics[3];
     float raw_sum;
     uint32_t sample_count;
@@ -52,6 +59,10 @@ struct dvbridge_dv_policy_snapshot {
     unsigned final_framebuffer; /* Captured matching-context authority, not an owned GL object. */
     struct dvbridge_creative_plan creative;
     struct dvbridge_creative_edit_report creative_edit;
+    /* Shared pixel expansion; identity reasons are distinct from measured output. */
+    const char *pixel_algorithm, *analysis_model;
+    unsigned expansion_reason, guidance_family;
+    double source_reference_nits, display_reference_nits;
 };
 struct dvbridge_dv_policy_output {
     struct dvbridge_dv_policy_snapshot value;
@@ -73,6 +84,7 @@ struct dvbridge_renderer *dvbridge_renderer_create_with_owner(struct dvbridge_re
 enum dvbridge_dv_policy_status dvbridge_retirement_owner_poll(struct dvbridge_retirement_owner *owner);
 bool dvbridge_retirement_owner_destroy(struct dvbridge_retirement_owner **owner);
 #define DVBRIDGE_HDR10_POLICY_API 4
+#define DVBRIDGE_HDR10_DIRECT_API 1
 struct dvbridge_hdr10_policy_output {
     struct dvbridge_identity identity;
     struct dvbridge_policy policy;
@@ -95,6 +107,10 @@ void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *renderer, bool
 /* Next-picture input chroma filter for every CB1 circuit. Default false; luma is unchanged. */
 void dvbridge_renderer_set_fast_chroma(struct dvbridge_renderer *renderer, bool enabled);
 
+#define CB1_FEL_FILTER_API 1
+/* Next-picture EL enlargement only. Default false retains the existing filter. */
+void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *renderer, bool enabled);
+
 #define CB1_PROCESSING_OPTIMIZATIONS_API 1
 void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *renderer, bool enabled);
 #define CB1_OVERLAY_METADATA_API 1
@@ -106,7 +122,7 @@ void dvbridge_renderer_set_overlay_visible(struct dvbridge_renderer *renderer, b
  * source/TV policy, allocation success and HDMI admission are separate checks.
  * Disabled has no CB1 processing route and returns false, as do null/invalid inputs. */
 bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *renderer, enum dvbridge_mode mode);
-/* HDR10 AI output retains its separate analysis requirements. */
+/* AI Reference retains its analysis requirements; Enhanced also needs the dense executor. */
 bool dvbridge_renderer_supports_hdr10_ai(struct dvbridge_renderer *renderer, enum dvbridge_mode mode);
 
 /* Produces an intermediate PQ RGB image, not a scanout-ready DV frame. */
@@ -155,6 +171,16 @@ bool dvbridge_render_hdr10_policy_rgb(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy, const struct dvbridge_identity *identity,
     const struct pl_frame *source, const void *metadata, size_t bytes,
     double pts, double el_pts, struct dvbridge_geometry geometry);
+/* Raw-video final target path: render and quantize in one FP32-precision pass.
+ * Basic session and Expert policy remain separate mapping contracts. */
+bool dvbridge_render_hdr10_direct(struct dvbridge_renderer *renderer,
+    const struct dvbridge_hdr10_session *session,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip_y,bool limited,unsigned bits);
+bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct dvbridge_identity *identity,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip_y,bool limited,unsigned bits);
 const struct dvbridge_hdr10_policy_output *dvbridge_render_policy_output(const struct dvbridge_renderer *renderer);
 bool dvbridge_render_hdr10_policy_resolve(struct dvbridge_renderer *renderer, pl_tex target,
     bool flip_y, bool limited, unsigned bits);
@@ -171,14 +197,21 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(
     const struct dvbridge_identity *identity,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry);
 #define DVBRIDGE_ENHANCED_PACKED_API 1
-/* Same metadata adjustment with native full-raster packing and optional subtitles.
- * Other GUI/capture composition retains the RGB intermediate prepare above. */
+/* Same pixel/metadata contract with native packing and optional subtitles.
+ * Both prepare entry points may return Pending; resolve only after Ready. */
 enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare_packed(
     struct dvbridge_renderer *renderer,const struct dvbridge_policy *policy,
     const struct dvbridge_identity *identity,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip_y,const struct dvbridge_native_overlay *overlay);
 enum dvbridge_dv_policy_status dvbridge_render_dv_policy_poll(struct dvbridge_renderer *renderer);
+/* Optional bounded wait for authored Adaptive analysis; legacy poll stays nonblocking. */
+enum dvbridge_dv_policy_status dvbridge_render_dv_policy_wait(
+    struct dvbridge_renderer *renderer,uint64_t timeout_ns);
+/* Replace borrowed GUI resources before resolve without restarting authored-DV
+ * Enhanced analysis. Visibility updates transmitted L5, never content statistics. */
+bool dvbridge_render_dv_policy_update_overlay(struct dvbridge_renderer *renderer,
+    const struct dvbridge_native_overlay *overlay,bool visible);
 #define CB1_PACKED_AHEAD_API 1
 /* Retain one committed packed frame's GPU lease while preparing the next.
  * Other paths keep normal polling; a third outstanding frame returns Busy. */

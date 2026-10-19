@@ -35,6 +35,10 @@ def wire(case):
     return ' '.join(map(str, numbers)) + '\n'
 
 def main():
+    hdr_quality = '--hdr-conversion-quality' in sys.argv
+    if hdr_quality:
+        sys.argv.remove('--hdr-conversion-quality')
+        assert not sys.argv[3:], 'HDR quality is unavailable to diagnostic/Native commands'
     vectors = json.loads((ROOT/'vectors.json').read_text())
     cases = [c for c in vectors['image_cases'] if c['mode'] == 'Reference Expert' and 'codes' in c['expected']]
     assert len(cases) == 19
@@ -54,7 +58,7 @@ def main():
             continue
         actual = json.loads(result.stdout)
         try:
-            R.check_image_integrity(case, actual)
+            R.check_image_integrity(case, actual, hdr_conversion_quality=hdr_quality)
         except AssertionError as error:
             errors=[abs(a-b) for p,q in zip(actual['rgb'],case['expected']['rgb']) for a,b in zip(p,q)]
             worst=max(range(len(errors)),key=errors.__getitem__)
@@ -63,7 +67,8 @@ def main():
             failed += 1
         else:
             maximum = max(abs(a-b) for p,q in zip(actual['rgb'],case['expected']['rgb']) for a,b in zip(p,q))
-            print('PASS frozen GPU budget, max PQ error', maximum, flush=True)
+            print('PASS HDR conversion budget' if hdr_quality else 'PASS frozen GPU budget',
+                  'max PQ error', maximum, flush=True)
     print('compiled image cases', len(cases), 'failures', failed, flush=True)
     return bool(failed)
 

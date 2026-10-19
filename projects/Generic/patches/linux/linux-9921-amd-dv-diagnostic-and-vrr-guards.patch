@@ -1,0 +1,35 @@
+Subject: [PATCH] drm/amd/display: preserve DV formatter during CRC and suppress FreeSync
+
+Adapted from Hades, d1e00b45ece3ce1a37276a7f6645b04aa1ac7eff,
+LibreELEC-Hades 9a06cf50abce7435a445bc438d4c5cd08e67ee1e (MIT).
+Only DV streams change. Preserve the existing DITHER_OPTION_DISABLE
+transport contract; this does not adopt Hades' TRUN8 policy or DCN filter.
+
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -12082,6 +12082,8 @@
+ 	aconnector = to_amdgpu_dm_connector(new_con_state->base.connector);
+ 
+-	new_crtc_state->vrr_supported = new_con_state->freesync_capable &&
++	/* No FreeSync capability InfoFrame while bytes carry the DV tunnel. */
++	new_crtc_state->vrr_supported = !new_con_state->dv_standard &&
++					new_con_state->freesync_capable &&
+ 					vrefresh >= aconnector->min_vfreq &&
+ 					vrefresh <= aconnector->max_vfreq;
+ 
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c
+@@ -551,7 +551,11 @@
+ 	}
+ 
+-	/* Configure dithering */
+-	if (!dm_need_crc_dither(source)) {
++	/* Configure dithering, but never rewrite an active byte-preserving DV
++	 * formatter for a diagnostic CRC request (including stopping capture).
++	 */
++	if (stream_state && stream_state->dv_standard) {
++		/* Preserve both dither and dynamic expansion. */
++	} else if (!dm_need_crc_dither(source)) {
+ 		dc_stream_set_dither_option(stream_state, DITHER_OPTION_TRUN8);
+ 		dc_stream_set_dyn_expansion(stream_state->ctx->dc, stream_state,
+ 					    DYN_EXPANSION_DISABLE);

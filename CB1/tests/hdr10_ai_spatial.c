@@ -3,7 +3,16 @@
 #include "cb1_hdr10_spatial.h"
 #include <time.h>
 #include "spatial_reference.h"
+extern enum cb1_ai_status cb1_hdr10_spatial_submit_motion(struct cb1_hdr10_spatial *,pl_tex,struct cb1_ai_identity) __attribute__((weak));
 static const struct cb1_ai_identity id={3,5,7};
+static bool submitting;
+static unsigned copies;
+extern void __real_glReadPixels(GLint,GLint,GLsizei,GLsizei,GLenum,GLenum,void *);
+void __wrap_glReadPixels(GLint x,GLint y,GLsizei w,GLsizei h,GLenum format,GLenum type,void *data)
+{
+    if(submitting)++copies;
+    __real_glReadPixels(x,y,w,h,format,type,data);
+}
 static enum cb1_ai_status wait_result(struct cb1_hdr10_spatial *ctx,struct cb1_hdr10_spatial_result *out)
 {
     for(unsigned i=0;i<10000;++i){
@@ -15,13 +24,17 @@ static enum cb1_ai_status wait_result(struct cb1_hdr10_spatial *ctx,struct cb1_h
 }
 int main(void)
 {
+    assert(cb1_hdr10_spatial_submit_motion);
     struct reference_gpu gpu=reference_gpu_create();
     struct cb1_hdr10_spatial *ctx=cb1_hdr10_spatial_create(gpu.gl->gpu);assert(ctx);
     cb1_hdr10_spatial_reset(ctx,id.stream,id.revision);
     float *pixels=calloc(128*72*4,sizeof(float));assert(pixels);
     for(unsigned i=0;i<128*72;++i){pixels[4*i]=.25f;pixels[4*i+1]=.5f;pixels[4*i+2]=.75f;}
     pl_tex texture=reference_texture(gpu.gl->gpu,128,72,pixels);
+    submitting=true;
     assert(cb1_hdr10_spatial_submit(ctx,texture,id)==CB1_AI_PENDING);
+    submitting=false;
+    assert(copies==0 && "Spatial descriptors must not use an intermediate framebuffer copy");
     struct cb1_hdr10_spatial_result out;
     assert(wait_result(ctx,&out)==CB1_AI_READY);
     for(unsigned i=0;i<32;++i)assert(out.features[i]==.75f);
@@ -45,6 +58,10 @@ int main(void)
         assert(cb1_hdr10_spatial_submit(ctx,texture,id)==CB1_AI_PENDING);
         assert(wait_result(ctx,&out)==CB1_AI_READY);
         assert(!memcmp(out.features,expected,sizeof(out.features)));
+        assert(!memcmp(out.motion,expected+38,sizeof(out.motion)));
+        assert(cb1_hdr10_spatial_submit_motion(ctx,texture,id)==CB1_AI_PENDING);
+        assert(wait_result(ctx,&out)==CB1_AI_READY);
+        for(unsigned i=0;i<38;++i)assert(out.features[i]==0);
         assert(!memcmp(out.motion,expected+38,sizeof(out.motion)));
     }
     out.features[0]=.125f;

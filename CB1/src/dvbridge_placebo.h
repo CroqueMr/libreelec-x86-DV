@@ -4,7 +4,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <libplacebo/colorspace.h>
+#include <libavutil/pixfmt.h>
 #include "dvbridge_policy.h"
+
+#define DVBRIDGE_CHROMA_MAP_API 1
+enum pl_chroma_location dvbridge_map_chroma(enum AVChromaLocation location);
 
 struct dvbridge_color {
     struct pl_color_space color;

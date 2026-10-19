@@ -19,6 +19,8 @@ struct vpp_slot {
     VASurfaceID surface;
     EGLImageKHR egl_image;
     bool leased;
+    bool pending;
+    AVFrame *source;
 };
 struct dvbridge_fel_vpp {
     AVBufferRef *device;
@@ -122,16 +124,27 @@ struct dvbridge_fel_vpp *dvbridge_fel_vpp_create(AVBufferRef *device, int width,
     vpp->egl = eglGetCurrentDisplay(); vpp->gl_context = eglGetCurrentContext();
     vpp->width = width; vpp->height = height;
     /* VPP's general RT mask is not an exhaustive list of output formats. */
-    if (!vpp->device || !vpp->va ||
-        vaCreateConfig(vpp->va, VAProfileNone, VAEntrypointVideoProc, NULL, 0, &vpp->config) != VA_STATUS_SUCCESS ||
-        vaCreateContext(vpp->va, vpp->config, width, height, VA_PROGRESSIVE, NULL, 0, &vpp->context) != VA_STATUS_SUCCESS)
+    if (!vpp->device || !vpp->va) goto fail;
+    VAStatus status = vaCreateConfig(vpp->va, VAProfileNone, VAEntrypointVideoProc, NULL, 0, &vpp->config);
+    if (status != VA_STATUS_SUCCESS) {
+        av_log(NULL, AV_LOG_WARNING, "CB1 FEL VPP: config failed: %s\n", vaErrorStr(status));
         goto fail;
+    }
+    status = vaCreateContext(vpp->va, vpp->config, width, height, VA_PROGRESSIVE, NULL, 0, &vpp->context);
+    if (status != VA_STATUS_SUCCESS) {
+        av_log(NULL, AV_LOG_WARNING, "CB1 FEL VPP: context failed: %s\n", vaErrorStr(status));
+        goto fail;
+    }
     VASurfaceAttrib format = {.type = VASurfaceAttribPixelFormat, .flags = VA_SURFACE_ATTRIB_SETTABLE,
         .value = {.type = VAGenericValueTypeInteger, .value.i = VA_FOURCC_Y416}};
     for (unsigned i = 0; i < 2; ++i) {
-        if (vaCreateSurfaces(vpp->va, VA_RT_FORMAT_YUV444_12, width, height,
-            &vpp->slots[i].surface, 1, &format, 1) != VA_STATUS_SUCCESS || !import_surface(vpp, &vpp->slots[i]))
+        status = vaCreateSurfaces(vpp->va, VA_RT_FORMAT_YUV444_12, width, height,
+            &vpp->slots[i].surface, 1, &format, 1);
+        if (status != VA_STATUS_SUCCESS || !import_surface(vpp, &vpp->slots[i])) {
+            av_log(NULL, AV_LOG_INFO, "CB1 FEL VPP: Y416 unavailable: %s\n",
+                   status == VA_STATUS_SUCCESS ? "GPU import failed" : vaErrorStr(status));
             goto fail;
+        }
     }
     return vpp;
 fail:
@@ -141,6 +154,13 @@ fail:
 
 enum dvbridge_fel_vpp_result dvbridge_fel_vpp_acquire(struct dvbridge_fel_vpp *vpp,
     const AVFrame *source, const struct dvbridge_fel_vpp_image **image)
+{
+    return dvbridge_fel_vpp_acquire_chroma(vpp,source,PL_CHROMA_LEFT,image);
+}
+
+static enum dvbridge_fel_vpp_result vpp_acquire(struct dvbridge_fel_vpp *vpp,
+    const AVFrame *source, enum pl_chroma_location chroma,
+    const struct dvbridge_fel_vpp_image **image, bool deferred)
 {
     if (image) *image = NULL;
     if (!vpp || !image || !source || vpp->failed || source->format != AV_PIX_FMT_VAAPI ||
@@ -156,32 +176,98 @@ enum dvbridge_fel_vpp_result dvbridge_fel_vpp_acquire(struct dvbridge_fel_vpp *v
     for (unsigned i = 0; i < 2; ++i)
         if (!vpp->slots[i].leased) { slot = &vpp->slots[i]; break; }
     if (!slot) return DVBRIDGE_VPP_BUSY;
+    if (deferred && !(slot->source = av_frame_clone(source))) return DVBRIDGE_VPP_FAILED;
     VARectangle src = {0, 0, source->width, source->height}, dst = {0, 0, vpp->width, vpp->height};
     VAProcPipelineParameterBuffer params = {.surface = (VASurfaceID)(uintptr_t)source->data[3],
         .surface_region = &src, .output_region = &dst,
         .surface_color_standard = VAProcColorStandardBT2020,
         .output_color_standard = VAProcColorStandardBT2020, .filter_flags = VA_FILTER_SCALING_DEFAULT};
     params.input_color_properties.color_range = params.output_color_properties.color_range = VA_SOURCE_RANGE_REDUCED;
-    params.input_color_properties.chroma_sample_location = VA_CHROMA_SITING_VERTICAL_CENTER | VA_CHROMA_SITING_HORIZONTAL_LEFT;
+    unsigned siting;
+    switch (chroma) {
+    case PL_CHROMA_TOP_LEFT: siting=VA_CHROMA_SITING_VERTICAL_TOP | VA_CHROMA_SITING_HORIZONTAL_LEFT; break;
+    case PL_CHROMA_TOP_CENTER: siting=VA_CHROMA_SITING_VERTICAL_TOP | VA_CHROMA_SITING_HORIZONTAL_CENTER; break;
+    case PL_CHROMA_BOTTOM_LEFT: siting=VA_CHROMA_SITING_VERTICAL_BOTTOM | VA_CHROMA_SITING_HORIZONTAL_LEFT; break;
+    case PL_CHROMA_BOTTOM_CENTER: siting=VA_CHROMA_SITING_VERTICAL_BOTTOM | VA_CHROMA_SITING_HORIZONTAL_CENTER; break;
+    case PL_CHROMA_CENTER: siting=VA_CHROMA_SITING_VERTICAL_CENTER | VA_CHROMA_SITING_HORIZONTAL_CENTER; break;
+    default: siting=VA_CHROMA_SITING_VERTICAL_CENTER | VA_CHROMA_SITING_HORIZONTAL_LEFT; break;
+    }
+    params.input_color_properties.chroma_sample_location = siting;
     VABufferID buffer = VA_INVALID_ID;
+    const char *stage = "pipeline buffer";
     VAStatus status = vaCreateBuffer(vpp->va, vpp->context, VAProcPipelineParameterBufferType,
         sizeof(params), 1, &params, &buffer);
-    if (status == VA_STATUS_SUCCESS) status = vaBeginPicture(vpp->va, vpp->context, slot->surface);
     if (status == VA_STATUS_SUCCESS) {
+        stage = "begin picture";
+        status = vaBeginPicture(vpp->va, vpp->context, slot->surface);
+    }
+    if (status == VA_STATUS_SUCCESS) {
+        stage = "render picture";
         status = vaRenderPicture(vpp->va, vpp->context, &buffer, 1);
         const VAStatus ended = vaEndPicture(vpp->va, vpp->context);
-        if (status == VA_STATUS_SUCCESS) status = ended;
+        if (status == VA_STATUS_SUCCESS) { stage = "end picture"; status = ended; }
     }
     if (buffer != VA_INVALID_ID) vaDestroyBuffer(vpp->va, buffer);
-    if (status == VA_STATUS_SUCCESS) status = vaSyncSurface(vpp->va, slot->surface);
-    if (status != VA_STATUS_SUCCESS) { vpp->failed = true; return DVBRIDGE_VPP_FAILED; }
+    if (status != VA_STATUS_SUCCESS) {
+        av_log(NULL, AV_LOG_WARNING, "CB1 FEL VPP: %s failed: %s\n", stage, vaErrorStr(status));
+        if (deferred) {
+            /* A failed end-picture may still have submitted work. */
+            slot->leased = slot->pending = true;
+            if (dvbridge_fel_vpp_finish(vpp, &slot->image) == DVBRIDGE_VPP_OK)
+                slot->leased = false;
+        }
+        vpp->failed = true; return DVBRIDGE_VPP_FAILED;
+    }
+    slot->leased = slot->pending = true;
+    if (!deferred && dvbridge_fel_vpp_finish(vpp, &slot->image) != DVBRIDGE_VPP_OK)
+        return DVBRIDGE_VPP_FAILED;
     slot->leased = true; *image = &slot->image;
-    return DVBRIDGE_VPP_OK;
+    return deferred ? DVBRIDGE_VPP_PENDING : DVBRIDGE_VPP_OK;
+}
+
+enum dvbridge_fel_vpp_result dvbridge_fel_vpp_acquire_chroma(struct dvbridge_fel_vpp *vpp,
+    const AVFrame *source, enum pl_chroma_location chroma,
+    const struct dvbridge_fel_vpp_image **image)
+{
+    return vpp_acquire(vpp, source, chroma, image, false);
+}
+
+enum dvbridge_fel_vpp_result dvbridge_fel_vpp_prefetch_chroma(struct dvbridge_fel_vpp *vpp,
+    const AVFrame *source, enum pl_chroma_location chroma,
+    const struct dvbridge_fel_vpp_image **image)
+{
+    return vpp_acquire(vpp, source, chroma, image, true);
+}
+
+enum dvbridge_fel_vpp_result dvbridge_fel_vpp_finish(struct dvbridge_fel_vpp *vpp,
+    const struct dvbridge_fel_vpp_image *image)
+{
+    if (!vpp || !image || eglGetCurrentDisplay() != vpp->egl ||
+        eglGetCurrentContext() != vpp->gl_context) return DVBRIDGE_VPP_FAILED;
+    for (unsigned i = 0; i < 2; ++i) {
+        struct vpp_slot *slot = &vpp->slots[i];
+        if (image != &slot->image || !slot->leased) continue;
+        if (slot->pending) {
+            VAStatus status = vaSyncSurface(vpp->va, slot->surface);
+            if (status != VA_STATUS_SUCCESS) {
+                av_log(NULL, AV_LOG_WARNING, "CB1 FEL VPP: surface sync failed: %s\n", vaErrorStr(status));
+                vpp->failed = true; return DVBRIDGE_VPP_FAILED;
+            }
+            slot->pending = false;
+            av_frame_free(&slot->source);
+        }
+        return DVBRIDGE_VPP_OK;
+    }
+    return DVBRIDGE_VPP_FAILED;
 }
 
 void dvbridge_fel_vpp_release(struct dvbridge_fel_vpp *vpp, const struct dvbridge_fel_vpp_image *image)
 {
     if (!vpp || !image) return;
     for (unsigned i = 0; i < 2; ++i)
-        if (image == &vpp->slots[i].image) { vpp->slots[i].leased = false; return; }
+        if (image == &vpp->slots[i].image) {
+            if (dvbridge_fel_vpp_finish(vpp, image) == DVBRIDGE_VPP_OK)
+                vpp->slots[i].leased = false;
+            return;
+        }
 }

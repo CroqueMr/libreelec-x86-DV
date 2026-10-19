@@ -27,7 +27,7 @@ int main(int argc,char **argv)
     if(uniform){uint32_t bits;memcpy(&bits,&constant,4);fprintf(stderr,"UNIFORM exact FP32 clear input=%a bits=%08x raster=%ux%u active=%u,%u,%u,%u\n",constant,bits,w,h,left,top,right,bottom);}
     r->dv.active=true;r->dv.output.value.identity=(struct dvbridge_identity){17,29,43};
     memcpy(r->dv.output.value.margins,(unsigned[4]){left,3840-right,top,2160-bottom},4*sizeof(unsigned));
-    assert(glGetError()==GL_NO_ERROR && dv_analyze(r));
+    assert(glGetError()==GL_NO_ERROR && dv_analyze(r,r->rgb));
     GLenum status=GL_TIMEOUT_EXPIRED;unsigned checks=0;
     for(;checks<10000 && status==GL_TIMEOUT_EXPIRED;checks++){
         status=r->dv.wait_sync(r->dv.fence,0,0);

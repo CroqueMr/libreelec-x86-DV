@@ -11,21 +11,7 @@
 /* The frozen FFmpeg 9.0 RGB48 producer uses BT.2020 coefficients rounded to
  * 13 fractional bits and a 255/256 RGB scale. These are analysis conventions,
  * not display adjustments. Source: libswscale/yuv2rgb.c and output.c. */
-static const char header[]=
-    "int sample_y(ivec2 p){return int(roundEven(texelFetch(Y_input,p+origin,0).r*65535.0))>>bit_shift;}"
-    "ivec2 sample_uv(ivec2 p){vec2 q;"
-    "p+=subsampled!=0u?origin/2:origin;if(packed!=0u)q=texelFetch(U_input,p,0).rg;"
-    "else q=vec2(texelFetch(U_input,p,0).r,texelFetch(V_input,p,0).r);"
-    "return ivec2(roundEven(q*65535.0))>>ivec2(bit_shift);}"
-    "vec4 analysis_rgb(ivec2 p){int y=4*sample_y(p)-16*(1<<depth_shift)*4;ivec2 uv;"
-    "if(subsampled!=0u){int row=p.y/2;"
-    "int other=(p.y&1)!=0?min(row+1,int(height)/2-1):max(row-1,0);"
-    "uv=3*sample_uv(ivec2(p.x/2,row))+sample_uv(ivec2(p.x/2,other));}"
-    "else uv=4*sample_uv(p);uv-=ivec2(128*(1<<depth_shift)*4);"
-    "int rounding_bias=1<<(depth_shift+6);int shift=depth_shift+7;"
-    "ivec3 value=ivec3(y*9539+uv.y*13752,y*9539-uv.x*1535-uv.y*5328,y*9539+uv.x*17545);"
-    "value=(value+ivec3(rounding_bias))>>ivec3(shift);"
-    "return vec4(vec3(clamp(value,ivec3(0),ivec3(65535)))/65535.0,1.0);}";
+static const char header[]=CB1_HDR10_SOURCE_GLSL;
 
 struct cb1_hdr10_ingress {
     pl_gpu gpu;pl_dispatch dispatch;pl_tex texture, horizontal, small, filters[4], preview[18];pl_fmt format;
@@ -52,9 +38,9 @@ void cb1_hdr10_ingress_destroy(struct cb1_hdr10_ingress **ctx)
     free(*ctx);*ctx=NULL;
 }
 
-static enum cb1_ai_status admissible(struct cb1_hdr10_ingress *ctx,const struct pl_frame *source)
+enum cb1_ai_status cb1_hdr10_ingress_validate(const struct pl_frame *source)
 {
-    if (!ctx || !source)return CB1_AI_INVALID;
+    if (!source)return CB1_AI_INVALID;
     if (source->color.transfer!=PL_COLOR_TRC_PQ || source->color.primaries!=PL_COLOR_PRIM_BT_2020 ||
         source->repr.sys!=PL_COLOR_SYSTEM_BT_2020_NC || source->repr.levels!=PL_COLOR_LEVELS_LIMITED ||
         source->enhancement_layer || source->repr.dovi || source->num_overlays ||
@@ -88,36 +74,44 @@ static enum cb1_ai_status admissible(struct cb1_hdr10_ingress *ctx,const struct 
     return CB1_AI_READY;
 }
 
-enum cb1_ai_status cb1_hdr10_ingress_rgb(struct cb1_hdr10_ingress *ctx,
-    const struct pl_frame *source,pl_tex *out)
+bool cb1_hdr10_ingress_source_shader(pl_shader shader,const struct pl_frame *source)
 {
-    if(!out)return CB1_AI_INVALID;
-    enum cb1_ai_status status=admissible(ctx,source);if(status!=CB1_AI_READY)return status;
+    if (!shader || cb1_hdr10_ingress_validate(source)!=CB1_AI_READY)return false;
     pl_tex y=source->planes[0].texture,u=source->planes[1].texture;
-    const int width=(int)(source->crop.x1-source->crop.x0),height=(int)(source->crop.y1-source->crop.y0);
+    unsigned sub=u->params.w==y->params.w/2 && u->params.h==y->params.h/2;
+    unsigned packed=source->num_planes==2,h=(unsigned)(source->crop.y1-source->crop.y0);
     int origin[2]={(int)source->crop.x0,(int)source->crop.y0};
-    unsigned sub=u->params.w==y->params.w/2 && u->params.h==y->params.h/2,packed=source->num_planes==2;
-    if (!pl_tex_recreate(ctx->gpu,&ctx->texture,pl_tex_params(.w=width,.h=height,
-        .format=ctx->format,.sampleable=true,.renderable=true)))return CB1_AI_INCOMPATIBLE;
+    int depth_shift=source->repr.bits.color_depth-8,bit_shift=source->repr.bits.bit_shift;
     struct pl_shader_desc descriptors[]={
         {.desc={.name="Y_input",.type=PL_DESC_SAMPLED_TEX},.binding={.object=y,.sample_mode=PL_TEX_SAMPLE_NEAREST}},
         {.desc={.name="U_input",.type=PL_DESC_SAMPLED_TEX},.binding={.object=u,.sample_mode=PL_TEX_SAMPLE_NEAREST}},
         {.desc={.name="V_input",.type=PL_DESC_SAMPLED_TEX},.binding={.object=packed?u:source->planes[2].texture,.sample_mode=PL_TEX_SAMPLE_NEAREST}}};
-    char source_header[sizeof(header)+64];
-    snprintf(source_header,sizeof(source_header),"%s%s",packed?"#define V_input U_input\n":"",header);
-    int depth_shift=source->repr.bits.color_depth-8,bit_shift=source->repr.bits.bit_shift;
-    unsigned h=(unsigned)height;
     struct pl_shader_var variables[]={
         {.var=pl_var_uint("subsampled"),.data=&sub,.dynamic=true},
-        {.var=pl_var_uint("packed"),.data=&packed,.dynamic=true},
+        {.var=pl_var_uint("source_packed"),.data=&packed,.dynamic=true},
         {.var=pl_var_uint("height"),.data=&h,.dynamic=true},
         {.var=pl_var_int("depth_shift"),.data=&depth_shift,.dynamic=true},
         {.var=pl_var_int("bit_shift"),.data=&bit_shift,.dynamic=true},
         {.var={.name="origin",.type=PL_VAR_SINT,.dim_v=2,.dim_m=1,.dim_a=1},.data=origin,.dynamic=true}};
+    char source_header[sizeof(header)+64];
+    snprintf(source_header,sizeof(source_header),"%s%s",packed?"#define V_input U_input\n":"",header);
+    return pl_shader_custom(shader,&(struct pl_custom_shader){.header=source_header,
+        .output=PL_SHADER_SIG_NONE,.descriptors=descriptors,.num_descriptors=packed?2:3,
+        .variables=variables,.num_variables=6});
+}
+
+enum cb1_ai_status cb1_hdr10_ingress_rgb(struct cb1_hdr10_ingress *ctx,
+    const struct pl_frame *source,pl_tex *out)
+{
+    if(!ctx || !out)return CB1_AI_INVALID;
+    enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);if(status!=CB1_AI_READY)return status;
+    int width=(int)(source->crop.x1-source->crop.x0),height=(int)(source->crop.y1-source->crop.y0);
+    if (!pl_tex_recreate(ctx->gpu,&ctx->texture,pl_tex_params(.w=width,.h=height,
+        .format=ctx->format,.sampleable=true,.renderable=true)))return CB1_AI_INCOMPATIBLE;
     pl_shader shader=pl_dispatch_begin(ctx->dispatch);
-    bool ok=pl_shader_custom(shader,&(struct pl_custom_shader){.description="CB1 RGB48 analysis ingress",
-        .header=source_header,.body="color=analysis_rgb(ivec2(gl_FragCoord.xy));",.output=PL_SHADER_SIG_COLOR,
-        .descriptors=descriptors,.num_descriptors=packed?2:3,.variables=variables,.num_variables=6});
+    bool ok=cb1_hdr10_ingress_source_shader(shader,source) &&
+        pl_shader_custom(shader,&(struct pl_custom_shader){.description="CB1 RGB48 analysis ingress",
+            .body="color=analysis_rgb(ivec2(gl_FragCoord.xy));",.output=PL_SHADER_SIG_COLOR});
     if (ok)ok=pl_dispatch_finish(ctx->dispatch,pl_dispatch_params(.shader=&shader,.target=ctx->texture));
     pl_dispatch_abort(ctx->dispatch,&shader);
     if (!ok)return CB1_AI_INVALID;
@@ -175,8 +169,8 @@ static const char small_header[]=
 enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
     const struct pl_frame *source,pl_tex *out)
 {
-    if(!out)return CB1_AI_INVALID;
-    enum cb1_ai_status status=admissible(ctx,source);if(status!=CB1_AI_READY)return status;
+    if(!ctx || !out)return CB1_AI_INVALID;
+    enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);if(status!=CB1_AI_READY)return status;
     int width=(int)(source->crop.x1-source->crop.x0),height=(int)(source->crop.y1-source->crop.y0);
     int origin[2]={(int)source->crop.x0,(int)source->crop.y0};
     unsigned sub=source->planes[1].texture->params.w==source->planes[0].texture->params.w/2,
@@ -197,7 +191,7 @@ enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
     int depth_shift=source->repr.bits.color_depth-8,bit_shift=source->repr.bits.bit_shift;
     struct pl_shader_var variables[]={
         {.var=pl_var_uint("subsampled"),.data=&sub,.dynamic=true},
-        {.var=pl_var_uint("packed"),.data=&packed,.dynamic=true},
+        {.var=pl_var_uint("source_packed"),.data=&packed,.dynamic=true},
         {.var=pl_var_uint("height"),.data=&h,.dynamic=true},
         {.var=pl_var_int("depth_shift"),.data=&depth_shift,.dynamic=true},
         {.var=pl_var_int("bit_shift"),.data=&bit_shift,.dynamic=true},
@@ -227,8 +221,8 @@ enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
 enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *ctx,
     const struct pl_frame *source, pl_tex *out)
 {
-    if (!out) return CB1_AI_INVALID;
-    enum cb1_ai_status status=admissible(ctx,source);
+    if (!ctx || !out) return CB1_AI_INVALID;
+    enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);
     if (status!=CB1_AI_READY) return status;
     bool sub=source->planes[1].texture->params.w==source->planes[0].texture->params.w/2;
     bool packed=source->num_planes==2;

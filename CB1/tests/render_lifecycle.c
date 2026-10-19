@@ -223,6 +223,7 @@ int main(int argc, char **argv)
         mapping->nlq[c].nlq_offset = 512;
         mapping->nlq[c].linear_deadzone_slope = 1;
         mapping->nlq[c].linear_deadzone_threshold = 0;
+        mapping->nlq[c].vdr_in_max = 1 << h->coef_log2_denom;
     }
     assert(!dvbridge_render_rgb(renderer, &frame, m, bytes, 3, NAN, geometry));
     frame.enhancement_layer = &el_frame;

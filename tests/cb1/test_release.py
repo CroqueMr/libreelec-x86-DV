@@ -17,10 +17,12 @@ class ReleaseTests(unittest.TestCase):
         script = "unset " + " ".join(keys) + "\n" + defaults
         script += '\nprintf "%s\\n" "$CUSTOM_VERSION" "$BUILDER_VERSION" "$CB1_HDR10_AI"'
         result = subprocess.check_output(["bash", "-c", script], text=True).splitlines()
-        self.assertEqual(result, ["DV-R1.0.0-Beta3", "DV-R1.0.0 Beta3", "yes"])
+        self.assertEqual(result, ["DV-R1.0.0-Beta4", "DV-R1.0.0 Beta4", "yes"])
         versions = json.loads((ROOT / "config/cb1-versions.json").read_text())
         self.assertEqual(versions["Release"]["version"], result[1])
-        self.assertEqual(versions["Release"]["tag"], "R1.0.0-Beta3")
+        self.assertEqual(versions["Release"]["tag"], "R1.0.0-Beta4")
+        self.assertEqual(versions["Release"]["image"],
+                         "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-Beta4")
 
 
 if __name__ == "__main__":

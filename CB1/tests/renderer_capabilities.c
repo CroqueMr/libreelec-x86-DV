@@ -82,7 +82,15 @@ int main(void)
     unchanged(r,DVBRIDGE_MODE_DISABLED,false);
     unchanged(r,(enum dvbridge_mode)-1,false);
     unchanged(r,(enum dvbridge_mode)99,false);
-    unchanged(r,(enum dvbridge_mode)5,false);
+    unchanged(r,DVBRIDGE_MODE_MASTER_REFERENCE,true);
+    {
+        pl_gpu actual=r->gpu;struct pl_gpu_t limited=*actual;
+        r->gpu=&limited;limited.glsl.gles=true;limited.glsl.version=300;
+        unchanged(r,DVBRIDGE_MODE_MASTER_REFERENCE,false);
+        limited.glsl.version=310;unchanged(r,DVBRIDGE_MODE_MASTER_REFERENCE,true);
+        r->gpu=actual;
+    }
+    unchanged(r,DVBRIDGE_MODE_COUNT,false);
     for(int mode=DVBRIDGE_MODE_STANDARD;mode<=DVBRIDGE_MODE_ENHANCED_DV;mode++)
         unchanged(r,mode,true);
     /* Both committed identities and a prepared transaction survive queries. */
@@ -97,7 +105,7 @@ int main(void)
     unchanged(r,DVBRIDGE_MODE_STANDARD,true);
     unchanged(r,DVBRIDGE_MODE_HDR10_BASIC,true);
     unchanged(r,DVBRIDGE_MODE_HDR10_EXPERT,true);
-    unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,true);
+    unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);
     no_storage=false;
 #ifdef CB1_HAS_HDR10_AI
     storage_override=65537*4;
@@ -105,7 +113,7 @@ int main(void)
     assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));
     storage_override=(65537+512)*4;
     assert(dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_STANDARD));
-    assert(dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));
+    assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));
     storage_override=0;
 #endif
     const GLenum limits[]={GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,GL_MAX_COMPUTE_WORK_GROUP_SIZE,
@@ -116,11 +124,11 @@ int main(void)
         assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));
         assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_STANDARD));
         unchanged(r,DVBRIDGE_MODE_STANDARD,true);unchanged(r,DVBRIDGE_MODE_HDR10_BASIC,true);
-        unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,true);
+        unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);
     }
     low_limit=0;low_precision=true;unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);low_precision=false;
     low_range=true;unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);low_range=false;
-    old_gles=true;unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,true);
+    old_gles=true;unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);
     assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_STANDARD));
     assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));old_gles=false;
     desktop_gl=true;unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);desktop_gl=false;
@@ -129,7 +137,7 @@ int main(void)
     for(unsigned i=0;i<sizeof(functions)/sizeof(*functions);i++){
         missing_proc=functions[i];
         assert(!dvbridge_renderer_supports_hdr10_ai(r,DVBRIDGE_MODE_ENHANCED_DV));
-        unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,i==0 || i>=4);
+        unchanged(r,DVBRIDGE_MODE_ENHANCED_DV,false);
     }
     missing_proc=NULL;
     for(unsigned i=0;i<2;i++){
