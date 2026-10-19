@@ -130,7 +130,7 @@ int main() {
             command = ['c++', '-std=c++20', '-pthread', '-fsanitize=address,undefined',
                        '-fno-omit-frame-pointer', '-I' + str(TREE / 'xbmc'),
                        '-I' + str(prefix / 'include'),
-                       '-I/home/dvbuild/hdr10-ai-enhanced-image-20261015/sysroot/usr/include',
+                       '-I' + os.environ.get('CB1_FMT_INCLUDE', '/usr/include'),
                        str(root / 'test.cpp'), str(helper),
                        str(TREE / 'xbmc/utils/Base64.cpp'),
                        str(TREE / 'xbmc/utils/Variant.cpp'),

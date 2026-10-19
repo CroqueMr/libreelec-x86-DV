@@ -5,6 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfmt-dev nlohmann-json3-dev
+      - name: Prepare matched test sources
+        run: bash .github/scripts/prepare-test-sources.sh
       - name: Test source staging
         run: python3 -m unittest discover -s tests/cb1 -p 'test_*.py'
       - name: Verify bundled engine and model
