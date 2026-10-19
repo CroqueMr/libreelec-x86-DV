@@ -192,6 +192,15 @@ static bool prepare_colour(struct cb1_processing *next, pl_gpu gpu)
     return true;
 }
 
+pl_tex cb1_processing_pq_encoder(struct cb1_processing *state, pl_gpu gpu)
+{
+    if (!state || !gpu) return NULL;
+    if (state->pq_texture[1]) return state->pq_texture[1];
+    if (gpu->limits.max_tex_2d_dim<4096 || !pl_find_fmt(gpu,PL_FMT_FLOAT,1,32,32,
+            PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR)) return NULL;
+    return prepare_colour(state,gpu) ? state->pq_texture[1] : NULL;
+}
+
 bool cb1_processing_prepare(struct cb1_processing *state, pl_gpu gpu,
     const struct pl_frame *source, const void *metadata, size_t bytes,
     bool paired, uint32_t requested)

@@ -1,4 +1,3 @@
-# SPDX-License-Identifier: MIT
 """Run the shipped pending-admission guards across L5 visibility edges."""
 import os
 from pathlib import Path
@@ -6,6 +5,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+from shipped_kodi import shipped_code
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -15,10 +15,10 @@ class PendingVisibility(unittest.TestCase):
         if source:
             code=Path(source).read_text()
         else:
-            patch=(ROOT/'projects/Generic/patches/kodi/kodi-9999-zzz-l5-overlay-visibility.patch').read_text()
-            code='\n'.join(line[1:] for line in patch.splitlines()
-                          if line.startswith((' ','+')) and not line.startswith('+++'))
-        guards=re.findall(r'if \(base.binding == m_pendingBinding &&\s*(?:revision|prediction.id.revision).*?\)\s*return PollReady\(\)',code,re.S)
+            code=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp')
+        guards=re.findall(r'if \((?:base.binding == m_pendingBinding &&\s*(?:revision|prediction.id.revision)|sameTransaction &&\s*m_pendingOverlayVisible|sameAITransaction && \(!m_direct).*?\)\s*return PollReady\(\)',code,re.S)
+        ai_transaction=re.search(r'const bool sameAITransaction = .*?;',code,re.S)
+        ai_transaction=ai_transaction.group(0) if ai_transaction else ''
         self.assertEqual(len(guards),2)
         functions=[]
         for i,guard in enumerate(guards):
@@ -30,9 +30,10 @@ class PendingVisibility(unittest.TestCase):
   struct Preferences {int revision; bool SameValues(const Preferences&) const {return true;}} preferences{1},m_requested{1};
   struct {int mode;} policy{0}; int m_effectiveMode=0;
   bool m_direct=direct,allowPacked=true,sameGeometry=true;
+  const bool sameTransaction=base.binding==m_pendingBinding && revision==m_pendingIdentity.revision && policy.mode==m_effectiveMode && (allowPacked || !m_direct);
   int m_pendingOverlayRevision=1,m_nativeOverlayRevision=contentChange||visibilityChange ? 2 : 1;
   bool m_pendingOverlayVisible=pendingVisible,m_overlayVisible=visibilityChange ? !pendingVisible : pendingVisible;
-''' % i + condition+'return true; return false;}')
+''' % i + ai_transaction+condition+'return true; return false;}')
         checks=[]
         for i in range(2):
             checks.append('''

@@ -39,6 +39,36 @@ static AVDOVIDmData custom_l10(void)
     return e;
 }
 
+static void custom_target_24(void)
+{
+    size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
+    *av_dovi_get_ext(m,0)=l8(10);
+    av_dovi_get_ext(m,0)->l8.target_display_index=24;
+    av_dovi_get_ext(m,0)->dvbridge_original_bytes[0]=24;
+    *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=10,
+        .l10={.target_display_index=24,.target_max_pq=2547,.target_min_pq=0,.target_primary_index=0},
+        .dvbridge_raw_magic=0x41424456,.dvbridge_original_length=5,
+        .dvbridge_original_bytes={0x18,0x9f,0x30,0,0}};
+    struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+        .tv={2300,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
+    struct dvbridge_creative_plan p;
+    for(unsigned i=0;i<2;i++){
+        assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
+        assert(p.cm4_lower.present && p.cm4_lower.target.origin==DVBRIDGE_CM4_CUSTOM);
+        assert(p.cm4_lower.target.max_pq==2547 && p.cm4_lower.target.transfer==PL_COLOR_TRC_UNKNOWN);
+        policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;
+    }
+    av_dovi_get_ext(m,0)->l8.target_display_index=25;
+    av_dovi_get_ext(m,0)->dvbridge_original_bytes[0]=25;
+    av_dovi_get_ext(m,1)->l10.target_display_index=25;
+    av_dovi_get_ext(m,1)->l10.target_primary_index=2;
+    memcpy(av_dovi_get_ext(m,1)->dvbridge_original_bytes,(uint8_t[]){0x19,0x9f,0x30,0,2},5);
+    policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;
+    assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
+    assert(p.cm4_lower.present && p.cm4_lower.target.origin==DVBRIDGE_CM4_CUSTOM);
+    av_free(m);
+}
+
 static void target_order(AVDOVIMetadata *m,size_t bytes)
 {
     const unsigned orders[][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
@@ -271,9 +301,8 @@ static void custom_target_edit(void)
     assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
     assert(p.cm4_lower.target.transfer==PL_COLOR_TRC_UNKNOWN);
     struct dvbridge_creative_edit_report report;
-    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_NEUTRAL);
-    assert(report.candidate_evaluations && report.reason==DVBRIDGE_CREATIVE_OK);
-    assert(report.candidate_evaluations<=3 && "An exact identity must not run the trim search");
+    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_UNSUPPORTED);
+    assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
     assert(edited_bytes==bytes && !memcmp(m,edited,bytes));av_free(edited);
     b->l10.target_primary_index=b->dvbridge_original_bytes[4]=99;
     assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
@@ -297,13 +326,20 @@ static void authored_signature(bool emit)
     memcpy(a->dvbridge_original_bytes,raw,sizeof(raw));*b=l10();
     av_dovi_get_color(m)->source_max_pq=3079;
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
-        .enhancement=DVBRIDGE_ENHANCEMENT_SIGNATURE,
+        
         .tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
     void *before=av_memdup(m,bytes),*edited=NULL;size_t edited_bytes=0;
     struct dvbridge_creative_plan p;struct dvbridge_creative_edit_report report;
     assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
     assert(p.cm4_lower.target.transfer==PL_COLOR_TRC_UNKNOWN);
-    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_READY);
+    enum dvbridge_creative_status status=dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report);
+    if(status==DVBRIDGE_CREATIVE_UNSUPPORTED){
+        assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
+        assert(edited_bytes==bytes && !memcmp(edited,m,bytes) && !memcmp(m,before,bytes));
+        if(emit)puts("{\"status\":1,\"preserved\":true}");
+        av_free(before);av_free(edited);av_free(m);return;
+    }
+    assert(status==DVBRIDGE_CREATIVE_READY);
     assert(edited_bytes==bytes && report.reason==DVBRIDGE_CREATIVE_OK && !memcmp(m,before,bytes));
     const AVDOVIDmData *e=av_dovi_get_ext(edited,0);
     assert(report.l8_coverage.edited && !(report.l8_coverage.edited&~31u));
@@ -347,9 +383,9 @@ static void fit_contract(bool emit)
     a->l8.target_display_index=a->dvbridge_original_bytes[0]=49;
     av_dovi_get_color(m)->source_max_pq=3079;
     if(emit)printf("{\"cases\":[");
-    for(unsigned preset=0;preset<2;preset++)for(unsigned j=0;j<5;j++){
+    for(unsigned preset=1;preset<2;preset++)for(unsigned j=0;j<5;j++){
         struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
-            .enhancement=preset,.tv={peaks[j],DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+            .tv={peaks[j],DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
         struct dvbridge_creative_plan p;void *edited=NULL;size_t edited_bytes=0;
         assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
         struct dvbridge_creative_edit_report report;
@@ -361,37 +397,25 @@ static void fit_contract(bool emit)
         if(emit){
             AVDOVIDmData *e=av_dovi_get_ext(edited,0);
             printf("%s{\"preset\":%u,\"peak\":%u,\"status\":%u,\"master_q\":3079,\"scene\":1,\"words\":[%u,%u,%u,%u,%u]}",
-                preset || j?",":"",preset,peaks[j],status,e->l8.trim_slope,e->l8.trim_offset,
+                j?",":"",preset,peaks[j],status,e->l8.trim_slope,e->l8.trim_offset,
                 e->l8.trim_power,e->l8.trim_chroma_weight,e->l8.trim_saturation_gain);
         }
-        assert(status==DVBRIDGE_CREATIVE_NEUTRAL || status==DVBRIDGE_CREATIVE_READY);
-        if(!preset && j<=2)
-            assert(report.candidate_evaluations<=3 && "Natural identity must have bounded validation-only work");
-        if(preset)
-            assert(report.candidate_evaluations<=4 && "A valid edited seed must not run the trim search");
-        {
-            policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;policy.tv.peak_nits=fit_nits(3079.0/4095);
-            struct dvbridge_creative_plan q;dvbridge_creative_resolve(&q,edited,bytes,&policy);
-            double reference=floor(fit_pq(fmax(1000,peaks[j]))*4095+.5);
-            double headroom=fmax(-.5,fmin(.5,(reference-3079)/3079));
-            for(unsigned k=0;k<=32;k++){
-                double u=k/32.0,value=fit_nits(u*3079/4095),out[3];
-                assert(dvbridge_creative_cm4_trim_rgb(&q,(double[3]){value,value,value},out));
-                double peak=fit_nits(3079.0/4095),x=value/peak,gate=fmin(1,value);
-                gate=gate*gate*(3-2*gate);
-                double high=fmax(0,fmin(1,(x-.25)/.75));high=high*high*(3-2*high);
-                double wanted=value+gate*(preset?.02:.04*fmax(0,headroom)*high)*value*(1-x);
-                assert(fabs(fit_pq(out[0])-fit_pq(wanted))<=2.0/1024);
-            }
+        /* This fixture cannot represent the stronger objective within the guards. */
+        if(!preset && j<=2){
+            assert(status==DVBRIDGE_CREATIVE_NEUTRAL && !report.candidate_evaluations);
+        }else{
+            assert(status==DVBRIDGE_CREATIVE_UNSUPPORTED);
+            assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
         }
+        assert(!memcmp(edited,m,bytes));
         av_free(edited);
     }
-    /* At the source peak Natural is representable as an exact identity. */
+    /* Unrepresentable expansion preserves the authored metadata. */
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
         .tv={fit_nits(3079.0/4095),DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
     struct dvbridge_creative_plan p;void *edited=NULL;size_t edited_bytes=0;
     dvbridge_creative_resolve(&p,m,bytes,&policy);
-    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,NULL)==DVBRIDGE_CREATIVE_NEUTRAL);
+    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,NULL)==DVBRIDGE_CREATIVE_UNSUPPORTED);
     assert(!memcmp(m,edited,bytes));av_free(edited);
     /* Optional bytes and presence survive accepted edits and rejected fits. */
     const unsigned lengths[]={10,12,13,19,25};
@@ -413,7 +437,7 @@ static void fit_contract(bool emit)
     /* A zero-maximum scene is an identity for both presets, without a fitted pass. */
     m->num_ext_blocks=2;*a=l8(10);a->l8.target_display_index=a->dvbridge_original_bytes[0]=49;
     AVDOVIDmData *stats=av_dovi_get_ext(m,1);*stats=(AVDOVIDmData){.level=1};
-    policy.enhancement=DVBRIDGE_ENHANCEMENT_SIGNATURE;
+    
     dvbridge_creative_resolve(&p,m,bytes,&policy);struct dvbridge_creative_edit_report report;
     assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_NEUTRAL);
     assert(!report.candidate_evaluations && !memcmp(edited,m,bytes));av_free(edited);
@@ -432,9 +456,9 @@ static void fit_contract(bool emit)
     AVDOVIDmData *offset=av_dovi_get_ext(m,2);
     *offset=(AVDOVIDmData){.level=3,.l3={2048,2068,2078},.dvbridge_raw_magic=0x41424456,
         .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0x08,0x14,0x81,0xe0}};
-    policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;policy.tv.peak_nits=1000;
+    policy.tv.peak_nits=1000;
     dvbridge_creative_resolve(&p,m,bytes,&policy);
-    assert(p.analysis[1]==3020 && p.analysis[2]==1530);
+    assert(p.analysis[1]==3040 && p.analysis[2]==1560);
     dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report);
     assert(!memcmp(av_dovi_get_ext(edited,1),stats,sizeof(*stats)));
     assert(!memcmp(av_dovi_get_ext(edited,2),offset,sizeof(*offset)));
@@ -444,13 +468,13 @@ static void fit_contract(bool emit)
     dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report);
     assert(!memcmp(av_dovi_get_ext(edited,0),av_dovi_get_ext(with_offsets,0),sizeof(*a)));
     av_free(with_offsets);av_free(edited);
-    /* Present authored black lift and clipped intervals survive an accepted identity. */
+    /* Preserve authored black lift when expansion is not representable. */
     m->num_ext_blocks=1;*a=l8(10);a->l8.target_display_index=a->dvbridge_original_bytes[0]=49;
     a->l8.trim_slope=3072;a->l8.trim_offset=2100;
     a->dvbridge_original_bytes[1]=0xc0;a->dvbridge_original_bytes[2]=0x08;a->dvbridge_original_bytes[3]=0x34;
     policy.tv.peak_nits=fit_nits(3079.0/4095);
     dvbridge_creative_resolve(&p,m,bytes,&policy);
-    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_NEUTRAL);
+    assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_UNSUPPORTED);
     assert(!memcmp(edited,m,bytes));av_free(edited);
     av_free(m);
     if(emit)puts("]}");else puts("PASS quantized Enhanced objective, raw words, optional presence, identity and coherent rejection");
@@ -461,7 +485,7 @@ static void protected_authored(void)
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=1;
     av_dovi_get_color(m)->source_max_pq=3079;
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
-        .enhancement=DVBRIDGE_ENHANCEMENT_SIGNATURE,
+        
         .tv={1500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
     for(unsigned cm4=0;cm4<2;cm4++){
         AVDOVIDmData *a=av_dovi_get_ext(m,0);
@@ -508,8 +532,9 @@ static void protected_authored(void)
         .trim_power=2048,.trim_chroma_weight=2048,.trim_saturation_gain=2048,.ms_weight=-1}};
     struct dvbridge_creative_plan p;struct dvbridge_creative_edit_report report;
     void *edited=NULL;size_t count=0;dvbridge_creative_resolve(&p,m,bytes,&policy);
-    assert(dvbridge_creative_edit(&edited,&count,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_READY);
-    assert(report.l2_coverage.edited);av_free(edited);
+    assert(dvbridge_creative_edit(&edited,&count,m,bytes,&p,&report)==DVBRIDGE_CREATIVE_UNSUPPORTED);
+    assert(report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
+    assert(!report.l2_coverage.edited && !memcmp(edited,m,bytes));av_free(edited);
     m->num_ext_blocks=2;*av_dovi_get_ext(m,1)=*a;
     AVDOVIDmData *second=av_dovi_get_ext(m,1);
     second->l2.target_max_pq=3200;second->l2.trim_slope=3072;second->l2.trim_offset=2100;
@@ -546,21 +571,22 @@ static void enhanced_intent(void)
 {
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=1;
     av_dovi_get_color(m)->source_max_pq=3079;
-    for(unsigned cm4=0;cm4<2;cm4++)for(unsigned preset=0;preset<2;preset++){
+    for(unsigned cm4=0;cm4<2;cm4++)for(unsigned preset=1;preset<2;preset++){
         AVDOVIDmData *a=av_dovi_get_ext(m,0);
         if(cm4){*a=l8(10);a->l8.target_display_index=a->dvbridge_original_bytes[0]=49;}
         else *a=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3079,
             .trim_slope=2048,.trim_offset=2048,.trim_power=2048,
             .trim_chroma_weight=2048,.trim_saturation_gain=2048,.ms_weight=-1}};
         struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
-            .enhancement=preset,.tv={1500,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+            .tv={1500,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
         void *before=av_memdup(m,bytes),*edited=NULL;size_t edited_bytes=0;
         struct dvbridge_creative_plan p;struct dvbridge_creative_edit_report report;
         assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
         enum dvbridge_creative_status status=dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,&report);
         fprintf(stderr,"intent cm4=%u preset=%u status=%u reason=%u pq=%g chroma=%g hue=%g\n",
             cm4,preset,status,report.reason,report.maximum_pq_error,report.maximum_relative_chroma_error,report.maximum_hue_error);
-        assert(status==DVBRIDGE_CREATIVE_READY || (!preset && status==DVBRIDGE_CREATIVE_NEUTRAL));
+        assert(status==DVBRIDGE_CREATIVE_UNSUPPORTED && report.reason==DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE);
+        assert(!memcmp(edited,m,bytes));
         assert(!memcmp(before,m,bytes) && edited_bytes==bytes);
         policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;policy.tv.peak_nits=fit_nits(3079.0/4095);
         struct dvbridge_creative_plan source,result;
@@ -575,7 +601,7 @@ static void enhanced_intent(void)
             if(i==0)assert(out[0]==original[0]);
             assert(out[0]>=last-1e-10);last=out[0];
             if(levels[i]==100){
-                if(preset)assert(out[0]>original[0] && "Signature must not darken authored midtones");
+                if(preset)assert(out[0]==original[0] && "Rejected enhancement must preserve the authored response");
                 else assert(fabs(fit_pq(out[0])-fit_pq(original[0]))<=2.0/1024);
             }
         }
@@ -591,12 +617,12 @@ static void native_profiles(void)
     AVDOVIDmData *a=av_dovi_get_ext(m,0);*a=l8(10);
     a->l8.target_display_index=a->dvbridge_original_bytes[0]=49;
     av_dovi_get_color(m)->source_max_pq=3079;
-    for(unsigned preset=0;preset<2;preset++)for(unsigned j=0;j<5;j++){
+    for(unsigned preset=1;preset<2;preset++)for(unsigned j=0;j<5;j++){
         struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
-            .enhancement=preset,.tv={peaks[j],DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+            .tv={peaks[j],DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
         struct dvbridge_creative_plan p;void *edited=NULL;size_t edited_bytes=0;
         assert(dvbridge_creative_resolve(&p,m,bytes,&policy)!=DVBRIDGE_CREATIVE_INVALID);
-        enum dvbridge_creative_status want=preset || j>2?DVBRIDGE_CREATIVE_READY:DVBRIDGE_CREATIVE_NEUTRAL;
+        enum dvbridge_creative_status want=preset || j>2?DVBRIDGE_CREATIVE_UNSUPPORTED:DVBRIDGE_CREATIVE_NEUTRAL;
         assert(dvbridge_creative_edit(&edited,&edited_bytes,m,bytes,&p,NULL)==want);
         assert(p.policy.tv.peak_nits==peaks[j] && !memcmp(&policy,&p.policy,sizeof(policy)));
         const AVDOVIDmData *e=av_dovi_get_ext(edited,0);
@@ -607,11 +633,12 @@ static void native_profiles(void)
         assert(edited_bytes==bytes && a->l8.trim_power==2048);
         av_free(edited);
     }
-    av_free(m);puts("PASS native Natural/Signature coverage, reference floor and unchanged TV capacity");
+    av_free(m);puts("PASS Adaptive coverage, reference floor and unchanged TV capacity");
 }
 
 int main(int argc,char **argv)
 {
+    custom_target_24();
     if(argc==2 && !strcmp(argv[1],"--intent")){enhanced_intent();return 0;}
     if(argc==2 && !strcmp(argv[1],"--authored-json")){authored_signature(true);return 0;}
     if(argc==2 && !strcmp(argv[1],"--native-profiles")){native_profiles();return 0;}

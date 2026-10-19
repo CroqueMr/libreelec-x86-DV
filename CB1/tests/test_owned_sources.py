@@ -38,8 +38,27 @@ class OwnedSources(unittest.TestCase):
     def test_missing_owned_helper_fails(self):
         self.owned.pop('src/dvbridge_metadata.h');self.save_owned()
         with self.assertRaisesRegex(ValueError,'owned source identity'):verify.verify(self.root)
+    def test_importer_override_retains_its_historical_extraction_record(self):
+        origins=json.loads((self.root/'config/extraction-origins.json').read_text())
+        self.assertIn('src/dvbridge_dmabuf.c',origins['files'])
+        self.assertIn('src/dvbridge_dmabuf.c',self.owned)
+        self.assertNotEqual(origins['files']['src/dvbridge_dmabuf.c']['sha256'],self.owned['src/dvbridge_dmabuf.c'])
+        verify.verify(self.root)
+    def test_fel_device_fix_retains_its_historical_extraction_record(self):
+        origins=json.loads((self.root/'config/extraction-origins.json').read_text())
+        self.assertNotEqual(origins['files']['src/dvbridge_fel.c']['sha256'],
+                            self.owned['src/dvbridge_fel.c'])
+        verify.verify(self.root)
     def test_wrong_current_owned_digest_fails(self):
         self.owned['src/dvbridge_metadata.h']='0'*64;self.save_owned()
+        with self.assertRaisesRegex(ValueError,'checksum mismatch'):verify.verify(self.root)
+    def test_modified_master_descriptor_fails(self):
+        path=self.root/'src/cb1_master_reference.h'
+        path.write_bytes(path.read_bytes()+b'\n')
+        with self.assertRaisesRegex(ValueError,'checksum mismatch'):verify.verify(self.root)
+    def test_modified_master_shader_owner_fails(self):
+        path=self.root/'patches/libplacebo/libplacebo-9913-processing.patch'
+        path.write_bytes(path.read_bytes()+b'\n')
         with self.assertRaisesRegex(ValueError,'checksum mismatch'):verify.verify(self.root)
     def test_wrong_historical_provenance_fails(self):
         path=self.root/'src/PROVENANCE.json';receipt=json.loads(path.read_text())

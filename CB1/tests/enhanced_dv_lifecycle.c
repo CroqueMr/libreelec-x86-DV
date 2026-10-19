@@ -85,7 +85,7 @@ static void state_probe(struct dvbridge_renderer *r)
     GLuint texture=pl_opengl_unwrap(r->gpu,foreign,NULL,NULL,NULL);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,texture);glBindSampler(0,sampler);
     glActiveTexture(GL_TEXTURE5);glUseProgram(program);
-    assert(glGetError()==GL_NO_ERROR && dv_analyze(r));
+    assert(glGetError()==GL_NO_ERROR && dv_analyze(r,r->rgb));
     GLint value;glGetIntegerv(GL_CURRENT_PROGRAM,&value);assert((GLuint)value==program);
     glGetIntegerv(GL_ACTIVE_TEXTURE,&value);assert(value==GL_TEXTURE5);
     glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,&value);assert((GLuint)value==texture);
@@ -162,7 +162,7 @@ static void imported_lifetime(struct reference_gpu *g)
     av_dovi_get_ext(metadata,0)->level=1;av_dovi_get_ext(metadata,0)->l1.max_pq=3079;av_dovi_get_ext(metadata,0)->l1.avg_pq=1667;
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(g->gl->gpu);assert(owner);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
-    struct dvbridge_policy policy=reference_policy();policy.mode=DVBRIDGE_MODE_ENHANCED_DV;policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;
+    struct dvbridge_policy policy=reference_policy();policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
     struct dvbridge_identity identity={1,7,1};
     assert(dvbridge_render_dv_policy_prepare(r,&policy,&identity,&source,metadata,bytes,0,0,(struct dvbridge_geometry){2,2,0,0,2,2})==DVBRIDGE_DV_READY);
     av_buffer_unref(&decoder);assert(!released && glIsTexture(texture));
@@ -217,17 +217,17 @@ static void temporal_probe(struct dvbridge_renderer *r)
     struct pl_frame source=reference_frame(input,2,2);
     pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_UNORM,4,8,8,PL_FMT_CAP_RENDERABLE);assert(fmt);
     pl_tex target=pl_tex_create(r->gpu,pl_tex_params(.w=3840,.h=2160,.format=fmt,.renderable=true));assert(target);
-    struct dvbridge_policy policy=reference_policy();policy.mode=DVBRIDGE_MODE_ENHANCED_DV;policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;
+    struct dvbridge_policy policy=reference_policy();policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
     struct dvbridge_identity identity={1,7,1};uint64_t previous_serial=r->resolve_serial;
     unsigned packet_ids[5]={0,17,34,34,0},refresh[5]={1,0,1,1,1};
     for(unsigned step=0;step<5;step++){
         if(step==1){identity.picture=8;l1->l1.avg_pq=2771;}
-        if(step==2){identity.revision=policy.revision=2;policy.enhancement=DVBRIDGE_ENHANCEMENT_INTENSE;
+        if(step==2){identity.revision=policy.revision=2;
             policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;policy.tv.peak_nits=1500.25;
             metadata->num_ext_blocks=2;
             *av_dovi_get_ext(metadata,1)=(AVDOVIDmData){.level=8,
                 .dvbridge_raw_magic=0x41424456,.dvbridge_original_length=10};}
-        if(step==3){identity.revision=policy.revision=3;policy.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;}
+        if(step==3){identity.revision=policy.revision=3;}
         if(step==4){dvbridge_renderer_reset(r);struct dvbridge_dv_policy_snapshot absent;
             assert(!dvbridge_render_dv_policy_committed(r,&absent));identity=(struct dvbridge_identity){2,1,4};policy.revision=4;}
         assert(dvbridge_render_dv_policy_prepare(r,&policy,&identity,&source,metadata,bytes,step? .04:0,step? .04:0,(struct dvbridge_geometry){2,2,0,0,2,2})==DVBRIDGE_DV_READY);
@@ -363,7 +363,7 @@ int main(int argc,char **argv)
     m->num_ext_blocks=1;av_dovi_get_ext(m,0)->level=1;
     av_dovi_get_ext(m,0)->l1.max_pq=3079;av_dovi_get_ext(m,0)->l1.avg_pq=1667;
     struct dvbridge_policy p=reference_policy();p.mode=DVBRIDGE_MODE_ENHANCED_DV;
-    p.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;
+    
     struct dvbridge_color color;struct pl_color_space nominal;struct dvbridge_hdr10_metadata signal;
     assert(dvbridge_reference_map(&color,&nominal,&signal,&p,m,bytes,false));
     av_free(m);

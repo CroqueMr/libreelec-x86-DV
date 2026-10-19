@@ -9,12 +9,12 @@ enum cb1_circuit {
     CB1_DV_DV_REFERENCE,
     CB1_DV_HDR10_BASIC,
     CB1_DV_HDR10_EXPERT,
-    CB1_DV_DV_NATURAL,
-    CB1_DV_DV_INTENSE,
+    CB1_DV_DV_ADAPTIVE,
     /* Retain existing IDs; retired entries are not reassigned. */
     CB1_HDR10_DV_REFERENCE = 7,
-    CB1_HDR10_DV_NATURAL,
-    CB1_HDR10_DV_INTENSE,
+    CB1_HDR10_DV_ADAPTIVE,
+    CB1_DV_DV_MASTER_REFERENCE = 9,
+    CB1_DV_DV_ADAPTIVE_B,
     CB1_CIRCUIT_COUNT
 };
 

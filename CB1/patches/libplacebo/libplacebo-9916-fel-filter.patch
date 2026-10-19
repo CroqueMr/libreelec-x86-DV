@@ -1,0 +1,161 @@
+CB1 optional FEL spatial filter: SPDX-License-Identifier: GPL-3.0-or-later
+Original libplacebo per-file copyright and LGPL notices remain unchanged.
+
+diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -371,8 +371,13 @@
+     // Default off. Requires matched renderer headers and library.
+ #define PL_CB1_CHROMA_FILTER_API 1
+     bool cb1_fast_chroma;
++    // Explicit nearest sampling of the reconstruction EL only; default false.
++#define PL_CB1_FEL_FILTER_API 1
++    bool cb1_fel_nearest;
+     // Borrowed opt-in CB1 processing contract. Requires a matched library.
+     const struct pl_cb1_dovi_processing *cb1_processing;
++    // Per-picture integer reference. Null preserves existing composition.
++    const struct pl_cb1_dovi_reference *cb1_dovi_reference;
+ 
+ 
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+@@ -415,6 +420,8 @@
+ #define pl_render_params(...) (&(struct pl_render_params) { PL_RENDER_DEFAULTS __VA_ARGS__ })
+ PL_API extern const struct pl_render_params pl_render_fast_params;
+ 
++PL_API unsigned pl_cb1_fel_filter_abi(void);
++
+ // This contains the default/recommended options for reasonable image quality,
+ // while also not being too terribly slow. All of the *_params structs are
+ // defaulted to the corresponding *_default_params, except for deband_params,
+diff --git a/src/renderer.c b/src/renderer.c
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -1706,8 +1706,17 @@
+         pl_shader plane_sh = pl_dispatch_begin_ex(rr->dp, true);
+         enum sampler_usage usage = detect_plane_type(plane, &el->repr) == PLANE_CHROMA ?
+                                    SAMPLER_CHROMA : SAMPLER_PLANE;
+-        dispatch_sampler(pass, plane_sh, &rr->samplers_el[i], usage,
+-                         NULL, &src);
++        if (pass->params->cb1_fel_nearest) {
++            if (plane->flipped) {
++                src.rect.y0 = plane->texture->params.h - src.rect.y0;
++                src.rect.y1 = plane->texture->params.h - src.rect.y1;
++            }
++            if (usage != SAMPLER_PLANE || skip_inactive_rows(pass, plane_sh, src.new_h, true))
++                pl_shader_sample_nearest(plane_sh, &src);
++        } else {
++            dispatch_sampler(pass, plane_sh, &rr->samplers_el[i], usage,
++                             NULL, &src);
++        }
+ 
+         ident_t sub = sh_subpass(sh, plane_sh);
+         pl_dispatch_abort(rr->dp, &plane_sh);
+@@ -1730,9 +1739,98 @@
+ }
+ #endif // PL_HAVE_DOVI
+ 
++unsigned pl_cb1_fel_filter_abi(void)
++{
++    return PL_CB1_FEL_FILTER_API;
++}
++
++static bool skip_reference_chroma_rows(struct pass_state *pass, pl_shader sh)
++{
++    if (pass->cb1_active_rows[1]<=pass->cb1_active_rows[0]) return true;
++    float bounds[2]={floorf(pass->cb1_active_rows[0]/2)-4,
++                     ceilf(pass->cb1_active_rows[1]/2)+4};
++    enum pl_shader_sig signature=sh->output;
++    if (!sh_require(sh,signature,0,0)) return false;
++    sh->output=signature;
++    ident_t rows=sh_var(sh,(struct pl_shader_var){.var=pl_var_vec2("ref_active_rows"),
++                                               .data=bounds,.dynamic=true});
++    GLSL("if(gl_FragCoord.y < "$".x || gl_FragCoord.y >= "$".y) return vec4(0.0);\n",rows,rows);
++    return true;
++}
++
++static bool pass_read_dovi_reference(struct pass_state *pass)
++{
++    const struct pl_cb1_dovi_reference *data=pass->params->cb1_dovi_reference;
++    const struct pl_frame *image=&pass->image;
++    int w=image->crop.x1,h=image->crop.y1;
++    if (!pass->params->cb1_dovi_transport || image->icc || image->lut ||
++        pass->params->lut || pass->rotation || pl_rect_w(pass->target.crop)!=w ||
++        pl_rect_h(pass->target.crop)!=h || w<=0 || h<=0) return false;
++    pl_tex planes[2]={0};
++    pl_tex luma_el=NULL;
++    const struct pl_frame *el=image->enhancement_layer;
++    bool resize=data->residual && el && el->crop.x1*2==w && el->crop.y1*2==h;
++    for (int c=0;c<2;c++) {
++        pl_fmt fmt=pl_find_fmt(pass->rr->gpu,PL_FMT_FLOAT,c?2:1,32,32,
++                              PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
++        if (!fmt) return false;
++        pl_tex vertical=NULL;
++        if (resize) {
++            /* FP32 stores every rounded 16-bit intermediate exactly. */
++            vertical=get_fbo(pass,c?w/4:w/2,c?h/2:h,fmt,c?2:1,PL_DEBUG_TAG);
++            pl_shader sh=pl_dispatch_begin(pass->rr->dp);
++            bool rows=c?skip_reference_chroma_rows(pass,sh):skip_inactive_rows(pass,sh,h,false);
++            bool ok=vertical && rows && sh_dovi_reference_el_vertical(sh,data,image,c) &&
++                pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=vertical));
++            pl_dispatch_abort(pass->rr->dp,&sh);
++            if (!ok) return false;
++        }
++        if (!c) {
++            luma_el=vertical;
++            continue;
++        }
++        planes[c]=get_fbo(pass,c?w/2:w,c?h/2:h,fmt,c?2:1,PL_DEBUG_TAG);
++        pl_shader sh=pl_dispatch_begin(pass->rr->dp);
++        bool ok=planes[c] && skip_reference_chroma_rows(pass,sh) &&
++            sh_dovi_reference_grid(sh,data,image,c,vertical) &&
++            pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=planes[c]));
++        pl_dispatch_abort(pass->rr->dp,&sh);
++        if (!ok) return false;
++    }
++    bool top_left=false;
++    for(int p=0;p<image->num_planes;p++)
++        if(image->planes[p].component_mapping[0]==1)top_left=image->planes[p].shift_y==-.5f;
++    pl_fmt fmt=pl_find_fmt(pass->rr->gpu,PL_FMT_FLOAT,2,32,32,
++                          PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
++    if (!fmt) return false;
++    pl_tex chroma=get_fbo(pass,w/2,h,fmt,2,PL_DEBUG_TAG);
++    pl_shader sh=pl_dispatch_begin(pass->rr->dp);
++    bool ok=chroma && skip_inactive_rows(pass,sh,h,false) &&
++        sh_dovi_reference_chroma(sh,planes[1],data->output_depth,top_left) &&
++        pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=chroma));
++    pl_dispatch_abort(pass->rr->dp,&sh);
++    if (!ok) return false;
++    pl_shader luma=pl_dispatch_begin_ex(pass->rr->dp,true);
++    sh=pl_dispatch_begin_ex(pass->rr->dp,true);
++    ok=skip_inactive_rows(pass,luma,h,true) && sh_dovi_reference_grid(luma,data,image,false,luma_el) &&
++        sh_dovi_reference_output(sh,luma,chroma,data->output_depth,w,h);
++    pl_dispatch_abort(pass->rr->dp,&luma);
++    if (!ok) {
++        pl_dispatch_abort(pass->rr->dp,&sh);
++        return false;
++    }
++    pass->img=(struct img){.sh=sh,.w=w,.h=h,.comps=3,.repr=pl_color_repr_rgb,
++        .color=image->color,.rect={0,0,w,h}};
++    pass->ref_rect=pass->img.rect;
++    pass_hook(pass,&pass->img,PL_HOOK_NATIVE);
++    return true;
++}
++
+ // This scales and merges all of the source images, and initializes pass->img.
+ static bool pass_read_image(struct pass_state *pass)
+ {
++    if (pass->params->cb1_dovi_reference)
++        return pass_read_dovi_reference(pass);
+     const struct pl_render_params *params = pass->params;
+     struct pl_frame *image = &pass->image;
+     pl_renderer rr = pass->rr;
+@@ -2138,7 +2236,8 @@
+         }
+ #endif
+         if (params->cb1_dovi_transport) {
+-            pl_shader_dovi_reconstruct_ex(sh, &pass->img.repr, el_sh, params->cb1_processing);
++            if (pass->img.repr.sys != PL_COLOR_SYSTEM_RGB)
++                pl_shader_dovi_reconstruct_ex(sh, &pass->img.repr, el_sh, params->cb1_processing);
+             // Internal carrier only. The output hook owns opponent encoding.
+             pass->img.repr.sys = PL_COLOR_SYSTEM_RGB;
+             pass->img.repr.levels = PL_COLOR_LEVELS_FULL;

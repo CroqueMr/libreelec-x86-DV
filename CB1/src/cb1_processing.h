@@ -39,5 +39,6 @@ int64_t cb1_mmr_term(const int64_t coefficients[3], unsigned order, unsigned sam
 bool cb1_processing_prepare(struct cb1_processing *state, pl_gpu gpu,
     const struct pl_frame *source, const void *metadata, size_t bytes,
     bool enhancement_layer_paired, uint32_t requested_groups);
+pl_tex cb1_processing_pq_encoder(struct cb1_processing *state, pl_gpu gpu);
 void cb1_processing_reset(struct cb1_processing *state, pl_gpu gpu);
 #endif

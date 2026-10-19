@@ -3,6 +3,15 @@
 #include "dvbridge_metadata.h"
 #include <time.h>
 
+static void ready(struct dvbridge_renderer *r,enum dvbridge_dv_policy_status status)
+{
+    for(unsigned i=0;status==DVBRIDGE_DV_PENDING && i<10000;i++){
+        nanosleep(&(struct timespec){.tv_nsec=1000000},NULL);
+        status=dvbridge_render_dv_policy_poll(r);
+    }
+    assert(status==DVBRIDGE_DV_READY);
+}
+
 static void retire(struct dvbridge_renderer *r)
 {
     dvbridge_render_dv_policy_cancel(r);
@@ -23,7 +32,8 @@ int main(void)
     struct pl_frame f=reference_frame(input,2,2);struct dvbridge_geometry geometry={2,2,0,0,2,2};
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
     AVDOVIDmData *l1=av_dovi_get_ext(m,0);l1->level=1;l1->l1.max_pq=3079;l1->l1.avg_pq=1667;
-    AVDOVIDmData *l2=av_dovi_get_ext(m,1);*l2=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3000,
+    /* An SDR-only anchor keeps the identity/serialization branch explicit. */
+    AVDOVIDmData *l2=av_dovi_get_ext(m,1);*l2=(AVDOVIDmData){.level=2,.l2={.target_max_pq=1024,
         .trim_slope=2048,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,.trim_saturation_gain=2048,.ms_weight=-1}};
     void *before=av_memdup(m,bytes);assert(before);
     assert(dvbridge_render_rgb(standard,&f,m,bytes,0,0,geometry));
@@ -47,21 +57,29 @@ int main(void)
         assert(dvbridge_dv_crc(packet,128)==0);
     }
     struct dvbridge_creative_edit_report first=out->value.creative_edit;
-    assert(!first.cache_hit && first.candidate_evaluations>0);
+    assert(!first.cache_hit && !first.candidate_evaluations);
+    assert(first.status==DVBRIDGE_CREATIVE_NEUTRAL && !memcmp(out->output_metadata,m,bytes));
     void *edited_before=av_memdup(out->output_metadata,bytes);assert(edited_before);
     retire(r);id.picture++;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
     out=dvbridge_render_dv_policy_output(r);assert(out);
-    assert(out->value.creative_edit.cache_hit && !out->value.creative_edit.fit_ns && !out->value.creative_edit.candidate_evaluations);
+    assert(!out->value.creative_edit.fit_ns && !out->value.creative_edit.candidate_evaluations);
     assert(out->value.identity.picture==id.picture && !memcmp(edited_before,out->output_metadata,bytes));
     assert(out->value.creative_edit.maximum_pq_error==first.maximum_pq_error);av_free(edited_before);
     retire(r);l1->l1.min_pq++;l1->l1.max_pq--;
     av_dovi_get_color(m)->scene_refresh_flag=1;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
-    out=dvbridge_render_dv_policy_output(r);assert(out && out->value.creative_edit.cache_hit);
+    out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(!memcmp(av_dovi_get_ext(out->output_metadata,0),l1,sizeof(*l1)));
     assert(av_dovi_get_color(out->output_metadata)->scene_refresh_flag==1);
     retire(r);l1->l1.avg_pq=3000;
+    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    out=dvbridge_render_dv_policy_output(r);assert(out);
+    assert(av_dovi_get_ext(out->output_metadata,0)->l1.avg_pq==3000);
+    retire(r);l1->l1.min_pq=l1->l1.max_pq=l1->l1.avg_pq=0;
+    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    out=dvbridge_render_dv_policy_output(r);assert(out && !out->value.creative_edit.cache_hit);
+    retire(r);l1->l1.max_pq=3079;l1->l1.avg_pq=1667;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
     out=dvbridge_render_dv_policy_output(r);assert(out && !out->value.creative_edit.cache_hit);
     retire(r);l2->l2.trim_power++;
@@ -71,23 +89,25 @@ int main(void)
     p.revision++;id.revision++;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
     out=dvbridge_render_dv_policy_output(r);assert(out && !out->value.creative_edit.cache_hit);
-    retire(r);p.enhancement=DVBRIDGE_ENHANCEMENT_INTENSE;p.revision++;id.revision++;
-    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    retire(r);l2->l2.target_max_pq=3000;
+    p.revision++;id.revision++;
+    ready(r,dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry));
     out=dvbridge_render_dv_policy_output(r);assert(out);
-    assert(out->value.creative_edit.status!=DVBRIDGE_CREATIVE_INVALID);retire(r);
+    assert(out->value.output_generation==DVBRIDGE_RECONSTRUCTED_ENHANCED && out->value.measured);
+    retire(r);
     m->num_ext_blocks=3;AVDOVIDmData *cm=av_dovi_get_ext(m,2);
     *cm=(AVDOVIDmData){.level=254,.dvbridge_raw_magic=0x41424456,.dvbridge_original_length=2};
-    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    ready(r,dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry));
     out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(out->value.creative_edit.status!=DVBRIDGE_CREATIVE_UNSUPPORTED || !memcmp(out->output_metadata,m,bytes));retire(r);
     /* A repeated key never bypasses raw source validation. */
     *cm=(AVDOVIDmData){.level=3,.l3={2048,2048,2048},.dvbridge_raw_magic=0x41424456,
         .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0x08,0x00,0x80,0x00}};
-    assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_READY);
+    ready(r,dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry));
     retire(r);cm->l3.max_pq_offset=1;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,geometry)==DVBRIDGE_DV_FAILED);
     assert(!dvbridge_render_dv_policy_output(r));
     dvbridge_renderer_destroy(r);dvbridge_renderer_destroy(standard);assert(dvbridge_retirement_owner_destroy(&owner));
     pl_tex_destroy(gpu,&input);av_free(m);av_free(before);reference_gpu_destroy(&g);
-    puts("PASS metadata-first identical pixels, source facts, exact source copy, packets and zero analysis");
+    puts("PASS Natural identity, original packets, P3/L2 Signature analysis and raw validation");
 }

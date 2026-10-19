@@ -116,7 +116,7 @@ int main(int argc,char **argv)
 #ifdef CB1_DV_TEST
     policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
     if(argc>=2 && (!strcmp(argv[1],"Natural") || !strcmp(argv[1],"Intense"))) {
-        policy.enhancement=!strcmp(argv[1],"Intense") ? DVBRIDGE_ENHANCEMENT_INTENSE : DVBRIDGE_ENHANCEMENT_NATURAL;
+        
     }
 #endif
     struct dvbridge_identity id={1,7,1};struct dvbridge_geometry geometry={sw,sh,0,0,dw,dh};

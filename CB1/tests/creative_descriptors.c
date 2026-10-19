@@ -56,8 +56,55 @@ int main(void)
     *l3=(AVDOVIDmData){.level=3,.l3={2058,2068,2078},.dvbridge_raw_magic=0x41424456,
         .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0xa8,0x14,0x81,0xe0}};
     assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
-    assert(fabs(color.color.hdr.max_pq_y-3020/4095.0)<1e-7);
-    assert(fabs(color.color.hdr.avg_pq_y-1530/4095.0)<1e-7);
+    assert(fabs(color.color.hdr.max_pq_y-3040/4095.0)<1e-7);
+    assert(fabs(color.color.hdr.avg_pq_y-1560/4095.0)<1e-7);
+    /* Quantization stays within half a 12-bit PQ code. */
+    assert(fabs(color.color.hdr.max_pq_y-(3000/4095.0+20/2048.0))<.5/4095);
+    assert(fabs(color.color.hdr.avg_pq_y-(1500/4095.0+30/2048.0))<.5/4095);
+    struct dvbridge_creative_plan decoded;
+    assert(dvbridge_creative_resolve(&decoded,m,bytes,&p)==DVBRIDGE_CREATIVE_NEUTRAL);
+    assert(decoded.analysis[0]==40 && decoded.analysis[1]==3040 && decoded.analysis[2]==1560);
+    *l3=(AVDOVIDmData){.level=3,.l3={2048,2048,2048},.dvbridge_raw_magic=0x41424456,
+        .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0x08,0x00,0x80,0x00}};
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(fabs(color.color.hdr.max_pq_y-3000/4095.0)<1e-7);
+    assert(fabs(color.color.hdr.avg_pq_y-1500/4095.0)<1e-7);
+    *l3=(AVDOVIDmData){.level=3,.l3={2048,2028,2018},.dvbridge_raw_magic=0x41424456,
+        .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0x07,0xec,0x7e,0x20}};
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(fabs(color.color.hdr.max_pq_y-2960/4095.0)<1e-7);
+    assert(fabs(color.color.hdr.avg_pq_y-1440/4095.0)<1e-7);
+    /* Invalid near-black statistics may straddle zero through L1/L3 rounding. */
+    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={0,2081,1229}};
+    *l3=(AVDOVIDmData){.level=3,.l3={2048,1007,1434},.dvbridge_raw_magic=0x41424456,
+        .dvbridge_original_length=5,.dvbridge_original_bytes={0x80,0x03,0xef,0x59,0xa0}};
+    void *black_source=av_memdup(m,bytes);assert(black_source);
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(dvbridge_creative_resolve(&decoded,m,bytes,&p)==DVBRIDGE_CREATIVE_NEUTRAL);
+    assert(decoded.analysis[0]==0 && decoded.analysis[1]==0 && decoded.analysis[2]==0);
+    assert(!memcmp(m,black_source,bytes));
+    assert(dvbridge_creative_resolve(&unknown,m,bytes,&enhanced)==DVBRIDGE_CREATIVE_INVALID);
+    av_free(black_source);
+    /* Adjacent representable values inside and outside the error bound. */
+    av_dovi_get_ext(m,0)->l1.max_pq=2048;l3->l3.max_pq_offset=1023;
+    l3->dvbridge_original_bytes[2]=0xff;
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    av_dovi_get_ext(m,0)->l1.max_pq=2046;l3->l3.max_pq_offset=1024;
+    l3->dvbridge_original_bytes[1]=0x04;l3->dvbridge_original_bytes[2]=0;
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(color.color.hdr.max_pq_y==0 && color.color.hdr.avg_pq_y==0);
+    av_dovi_get_ext(m,0)->l1.max_pq=2081;l3->l3.max_pq_offset=1007;
+    l3->dvbridge_original_bytes[1]=0x03;l3->dvbridge_original_bytes[2]=0xef;
+    av_dovi_get_ext(m,0)->l1.min_pq=1230;l3->l3.min_pq_offset=1433;
+    l3->dvbridge_original_bytes[0]=0x59;l3->dvbridge_original_bytes[1]=0x93;
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(color.color.hdr.max_pq_y==0 && color.color.hdr.avg_pq_y==0);
+    av_dovi_get_ext(m,0)->l1.min_pq=0;l3->l3.min_pq_offset=2048;
+    l3->dvbridge_original_bytes[0]=0x80;l3->dvbridge_original_bytes[1]=0x03;
+    l3->l3.avg_pq_offset=1534;
+    l3->dvbridge_original_bytes[3]=0x5f;l3->dvbridge_original_bytes[4]=0xe0;
+    assert(dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));
+    assert(color.color.hdr.max_pq_y==0 && color.color.hdr.avg_pq_y==0);
     // Retired HDR10 Enhanced is not a rendering policy.
     p.mode=(enum dvbridge_mode)5;
     assert(!dvbridge_reference_map(&color,&target,&signal,&p,m,bytes,false));

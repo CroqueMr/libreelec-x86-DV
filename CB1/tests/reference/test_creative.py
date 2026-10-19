@@ -19,7 +19,13 @@ class CreativeContract(unittest.TestCase):
 
     def test_analysis_is_signed_and_once(self):
         self.assertEqual(analysis([200, 2200, 1400], [2058, 2068, 2018]),
-                         [210, 2220, 1370])
+                         [220, 2240, 1340])
+        self.assertEqual(analysis([200, 2200, 1400], [2049, 2047, 2048]),
+                         [202, 2198, 1400])
+        self.assertEqual(analysis([200, 2200, 1400]), [200, 2200, 1400])
+        self.assertEqual(analysis([2, 2200, 1400], [2047, 2048, 2048]), [0, 2200, 1400])
+        with self.assertRaises(ValueError):
+            analysis([1, 2200, 1400], [2047, 2048, 2048])
         with self.assertRaises(ValueError):
             analysis([10, 2200, 1400], [2000, 2048, 2048])
 

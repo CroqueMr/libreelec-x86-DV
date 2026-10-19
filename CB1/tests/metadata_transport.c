@@ -74,6 +74,30 @@ int main(void)
             packet[j] = state.packets[i * 128 + j];
         assert(dvbridge_dv_crc(packet, sizeof(packet)) == 0);
     }
+    m->num_ext_blocks = 22;
+    for (int i = 1; i < m->num_ext_blocks; ++i) {
+        AVDOVIDmData *e = av_dovi_get_ext(m, i);
+        *e = (AVDOVIDmData){.level=2};
+        e->l2.target_max_pq = 2000+i;
+        e->l2.trim_slope = e->l2.trim_offset = e->l2.trim_power = 2048;
+        e->l2.trim_chroma_weight = e->l2.trim_saturation_gain = 2048;
+        e->l2.ms_weight = -1;
+    }
+    assert(dvbridge_dv_metadata(&state,m,6.0,margins));
+    assert(state.size == 494 && state.count == 5);
+    m->num_ext_blocks=23;
+    AVDOVIDmData *tail=av_dovi_get_ext(m,22);
+    *tail=(AVDOVIDmData){.level=8,.dvbridge_raw_magic=0x41424456,
+        .dvbridge_original_length=10};
+    assert(dvbridge_dv_metadata(&state,m,7.0,margins));
+    assert(state.size==512 && state.count==5);
+    for (unsigned i=0;i<state.count;i++) {
+        uint8_t packet[128];
+        for(unsigned j=0;j<128;j++)packet[j]=state.packets[i*128+j];
+        assert(!dvbridge_dv_crc(packet,128));
+    }
+    tail->dvbridge_original_length=12;
+    assert(!dvbridge_dv_metadata(&state,m,8.0,margins));
     av_free(m);
     puts("PASS: metadata bounds, geometry, repeat, seek refresh, FEL rejection, CM4 presence, packet CRC");
     return 0;

@@ -1,0 +1,563 @@
+"""Execute applied Kodi diagnostics and real refresh-switch functions without a GPU."""
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+TREE = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+
+
+def function(relative, signature):
+    text = (TREE / relative).read_text()
+    start = text.index(signature)
+    opening = text.index('{', start)
+    depth = 1
+    end = opening + 1
+    while depth:
+        depth += (text[end] == '{') - (text[end] == '}')
+        end += 1
+    # Include a function-try-block handler when production isolates diagnostics.
+    tail = text[end:]
+    if tail.lstrip().startswith('catch (...) {}'):
+        end += len(tail) - len(tail.lstrip()) + len('catch (...) {}')
+    return text[start:end]
+
+
+class DiagnosticsRuntime(unittest.TestCase):
+    def test_debug_framebuffer_query_closes_each_unique_gem_handle(self):
+        query = function('xbmc/windowing/gbm/drm/DRMAtomic.cpp',
+                         'if (auto* layout=drmModeGetFB2(m_fd,fb))')
+        self.run_cpp(r'''
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <vector>
+constexpr unsigned DRM_MODE_FB_MODIFIERS=2, LOGINFO=1;
+struct drmModeFB2 {unsigned width=3840,height=2160,pixel_format=0,flags=2;
+ uint64_t modifier=7;unsigned handles[4]={11,11,12,0},pitches[4]={15360},offsets[4]={0};};
+inline std::vector<unsigned> closed;
+inline unsigned freed=0;
+drmModeFB2* drmModeGetFB2(int,unsigned){return new drmModeFB2;}
+int drmCloseBufferHandle(int,unsigned handle){closed.push_back(handle);return 0;}
+void drmModeFreeFB2(drmModeFB2* layout){assert(closed.size()==2);++freed;delete layout;}
+namespace DVBRIDGE {template<class... T>void DiagnosticLog(T...) {}}
+int main(){int m_fd=1;unsigned fb=42;std::array<uint64_t,3> debug={1,2,3};
+''' + query + r'''
+ assert((closed==std::vector<unsigned>{11,12}) && freed==1);
+}
+''')
+
+    def test_debug_budget_and_explicit_disable(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticState.h"
+#include <cassert>
+int main(){using namespace DVBRIDGE;
+ const bool enabled=EXPECTED_ENABLED;
+ assert(DebugDiagnosticsEnabled()==enabled);
+ DiagnosticSession session;session.Observe(1,12,1,1,1,"probe",true,false);
+ const unsigned limit=enabled?128:24;
+ for(unsigned n=0;n<limit;++n)assert(session.Admit(1,DiagnosticEvent::Normal));
+ assert(!session.Admit(1,DiagnosticEvent::Normal));
+ session.Observe(2,12,2,1,1,"seek",true,false);
+ assert(!session.Admit(2,DiagnosticEvent::Normal));
+ assert(session.Admit(30001,DiagnosticEvent::Normal));
+}
+'''.replace('EXPECTED_ENABLED', 'true' if enabled else 'false'),
+                    env={'DVBRIDGE_DEBUG_DIAGNOSTICS': '1' if enabled else '0'})
+
+    def test_debug_kernel_snapshot_uses_live_properties_and_keeps_errno(self):
+        text = (TREE/'xbmc/windowing/gbm/drm/DRMAtomic.cpp').read_text()
+        self.assertTrue('void CDRMAtomic::ReportDebugState(' in text,
+                      'Automatic post-submit kernel snapshot is missing')
+        report = function('xbmc/windowing/gbm/drm/DRMAtomic.cpp',
+                          'void CDRMAtomic::ReportDebugState(')
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+#include <cerrno>
+#include <map>
+#include <vector>
+#include <cstdint>
+constexpr int DRM_MODE_OBJECT_PLANE=1, DRM_MODE_OBJECT_CONNECTOR=2, DRM_MODE_OBJECT_CRTC=3;
+inline bool fail=false;
+struct drmModeObjectProperties {unsigned count_props=1;uint32_t props[1]={7};uint64_t prop_values[1]={42};};
+drmModeObjectProperties* drmModeObjectGetProperties(int,uint32_t,uint32_t) {
+ if(fail){errno=EIO;return nullptr;}return new drmModeObjectProperties;
+}
+void drmModeFreeObjectProperties(drmModeObjectProperties* p){delete p;errno=EBADF;}
+struct Object {unsigned GetId()const{return 3;} unsigned GetPropertyId(const char*)const{return 7;}
+ std::optional<uint64_t> GetPropertyValue(const char*)const{return 999;}};
+struct CDRMAtomic {
+ int m_fd=1;Object object;Object *m_gui_plane=&object,*m_video_plane=nullptr,*m_connector=&object,*m_crtc=&object;
+ void ReportDebugState(uint64_t stream,uint64_t picture,unsigned sample,uint32_t fb,bool accepted,bool pending) noexcept;
+};
+''' + report + r'''
+int main(){
+ DVBRIDGE::ObserveDiagnostic(1,2,3,4,"probe",true,false);
+ CDRMAtomic drm;errno=ENOSPC;drm.ReportDebugState(1,2,3,41,true,false);
+ assert(errno==ENOSPC);
+ bool found=false;for(auto& line:CLog::lines){
+   found |= line.find("actual_fb=42")!=line.npos;
+   assert(line.find("actual_fb=999")==line.npos);
+ }
+ assert(found);CLog::lines.clear();fail=true;
+ drm.ReportDebugState(1,2,4,41,false,false);
+ found=false;for(auto& line:CLog::lines)found |= line.find("query_error=5")!=line.npos;
+ assert(found && errno==ENOSPC);
+}
+''', {'utils/log.h': r'''
+#pragma once
+#include <fmt/format.h>
+#include <vector>
+#include <string>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {inline static std::vector<std::string> lines;
+ template<class... T>static void Log(int,fmt::format_string<T...> f,T&&... a){
+ lines.push_back(fmt::format(f,std::forward<T>(a)...));}};
+'''})
+
+    def run_cpp(self, program, files=None, env=None):
+        with tempfile.TemporaryDirectory(prefix='dv-diagnostic-') as folder:
+            root = Path(folder)
+            (root / 'check.cpp').write_text(program)
+            for name, data in (files or {}).items():
+                destination = root / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(data)
+            result = subprocess.run(['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror',
+                '-pthread', '-DFMT_HEADER_ONLY', '-I', folder, '-I', str(TREE / 'xbmc'),
+                '-idirafter', os.environ.get('CB1_FMT_INCLUDE', '/usr/include'),
+                str(root / 'check.cpp'), '-o', str(root / 'check')], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            result = subprocess.run([str(root / 'check')], capture_output=True, text=True,
+                                    env={**os.environ, **(env or {})})
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_common_sliding_budget_first_failure_final_and_wait_lifecycle(self):
+        # Removing the shared line gate or resetting it on recovery must overflow this test.
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticState.h"
+#include <cassert>
+#include <vector>
+#include <thread>
+int main() {
+  using namespace DVBRIDGE;
+  DiagnosticSession adoption;
+  adoption.Candidate(1);
+  for(unsigned n=0;n<24;++n) assert(adoption.Admit(1,DiagnosticEvent::Normal));
+  assert(adoption.Admit(1,DiagnosticEvent::Failure));
+  adoption.Observe(2,99,1,1,1,"first-bound-picture",true,false);
+  assert(!adoption.Admit(2,DiagnosticEvent::Normal));
+  assert(!adoption.Admit(2,DiagnosticEvent::Failure));
+  adoption.Open();
+  assert(adoption.Admit(3,DiagnosticEvent::Normal));
+  DiagnosticSession session;
+  session.Observe(100,12,1,7,9,"admission",true,false);
+  std::vector<uint64_t> emitted;
+  for(unsigned now=100;now<60100;++now) {
+    if(session.Admit(now,DiagnosticEvent::Normal)) emitted.push_back(now);
+  }
+  for(auto first:emitted) {
+    unsigned count=0;
+    for(auto time:emitted) count+=time>=first && time-first<30000;
+    assert(count<=24);
+  }
+  assert(session.Suppressed()>59000);
+  for(unsigned n=0;n<24;++n) session.Admit(60100,DiagnosticEvent::Normal);
+  assert(session.Admit(60100,DiagnosticEvent::Failure));
+  assert(!session.Admit(60100,DiagnosticEvent::Failure));
+  session.Failure("old-generation");
+  session.Observe(60100,12,2,8,10,"seek",true,false);
+  assert(std::string_view(session.FirstFailure())=="none");
+  assert(!session.Admit(60100,DiagnosticEvent::Failure)); // No new exemption on seek/policy.
+  assert(session.Admit(60100,DiagnosticEvent::Final));
+  assert(!session.Admit(60100,DiagnosticEvent::Final));
+  assert(!session.WaitDue(60101));
+  session.Observe(70000,13,1,8,10,"import",true,false);
+  assert(!session.WaitDue(74999));
+  assert(session.WaitDue(75000));
+  assert(!session.WaitDue(104999));
+  assert(session.WaitDue(105000));
+  session.Observe(105001,13,1,8,10,"import",true,true);
+  assert(!session.WaitDue(150000));
+  session.Observe(150000,13,2,8,10,"import",true,false);
+  assert(!session.WaitDue(154999));
+  assert(session.WaitDue(155000));
+  session.Presented(13);
+  assert(!session.WaitDue(200000));
+  session.Observe(200000,12,99,7,9,"late-old-stream",true,false);
+  assert(session.Stream()==13);
+  assert(session.Admit(200000,DiagnosticEvent::Final));
+  session.Observe(200001,13,3,8,10,"late-after-stop",true,false);
+  assert(!session.WaitDue(300000));
+  session.Open(); session.Candidate(1);
+  assert(session.Admit(2,DiagnosticEvent::Final)); // Stop before any picture/renderer.
+  assert(!session.Admit(2,DiagnosticEvent::Final));
+  DiagnosticProperty unknown(false,std::nullopt), absent(true,std::nullopt),
+      zero(true,0),one(true,1);
+  assert(unknown.Presence()==std::string_view("unknown") && unknown.Value()=="unavailable");
+  assert(absent.Presence()==std::string_view("absent") && absent.Value()=="unavailable");
+  assert(zero.Presence()==std::string_view("present") && zero.Value()=="0");
+  assert(one.Presence()==std::string_view("present") && one.Value()=="1");
+  assert(!(absent==zero));
+}
+''')
+
+    def test_same_size_refresh_updates_only_accepted_current_mode(self):
+        # Missing SetFullScreen refresh leaves startup-120Hz facts after 23.976Hz success.
+        relative = 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp'
+        switch = function(relative, 'bool CWinSystemGbmGLESContext::SetFullScreen(')
+        refresh = function(relative, 'void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()')
+        self.run_cpp(r'''
+#include <cassert>
+#include <memory>
+#include <mutex>
+#include <array>
+#include <stdexcept>
+#include "utils/DVBridgeDiagnosticState.h"
+#include "windowing/gbm/ModeChangeHold.h"
+#include <atomic>
+using namespace KODI::WINDOWING::GBM;
+#define HAVE_DVBRIDGE
+constexpr int EGL_NO_CONTEXT=0, EGL_OPENGL_ES3_BIT=3, LOGDEBUG=0, LOGERROR=1, LOGINFO=2;
+constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2;
+enum class RenderStereoMode {MONO};
+enum dvbridge_mode {DVBRIDGE_MODE_DISABLED};
+namespace DVBRIDGE {enum class OutputReason {None,NoGPUProcessing};
+inline std::atomic<int> modeChangeResolution{-1};
+template<class... T> void DiagnosticLog(T...) {}}
+struct Admission {bool usable=false; DVBRIDGE::OutputReason reason{};};
+struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,processingKnown=false;
+  std::array<Admission,6> processing{},hdr10Processing{};};
+inline int eglGetCurrentContext() {return 1;}
+inline bool pl_opengl_has_ext(int,const char*) {return true;}
+inline bool dvbridge_renderer_supports_mode(int*,dvbridge_mode) {return true;}
+inline bool dvbridge_renderer_supports_hdr10_ai(int*,dvbridge_mode) {return true;}
+struct CLog {template<class... T> static void Log(T...) {}};
+struct CEGLUtils {template<class... T> static void Log(T...) {}};
+struct RESOLUTION_INFO {int iWidth=3840,iHeight=2160,dwFlags=0; double rate=60; std::string strId;};
+enum RESOLUTION {RES_DESKTOP};
+struct CDisplaySettings {static CDisplaySettings& GetInstance() {static CDisplaySettings value; return value;}
+ RESOLUTION_INFO GetResolutionInfo(RESOLUTION) {return {};}};
+struct Connector {bool HasPropertyInventory() const {return true;}
+  std::optional<uint64_t> GetPropertyValue(const char*) const {return 0;}
+  unsigned GetId() const {return 42;}};
+struct DRM {virtual ~DRM()=default; double rate=120; bool accept=true,receipt=true;
+  Connector connector; Connector* GetConnector() {return &connector;}};
+struct Info {struct Sink {unsigned status=0,version=2;}; Sink GetDolbyVisionCaps() const {return {};}};
+inline const char* dvbridge_edid_reason(unsigned) {return "standard-dv";}
+struct CDRMAtomic:DRM {bool IsSelectedModeCommitted() const {return receipt;}};
+struct EGL {bool TrySwapBuffers() {return true;} int GetEGLContext() const {return 1;}};
+struct CDVBridgeGLES {
+  bool HasRenderer() const {return true;}
+  bool SupportsMode(dvbridge_mode) const {return true;}
+  bool SupportsHDR10AI(dvbridge_mode) const {return true;}
+  struct Context {bool Initialize(bool) {return true;} int* Attach() {return nullptr;}
+    int GL() const {return 1;} void Detach(int*) {}};
+};
+struct CWinSystemGbm {
+  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
+  bool SetFullScreen(bool,RESOLUTION_INFO& res,bool) {
+    if(!m_DRM->accept) return false;
+    if(m_DRM->receipt) m_DRM->rate=res.rate;
+    return true;
+  }
+};
+struct CRenderSystemGLES {static void ResetRenderSystem(int,int) {}};
+struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
+  CModeChangeHold m_modeHold; CHeldModeAnnouncement m_modeAnnouncement;
+  bool HoldCB1Mode(RESOLUTION_INFO&) {return false;}
+  bool SupportsDVOutputMode() const {return m_DRM->rate<=60;}
+  int m_nWidth=3840,m_nHeight=2160,m_renderableType=EGL_OPENGL_ES3_BIT;
+  EGL m_eglContext; Caps m_dvCapabilities; std::mutex m_dvCapabilityMutex;
+  std::unique_ptr<Info> m_info=std::make_unique<Info>();
+  const Info* GetDisplayInfo() const {return m_info.get();}
+  std::unique_ptr<CDVBridgeGLES> m_dvBridge;
+  std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
+  bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
+  bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
+  bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
+  bool SupportsNativeDVOutput(bool current=true) const {return !current || m_DRM->rate<=60;}
+  bool SupportsHDR10Conversion(bool current=true) const {return SupportsNativeDVOutput(current);}
+  Caps GetDVOutputCapabilities(std::nullptr_t) const {return m_dvCapabilities;}
+  struct Gfx {void SetStereoMode(RenderStereoMode) {}};
+  Gfx GetGfxContext() {return {};}
+  bool CreateNewWindow(const char*,bool,RESOLUTION_INFO&) {return true;}
+  bool SetFullScreen(bool,RESOLUTION_INFO&,bool);
+  void RefreshDVOutputCapabilities();
+};
+''' + refresh + '\n' + switch + r'''
+int main() {
+  CWinSystemGbmGLESContext w;
+  w.RefreshDVOutputCapabilities();
+  assert(!w.m_dvCapabilities.nativeDV && w.m_dvAvailableNativeDV);
+  RESOLUTION_INFO film; film.rate=24000.0/1001;
+  assert(w.SetFullScreen(true,film,false));
+  assert(w.m_DRM->rate<24 && w.m_dvCapabilities.nativeDV);
+  film.rate=120;
+  assert(w.SetFullScreen(true,film,false));
+  assert(!w.m_dvCapabilities.nativeDV && w.m_dvAvailableNativeDV);
+  film.rate=60; w.m_DRM->accept=false;
+  assert(w.SetFullScreen(true,film,false)); // Preserve ordinary caller's historical return.
+  assert(!w.m_dvCapabilities.nativeDV);
+  w.m_DRM->accept=true; w.m_DRM->receipt=false;
+  assert(w.SetFullScreen(true,film,false));
+  assert(!w.m_dvCapabilities.nativeDV); // A test/request is not an accepted mode.
+}
+''')
+
+    def test_actual_logging_adapter_bounds_lines_and_swallows_callback_exceptions(self):
+        backend = function('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp', 'void BackendLog(')
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+using pl_log_level=int;
+''' + backend + r'''
+int main() {
+  using namespace DVBRIDGE;
+  ObserveDiagnostic(12,1,7,9,"admission",true,false);
+  for(unsigned n=0;n<100;++n) DiagnosticLog(LOGINFO,"producer={} value={}",n%8,n);
+  assert(CLog::lines.size()==24);
+  DiagnosticFailureLog("base-import",true,LOGERROR,"first failure");
+  assert(CLog::lines.size()==25);
+  DiagnosticFinal("stop"); DiagnosticFinal("duplicate-stop");
+  assert(CLog::lines.size()==26);
+  assert(CLog::lines.back().find("first_failure=base-import")!=std::string::npos);
+  assert(CLog::lines.back().find("first_present=false")!=std::string::npos);
+  ObserveDiagnostic(13,1,1,1,"prepare",true,false);
+  DiagnosticLog(LOGINFO,"long={}\nsecret-line",std::string(4096,'x'));
+  assert(CLog::lines.back().size()+128<=1024);
+  assert(CLog::lines.back().find("[truncated]")!=std::string::npos);
+  assert(CLog::lines.back().find('\n')==std::string::npos);
+  BackendLog(nullptr,1,"old renderer callback");
+  assert(CLog::lines.back().find("association=backend-unscoped")!=std::string::npos);
+  CLog::throws=true;
+  BackendLog(nullptr,2,"C callback failure");
+  DiagnosticLog(LOGERROR,"callback error");
+  DiagnosticFailureLog("graphics",true,LOGERROR,"callback {}",42);
+  CLog::throws=false;
+  DiagnosticOpen();
+  diagnosticSession.Observe(0,14,1,1,1,"output-admission",true,false);
+  const auto beforeDisable=CLog::lines.size();
+  DiagnosticTick(false);
+  assert(!diagnosticSession.WaitDue(DiagnosticNowMs()+60000));
+  assert(CLog::lines.size()==beforeDisable); // No missing-activation alert after disabling.
+  DiagnosticOpen();
+  DiagnosticTick(true);
+  assert(!diagnosticSession.WaitDue(DiagnosticNowMs()+60000)); // Do not arm ordinary SDR/HDR.
+}
+''', {'utils/log.h': r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+#include <stdexcept>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+  inline static bool throws=false;
+  inline static std::vector<std::string> lines;
+  template<class... T> static void Log(int,fmt::format_string<T...> f,T&&... a) {
+    if(throws) throw std::runtime_error("logger unavailable");
+    lines.push_back(fmt::format(f,std::forward<T>(a)...));
+  }
+};
+'''})
+
+    def test_signal_cache_distinguishes_missing_zero_one_and_unknown(self):
+        report = function('xbmc/windowing/gbm/drm/DRMAtomic.cpp', 'void CDRMAtomic::ReportSignalState()')
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+#include <map>
+#include <memory>
+#include <vector>
+inline uint64_t DVNowMs() {return 1;}
+struct Object {
+  bool known=true;
+  std::map<std::string,uint64_t> properties;
+  bool HasPropertyInventory() const {return known;}
+  std::optional<int> PropertyInventoryError() const {return std::nullopt;}
+  unsigned GetId() const {return 42;}
+  std::optional<uint64_t> GetPropertyValue(const char* name) const {
+    auto it=properties.find(name);
+    return it==properties.end()?std::nullopt:std::optional<uint64_t>(it->second);
+  }
+};
+struct Mode {uint64_t hdisplay=3840,vdisplay=2160,clock=594000,htotal=4400,vtotal=2250,flags=0,vscan=0;};
+struct State {
+  std::vector<uint64_t> values;
+  template<size_t N> bool operator==(const std::array<uint64_t,N>& other) const {
+    return values==std::vector<uint64_t>(other.begin(),other.end());
+  }
+  template<size_t N> State& operator=(const std::array<uint64_t,N>& other) {
+    values.assign(other.begin(),other.end()); return *this;
+  }
+};
+struct CDRMAtomic {
+  Object connectorStorage, crtcStorage;
+  Object* m_connector=&connectorStorage;
+  Object* m_crtc=&crtcStorage;
+  Mode storage,*m_mode=&storage,m_committedMode;
+  bool m_signalKnown=false; State m_signalState;
+  uint64_t m_signalWindow=0; unsigned m_signalReports=0;
+  void ReportSignalState() noexcept;
+};
+''' + report + r'''
+int main() {
+  CDRMAtomic drm;
+  drm.ReportSignalState();
+  assert(CLog::lines.back().find("dv_property=absent dv_value=unavailable")!=std::string::npos);
+  auto count=CLog::lines.size();
+  drm.m_connector->properties["DVBRIDGE_DV_STANDARD_LAB"]=0;
+  drm.ReportSignalState();
+  assert(CLog::lines.size()==count+1);
+  assert(CLog::lines.back().find("dv_property=present dv_value=0")!=std::string::npos);
+  drm.m_connector->properties["DVBRIDGE_DV_STANDARD_LAB"]=1;
+  drm.ReportSignalState();
+  assert(CLog::lines.back().find("dv_property=present dv_value=1")!=std::string::npos);
+  count=CLog::lines.size();
+  drm.m_connector->properties["NV_HDMI_VSIF_METADATA"]=9;
+  drm.ReportSignalState();
+  assert(CLog::lines.size()==count+1);
+  assert(CLog::lines.back().find("nv_vsif_value=9")!=std::string::npos);
+  drm.ReportSignalState();
+  assert(CLog::lines.size()==count+1);
+  drm.m_connector->properties["dithering mode"]=1;
+  drm.ReportSignalState();
+  assert(CLog::lines.size()==count+2);
+  assert(CLog::lines.back().find("dither_value=1")!=std::string::npos);
+  drm.m_connector->known=false; drm.ReportSignalState();
+  assert(CLog::lines.back().find("dv_property=unknown dv_value=unavailable")!=std::string::npos);
+  drm.m_connector=nullptr; drm.ReportSignalState();
+}
+''', {'utils/log.h': r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+  inline static std::vector<std::string> lines;
+  template<class... T> static void Log(int,fmt::format_string<T...> f,T&&... a) {
+    lines.push_back(fmt::format(f,std::forward<T>(a)...));
+  }
+};
+'''})
+
+    def test_kernel_reader_reports_complete_empty_and_io_error_coverage(self):
+        reader = function('xbmc/windowing/gbm/drm/DVBridgeKernelLogReader.h', 'class KernelLogReader') + ';'
+        self.run_cpp(r'''
+#include "utils/DVBridgeKernelLog.h"
+#include <fmt/format.h>
+#include <array>
+#include <mutex>
+#include <chrono>
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cassert>
+#include <vector>
+#include <cstring>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+  inline static std::vector<std::string> lines;
+  template<class... T> static void Log(int,fmt::format_string<T...> f,T&&... a) {
+    lines.push_back(fmt::format(f,std::forward<T>(a)...));
+  }
+};
+inline int readError=EAGAIN,openError=0; inline bool recordReady=false;
+inline int fakeOpen(const char*,int) {if(openError) {errno=openError; return -1;} return 42;}
+inline int fakeClose(int) {return 0;}
+inline int fakeClock(int,timespec* now) {now->tv_sec=70;now->tv_nsec=0; return 0;}
+inline ssize_t fakeRead(int,char* bytes,size_t) {
+  if(recordReady) {recordReady=false;const char* record="3,1,69000000,-;DVBridge: link rejected\n";
+    std::memcpy(bytes,record,std::strlen(record));return std::strlen(record);}
+  errno=readError;return -1;
+}
+#define open fakeOpen
+#define close fakeClose
+#define read fakeRead
+#define clock_gettime fakeClock
+namespace DVBRIDGE {
+''' + reader + r'''
+}
+#undef open
+#undef close
+#undef read
+#undef clock_gettime
+bool contains(const char* part) {for(auto& line:CLog::lines) if(line.find(part)!=std::string::npos) return true; return false;}
+int main() {
+  using namespace DVBRIDGE;
+  {KernelLogReader reader; assert(!reader.Collect());
+   assert(contains("complete=true") && contains("matched=0"));}
+  CLog::lines.clear(); readError=EIO;
+  {KernelLogReader reader; assert(!reader.Collect());
+   assert(contains("complete=false") && contains("read-error") && contains("error=5"));}
+  CLog::lines.clear(); openError=EACCES;
+  {KernelLogReader reader; assert(!reader.Collect());
+   assert(contains("complete=false") && contains("open-error") && contains("error=13"));}
+  CLog::lines.clear(); openError=0;readError=EAGAIN;recordReady=true;
+  {KernelLogReader reader; assert(!reader.Collect());
+   assert(contains("complete=true") && contains("matched=1"));}
+}
+''')
+
+    def test_actual_inventory_keeps_exact_query_error_across_cleanup(self):
+        query = function('xbmc/windowing/gbm/drm/DRMObject.cpp', 'bool CDRMObject::GetProperties(')
+        inventory = function('xbmc/windowing/gbm/drm/DRMObject.h', 'bool HasPropertyInventory() const')
+        self.run_cpp(r'''
+#include <cassert>
+#include <memory>
+#include <vector>
+#include <optional>
+#include <cstdint>
+#include <cerrno>
+struct drmModeObjectProperties {uint32_t count_props=2; uint32_t props[2]={1,2};};
+struct drmModePropertyRes {};
+inline bool failList=false,failProperty=false; inline unsigned count=2;
+inline drmModeObjectProperties* drmModeObjectGetProperties(int,unsigned,unsigned) {
+  if(failList) {errno=EIO;return nullptr;} auto* p=new drmModeObjectProperties; p->count_props=count;return p;
+}
+inline drmModePropertyRes* drmModeGetProperty(int,unsigned id) {
+  if(failProperty && id==1) {errno=ENOMEM;return nullptr;}
+  errno=ERANGE;return new drmModePropertyRes;
+}
+struct CDRMObject {
+  struct DrmModeObjectPropertiesDeleter {
+    void operator()(drmModeObjectProperties* p) const {delete p;errno=EBADF;}
+  };
+  struct DrmModePropertyResDeleter {void operator()(drmModePropertyRes* p) const {delete p;errno=EBADF;}};
+  std::unique_ptr<drmModeObjectProperties,DrmModeObjectPropertiesDeleter> m_props;
+  std::vector<std::unique_ptr<drmModePropertyRes,DrmModePropertyResDeleter>> m_propsInfo;
+  std::optional<int> m_propertyInventoryError;
+  int m_fd=1;unsigned m_id=0,m_type=0;
+  bool GetProperties(uint32_t,uint32_t);
+''' + inventory + r'''
+};
+''' + query + r'''
+int main() {
+  CDRMObject object;
+  assert(!object.HasPropertyInventory());
+  assert(object.GetProperties(42,1) && object.HasPropertyInventory());
+  assert(!object.m_propertyInventoryError);
+  failList=true;
+  assert(!object.GetProperties(42,1) && !object.HasPropertyInventory());
+  assert(object.m_propertyInventoryError==EIO); // Old inventory deleter changed errno to EBADF.
+  failList=false;failProperty=true;
+  CDRMObject partial;
+  assert(partial.GetProperties(42,1)); // Preserve historical playback result.
+  assert(!partial.HasPropertyInventory() && partial.m_propertyInventoryError==ENOMEM);
+  failProperty=false;count=0;
+  CDRMObject empty;
+  assert(empty.GetProperties(42,1) && empty.HasPropertyInventory());
+  assert(!empty.m_propertyInventoryError);
+}
+''')
+
+
+if __name__ == '__main__':
+    unittest.main()

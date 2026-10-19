@@ -48,10 +48,14 @@ int main(void)
     }
     dvbridge_candidate_destroy(c);
     *av_dovi_get_ext(m,12)=*e; m->num_ext_blocks=13;
+    c=dvbridge_prepare(context,m,bytes,0,geometry,false);assert(c);
+    packets=dvbridge_packets(c,&count);assert(count==5 && packets[3]*256+packets[4]==503);
+    dvbridge_candidate_destroy(c);
+    *av_dovi_get_ext(m,13)=*e; m->num_ext_blocks=14;
     assert(!dvbridge_prepare(context,m,bytes,0,geometry,false));
     m->num_ext_blocks=1;
     c=dvbridge_prepare(context,m,bytes,0,geometry,false); assert(c);
     assert(!memcmp(words,dvbridge_packets(c,NULL),sizeof(words)));
     dvbridge_candidate_destroy(c); dvbridge_destroy(context); av_free(m);
-    puts("PASS: strict native grammar, common L5 margins, 469-byte four-packet boundary and no advance on rejection");
+    puts("PASS: native grammar, L5, four/five packet boundaries and no advance on rejection");
 }

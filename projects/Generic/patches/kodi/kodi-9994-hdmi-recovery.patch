@@ -1,9 +1,7 @@
 diff --git a/xbmc/utils/DVBridgeEdid.h b/xbmc/utils/DVBridgeEdid.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..1611a4eef1d4145c31271592727b507af8d03636
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeEdid.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,140 @@
 +/* SPDX-License-Identifier: MIT */
 +/* Shared, side-effect-free Standard-DV eligibility. The kernel and player
 + * copies must remain identical (checked by the source tests). This only
@@ -49,12 +47,12 @@ index 0000000000000000000000000000000000000000..1611a4eef1d4145c31271592727b507a
 +{
 +	static const unsigned char magic[8] = {0, 255, 255, 255, 255, 255, 255, 0};
 +	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false};
-+	unsigned int block, i, found = 0;
++	unsigned int block, i, blocks, found = 0;
 +
 +	if (!edid || !size)
 +		return result;
 +	result.status = DV_EDID_INVALID;
-+	if (size < 128 || size != ((size_t)edid[126] + 1) * 128)
++	if (size < 128 || size % 128 || size > 256 * 128)
 +		return result;
 +	for (i = 0; i < 8; i++)
 +		if (edid[i] != magic[i])
@@ -67,8 +65,18 @@ index 0000000000000000000000000000000000000000..1611a4eef1d4145c31271592727b507a
 +		if (sum)
 +			return result;
 +	}
++	blocks = edid[126] + 1;
++	if (edid[126] && size >= 256) {
++		const unsigned char *cta = edid + 128;
++		/* HDMI Forum EEODB occupies bytes 4..6 of the first CTA extension. */
++		if (cta[0] == 2 && cta[1] >= 3 && cta[2] >= 7 && cta[2] <= 127 &&
++		    cta[4] == 0xe2 && cta[5] == 0x78 && cta[6])
++			blocks = cta[6] + 1;
++	}
++	if (size != (size_t)blocks * 128)
++		return result;
 +	result.status = DV_EDID_NO_DV;
-+	for (block = 1; block < size / 128; block++) {
++	for (block = 1; block < blocks; block++) {
 +		const unsigned char *b = edid + block * 128;
 +		unsigned int end = b[2], pos;
 +
@@ -135,8 +143,6 @@ index 0000000000000000000000000000000000000000..1611a4eef1d4145c31271592727b507a
 +}
 +#endif
 diff --git a/xbmc/utils/DVBridgeOutputRetry.h b/xbmc/utils/DVBridgeOutputRetry.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..87cce3e599a22909ec477d90c8aaa2a971aff28c
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeOutputRetry.h
 @@ -0,0 +1,29 @@
@@ -170,10 +176,9 @@ index 0000000000000000000000000000000000000000..87cce3e599a22909ec477d90c8aaa2a9
 +};
 +} // namespace DVBRIDGE
 diff --git a/xbmc/utils/DisplayInfo.cpp b/xbmc/utils/DisplayInfo.cpp
-index 377ab2aeaab9c2feed69a4a1d5b8b38e7fdb2087..482f53635d1d3c7e910f18ddeb50e748ba896d00 100644
 --- a/xbmc/utils/DisplayInfo.cpp
 +++ b/xbmc/utils/DisplayInfo.cpp
-@@ -41,6 +41,7 @@ std::unique_ptr<CDisplayInfo> CDisplayInfo::Create(const std::vector<uint8_t>& e
+@@ -41,6 +41,7 @@
  
  CDisplayInfo::CDisplayInfo(const std::vector<uint8_t>& edid)
  {
@@ -181,7 +186,7 @@ index 377ab2aeaab9c2feed69a4a1d5b8b38e7fdb2087..482f53635d1d3c7e910f18ddeb50e748
    m_info.reset(di_info_parse_edid(edid.data(), edid.size()));
  }
  
-@@ -108,9 +109,8 @@ void CDisplayInfo::Parse()
+@@ -108,9 +109,14 @@
                // Report the connected display's capability, not the current output mode.
                const auto* dv = di_cta_data_block_get_dolby_video(block);
                m_dolbyVision |= dv != nullptr;
@@ -190,11 +195,16 @@ index 377ab2aeaab9c2feed69a4a1d5b8b38e7fdb2087..482f53635d1d3c7e910f18ddeb50e748
 -                m_standardDolbyVision |= dv->v0 || dv->v1 || (dv->v2 && dv->v2->mode_standard);
 +              // Native-output eligibility uses the same bounded EDID validation
 +              // as the kernel. This UI capability remains libdisplay-info's.
++              break;
++            }
++            case DI_CTA_DATA_BLOCK_VIDEO_CAP:
++            {
++              const auto* cap = di_cta_data_block_get_video_cap(block);
++              m_rgbQuantizationSelectable |= cap && cap->selectable_rgb_quantization_range;
                break;
              }
              case DI_CTA_DATA_BLOCK_COLORIMETRY:
 diff --git a/xbmc/utils/DisplayInfo.h b/xbmc/utils/DisplayInfo.h
-index eb3d7f455fc9a99989d208ea9af62a19085ffb0a..d67235e5e6ab367b1ae71263060297023c3cca0e 100644
 --- a/xbmc/utils/DisplayInfo.h
 +++ b/xbmc/utils/DisplayInfo.h
 @@ -12,6 +12,7 @@
@@ -205,30 +215,31 @@ index eb3d7f455fc9a99989d208ea9af62a19085ffb0a..d67235e5e6ab367b1ae7126306029702
  
  struct di_info;
  struct di_cta_colorimetry_block;
-@@ -66,7 +67,8 @@ public:
+@@ -66,7 +67,9 @@
    bool SupportsEOTF(Eotf eotf) const;
  
    bool SupportsDolbyVision() const { return m_dolbyVision; }
 -  bool SupportsStandardDolbyVision() const { return m_standardDolbyVision; }
 +  bool SupportsStandardDolbyVision() const { return m_dvCaps.status == DV_EDID_STANDARD; }
++  bool SupportsRGBQuantizationSelection() const { return m_rgbQuantizationSelectable; }
 +  const dvbridge_sink_caps& GetDolbyVisionCaps() const { return m_dvCaps; }
  
    bool SupportsColorimetry(Colorimetry colorimetry) const;
  
-@@ -90,7 +92,7 @@ private:
+@@ -90,7 +93,8 @@
    const di_cta_colorimetry_block* m_colorimetry = nullptr;
    const di_cta_hdr_static_metadata_block* m_hdr_static_metadata = nullptr;
    bool m_dolbyVision = false;
 -  bool m_standardDolbyVision = false;
++  bool m_rgbQuantizationSelectable = false;
 +  dvbridge_sink_caps m_dvCaps{};
  };
  
  } // namespace UTILS
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
-index a0254e2bab9f61353738bf4e9592f5c033660929..00239c3916a70dff68f673067016cda74c1ef38e 100644
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -348,7 +348,7 @@ bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
+@@ -348,7 +348,7 @@
    }
    if (valid)
      valid = state.Stage(*drm, restore);
@@ -238,7 +249,6 @@ index a0254e2bab9f61353738bf4e9592f5c033660929..00239c3916a70dff68f673067016cda7
    if (accepted && restore)
    {
 diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
-index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522b35885c6 100644
 --- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
 +++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
 @@ -29,10 +29,42 @@
@@ -285,7 +295,7 @@ index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522
      m_old_crtc = oldCrtc;
      FinishRequest(false);
      return false;
-@@ -82,17 +114,17 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
+@@ -82,17 +114,17 @@
    if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET)
    {
      if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
@@ -307,7 +317,7 @@ index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522
    }
  
    // In Direct-To-Plane (dual plane) mode m_gui_plane is the output
-@@ -141,15 +173,18 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
+@@ -141,15 +173,18 @@
      m_req->LogAtomicRequest();
  
    if (strict && m_propertyFailure)
@@ -328,7 +338,7 @@ index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522
      }
      CLog::LogF(LOGERROR,
                 "test commit failed: ({}) - falling back to last successful atomic "
-@@ -168,8 +203,9 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
+@@ -168,8 +203,9 @@
    ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags, nullptr);
    if (ret < 0)
    {
@@ -339,13 +349,14 @@ index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522
    }
    FinishRequest(true);
    return true;
-@@ -203,16 +239,20 @@ void CDRMAtomic::FinishRequest(bool accepted)
+@@ -203,16 +239,20 @@
    m_propertyFailure = false;
  }
  
 -bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo)
+-{
 +bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
- {
++{
 +  // The window owns the bounded retry decision after coherent restoration.
 +  m_dvRestoring = restore;
    if (!bo)
@@ -362,7 +373,6 @@ index b3a5063ffd5d9f1d671d05fb661feaa2096de067..d9ba535d038c3ec45ada2f2fc0ef3522
      return false;
    }
 diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
-index bbf1ee00f23f5302a8a2294443bf215403e03b02..cba16cccec547fce83e157e33627f703d9f63fdf 100644
 --- a/xbmc/windowing/gbm/drm/DRMAtomic.h
 +++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
 @@ -10,6 +10,7 @@
@@ -373,7 +383,7 @@ index bbf1ee00f23f5302a8a2294443bf215403e03b02..cba16cccec547fce83e157e33627f703
  
  #include <cstdint>
  #include <deque>
-@@ -36,7 +37,14 @@ public:
+@@ -36,7 +37,14 @@
    bool SupportsFencing() override { return true; }
    bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
    // Blocking commit: rejected properties must not be paired with a new framebuffer.
@@ -389,7 +399,7 @@ index bbf1ee00f23f5302a8a2294443bf215403e03b02..cba16cccec547fce83e157e33627f703
  
    // Probe whether any DRM device supports atomic modesetting, with no
    // connector required. Used to decide atomic-vs-legacy before falling back.
-@@ -46,10 +54,16 @@ private:
+@@ -46,10 +54,16 @@
    bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
                         bool strict = false);
    void FinishRequest(bool accepted);

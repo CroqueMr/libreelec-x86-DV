@@ -24,11 +24,15 @@ static void injected_samplers(GLsizei count, GLuint *samplers)
 #define dvbridge_gl_packer_create tested_packer_create
 #define dvbridge_gl_packer_destroy tested_packer_destroy
 #define dvbridge_gl_pack tested_pack
+#define dvbridge_gl_patch tested_patch
+#define dvbridge_gl_patch_inplace tested_patch_inplace
 #include "../src/dvbridge_gl_pack.c"
 #undef glGenSamplers
 #undef dvbridge_gl_packer_create
 #undef dvbridge_gl_packer_destroy
 #undef dvbridge_gl_pack
+#undef dvbridge_gl_patch
+#undef dvbridge_gl_patch_inplace
 
 enum { WIDTH = 3840, HEIGHT = 2160, OUTPUT_HEIGHT = 8 };
 
@@ -136,10 +140,10 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WIDTH, HEIGHT, 0, GL_RGBA, GL_FLOAT, pixels);
     glUniform1i(glGetUniformLocation(program, "pq_input"), 0);
-    GLuint metadata[512];
-    for (unsigned i = 0; i < 512; ++i) metadata[i] = (i * 37 + 19) & 255;
-    glUniform4uiv(glGetUniformLocation(program, "metadata_words"), 128, metadata);
-    glUniform1ui(glGetUniformLocation(program, "packet_count"), 4);
+    GLuint metadata[640];
+    for (unsigned i = 0; i < 640; ++i) metadata[i] = (i * 37 + 19) & 255;
+    glUniform4uiv(glGetUniformLocation(program, "metadata_words"), 160, metadata);
+    glUniform1ui(glGetUniformLocation(program, "packet_count"), 5);
     glDisable(GL_DITHER);
     glDisable(GL_BLEND);
     glViewport(0, 0, WIDTH, OUTPUT_HEIGHT);
@@ -155,8 +159,8 @@ int main(int argc, char **argv)
         glScissor(0, 0, 1, 1);
         glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_TRUE);
         glViewport(3, 5, 13, 17);
-        assert(!dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 5, flip));
-        assert(dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 4, flip));
+        assert(!dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 6, flip));
+        assert(dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 5, flip));
         GLint originalFilter;
         glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &originalFilter);
         assert(originalFilter == GL_NEAREST_MIPMAP_LINEAR);
@@ -180,7 +184,7 @@ int main(int argc, char **argv)
                 float cr = 2048.f + 3584.f * ((a[0] - ya) + (b[0] - yb)) / (2.f * 1.4746f);
                 unsigned c = (unsigned)floorf(((x & 1) ? cr : cb) + .5f);
                 unsigned index = y * WIDTH + x, packet = index / 3072;
-                if (packet < 4) {
+                if (packet < 5) {
                     unsigned bit = index % 1024;
                     unsigned v = (metadata[packet * 128 + bit / 8] >> (7 - bit % 8)) & 1;
                     c = (c & 4094) | (v ^ (__builtin_parity(c >> 1) ^ __builtin_parity(luma)));

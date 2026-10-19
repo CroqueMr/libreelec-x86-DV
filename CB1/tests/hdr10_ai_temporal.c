@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(void)
 {
@@ -31,11 +32,9 @@ int main(void)
         struct cb1_ai_identity id={11,picture+1,13};
         assert(cb1_hdr10_temporal_poll(ctx,id,&out)==CB1_AI_READY);
         assert(out.id.picture==id.picture && out.observed_until<=picture/24.+1.+1e-9);
-        /* A cut becomes known after 200 ms; the frozen algorithm includes the
-         * unconfirmed following observations in its earlier bounded prefix. */
-        unsigned average=picture<5?(unsigned)nearbyint(((double).2f*24+(double).5f*(picture+1))/(25+picture)*4095):
-            picture<24?819:2048;
-        unsigned peak=picture>=5 && picture<24?2081:2866;
+        /* Future scene pixels must not pulse the current scene's metadata. */
+        unsigned average=picture<24?819:2048;
+        unsigned peak=picture<24?2081:2866;
         if(out.base[1]!=average)fprintf(stderr,"picture %u: %u/%u/%u expected avg%u\n",picture,out.base[0],out.base[1],out.base[2],average);
         assert(out.base[0]==12 && out.base[1]==average && out.base[2]==peak);
         assert(cb1_hdr10_temporal_size(ctx)<=29);
@@ -86,5 +85,46 @@ int main(void)
     assert(out.base[0]==12 && out.base[1]==3071 && out.base[2]==3276);
     assert(out.observed_until==2.);
     cb1_hdr10_temporal_destroy(&control);cb1_hdr10_temporal_destroy(&ctx);
+    /* Exposure changes are not scene cuts and must retain real source peaks. */
+    ctx=cb1_hdr10_temporal_create();assert(ctx);
+    cb1_hdr10_temporal_reset(ctx,3,4);
+    for(unsigned i=0;i<25;++i){
+        const bool flash=i==24;
+        struct cb1_hdr10_descriptor d={.pts=i/24.};
+        d.global[0]=flash?.2f:.1f;d.global[1]=flash?.7f:.3f;d.global[2]=flash?.5f:.2f;
+        for(unsigned c=0;c<3;++c)for(unsigned j=0;j<576;++j)
+            motion[c*576+j]=((j%32)<16?.3f:.1f)+(flash?.2f:0);
+        assert(cb1_hdr10_temporal_push(ctx,&d,motion,(struct cb1_ai_identity){3,i+1,4})==CB1_AI_READY);
+    }
+    assert(cb1_hdr10_temporal_poll(ctx,(struct cb1_ai_identity){3,1,4},&out)==CB1_AI_READY);
+    assert(out.base[1]==868 && out.base[2]==2866 && fabs(out.peak-.7f)<1e-9);
+    cb1_hdr10_temporal_end(ctx);
+    assert(cb1_hdr10_temporal_poll(ctx,(struct cb1_ai_identity){3,25,4},&out)==CB1_AI_READY);
+    assert(out.base[2]==2866 && fabs(out.peak-.7f)<1e-9);
+    cb1_hdr10_temporal_destroy(&ctx);
+    /* An irregular cadence may expose a future cut before its 200 ms confirmation. */
+    ctx=cb1_hdr10_temporal_create();assert(ctx);
+    cb1_hdr10_temporal_reset(ctx,4,5);
+    const double times[]={0.,.2,1.1,1.7};
+    float calibration[222];
+    for(unsigned i=0;i<4;++i){
+        const bool second=i>=2;
+        struct cb1_hdr10_descriptor d={.pts=times[i]};
+        d.global[0]=second?.2f:.1f;d.global[1]=second?.7f:.3f;d.global[2]=second?.5f:.2f;
+        for(unsigned c=0;c<3;++c)for(unsigned j=0;j<576;++j)
+            motion[c*576+j]=((j%32)<16)^second?.75f:.25f;
+        assert(cb1_hdr10_temporal_push(ctx,&d,motion,(struct cb1_ai_identity){4,i+1,5})==CB1_AI_READY);
+        if(i==2){
+            assert(cb1_hdr10_temporal_advance(ctx,1.2)==CB1_AI_READY);
+            assert(cb1_hdr10_temporal_poll(ctx,(struct cb1_ai_identity){4,2,5},&out)==CB1_AI_READY);
+            assert(out.base[1]==819 && out.base[2]==2081);
+            memcpy(calibration,out.calibration,sizeof(calibration));
+        }
+    }
+    cb1_hdr10_temporal_end(ctx);
+    assert(cb1_hdr10_temporal_poll(ctx,(struct cb1_ai_identity){4,3,5},&out)==CB1_AI_READY);
+    assert(out.base[1]==2048 && out.base[2]==2866);
+    assert(!memcmp(calibration,out.calibration,sizeof(calibration)));
+    cb1_hdr10_temporal_destroy(&ctx);
     puts("Bounded temporal cuts, pause, reset and long baseline passed");
 }

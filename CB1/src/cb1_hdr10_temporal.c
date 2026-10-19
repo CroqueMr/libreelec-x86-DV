@@ -111,16 +111,21 @@ enum cb1_ai_status cb1_hdr10_temporal_push(struct cb1_hdr10_temporal *ctx,
     return CB1_AI_READY;
 }
 
-static bool confirmed_cut(const struct cb1_hdr10_temporal *ctx,size_t i,size_t observed,double available)
+static bool scene_boundary(const struct cb1_hdr10_temporal *ctx,size_t i,size_t observed)
 {
     if(!i || i>=observed)return false;
+    const struct sample *s=&ctx->samples[i];
+    return s->gap || (s->settled && i+2<observed?s->candidate:cut_candidate(ctx,i,observed));
+}
+
+static bool confirmed_cut(const struct cb1_hdr10_temporal *ctx,size_t i,size_t observed,double available)
+{
+    if(!scene_boundary(ctx,i,observed))return false;
     const struct sample *s=&ctx->samples[i];
     if(s->gap)return s->d.pts<=available+1e-9;
     size_t consumed=i+2<observed?i+2:observed-1;
     double confirmation=fmax(s->d.pts+.2,ctx->samples[consumed].d.pts);
-    bool candidate=s->settled && i+2<observed?s->candidate:cut_candidate(ctx,i,observed);
-    return candidate &&
-        confirmation<=available+1e-9;
+    return confirmation<=available+1e-9;
 }
 
 static bool baseline(const struct cb1_hdr10_temporal *ctx,size_t start,size_t end,bool cut,
@@ -176,8 +181,10 @@ enum cb1_ai_status cb1_hdr10_temporal_poll(struct cb1_hdr10_temporal *ctx,
         ctx->calibration_start=ctx->samples[span].d.pts;
     }
     size_t start=0,end=observed;
-    for(size_t i=1;i<observed;++i)if(confirmed_cut(ctx,i,observed,available)){
-        if(i<=requested)start=i;else{end=i;break;}
+    for(size_t i=1;i<observed;++i){
+        if(i<=requested){if(confirmed_cut(ctx,i,observed,available))start=i;}
+        /* Exclude a future scene before confirmation can change this frame's statistics. */
+        else if(scene_boundary(ctx,i,observed)){end=i;break;}
     }
     if(start && ctx->samples[start].d.pts>ctx->active_cut){
         ctx->active_cut=ctx->samples[start].d.pts;ctx->history_low=1;ctx->history_high=0;

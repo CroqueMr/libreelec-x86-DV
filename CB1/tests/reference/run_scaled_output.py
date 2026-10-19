@@ -8,6 +8,10 @@ import sys
 import reference as R
 from run_gpu_images import wire
 ROOT=Path(__file__).resolve().parent
+hdr_quality = '--hdr-conversion-quality' in sys.argv
+if hdr_quality:
+    sys.argv.remove('--hdr-conversion-quality')
+assert len(sys.argv) == 2, 'only complete HDR output is accepted'
 data=json.loads((ROOT/'scaled-output-vectors.json').read_text())
 assert data['source_vectors_sha256']==hashlib.sha256((ROOT/'vectors.json').read_bytes()).hexdigest()
 assert len(data['cases'])==3
@@ -22,7 +26,7 @@ for case in data['cases']:
     errors=[abs(a-b) for p,q in zip(actual['rgb'],case['expected']['rgb']) for a,b in zip(p,q)]
     index=max(range(len(errors)),key=errors.__getitem__);worst=errors[index]
     try:
-        R.check_image_integrity(case,actual)
+        R.check_image_integrity(case,actual,hdr_conversion_quality=hdr_quality)
         if case['source_scaler_id']=='two-axis-upscale-overshoot':
             assert 0<max(actual['rgb'][28])<max(actual['rgb'][30])<max(actual['rgb'][35]),'near-black detail order'
     except AssertionError as error:
@@ -30,6 +34,7 @@ for case in data['cases']:
         print('FAIL',error,'max PQ error',worst,'pixel',index//3,'component',index%3,
               'actual=',json.dumps(actual),flush=True)
         continue
-    print('PASS unchanged complete-output PQ/code/black/hue budgets; max PQ error',worst,flush=True)
+    print('PASS HDR conversion PQ/code/black/hue budgets' if hdr_quality else
+          'PASS unchanged complete-output PQ/code/black/hue budgets', 'max PQ error',worst,flush=True)
 print('additional complete cases',len(data['cases']),'failures',failures,flush=True)
 sys.exit(bool(failures))

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Independent scalar controls; not a Dolby display-management emulator."""
+from math import floor
 
 
 def pq(nits):
@@ -8,10 +9,10 @@ def pq(nits):
 
 
 def analysis(l1, l3=None):
-    out = [v + (o - 2048) for v, o in zip(l1, l3 or [2048]*3)]
+    out = [v + (o - 2048) * 4095 / 2048 for v, o in zip(l1, l3 or [2048]*3)]
     if not 0 <= out[0] <= out[2] <= out[1] <= 4095:
         raise ValueError('Invalid effective analysis')
-    return out
+    return [floor(v + .5) for v in out]
 
 
 def anchors(table, target, master):

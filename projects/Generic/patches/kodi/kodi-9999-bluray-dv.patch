@@ -1,9 +1,7 @@
 diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619ecc613c0c
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,290 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -17,52 +15,144 @@ index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619e
 +extern "C"
 +{
 +#include <libavcodec/packet.h>
++#include <libavcodec/bsf.h>
 +#include <libavutil/avutil.h>
 +#include <libavutil/error.h>
++#include <libavutil/mathematics.h>
 +}
 +
-+// Present separate Blu-ray layers as the joined HEVC stream consumed by CB1.
++// Present separate HEVC layers as the joined stream consumed by CB1.
 +class CBlurayDovi
 +{
 +public:
-+  void Reset()
++  // Preserve each layer's HEVC configuration and time base.
++  bool Configure(const AVCodecParameters* base, const AVCodecParameters* enhancement,
++                 AVRational baseClock, AVRational enhancementClock)
 +  {
++    const auto* filter = av_bsf_get_by_name("hevc_mp4toannexb");
++    if (!filter || baseClock.num <= 0 || baseClock.den <= 0 ||
++        enhancementClock.num <= 0 || enhancementClock.den <= 0)
++      return false;
++    std::array<Filter, 2> prepared;
++    const AVCodecParameters* parameters[] = {base, enhancement};
++    const AVRational clocks[] = {baseClock, enhancementClock};
++    for (unsigned i = 0; i < prepared.size(); ++i)
++    {
++      AVBSFContext* context = nullptr;
++      if (av_bsf_alloc(filter, &context) < 0)
++        return false;
++      prepared[i].reset(context);
++      if (avcodec_parameters_copy(context->par_in, parameters[i]) < 0)
++        return false;
++      context->time_base_in = clocks[i];
++      if (av_bsf_init(context) < 0)
++        return false;
++    }
++    m_filters = std::move(prepared);
++    return true;
++  }
++  const AVCodecParameters* BaseParameters() const { return m_filters[0]->par_out; }
++  const AVCodecParameters* OriginalBaseParameters() const
++  { return m_filters[0] ? m_filters[0]->par_in : nullptr; }
++
++  void Reset(bool resync = false)
++  {
++    for (auto& filter : m_filters)
++      if (filter) av_bsf_flush(filter.get());
 +    m_base.clear();
 +    m_enhancement.clear();
 +    m_rpu.clear();
 +    m_bytes = 0;
++    m_error = "";
++    m_resync = resync;
++    m_preroll = 0;
++    m_lastDts = {AV_NOPTS_VALUE, AV_NOPTS_VALUE};
++    m_discontinuity = false;
++    m_restartPeer = -1;
 +  }
 +
 +  bool Push(const AVPacket* packet, bool enhancement)
 +  {
-+    if (!packet || packet->pts == AV_NOPTS_VALUE || packet->size <= 0 ||
-+        static_cast<size_t>(packet->size) > MAX_BYTES - m_bytes)
-+      return false;
++    m_error = "";
++    if (!packet || packet->size <= 0 || static_cast<size_t>(packet->size) > MAX_BYTES)
++      return Reject("packet");
++    Packet normalized;
++    if (m_filters[enhancement])
++    {
++      Packet input(av_packet_clone(packet));
++      normalized.reset(av_packet_alloc());
++      auto* filter = m_filters[enhancement].get();
++      if (!input || !normalized || av_bsf_send_packet(filter, input.get()) < 0 ||
++          av_bsf_receive_packet(filter, normalized.get()) < 0)
++        return Reject("hevc-normalization");
++      const auto from = filter->time_base_out, to = m_filters[0]->time_base_out;
++      if (av_cmp_q(from, to))
++      {
++        const auto pts = normalized->pts, dts = normalized->dts, duration = normalized->duration;
++        av_packet_rescale_ts(normalized.get(), from, to);
++        if ((pts != AV_NOPTS_VALUE && av_rescale_q(normalized->pts, to, from) != pts) ||
++            (dts != AV_NOPTS_VALUE && av_rescale_q(normalized->dts, to, from) != dts) ||
++            av_rescale_q(normalized->duration, to, from) != duration)
++          return Reject("layer-time-base");
++      }
++      packet = normalized.get();
++    }
++    // Wait for both transport clocks before accepting a new layer epoch.
++    if (m_restartPeer == int(enhancement))
++    {
++      if (packet->dts == AV_NOPTS_VALUE) return Reject("restart-peer-dts");
++      if (packet->dts >= m_lastDts[enhancement]) return SkipPreroll();
++      m_restartPeer = -1;
++      m_lastDts[enhancement] = packet->dts;
++    }
++    if (packet->dts != AV_NOPTS_VALUE)
++    {
++      if (m_lastDts[enhancement] != AV_NOPTS_VALUE && packet->dts < m_lastDts[enhancement])
++      {
++        if (m_restartPeer != -1) return Reject("overlapping-discontinuity");
++        const auto peerDts = m_lastDts[!enhancement];
++        if (peerDts == AV_NOPTS_VALUE) return Reject("missing-peer-dts");
++        Reset(true);
++        m_lastDts[!enhancement] = peerDts;
++        m_restartPeer = !enhancement;
++        m_discontinuity = true;
++      }
++      m_lastDts[enhancement] = packet->dts;
++    }
++    if (static_cast<size_t>(packet->size) > MAX_BYTES - m_bytes)
++      return Reject("byte-limit");
++    if (packet->pts == AV_NOPTS_VALUE)
++    {
++      if (m_resync && !enhancement) return SkipPreroll();
++      return Reject("packet");
++    }
 +    if (!enhancement)
 +    {
++      ResyncPreroll();
 +      if (m_base.size() >= MAX_PACKETS)
-+        return false;
++        return Reject("base-queue");
 +      Packet owned(av_packet_clone(packet));
 +      if (!owned)
-+        return false;
++        return Reject("allocation");
 +      m_bytes += packet->size;
 +      m_base.push_back(std::move(owned));
 +      return true;
 +    }
-+    if (m_enhancement.size() >= MAX_PACKETS || m_rpu.size() >= MAX_PACKETS ||
-+        m_rpu.contains(packet->pts))
-+      return false;
++    if (m_enhancement.size() >= MAX_PACKETS || m_rpu.size() >= MAX_PACKETS)
++      return Reject("enhancement-queue");
++    if (m_rpu.contains(packet->pts))
++      return Reject("duplicate-rpu-pts");
 +
 +    std::vector<uint8_t> layer, rpu;
 +    auto begin = Start(packet->data, packet->size, 0);
 +    if (begin[0] != 0)
-+      return false;
++      return Reject("annex-b");
 +    while (begin[0] < packet->size)
 +    {
 +      const auto next = Start(packet->data, packet->size, begin[1]);
 +      const int size = next[0] - begin[1];
 +      if (size < 2 || packet->data[begin[1]] & 0x80 || !(packet->data[begin[1]+1] & 7))
-+        return false;
++        return Reject("nal-header");
 +      const int type = (packet->data[begin[1]] >> 1) & 63;
 +      auto& destination = type == 62 ? rpu : layer;
 +      destination.insert(destination.end(), {0, 0, 0, 1});
@@ -70,15 +160,17 @@ index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619e
 +        destination.insert(destination.end(), {0x7e, 1});
 +      destination.insert(destination.end(), packet->data + begin[1], packet->data + next[0]);
 +      if (layer.size() + rpu.size() > MAX_BYTES - m_bytes)
-+        return false;
++        return Reject("byte-limit");
 +      begin = next;
 +    }
 +    if (layer.empty() || rpu.empty())
-+      return false;
++      return Reject("missing-layer-or-rpu");
 +    Packet owned(av_packet_alloc());
 +    if (!owned || av_new_packet(owned.get(), layer.size()) < 0)
-+      return false;
++      return Reject("allocation");
 +    std::memcpy(owned->data, layer.data(), layer.size());
++    owned->pts = packet->pts;
++    owned->dts = packet->dts;
 +    m_bytes += layer.size() + rpu.size();
 +    m_enhancement.push_back(std::move(owned));
 +    m_rpu.emplace(packet->pts, std::move(rpu));
@@ -87,6 +179,7 @@ index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619e
 +
 +  int Take(AVPacket* output)
 +  {
++    ResyncPreroll();
 +    if (m_base.empty() || m_enhancement.empty())
 +      return AVERROR(EAGAIN);
 +    auto rpu = m_rpu.find(m_base.front()->pts);
@@ -107,16 +200,71 @@ index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619e
 +    m_base.pop_front();
 +    m_enhancement.pop_front();
 +    m_rpu.erase(rpu);
++    m_resync = false;
 +    return 0;
 +  }
 +
 +  bool Pending() const { return !m_base.empty() || !m_enhancement.empty() || !m_rpu.empty(); }
++  const char* LastError() const { return m_error; }
++  int64_t BasePTS() const { return m_base.empty() ? AV_NOPTS_VALUE : m_base.front()->pts; }
++  int64_t RpuPTS() const { return m_rpu.empty() ? AV_NOPTS_VALUE : m_rpu.begin()->first; }
++  size_t TakePrerollCount() { const auto count=m_preroll; m_preroll=0; return count; }
++  bool TakeDiscontinuity() { const bool changed=m_discontinuity; m_discontinuity=false; return changed; }
 +
 +private:
++  bool Reject(const char* reason) { m_error = reason; return false; }
++  bool SkipPreroll()
++  {
++    if (m_preroll >= MAX_PACKETS) return Reject("seek-preroll-limit");
++    ++m_preroll;
++    return true;
++  }
++  void ResyncPreroll()
++  {
++    if (!m_resync)
++      return;
++    if (!m_enhancement.empty() && m_enhancement.front()->dts != AV_NOPTS_VALUE)
++    {
++      if (m_base.size() < MAX_PACKETS && m_enhancement.size() < MAX_PACKETS)
++        return;
++      // A common decode anchor proves which BL units precede the first EL unit.
++      const auto& first = m_enhancement.front();
++      const auto anchor = std::find_if(m_base.begin(), m_base.end(), [&first](const Packet& base) {
++        return base->pts == first->pts && base->dts == first->dts;
++      });
++      if (anchor == m_base.end() || !std::all_of(m_base.begin(), anchor, [&first](const Packet& base) {
++            return base->dts != AV_NOPTS_VALUE && base->dts < first->dts;
++          }))
++        return;
++      const auto count = static_cast<size_t>(std::distance(m_base.begin(), anchor));
++      if (m_preroll > MAX_PACKETS || count > MAX_PACKETS - m_preroll)
++        return;
++      for (size_t i = 0; i < count; ++i)
++      {
++        m_bytes -= m_base.front()->size;
++        m_base.pop_front();
++        ++m_preroll;
++      }
++      return;
++    }
++    // Only retire leading seek packets after a full reorder window proves them orphaned.
++    if (m_base.size() < MAX_PACKETS || m_rpu.size() < MAX_PACKETS - 1 ||
++        std::none_of(m_base.begin(),m_base.end(),
++            [this](const Packet& base) { return m_rpu.contains(base->pts); })) return;
++    while (!m_base.empty() && m_base.front()->pts < m_rpu.begin()->first)
++    {
++      m_bytes -= m_base.front()->size;
++      m_base.pop_front();
++      ++m_preroll;
++    }
++  }
 +  static constexpr size_t MAX_PACKETS = 32;
 +  static constexpr size_t MAX_BYTES = 64u * 1024u * 1024u;
 +  struct Release { void operator()(AVPacket* p) const { av_packet_free(&p); } };
 +  using Packet = std::unique_ptr<AVPacket, Release>;
++  struct ReleaseFilter { void operator()(AVBSFContext* p) const { av_bsf_free(&p); } };
++  using Filter = std::unique_ptr<AVBSFContext, ReleaseFilter>;
++  std::array<Filter, 2> m_filters;
 +
 +  // Return the prefix and payload positions of the next Annex-B NAL.
 +  static std::array<int, 2> Start(const uint8_t* data, int size, int from)
@@ -137,9 +285,14 @@ index 0000000000000000000000000000000000000000..d86acf5979ef283a3341b28bfee7619e
 +  // Keep each layer's decode order; associate RPU only by presentation time.
 +  std::map<int64_t, std::vector<uint8_t>> m_rpu;
 +  size_t m_bytes{0};
++  const char* m_error{""};
++  bool m_resync{false};
++  size_t m_preroll{0};
++  std::array<int64_t, 2> m_lastDts{AV_NOPTS_VALUE, AV_NOPTS_VALUE};
++  bool m_discontinuity{false};
++  int m_restartPeer{-1};
 +};
 diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
-index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a67467a018f4 100644
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
 @@ -10,6 +10,7 @@
@@ -150,7 +303,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
  #include "cores/VideoPlayer/DVDStreamInfo.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
  extern "C"
-@@ -730,6 +731,10 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool
+@@ -730,6 +731,10 @@
  
  void CDVDDemuxFFmpeg::Dispose()
  {
@@ -161,7 +314,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
    m_pkt.result = -1;
    av_packet_unref(&m_pkt.pkt);
  
-@@ -767,6 +772,10 @@ bool CDVDDemuxFFmpeg::Reset()
+@@ -767,6 +772,10 @@
  
  void CDVDDemuxFFmpeg::Flush()
  {
@@ -172,7 +325,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
    if (m_pFormatContext)
    {
      if (m_pFormatContext->pb)
-@@ -1106,7 +1115,12 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
+@@ -1106,7 +1115,12 @@
  
          // timeout reads after 100ms
          m_timeout.Set(20s);
@@ -185,7 +338,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
          m_timeout.SetInfinite();
        }
  
-@@ -1645,6 +1659,9 @@ double CDVDDemuxFFmpeg::SelectAspect(AVStream* st, bool& forced)
+@@ -1645,6 +1659,9 @@
  
  void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
  {
@@ -195,7 +348,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
    // changes must keep increasing across rebuilds; consumers detect a rebuild by comparing values
    std::map<int, int> prevChanges;
    for (const auto& [streamIdx, stream] : m_streams)
-@@ -1703,7 +1720,11 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
+@@ -1703,7 +1720,11 @@
        for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
        {
          m_pFormatContext->streams[i]->discard = AVDISCARD_NONE;
@@ -208,7 +361,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
            m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
        }
      }
-@@ -2252,8 +2273,13 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
+@@ -2252,8 +2273,13 @@
        // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
        if (pStream->id == 0x1015)
        {
@@ -222,7 +375,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
          delete stream;
          return nullptr;
        }
-@@ -2499,8 +2525,12 @@ bool CDVDDemuxFFmpeg::IsProgramChange()
+@@ -2499,8 +2525,12 @@
  
    for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
    {
@@ -237,7 +390,7 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
        continue;
      CDemuxStream* stream = GetStream(idx);
      if (!stream)
-@@ -2885,6 +2915,106 @@ void CDVDDemuxFFmpeg::GetL16Parameters(int &channels, int &samplerate)
+@@ -2885,6 +2915,106 @@
    }
  }
  
@@ -345,10 +498,9 @@ index 2810175f56681f0d06270fd008001215fac70585..0af180beb468ab8ceb6567a10224a674
  {
    StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
 diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
-index 541e2e4efb7283d7891a821ef9c1cae5760b7e70..626017a0d42d8b84a1d4f50ff8ed17c066f17cd5 100644
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
-@@ -20,6 +20,9 @@ extern "C" {
+@@ -20,6 +20,9 @@
  }
  
  class CDVDDemuxFFmpeg;
@@ -358,7 +510,7 @@ index 541e2e4efb7283d7891a821ef9c1cae5760b7e70..626017a0d42d8b84a1d4f50ff8ed17c0
  class CDVDInputStream;
  class CURL;
  struct ChapterFFmpeg;
-@@ -149,6 +152,13 @@ protected:
+@@ -149,6 +152,13 @@
  
    StreamHdrType DetermineHdrType(AVStream* pStream);
  

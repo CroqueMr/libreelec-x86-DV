@@ -12,13 +12,13 @@
 int main(void)
 {
     const char *expected[] = {
-        "CB1-DVDVR.0.1", "CB1-DVHDR10B.0.1", "CB1-DVHDR10X.0.3",
-        "CB1-DVDVEa.0.3", "CB1-DVDVEb.0.3",
+        "CB1-DVDVR.0.3", "CB1-DVHDR10B.0.3", "CB1-DVHDR10X.0.8",
+        "CB1-DVDVA.0.9", NULL,
         NULL, NULL,
-        "CB1-HDR10DVR.0.1.1", "CB1-HDR10DVEa.0.1.1", "CB1-HDR10DVEb.0.1.1"
+        "CB1-HDR10DVR.0.1.2", "CB1-HDR10DVA.0.4", "CB1-DVDVMR.0.4", "CB1-DVDVA.0.10"
     };
-    assert(strcmp(cb1_engine_version(), "CB1 0.1") == 0);
-    assert(CB1_CIRCUIT_COUNT == 10);
+    assert(strcmp(cb1_engine_version(), "CB1 0.3") == 0);
+    assert(CB1_CIRCUIT_COUNT == 11);
     for (int i = 0; i < CB1_CIRCUIT_COUNT; ++i)
         if (expected[i]) assert(strcmp(cb1_circuit_version((enum cb1_circuit)i), expected[i]) == 0);
         else assert(cb1_circuit_version((enum cb1_circuit)i) == NULL);

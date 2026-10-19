@@ -6,6 +6,13 @@ import subprocess
 import sys
 import cm4_reference as ref
 from cm4_reference import pq
+from hdr_conversion_quality import check_hdr_conversion_quality
+
+HDR_QUALITY = '--hdr-conversion-quality' in sys.argv
+if HDR_QUALITY:
+    sys.argv.remove('--hdr-conversion-quality')
+    assert len(sys.argv) == 3 and sys.argv[2] in ('--full-colour', '--full', '--spatial-numeric'), \
+        'HDR quality cannot change the native reference graph'
 
 
 def main():
@@ -40,6 +47,7 @@ def full():
     fixture = 'cm4-colour-vectors.json' if colour else 'cm4-envelope-vectors.json'
     native = json.loads(Path(__file__).with_name(fixture).read_text())['native']
     maximum, all_errors, worst, per_control = 0, [], None, {}
+    quality_expected, quality_actual, quality_neutral = [], [], []
     for case in data:
         c = case['control']
         controls = dict(primary=[2048]*6, mid_contrast=2048, clip_trim=2048,
@@ -58,6 +66,9 @@ def full():
             controls.update(primary=[2304, 2200, 1900, 3000, 2700, 2048],
                             mid_contrast=2400, clip_trim=1800)
             controls['saturation'][1], controls['hue'][4] = 180, 200
+        # Secondary six-vector controls are SDR-only, absent from HDR10 execution.
+        controls.pop('saturation')
+        controls.pop('hue')
         prim = [[.68, .32], [.265, .690], [.150, .060], [.3127, .3290]] if case['gamut'] else ref.BT2020
         coeff = ref.decode_controls(controls, 1000, prim)
         before = native[case['gamut']]['linear']
@@ -74,8 +85,14 @@ def full():
         for index, (actual, wanted) in enumerate(zip(case['pq'], expected_pq)):
             # Exact signal black precedes authored offsets in the complete policy.
             errors = [abs(a-v) for a, v in zip(actual, wanted)]
-            if colour and index % 8 == 0 and coeff['sop'][1] <= 0:
+            if (colour or HDR_QUALITY) and index % 8 == 0 and coeff['sop'][1] <= 0:
                 errors = [abs(a) for a in actual]
+                wanted = [0, 0, 0]
+            # Fixture --full is all gray; --full-colour columns 0/7 are black/white.
+            if not colour or index % 8 in (0, 7):
+                quality_neutral.append(len(quality_expected))
+            quality_expected.append(wanted)
+            quality_actual.append(actual)
             if max(errors) > maximum:
                 maximum = max(errors)
                 worst = dict(control=c, gamut=case['gamut'], pixel=index,
@@ -85,6 +102,10 @@ def full():
             per_control[key] = max(per_control.get(key, 0), max(errors))
     if maximum > 1e-3:
         print('Per-gamut/control maximum PQ:', per_control, file=sys.stderr)
+    if HDR_QUALITY:
+        print('PASS complete HDR CM4 conversion quality',
+              check_hdr_conversion_quality(quality_expected, quality_actual, quality_neutral))
+        return
     assert maximum <= 1e-3, (maximum, worst)
     p999 = sorted(all_errors)[int((len(all_errors)-1)*.999)]
     assert p999 <= 2.5e-4, p999
@@ -97,6 +118,7 @@ def spatial():
     data = json.loads(result.stdout)['spatial']
     assert len(data) == 16
     errors, worst = [], None
+    quality_expected, quality_actual, quality_neutral = [], [], []
     for case in data:
         controls = dict(primary=[2048]*6, mid_contrast=2048, clip_trim=2048,
                         saturation=[128]*6, hue=[128]*6)
@@ -105,6 +127,8 @@ def spatial():
                             mid_contrast=2400, clip_trim=1800)
             controls['saturation'][1], controls['hue'][4] = 180, 200
         controls['primary'][5] = case['ms']
+        controls.pop('saturation')
+        controls.pop('hue')
         prim = [[.68, .32], [.265, .690], [.150, .060], [.3127, .3290]] if case['gamut'] else ref.BT2020
         coeff = ref.decode_controls(controls, 1000, prim)
         linear = [[v*203 for v in rgb] for rgb in case['native']]
@@ -118,10 +142,18 @@ def spatial():
             if (case['border'] and (x in (0, 7) or y in (0, 7))) or (x == 0 and coeff['sop'][1] <= 0):
                 wanted = [0, 0, 0]
             e = [abs(a-b) for a, b in zip(actual, wanted)]
+            if x in (0, 7) and max(wanted)-min(wanted) <= 2/65535:
+                quality_neutral.append(len(quality_expected))
+            quality_expected.append(wanted)
+            quality_actual.append(actual)
             if not errors or max(e) > max(errors):
                 worst = (case['gamut'], case['control'], case['ms'], case['border'], i, actual, wanted)
             errors.extend(e)
     maximum = max(errors)
+    if HDR_QUALITY:
+        print('PASS spatial HDR CM4 conversion quality',
+              check_hdr_conversion_quality(quality_expected, quality_actual, quality_neutral))
+        return
     p999 = sorted(errors)[int((len(errors)-1)*.999)]
     assert maximum <= 1e-3, (maximum, worst)
     assert p999 <= 2.5e-4, (p999, worst)

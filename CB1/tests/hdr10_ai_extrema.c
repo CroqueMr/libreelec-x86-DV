@@ -114,6 +114,20 @@ int main(void)
           (struct cb1_hdr10_bounds){3839,2159,3840,2160,0,65535});
     assert(resized==warmed);
     free(large);
+    /* A partial final tile must retain its sole bottom-right highlight. */
+    large=calloc((size_t)3841*2161*4,sizeof(float));assert(large);
+    large[4*((size_t)3841*2161-1)+1]=1.f;
+    check(&gpu,ctx,3841,2161,large,
+          (struct cb1_hdr10_bounds){3840,2160,3841,2161,0,65535});
+    free(large);
+    /* A cropped cinema raster can cut through both edges of a tile. */
+    large=calloc((size_t)3841*1601*4,sizeof(float));assert(large);
+    for(unsigned y=3;y<1597;++y)for(unsigned x=1;x<3839;++x)
+        for(unsigned c=0;c<3;++c)large[4*((size_t)y*3841+x)+c]=77.f/65535.f;
+    large[4*((size_t)1596*3841+3838)+2]=1.f;
+    check(&gpu,ctx,3841,1601,large,
+          (struct cb1_hdr10_bounds){1,3,3839,1597,77,65535});
+    free(large);
     /* Pending destruction is legal; GPU resource references outlive the owner. */
     float pixel[4] = {.3f,.4f,.5f,1.f};
     pl_tex pending = reference_texture(gpu.gl->gpu, 1, 1, pixel);

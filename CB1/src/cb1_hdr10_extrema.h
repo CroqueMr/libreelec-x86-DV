@@ -2,6 +2,7 @@
 #ifndef CB1_HDR10_EXTREMA_H
 #define CB1_HDR10_EXTREMA_H
 #include <libplacebo/gpu.h>
+#include <libplacebo/renderer.h>
 #include "cb1_l1l3_model.h"
 #ifdef __cplusplus
 extern "C" {
@@ -19,8 +20,12 @@ struct cb1_hdr10_extrema *cb1_hdr10_extrema_create(pl_gpu gpu);
 void cb1_hdr10_extrema_destroy(struct cb1_hdr10_extrema **ctx);
 /* Retire pending results on seek or policy change; no GPU recovery is implied. */
 void cb1_hdr10_extrema_reset(struct cb1_hdr10_extrema *ctx, uint64_t stream, uint64_t revision);
+bool cb1_hdr10_extrema_set_coalesced(struct cb1_hdr10_extrema *ctx,bool enabled);
 enum cb1_ai_status cb1_hdr10_extrema_submit(struct cb1_hdr10_extrema *ctx, pl_tex pq,
                                           struct cb1_ai_identity id);
+/* Validated 4:2:0 source. Caller retains planes through job completion. */
+enum cb1_ai_status cb1_hdr10_extrema_submit_source(struct cb1_hdr10_extrema *ctx,
+    const struct pl_frame *source,struct cb1_ai_identity id);
 /* Private dependency, available only for the matching pending picture. */
 pl_tex cb1_hdr10_extrema_pending(struct cb1_hdr10_extrema *ctx,struct cb1_ai_identity id);
 /* Non-blocking query; invalid/pending leaves out unchanged. Reads 16 bytes. */

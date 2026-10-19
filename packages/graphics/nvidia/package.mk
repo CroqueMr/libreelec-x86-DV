@@ -2,15 +2,19 @@
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="nvidia"
-PKG_VERSION="580.178.04"
-PKG_SHA256="1833c8c5c53481dfab46df442c3de26ec5d4c35084e03d94ad93746d29899750"
+PKG_VERSION="615.78.08"
+PKG_SHA256="e9d5167f4ca67f58b2b3447584b1e4273218d5088aba210d3aef2a407e522892"
 PKG_ARCH="x86_64"
 PKG_LICENSE="LicenseRef-nonfree"
 PKG_SITE="https://www.nvidia.com/en-us/drivers/unix/"
-PKG_URL="http://us.download.nvidia.com/XFree86/Linux-x86_64/${PKG_VERSION}/NVIDIA-Linux-x86_64-${PKG_VERSION}-no-compat32.run"
-PKG_DEPENDS_TARGET="toolchain util-macros libglvnd"
-PKG_LONGDESC="The GBM/Wayland graphic driver for NVIDIA GPUs supporting the GeForce 700 Series & above."
+PKG_URL="https://download.nvidia.com/XFree86/Linux-x86_64/${PKG_VERSION}/NVIDIA-Linux-x86_64-${PKG_VERSION}-no-compat32.run"
+PKG_DEPENDS_TARGET="toolchain util-macros libglvnd nvidia-open-kernel-modules"
+PKG_LONGDESC="The GBM/Wayland graphic driver for NVIDIA GPUs from Turing (GeForce GTX 16 and RTX 20 Series) on."
 PKG_TOOLCHAIN="manual"
+# Hades: NVIDIA's licence lets its files be passed on only as they are. They come already
+# stripped, and the strip of the build happens to leave them byte for byte as they were; another
+# strip would not.
+PKG_BUILD_FLAGS="-strip"
 
 PKG_IS_KERNEL_PKG="yes"
 
@@ -19,31 +23,41 @@ if [ "${VULKAN_SUPPORT}" = "yes" ]; then
 fi
 
 unpack() {
-  [ -d ${PKG_BUILD} ] && rm -rf ${PKG_BUILD}
+  # Extract the self-extracting .run without executing it. Its makeself header checks the
+  # payload with cksum and md5sum over "tail -n +4" and extracts it with
+  # "tail -n +${skip} | zstd -d | tar x"; do the same, and stop on any mismatch.
+  local run="${SOURCES}/${PKG_NAME}/${PKG_SOURCE_NAME}"
+  local skip crc md5
+  skip=$(head -n 20 "${run}" | sed -n 's/^skip=\([0-9]\+\)$/\1/p')
+  crc=$(head -n 20 "${run}" | sed -n 's/^CRCsum=\([0-9]\+\)$/\1/p')
+  md5=$(head -n 20 "${run}" | sed -n 's/^MD5=\([0-9a-f]\{32\}\)$/\1/p')
+  [ -n "${skip}" -a -n "${crc}" -a -n "${md5}" ] || die "nvidia: unexpected .run header"
+  [ "$(tail -n +4 "${run}" | cksum | cut -d' ' -f1)" = "${crc}" ] || die "nvidia: .run CRC mismatch"
+  [ "$(tail -n +4 "${run}" | md5sum | cut -b-32)" = "${md5}" ] || die "nvidia: .run MD5 mismatch"
 
-  sh ${SOURCES}/${PKG_NAME}/${PKG_SOURCE_NAME} --extract-only --target ${PKG_BUILD}
+  [ -d ${PKG_BUILD} ] && rm -rf ${PKG_BUILD}
+  mkdir -p ${PKG_BUILD}
+  tail -n +${skip} "${run}" | zstd -dq | tar -xf - -C ${PKG_BUILD} --no-same-owner
 }
 
 make_target() {
-  unset LDFLAGS
-
-  cd kernel
-    make module CC=${CC} LD=${LD} SYSSRC=$(kernel_path) SYSOUT=$(kernel_path)
-    ${STRIP} --strip-debug nvidia.ko
-  cd ..
+  # The kernel modules come from nvidia-open-kernel-modules, built from source.
+  :
 }
 
 makeinstall_target() {
-  # Linux kernel modules
-  mkdir -p ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel/nvidia.ko         ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel/nvidia-drm.ko     ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel/nvidia-uvm.ko     ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel/nvidia-modeset.ko ${INSTALL}/$(get_full_module_dir)/nvidia
+  # Hades: the agreement that NVIDIA's files come under goes wherever they go. The copy in
+  # licenses/, which the release .tar and the boot partition of the image carry, has to be the one
+  # of this driver.
+  cmp -s LICENSE ${ROOT}/licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt || \
+    die "nvidia: licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt is not the LICENSE of this driver"
+  mkdir -p ${INSTALL}/usr/share/licenses/nvidia
+    cp -p LICENSE ${INSTALL}/usr/share/licenses/nvidia
 
-  # GSP firmware files
+  # GSP firmware and the ucode images the open kernel modules also request
   mkdir -p ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
     cp firmware/gsp*.bin           ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
+    cp firmware/ucodes*.bin        ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
 
   # GBM
   mkdir -p ${INSTALL}/usr/lib/gbm

@@ -4,7 +4,7 @@
 precision highp float;
 precision highp int;
 uniform highp sampler2D pq_input;
-uniform uvec4 metadata_words[128];
+uniform uvec4 metadata_words[160];
 uniform uint packet_count;
 uniform uint flip_y;
 out vec4 color;

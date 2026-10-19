@@ -324,7 +324,8 @@ static void full_gpu(pl_gpu gpu,bool colour)
             (struct dvbridge_geometry){W,H,0,0,W,H}));
         const struct dvbridge_hdr10_policy_output *pending=dvbridge_render_policy_output(r);
         assert(pending && pending->creative.backend==DVBRIDGE_CREATIVE_CM4);
-        assert(pending->creative.l8_coverage.applied==(1023u&~(1u<<5)));
+        assert(pending->creative.l8_coverage.applied==(1023u&~((1u<<5)|(3u<<8))));
+        assert((pending->creative.l8_coverage.preserved&(3u<<8))==(3u<<8));
         assert(!(pending->creative.applied_levels&(1u<<2)));
         reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,output);
         printf("%s{\"gamut\":%u,\"control\":%u,\"pq\":[",comma?",":"",gamut,control);comma=true;

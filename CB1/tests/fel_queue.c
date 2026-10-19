@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "dvbridge_fel.h"
 #include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_vaapi.h>
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -82,7 +83,10 @@ int main(void)
     assert(dvbridge_fel_take(f, 0, &frame) == 0 && !frame);
     AVBufferRef *device = av_buffer_allocz(sizeof(AVHWDeviceContext));
     assert(device);
+    int display_token, other_display_token;
+    AVVAAPIDeviceContext va_device = {.display = &display_token};
     ((AVHWDeviceContext *)device->data)->type = AV_HWDEVICE_TYPE_VAAPI;
+    ((AVHWDeviceContext *)device->data)->hwctx = &va_device;
     assert(dvbridge_fel_device(f, device));
     assert(dvbridge_fel_take(f, 0, &frame) == 1 && frame->pts == 0);
     assert(dvbridge_fel_take(f, 0, &frame) == -1); /* refuse overwriting ownership */
@@ -97,8 +101,28 @@ int main(void)
     /* Released API waits for a missing identity while lookahead remains bounded. */
     assert(dvbridge_fel_take(f, 2 * 41708 + 1, &frame) == 0 && !frame);
     assert(dvbridge_fel_take(f, 3 * 41708, &frame) == 1);
+    /* A renewed BL decoder may wrap the same VA display in a new AVBuffer. */
+    AVBufferRef *renewed = av_buffer_allocz(sizeof(AVHWDeviceContext));
+    assert(renewed);
+    AVVAAPIDeviceContext va_renewed = {.display = &display_token};
+    ((AVHWDeviceContext *)renewed->data)->type = AV_HWDEVICE_TYPE_VAAPI;
+    ((AVHWDeviceContext *)renewed->data)->hwctx = &va_renewed;
+    assert(dvbridge_fel_device(f, renewed));
+    av_frame_free(&frame);
+    p->pts = p->dts = 4 * 41708;
+    assert(dvbridge_fel_submit(f, p));
+    assert(dvbridge_fel_device(f, renewed));
+    assert(dvbridge_fel_take(f, 4 * 41708, &frame) == 1 && frame->pts == 4 * 41708);
+    va_renewed.display = &other_display_token;
+    assert(!dvbridge_fel_device(f, renewed));
+    va_renewed.display = NULL;
+    assert(!dvbridge_fel_device(f, renewed));
+    ((AVHWDeviceContext *)renewed->data)->type = AV_HWDEVICE_TYPE_CUDA;
+    assert(!dvbridge_fel_device(f, renewed));
+    assert(dvbridge_fel_device(f, device) && !dvbridge_fel_failed(f));
+    av_buffer_unref(&renewed);
     dvbridge_fel_reset(f);
-    assert(frame->pts == 3 * 41708 && frame->buf[0]); /* downstream ref survives seek */
+    assert(frame->pts == 4 * 41708 && frame->buf[0]); /* downstream ref survives seek */
     av_frame_free(&frame);
     p->pts = p->dts = 0;
     assert(dvbridge_fel_submit(f, p));

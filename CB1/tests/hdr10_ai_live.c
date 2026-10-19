@@ -10,14 +10,14 @@ static unsigned gpu_errors;
 static unsigned deferred;
 static bool reject_statistics;
 static bool stall_statistics;
-extern enum cb1_ai_status __real_cb1_hdr10_statistics_poll(struct cb1_hdr10_statistics *,struct cb1_ai_identity,float[35]);
+extern enum cb1_ai_status __real_cb1_hdr10_statistics_poll_bounds(struct cb1_hdr10_statistics *,struct cb1_ai_identity,struct cb1_hdr10_bounds,float[35]);
 /* Delay the real statistics poll so quantiles finish before its result. */
-enum cb1_ai_status __wrap_cb1_hdr10_statistics_poll(struct cb1_hdr10_statistics *ctx,struct cb1_ai_identity id,float out[35])
+enum cb1_ai_status __wrap_cb1_hdr10_statistics_poll_bounds(struct cb1_hdr10_statistics *ctx,struct cb1_ai_identity id,struct cb1_hdr10_bounds bounds,float out[35])
 {
     if(reject_statistics)return CB1_AI_INVALID;
     if(stall_statistics)return CB1_AI_PENDING;
     if((deferred++%3)!=2)return CB1_AI_PENDING;
-    return __real_cb1_hdr10_statistics_poll(ctx,id,out);
+    return __real_cb1_hdr10_statistics_poll_bounds(ctx,id,bounds,out);
 }
 static void log_error(void *priv,enum pl_log_level level,const char *message)
 { (void)priv;if(level<=PL_LOG_ERR){++gpu_errors;fprintf(stderr,"%s\n",message);} }
@@ -63,7 +63,7 @@ int main(int argc,char **argv)
         }
         assert(status==CB1_AI_READY);
         cb1_hdr10_ai_metrics(ctx,&completed);
-        assert(completed.gpu_submissions>submitted.gpu_submissions);
+        assert(completed.gpu_submissions==submitted.gpu_submissions);
         assert(cb1_hdr10_ai_submit(ctx,NULL,id,i*.04)==CB1_AI_READY);
     }
     struct cb1_ai_result actual={.pts=123};
@@ -124,6 +124,30 @@ int main(int argc,char **argv)
         future_status=cb1_hdr10_ai_submit(ctx,NULL,future,1.04);
     }
     assert(future_status==CB1_AI_READY);
+    cb1_hdr10_ai_metrics(ctx,&metrics);
+    /* Frame 26 closes calibration; frame 27 needs no quantile readback. */
+    assert(metrics.readback_bytes==26*7272+7216);
+    for(unsigned i=0;i<26;++i){
+        struct cb1_ai_identity gap={7,28+i,3};
+        const double pts=3.+i*.04;
+        enum cb1_ai_status gap_status=cb1_hdr10_ai_submit(ctx,&future_frame,gap,pts);
+        while(gap_status==CB1_AI_PENDING){
+            nanosleep(&(struct timespec){.tv_nsec=1000000},NULL);
+            gap_status=cb1_hdr10_ai_submit(ctx,NULL,gap,pts);
+        }
+        assert(gap_status==CB1_AI_READY);
+    }
+    cb1_hdr10_ai_metrics(ctx,&repeated_metrics);
+    assert(repeated_metrics.readback_bytes-metrics.readback_bytes==26*7272);
+    struct cb1_ai_result gap_result;
+    assert(cb1_hdr10_ai_poll(ctx,(struct cb1_ai_identity){7,28,3},&gap_result)==CB1_AI_READY);
+    struct cb1_hdr10_descriptor gap_descriptors[26];
+    for(unsigned i=0;i<26;++i){gap_descriptors[i]=descriptors[0];gap_descriptors[i].pts=3.+i*.04;}
+    assert(cb1_hdr10_baseline(gap_descriptors,26,NAN,base,&peak));
+    assert(cb1_hdr10_prefix(gap_descriptors,26,base,true,true,prefix));
+    for(unsigned i=0;i<222;++i)features[i]=prefix[i];
+    assert(cb1_l1l3_model_predict(model,features,222,base,peak,&expected)==CB1_AI_READY);
+    assert(!memcmp(&gap_result.raw,&expected,sizeof(expected)));
     for(unsigned p=0;p<2;++p)pl_tex_destroy(gpu.gl->gpu,&future_frame.planes[p].texture);
     assert(strlen(cb1_l1l3_bundle_id())==64);
     cb1_hdr10_ai_reset(ctx,8,4);

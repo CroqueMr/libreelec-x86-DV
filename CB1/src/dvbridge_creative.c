@@ -2,6 +2,7 @@
 /* Open CM2.9 numerical references: DoViBaker and MPC Video Renderer.
  * See docs/CREATIVE-MAPPING.md for pinned revisions and qualified domains. */
 #include "dvbridge_creative.h"
+#include "cb1_dv_enhanced.h"
 #include "dvbridge_metadata.h"
 #include <libavutil/mem.h>
 #include <stdlib.h>
@@ -21,6 +22,29 @@ static void controls(double out[5],const AVDOVIDmData *e)
 {
     out[0]=e->l2.trim_slope;out[1]=e->l2.trim_offset;out[2]=e->l2.trim_power;
     out[3]=e->l2.trim_chroma_weight;out[4]=e->l2.trim_saturation_gain;
+}
+static void l2_detail_resolve(struct dvbridge_creative_plan *p,
+    const AVDOVIDmData *lower,const AVDOVIDmData *upper)
+{
+    if(!lower && !upper)return;
+    struct dvbridge_l2_detail *d=&p->l2_detail;
+    const AVDOVIDmData *a=lower?lower:upper,*b=upper?upper:a;
+    *d=(struct dvbridge_l2_detail){.level=2,.num_anchors=1,
+        .codes={a->l2.ms_weight},.target_pq={a->l2.target_max_pq}};
+    bool bracketed=lower && upper;
+    if(bracketed && a!=b){
+        d->upper_weight=fmax(0,fmin(1,(p->target_pq-a->l2.target_max_pq)/
+            (b->l2.target_max_pq-a->l2.target_max_pq)));
+        d->num_anchors=2;d->codes[1]=b->l2.ms_weight;d->target_pq[1]=b->l2.target_max_pq;
+    }
+    if(d->codes[0]==-1 && (d->num_anchors==1 || d->codes[1]==-1))
+        d->state=DVBRIDGE_DETAIL_SENTINEL;
+    else if(!bracketed || d->codes[0]==-1 || (d->num_anchors==2 && d->codes[1]==-1))
+        d->state=DVBRIDGE_DETAIL_UNRESOLVED;
+    else{
+        d->state=DVBRIDGE_DETAIL_NUMERIC;d->code=d->codes[0];
+        if(d->num_anchors==2)d->code+=d->upper_weight*(d->codes[1]-d->codes[0]);
+    }
 }
 static unsigned wire_word(const uint8_t *wire)
 {
@@ -73,8 +97,6 @@ static bool cm4_preset(unsigned index,struct dvbridge_cm4_target *out)
         {16,48,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_TRC_GAMMA26},
         {18,48,PL_COLOR_PRIM_DCI_P3,PL_COLOR_TRC_GAMMA26},
         {21,48,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_TRC_GAMMA26},
-        {24,300,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_TRC_PQ},
-        {25,300,PL_COLOR_PRIM_BT_2020,PL_COLOR_TRC_PQ},
         {27,600,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_TRC_PQ},
         {28,600,PL_COLOR_PRIM_BT_2020,PL_COLOR_TRC_PQ},
         {37,2000,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_TRC_PQ},
@@ -181,7 +203,9 @@ static bool cm4_targets(const AVDOVIMetadata *m,struct dvbridge_creative_plan *p
             }else if(a.target.max_pq==p->cm4_upper.target.max_pq)upper_ambiguous=true;
         }
     }
-    p->cm4_targets=!has_controls?DVBRIDGE_CM4_NO_CONTROLS:unknown?DVBRIDGE_CM4_UNKNOWN_TARGET:
+    bool unknown_blocks_selection=unknown && (p->policy.mode!=DVBRIDGE_MODE_HDR10_EXPERT ||
+        (!p->cm4_lower.present && !p->cm4_upper.present));
+    p->cm4_targets=!has_controls?DVBRIDGE_CM4_NO_CONTROLS:unknown_blocks_selection?DVBRIDGE_CM4_UNKNOWN_TARGET:
         lower_ambiguous || upper_ambiguous || (!p->cm4_lower.present && !p->cm4_upper.present)?
         DVBRIDGE_CM4_INCOMPATIBLE_TARGETS:DVBRIDGE_CM4_TARGETS_RESOLVED;
     if(p->cm4_targets!=DVBRIDGE_CM4_TARGETS_RESOLVED){
@@ -293,14 +317,19 @@ bool dvbridge_creative_cm4_coefficients(struct dvbridge_cm4_coefficients *out,
             if(!isfinite(c.rgb_to_lms[i*3+j]) || !isfinite(c.lms_to_rgb[i*3+j]))return false;
         }
     }
-    const double vertices[6][3]={{1,0,0},{1,1,0},{0,1,0},{0,1,1},{0,0,1},{1,0,1}};
-    for(int i=0;i<6;i++){
-        double rgb[3],ipt[3];for(int j=0;j<3;j++)rgb[j]=vertices[i][j]*c.peak_nits/4;
-        cm4_to_ipt(&c,rgb,ipt);c.hue_centres[i]=atan2(ipt[2],ipt[1]);
+    if(p->policy.mode==DVBRIDGE_MODE_HDR10_EXPERT){
+        /* Dolby secondary six-vector trims target SDR, not HDR10 output. */
+        for(int i=0;i<6;i++){c.secondary_gain[i]=1;c.secondary_rotation[i]=0;}
+    }else{
+        const double vertices[6][3]={{1,0,0},{1,1,0},{0,1,0},{0,1,1},{0,0,1},{1,0,1}};
+        for(int i=0;i<6;i++){
+            double rgb[3],ipt[3];for(int j=0;j<3;j++)rgb[j]=vertices[i][j]*c.peak_nits/4;
+            cm4_to_ipt(&c,rgb,ipt);c.hue_centres[i]=atan2(ipt[2],ipt[1]);
+        }
     }
     *out=c;return true;
 }
-static bool cm4_trim(const struct dvbridge_cm4_coefficients *c,const double input[3],double out[3])
+bool dvbridge_creative_cm4_apply(const struct dvbridge_cm4_coefficients *c,const double input[3],double out[3])
 {
     double rgb[3],y=0,peak=c->peak_nits;bool gray;
     for(int i=0;i<3;i++){
@@ -342,25 +371,26 @@ static bool cm4_trim(const struct dvbridge_cm4_coefficients *c,const double inpu
 bool dvbridge_creative_cm4_trim_rgb(const struct dvbridge_creative_plan *p,const double input[3],double out[3])
 {
     struct dvbridge_cm4_coefficients c;
-    return input && out && dvbridge_creative_cm4_coefficients(&c,p) && cm4_trim(&c,input,out);
+    return input && out && dvbridge_creative_cm4_coefficients(&c,p) && dvbridge_creative_cm4_apply(&c,input,out);
 }
 struct trim_fit {
     struct dvbridge_cm4_coefficients c;
     struct dvbridge_creative_plan l2;
     unsigned source[5];
-    double scene;
-    bool cm4, signature;
+    double influence, anchor_peak, source_peak, baseline_error;
+    bool cm4;
     double gray_input[257], gray_source[257], gray_goal[257];
     double colour_input[24][3], colour_goal[24][3], colour_rgb_goal[24][3];
 };
 
-static double enhanced_nits(double value,double peak,double headroom,double scene,bool signature)
+static double enhanced_nits(double value,double source_peak,double target_peak)
 {
-    double x=bound(value/peak),gate=bound(value);
+    double x=bound(value/source_peak),gate=bound(value);
     gate=gate*gate*(3-2*gate);
     double highlight=bound((x-.25)/.75);highlight=highlight*highlight*(3-2*highlight);
-    double gain=scene*gate*(signature?.02:.04*fmax(0,headroom)*highlight);
-    return value+gain*fmax(0,value)*(1-x);
+    double mapped=value*(1+fmax(0,target_peak/source_peak-1)*highlight*gate);
+    x=bound(value/fmin(source_peak,target_peak));
+    return mapped*(1+.15*gate*4*x*(1-x));
 }
 
 static bool control_response(const struct trim_fit *f,const double words[5],
@@ -368,14 +398,14 @@ static bool control_response(const struct trim_fit *f,const double words[5],
 {
     if(!f->cm4){
         struct dvbridge_creative_plan p=f->l2;
-        for(int i=0;i<5;i++)p.codes[i]=words[i];
+        for(int i=0;i<5;i++)p.codes[i]+=f->influence*(words[i]-f->source[i]);
         return dvbridge_creative_trim_rgb(&p,input,out);
     }
     struct dvbridge_cm4_coefficients c=f->c;
-    c.sop[0]=words[0]/4096.0+.5;c.sop[1]=words[1]/4096.0-.5;c.sop[2]=words[2]/4096.0+.5;
-    c.chroma_base=exp2(((double)words[3]-2048)/4096);
-    c.saturation_gain=exp2(((double)words[4]-2048)/4096);
-    return cm4_trim(&c,input,out);
+    for(int i=0;i<3;i++)c.sop[i]+=f->influence*(words[i]-f->source[i])/4096;
+    c.chroma_base+=f->influence*(exp2((words[3]-2048)/4096)-exp2(((double)f->source[3]-2048)/4096));
+    c.saturation_gain+=f->influence*(exp2((words[4]-2048)/4096)-exp2(((double)f->source[4]-2048)/4096));
+    return dvbridge_creative_cm4_apply(&c,input,out);
 }
 
 static bool fit_response(const struct trim_fit *f,const unsigned words[5],
@@ -385,37 +415,38 @@ static bool fit_response(const struct trim_fit *f,const unsigned words[5],
     return control_response(f,decoded,input,out);
 }
 
-static bool fit_samples(struct trim_fit *f,double headroom,double scene)
+static bool fit_samples(struct trim_fit *f,double source_peak)
 {
-    f->scene=scene;
-    double q=pq(f->c.peak_nits)/4095;
+    f->source_peak=source_peak;
+    /* Inputs are already content-mapped, not reconstructed source pixels. */
+    double q=pq(fmin(source_peak,f->c.peak_nits))/4095;
     for(int i=0;i<257;i++){
         double in=cm4_eotf(q*i/256),rgb[3];f->gray_input[i]=in;
         if(!fit_response(f,f->source,(double[3]){in,in,in},rgb))return false;
         f->gray_source[i]=pq(fmax(0,rgb[0]))/4095;
-        f->gray_goal[i]=pq(enhanced_nits(rgb[0],f->c.peak_nits,headroom,scene,f->signature))/4095;
+        double goal=enhanced_nits(rgb[0],source_peak,f->c.peak_nits);
+        if(rgb[0]>0)goal=fmin(goal,fmax(rgb[0],f->c.peak_nits));
+        f->gray_goal[i]=pq(fmax(0,goal))/4095;
     }
     static const double vertices[6][3]={{1,0,0},{1,1,0},{0,1,0},{0,1,1},{0,0,1},{1,0,1}};
-    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
+    for(int i=0;i<(f->cm4?24:18);i++){
         double value=cm4_eotf(q*(.1+.4*(i%3))),rgb[3],goal[3],y=0;
         if(i<18)for(int j=0;j<3;j++)f->colour_input[i][j]=value*vertices[i/3][j];
         else{
             /* Mixed near-black colours expose errors hidden by gamut vertices. */
             static const unsigned channels[6][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
-            const double low[3]={fmin(10,f->c.peak_nits*.01),fmin(1,f->c.peak_nits*.001),0};
+            double peak=fmin(source_peak,f->c.peak_nits);
+            const double low[3]={fmin(10,peak*.01),fmin(1,peak*.001),0};
             for(int j=0;j<3;j++)f->colour_input[i][j]=low[channels[i-18][j]];
         }
         if(!fit_response(f,f->source,f->colour_input[i],rgb))return false;
         for(int j=0;j<3;j++)y+=rgb[j]*f->c.luma[j];
-        double mapped=enhanced_nits(y,f->c.peak_nits,headroom,scene,f->signature);
+        double mapped=enhanced_nits(y,source_peak,f->c.peak_nits);
         double maximum=fmax(fmax(rgb[0],rgb[1]),rgb[2]);
-        double room=bound((f->c.peak_nits-maximum)/fmax(1e-6,f->c.peak_nits-y));
-        mapped=y+(mapped-y)*room;
+        if(maximum>0)mapped=fmin(mapped,y*fmax(1,f->c.peak_nits/maximum));
         for(int j=0;j<3;j++)goal[j]=y>0?rgb[j]*mapped/y:rgb[j];
         cm4_to_ipt(&f->c,goal,f->colour_goal[i]);
-        double gain=exp2(scene*32*(f->signature?1:fmax(0,headroom))*bound(1-maximum/f->c.peak_nits)/4096);
-        f->colour_goal[i][1]*=gain;f->colour_goal[i][2]*=gain;
-        cm4_from_ipt(&f->c,f->colour_goal[i],f->colour_rgb_goal[i]);
+        memcpy(f->colour_rgb_goal[i],goal,sizeof(goal));
     }
     return true;
 }
@@ -439,8 +470,7 @@ static bool validate_words(const struct trim_fit *f,const unsigned words[5],
             if(f->gray_source[i]-f->gray_source[i-1]>2e-5 && q-last<=1e-12)return false;
         }
         if(in<=1 && fabs(q-f->gray_source[i])>2.0/1024)return false;
-        if(f->signature && q<f->gray_source[i]-2e-5)return false;
-        if(!f->signature && in<=f->c.peak_nits/4 && fabs(q-f->gray_source[i])>2.0/1024)return false;
+        if(q<f->gray_source[i]-2e-5)return false;
         last=q;double err=fabs(q-f->gray_goal[i]);
         report->maximum_pq_error=fmax(report->maximum_pq_error,err);
         /* Exact gray remains achromatic; matrix residuals are not creative chroma. */
@@ -449,7 +479,7 @@ static bool validate_words(const struct trim_fit *f,const unsigned words[5],
             if(hypot(ipt[1],ipt[2])>1e-7)return false;
         }
     }
-    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
+    for(int i=0;i<(f->cm4?24:18);i++){
         double rgb[3],ipt[3];if(!fit_response(f,words,f->colour_input[i],rgb))return false;
         if(i>=18)for(int j=0;j<3;j++)report->maximum_pq_error=fmax(report->maximum_pq_error,
             fabs(pq(fmax(0,rgb[j]))/4095-pq(fmax(0,f->colour_rgb_goal[i][j]))/4095));
@@ -475,15 +505,14 @@ static double fit_error(const struct trim_fit *f,const unsigned words[5])
         if((i==0 && (fabs(q-f->gray_source[i])>2e-5 ||
             (f->gray_source[0]>pq(0)/4095+1e-12)!=(q>pq(0)/4095+1e-12))) ||
            (in<=1 && fabs(q-f->gray_source[i])>2.0/1024) ||
-           (!f->signature && in<=f->c.peak_nits/4 && fabs(q-f->gray_source[i])>2.0/1024) ||
-           (f->signature && q<f->gray_source[i]-2e-5) ||
+           (q<f->gray_source[i]-2e-5) ||
            (i && (q<last-1e-12 ||
             (fabs(f->gray_source[i]-f->gray_source[i-1])<=1e-12 && fabs(q-last)>2e-5) ||
             (f->gray_source[i]-f->gray_source[i-1]>2e-5 && q-last<=1e-12))))return INFINITY;
         last=q;
         error=fmax(error,d*d);
     }
-    for(int i=0;i<(f->cm4 && f->signature?24:18);i++){
+    for(int i=0;i<(f->cm4?24:18);i++){
         double rgb[3],ipt[3];if(!fit_response(f,words,f->colour_input[i],rgb))return INFINITY;
         if(i>=18)for(int j=0;j<3;j++){
             double d=(pq(fmax(0,rgb[j]))-pq(fmax(0,f->colour_rgb_goal[i][j])))/4095*1024/2;
@@ -502,7 +531,9 @@ static double fit_error(const struct trim_fit *f,const unsigned words[5])
 static bool accept_fit(const struct trim_fit *f,const unsigned words[5],double error,
                        unsigned evaluations,struct dvbridge_creative_edit_report *report)
 {
-    if(!(error<=1 && (error<=1e-18 || memcmp(words,f->source,sizeof(f->source)))))return false;
+    /* Require an actual reduction towards the objective, not just edited words. */
+    if(!(error<=1 && (f->baseline_error<=1e-18 ||
+        (error<=f->baseline_error*.8 && memcmp(words,f->source,sizeof(f->source))))))return false;
     struct dvbridge_creative_edit_report accepted=*report;
     if(!validate_words(f,words,&accepted) || accepted.maximum_pq_error>2.0/1024 ||
        accepted.maximum_relative_chroma_error>.02 || accepted.maximum_hue_error>.5)return false;
@@ -512,18 +543,14 @@ static bool accept_fit(const struct trim_fit *f,const unsigned words[5],double e
 static bool fit_words(struct trim_fit *f,unsigned words[5],struct dvbridge_creative_edit_report *report)
 {
     memcpy(words,f->source,sizeof(f->source));
-    double best=fit_error(f,words);unsigned evaluations=1;
-    if(f->signature){
-        unsigned seed[5];memcpy(seed,words,sizeof(seed));
-        seed[0]=fmin(4095,seed[0]+floor(48*f->scene+.5));
-        seed[4]=fmin(4095,seed[4]+floor(32*f->scene+.5));
-        double error=fit_error(f,seed);evaluations++;
-        if(error<best){best=error;memcpy(words,seed,sizeof(seed));}
-    }
+    double best=fit_error(f,words);f->baseline_error=best;unsigned evaluations=1;
+    report->reference_error_before=fmax(report->reference_error_before,sqrt(best));
     /* Stop only after full validation of an identity or a modified solution. */
-    if(accept_fit(f,words,best,evaluations,report))return true;
-    /* Enhanced trims need local changes, not a coarse display-mapping search. */
-    for(unsigned pass=0;pass<2;pass++)for(unsigned step=16;step;step/=2){
+    if(accept_fit(f,words,best,evaluations,report)){
+        report->reference_error_after=fmax(report->reference_error_after,sqrt(best));return true;
+    }
+    /* Bounded search over existing controls, evaluated in the resolved domain. */
+    for(unsigned pass=0;pass<2;pass++)for(unsigned step=256;step;step/=2){
         for(int j=0;j<5;j++){
             unsigned selected=words[j],trial[5];
             for(int direction=-1;direction<=1;direction+=2){
@@ -535,11 +562,13 @@ static bool fit_words(struct trim_fit *f,unsigned words[5],struct dvbridge_creat
             }
             words[j]=selected;
         }
-        if(accept_fit(f,words,best,evaluations,report))return true;
+        if(accept_fit(f,words,best,evaluations,report)){
+            report->reference_error_after=fmax(report->reference_error_after,sqrt(best));return true;
+        }
     }
     report->candidate_evaluations+=evaluations;
-    return validate_words(f,words,report) && report->maximum_pq_error<=2.0/1024 &&
-        report->maximum_relative_chroma_error<=.02 && report->maximum_hue_error<=.5;
+    report->reference_error_after=fmax(report->reference_error_after,sqrt(best));
+    return false;
 }
 
 static void write_l8_words(AVDOVIDmData *e,const unsigned words[5])
@@ -557,7 +586,7 @@ static bool fit_anchor(struct trim_fit *f,const struct dvbridge_creative_plan *p
                        const AVDOVIMetadata *m,const AVDOVIDmData *e)
 {
     struct dvbridge_creative_plan basis=*p;struct dvbridge_cm4_anchor a={.present=true};
-    f->cm4=e->level==8;f->signature=p->policy.enhancement==DVBRIDGE_ENHANCEMENT_SIGNATURE;
+    f->cm4=e->level==8;
     if(f->cm4){
         if(!cm4_controls(e,&a.controls))return false;
         bool resolved=cm4_preset(e->l8.target_display_index,&a.target);
@@ -567,20 +596,39 @@ static bool fit_anchor(struct trim_fit *f,const struct dvbridge_creative_plan *p
                 resolved=cm4_custom_target(t,&a.target)==1;
         }
         /* L10 resolves absolute bounds/gamut, not a display EOTF. */
-        if(!resolved || (a.target.transfer!=PL_COLOR_TRC_PQ &&
-                         a.target.transfer!=PL_COLOR_TRC_UNKNOWN))return false;
+        if(!resolved)return false;
         for(int i=0;i<5;i++)f->source[i]=a.controls.primary[i];
+        f->anchor_peak=cm4_eotf(a.target.max_pq/4095.0);
+        /* Known SDR/different-gamut anchors remain intact and have no HDR influence. */
+        if((a.target.transfer!=PL_COLOR_TRC_PQ && a.target.transfer!=PL_COLOR_TRC_UNKNOWN) ||
+           !dvbridge_creative_cm4_coefficients(&f->c,p))return true;
+        bool lower=p->cm4_lower.present && p->cm4_lower.target.display_index==a.target.display_index;
+        bool upper=p->cm4_upper.present && p->cm4_upper.target.display_index==a.target.display_index;
+        f->influence=lower && upper?1:lower?(p->cm4_upper.present?1-p->cm4_weight:1):
+            upper?(p->cm4_lower.present?p->cm4_weight:1):0;
+        return true;
     }else{
         a.target=(struct dvbridge_cm4_target){.max_pq=e->l2.target_max_pq,
             .primaries=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),.transfer=PL_COLOR_TRC_PQ};
         a.controls.present_fields=DVBRIDGE_CM4_PRIMARY;
         for(int i=0;i<6;i++)a.controls.primary[i]=2048;
         double raw[5];controls(raw,e);for(int i=0;i<5;i++)f->source[i]=raw[i];
+        f->anchor_peak=cm4_eotf(a.target.max_pq/4095.0);
+        const AVDOVIDmData *lower=NULL,*upper=NULL;
+        for(int i=0;i<m->num_ext_blocks;i++){
+            const AVDOVIDmData *t=av_dovi_get_ext(m,i);if(t->level!=2)continue;
+            if(t->l2.target_max_pq<=p->target_pq && (!lower || t->l2.target_max_pq>lower->l2.target_max_pq))lower=t;
+            if(t->l2.target_max_pq>=p->target_pq && (!upper || t->l2.target_max_pq<upper->l2.target_max_pq))upper=t;
+        }
+        if(!lower)lower=upper;
+        double q1=lower?lower->l2.target_max_pq:0,q2=upper?upper->l2.target_max_pq:p->master_pq;
+        double w=q2<=q1?(p->target_pq>q1?1:0):bound((p->target_pq-q1)/(q2-q1));
+        f->influence=(lower==e?1-w:0)+(upper==e?w:0);
     }
     basis.cm4=true;basis.cm4_targets=DVBRIDGE_CM4_TARGETS_RESOLVED;basis.cm4_output=a.target;
     basis.cm4_lower=a;basis.cm4_upper=(struct dvbridge_cm4_anchor){0};basis.cm4_weight=0;
-    basis.policy.tv.peak_nits=cm4_eotf(a.target.max_pq/4095.0);
-    f->l2=*p;f->l2.policy.tv.peak_nits=basis.policy.tv.peak_nits;
+    /* Coefficients provide the target colour basis; L2 uses the resolved codes. */
+    f->l2=*p;
     return dvbridge_creative_cm4_coefficients(&f->c,&basis);
 }
 
@@ -668,12 +716,27 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
         }
     }
     if(l1){
-        int effective[3]={l1->l1.min_pq,l1->l1.max_pq,l1->l1.avg_pq};
-        if(l3){effective[0]+=(int)l3->l3.min_pq_offset-2048;
-            effective[1]+=(int)l3->l3.max_pq_offset-2048;effective[2]+=(int)l3->l3.avg_pq_offset-2048;}
-        if(effective[0]<0 || effective[0]>effective[2] || effective[2]>effective[1] || effective[1]>4095)
-            return out->status;
-        for(int j=0;j<3;j++)p.analysis[j]=effective[j];p.l1_present=true;p.l3_present=l3!=NULL;
+        double effective[3]={l1->l1.min_pq,l1->l1.max_pq,l1->l1.avg_pq};
+        /* L3 is signed normalized PQ; L1 uses full-range 12-bit PQ. */
+        if(l3){effective[0]+=((int)l3->l3.min_pq_offset-2048)*(4095.0/2048.0);
+            effective[1]+=((int)l3->l3.max_pq_offset-2048)*(4095.0/2048.0);
+            effective[2]+=((int)l3->l3.avg_pq_offset-2048)*(4095.0/2048.0);}
+        bool invalid=effective[0]<0 || effective[0]>effective[2] || effective[2]>effective[1] || effective[1]>4095;
+        if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT)
+            invalid|=l1->l1.min_pq>l1->l1.avg_pq || l1->l1.avg_pq>l1->l1.max_pq || l1->l1.max_pq>4095;
+        if(invalid){
+            if(policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT)return out->status;
+            /* Unusable scene statistics do not invalidate reconstruction or trims. */
+            for(int j=0;j<3;j++)effective[j]=0;
+        }
+        for(int j=0;j<3;j++)p.analysis[j]=(uint16_t)floor(effective[j]+.5);
+        p.l1_present=policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT || p.analysis[1]>0;
+        p.l3_present=l3!=NULL;
+    }
+    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
+        l2_detail_resolve(&p,lower,upper);
+        spatial=p.l2_detail.state==DVBRIDGE_DETAIL_NUMERIC ||
+            p.l2_detail.state==DVBRIDGE_DETAIL_UNRESOLVED;
     }
     p.anchor_present=lower || upper;
     if(lower || upper){
@@ -688,6 +751,8 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
     p.backend=p.anchor_present?(p.cm4?DVBRIDGE_CREATIVE_CM29_COMPATIBILITY:DVBRIDGE_CREATIVE_CM29):DVBRIDGE_CREATIVE_NONE;
     p.reason=!p.anchor_present?DVBRIDGE_CREATIVE_NO_ANCHOR:p.cm4?DVBRIDGE_CREATIVE_CM4_RENDER_PARTIAL:
         spatial?DVBRIDGE_CREATIVE_SPATIAL_UNQUALIFIED:DVBRIDGE_CREATIVE_OK;
+    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT && !p.l1_present)
+        p.reason=l1?DVBRIDGE_CREATIVE_STATIC_UNUSABLE_L1:DVBRIDGE_CREATIVE_STATIC_MISSING_L1;
     p.status=p.anchor_present?DVBRIDGE_CREATIVE_READY:DVBRIDGE_CREATIVE_NEUTRAL;
     if(policy->mode==DVBRIDGE_MODE_ENHANCED_DV && p.cm4){
         p.backend=DVBRIDGE_CREATIVE_PRESERVE_CM4;p.reason=DVBRIDGE_CREATIVE_CM4_EDIT_UNQUALIFIED;
@@ -698,8 +763,9 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
         if(p.l3_present && p.l1_present)p.applied_levels|=1u<<3;
         if(p.mastering_primaries_present)p.applied_levels|=1u<<9;
     }
-    p.l2_coverage.present=p.anchor_present?31u:0;
-    if(p.applied_levels&(1u<<2))p.l2_coverage.applied=p.l2_coverage.present;
+    p.l2_coverage.present=p.anchor_present?
+        (policy->mode==DVBRIDGE_MODE_HDR10_EXPERT?63u:31u):0;
+    if(p.applied_levels&(1u<<2))p.l2_coverage.applied=p.l2_coverage.present&31u;
     p.l2_coverage.preserved=p.l2_coverage.present&~p.l2_coverage.applied;
     struct dvbridge_cm4_coefficients decoded;
     if(dvbridge_creative_cm4_coefficients(&decoded,&p)){
@@ -715,6 +781,88 @@ double dvbridge_creative_scene_weight(const struct dvbridge_creative_plan *p)
     if(!p->analysis[1])return 0;
     double t=bound((cm4_eotf(p->analysis[2]/4095.0)/cm4_eotf(p->analysis[1]/4095.0)-.1)/.4);
     return 1-.5*t*t*(3-2*t);
+}
+
+bool dvbridge_creative_enhanced_source(struct cb1_dv_enhanced_source *out,
+    const void *metadata,size_t bytes,const struct dvbridge_policy *policy)
+{
+    if(!out)return false;
+    *out=(struct cb1_dv_enhanced_source){0};
+    struct dvbridge_creative_plan p;
+    if(!policy || policy->mode!=DVBRIDGE_MODE_ENHANCED_DV ||
+       dvbridge_creative_resolve(&p,metadata,bytes,policy)==DVBRIDGE_CREATIVE_INVALID)return false;
+    out->master=cm4_eotf(p.master_pq/4095);out->l1_present=p.l1_present;
+    memcpy(out->analysis,p.analysis,sizeof(out->analysis));
+    const AVDOVIMetadata *m=metadata;
+    struct dvbridge_cm4_anchor lower={0},upper={0};
+    enum pl_color_primaries gamut=policy->tv.gamut==DVBRIDGE_GAMUT_BT709?PL_COLOR_PRIM_BT_709:
+        policy->tv.gamut==DVBRIDGE_GAMUT_P3_D65?PL_COLOR_PRIM_DISPLAY_P3:PL_COLOR_PRIM_BT_2020;
+    /* Resolve L8 independently: an unknown extra does not erase usable anchors. */
+    for(int family=8;family>=2;family-=6){
+        for(int i=0;i<m->num_ext_blocks;i++){
+            const AVDOVIDmData *e=av_dovi_get_ext(m,i);
+            if(e->level!=family)continue;
+            struct dvbridge_cm4_anchor a={.present=true};
+            if(family==8){
+                if(!cm4_controls(e,&a.controls))return false;
+                bool resolved=cm4_preset(e->l8.target_display_index,&a.target);
+                if(!resolved)for(int j=0;j<m->num_ext_blocks;j++){
+                    const AVDOVIDmData *t=av_dovi_get_ext(m,j);
+                    if(t->level==10 && t->l10.target_display_index==e->l8.target_display_index)
+                        resolved=cm4_custom_target(t,&a.target)==1;
+                }
+                if(!resolved)continue;
+            }else{
+                a.target=(struct dvbridge_cm4_target){.max_pq=e->l2.target_max_pq,
+                    .primaries=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),.transfer=PL_COLOR_TRC_PQ};
+                a.controls.present_fields=DVBRIDGE_CM4_PRIMARY;
+                double raw[5];controls(raw,e);
+                for(unsigned j=0;j<5;j++)a.controls.primary[j]=raw[j];
+                a.controls.primary[5]=2048;
+            }
+            struct dvbridge_cm4_coefficients check;
+            if(!cm4_decode(&check,&a.controls))return false;
+            /* L2 has no authored gamut; only explicit L8 targets can mismatch. */
+            if((a.target.transfer!=PL_COLOR_TRC_UNKNOWN && a.target.transfer!=PL_COLOR_TRC_PQ) ||
+               cm4_eotf(a.target.max_pq/4095.0)<=100 ||
+               (family==8 && !cm4_same_gamut(&a.target.primaries,pl_raw_primaries_get(gamut))))continue;
+            if(a.target.max_pq<=p.target_pq){
+                if(lower.present && a.target.max_pq==lower.target.max_pq)return false;
+                if(!lower.present || a.target.max_pq>lower.target.max_pq)lower=a;
+            }
+            if(a.target.max_pq>=p.target_pq){
+                if(upper.present && a.target.max_pq==upper.target.max_pq)return false;
+                if(!upper.present || a.target.max_pq<upper.target.max_pq)upper=a;
+            }
+        }
+        if(!lower.present && !upper.present)continue;
+        out->family=family;
+        out->anchors[0]=lower.present?lower:upper;out->count=1;out->weights[0]=1;
+        if(lower.present && upper.present && lower.target.max_pq!=upper.target.max_pq){
+            out->count=2;out->anchors[1]=upper;
+            out->weights[1]=bound((p.target_pq-lower.target.max_pq)/(upper.target.max_pq-lower.target.max_pq));
+            out->weights[0]=1-out->weights[1];
+        }
+        break;
+    }
+    return true;
+}
+
+bool dvbridge_creative_enhanced_source_b(struct cb1_dv_enhanced_source *out,
+    const void *metadata,size_t bytes,const struct dvbridge_policy *policy)
+{
+    if(!dvbridge_creative_enhanced_source(out,metadata,bytes,policy))return false;
+    if(out->family==8)return true;
+    /* Resolve a trim in its declared gamut; do not reinterpret its coefficients. */
+    const enum dvbridge_gamut gamuts[]={DVBRIDGE_GAMUT_P3_D65,DVBRIDGE_GAMUT_BT2020,DVBRIDGE_GAMUT_BT709};
+    for(unsigned i=0;i<3;i++){
+        if(gamuts[i]==policy->tv.gamut)continue;
+        struct dvbridge_policy alternate=*policy;alternate.tv.gamut=gamuts[i];
+        struct cb1_dv_enhanced_source candidate;
+        if(!dvbridge_creative_enhanced_source(&candidate,metadata,bytes,&alternate))return false;
+        if(candidate.family==8){*out=candidate;break;}
+    }
+    return true;
 }
 
 enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *output_bytes,
@@ -733,12 +881,14 @@ enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *outpu
     AVDOVIMetadata *m=av_memdup(metadata,bytes);if(!m)return DVBRIDGE_CREATIVE_INVALID;
     struct timespec start,end;bool timed=clock_gettime(CLOCK_MONOTONIC,&start)==0;
     bool changed=false,rejected=false,unresolved=false;
-    double reference_pq=floor(pq(fmax(1000,p->policy.tv.peak_nits))+.5);
-    double headroom=fmax(-.5,fmin(.5,(reference_pq-p->master_pq)/fmax(p->master_pq,1e-6)));
+    double source_peak=cm4_eotf(p->master_pq/4095);
     double scene=dvbridge_creative_scene_weight(p);
+    int selected[2]={-1,-1};double influence[2]={0,0},anchor_peak[2]={0,0};
+    bool present[2]={false,false};
     /* Resolve every family before mutation; compatibility cannot hide an unknown L8. */
     for(int i=0;i<m->num_ext_blocks;i++){
         AVDOVIDmData *e=av_dovi_get_ext(m,i);if(e->level!=2 && e->level!=8)continue;
+        unsigned family=e->level==8;present[family]=true;
         struct trim_fit f={0};
         struct dvbridge_creative_coverage *coverage=e->level==8?&report->l8_coverage:&report->l2_coverage;
         if(e->level==8){
@@ -747,11 +897,19 @@ enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *outpu
             coverage->present|=decoded.present;
         }else coverage->present|=31;
         if(!fit_anchor(&f,p,m,e)){unresolved=true;continue;}
+        if(f.influence>0 && (f.influence>influence[family] ||
+           (f.influence==influence[family] && f.anchor_peak>anchor_peak[family]))){
+            selected[family]=i;influence[family]=f.influence;anchor_peak[family]=f.anchor_peak;
+        }
     }
-    if(!unresolved && scene!=0)for(int i=0;i<m->num_ext_blocks;i++){
+    bool identity=scene==0;
+    if(!unresolved && !identity)for(unsigned family=0;family<2;family++){
+        if(!present[family])continue;
+        int i=selected[family];
+        if(i<0){rejected=true;break;}
         AVDOVIDmData *e=av_dovi_get_ext(m,i);if(e->level!=2 && e->level!=8)continue;
         struct trim_fit f={0};unsigned words[5];
-        if(!fit_anchor(&f,p,m,e) || !fit_samples(&f,headroom,scene) || !fit_words(&f,words,report)){
+        if(!fit_anchor(&f,p,m,e) || !fit_samples(&f,source_peak) || !fit_words(&f,words,report)){
             rejected=true;break;
         }
         struct dvbridge_creative_coverage *coverage=e->level==8?&report->l8_coverage:&report->l2_coverage;
@@ -768,7 +926,10 @@ enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *outpu
         memcpy(m,metadata,bytes);report->l2_coverage.edited=report->l8_coverage.edited=0;
         report->status=DVBRIDGE_CREATIVE_UNSUPPORTED;
         report->reason=unresolved?DVBRIDGE_CREATIVE_EDIT_TARGET_UNRESOLVED:DVBRIDGE_CREATIVE_EDIT_NOT_REPRESENTABLE;
-    }else report->status=changed?DVBRIDGE_CREATIVE_READY:DVBRIDGE_CREATIVE_NEUTRAL;
+    }else{
+        report->status=changed?DVBRIDGE_CREATIVE_READY:DVBRIDGE_CREATIVE_NEUTRAL;
+        if(!present[0] && !present[1])report->reason=DVBRIDGE_CREATIVE_NO_ANCHOR;
+    }
     report->l2_coverage.preserved=report->l2_coverage.present&~report->l2_coverage.edited;
     report->l8_coverage.preserved=report->l8_coverage.present&~report->l8_coverage.edited;
     report->l8_coverage.one_anchor=p->l8_coverage.one_anchor;

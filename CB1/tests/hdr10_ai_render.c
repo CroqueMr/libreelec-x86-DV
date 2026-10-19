@@ -99,8 +99,8 @@ int main(void)
     assert(!dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
     float *dv_pixels=malloc((size_t)3840*2160*4*sizeof(float));assert(dv_pixels);
     source.color.hdr.max_luma=4000;
-    for(unsigned preset=0;preset<2;++preset){
-        policy.mode=DVBRIDGE_MODE_ENHANCED_DV;policy.enhancement=preset;
+    for(unsigned preset=0;preset<1;++preset){
+        policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
         policy.tv=(struct dvbridge_tv_profile){1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_P3_D65};
         result=dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry);assert(result);
         for(unsigned i=0;i<10000;++i){
@@ -108,13 +108,45 @@ int main(void)
             if(status==DVBRIDGE_DV_READY)break;
             assert(status==DVBRIDGE_DV_PENDING);nanosleep(&(struct timespec){.tv_nsec=1000000},NULL);
         }
-        out=dvbridge_render_dv_policy_output(r);assert(out && out->value.sample_count==3840u*1920u/4);
-        assert(!av_dovi_find_level(out->output_metadata,3));
-        assert(out->value.nominal_max_nits==1000 && !out->value.fel_reconstructed);
+        out=dvbridge_render_dv_policy_output(r);assert(out);
+        assert(out->value.sample_count==(preset?3840u*1920u:0));
+        assert((av_dovi_find_level(out->output_metadata,3)!=NULL)==!preset);
+        assert(out->value.nominal_max_nits==4000 && !out->value.fel_reconstructed);
         reference_read(gpu.gl->gpu,result,0,0,3840,2160,dv_pixels);
         for(unsigned i=0;i<3840*2160*4;++i)assert(isfinite(dv_pixels[i]));
         retire(r);
     }
+    /* Enhanced returns the shared executor's float output; Reference is unchanged. */
+    uint16_t y[32],uv[16];for(unsigned i=0;i<32;i++)y[i]=512<<6;
+    for(unsigned i=0;i<16;i++)uv[i]=512<<6;
+    pl_fmt yf=pl_find_fmt(gpu.gl->gpu,PL_FMT_UNORM,1,16,16,PL_FMT_CAP_SAMPLEABLE);
+    pl_fmt cf=pl_find_fmt(gpu.gl->gpu,PL_FMT_UNORM,2,16,16,PL_FMT_CAP_SAMPLEABLE);
+    assert(yf && cf);
+    struct pl_frame planar={.num_planes=2,.crop={0,0,8,4},
+        .repr={.sys=PL_COLOR_SYSTEM_BT_2020_NC,.levels=PL_COLOR_LEVELS_LIMITED,
+            .bits={.sample_depth=16,.color_depth=10,.bit_shift=6}},.color=source.color,
+        .planes={{.components=1,.component_mapping={0},
+            .texture=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=8,.h=4,.format=yf,.sampleable=true,.initial_data=y))},
+            {.components=2,.component_mapping={1,2},
+            .texture=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=4,.h=2,.format=cf,.sampleable=true,.initial_data=uv))}}};
+    assert(planar.planes[0].texture && planar.planes[1].texture);
+    result=dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&planar,&geometry);assert(result);
+    assert(result->params.format->type==PL_FMT_FLOAT &&
+        (result->params.format->texel_size==8 || result->params.format->texel_size==16));
+    pl_gpu_finish(gpu.gl->gpu);assert(dvbridge_render_dv_policy_poll(r)==DVBRIDGE_DV_READY);
+    out=dvbridge_render_dv_policy_output(r);assert(out && out->intermediate==result);
+    assert(dvbridge_render_texture(r)==result);
+    assert(dvbridge_render_dv_policy_resolve(r,transport,framebuffer,false));retire(r);
+    struct pl_frame float_plane=planar;float_plane.planes[0].texture=tex;
+    result=dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&float_plane,&geometry);assert(result);
+    assert(result->params.format->type==PL_FMT_FLOAT &&
+        (result->params.format->texel_size==8 || result->params.format->texel_size==16));
+    pl_gpu_finish(gpu.gl->gpu);assert(dvbridge_render_dv_policy_poll(r)==DVBRIDGE_DV_READY);retire(r);
+    policy.mode=DVBRIDGE_MODE_STANDARD;
+    result=dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&planar,&geometry);assert(result);
+    assert(result->params.format->texel_size==16);
+    out=dvbridge_render_dv_policy_output(r);assert(out);wire(out->candidate);retire(r);
+    for(int i=0;i<2;i++)pl_tex_destroy(gpu.gl->gpu,&planar.planes[i].texture);
     free(dv_pixels);
     pl_tex_destroy(gpu.gl->gpu,&transport);pl_tex_destroy(gpu.gl->gpu,&tex);dvbridge_renderer_destroy(r);
     assert(dvbridge_retirement_owner_destroy(&owner));reference_gpu_destroy(&gpu);

@@ -27,7 +27,7 @@ struct cb1_hdr10_ai {
     bool active,pending,failed,ended,bounded,statistics_ready,quantiles_ready,spatial_ready;
     bool last_valid,result_valid,residual_valid;
     struct cb1_ai_identity id,last;
-    double pts,last_pts;
+    double pts,last_pts,calibration_until;
     pl_tex rgb;
     struct cb1_hdr10_bounds bounds;
     struct cb1_hdr10_descriptor descriptor;
@@ -127,6 +127,11 @@ static enum cb1_ai_status collect(struct cb1_hdr10_ai *c)
 fail:
     c->failed=true;return status==CB1_AI_INCOMPATIBLE?status:CB1_AI_INVALID;
 }
+
+bool cb1_hdr10_ai_set_coalesced_bounds(struct cb1_hdr10_ai *c,bool enabled)
+{
+    return c && !c->pending && cb1_hdr10_extrema_set_coalesced(c->extrema,enabled);
+}
 enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_frame *frame,
     struct cb1_ai_identity id,double pts)
 {
@@ -135,22 +140,37 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     enum cb1_ai_status status=collect(c);if(status!=CB1_AI_READY)return status;
     if(c->last_valid && same(id,c->last))return pts==c->last_pts?CB1_AI_READY:CB1_AI_INVALID;
     if(!frame || c->ended || (c->last_valid && (id.picture<=c->last.picture || pts<=c->last_pts)))return CB1_AI_INVALID;
+    /* The fitted model consumes only the first one-second prefix of a span. */
+    if(!c->last_valid || pts-c->last_pts>1.)c->calibration_until=pts+1.;
+    const bool calibration=pts<=c->calibration_until+1e-9;
     const uint64_t dispatch=now_ns();
     ++c->metrics.gpu_submissions;
-    status=cb1_hdr10_ingress_rgb(c->ingress,frame,&c->rgb);if(status!=CB1_AI_READY)goto submit_fail;
+    status=cb1_hdr10_ingress_validate(frame);if(status!=CB1_AI_READY)goto submit_fail;
+    const bool source_analysis=!calibration && frame->crop.x1-frame->crop.x0>=3840 &&
+        frame->crop.y1-frame->crop.y0>=1080 &&
+        frame->planes[1].texture->params.w==frame->planes[0].texture->params.w/2 &&
+        frame->planes[1].texture->params.h==frame->planes[0].texture->params.h/2;
+    if(!source_analysis){
+        status=cb1_hdr10_ingress_rgb(c->ingress,frame,&c->rgb);if(status!=CB1_AI_READY)goto submit_fail;
+    }
     /* Keep dependent analysis on the GPU; collect only final records. */
-    status=cb1_hdr10_extrema_submit(c->extrema,c->rgb,id);if(status!=CB1_AI_PENDING)goto submit_fail;
+    status=source_analysis?cb1_hdr10_extrema_submit_source(c->extrema,frame,id):
+        cb1_hdr10_extrema_submit(c->extrema,c->rgb,id);if(status!=CB1_AI_PENDING)goto submit_fail;
     pl_tex bounds=cb1_hdr10_extrema_pending(c->extrema,id);
-    status=cb1_hdr10_statistics_queue_pending(c->statistics,c->rgb,bounds,id);
+    status=source_analysis?cb1_hdr10_statistics_queue_source(c->statistics,frame,bounds,id):
+        cb1_hdr10_statistics_queue_pending(c->statistics,c->rgb,bounds,id);
     if(status!=CB1_AI_PENDING)goto submit_fail;
-    status=cb1_hdr10_quantiles_queue_pending(c->quantiles,c->rgb,bounds,id);
-    if(status!=CB1_AI_PENDING)goto submit_fail;
+    if(calibration){
+        status=cb1_hdr10_quantiles_queue_pending(c->quantiles,c->rgb,bounds,id);
+        if(status!=CB1_AI_PENDING)goto submit_fail;
+    }else memset(c->quantile_values,0,sizeof(c->quantile_values));
     pl_tex small;
     status=cb1_hdr10_ingress_preview_u16(c->ingress,frame,&small);if(status!=CB1_AI_READY)goto submit_fail;
-    status=cb1_hdr10_spatial_submit(c->spatial,small,id);
+    status=calibration?cb1_hdr10_spatial_submit(c->spatial,small,id):
+        cb1_hdr10_spatial_submit_motion(c->spatial,small,id);
     if(status!=CB1_AI_PENDING)goto submit_fail;
     c->id=id;c->pts=pts;c->descriptor=(struct cb1_hdr10_descriptor){.pts=pts};
-    c->bounded=c->statistics_ready=c->quantiles_ready=c->spatial_ready=false;
+    c->bounded=c->statistics_ready=c->spatial_ready=false;c->quantiles_ready=!calibration;
     c->submitted_ns=dispatch;c->metrics.analysis_submit_ns+=elapsed_ns(dispatch);
     c->pending=true;return CB1_AI_PENDING;
 submit_fail:

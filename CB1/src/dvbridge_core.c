@@ -78,9 +78,7 @@ static struct dvbridge_candidate *prepare_output(
     bool source_transport)
 {
     if (!context || !dvbridge_dv_bounds(metadata, bytes)) return NULL;
-    if (source_transport && (!dvbridge_dv_source_transport(metadata) ||
-        geometry.source_width!=3840 || geometry.source_height!=2160 || geometry.x || geometry.y ||
-        geometry.width!=3840 || geometry.height!=2160)) return NULL;
+    if (source_transport && !dvbridge_dv_source_transport(metadata)) return NULL;
     unsigned margins[4];
     if (!dvbridge_frame_area(margins, metadata, bytes, geometry)) return NULL;
     struct dvbridge_candidate *candidate = calloc(1, sizeof(*candidate));

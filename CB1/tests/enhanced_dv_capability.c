@@ -41,7 +41,7 @@ int main(void)
     av_dovi_get_ext(m,0)->l1.max_pq=3079;av_dovi_get_ext(m,0)->l1.avg_pq=1667;
     pl_tex input=reference_texture(g.gl->gpu,2,2,(float[16]){.5,.5,.5,1,.5,.5,.5,1,.5,.5,.5,1,.5,.5,.5,1});
     struct pl_frame f=reference_frame(input,2,2);
-    struct dvbridge_policy p=reference_policy();p.mode=DVBRIDGE_MODE_ENHANCED_DV;p.enhancement=DVBRIDGE_ENHANCEMENT_NATURAL;
+    struct dvbridge_policy p=reference_policy();p.mode=DVBRIDGE_MODE_ENHANCED_DV;
     struct dvbridge_identity id={1,7,1};
     enum dvbridge_dv_policy_status s=dvbridge_render_dv_policy_prepare(r,&p,&id,&f,m,bytes,0,0,(struct dvbridge_geometry){2,2,0,0,2,2});
     fprintf(stderr,"actual engine capability outcome=%d\n",s);

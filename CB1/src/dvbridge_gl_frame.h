@@ -17,6 +17,9 @@ struct dvbridge_gl_frame {
     pl_gpu gpu;
     struct pl_frame frame;
 };
+#define DVBRIDGE_GL_CHROMA_API 1
+/* Apply source siting only to subsampled planes; packed/luma planes are unchanged. */
+void dvbridge_gl_frame_set_chroma(struct dvbridge_gl_frame *frame, enum pl_chroma_location location);
 /* Current GL context required. The decoder retains ownership of all textures. */
 bool dvbridge_gl_frame_import(struct dvbridge_gl_frame *out, pl_gpu gpu,
                              enum dvbridge_gl_layout layout, int width, int height,

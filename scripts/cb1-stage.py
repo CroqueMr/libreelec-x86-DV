@@ -40,8 +40,19 @@ def stage(tree, engine, check=False):
         if digest(checked(tree, name)) != expected:
             raise ValueError("Integration mismatch: " + name)
     files = []
+    dependency_patches = set()
     for destination, record in lock["staging"].items():
         source, target = checked(engine, record["source"]), checked(tree, destination)
+        if record["source"].startswith("patches/"):
+            if record["source"] in dependency_patches:
+                raise ValueError("Duplicate dependency patch: " + record["source"])
+            dependency_patches.add(record["source"])
+        if record["source"].startswith("patches/ffmpeg/"):
+            routes = ("packages/multimedia/ffmpeg/patches/" + source.name,
+                      "projects/Generic/patches/ffmpeg/" + source.name)
+            for route in routes:
+                if route != destination and route not in lock["staging"] and checked(tree, route).exists():
+                    raise ValueError("Duplicate native FFmpeg patch: " + route)
         if digest(source) != record["sha256"]:
             raise ValueError("Source mismatch: " + record["source"])
         if target.exists() and digest(target) != record["sha256"]:

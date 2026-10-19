@@ -91,36 +91,35 @@ class CM4Contract(unittest.TestCase):
         with self.assertRaises(ValueError):
             cm4.blend_coefficients(lower, upper, 1.1)
 
-    def test_enhanced_objective_endpoints(self):
-        for peak in [500, 800, 1000, 1500, 2000]:
-            for headroom in [-.5, 0, .5]:
-                for preset in ['Natural', 'Signature']:
-                    values = [cm4.enhanced_objective((cm4.eotf(i/100*cm4.pq(peak)),)*3,
-                              peak, headroom, 1, preset)[0] for i in range(101)]
-                    self.assertEqual(values[0], 0)
-                    self.assertAlmostEqual(values[-1], peak, places=7)
-                    self.assertEqual(values, sorted(values))
-                    self.assertLess(values[10], peak/2)
-        natural = cm4.enhanced_objective((100,)*3, 1000, .2, 1, 'Natural')
-        signature = cm4.enhanced_objective((100,)*3, 1000, .2, 1, 'Signature')
-        self.assertNotEqual(natural, signature)
+    def test_enhanced_luminance_objective(self):
+        for value, natural, signature in [(0,0,0),(100,100,105.4),
+                (250,250,278.125),(500,668.518518518519,768.796296296297),
+                (750,1472.22222222222,1637.84722222222),(1000,2300,2300)]:
+            for preset, want in [('Natural',natural),('Signature',signature)]:
+                got=cm4.enhanced_objective((value,)*3,1000,2300,1,preset)
+                for channel in got:
+                    self.assertAlmostEqual(channel,want,delta=1e-8)
+        self.assertEqual(cm4.enhanced_objective((250,)*3,1000,600,1,'Natural'),[250]*3)
 
-    def test_signature_does_not_darken_authored_midtones(self):
-        # A positive preset must not turn 100 authored nits into about 85 nits.
-        for headroom in [0, .2, .5]:
-            output=cm4.enhanced_objective((100,)*3,1000,headroom,1,'Signature')
-            self.assertGreater(output[0],100)
-        self.assertEqual(cm4.enhanced_objective((0,)*3,1000,.2,1,'Signature'),[0]*3)
+    def test_enhanced_preserves_colour_ratios(self):
+        rgb=(500,250,100)
+        got=cm4.enhanced_objective(rgb,1000,2300,1,'Signature')
+        self.assertAlmostEqual(got[0]/got[1],2,places=12)
+        self.assertAlmostEqual(got[1]/got[2],2.5,places=12)
+        self.assertLessEqual(max(got),2300)
 
-    def test_natural_preserves_general_scene_brightness(self):
-        for headroom in [-.5,0,.5]:
-            output=cm4.enhanced_objective((100,)*3,1000,headroom,1,'Natural')
-            self.assertLessEqual(abs(cm4.pq(output[0])-cm4.pq(100)),2/1024)
+    def test_enhanced_objective_monotone(self):
+        for master,target in [(1000,2300),(4000,600),(500,10000)]:
+            for preset in ['Natural','Signature']:
+                values=[cm4.enhanced_objective((i*min(master,target)/1000,)*3,
+                        master,target,1,preset)[0] for i in range(1001)]
+                self.assertEqual(values,sorted(values))
+                self.assertEqual(values[0],0)
 
     def test_inactive_scene_preserves_authored_response(self):
         for preset in ['Natural','Signature']:
             for rgb in [(0,)*3,(100,)*3,(75,20,10)]:
-                self.assertEqual(cm4.enhanced_objective(rgb,1000,.5,0,preset),list(rgb))
+                self.assertEqual(cm4.enhanced_objective(rgb,1000,2300,0,preset),list(rgb))
 
     def test_frozen_analytical_vectors(self):
         fixture = json.loads(Path(__file__).with_name('cm4-vectors.json').read_text())

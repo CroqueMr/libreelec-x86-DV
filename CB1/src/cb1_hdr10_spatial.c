@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "cb1_hdr10_spatial.h"
-#include <libplacebo/dispatch.h>
-#include <libplacebo/shaders/custom.h>
 #include <libplacebo/opengl.h>
 #include <GLES3/gl31.h>
 #include <math.h>
@@ -10,7 +8,7 @@
 #include <string.h>
 
 /* 38 spatial coordinates and an 18x32 motion grid, never a full image readback. */
-enum { RECORD_FLOATS=1768, RECORD_PIXELS=442 };
+enum { RECORD_FLOATS=1768 };
 static const char shader_header[]=
     "void accumulate(inout float sum,inout float error,float value){"
     "precise float corrected=value-error,next=sum+corrected;error=(next-sum)-corrected;sum=next;}"
@@ -48,11 +46,16 @@ static const char bulk_header[]=
     "vec4 center=vec4(mass>0.0?total/mass:vec2(0),motion(38),motion(39));"
     "if(invalid[0]!=0u){threshold=vec4(uintBitsToFloat(0x7fc00000u));center=threshold;}"
     "for(int i=0;i<4;i++){result[32+i]=threshold[i];result[36+i]=center[i];}}}"
-    "void main(){bulk();}";
+    "uniform bool calibration;"
+    "void main(){uint lane=gl_LocalInvocationID.x;"
+    "if(!calibration){for(uint i=lane;i<1768u;i+=128u)result[i]=i<38u?0.0:motion(int(i));return;}"
+    "for(uint pixel=lane;pixel<442u;pixel+=128u){"
+    "if(pixel==8u || pixel==9u)continue;vec4 value=record(int(pixel));"
+    "for(uint c=0u;c<4u;c++)result[pixel*4u+c]=value[int(c)];}bulk();}";
 
 struct cb1_hdr10_spatial {
-    pl_gpu gpu;pl_dispatch dispatch;pl_tex result;
-    GLuint buffer,framebuffer,program,sampler;GLsync fence;
+    pl_gpu gpu;
+    GLuint buffer,program,sampler;GLsync fence;
     uint64_t stream,revision;struct cb1_ai_identity id;bool active,pending,failed;
 };
 
@@ -78,7 +81,7 @@ static GLuint program_create(pl_opengl gl)
     return program;
 }
 
-static bool submit_bulk(struct cb1_hdr10_spatial *ctx,pl_tex texture)
+static bool submit_bulk(struct cb1_hdr10_spatial *ctx,pl_tex texture,bool calibration)
 {
     GLint program,active,binding,sampler,generic,indexed;GLint64 offset,size;
     glGetIntegerv(GL_CURRENT_PROGRAM,&program);glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
@@ -89,9 +92,9 @@ static bool submit_bulk(struct cb1_hdr10_spatial *ctx,pl_tex texture)
     glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START,0,&offset);
     glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE,0,&size);
     glUseProgram(ctx->program);glBindSampler(0,ctx->sampler);
+    glUniform1i(glGetUniformLocation(ctx->program,"calibration"),calibration);
     glBindTexture(GL_TEXTURE_2D,pl_opengl_unwrap(ctx->gpu,texture,NULL,NULL,NULL));
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,ctx->buffer);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT|GL_PIXEL_BUFFER_BARRIER_BIT);
     glDispatchCompute(1,1,1);glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
     const bool ok=glGetError()==GL_NO_ERROR;
     if(indexed && size)glBindBufferRange(GL_SHADER_STORAGE_BUFFER,0,(GLuint)indexed,offset,size);
@@ -105,11 +108,8 @@ struct cb1_hdr10_spatial *cb1_hdr10_spatial_create(pl_gpu gpu)
 {
     pl_opengl gl=gpu?pl_opengl_get(gpu):NULL;
     if(!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1))return NULL;
-    pl_fmt fmt=pl_find_fmt(gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
-    if(!fmt)return NULL;
     struct cb1_hdr10_spatial *ctx=calloc(1,sizeof(*ctx));if(!ctx)return NULL;
-    ctx->gpu=gpu;ctx->dispatch=pl_dispatch_create(gpu->log,gpu);
-    ctx->result=pl_tex_create(gpu,pl_tex_params(.w=RECORD_PIXELS,.h=1,.format=fmt,.renderable=true,.sampleable=true));
+    ctx->gpu=gpu;
     ctx->program=program_create(gl);
     glGenSamplers(1,&ctx->sampler);
     glSamplerParameteri(ctx->sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
@@ -117,9 +117,8 @@ struct cb1_hdr10_spatial *cb1_hdr10_spatial_create(pl_gpu gpu)
     GLint prior;glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&prior);
     glGenBuffers(1,&ctx->buffer);glBindBuffer(GL_PIXEL_PACK_BUFFER,ctx->buffer);
     glBufferData(GL_PIXEL_PACK_BUFFER,RECORD_FLOATS*sizeof(float),NULL,GL_STREAM_READ);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER,(GLuint)prior);glGenFramebuffers(1,&ctx->framebuffer);
-    if(!ctx->dispatch || !ctx->result || !ctx->buffer || !ctx->framebuffer ||
-        !ctx->program || !ctx->sampler || glGetError()!=GL_NO_ERROR){
+    glBindBuffer(GL_PIXEL_PACK_BUFFER,(GLuint)prior);
+    if(!ctx->buffer || !ctx->program || !ctx->sampler || glGetError()!=GL_NO_ERROR){
         cb1_hdr10_spatial_destroy(&ctx);return NULL;
     }
     return ctx;
@@ -129,8 +128,7 @@ void cb1_hdr10_spatial_destroy(struct cb1_hdr10_spatial **ctx)
 {
     if(!ctx || !*ctx)return;
     if((*ctx)->fence)glDeleteSync((*ctx)->fence);
-    pl_tex_destroy((*ctx)->gpu,&(*ctx)->result);pl_dispatch_destroy(&(*ctx)->dispatch);
-    glDeleteBuffers(1,&(*ctx)->buffer);glDeleteFramebuffers(1,&(*ctx)->framebuffer);
+    glDeleteBuffers(1,&(*ctx)->buffer);
     glDeleteProgram((*ctx)->program);glDeleteSamplers(1,&(*ctx)->sampler);free(*ctx);*ctx=NULL;
 }
 
@@ -141,7 +139,7 @@ void cb1_hdr10_spatial_reset(struct cb1_hdr10_spatial *ctx,uint64_t stream,uint6
     ctx->fence=NULL;ctx->pending=false;ctx->stream=stream;ctx->revision=revision;ctx->active=true;
 }
 
-enum cb1_ai_status cb1_hdr10_spatial_submit(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id)
+static enum cb1_ai_status submit(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id,bool calibration)
 {
     if(!ctx || ctx->failed || !ctx->active || id.stream!=ctx->stream || id.revision!=ctx->revision ||
         !texture || !texture->params.sampleable || texture->params.d || texture->params.w!=128 ||
@@ -149,36 +147,18 @@ enum cb1_ai_status cb1_hdr10_spatial_submit(struct cb1_hdr10_spatial *ctx,pl_tex
         texture->params.format->num_components<3)return CB1_AI_INVALID;
     for(unsigned i=0;i<3;++i)if(texture->params.format->component_depth[i]<32)return CB1_AI_INCOMPATIBLE;
     if(ctx->pending)return CB1_AI_PENDING;
-    struct pl_shader_desc descriptor={.desc={.name="small_image",.type=PL_DESC_SAMPLED_TEX},
-        .binding={.object=texture,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
-    pl_shader shader=pl_dispatch_begin(ctx->dispatch);
-    bool ok=pl_shader_custom(shader,&(struct pl_custom_shader){.description="CB1 compact spatial analysis",
-        .header=shader_header,.body="color=record(int(gl_FragCoord.x));",
-        .output=PL_SHADER_SIG_COLOR,.descriptors=&descriptor,.num_descriptors=1});
-    if(ok)ok=pl_dispatch_finish(ctx->dispatch,pl_dispatch_params(.shader=&shader,.target=ctx->result));
-    pl_dispatch_abort(ctx->dispatch,&shader);
-    if(!ok){ctx->failed=true;return CB1_AI_INVALID;}
-    GLint framebuffer,buffer,alignment,row,rows,pixels;
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&framebuffer);glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING,&buffer);
-    glGetIntegerv(GL_PACK_ALIGNMENT,&alignment);glGetIntegerv(GL_PACK_ROW_LENGTH,&row);
-    glGetIntegerv(GL_PACK_SKIP_ROWS,&rows);glGetIntegerv(GL_PACK_SKIP_PIXELS,&pixels);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER,ctx->framebuffer);
-    GLuint image=pl_opengl_unwrap(ctx->gpu,ctx->result,NULL,NULL,NULL);
-    glFramebufferTexture2D(GL_READ_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,image,0);
-    glBindBuffer(GL_PIXEL_PACK_BUFFER,ctx->buffer);glPixelStorei(GL_PACK_ALIGNMENT,4);
-    glPixelStorei(GL_PACK_ROW_LENGTH,0);glPixelStorei(GL_PACK_SKIP_ROWS,0);glPixelStorei(GL_PACK_SKIP_PIXELS,0);
-    if(glCheckFramebufferStatus(GL_READ_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE){
-        glReadPixels(0,0,RECORD_PIXELS,1,GL_RGBA,GL_FLOAT,NULL);
-        if(submit_bulk(ctx,texture))ctx->fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
-        glFlush();
-    }
-    ok=ctx->fence && glGetError()==GL_NO_ERROR;
-    glPixelStorei(GL_PACK_ALIGNMENT,alignment);glPixelStorei(GL_PACK_ROW_LENGTH,row);
-    glPixelStorei(GL_PACK_SKIP_ROWS,rows);glPixelStorei(GL_PACK_SKIP_PIXELS,pixels);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER,(GLuint)framebuffer);glBindBuffer(GL_PIXEL_PACK_BUFFER,(GLuint)buffer);
+    if(submit_bulk(ctx,texture,calibration))ctx->fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+    glFlush();
+    bool ok=ctx->fence && glGetError()==GL_NO_ERROR;
     if(!ok || glGetError()!=GL_NO_ERROR){ctx->failed=true;return CB1_AI_INVALID;}
     ctx->pending=true;ctx->id=id;return CB1_AI_PENDING;
 }
+
+enum cb1_ai_status cb1_hdr10_spatial_submit(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id)
+{ return submit(ctx,texture,id,true); }
+
+enum cb1_ai_status cb1_hdr10_spatial_submit_motion(struct cb1_hdr10_spatial *ctx,pl_tex texture,struct cb1_ai_identity id)
+{ return submit(ctx,texture,id,false); }
 
 enum cb1_ai_status cb1_hdr10_spatial_poll(struct cb1_hdr10_spatial *ctx,struct cb1_ai_identity id,
     struct cb1_hdr10_spatial_result *out)

@@ -9,11 +9,8 @@ extern "C" {
 
 enum dvbridge_mode {
     DVBRIDGE_MODE_DISABLED, DVBRIDGE_MODE_STANDARD, DVBRIDGE_MODE_HDR10_BASIC,
-    DVBRIDGE_MODE_HDR10_EXPERT, DVBRIDGE_MODE_ENHANCED_DV
-};
-enum dvbridge_enhancement {
-    DVBRIDGE_ENHANCEMENT_NATURAL=0, DVBRIDGE_ENHANCEMENT_SIGNATURE=1,
-    DVBRIDGE_ENHANCEMENT_INTENSE=DVBRIDGE_ENHANCEMENT_SIGNATURE /* Deprecated source alias. */
+    DVBRIDGE_MODE_HDR10_EXPERT, DVBRIDGE_MODE_ENHANCED_DV,
+    DVBRIDGE_MODE_MASTER_REFERENCE = 5, DVBRIDGE_MODE_COUNT = 6
 };
 enum dvbridge_panel { DVBRIDGE_PANEL_UNSET, DVBRIDGE_PANEL_OLED, DVBRIDGE_PANEL_LCD };
 enum dvbridge_gamut {
@@ -24,12 +21,15 @@ struct dvbridge_tv_profile {
     enum dvbridge_panel panel;
     enum dvbridge_gamut gamut;
 };
+enum dvbridge_adaptive_variant {
+    DVBRIDGE_ADAPTIVE_A, DVBRIDGE_ADAPTIVE_B_FP32, DVBRIDGE_ADAPTIVE_B_FP16
+};
 /* Plain value snapshots. Validation neither mutates them nor enables rendering. */
 struct dvbridge_policy {
     uint64_t revision;
     enum dvbridge_mode mode;
-    enum dvbridge_enhancement enhancement;
     struct dvbridge_tv_profile tv;
+    enum dvbridge_adaptive_variant adaptive;
 };
 struct dvbridge_identity { uint64_t stream, picture, revision; };
 enum dvbridge_policy_status {
