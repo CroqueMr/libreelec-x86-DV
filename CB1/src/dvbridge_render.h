@@ -6,10 +6,10 @@
 #include "dvbridge_placebo.h"
 #include "dvbridge_creative.h"
 #include "cb1_master_reference.h"
-
 struct dvbridge_renderer;
-struct cb1_ai_result;
 struct dvbridge_native_overlay;
+
+struct cb1_ai_result;
 enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,

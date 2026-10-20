@@ -17,7 +17,7 @@ const char *cb1_circuit_version(enum cb1_circuit circuit)
         [CB1_HDR10_DV_REFERENCE] = "CB1-HDR10DVR.0.1.2",
         [CB1_HDR10_DV_ADAPTIVE] = "CB1-HDR10DVA.0.4",
         [CB1_DV_DV_MASTER_REFERENCE] = "CB1-DVDVMR.0.4",
-        [CB1_DV_DV_ADAPTIVE_B] = "CB1-DVDVA.0.10"
+        [CB1_DV_DV_ADAPTIVE_B] = "CB1-DVDVA.0.10",
     };
     return (unsigned)circuit < CB1_CIRCUIT_COUNT ? versions[circuit] : NULL;
 }

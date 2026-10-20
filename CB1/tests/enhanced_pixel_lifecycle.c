@@ -374,8 +374,8 @@ int main(void)
         assert(dvbridge_render_dv_policy_prepare_packed(r,&p,&id,&full_frame,m,bytes,1,1,full_geometry,target,false,&overlay)==DVBRIDGE_DV_PENDING);
         assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);assert(out);
         exact_prepack(r,fbo,false);exact_prepack(r,fbo,true);
-        /* Packed-only output is re-prepared when GUI composition changes. */
-        assert(!dvbridge_render_dv_policy_update_overlay(r,NULL,false));
+        /* GUI removal keeps the prepared video and composes at resolve. */
+        assert(dvbridge_render_dv_policy_update_overlay(r,NULL,false));
         assert(dvbridge_render_dv_policy_resolve(r,target,fbo,false));
         dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
         pl_tex_destroy(r->gpu,&overlay_texture);pl_tex_destroy(r->gpu,&degamma);pl_tex_destroy(r->gpu,&pq_lut);
@@ -406,7 +406,10 @@ int main(void)
     assert(dvbridge_render_dv_policy_prepare_packed(r,&p,&id,&full_frame,m,bytes,1,1,full_geometry,target,false,NULL)==DVBRIDGE_DV_PENDING);
     assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(r->dv.prepacked && !out->intermediate && !dvbridge_render_texture(r));
-    assert(!dvbridge_render_dv_policy_update_overlay(r,NULL,true) && "Late GUI must reprepare a cache-free frame");
+    assert(dvbridge_render_dv_policy_update_overlay(r,NULL,true));
+    GLsync materialized=r->dv.fence;
+    assert(dvbridge_render_dv_policy_update_overlay(r,NULL,false));
+    assert(r->dv.fence==materialized && "GUI changes must retain materialized video");
     assert(dvbridge_render_dv_policy_resolve(r,target,fbo,false));
     glBindFramebuffer(GL_FRAMEBUFFER,fbo);glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,lean);
     glBindFramebuffer(GL_FRAMEBUFFER,0);

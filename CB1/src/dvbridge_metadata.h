@@ -164,11 +164,13 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
     DV_REQUIRE(!d->source_transport || dvbridge_dv_source_transport(m));
     for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
         (uint16_t)((int64_t)c->ycc_to_rgb_matrix[i].num*8192/c->ycc_to_rgb_matrix[i].den) :
-        (uint16_t)dvbridge_output_ycc[i]);
+        (uint16_t)(
+            dvbridge_output_ycc[i]));
     dvbridge_dv_u32(d, 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
     for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
         (uint16_t)((int64_t)c->rgb_to_lms_matrix[i].num*16384/c->rgb_to_lms_matrix[i].den) :
-        dvbridge_output_lms[i]);
+        (
+            dvbridge_output_lms[i]));
     dvbridge_dv_u16(d, 65535); dvbridge_dv_u32(d, 0); dvbridge_dv_u32(d, 0);
     d->payload[d->size++] = 12; d->payload[d->size++] = 0;
     d->payload[d->size++] = 1; d->payload[d->size++] = 1;
