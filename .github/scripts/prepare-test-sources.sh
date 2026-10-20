@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Prepare the actual patched sources, not concatenated diff fragments.
 set -euo pipefail
+shopt -s nullglob
 export LC_ALL=C
 
 pin() {
@@ -26,7 +27,8 @@ python3 scripts/cb1-stage.py
 mkdir "$test_root/kodi" "$test_root/ffmpeg"
 tar -xf "$test_root/kodi.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg.tar.xz" -C "$test_root/ffmpeg" --strip-components=1
-for patch_file in packages/mediacenter/kodi/patches/*.patch projects/Generic/patches/kodi/*.patch; do
+for patch_file in packages/mediacenter/kodi/patches/*.patch projects/Generic/patches/kodi/*.patch \
+                  projects/Generic/patches/kodi/x86/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/kodi" < "$patch_file"
 done
 for patch_file in packages/multimedia/ffmpeg/patches/postproc/*.patch \
@@ -39,7 +41,9 @@ done
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \
     --disable-doc --disable-network --disable-autodetect --disable-x86asm \
     --enable-gpl --enable-version3 --enable-shared --disable-static \
-    --enable-filter=buffer,buffersink,hstack,settb
+    --enable-filter=buffer,buffersink,hstack,settb \
+    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc --enable-protocol=file \
+    --enable-bsf=hevc_mp4toannexb
   make -j2
   make install
 )
@@ -47,5 +51,6 @@ printf '%s\n' \
   "KODI_NATIVE_SOURCE_TREE=$test_root/kodi" \
   "CB1_DRM_STATE_SOURCE=$test_root/kodi" \
   "FFMPEG_TEST_PREFIX=$test_root/prefix" \
+  "FFMPEG_MATCHED_SOURCE=$test_root/ffmpeg" \
   "FFMPEG_SOURCE_ARCHIVE=$test_root/ffmpeg.tar.xz" \
   "LD_LIBRARY_PATH=$test_root/prefix/lib" >> "${GITHUB_ENV:?}"
