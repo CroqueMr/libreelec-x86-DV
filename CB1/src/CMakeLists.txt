@@ -45,10 +45,6 @@ pkg_check_modules(DVVa REQUIRED IMPORTED_TARGET libva)
 add_library(dvbridge_core STATIC dvbridge_core.c dvbridge_placebo.c dvbridge_render.c dvbridge_cache.c
                                 dvbridge_gl_frame.c dvbridge_gl_pack.c dvbridge_fel.c dvbridge_dmabuf.c dvbridge_fel_vpp.c
                                 dvbridge_policy.c cb1_circuit.c cb1_master_reference.c dvbridge_creative.c cb1_dv_enhanced.c cb1_processing.c)
-if(CB1_ENABLE_MASTER_IPT)
-  target_sources(dvbridge_core PRIVATE cb1_master_ipt.c)
-  target_compile_definitions(dvbridge_core PUBLIC CB1_ENABLE_MASTER_IPT=1)
-endif()
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert" CB1_PACK_VERTEX)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.frag" CB1_PACK_FRAGMENT)
 foreach(variable CB1_PACK_VERTEX CB1_PACK_FRAGMENT)

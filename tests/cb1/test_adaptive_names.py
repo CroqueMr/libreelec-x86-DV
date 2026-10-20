@@ -84,11 +84,11 @@ int main() {
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings = ET.parse(tree / 'system/settings/settings.xml')
         options = settings.findall(".//setting[@id='dvbridge.outputmode']/constraints/options/option")
-        self.assertEqual([int(option.text) for option in options], [0, 4, 6, 5, 2, 1])
+        self.assertEqual([int(option.text) for option in options], [0, 4, 5, 2, 1])
         self.assertIsNone(settings.find(".//setting[@id='dvbridge.adaptivefp16']"))
         menu = (tree / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
-        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 6, 5, 2, 1, 1])
+        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1])
 
     def test_authored_fast_uses_effective_policy_without_affecting_ai_or_hdr10(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

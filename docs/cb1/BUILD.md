@@ -13,7 +13,7 @@ patches into LibreELEC's native package directories. Do not mix headers or libra
 from another version. Native recipes download the pinned upstream archives and apply
 the recorded patches; this tree does not use Beta4's frozen pre-patched archives.
 
-The normal build excludes Master Reference IPT. Intel/AMD display support,
+Intel/AMD display support,
 experimental dedicated-GPU support and AMD HDMI 3D use one Generic image.
 
 The AI model under `CB1/models/l1l3/` is required for the AI circuits. Training data,

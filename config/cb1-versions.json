@@ -4,11 +4,6 @@
     "tag": "R1.0.0-Beta5",
     "image": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-Beta5"
   },
-  "Debug release": {
-    "version": "DV-R1.0.0 Beta5 Debug",
-    "tag": "R1.0.0-Beta5-debug",
-    "image": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-Beta5-debug"
-  },
   "LibreELEC": {
     "version": "13.0-devel",
     "revision": "3de4708704041ead8ae1531092efb7ea5da9d355",

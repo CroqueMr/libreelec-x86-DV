@@ -11,7 +11,6 @@
 #include <libavutil/dovi_meta.h>
 #include "dvbridge_metadata_bounds.h"
 #include "mpv_dvbridge_cm4.h"
-#include "cb1_master_ipt.h"
 #include <stdio.h>
 #include <limits.h>
 
@@ -79,7 +78,7 @@ struct dvbridge_dv {
     uint64_t frames, changes;
     double last_pts;
     int source_w, source_h, dest_x, dest_y, dest_w, dest_h;
-    bool fel_verified, source_transport, ipt_transport;
+    bool fel_verified, source_transport;
     unsigned compatibility_omissions;
 };
 #define DV_REQUIRE(x) do { if (!(x)) return false; } while (0)
@@ -150,9 +149,6 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
                                        double pts, const unsigned margins[4], bool force_refresh)
 {
     DV_REQUIRE(m && isfinite(pts));
-#ifndef CB1_ENABLE_MASTER_IPT
-    DV_REQUIRE(!d->ipt_transport);
-#endif
     const AVDOVIColorMetadata *c = av_dovi_get_color(m);
     const AVDOVIRpuDataHeader *h = av_dovi_get_header(m);
     DV_REQUIRE(c && h && (h->disable_residual_flag == 1 || d->fel_verified || dvbridge_dv_is_mel(m)));
@@ -169,23 +165,17 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDO
     for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
         (uint16_t)((int64_t)c->ycc_to_rgb_matrix[i].num*8192/c->ycc_to_rgb_matrix[i].den) :
         (uint16_t)(
-#ifdef CB1_ENABLE_MASTER_IPT
-            d->ipt_transport ? cb1_ipt_output_ycc[i] :
-#endif
             dvbridge_output_ycc[i]));
-    dvbridge_dv_u32(d, d->ipt_transport ? 0 : 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
+    dvbridge_dv_u32(d, 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
     for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
         (uint16_t)((int64_t)c->rgb_to_lms_matrix[i].num*16384/c->rgb_to_lms_matrix[i].den) :
         (
-#ifdef CB1_ENABLE_MASTER_IPT
-            d->ipt_transport ? (uint16_t)cb1_ipt_output_lms[i] :
-#endif
             dvbridge_output_lms[i]));
     dvbridge_dv_u16(d, 65535); dvbridge_dv_u32(d, 0); dvbridge_dv_u32(d, 0);
-    d->payload[d->size++] = 12; d->payload[d->size++] = d->ipt_transport ? 2 : 0;
+    d->payload[d->size++] = 12; d->payload[d->size++] = 0;
     d->payload[d->size++] = 1; d->payload[d->size++] = 1;
     dvbridge_dv_u16(d, c->source_min_pq); dvbridge_dv_u16(d, c->source_max_pq);
-    dvbridge_dv_u16(d, d->source_transport || d->ipt_transport ? c->source_diagonal : 42);
+    dvbridge_dv_u16(d, d->source_transport ? c->source_diagonal : 42);
     unsigned count_pos = d->size++;
     d->payload[count_pos] = 0;
     unsigned l1 = 0, area = 0, targets[AV_DOVI_MAX_EXT_BLOCKS], ntargets = 0;

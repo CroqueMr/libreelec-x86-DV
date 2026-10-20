@@ -19,7 +19,6 @@ Changes from the MVC-corrected [Beta4](RELEASE-BETA4.md).
 - Disabling it restores the active skin's native information dialog.
 - Quick rendering selection preserves the active skin's native selector layout.
 - Corrected parsed L3 and output-snapshot consistency for HDR10-to-Dolby Vision AI.
-- Master Reference IPT is not part of the normal build.
 
 ## Known limitations
 

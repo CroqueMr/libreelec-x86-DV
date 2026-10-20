@@ -8,13 +8,6 @@
 #include "cb1_master_reference.h"
 struct dvbridge_renderer;
 struct dvbridge_native_overlay;
-#ifdef CB1_ENABLE_MASTER_IPT
-#define DVBRIDGE_MASTER_IPT_API 1
-enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_renderer *renderer,
-    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
-    struct dvbridge_geometry geometry,pl_tex target,bool flip,
-    const struct dvbridge_native_overlay *overlay);
-#endif
 
 struct cb1_ai_result;
 enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *renderer,

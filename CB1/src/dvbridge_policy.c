@@ -7,12 +7,6 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
     if (!policy || policy->mode < DVBRIDGE_MODE_DISABLED ||
         policy->mode >= DVBRIDGE_MODE_COUNT)
         return DVBRIDGE_POLICY_INVALID_VALUE;
-    if(policy->master_ipt
-#ifdef CB1_ENABLE_MASTER_IPT
-       && policy->mode!=DVBRIDGE_MODE_MASTER_REFERENCE
-#endif
-      )
-        return DVBRIDGE_POLICY_INVALID_VALUE;
     if(policy->adaptive<DVBRIDGE_ADAPTIVE_A || policy->adaptive>DVBRIDGE_ADAPTIVE_B_FP16 ||
        (policy->adaptive!=DVBRIDGE_ADAPTIVE_A && policy->mode!=DVBRIDGE_MODE_ENHANCED_DV))
         return DVBRIDGE_POLICY_INVALID_VALUE;

@@ -2,9 +2,6 @@
 # Copyright (C) 2026-present Hades
 
 PKG_NAME="nvidia-open-kernel-modules"
-if [ "${CB1_DEBUG:-no}" = yes ]; then
-  PKG_STAMP+=" cb1-driver-profile=${CB1_DRIVER_PROFILE:-modified}"
-fi
 PKG_VERSION="615.78.08"
 PKG_COMMIT="1a82fbfda8f321b056eb3568850f9316c5e465c5"
 PKG_SHA256="590ee6a5a780f946322edd17f9d235c6664eb7e6839073ac0d68c0f263e7184f"

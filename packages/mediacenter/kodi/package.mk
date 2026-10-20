@@ -13,7 +13,6 @@ PKG_DEPENDS_UNPACK="commons-lang3 commons-text groovy"
 PKG_DEPENDS_HOST="toolchain"
 PKG_LONGDESC="A free and open source cross-platform media player."
 PKG_BUILD_FLAGS="+speed"
-PKG_STAMP+=" CB1_DEBUG=${CB1_DEBUG:-no}"
 
 if [ "${TARGET_ARCH}" = "arm" ]; then
   PKG_BUILD_FLAGS+=" -gold"
@@ -306,12 +305,6 @@ configure_package() {
                          ${KODI_ALSA} \
                          ${KODI_PULSEAUDIO} \
                          ${KODI_PIPEWIRE}"
-
-  if [ "${CB1_DEBUG:-no}" = "yes" ]; then
-    PKG_CMAKE_OPTS_TARGET+=" -DCB1_ENABLE_MASTER_IPT=ON -DCB1_DEBUG_BUILD=ON"
-  else
-    PKG_CMAKE_OPTS_TARGET+=" -DCB1_ENABLE_MASTER_IPT=OFF -DCB1_DEBUG_BUILD=OFF"
-  fi
 
   if [ "${CB1_HDR10_AI}" = "yes" ]; then
     PKG_CMAKE_OPTS_TARGET+=" -DCB1_ENABLE_HDR10_AI=ON \

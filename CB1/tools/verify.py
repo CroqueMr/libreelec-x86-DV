@@ -74,7 +74,6 @@ def verify(root, dependency_roots=None, prefix=None):
     owned = json.loads(checked(root, 'config/owned-sources.json').read_text())
     if set(owned) != {'src/CMakeLists.txt', 'src/dvbridge_policy.c', 'src/dvbridge_policy.h',
                       'src/cb1_master_reference.c', 'src/cb1_master_reference.h',
-                      'src/cb1_master_ipt.c', 'src/cb1_master_ipt.h', 'src/cb1_master_ipt_shader.h',
                       'src/dvbridge_gl_frame.c', 'src/dvbridge_gl_frame.h',
                       'src/dvbridge_dmabuf.c', 'src/dvbridge_dmabuf.h',
                       'src/dvbridge_cache.c', 'src/dvbridge_cache.h',

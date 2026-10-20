@@ -189,23 +189,11 @@ if { [ -d "${SOURCES}/${PKG_NAME}" ] || [ -d "${PKG_DIR}/sources" ]; } || pkg_ca
       fi
 
       if [ -f "${i}" ]; then
-        if [ "${CB1_DEBUG:-no}" = yes ] && [ "${PROJECT}" = Generic ] &&
-           [ "${CB1_DRIVER_PROFILE:-modified}" = standard ] &&
-           grep -Fxq "${i#${ROOT}/}" "${ROOT}/config/cb1-driver-patches.list"; then
-          continue
-        fi
         build_msg "CLR_APPLY_PATCH" "APPLY PATCH $(print_color "CLR_PATCH_DESC" "${PATCH_DESC}")" "${i#${ROOT}/}"
         if grep -qE '^GIT binary patch$|^rename from|^rename to' ${i}; then
           git apply --directory="${PKG_BUILD}" -p1 --verbose --whitespace=nowarn --unsafe-paths <${i} >&${VERBOSE_OUT}
         else
           patch -d "${PKG_BUILD}" -p1 <${i} >&${VERBOSE_OUT}
-        fi
-        if [ "${CB1_DEBUG:-no}" = yes ] && [ "${PROJECT}" = Generic ]; then
-          case "${PKG_NAME}" in
-            linux|nvidia-open-kernel-modules)
-              printf '%s  %s\n' "$(sha256sum "${i}" | cut -d' ' -f1)" "${i#${ROOT}/}" >>"${PKG_BUILD}/.cb1-applied-patches"
-              ;;
-          esac
         fi
       fi
     done

@@ -4,10 +4,6 @@
  */
 /* Reconstruct video at full precision, then pack the HDMI transport with frame-matched metadata. */
 #include "dvbridge_render.h"
-#include "cb1_master_ipt.h"
-#ifdef CB1_ENABLE_MASTER_IPT
-#include "cb1_master_ipt_shader.h"
-#endif
 #include <dlfcn.h>
 #include "dvbridge_placebo.h"
 #include "dvbridge_metadata.h"
@@ -102,9 +98,6 @@ struct dvbridge_renderer {
     pl_gpu gpu;
     pl_renderer renderer;
     pl_tex rgb, ai_rgb, enhanced_rgb, enhanced_input;
-#ifdef CB1_ENABLE_MASTER_IPT
-    pl_tex ipt_pq[2];
-#endif
     pl_tex cm29_tail_atlas;
     pl_tex cm29_tail_axis;
     struct cm29_tail_cache_key cm29_tail_key;
@@ -825,9 +818,6 @@ struct active_mask {
     pl_shader native_shader;
     bool early_mask, source_domain, source_overlay, straight_overlay, linear_output;
     bool reference_transport;
-    bool ipt_quad;
-    const struct cb1_master_ipt *ipt;
-    const pl_tex *ipt_pq;
     pl_tex reference_target;
     pl_tex scaled_reference;
     float scaled_rect[4];
@@ -885,11 +875,6 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
         .input=PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
         .description="Skip reconstruction outside the DV active picture",
         .header=
-#ifdef CB1_ENABLE_MASTER_IPT
-            mask->ipt_quad ? (mask->overlay ?
-            "#define CB1_IPT_EARLY_OUTPUT 1\n#define CB1_NATIVE_OVERLAY 1\n" :
-            "#define CB1_IPT_EARLY_OUTPUT 1\n") :
-#endif
             mask->linear_output ? "#define CB1_LINEAR_EARLY_OUTPUT 1\n" :
             mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         .variables=vars, .num_variables=5,
@@ -913,16 +898,7 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
         "uint ei=uint(ep.y*3840+ep.x), ek=ei/3072u, ev=0u;\n"
         "if(ek<early_count){uint eb=ei%1024u, ew=ek*128u+eb/8u;\n"
         "ev=(early_words[ew/4u][int(ew%4u)]>>(7u-eb%8u))&1u;}\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#ifdef CB1_IPT_EARLY_OUTPUT\n"
-        "if(ek<early_count)ev^=1u;\n"
-        "return vec4(128.0,0.0,float(ev*16u),255.0)/255.0;\n"
-        "#else\n"
-#endif
         "return vec4(128.0,16.0,float(ev*16u),255.0)/255.0;\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#endif\n"
-#endif
         "#endif\n}\n"};
     mask->failed = pl_shader_is_compute(p->sh) || !pl_shader_custom(p->sh, &shader);
     return (struct pl_hook_res){.failed=mask->failed, .output=PL_HOOK_SIG_NONE};
@@ -937,17 +913,6 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
     if (p->stage == PL_HOOK_NATIVE)
         return skip_inactive_area(mask, p);
     mask->called = true;
-#ifdef CB1_ENABLE_MASTER_IPT
-    float ipt_decode[9]={0},ipt_linear[9]={0},ipt_encode[9]={0},ipt_offset[3]={0};
-    if(mask->ipt)for(int i=0;i<3;i++) {
-        ipt_offset[i]=mask->ipt->offset[i];
-        for(int j=0;j<3;j++) {
-            ipt_decode[j*3+i]=mask->ipt->decode[i*3+j];
-            ipt_linear[j*3+i]=mask->ipt->linear[i*3+j];
-            ipt_encode[j*3+i]=mask->ipt->encode[i*3+j];
-        }
-    }
-#endif
     struct pl_shader_var vars[] = {
         {.var = pl_var_vec4("active_area"), .data = mask->rect, .dynamic = true},
         {.var = {.name="metadata_words", .type=PL_VAR_UINT, .dim_v=4, .dim_m=1, .dim_a=32*(mask->count ? mask->count : 1)},
@@ -959,12 +924,6 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         {.var=pl_var_vec3("overlay_offset"), .data=mask->offset, .dynamic=true},
         {.var=pl_var_mat3("overlay_linear"), .data=mask->linear, .dynamic=true},
         {.var=pl_var_vec4("scaled_rect"), .data=mask->scaled_rect, .dynamic=true},
-#ifdef CB1_ENABLE_MASTER_IPT
-        {.var=pl_var_mat3("ipt_decode"), .data=ipt_decode, .dynamic=true},
-        {.var=pl_var_mat3("ipt_linear"), .data=ipt_linear, .dynamic=true},
-        {.var=pl_var_mat3("ipt_encode"), .data=ipt_encode, .dynamic=true},
-        {.var=pl_var_vec3("ipt_offset"), .data=ipt_offset, .dynamic=true},
-#endif
     };
     struct pl_shader_desc desc[6]={0};
     if(mask->overlay) {
@@ -983,12 +942,6 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .binding={.object=mask->scaled_reference,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     }
     unsigned descriptors=(mask->overlay?3:0)+(mask->scaled_reference?1:0);
-#ifdef CB1_ENABLE_MASTER_IPT
-    if(mask->ipt)for(int i=0;i<2;i++)
-        desc[descriptors++]=(struct pl_shader_desc){
-            .desc={.name=i?"ipt_oetf":"ipt_eotf",.type=PL_DESC_SAMPLED_TEX},
-            .binding={.object=mask->ipt_pq[i],.sample_mode=PL_TEX_SAMPLE_NEAREST}};
-#endif
     char header[4096];
     snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
@@ -998,24 +951,16 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
-#ifdef CB1_ENABLE_MASTER_IPT
-        mask->ipt ? CB1_MASTER_IPT_GLSL : "",
-        mask->ipt_quad ? "#define CB1_IPT_QUAD 1\n" : ""
-#else
         "", ""
-#endif
     );
     struct pl_custom_shader shader = {
-        .prelude=!mask->ipt_quad && (mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
+        .prelude=(mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
                  "#extension GL_KHR_shader_subgroup_quad : require\n",
         .header=header,
         .input=mask->scaled_reference?PL_SHADER_SIG_NONE:PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
         .description="Exact full-raster DV transport without intermediate image",
         .output_w=mask->scaled_reference?3840:0,.output_h=mask->scaled_reference?2160:0,
         .variables=vars, .num_variables=
-#ifdef CB1_ENABLE_MASTER_IPT
-            mask->ipt ? 13 :
-#endif
             mask->scaled_reference ? 9 : mask->overlay ? 8 : 4,
         .descriptors=desc, .num_descriptors=descriptors,
         .body=
@@ -1026,39 +971,15 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         "bool inactive=float(p.x)<active_area.x || float(p.x)>=active_area.z || float(p.y)<active_area.y || float(p.y)>=active_area.w;\n"
         "vec3 self_rgb=vec3(0); bool compose=false; vec4 gui=vec4(0);\n"
         "#ifdef CB1_SOURCE_DOMAIN\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#ifdef CB1_IPT_TRANSPORT\n"
-        "if(inactive)color=vec4(vec3(256.0,2048.0,2048.0)/4095.0,1.0);\n"
-        "#else\n"
-#endif
         "if(inactive) color=vec4(.0625,.5,.5,1.0);\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#endif\n"
-#endif
         "vec3 self_ycc=clamp(color.rgb,0.0,1.0);\n"
         "vec3 peer_ycc;\n"
         "#ifdef CB1_SCALED_REFERENCE\n"
         "vec2 peer_pos=vec2(p^ivec2(1,0))+.5;\n"
         "peer_ycc=clamp(texelFetch(scaled_reference,ivec2(scaled_rect.xy+peer_pos*scaled_rect.zw),0).rgb,0.0,1.0);\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#ifdef CB1_IPT_TRANSPORT\n"
-        "if(inactive)peer_ycc=vec3(256.0,2048.0,2048.0)/4095.0;\n"
-        "#else\n"
-#endif
         "if(inactive)peer_ycc=vec3(.0625,.5,.5);\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#endif\n"
-#endif
         "#elif defined(CB1_REFERENCE_TRANSPORT)\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#ifdef CB1_IPT_QUAD\n"
-        "peer_ycc=subgroupQuadSwapHorizontal(self_ycc);\n"
-        "#else\n"
-#endif
         "peer_ycc=self_ycc;\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#endif\n"
-#endif
         "#elif !defined(CB1_SOURCE_OVERLAY)\n"
         "peer_ycc=subgroupQuadSwapHorizontal(self_ycc);\n"
         "#endif\n"
@@ -1119,26 +1040,9 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         "#endif\n"
         // Keep the direct transport values out of the subtitle colour branch.
         "if(!compose){\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#ifdef CB1_IPT_TRANSPORT\n"
-        "vec3 ipt=cb1_ipt(self_ycc);\n"
-        "#ifdef CB1_IPT_QUAD\n"
-        "float peer_t=subgroupQuadSwapHorizontal(ipt.z);\n"
-        "float ipt_chroma=(p.x&1)==0?ipt.y:peer_t;\n"
-        "#else\n"
-        "vec3 even_ipt=cb1_ipt((p.x&1)==0?self_ycc:peer_ycc);\n"
-        "float ipt_chroma=(p.x&1)==0?even_ipt.y:even_ipt.z;\n"
-        "#endif\n"
-        "uint y=uint(clamp(floor(4096.0*ipt.x+.5),0.0,4095.0));\n"
-        "uint c=uint(clamp(floor(4096.0*ipt_chroma+.5),0.0,4095.0));\n"
-        "#else\n"
-#endif
         "uint y=uint(floor(4095.0*self_ycc.x+.5));\n"
         "float chroma=(p.x&1)==0?self_ycc.y+peer_ycc.y:self_ycc.z+peer_ycc.z;\n"
         "uint c=uint(floor(2047.5*chroma+.5));\n"
-#ifdef CB1_ENABLE_MASTER_IPT
-        "#endif\n"
-#endif
         "uint index=uint(p.y*3840+p.x), packet=index/3072u;\n"
         "if(packet<packet_count){uint bit=index%1024u, byte_index=packet*128u+bit/8u;\n"
         "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;\n"
@@ -1363,9 +1267,6 @@ void dvbridge_renderer_destroy(struct dvbridge_renderer *r)
 
 static void renderer_free(struct dvbridge_renderer *r)
 {
-#ifdef CB1_ENABLE_MASTER_IPT
-    for(int i=0;i<2;i++)pl_tex_destroy(r->gpu,&r->ipt_pq[i]);
-#endif
     cb1_processing_reset(&r->processing,r->gpu);
     glDeleteProgram(r->dv_analysis_program);
     glDeleteProgram(r->enhanced_program);
@@ -1441,11 +1342,8 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
                         const struct dvbridge_policy *policy,
                         const struct dvbridge_native_overlay *overlay,bool force_refresh,
                         struct direct_output *direct,bool enhanced_reconstruction,
-                        const struct pl_cb1_dovi_reference *master,const struct cb1_master_ipt *ipt)
+                        const struct pl_cb1_dovi_reference *master)
 {
-#ifndef CB1_ENABLE_MASTER_IPT
-    if(ipt)return false;
-#endif
     if (!r)
         return false;
     if (r->dv.active) {
@@ -1626,21 +1524,15 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     }
     mask.overlay=overlay;
     mask.reference_transport=master!=NULL;
-#ifdef CB1_ENABLE_MASTER_IPT
-    mask.ipt=ipt;
-    mask.ipt_pq=r->ipt_pq;
-#endif
     mask.straight_overlay=r->optimized_dv && overlay && !overlay->input_pq;
     bool full_transport=packed && !session && !policy && !source->num_overlays &&
         (!el || !el->num_overlays) &&
         geometry.source_width==3840 && geometry.source_height==2160 && !geometry.x && !geometry.y &&
         geometry.width==3840 && geometry.height==2160;
-    bool placed_reference=master && !ipt && !full_transport && !source->num_overlays &&
+    bool placed_reference=master && !full_transport && !source->num_overlays &&
         (!el || !el->num_overlays) && geometry.width==geometry.source_width &&
         geometry.height==geometry.source_height && !(geometry.x&1);
-    bool direct_reference=master && (full_transport || placed_reference) &&
-        (!ipt || (full_transport && r->fragment_quad));
-    mask.ipt_quad=ipt && direct_reference;
+    bool direct_reference=master && (full_transport || placed_reference);
     mask.reference_target=placed_reference?packed:NULL;
     bool source_transport=full_transport && r->optimized_dv && !mapped.dovi.nlq_active &&
         dvbridge_dv_source_transport(metadata);
@@ -1701,10 +1593,6 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     params.cb1_exact_scaler_cache=mask.source_domain && r->exact_scaler_cache;
     if(!session && !policy) {
         r->pending=
-#ifdef CB1_ENABLE_MASTER_IPT
-            ipt ? dvbridge_prepare_ipt_output(r->context,metadata,bytes,pts,geometry,
-                paired && mapped.dovi.nlq_active,force_refresh) :
-#endif
             source_transport ?
             dvbridge_prepare_source_output(r->context,metadata,bytes,pts,geometry,
                 paired && mapped.dovi.nlq_active,force_refresh) :
@@ -1720,7 +1608,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     mask.packets = dvbridge_packets(r->pending, &mask.count);
     bool authored_linear = enhanced_reconstruction && r->enhanced_linear && r->fast_chroma &&
                            paired && mapped.dovi.nlq_active;
-    mask.early_mask = (!ipt || mask.ipt_quad) && !(master && !full_transport) && (packed || authored_linear) && geometry.source_width == 3840 && geometry.source_height == 2160 &&
+    mask.early_mask = !(master && !full_transport) && (packed || authored_linear) && geometry.source_width == 3840 && geometry.source_height == 2160 &&
                       (margins[0] || margins[1] || margins[2] || margins[3]);
     const struct pl_hook hook = {
         .stages = PL_HOOK_OUTPUT | (mask.early_mask || placed_reference ? PL_HOOK_NATIVE : 0),
@@ -1949,7 +1837,7 @@ bool dvbridge_render_rgb(struct dvbridge_renderer *r, const struct pl_frame *sou
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry)
 {
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL, NULL,false,NULL,false,NULL,NULL);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL, NULL,false,NULL,false,NULL);
 }
 
 bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
@@ -1962,7 +1850,7 @@ bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
         dvbridge_renderer_reset(r);
         return false;
     }
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL, NULL,false,NULL,false,NULL,NULL);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL, NULL,false,NULL,false,NULL);
 }
 
 bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *source,
@@ -1999,7 +1887,7 @@ static bool overlay_valid(const struct dvbridge_native_overlay *overlay)
 static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay,bool force_refresh,
-    const struct pl_cb1_dovi_reference *master,const struct cb1_master_ipt *ipt)
+    const struct pl_cb1_dovi_reference *master)
 {
     if (r && r->dv.active)
         dvbridge_render_dv_policy_cancel(r);
@@ -2025,7 +1913,7 @@ static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_fr
         glDisable(caps[i]);
     }
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,ipt);
+    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master);
     ok = glGetError() == GL_NO_ERROR && ok;
     glColorMask(mask[0], mask[1], mask[2], mask[3]);
     for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
@@ -2040,7 +1928,7 @@ bool dvbridge_render_packed_overlay(struct dvbridge_renderer *r,const struct pl_
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
 {
-    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,NULL,NULL);
+    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,NULL);
 }
 
 static int master_chroma_phase(const struct pl_frame *source)
@@ -2063,12 +1951,9 @@ static int master_chroma_phase(const struct pl_frame *source)
 static enum cb1_master_status render_master_reference(struct dvbridge_renderer *r,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip,
-    const struct dvbridge_native_overlay *overlay,bool ipt_output)
+    const struct dvbridge_native_overlay *overlay)
 {
     if(r)r->ready=false;
-#ifndef CB1_ENABLE_MASTER_IPT
-    if(ipt_output)return CB1_MASTER_UNSUPPORTED;
-#endif
     if(!r || !source)return CB1_MASTER_INVALID;
     struct pl_cb1_dovi_reference raw;
     enum cb1_master_status status=cb1_master_reference_map(&raw,metadata,bytes,
@@ -2084,25 +1969,7 @@ static enum cb1_master_status render_master_reference(struct dvbridge_renderer *
     if(!target || !dvbridge_dv_source_transport(metadata) || phase<0 ||
        (raw.residual && phase!=master_chroma_phase(source->enhancement_layer)))return CB1_MASTER_UNSUPPORTED;
     if(!dvbridge_renderer_supports_mode(r,DVBRIDGE_MODE_MASTER_REFERENCE))return CB1_MASTER_GPU_UNAVAILABLE;
-#ifdef CB1_ENABLE_MASTER_IPT
-    struct cb1_master_ipt ipt;
-    if(ipt_output && !cb1_master_ipt_prepare(&ipt,metadata,bytes))return CB1_MASTER_UNSUPPORTED;
-    if(ipt_output && !cb1_master_ipt_tables(r->gpu,r->ipt_pq))return CB1_MASTER_GPU_UNAVAILABLE;
-    if(ipt_output && r->fragment_quad && !geometry.x && !geometry.y &&
-       geometry.source_width==3840 && geometry.source_height==2160 &&
-       geometry.width==3840 && geometry.height==2160) {
-        /* Runtime lookup preserves optional capability checks under whole-program LTO. */
-        unsigned (*paired_rows)(void)=dlsym(RTLD_DEFAULT,"pl_cb1_dovi_reference_paired_rows_abi");
-        if(paired_rows && paired_rows()==1)raw.contract=2;
-    }
-#endif
-    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,
-#ifdef CB1_ENABLE_MASTER_IPT
-        ipt_output?&ipt:NULL
-#else
-        NULL
-#endif
-        )?
+    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw)?
         CB1_MASTER_READY:CB1_MASTER_FAILED;
 }
 
@@ -2110,17 +1977,9 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
 {
-    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false);
+    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay);
 }
 
-#ifdef CB1_ENABLE_MASTER_IPT
-enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_renderer *r,
-    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
-    struct dvbridge_geometry geometry,pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
-{
-    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,true);
-}
-#endif
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
 {
@@ -2198,7 +2057,7 @@ bool dvbridge_render_hdr10_policy_rgb(struct dvbridge_renderer *r,
         !pl_find_fmt(r->gpu, PL_FMT_UNORM, 4, 16, 16, PL_FMT_CAP_LINEAR) ||
         !pl_find_fmt(r->gpu, PL_FMT_FLOAT, 1, 32, 32, PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR))
         return false;
-    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy, NULL,false,NULL,false,NULL,NULL))
+    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy, NULL,false,NULL,false,NULL))
         return false;
     r->policy_pending.identity = *identity;
     return true;
@@ -2245,7 +2104,7 @@ bool dvbridge_render_hdr10_direct(struct dvbridge_renderer *r,
        !direct_geometry_valid(geometry) || !direct_target_valid(r,target,bits))return false;
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,false);
-    return render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,session,NULL,NULL,false,&direct,false,NULL,NULL);
+    return render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,session,NULL,NULL,false,&direct,false,NULL);
 }
 
 bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *r,
@@ -2264,7 +2123,7 @@ bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *r,
        !direct_geometry_valid(geometry) || !direct_target_valid(r,target,bits))return false;
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,true);
-    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,policy,NULL,false,&direct,false,NULL,NULL))return false;
+    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,policy,NULL,false,&direct,false,NULL))return false;
     r->policy_pending.identity=*identity;
     r->policy_pending.resolved=true;
     r->policy_pending.final_target=target;
@@ -3107,8 +2966,8 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     if(!s->output_metadata){dv_release(r);return DVBRIDGE_DV_FAILED;}
     bool force=!r->dv_has_committed || r->dv_committed.identity.stream!=id->stream ||
         r->dv_committed.identity.revision!=id->revision;
-    bool ok=packed && !pixels ? render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,overlay,force,NULL,NULL) :
-        render(r,source,metadata,bytes,pts,el_pts,reconstruction,NULL,false,NULL,NULL,NULL,force,NULL,pixels,NULL,NULL);
+    bool ok=packed && !pixels ? render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,overlay,force,NULL) :
+        render(r,source,metadata,bytes,pts,el_pts,reconstruction,NULL,false,NULL,NULL,NULL,force,NULL,pixels,NULL);
     s->active=true;s->pts=pts;
     if(!ok){dv_last_use(r);dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}
     if(!r->pending){dv_last_use(r);dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}

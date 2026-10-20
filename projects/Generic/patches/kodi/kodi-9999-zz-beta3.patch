@@ -7763,15 +7763,13 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -4,6 +4,29 @@
+@@ -4,6 +4,21 @@
  endif()
  
  project(kodi LANGUAGES CXX C ASM)
 +
 +option(ENABLE_DVBRIDGE "Build experimental native DV bridge (requires patched dependencies)" OFF)
 +option(CB1_ENABLE_HDR10_AI "Build matched native HDR10 AI circuits" OFF)
-+option(CB1_ENABLE_MASTER_IPT "Build the diagnostic Master Reference IPT circuit" OFF)
-+option(CB1_DEBUG_BUILD "Build bounded diagnostic logging and driver-profile controls" OFF)
 +set(DVBRIDGE_SOURCE_DIR "" CACHE PATH "DVBridge common source directory")
 +if(NOT EXISTS "${DVBRIDGE_SOURCE_DIR}/dvbridge_metadata_bounds.h")
 +  message(FATAL_ERROR "DVBRIDGE_SOURCE_DIR must provide the shared metadata validation headers")
@@ -7779,12 +7777,6 @@ diff --git a/CMakeLists.txt b/CMakeLists.txt
 +if(ENABLE_DVBRIDGE)
 +  # Headers change class layout: every translation unit must use the same ABI.
 +  add_compile_definitions(HAVE_DVBRIDGE=1)
-+  if(CB1_ENABLE_MASTER_IPT)
-+    add_compile_definitions(CB1_ENABLE_MASTER_IPT=1)
-+  endif()
-+  if(CB1_DEBUG_BUILD)
-+    add_compile_definitions(CB1_DEBUG_BUILD=1)
-+  endif()
 +  if(CB1_ENABLE_HDR10_AI)
 +    add_compile_definitions(CB1_HAS_HDR10_AI=1)
 +    include_directories("${DVBRIDGE_SOURCE_DIR}")
@@ -7805,7 +7797,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,295 @@
+@@ -25795,3 +25795,275 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -8081,26 +8073,6 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgid "Insufficient rendering headroom. Switching to Dolby Vision Standard."
 +msgstr ""
 +
-+msgctxt "#40916"
-+msgid "Dolby Vision Master Reference (IPT-PQc2)"
-+msgstr ""
-+
-+msgctxt "#40917"
-+msgid "Use standard LibreELEC drivers (reboot required)"
-+msgstr ""
-+
-+msgctxt "#40918"
-+msgid "Use unmodified LibreELEC graphics drivers after restarting. Dolby Vision output may be unavailable."
-+msgstr ""
-+
-+msgctxt "#40919"
-+msgid "Driver profile selected. Restart to apply."
-+msgstr ""
-+
-+msgctxt "#40920"
-+msgid "Driver profile selection failed. Check kodi.log."
-+msgstr ""
-+
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
@@ -8167,131 +8139,6 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +    </focusedlayout>
 +  </include>
  </includes>
-diff --git a/system/settings/settings.xml b/system/settings/settings.xml
---- a/system/settings/settings.xml
-+++ b/system/settings/settings.xml
-@@ -2,6 +2,106 @@
- <settings version="1">
-   <section id="player" label="14200" help="38100">
-     <category id="videoplayer" label="14215" help="38103">
-+      <group id="99" label="40810">
-+        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
-+          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
-+          <constraints><options>
-+            <option label="40867">1</option><option label="40868">2</option>
-+            <option label="40866">0</option>
-+          </options></constraints>
-+          <control type="list" format="string"><usedetails>true</usedetails></control>
-+        </setting>
-+        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>0</level>
-+          <default>0</default>
-+          <constraints>
-+            <options>
-+              <option label="40812">0</option>
-+              <option label="40913">4</option>
-+              <option label="40916">6</option>
-+              <option label="40914">5</option>
-+              <option label="40814">2</option>
-+              <option label="40813">1</option>
-+            </options>
-+          </constraints>
-+          <control type="list" format="string"><usedetails>true</usedetails></control>
-+        </setting>
-+        <setting id="dvbridge.hdr10method" type="integer" label="40820" help="40821">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>2</level><default>0</default>
-+          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">1</dependency></dependencies>
-+          <constraints><options>
-+            <option label="40822">0</option><option label="40823">1</option>
-+          </options></constraints>
-+          <control type="list" format="string"><usedetails>true</usedetails></control>
-+        </setting>
-+        <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>0</level><default>0</default>
-+          <dependencies><dependency type="visible"><or>
-+            <condition setting="dvbridge.outputmode" operator="is">3</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-+            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-+          </or></dependency></dependencies>
-+          <constraints><minimum>0</minimum><maximum>10000</maximum><step>1</step></constraints>
-+          <control type="edit" format="number" />
-+        </setting>
-+        <setting id="dvbridge.tvpanel" type="integer" label="40831" help="40832">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>2</level><default>0</default>
-+          <visible>false</visible>
-+          <constraints><options><option label="40833">0</option><option label="40834">1</option><option label="40835">2</option></options></constraints>
-+          <control type="spinner" format="string" />
-+        </setting>
-+        <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>0</level><default>2</default>
-+          <dependencies><dependency type="visible"><or>
-+            <condition setting="dvbridge.outputmode" operator="is">3</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-+            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-+          </or></dependency></dependencies>
-+          <constraints><options><option label="40833">0</option><option label="40838">1</option><option label="40839">2</option><option label="40840">3</option></options></constraints>
-+          <control type="spinner" format="string" />
-+        </setting>
-+        <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>2</level>
-+          <default>true</default>
-+          <control type="toggle" />
-+        </setting>
-+        <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
-+          <dependencies><dependency type="visible"><or>
-+            <condition setting="dvbridge.outputmode" operator="is">3</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-+            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-+          </or></dependency></dependencies>
-+          <control type="button" format="action" />
-+        </setting>
-+        <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
-+          <control type="toggle" />
-+        </setting>
-+        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
-+          <control type="toggle" />
-+        </setting>
-+        <setting id="dvbridge.fastchroma" type="integer" label="40904" help="40905">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>2</default>
-+          <constraints><options><option label="106">0</option><option label="107">1</option><option label="16316">2</option></options></constraints>
-+          <control type="list" format="string" />
-+        </setting>
-+        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
-+          <constraints><options><option label="40910">0</option><option label="40909">1</option></options></constraints>
-+          <control type="list" format="string" />
-+        </setting>
-+      </group>
-       <group id="1" label="14230">
-         <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
-           <constraints>
-@@ -3900,6 +4000,14 @@
-       </group>
-     </category>
-     <category id="logging" label="14092" help="36391">
-+      <group id="99" label="40810">
-+        <setting id="debug.cb1standarddrivers" type="boolean" label="40917" help="40918">
-+          <requirement>HAVE_CB1_DEBUG</requirement>
-+          <level>2</level><default>false</default>
-+          <dependencies><dependency type="enable" on="property" name="cb1driverprofilesavailable" /></dependencies>
-+          <control type="toggle" />
-+        </setting>
-+      </group>
-       <group id="1" label="14260">
-         <setting id="debug.showloginfo" type="boolean" label="20191" help="36392">
-           <level>1</level>
 diff --git a/xbmc/addons/Skin.cpp b/xbmc/addons/Skin.cpp
 --- a/xbmc/addons/Skin.cpp
 +++ b/xbmc/addons/Skin.cpp
@@ -8365,7 +8212,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        (avctx->codec_id == AV_CODEC_ID_VC1 && avctx->profile == AV_PROFILE_UNKNOWN))
    {
      AVPixelFormat defaultFmt = avcodec_default_get_format(avctx, fmt);
-@@ -334,7 +355,16 @@
+@@ -334,7 +355,15 @@
    }
  
    m_hints = hints;
@@ -8374,7 +8221,6 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    m_options = options;
 +#ifdef HAVE_DVBRIDGE
 +  m_dvNativeOutput = DVBRIDGE::RetainsDVSource(hints);
-+  m_iptDoviSource = false;
 +  m_dvSourceOwner.BeginStream();
 +  m_dvHasStreamDisplayMetadata = false;
 +  m_dvHasStreamLightMetadata = false;
@@ -8382,7 +8228,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    const AVCodec* pCodec = nullptr;
  
-@@ -434,6 +464,44 @@
+@@ -434,6 +463,44 @@
      av_opt_set(m_pCodecContext, it->m_name.c_str(), it->m_value.c_str(), 0);
    }
  
@@ -8427,7 +8273,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
    {
      CLog::Log(LOGDEBUG,"CDVDVideoCodecFFmpeg::Open() Unable to open codec");
-@@ -472,11 +540,41 @@
+@@ -472,11 +539,40 @@
  
    m_dropCtrl.Reset(true);
    m_eof = false;
@@ -8464,12 +8310,11 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +  m_dvFel.reset();
 +  m_dvFailed = false;
 +  m_dvNativeOutput = false;
-+  m_iptDoviSource = false;
 +#endif
    av_frame_free(&m_pFrame);
    av_frame_free(&m_pDecodedFrame);
    av_frame_free(&m_pFilterFrame);
-@@ -619,6 +717,11 @@
+@@ -619,6 +715,11 @@
    avpkt->side_data_elems = packet.iSideDataElems;
  
    int ret = avcodec_send_packet(m_pCodecContext, avpkt);
@@ -8481,7 +8326,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -656,6 +759,79 @@
+@@ -656,6 +757,79 @@
  }
  
  CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPicture)
@@ -8561,7 +8406,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  {
    if (!m_startedInput)
    {
-@@ -793,21 +969,8 @@
+@@ -793,21 +967,8 @@
    }
  
    // here we got a frame
@@ -8585,7 +8430,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +998,9 @@
+@@ -835,6 +996,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -8595,7 +8440,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1062,13 @@
+@@ -896,8 +1060,13 @@
          need_reopen = true;
      }
  
@@ -8610,7 +8455,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1097,22 @@
+@@ -926,6 +1095,22 @@
    return VC_NONE;
  }
  
@@ -8633,7 +8478,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1141,14 @@
+@@ -954,6 +1139,14 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -8648,7 +8493,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1164,7 @@
+@@ -969,6 +1162,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -8656,7 +8501,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1188,48 @@
+@@ -992,8 +1186,48 @@
    return VC_REOPEN;
  }
  
@@ -8705,7 +8550,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1281,10 @@
+@@ -1045,6 +1279,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -8716,28 +8561,17 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1338,20 @@
+@@ -1098,6 +1336,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
 +#ifdef HAVE_DVBRIDGE
 +  bool retainStaticDV = m_dvNativeOutput;
-+  // TS and headerless remuxes can carry valid RPUs without a container DV record.
-+  if (DVBRIDGE::playbackMode.load() == DVBRIDGE::OutputMode::MasterReferenceIPT)
-+  {
-+    const auto* metadata = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_METADATA);
-+    m_iptDoviSource |= metadata && dvbridge_metadata_bounds(metadata->data, metadata->size);
-+    if (m_iptDoviSource)
-+    {
-+      pVideoPicture->hdrType = StreamHdrType::HDR_TYPE_DOLBYVISION;
-+      retainStaticDV = true;
-+    }
-+  }
 +#endif
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1388,23 @@
+@@ -1134,7 +1375,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
@@ -8762,7 +8596,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,35 +1415,89 @@
+@@ -1145,35 +1402,89 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
@@ -8867,7 +8701,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
            }
          }
        }
-@@ -1193,6 +1517,9 @@
+@@ -1193,6 +1504,9 @@
      }
    }
  
@@ -8877,7 +8711,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1571,7 @@
+@@ -1244,7 +1558,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -8886,7 +8720,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1629,20 @@
+@@ -1302,7 +1616,20 @@
      return result;
    }
  
@@ -8908,7 +8742,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1657,22 @@
+@@ -1317,7 +1644,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -8932,7 +8766,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1708,8 @@
+@@ -1353,6 +1695,8 @@
      return result;
    }
  
@@ -8941,7 +8775,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1726,8 @@
+@@ -1369,6 +1713,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -8950,7 +8784,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1735,7 @@
+@@ -1376,6 +1722,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -8958,7 +8792,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1746,14 @@
+@@ -1386,7 +1733,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -8974,7 +8808,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1778,18 @@
+@@ -1411,6 +1765,18 @@
      return VC_ERROR;
    }
  
@@ -8993,7 +8827,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1421,6 +1800,31 @@
+@@ -1421,6 +1787,31 @@
  {
    return m_iLastKeyframe;
  }
@@ -9025,7 +8859,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-@@ -1497,4 +1901,3 @@
+@@ -1497,4 +1888,3 @@
  {
    return m_pHardware;
  }
@@ -9052,7 +8886,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
  
  extern "C"
  {
-@@ -46,8 +52,37 @@
+@@ -46,8 +52,36 @@
  
    IHardwareDecoder* GetHWAccel() override;
    bool GetPictureCommon(VideoPicture* pVideoPicture) override;
@@ -9079,7 +8913,6 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
 +  std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
 +  bool m_dvFailed{false};
 +  bool m_dvNativeOutput{false};
-+  bool m_iptDoviSource{false};
 +  DVBRIDGE::SourceOwner m_dvSourceOwner;
 +  // Last in-band HDR10 static metadata of this stream (see GetPictureCommon).
 +  bool m_dvHasStreamDisplayMetadata{false};
@@ -9090,7 +8923,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
    void Dispose();
    CDVDVideoCodec::VCReturn HandleHwFatal();
    static enum AVPixelFormat GetFormat(struct AVCodecContext * avctx, const AVPixelFormat * fmt);
-@@ -58,6 +93,7 @@
+@@ -58,6 +92,7 @@
    void SetFilters();
    void UpdateName();
    bool SetPictureParams(VideoPicture* pVideoPicture);
@@ -9098,7 +8931,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
  
    bool HasHardware() { return m_pHardware != nullptr; }
    void SetHardware(IHardwareDecoder *hardware);
-@@ -71,10 +107,16 @@
+@@ -71,10 +106,16 @@
    std::string m_filters_next;
    AVFilterGraph* m_pFilterGraph = nullptr;
    AVFilterContext* m_pFilterIn = nullptr;
@@ -9119,7 +8952,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/c
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,82 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9165,7 +8998,7 @@ new file mode 100644
 +    return result;
 +  }
 +  auto policy = preferences.Policy();
-+  if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && !policy.master_ipt && preferences.fastRenderingMode == 2 &&
++  if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && preferences.fastRenderingMode == 2 &&
 +      automaticFastRendering.load())
 +    policy.mode = DVBRIDGE_MODE_STANDARD;
 +  const auto admission = [&](dvbridge_mode mode) {
@@ -9183,7 +9016,6 @@ new file mode 100644
 +    return {requestedDV ? OutputRoute::NativeDV : OutputRoute::HDR10, policy, OutputReason::None};
 +  result.reason = !(requestedDV ? caps.nativeDV : caps.hdr10) ?
 +      (requestedDV ? OutputReason::NoDVTransport : OutputReason::NoHDR10Transport) : candidate.reason;
-+  if (policy.master_ipt) return result;
 +  if (!requestedDV) return result;
 +  if (!caps.hdr10)
 +  {
@@ -9197,7 +9029,6 @@ new file mode 100644
 +    return result;
 +  }
 +  policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
-+  policy.master_ipt = false;
 +  policy.adaptive = DVBRIDGE_ADAPTIVE_A;
 +  policy.tv = {};
 +  return {OutputRoute::HDR10, policy, result.reason};
@@ -9208,7 +9039,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,195 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -9228,7 +9059,7 @@ new file mode 100644
 +
 +namespace DVBRIDGE
 +{
-+enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5, MasterReferenceIPT = 6 };
++enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5 };
 +enum class HDR10SourceMode : int { Native = 0, ReferenceDV = 1, EnhancedDV = 2 };
 +
 +// Decoder ingress sees the last complete frame-boundary preference snapshot.
@@ -9239,7 +9070,7 @@ new file mode 100644
 +#ifdef HAVE_DVBRIDGE
 +inline int PolicyCode(const dvbridge_policy& policy)
 +{
-+  return policy.master_ipt ? 7 : policy.mode==DVBRIDGE_MODE_ENHANCED_DV && policy.adaptive!=DVBRIDGE_ADAPTIVE_A ? 6 : int(policy.mode);
++  return policy.mode==DVBRIDGE_MODE_ENHANCED_DV && policy.adaptive!=DVBRIDGE_ADAPTIVE_A ? 6 : int(policy.mode);
 +}
 +#endif
 +
@@ -9296,8 +9127,6 @@ new file mode 100644
 +        result.adaptive=DVBRIDGE_ADAPTIVE_B_FP16;
 +        break;
 +      case OutputMode::MasterReference: result.mode = DVBRIDGE_MODE_MASTER_REFERENCE; break;
-+      case OutputMode::MasterReferenceIPT:
-+        result.mode=DVBRIDGE_MODE_MASTER_REFERENCE; result.master_ipt=true; break;
 +      case OutputMode::HDR10:
 +        result.mode = method == 1 ? DVBRIDGE_MODE_HDR10_EXPERT : DVBRIDGE_MODE_HDR10_BASIC;
 +        break;
@@ -9312,7 +9141,6 @@ new file mode 100644
 +  dvbridge_policy HDR10Policy() const
 +  {
 +    auto result = Policy();
-+    result.master_ipt=false;
 +    result.adaptive=DVBRIDGE_ADAPTIVE_A;
 +    result.mode = hdr10Source == HDR10SourceMode::ReferenceDV ? DVBRIDGE_MODE_STANDARD :
 +        hdr10Source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
@@ -9346,7 +9174,7 @@ new file mode 100644
 +  const int mode = settings ? settings->GetInt("dvbridge.outputmode") : 0;
 +  OutputPreferences next;
 +  next.output = mode == 3 ? OutputMode::AdaptiveB :
-+      mode >= 0 && mode <= 6 ? static_cast<OutputMode>(mode) : OutputMode::Standard;
++      mode >= 0 && mode <= 5 ? static_cast<OutputMode>(mode) : OutputMode::Standard;
 +  if (settings)
 +  {
 +    const int hdr10 = settings->GetInt("dvbridge.hdr10source");
@@ -9411,7 +9239,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/core
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,134 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <atomic>
@@ -9484,7 +9312,6 @@ new file mode 100644
 +      case 3: return "HDR10 Reference Expert";
 +      case 4: return "Dolby Vision Adaptive HDR Mapping";
 +      case 5: return "Dolby Vision Master Reference";
-+      case 7: return "Dolby Vision Master Reference (IPT-PQc2)";
 +      case 6: return "Dolby Vision Adaptive HDR Mapping";
 +      default: return output.flags & HDR10 ? "HDR10 Reference Basic" : "Dolby Vision Standard";
 +    }
@@ -9501,7 +9328,6 @@ new file mode 100644
 +      case 3:return "HDR10 Reference Expert";
 +      case 4:return "Dolby Vision Adaptive HDR Mapping";
 +      case 5:return "Dolby Vision Master Reference";
-+      case 7:return "Dolby Vision Master Reference (IPT-PQc2)";
 +      case 6:return "Dolby Vision Adaptive HDR Mapping";
 +      default:return "";
 +    }
@@ -9511,7 +9337,6 @@ new file mode 100644
 +  {
 +    if (!output.flags) return "Kodi default";
 +    std::string mode = output.flags & HDR10 ? Policy(output) :
-+        output.effective == 7 ? "Dolby Vision Master Reference (IPT-PQc2)" :
 +        output.effective == 6 ? "Dolby Vision Adaptive HDR Mapping" :
 +        output.effective == 5 ? "Dolby Vision Master Reference" :
 +        output.effective == 4 ? "Dolby Vision Adaptive HDR Mapping" : "Dolby Vision Standard";
@@ -9553,7 +9378,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-@@ -0,0 +1,412 @@
+@@ -0,0 +1,411 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -9642,7 +9467,6 @@ new file mode 100644
 +        if (effective==3) return cb1_circuit_version(CB1_DV_HDR10_EXPERT);
 +        if (effective==4) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE);
 +        if (effective==5) return cb1_circuit_version(CB1_DV_DV_MASTER_REFERENCE);
-+        if (effective==7) return cb1_circuit_version(CB1_DV_DV_MASTER_IPT);
 +        if (effective==6) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE_B);
 +      }
 +      return "";
@@ -10866,7 +10690,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2066 @@
+@@ -0,0 +1,2052 @@
 +/* SPDX-License-Identifier: GPL-3.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11906,16 +11730,6 @@ new file mode 100644
 +    if(m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE)
 +    {
 +      auto renderMaster=dvbridge_render_master_reference;
-+#ifdef CB1_ENABLE_MASTER_IPT
-+      if(m_requested.output==DVBRIDGE::OutputMode::MasterReferenceIPT)
-+        renderMaster=dvbridge_render_master_reference_ipt;
-+#else
-+      if(m_requested.output==DVBRIDGE::OutputMode::MasterReferenceIPT)
-+      {
-+        Failure("master-ipt-not-built");
-+        return false;
-+      }
-+#endif
 +      const auto status=renderMaster(m_renderer,&bl.frame,metadata.Data(),metadata.Size(),
 +          base.pts,elPts,geometry,m_scanout,true,m_nativeOverlayEnabled ? &m_nativeOverlay : nullptr);
 +      m_direct=status==CB1_MASTER_READY;
@@ -12037,7 +11851,6 @@ new file mode 100644
 +        DVBRIDGE_MODE_HDR10_BASIC : DVBRIDGE_MODE_STANDARD;
 +    policy.tv = {};
 +    policy.adaptive = DVBRIDGE_ADAPTIVE_A;
-+    policy.master_ipt = false;
 +  }
 +  // Capture the proven observation key before geometry or refresh rekeys work.
 +  const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
@@ -12342,7 +12155,6 @@ new file mode 100644
 +
 +bool CDVBridgeGLES::ReadScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
 +{
-+  if(m_requested.output==DVBRIDGE::OutputMode::MasterReferenceIPT)return false;
 +  using namespace KODI::RENDERING::CAPTURE;
 +  const bool master=m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE;
 +  if (!m_prepared || (master && !m_direct)) return false;
@@ -12813,8 +12625,6 @@ new file mode 100644
 +  output.fastChroma = m_requested.EffectiveFastChroma(m_effectiveMode, CDVPlaybackInfo::IsHDR10AI(output));
 +  output.fastRenderingMode = m_requested.EffectiveFastRenderingMode(m_effectiveMode, CDVPlaybackInfo::IsHDR10AI(output));
 +  output.effective = static_cast<int>(m_effectiveMode);
-+  if(m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE &&
-+      m_requested.output==DVBRIDGE::OutputMode::MasterReferenceIPT)output.effective=7;
 +  if(m_effectiveMode==DVBRIDGE_MODE_ENHANCED_DV &&
 +#ifdef CB1_HAS_HDR10_AI
 +      !output.hdr10AI &&
@@ -12937,7 +12747,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,198 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVPlaybackModes.h"
 +#ifdef HAVE_DVBRIDGE
@@ -12966,39 +12776,6 @@ new file mode 100644
 +#include "threads/IRunnable.h"
 +#include <cstdio>
 +
-+#ifdef CB1_DEBUG_BUILD
-+namespace
-+{
-+bool DriverProfileCommand(const char* command, CVariant& status)
-+{
-+  const std::string invocation = std::string("/usr/bin/cb1-driver-profile ") + command;
-+  FILE* pipe = popen(invocation.c_str(), "r");
-+  if (!pipe) return false;
-+  std::string output;
-+  char buffer[512];
-+  while (fgets(buffer, sizeof(buffer), pipe) && output.size() < 16384)
-+    output += buffer;
-+  const int result = pclose(pipe);
-+  return result == 0 && output.size() < 16384 && CJSONVariantParser::Parse(output, status);
-+}
-+
-+bool SelectDriverProfile(bool standard, CVariant& status)
-+{
-+  struct Selection : IRunnable
-+  {
-+    Selection(bool selected, CVariant& output) : standard(selected), status(output) {}
-+    bool standard;
-+    CVariant& status;
-+    bool success{false};
-+    void Run() override
-+    {
-+      success = DriverProfileCommand(standard ? "select standard" : "select modified", status);
-+    }
-+  } selection(standard, status);
-+  return CGUIDialogBusy::Wait(&selection, 100, false) && selection.success;
-+}
-+}
-+#endif
 +
 +CDVPlaybackModes& CDVPlaybackModes::GetInstance()
 +{
@@ -13061,9 +12838,6 @@ new file mode 100644
 +  const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
 +  struct Choice { int output,method,label; };
 +  constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
-+#ifdef CB1_ENABLE_MASTER_IPT
-+      {6,0,40916},
-+#endif
 +      {5,0,40914},
 +      {2,0,40814},{1,0,40822},{1,1,40823}};
 +  const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
@@ -13142,63 +12916,8 @@ new file mode 100644
 +  if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
 +}
 +
-+bool CDVPlaybackModes::DriverProfilesAvailable()
-+{
-+  return GetInstance().m_driverProfilesAvailable;
-+}
 +
-+void CDVPlaybackModes::OnSettingsLoaded()
-+{
-+#ifdef CB1_DEBUG_BUILD
-+  CVariant status;
-+  m_driverProfilesAvailable = DriverProfileCommand("status", status) && status["available"].asBoolean();
-+  CLog::Log(LOGINFO, "CB1 driver profile: active={} pending={} available={} reason={}",
-+      status["active"].asString(), status["pending"].asString(), m_driverProfilesAvailable,
-+      status["reason"].asString());
-+  if (m_driverProfilesAvailable)
-+    CLog::Log(LOGINFO, "CB1 Debug boot: build={} kernel={} kernel_sha256={} system_sha256={} modules_sha256={}",
-+        status["build"]["id"].asString(), status["kernel_release"].asString(),
-+        status["payloads"]["kernel"]["sha256"].asString(),
-+        status["payloads"]["system"]["sha256"].asString(),
-+        status["payloads"]["modules_sha256"].asString());
-+  if (m_driverProfilesAvailable)
-+  {
-+    m_standardProfile = status["pending"].asString() == "standard";
-+    m_syncingProfile = true;
-+    CServiceBroker::GetSettingsComponent()->GetSettings()->SetBool(
-+        "debug.cb1standarddrivers", m_standardProfile);
-+    m_syncingProfile = false;
-+  }
-+#endif
-+}
 +
-+bool CDVPlaybackModes::OnSettingChanging(const std::shared_ptr<const CSetting>& setting)
-+{
-+#ifdef CB1_DEBUG_BUILD
-+  if (!setting || setting->GetId() != "debug.cb1standarddrivers" || m_syncingProfile)
-+    return true;
-+  const bool standard = std::static_pointer_cast<const CSettingBool>(setting)->GetValue();
-+  // Kodi repeats this callback with the previous value after a refused change.
-+  if (standard == m_standardProfile) return true;
-+  CVariant status;
-+  const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
-+  if (!SelectDriverProfile(standard, status) ||
-+      !status["available"].asBoolean() ||
-+      status["pending"].asString() != (standard ? "standard" : "modified"))
-+  {
-+    CLog::Log(LOGERROR, "CB1 driver profile selection refused: {}", status["reason"].asString());
-+    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
-+        strings.Get(40917), strings.Get(40920), 5000, false);
-+    return false;
-+  }
-+  m_standardProfile = standard;
-+  CLog::Log(LOGINFO, "CB1 driver profile selected: active={} pending={} reboot_required=true",
-+      status["active"].asString(), status["pending"].asString());
-+  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
-+      strings.Get(40917), strings.Get(40919), 3000, false);
-+#endif
-+  return true;
-+}
 +
 +void DVBRIDGE::PlaybackNotification::Emit(const std::string& text)
 +{
@@ -13231,28 +12950,20 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.h b/xbmc/dialogs/DVPlaybackModes.h
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,15 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#ifdef HAVE_DVBRIDGE
 +#include "settings/lib/ISettingCallback.h"
-+#include "settings/lib/ISettingsHandler.h"
 +
-+class CDVPlaybackModes : public ISettingCallback, public ISettingsHandler
++class CDVPlaybackModes : public ISettingCallback
 +{
 +public:
 +  static CDVPlaybackModes& GetInstance();
 +  static bool MenuEnabled();
 +  static bool ShowMenu();
 +  static bool ConfigureProfile();
-+  static bool DriverProfilesAvailable();
-+  bool OnSettingChanging(const std::shared_ptr<const CSetting>& setting) override;
-+  void OnSettingsLoaded() override;
 +  void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
-+private:
-+  bool m_syncingProfile{false};
-+  bool m_driverProfilesAvailable{false};
-+  bool m_standardProfile{false};
 +};
 +#endif
 diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
@@ -13671,27 +13382,20 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
  
  namespace
  {
-@@ -366,6 +374,19 @@
+@@ -366,6 +374,12 @@
  #endif
  #ifdef HAVE_GBM
    m_simpleConditions.emplace("have_gbm");
 +#endif
 +#ifdef HAVE_DVBRIDGE
 +  m_simpleConditions.emplace("have_dvbridge");
-+#ifdef CB1_DEBUG_BUILD
-+  m_simpleConditions.emplace("have_cb1_debug");
-+  m_complexConditions.try_emplace("cb1driverprofilesavailable",
-+      [](const std::string&, const std::string&, const SettingConstPtr&) {
-+        return CDVPlaybackModes::DriverProfilesAvailable();
-+      });
-+#endif
 +#endif
 +#ifdef CB1_HAS_HDR10_AI
 +  m_simpleConditions.emplace("have_cb1_hdr10_ai");
  #endif
  #ifdef HAS_GL
    m_simpleConditions.emplace("has_gl");
-@@ -488,6 +509,83 @@
+@@ -488,6 +502,76 @@
    m_complexConditions.try_emplace("lte", LessThanOrEqual);
  }
  
@@ -13722,14 +13426,7 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
 +  const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
 +  const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
 +  constexpr int menuModes[]{1,5,
-+#ifdef CB1_ENABLE_MASTER_IPT
-+      5,
-+#endif
 +      4,0,2,3};
-+#ifndef CB1_ENABLE_MASTER_IPT
-+  if (!menu && !hdr10Menu && !method && !hdr10Source)
-+    std::erase_if(list, [](const auto& option) { return option.value == 6; });
-+#endif
 +#ifdef CB1_HAS_HDR10_AI
 +  constexpr int hdr10MenuModes[]{1,4,0};
 +#else
@@ -13741,7 +13438,7 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
 +        hdr10Source ? (option.value==1 ? 1 : option.value==2 ? 4 : 0) :
 +        menu ? (option.value>=0 && option.value<int(std::size(menuModes)) ? menuModes[option.value] : 0) :
 +        method ? (option.value==0 ? 2 : option.value==1 ? 3 : 0) :
-+        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 || option.value==6 ? 5 : 0);
++        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
 +    auto reason=DVBRIDGE::OutputReason::None;
 +    if (mode)
 +    {
@@ -13830,38 +13527,36 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
  
    return Load(static_cast<const TiXmlNode*>(root));
  }
-@@ -535,6 +571,9 @@
+@@ -535,6 +571,8 @@
  
  void CSettings::InitializeISettingsHandlers()
  {
 +#ifdef HAVE_DVBRIDGE
-+  GetSettingsManager()->RegisterSettingsHandler(&CDVPlaybackModes::GetInstance());
 +#endif
    // register ISettingsHandler implementations
    // The order of these matters! Handlers are processed in the order they were registered.
    GetSettingsManager()->RegisterSettingsHandler(&CMediaSourceSettings::GetInstance());
-@@ -549,6 +588,9 @@
+@@ -549,6 +587,8 @@
  
  void CSettings::UninitializeISettingsHandlers()
  {
 +#ifdef HAVE_DVBRIDGE
-+  GetSettingsManager()->UnregisterSettingsHandler(&CDVPlaybackModes::GetInstance());
 +#endif
    // unregister ISettingsHandler implementations
    GetSettingsManager()->UnregisterSettingsHandler(&CMediaSettings::GetInstance());
    GetSettingsManager()->UnregisterSettingsHandler(&g_langInfo);
-@@ -582,6 +624,10 @@
+@@ -582,6 +622,10 @@
  
  void CSettings::InitializeISettingCallbacks()
  {
 +#ifdef HAVE_DVBRIDGE
 +  GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
-+      {"dvbridge.configureprofile", "debug.cb1standarddrivers"});
++      {"dvbridge.configureprofile"});
 +#endif
    // register any ISettingCallback implementations
    GetSettingsManager()->RegisterCallback(
        &CMediaSettings::GetInstance(),
-@@ -644,6 +690,9 @@
+@@ -644,6 +688,9 @@
  
  void CSettings::UninitializeISettingCallbacks()
  {
@@ -13875,7 +13570,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticLog.h b/xbmc/utils/DVBridgeDiagnosticL
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticLog.h
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,157 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeDiagnosticState.h"
@@ -13927,10 +13622,6 @@ new file mode 100644
 +  message += fmt::format(" stream={} picture={} revision={} policy={} suppressed={} truncations={}",
 +      diagnosticSession.Stream(), diagnosticSession.Picture(), diagnosticSession.Revision(),
 +      diagnosticSession.Policy(), diagnosticSession.Suppressed(), diagnosticSession.Truncations());
-+#ifdef CB1_DEBUG_BUILD
-+  // Expose bounded diagnostic details without enabling Kodi's global debug log.
-+  if (level == LOGDEBUG) level = LOGINFO;
-+#endif
 +  CLog::Log(level, "{}", message);
 +  return true;
 +}
@@ -15090,7 +14781,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +917,1566 @@
+@@ -397,13 +917,1565 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -15970,7 +15661,6 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  if (capabilities.processingKnown && capabilities.isDV &&
 +      (m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 || !capabilities.nativeDV) &&
 +      preferences.output != DVBRIDGE::OutputMode::HDR10 &&
-+      preferences.output != DVBRIDGE::OutputMode::MasterReferenceIPT &&
 +      preferences.output != DVBRIDGE::OutputMode::Disabled)
 +  {
 +    std::lock_guard lock(m_dvCapabilityMutex);
@@ -15982,7 +15672,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  const bool ordinaryBL = !source.profile || source.profile == 7 ||
 +      source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
 +  if (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla && capabilities.processingKnown &&
-+      (!ordinaryBL || (capabilities.isDV && preferences.output == DVBRIDGE::OutputMode::MasterReferenceIPT)) &&
++      !ordinaryBL &&
 +      preferences.output != DVBRIDGE::OutputMode::Disabled &&
 +      !(source.el && !picture.doviEnhancement))
 +  {
@@ -16660,7 +16350,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2490,16 @@
+@@ -417,5 +2489,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }

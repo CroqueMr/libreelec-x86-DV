@@ -10,20 +10,6 @@
 ################################################################################
 
 # set variables
-if [ "${CB1_DEBUG:-no}" = "yes" ] || [ -n "${CB1_DEBUG_PROFILES_DIR:-}" ]; then
-  if [ "${CB1_DEBUG:-no}" != "yes" ] || [ -z "${CB1_DEBUG_PROFILES_DIR:-}" ] ||
-     [ "${PROJECT}" != "Generic" ] || [ "${BOOTLOADER}" != "syslinux" ] || [ "${KERNEL_NAME}" != "KERNEL" ]; then
-    echo "mkimage: complete paired Debug payloads are required for Generic syslinux."
-    exit 1
-  fi
-  if ! python3 "${SCRIPTS}/cb1-debug-profiles.py" --check "${CB1_DEBUG_PROFILES_DIR}" \
-      --capacity "$((SYSTEM_SIZE * 1024 * 1024))" \
-      --kernel "${TARGET_IMG}/${BUILD_NAME}.kernel" --system "${TARGET_IMG}/${BUILD_NAME}.system"; then
-    echo "mkimage: paired Debug preflight failed; no disk image created."
-    exit 1
-  fi
-fi
-
 IMG_TMP=$(mktemp -d -p ${TARGET_IMG})
 SAVE_ERROR="${IMG_TMP}/save_error"
 
@@ -206,10 +192,6 @@ EOF
   mcopy "${TARGET_IMG}/${BUILD_NAME}.system" ::/SYSTEM >"${SAVE_ERROR}" 2>&1 || show_error
   mcopy "${RELEASE_DIR}/target/KERNEL.md5" "::/${KERNEL_NAME}.md5" >"${SAVE_ERROR}" 2>&1 || show_error
   mcopy "${RELEASE_DIR}/target/SYSTEM.md5" ::/SYSTEM.md5 >"${SAVE_ERROR}" 2>&1 || show_error
-
-  if [ -n "${CB1_DEBUG_PROFILES_DIR:-}" ]; then
-    mcopy -s "${CB1_DEBUG_PROFILES_DIR}/cb1" ::/ >"${SAVE_ERROR}" 2>&1 || show_error
-  fi
 
   mmd EFI EFI/BOOT >"${SAVE_ERROR}" 2>&1 || show_error
   mcopy "${TOOLCHAIN}/share/syslinux/bootx64.efi" ::/EFI/BOOT >"${SAVE_ERROR}" 2>&1 || show_error

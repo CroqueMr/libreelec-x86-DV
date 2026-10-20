@@ -40,7 +40,7 @@ void pl_color_repr_normalize(int*){}
 pl_transform3x3 pl_color_repr_decode(int*,void*){return {{{{1,0,0},{0,1,0},{0,0,1}}},{0,0,0}};}
 void pl_matrix3x3_mul(pl_matrix3x3*,const pl_matrix3x3*){}
 struct CDVPlaybackInfo {enum {FEL=2};};
-namespace DVBRIDGE {enum class OutputMode{MasterReference,MasterReferenceIPT};}
+namespace DVBRIDGE {enum class OutputMode{MasterReference};}
 struct CDVBridgeGLES {
  struct {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;}m_requested;
  int m_effectiveMode=5;bool m_prepared=true,m_direct=true;
@@ -62,8 +62,6 @@ int main(){
  bridge.m_effectiveMode=1;bridge.m_direct=false;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==16 && !flip && bridge.pqCalls==1);
  assert(out.format==AV_PIX_FMT_RGBA && out.stride==8);
- bridge.m_requested.output=DVBRIDGE::OutputMode::MasterReferenceIPT;
- assert(!bridge.ReadScreenshot(out));
 }
 '''.replace('@@BODY@@',implementation)
         with tempfile.TemporaryDirectory() as directory:

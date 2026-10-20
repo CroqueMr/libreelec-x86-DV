@@ -10,48 +10,6 @@ unset _CACHE_PACKAGE_LOCAL _CACHE_PACKAGE_GLOBAL _DEBUG_DEPENDS_LIST _DEBUG_PACK
 . config/multithread
 . config/show_config
 
-function cb1_debug_check_request() {
-  CB1_DEBUG_FINAL_PAIR=no
-  [ "${CB1_DEBUG:-no}" = yes ] || return 0
-  case "${CB1_DRIVER_PROFILE:-modified}" in
-    modified|standard) ;;
-    *) die "Invalid Debug driver profile" ;;
-  esac
-  case "${1:-}" in
-    noobs) die "Paired Debug does not support the separate NOOBS payload format" ;;
-    release|mkimage)
-      [ "${CB1_DRIVER_PROFILE:-modified}" = modified ] || die "Standard Debug is a component build, not a primary release"
-      [ "${PROJECT}" = Generic ] && [ "${BOOTLOADER}" = syslinux ] || die "Paired Debug requires Generic/syslinux"
-      [ -n "${CB1_DEBUG_PROFILES_DIR:-}" ] && [ -d "${CB1_DEBUG_PROFILES_DIR}/cb1" ] || die "Verified CB1_DEBUG_PROFILES_DIR required for final Debug packaging"
-      CB1_DEBUG_FINAL_PAIR=yes
-      ;;
-  esac
-}
-
-function cb1_debug_install_identity() {
-  if [ "${CB1_DEBUG:-no}" != yes ]; then
-    rm -f -- "${INSTALL}/usr/bin/cb1-driver-profile" \
-      "${INSTALL}/usr/lib/systemd/system/cb1-driver-profile.service"
-    return 0
-  fi
-  local paired=""
-  [ "${CB1_DEBUG_FINAL_PAIR:-no}" = yes ] && paired="${CB1_DEBUG_PROFILES_DIR}"
-  python3 "${SCRIPTS}/cb1-debug-build-info.py" --root "${ROOT}" --install "${INSTALL}" \
-    --build-id "${CUSTOM_VERSION}" --linux-version "$(get_pkg_version linux)" \
-    --linux-source-sha256 "$(get_pkg_variable linux PKG_SHA256)" --profiles-dir "${paired}" || die "Debug source identity verification failed"
-  enable_service cb1-driver-profile.service
-}
-
-function cb1_debug_stage_profiles() {
-  [ "${CB1_DEBUG:-no}" = yes ] || return 0
-  python3 "${SCRIPTS}/cb1-debug-profiles.py" --check "${CB1_DEBUG_PROFILES_DIR}" \
-    --kernel "${RELEASE_DIR}/target/KERNEL" --system "${RELEASE_DIR}/target/SYSTEM" || die "Debug pair verification failed"
-  [ ! -e "${RELEASE_DIR}/target/cb1" ] || die "Refusing to overwrite existing Debug profile payload"
-  cp -a -- "${CB1_DEBUG_PROFILES_DIR}/cb1" "${RELEASE_DIR}/target/cb1" || die "Cannot stage Debug profile payload"
-}
-
-cb1_debug_check_request "${1:-}"
-
 # Validate UBOOT_SYSTEM if it is specified
 if [ "${BOOTLOADER}" = "u-boot" ] && [ -n "${DEVICE}" ]; then
   if [ -z "${UBOOT_SYSTEM}" ]; then
@@ -98,8 +56,6 @@ function do_mkimage() {
     SYSTEM_PART_START="${SYSTEM_PART_START}" \
     STORAGE_SIZE="${STORAGE_SIZE:-32}" \
     OVA_SIZE="${OVA_SIZE}" \
-    CB1_DEBUG="${CB1_DEBUG:-no}" \
-    CB1_DEBUG_PROFILES_DIR="${CB1_DEBUG_PROFILES_DIR:-}" \
     ${SCRIPTS}/mkimage
 }
 
@@ -243,7 +199,7 @@ if [ -d "${PROJECT_DIR}/${PROJECT}/filesystem" ]; then
   cp -PR --remove-destination ${PROJECT_DIR}/${PROJECT}/filesystem/* ${INSTALL}
   # Install project specific systemd services
   for service in ${PROJECT_DIR}/${PROJECT}/filesystem/usr/lib/systemd/system/*.service; do
-    if [ -f "${service}" ] && [ "${service##*/}" != cb1-driver-profile.service ]; then
+    if [ -f "${service}" ]; then
       enable_service ${service##*/}
     fi
   done
@@ -254,13 +210,11 @@ if [ -n "${DEVICE}" ] && [ -d "${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/files
   cp -PR --remove-destination ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/filesystem/* ${INSTALL}
   # Install device specific systemd services
   for service in ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/filesystem/usr/lib/systemd/system/*.service; do
-    if [ -f "${service}" ] && [ "${service##*/}" != cb1-driver-profile.service ]; then
+    if [ -f "${service}" ]; then
       enable_service ${service##*/}
     fi
   done
 fi
-
-cb1_debug_install_identity
 
 # Replace placeholders with values in install script to eMMC
 if [ -f ${INSTALL}/usr/bin/install2emmc ]; then
@@ -290,13 +244,11 @@ ln -sT /run/kernel-overlays/firmware ${INSTALL}/usr/lib/firmware
 
 # Make target dir
 mkdir -p ${TARGET_IMG}
-if [ "${CB1_DEBUG_FINAL_PAIR:-no}" != yes ]; then
-  rm -rf ${TARGET_IMG}/${IMAGE_NAME}.kernel
+rm -rf ${TARGET_IMG}/${IMAGE_NAME}.kernel
 
-  # Copy kernel to target dir
-  cp -PR $(get_install_dir linux)/.image/${KERNEL_TARGET} ${TARGET_IMG}/${IMAGE_NAME}.kernel
-  chmod 0644 ${TARGET_IMG}/${IMAGE_NAME}.kernel
-fi
+# Copy kernel to target dir
+cp -PR $(get_install_dir linux)/.image/${KERNEL_TARGET} ${TARGET_IMG}/${IMAGE_NAME}.kernel
+chmod 0644 ${TARGET_IMG}/${IMAGE_NAME}.kernel
 
 # Set mksquashfs options for each compression method
 if [ -z "${SQUASHFS_COMPRESSION_OPTION}" ]; then
@@ -309,13 +261,6 @@ if [ -z "${SQUASHFS_COMPRESSION_OPTION}" ]; then
   fi
 fi
 
-if [ "${CB1_DEBUG_FINAL_PAIR:-no}" = yes ]; then
-  # Component builds prepared these exact files. Re-squashing here would change
-  # timestamps and invalidate the already-verified paired payload.
-  python3 "${SCRIPTS}/cb1-debug-profiles.py" --check "${CB1_DEBUG_PROFILES_DIR}" \
-    --kernel "${TARGET_IMG}/${IMAGE_NAME}.kernel" --system "${TARGET_IMG}/${IMAGE_NAME}.system" || die "Prepared native Debug pair differs"
-  echo "Using verified prepared Debug KERNEL/SYSTEM; not rebuilding primary payloads"
-else
 # Create squashfs file, default to gzip if no compression configured
 echo "rm -rf \"${TARGET_IMG}/${IMAGE_NAME}.system\"" >>${FAKEROOT_SCRIPT}
 echo "${TOOLCHAIN}/bin/mksquashfs \"${BUILD}/image/system\" \"${TARGET_IMG}/${IMAGE_NAME}.system\" -noappend -comp ${SQUASHFS_COMPRESSION:-gzip} ${SQUASHFS_COMPRESSION_OPTION}" >>${FAKEROOT_SCRIPT}
@@ -326,7 +271,6 @@ rm -rf ${FAKEROOT_SCRIPT}
 
 # Set permissions
 chmod 0644 ${TARGET_IMG}/${IMAGE_NAME}.system
-fi
 
 if [ "${1}" = "release" ] || [ "${1}" = "mkimage" ] || [ "${1}" = "noobs" ]; then
 
@@ -376,8 +320,6 @@ if [ "${1}" = "release" ] || [ "${1}" = "mkimage" ] || [ "${1}" = "noobs" ]; the
     md5sum -t target/SYSTEM >target/SYSTEM.md5
     md5sum -t target/KERNEL >target/KERNEL.md5
   )
-
-  cb1_debug_stage_profiles
 
   # Create target directory
   mkdir -p ${TARGET_IMG}

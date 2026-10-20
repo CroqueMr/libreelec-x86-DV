@@ -10,90 +10,6 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class MasterReferenceTests(unittest.TestCase):
-    def test_ipt_accepts_valid_inband_metadata_without_container_config(self):
-        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
-        decoder=(tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
-        start=decoder.index('  pVideoPicture->hdrType = m_hints.hdrType;')
-        end=decoder.index('  AVFrameSideData* sd;',start)
-        ingress=decoder[start:end]
-        program=r'''
-#include <atomic>
-#include <cassert>
-#include <cstddef>
-#define HAVE_DVBRIDGE
-namespace DVBRIDGE {enum class OutputMode{Standard,MasterReferenceIPT};std::atomic<OutputMode> playbackMode;}
-enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION};
-enum{AV_FRAME_DATA_DOVI_METADATA};
-struct Data{const unsigned char* data;size_t size;};
-auto av_frame_get_side_data(Data* frame,int){return frame;}
-bool dvbridge_metadata_bounds(const unsigned char* data,size_t size){return data && size==1 && *data==42;}
-bool m_iptDoviSource=false,m_dvNativeOutput=false,retained=false;
-StreamHdrType classify(DVBRIDGE::OutputMode mode,Data* m_pFrame){
- DVBRIDGE::playbackMode=mode;
- struct {StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;}m_hints,picture,*pVideoPicture=&picture;
- @@INGRESS@@
- retained=retainStaticDV;
- return picture.hdrType;
-}
-int main(){using M=DVBRIDGE::OutputMode;using H=StreamHdrType;
- const unsigned char valid=42,bad=0;Data good{&valid,1},invalid{&bad,1};
- assert(classify(M::MasterReferenceIPT,&good)==H::HDR_TYPE_DOLBYVISION);
- assert(retained);
- assert(classify(M::MasterReferenceIPT,nullptr)==H::HDR_TYPE_DOLBYVISION);
- assert(classify(M::MasterReferenceIPT,&invalid)==H::HDR_TYPE_DOLBYVISION);
- assert(classify(M::Standard,&good)==H::HDR_TYPE_HDR10);
- assert(!retained);
- m_iptDoviSource=false;
- assert(classify(M::MasterReferenceIPT,nullptr)==H::HDR_TYPE_HDR10);
- assert(classify(M::MasterReferenceIPT,&invalid)==H::HDR_TYPE_HDR10);
-}
-'''.replace('@@INGRESS@@',ingress)
-        with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);(root/'test.cpp').write_text(program)
-            built=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],text=True,capture_output=True)
-            self.assertEqual(built.returncode,0,built.stderr)
-            ran=subprocess.run([str(root/'test')],text=True,capture_output=True)
-            self.assertEqual(ran.returncode,0,ran.stderr)
-        self.assertIn('else if (retainStaticDV && m_dvHasStreamDisplayMetadata)',decoder)
-        self.assertIn('else if (retainStaticDV && m_dvHasStreamLightMetadata)',decoder)
-        self.assertEqual(decoder.count('m_iptDoviSource = false;'),2)
-
-    def test_ipt_rejection_never_enters_ordinary_or_hdr10_recovery(self):
-        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
-        window=(tree/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        fatal=re.search(r'if \((m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla && capabilities.processingKnown &&.*?)\)\n  \{',window,re.S).group(1)
-        fallback=re.search(r'if \((capabilities.processingKnown && capabilities.isDV &&.*?)\)\n  \{',window,re.S).group(1)
-        program=r'''
-#include <cassert>
-namespace DVBRIDGE {enum class OutputMode{Disabled,Standard,MasterReferenceIPT,HDR10};enum class OutputRoute{Vanilla,NativeDV,HDR10};}
-bool fails(bool dv,bool ordinaryBL,DVBRIDGE::OutputMode mode){
- struct{DVBRIDGE::OutputMode output;}preferences{mode};
- struct{DVBRIDGE::OutputRoute route;}m_dvSelection{DVBRIDGE::OutputRoute::Vanilla};
- struct{bool processingKnown=true;bool isDV;}capabilities{true,dv};
- struct{bool el=false;}source;struct{bool doviEnhancement=false;}picture;
- return @@FATAL@@;
-}
-bool recovers(DVBRIDGE::OutputMode mode){
- struct{DVBRIDGE::OutputMode output;}preferences{mode};
- struct{DVBRIDGE::OutputRoute route;}m_dvSelection{DVBRIDGE::OutputRoute::Vanilla};
- struct{bool processingKnown=true,isDV=true,nativeDV=false;}capabilities;
- return @@FALLBACK@@;
-}
-int main(){using M=DVBRIDGE::OutputMode;
- assert(fails(true,true,M::MasterReferenceIPT));
- assert(!fails(false,true,M::MasterReferenceIPT));
- assert(!fails(true,true,M::Standard));assert(fails(true,false,M::Standard));
- assert(!fails(true,true,M::Disabled));
- assert(!recovers(M::MasterReferenceIPT));assert(recovers(M::Standard));
-}
-'''.replace('@@FATAL@@',fatal).replace('@@FALLBACK@@',fallback)
-        with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);(root/'test.cpp').write_text(program)
-            built=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],text=True,capture_output=True)
-            self.assertEqual(built.returncode,0,built.stderr)
-            ran=subprocess.run([str(root/'test')],text=True,capture_output=True)
-            self.assertEqual(ran.returncode,0,ran.stderr)
-
     def test_master_async_uses_its_own_direct_admission(self):
         from test_native_video_source import body
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
@@ -255,23 +171,7 @@ int main(){
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_MASTER_REFERENCE)==0);
  automaticFastRendering.store(false);assert(SelectOutput(p,caps).policy.mode==5);
  p.fastRenderingMode=1;
- stored->ints["dvbridge.outputmode"]=6;
- auto ipt=FrameOutputSettings();assert(ipt.output==OutputMode::MasterReferenceIPT);
- assert(ipt.Policy().master_ipt && PolicyCode(ipt.Policy())==7);
- for(int fast=0;fast<3;fast++) {
-   ipt.fastRenderingMode=fast;automaticFastRendering.store(true);
-   auto selected=SelectOutput(ipt,caps);
-   assert(selected.policy.mode==5 && selected.policy.master_ipt);
-   assert(!ipt.EffectiveFastChroma(selected.policy.mode));
- }
- assert(!ipt.HDR10Policy().master_ipt);
  caps.processing[5]={false,OutputReason::SourceIneligible};
- auto blocked=SelectOutput(ipt,caps);
- assert(blocked.route==OutputRoute::Vanilla && blocked.reason==OutputReason::SourceIneligible);
- caps.processing[5]={true,OutputReason::None};caps.nativeDV=false;
- blocked=SelectOutput(ipt,caps);
- assert(blocked.route==OutputRoute::Vanilla && blocked.reason==OutputReason::NoDVTransport);
- caps.nativeDV=true;caps.processing[5]={false,OutputReason::SourceIneligible};
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::HDR10 && out.policy.mode==2);
  assert(out.reason==OutputReason::SourceIneligible);
  caps.isDV=false;caps.isHDR10=true;
@@ -299,8 +199,6 @@ int main(){
         self.assertIn('4',[o.text for o in node.findall('constraints/options/option')])
         bridge=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         self.assertIn('dvbridge_render_master_reference;',bridge)
-        self.assertIn('dvbridge_render_master_reference_ipt',bridge)
-        self.assertIn('6',[o.text for o in node.findall('constraints/options/option')])
         self.assertIn('master-reference-unavailable',bridge)
         panel=(tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         self.assertIn('Reference GPU',panel)

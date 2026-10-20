@@ -45,7 +45,6 @@ files; the combined program must also satisfy its linked dependencies.
 | --- | --- |
 | [cb1_circuit.c](../src/cb1_circuit.c) | GPL-3.0-or-later |
 | [cb1_circuit.h](../src/cb1_circuit.h) | GPL-3.0-or-later |
-| `cb1_master_ipt.c/.h`, `cb1_master_ipt_shader.h` (normal build disabled) | GPL-3.0-or-later |
 | `cb1_dv_enhanced_shader.h` (release sources) | GPL-3.0-only |
 | `cb1_dv_enhanced.c` (release sources) | GPL-3.0-only |
 | `cb1_dv_enhanced.h` (release sources) | GPL-3.0-only |

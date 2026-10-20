@@ -62,13 +62,9 @@ int main() {
  frame.identity.valid=true;frame.capabilities=window.available;
  frame.capabilities.sourceKnown=true;frame.capabilities.isDV=true;
  std::vector<IntegerSettingOption> choices;
- for(int value:{0,4,6,5,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
+ for(int value:{0,4,5,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
  CSettingConditions::DVOutputOptions(std::make_shared<CSetting>(),choices);
-#ifdef CB1_ENABLE_MASTER_IPT
- assert(choices.size()==6 && choices[2].value==6);
-#else
  assert(choices.size()==5 && std::none_of(choices.begin(),choices.end(),[](auto& x){return x.value==6;}));
-#endif
  assert(!disabled());
  // A prior failed atomic commit does not remove physically available transports.
  frame.capabilities.nativeDV=false;frame.capabilities.hdr10=false;
@@ -91,7 +87,7 @@ int main() {
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'test.cpp').write_text(program)
-            for flags in ([], ['-DCB1_ENABLE_MASTER_IPT=1']):
+            for flags in ([],):
                 built = subprocess.run(['c++', '-std=c++20', *flags, '-I' + str(tree / 'xbmc'),
                                     str(root / 'test.cpp'), '-o', str(root / 'test')],
                                    capture_output=True, text=True)

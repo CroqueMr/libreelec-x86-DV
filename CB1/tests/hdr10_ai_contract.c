@@ -16,14 +16,9 @@ int main(void)
         "CB1-DVDVA.0.9", NULL,
         NULL, NULL,
         "CB1-HDR10DVR.0.1.2", "CB1-HDR10DVA.0.4", "CB1-DVDVMR.0.4", "CB1-DVDVA.0.10",
-#ifdef CB1_ENABLE_MASTER_IPT
-        "CB1-DVDVMRI.0.1"
-#else
-        NULL
-#endif
     };
     assert(strcmp(cb1_engine_version(), "CB1 0.3") == 0);
-    assert(CB1_CIRCUIT_COUNT == 12);
+    assert(CB1_CIRCUIT_COUNT == 11);
     for (int i = 0; i < CB1_CIRCUIT_COUNT; ++i)
         if (expected[i]) assert(strcmp(cb1_circuit_version((enum cb1_circuit)i), expected[i]) == 0);
         else assert(cb1_circuit_version((enum cb1_circuit)i) == NULL);
