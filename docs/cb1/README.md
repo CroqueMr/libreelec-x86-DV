@@ -10,7 +10,7 @@
 | [Playback settings](PLAYBACK.md) | TV profile, Fast, FEL upscaling, async and O controls |
 | [Processing](PROCESSING.md) | Mode behavior, metadata use and output limits |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |
-| [Beta4 release notes](RELEASE.md) | Release changes and known limitations |
+| [Beta5 release notes](RELEASE.md) | Release changes and known limitations |
 
 ## Engine and integration
 
@@ -34,7 +34,6 @@
 [Image build](BUILD.md) · [Engine build](../../CB1/docs/BUILD.md)
 · [Versions](VERSIONS.md) · [Licensing and credits](LICENSING.md)
 · [Engine licensing](../../CB1/docs/LICENSING.md)
-· [Module and file license map](../../CB1/docs/LICENSE-MAP.md)
 · [Original LibreELEC README](UPSTREAM.md).
 
 [Archived numerical contracts](../../CB1/docs/REFERENCE-CONTRACTS.md) retain earlier

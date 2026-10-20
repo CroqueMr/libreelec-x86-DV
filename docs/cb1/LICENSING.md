@@ -23,7 +23,7 @@ build. Existing upstream files retain their own notices.
 The GPLv3 requirement is not confined to a single conversion mode. Creative and
 shared rendering modules are linked unconditionally; disabling a mode is not a
 GPLv2 build. An API or shared-library boundary does not by itself remove license
-requirements. [Module and file map](../../CB1/docs/LICENSE-MAP.md).
+requirements. [Engine license details](../../CB1/docs/LICENSING.md).
 
 Source archives provide release sources, patches, the model and build material.
 Keep source and vendor inputs available alongside the binaries, with notices and

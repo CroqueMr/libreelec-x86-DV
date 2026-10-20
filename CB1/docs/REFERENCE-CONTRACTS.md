@@ -1,9 +1,4 @@
-# Archived CB1 numerical contracts
-
-These contracts include earlier Natural/Intense experiments, not the current
-playback menu. For active behavior and versions, use [Algorithms](ALGORITHMS.md)
-and [Circuits](CIRCUITS.md). The numerical reference material below is retained
-without reinterpretation.
+# CB1 numerical contracts
 
 Status: Task 6A offline image composition and state contract reviewed and
 sponsor-approved. Task 6B experimental transformed TV-Led contract is declared,

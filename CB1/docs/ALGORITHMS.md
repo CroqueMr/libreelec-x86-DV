@@ -70,9 +70,9 @@ block length, not whether the value is nonzero. Unknown targets are not assigned
 invented peak, black-level or transfer values. Duplicate or inconsistent data
 is not presented as valid processing.
 
-L1-only authored DV uses neutral creative guidance in the exposed Adaptive policy.
-No L2/L8 controls are fabricated. Missing optional creative metadata does not
-prevent scene-guided expansion or imply that source reconstruction is missing.
+L1-only authored DV does not acquire fabricated L2/L8 trims. Its Adaptive HDR Mapping
+treatment can therefore remain unchanged. Missing optional creative metadata
+does not imply that source reconstruction is missing.
 
 ## Standard Dolby Vision
 
@@ -94,11 +94,6 @@ DV HDMI transport. RGB8 is the byte container, not a reduction of the video to
 ordinary 8-bit SDR. Scanout must preserve the packed bytes; color transforms,
 range changes and dithering cannot be applied to that container as ordinary RGB.
 The TV performs final TV-Led display mapping.
-
-Standard always selects Fast input-chroma interpolation. Master Reference is a
-separate source-domain reconstruction circuit, with dedicated reference FEL
-filters and Fast disabled. Its admission, arithmetic and spatial contracts are
-documented in [Master Reference](MASTER-REFERENCE.md).
 
 ## Dolby Vision to HDR10: Reference Basic
 
@@ -297,9 +292,7 @@ The pixel shader linearly interpolates this table at
 `u=clamp((Y-10)/(M-10),0,1)`. Highlights can expand when the display peak is
 below the mastering bound but above the authored scene peak.
 Dark scenes do not automatically reach T.
-Missing usable L1 preserves the original image/metadata pair. Missing creative
-anchors uses neutral retention and no trim-derived color restraint in the
-exposed Adaptive policy.
+Missing L1 or usable creative anchors preserves the original image/metadata pair.
 HDR10 AI uses its separate expansion contract.
 
 Two global color coefficients and 65 circular hue samples restrain expansion
@@ -388,13 +381,13 @@ Expansion, source validation and dense statistics share one pass. Eight pixels
 per lane amortize reduction barriers without subsampling. Any bound violation
 discards the entire transformed scratch image before presentation. The changed
 sum order is qualified to one logical 12-bit PQ code against the scalar mean.
-Transfer evaluation depends on the selected execution path. Existing FP32 lookup
-textures and analytic PQ paths have separate numerical qualifications; the
-retained Adaptive FEL optimization uses analytic PQ. A 0.001-nit tolerance
-protects the 10-nit shadow boundary from numerical roundoff.
+Existing 4096-point FP32 transfer textures replace repeated PQ powers when
+linear float sampling is available. The encoder uses fourth-root coordinates;
+unsupported formats retain analytic PQ. Pixel/statistic differences are qualified
+to one logical 12-bit PQ code. A 0.001-nit tolerance protects the 10-nit shadow
+boundary from lookup roundoff.
 Identity-size 4K reconstruction stays linear through expansion, normalized to
-10000 nits. The exposed authored-DV Adaptive policy selects the qualified FP16
-intermediate. This removes the intermediate PQ encode/decode pair.
+10000 nits in FP32 storage. This removes the intermediate PQ encode/decode pair.
 Explicit intermediate luminance prevents SDR inference. A bound rejection alone
 re-encodes the unexpanded image. PQ recovery and protected-shadow re-encoding
 are qualified within one logical 12-bit code, not byte-for-byte PQ identity.
@@ -409,7 +402,7 @@ visibility signaling. Unresolved Adaptive HDR Mapping frames accept updated GUI 
 without restarting content analysis. Visibility changes refresh the outgoing L5
 candidate, including source-bound identity output.
 
-The GPU uses a retained output, compact reductions and asynchronous
+The GPU uses one retained FP32 output, compact reductions and asynchronous
 completion. Both RGB and packed preparation may return Pending. No image buffer
 is downloaded to the CPU. This numerical qualification does not establish TV
 appearance, Dolby equivalence or Intel/AMD hardware throughput.
