@@ -4,9 +4,9 @@ Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Intel and AMD integrated graphics
 are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
 
-**R1.0.0 Beta4** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
+**R1.0.0 Beta5** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
 
-[Download Beta4](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta4)
+[Downloads](https://github.com/CroqueMr/libreelec-x86-DV/releases)
 · [Release notes](docs/cb1/RELEASE.md)
 · [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
 
@@ -69,7 +69,7 @@ GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
 
 ## Install or update
 
-Download one binary asset from [Beta4](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta4):
+Choose the matching version from [releases](https://github.com/CroqueMr/libreelec-x86-DV/releases):
 
 | File | Use |
 | --- | --- |
@@ -103,8 +103,8 @@ A 3D-capable display and suitable glasses are required.
 | NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Experimental |
 | Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
-Performance depends on hardware, content and rendering mode. The N100 handles all
-tested Master Reference sources, including 4K FEL remuxes and 4K60 content.
+Performance depends on hardware, content and rendering mode. Prior N100 tests
+covered Master Reference with 4K FEL remuxes and 4K60 content.
 Heavier conversions require more GPU performance.
 
 For problems, open an issue with the exact CPU/GPU, display, connection chain,

@@ -60,10 +60,8 @@ Admission is automatic; no separate player setting is required. HDR10
 conversion and AI output retain their existing routing.
 
 `dvbridge_renderer_set_fast_chroma` selects bilinear input chroma enlargement in
-eligible CB1 circuits, independently of optimized transport admission. This includes
-DV to HDR10 and HDR10 to DV AI, but excludes Master Reference. Standard always
-uses Fast; Master Reference never does. For the other modes, Off restores the
-reference chroma filter. Luma,
+every CB1 circuit, independently of optimized transport admission. This includes
+DV to HDR10 and HDR10 to DV AI. Off restores the reference chroma filter. Luma,
 including enlarged FEL luma, RGB/output scaling, reshaping, FEL VPP, metadata and
 intermediate precision remain unchanged. The default library preference is off;
 Kodi supplies its user preference. Native Kodi and vanilla fallback do not use it.
@@ -91,10 +89,10 @@ visibility on unresolved authored-DV or HDR10 AI Adaptive HDR Mapping work. The 
 same source, geometry and policy transaction before calling it. Content analysis
 is retained; visibility changes refresh only the outgoing L5 candidate. Resolved,
 retiring, quarantined and AI Reference work are not eligible.
-Packed authored Adaptive may omit its expanded RGB cache, including known GUI.
-Such output has no RGB intermediate; a late overlay update returns false and the
-caller cancels/reprepares the same picture. Native source-bound recovery remains
-available. HDR10 AI retains its existing storage contract.
+GUI-free packed authored Adaptive may omit its expanded RGB cache. The first
+late overlay materializes that cache from the retained reconstruction once;
+later redraws reuse it without repeating source reconstruction or analysis.
+Native source-bound recovery remains available. HDR10 AI is unchanged.
 GUI may be sampled during preparation for transport prepacking, but never enters
 content statistics. Keep submitted resources valid through completion and order
 updates on the same GL context. Every late update invalidates prepacked GUI;

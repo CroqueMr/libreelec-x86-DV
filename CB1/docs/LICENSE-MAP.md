@@ -11,8 +11,8 @@ Those modules contain GPL-3.0-only code; the current combined executable is
 therefore distributed under GPL-3.0-only. This does not change the license of
 Linux, unrelated programs, firmware or each upstream source file.
 
-There are 61 files in the runtime source directory: 6 marked GPL-3.0-only,
-51 GPL-3.0-or-later, 2 LGPL-2.1-or-later, and 2 build/provenance records without a
+There are 64 files in the runtime source directory: 6 marked GPL-3.0-only,
+54 GPL-3.0-or-later, 2 LGPL-2.1-or-later, and 2 build/provenance records without a
 file-level SPDX identifier. These are declaration counts, not authorship proof.
 
 ## Parts requiring GPLv3
@@ -168,7 +168,7 @@ The Hades cache/output adaptation is pinned to
 [Hades RC2](https://github.com/hadesdevls/LibreELEC-Hades/tree/69fc36199f0d5f5d1e5bb4d42f45656e256a6e35).
 [Creative attribution](CREATIVE-MAPPING.md) retains the detailed source record.
 
-The integrity verifier passes for the local engine, 25 dependency patches, locked
+The integrity verifier passes for the local engine, 26 dependency patches, locked
 model and retained license files. This confirms recorded bytes, not ownership or
 the complete legal status of every dependency in an installed image.
 `owned-sources.json` is a checksum inventory, not a copyright assignment.
