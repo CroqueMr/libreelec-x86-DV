@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Prepare the actual patched sources, not concatenated diff fragments.
 set -euo pipefail
+shopt -s nullglob
 export LC_ALL=C
 
 pin() {
