@@ -8139,6 +8139,115 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +    </focusedlayout>
 +  </include>
  </includes>
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -2,6 +2,105 @@
+ <settings version="1">
+   <section id="player" label="14200" help="38100">
+     <category id="videoplayer" label="14215" help="38103">
++      <group id="99" label="40810">
++        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40867">1</option><option label="40868">2</option>
++            <option label="40866">0</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="40812">0</option>
++              <option label="40913">4</option>
++              <option label="40914">5</option>
++              <option label="40814">2</option>
++              <option label="40813">1</option>
++            </options>
++          </constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10method" type="integer" label="40820" help="40821">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">1</dependency></dependencies>
++          <constraints><options>
++            <option label="40822">0</option><option label="40823">1</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>10000</maximum><step>1</step></constraints>
++          <control type="edit" format="number" />
++        </setting>
++        <setting id="dvbridge.tvpanel" type="integer" label="40831" help="40832">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default>
++          <visible>false</visible>
++          <constraints><options><option label="40833">0</option><option label="40834">1</option><option label="40835">2</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>2</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <constraints><options><option label="40833">0</option><option label="40838">1</option><option label="40839">2</option><option label="40840">3</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level>
++          <default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.fastchroma" type="integer" label="40904" help="40905">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>2</default>
++          <constraints><options><option label="106">0</option><option label="107">1</option><option label="16316">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <constraints><options><option label="40910">0</option><option label="40909">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++      </group>
+       <group id="1" label="14230">
+         <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
+           <constraints>
 diff --git a/xbmc/addons/Skin.cpp b/xbmc/addons/Skin.cpp
 --- a/xbmc/addons/Skin.cpp
 +++ b/xbmc/addons/Skin.cpp

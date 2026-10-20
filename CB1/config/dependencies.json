@@ -75,12 +75,12 @@
     "patches/libplacebo/libplacebo-9911-0-policy-scaler-lut-fp32.patch": "ae6335437763c5cf451618675338cc180e72d375f49a146a907b368cfa0d20e4",
     "patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": "496c5c1bcfadcecdd62e6bae738448ca43b795987a19d936f7be00c72eacb345",
     "patches/libplacebo/libplacebo-9912-native-transport.patch": "cd5120ac299f7d85441db7d92ccae770e9e452e10ae296aa738a421c38f636e2",
-    "patches/libplacebo/libplacebo-9913-processing.patch": "13f7dd3ca5143ba982b4b3373635abb35ebf5dbb95636609cc698a18b59aa29e",
+    "patches/libplacebo/libplacebo-9913-processing.patch": "b58e5dea9dc10b23f8668b423942b6bb553dc9fb0d2992efc9995d0ee16d00d5",
     "patches/libplacebo/libplacebo-9914-shared-mmr-intervals.patch": "be5a37db02a43295a72e6e9719fe1874389f1c08dca6c04aaaa77d27906b24d7",
     "patches/libplacebo/libplacebo-9915-hdr10-linear-conversion.patch": "f69544ddeb0b350cfc5e19231afc40c346246684ba66d7c70c2c3b30711a7456",
     "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": "f2f7d6ac70566b2035966cfe83db8c02b3d6b874b81d31d41a7be126cb52c55a",
-    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "23ba043c4e7abd69650dde2f21249356ab0ad0128b8251c63d4bbfb020797919",
-    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "da0f4d8af67d3fa9315c4a517b5cd3e9e945237c71bdb9eb33bf5b5548b1d38f",
+    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "87a9918fb2c196469f178c0d7e9da7d1be779a0635770f461712bb714ced4d88",
+    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "8a56adae2fa7b033e4721021ce6356b8047dab33b1fa32b8ac90e5c5c3976290",
     "patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": "4ce28e60a949a51554d3c0d8d2596b2ca791463baf352d7f250c6e710d0f0ac2"
   },
   "modified_sources": {
