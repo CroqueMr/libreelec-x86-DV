@@ -11,6 +11,9 @@ PKG_NEED_UNPACK="${LINUX_DEPENDS} $(get_pkg_directory initramfs) $(get_pkg_varia
 PKG_LONGDESC="This package contains a precompiled kernel image and the modules."
 PKG_IS_KERNEL_PKG="yes"
 PKG_STAMP="${KERNEL_TARGET} ${KERNEL_MAKE_EXTRACMD}"
+if [ "${CB1_DEBUG:-no}" = yes ]; then
+  PKG_STAMP+=" cb1-driver-profile=${CB1_DRIVER_PROFILE:-modified}"
+fi
 
 PKG_PATCH_DIRS="${LINUX}"
 

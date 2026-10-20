@@ -131,6 +131,18 @@ create_device_list() {
 }
 
 do_install_quick() {
+  # Validate both Debug pairs and capacity before offering a destructive install.
+  CB1_DEBUG_INSTALL="no"
+  if [ -f /etc/cb1-debug -o -f /flash/cb1/driver-profiles.json ]; then
+    rm -f "$TMPDIR/cb1-install-failed"
+    if ! /usr/bin/cb1-driver-profile check-install "$((PARTSIZE_SYSTEM * 1024 * 1024))" >> "$LOGFILE" 2>&1; then
+      whiptail --backtitle "$BACKTITLE" --title "Debug install refused" --msgbox \
+        "Both verified driver profiles must fit on the boot partition. See the installation log." 9 73
+      return 1
+    fi
+    CB1_DEBUG_INSTALL="yes"
+  fi
+
   # show menu
   MSG_TITLE="QUICK INSTALL MENU"
   MSG_MENU="\nUse the up/down arrows to select the device you wish to install to.\n\nPlease select a device:"
@@ -261,10 +273,14 @@ do_install_quick() {
 
     # install system files
     msg_progress_install "60" "Installing Kernel"
-    cp "/flash/$IMAGE_KERNEL" $TMPDIR/part1/KERNEL >> $LOGFILE 2>&1
+    if [ "$CB1_DEBUG_INSTALL" != "yes" ]; then
+      cp "/flash/$IMAGE_KERNEL" $TMPDIR/part1/KERNEL >> $LOGFILE 2>&1
+    fi
 
     msg_progress_install "65" "Installing System"
-    cp "/flash/$IMAGE_SYSTEM" $TMPDIR/part1/SYSTEM >> $LOGFILE 2>&1
+    if [ "$CB1_DEBUG_INSTALL" != "yes" ]; then
+      cp "/flash/$IMAGE_SYSTEM" $TMPDIR/part1/SYSTEM >> $LOGFILE 2>&1
+    fi
     sync
 
     # configuring bootloader
@@ -288,6 +304,14 @@ menuentry "@DISTRONAME@" {
 	linux /KERNEL boot=UUID=$UUID_SYSTEM disk=UUID=$UUID_STORAGE quiet
 }
 EOF
+
+    if [ "$CB1_DEBUG_INSTALL" = "yes" ]; then
+      if ! /usr/bin/cb1-driver-profile install "$TMPDIR/part1" >> "$LOGFILE" 2>&1; then
+        touch "$TMPDIR/cb1-install-failed"
+        umount "$TMPDIR/part1" >> "$LOGFILE" 2>&1
+        exit 1
+      fi
+    fi
 
     # uefi boot / hybrid mode
     cp /usr/share/syslinux/bootx64.efi $TMPDIR/part1/EFI/BOOT
@@ -323,6 +347,12 @@ EOF
       rmdir $TMPDIR/part2 >> $LOGFILE 2>&1
     fi
   } | whiptail --backtitle "$BACKTITLE" --gauge "Please wait while your system is being setup ..." 6 73 0
+
+  if [ -f "$TMPDIR/cb1-install-failed" ]; then
+    whiptail --backtitle "$BACKTITLE" --title "Debug install failed" --msgbox \
+      "Driver-profile installation failed. Do not boot the target disk. See the installation log." 9 73
+    return 1
+  fi
 
   # install complete
   MSG_TITLE="@DISTRONAME@ Install Complete"

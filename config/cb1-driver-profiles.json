@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "linux_source_sha256": "039aef84f2b0994aeda3f4fcfc3d02ec9d7a9bbb9020ea264c43f446c860f606",
+  "ordinary_patches": {
+    "packages/linux/patches/default/0062-imon-pad-ignore-diagonal.patch": "6775b32fdcaa21fd91a723db7b794fca99f651d071179f1a0e5f65c1288d83e0",
+    "packages/linux/patches/default/9900-i915-10bit-hack.patch": "79e95885b65f08fc5509eecac8d737e25ef3e1afcbeff6b647e63f97223e15a7",
+    "packages/linux/patches/default/9901-pm-disable-async-suspend-resume-by-default.patch": "1f254ef3ec3e996e3c21fe81343224d993680db53277210613c314d270864626"
+  },
+  "graphics_patches": {
+    "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
+    "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
+    "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
+    "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
+    "projects/Generic/patches/linux/linux-9900-03-drivers__gpu__drm__i915__display__intel_display_params.h.patch": "5806619184d5f1b308e62a5ad664fee8720c18370a35cd03b91646e6cba4be1d",
+    "projects/Generic/patches/linux/linux-9900-04-drivers__gpu__drm__i915__display__intel_display_types.h.patch": "cf3c94993f2963e54ef68504fd54f4525563aee5fb9e79f5617d6e847a396d56",
+    "projects/Generic/patches/linux/linux-9900-05-drivers__gpu__drm__i915__display__intel_dv_lab_policy.h.patch": "f8d606ad767be8a20bc243e2b512804fffca3b8052d00a901aa265d091a36380",
+    "projects/Generic/patches/linux/linux-9900-06-drivers__gpu__drm__i915__display__intel_dvbridge_hdr_policy.h.patch": "255ed576924b3abfbd82cd2533336e3b0fa3f423dd601cf28498b625334fe2fd",
+    "projects/Generic/patches/linux/linux-9900-07-drivers__gpu__drm__i915__display__intel_hdmi.c.patch": "b41b585f345bf92a407cc27c5390f7d61590cab6f1a9170d8e3f7810542c52d2",
+    "projects/Generic/patches/linux/linux-9900-08-drivers__video__hdmi.c.patch": "6446b66d254ac934ce0dddd3b3fcd47c41b3af5c8f522579832294b753114a38",
+    "projects/Generic/patches/linux/linux-9900-09-include__linux__hdmi.h.patch": "fc52a46f7745449a0bfd6fe499050c8147dfe32b59d8a3a6f3c08e8b87f7cd91",
+    "projects/Generic/patches/linux/linux-9901-native-hdmi-level-shifter.patch": "854df16b6a81c9fd4740e13feda867cf449fdcc730aea83adc1b46f871fbea6b",
+    "projects/Generic/patches/linux/linux-9902-hdmi-compatibility.patch": "fcb59b6368e42a6383fc5f69af81e924d8baa153b0518e903021f5c4f29e2951",
+    "projects/Generic/patches/linux/linux-9903-diagnostics.patch": "5c21813bdc2db60a0d7117487b220900825b37da605a8c8ac9e8f39b13d4147b",
+    "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "da09fb390eeebd912e889f44bab70ee27f1f882bd75c68aac598afcb2769139d",
+    "projects/Generic/patches/linux/linux-9910-common-dv-policy.patch": "ac514dfdeb54c6704936a320cbf08ca1397a2ea87e321eec047821119d95485c",
+    "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "546188b8dc5b24e1d78034879984be0bfa391666579c2763f05656beb0a110ca",
+    "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "b9169706f78483e53b6a802989d5cc6ac290ef2732d6466c7689da71877a086a",
+    "projects/Generic/patches/linux/linux-9930-amd-3d.patch": "47fc2be4e35fd51e5ec8769f3b57145e4f6df2eb0e3e6354afe7d31192ec7663",
+    "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
+    "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9002-nvkms-integer-rate-twins-of-1000-1001-timings.patch": "34c33c83d1cf0b3613aa722654e30f8d0adefa16316a0eb73d306c28d824e62d"
+  }
+}

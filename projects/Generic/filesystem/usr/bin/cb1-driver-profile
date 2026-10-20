@@ -1,0 +1,333 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""Select verified Debug boot pairs; never unload drivers or reboot."""
+import argparse
+import contextlib
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+PROFILES = ("modified", "standard")
+CONFIGS = ("syslinux.cfg", "EFI/BOOT/syslinux.cfg", "grub.cfg", "EFI/BOOT/grub.cfg")
+RECOVERY = "cb1-modified-recovery"
+RESERVE = 16 * 1024 * 1024
+
+
+def require(ok, reason):
+    if not ok:
+        raise ValueError(reason)
+
+
+def regular(path):
+    require(path.is_file() and not any(p.is_symlink() for p in (path, *path.parents)),
+            "Missing or symlink file: " + str(path))
+    return path
+
+
+def read_json(path):
+    return json.loads(regular(path).read_text())
+
+
+def digest(path):
+    with regular(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def validate_manifest(manifest):
+    require(manifest["schema"] == 1, "Unsupported driver-profile manifest")
+    require(set(manifest["profiles"]) == set(PROFILES), "Both profiles are required")
+    build = manifest["build"]
+    require(bool(build["id"]) and bool(build["linux_version"]), "Missing build identity")
+    for value in [build["linux_source_sha256"], build["ordinary_patches_sha256"],
+                  *(build["userspace"][name] for name in ("kodi", "cb1", "mesa"))]:
+        require(isinstance(value, str) and re.fullmatch("[0-9a-f]{64}", value), "Invalid build hash")
+    for name, pair in manifest["profiles"].items():
+        require(isinstance(pair["kernel_release"], str) and
+                pair["kernel_release"].split("-", 1)[0] == build["linux_version"],
+                "Kernel versions differ")
+        require(re.fullmatch("[0-9a-f]{64}", pair["modules_sha256"]), "Missing matched module identity")
+        for kind in ("kernel", "system"):
+            item = pair[kind]
+            expected = kind.upper() if name == "modified" else "cb1/" + kind.upper() + ".standard"
+            require(item["path"] == expected, "Unexpected profile path")
+            require(type(item["size"]) is int and item["size"] > 0, "Invalid payload size")
+            require(re.fullmatch("[0-9a-f]{64}", item["sha256"]), "Invalid payload hash")
+
+
+def load(root, strong=False):
+    require((root / "etc/cb1-debug").is_file(), "Driver profiles require a Debug build")
+    manifest = read_json(root / "flash/cb1/driver-profiles.json")
+    require(manifest["build"] == read_json(root / "usr/share/cb1/driver-profile-build.json"),
+            "Boot payloads belong to another SYSTEM build")
+    validate_manifest(manifest)
+    for pair in manifest["profiles"].values():
+        for kind in ("kernel", "system"):
+            item = pair[kind]
+            path = regular(root / "flash" / item["path"])
+            require(path.stat().st_size == item["size"], "Payload size mismatch: " + item["path"])
+            if strong:
+                require(digest(path) == item["sha256"], "Payload hash mismatch: " + item["path"])
+    return manifest
+
+
+def pair_name(kernel, args, manifest):
+    options = dict(arg.split("=", 1) for arg in args.split() if "=" in arg)
+    boot = options.get("BOOT_IMAGE", kernel).lstrip("/")
+    system = options.get("SYSTEM_IMAGE", "SYSTEM").lstrip("/")
+    require(boot == kernel.lstrip("/"), "BOOT_IMAGE disagrees with kernel entry")
+    for name, pair in manifest["profiles"].items():
+        if (boot, system) == (pair["kernel"]["path"], pair["system"]["path"]):
+            return name
+    raise ValueError("Boot entry is not a matched profile pair")
+
+
+def entries(text, grub):
+    pattern = r'(?m)^menuentry\s+["\']([^"\']+)["\'][^\n]*\{\s*\n' if grub else r"(?mi)^LABEL\s+(\S+)\s*\n"
+    matches = list(re.finditer(pattern, text))
+    require(bool(matches), "Unsupported boot configuration: no entries")
+    result = []
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[match.end():end]
+        if grub:
+            require(body.count("}") == 1 and "{" not in body, "Unsupported nested grub entry")
+        result.append((match.group(1), match.start(), end, body))
+    return result
+
+
+def boot_line(body, grub):
+    command = r"linux(?:efi)?" if grub else r"KERNEL"
+    kernel = re.search(r"(?mi)^\s*" + command + r"\s+(\S+)([^\n]*)", body)
+    require(kernel is not None, "Missing kernel entry")
+    append = re.search(r"(?mi)^\s*APPEND\s+([^\n]*)", body) if not grub else None
+    require(grub or append is not None, "Missing APPEND arguments")
+    return kernel.group(1), kernel.group(2).strip() if grub else append.group(1)
+
+
+def default_entry(text, grub):
+    pattern = r'(?m)^set default=["\']([^"\']+)["\']\s*$' if grub else r"(?mi)^DEFAULT\s+(\S+)\s*$"
+    default = re.search(pattern, text)
+    require(default is not None, "Missing bootloader default")
+    parsed = entries(text, grub)
+    selected = default.group(1)
+    if grub and selected.isdigit():
+        require(int(selected) < len(parsed), "Invalid grub default index")
+        selected = parsed[int(selected)][0]
+    match = [entry for entry in parsed if entry[0] == selected]
+    require(len(match) == 1 and selected != RECOVERY, "Unsupported bootloader default")
+    return match[0]
+
+
+def configs(flash):
+    result = [(regular(flash / name), (flash / name).read_text(), name.endswith("grub.cfg"))
+              for name in CONFIGS if (flash / name).exists()]
+    require(bool(result), "No supported BIOS/EFI boot configuration")
+    return result
+
+
+def pending(flash, manifest):
+    choices = {pair_name(*boot_line(default_entry(text, grub)[3], grub), manifest)
+               for _, text, grub in configs(flash)}
+    require(len(choices) == 1, "BIOS and EFI pending profiles disagree")
+    return choices.pop()
+
+
+def arguments(args, pair):
+    kept = [a for a in args.split() if not a.startswith(("BOOT_IMAGE=", "SYSTEM_IMAGE=", "cb1_driver_profile="))]
+    return " ".join(kept + ["BOOT_IMAGE=/" + pair["kernel"]["path"],
+                            "SYSTEM_IMAGE=/" + pair["system"]["path"]])
+
+
+def configure(text, grub, name, manifest):
+    chosen = manifest["profiles"][name]
+    fallback = manifest["profiles"]["modified"]
+    recovery_args = boot_line(default_entry(text, grub)[3], grub)[1]
+    parsed = entries(text, grub)
+    output = text[:parsed[0][1]]
+    for label, start, end, body in parsed:
+        if label == RECOVERY:
+            continue
+        boot_line(body, grub)
+        block = text[start:end]
+        if grub:
+            block = re.sub(r"(?mi)^(\s*linux(?:efi)?)\s+\S+([^\n]*)",
+                           lambda m: m[1] + " /" + chosen["kernel"]["path"] + " " + arguments(m[2], chosen), block)
+            block = re.sub(r"(?m)^(\s*search\s+--set\s+-f)\s+\S+", r"\1 /" + chosen["kernel"]["path"], block)
+        else:
+            block = re.sub(r"(?mi)^(\s*KERNEL)\s+\S+", r"\1 /" + chosen["kernel"]["path"], block)
+            block = re.sub(r"(?mi)^(\s*APPEND)\s+([^\n]*)",
+                           lambda m: m[1] + " " + arguments(m[2], chosen), block)
+        output += block.rstrip() + "\n\n"
+    args = arguments(recovery_args, fallback)
+    if grub:
+        output += 'menuentry "' + RECOVERY + '" {\n search --set -f /KERNEL\n linux /KERNEL ' + args + '\n}\n'
+    else:
+        output += "LABEL " + RECOVERY + "\n KERNEL /KERNEL\n APPEND " + args + "\n"
+    require(pair_name(*boot_line(default_entry(output, grub)[3], grub), manifest) == name,
+            "New bootloader default failed validation")
+    return output
+
+
+def atomic_write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(prefix=".cb1-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+
+
+def select(flash, name, manifest):
+    changes = [(path, path.read_bytes(), configure(text, grub, name, manifest).encode())
+               for path, text, grub in configs(flash)]
+    changed = []
+    try:
+        for path, old, new in changes:
+            atomic_write(path, new)
+            changed.append((path, old))
+    except OSError:
+        for path, old in reversed(changed):
+            atomic_write(path, old)
+        raise
+
+
+def free_bytes(path):
+    return shutil.disk_usage(path).free
+
+
+def payload_size(manifest):
+    return sum(pair[kind]["size"] for pair in manifest["profiles"].values()
+               for kind in ("kernel", "system")) + RESERVE
+
+
+@contextlib.contextmanager
+def writable_flash(root):
+    if root == Path("/"):
+        require(os.geteuid() == 0, "Root privileges required")
+        mounts = (root / "proc/mounts").read_text().splitlines()
+        mounted = [line.split()[3].split(",") for line in mounts if line.split()[1] == "/flash"]
+        require(len(mounted) == 1, "Local /flash mount required")
+        readonly = "ro" in mounted[0]
+        if readonly:
+            subprocess.run(["/usr/bin/mount", "-o", "remount,rw", "/flash"], check=True)
+        try:
+            yield
+            os.sync()
+        finally:
+            if readonly:
+                subprocess.run(["/usr/bin/mount", "-o", "remount,ro", "/flash"], check=True)
+    else:
+        yield
+
+
+@contextlib.contextmanager
+def mutation_lock(root):
+    directory = root / "run"
+    directory.mkdir(exist_ok=True)
+    with (directory / "cb1-driver-profile.lock").open("a") as stream:
+        if os.name == "posix":
+            import fcntl
+            fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
+
+
+def status(root, state):
+    manifest = load(root)
+    cmdline = (root / "proc/cmdline").read_text()
+    options = dict(arg.split("=", 1) for arg in cmdline.split() if "=" in arg)
+    state["active"] = pair_name(options.get("BOOT_IMAGE", "KERNEL"), cmdline, manifest)
+    state["pending"] = pending(root / "flash", manifest)
+    require((root / "proc/sys/kernel/osrelease").read_text().strip() ==
+            manifest["profiles"][state["active"]]["kernel_release"], "Running kernel release does not match profile")
+    require(free_bytes(root / "flash") >= RESERVE, "Boot partition has insufficient free space")
+    state["available"] = True
+    state["build"] = manifest["build"]
+    state["kernel_release"] = manifest["profiles"][state["active"]]["kernel_release"]
+    pair = manifest["profiles"][state["active"]]
+    state["payloads"] = {key: pair[key] for key in ("kernel", "system", "modules_sha256")}
+    return manifest
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path("/"), help="absolute offline system root")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("status")
+    sub.add_parser("select").add_argument("profile", choices=PROFILES)
+    sub.add_parser("check-install").add_argument("capacity", type=int)
+    sub.add_parser("install").add_argument("target", type=Path)
+    args = parser.parse_args(argv)
+    state = {"active": None, "pending": None, "available": False, "reason": ""}
+    code = 0
+    try:
+        require(args.root.is_absolute(), "Root must be an absolute path")
+        root = args.root.resolve()
+        if args.command in ("status", "select"):
+            manifest = status(root, state)
+            if args.command == "select":
+                with mutation_lock(root):
+                    manifest = status(root, state)
+                    load(root, strong=True)
+                    with writable_flash(root):
+                        select(root / "flash", args.profile, manifest)
+                    status(root, state)
+        else:
+            manifest = load(root, strong=True)
+            if args.command == "check-install":
+                require(args.capacity >= payload_size(manifest), "Boot partition is too small for both profiles")
+            else:
+                target = args.target
+                require(target.is_absolute() and target.is_dir() and not target.is_symlink(), "Invalid install target")
+                require(target.resolve() not in (root, Path("/")) and
+                        not target.resolve().is_relative_to((root / "flash").resolve()), "Unsafe install target")
+                require(root != Path("/") or target.is_mount(), "Install target is not a mounted partition")
+                changes = [(path, configure(text, grub, "modified", manifest)) for path, text, grub in configs(target)]
+                require(free_bytes(target) >= payload_size(manifest), "Boot partition is too small for both profiles")
+                for pair in manifest["profiles"].values():
+                    for kind in ("kernel", "system"):
+                        item = pair[kind]
+                        destination = target / item["path"]
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        require(not any(p.is_symlink() for p in (destination, *destination.parents)), "Symlink install target")
+                        with (root / "flash" / item["path"]).open("rb") as source:
+                            fd, temp = tempfile.mkstemp(prefix=".cb1-", dir=destination.parent)
+                            try:
+                                with os.fdopen(fd, "wb") as output:
+                                    shutil.copyfileobj(source, output)
+                                    output.flush()
+                                    os.fsync(output.fileno())
+                                require(digest(Path(temp)) == item["sha256"], "Install copy hash mismatch")
+                                os.replace(temp, destination)
+                            finally:
+                                if os.path.exists(temp):
+                                    os.unlink(temp)
+                atomic_write(target / "cb1/driver-profiles.json",
+                             regular(root / "flash/cb1/driver-profiles.json").read_bytes())
+                for name in ("cb1/driver-profiles.sha256", "KERNEL.md5", "SYSTEM.md5"):
+                    source = root / "flash" / name
+                    if source.exists():
+                        atomic_write(target / name, regular(source).read_bytes())
+                for path, text in changes:
+                    atomic_write(path, text.encode())
+            state["available"] = True
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        state["available"] = False
+        state["reason"] = str(error)
+        code = 0 if args.command == "status" else 1
+    print(json.dumps(state, sort_keys=True))
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,15 @@
+[Unit]
+Description=Record Debug driver-profile boot identity
+After=local-fs.target
+Before=kodi.service
+ConditionPathExists=/etc/cb1-debug
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/cb1-driver-profile status
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cb1-driver-profile
+
+[Install]
+WantedBy=multi-user.target

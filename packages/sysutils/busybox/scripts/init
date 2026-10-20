@@ -616,6 +616,83 @@ do_cleanup() {
   StopProgress "done"
 }
 
+cb1_update_allowed() {
+  local name available old_size new_size
+  CB1_PAIRED_UPDATE="no"
+  if [ -f /sysroot/etc/cb1-debug -o -f /update/etc/cb1-debug -o -f /flash/cb1/driver-profiles.json -o -f "$UPDATE_DIR/cb1/driver-profiles.json" ]; then
+    if [ ! -f /sysroot/etc/cb1-debug -o ! -f /update/etc/cb1-debug -o ! -f /flash/cb1/driver-profiles.json ]; then
+      echo "Mixed normal/Debug update refused. Install the complete Debug image instead."
+      return 1
+    fi
+    if [ ! -f "$UPDATE_DIR/cb1/driver-profiles.sha256" -o -L "$UPDATE_DIR/cb1/driver-profiles.sha256" -o -L "$UPDATE_DIR/cb1" -o -L /flash/cb1 ]; then
+      echo "Missing complete paired Debug update."
+      return 1
+    fi
+    # Fixed order and paths only. Never interpret JSON or accept archive-provided paths.
+    if ! awk '
+      BEGIN { names[1]="KERNEL"; names[2]="SYSTEM"; names[3]="cb1/KERNEL.standard";
+              names[4]="cb1/SYSTEM.standard"; names[5]="cb1/driver-profiles.json" }
+      { if (NR > 5 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ ||
+            $2 != names[NR] || $0 != $1 "  " $2) bad=1 }
+      END { exit (bad || NR != 5) }
+    ' "$UPDATE_DIR/cb1/driver-profiles.sha256"; then
+      echo "Invalid paired Debug checksum paths."
+      return 1
+    fi
+    for name in KERNEL SYSTEM cb1/KERNEL.standard cb1/SYSTEM.standard cb1/driver-profiles.json; do
+      if [ ! -f "$UPDATE_DIR/$name" -o -L "$UPDATE_DIR/$name" -o ! -f "/flash/$name" -o -L "/flash/$name" ]; then
+        echo "Incomplete paired Debug update: $name"
+        return 1
+      fi
+    done
+    if ! (cd "$UPDATE_DIR" && sha256sum -c cb1/driver-profiles.sha256); then
+      echo "Paired Debug SHA256 verification failed."
+      return 1
+    fi
+    available=$(df -Pk /flash/ | awk 'END {printf "%.0f", $4 * 1024}')
+    for name in KERNEL SYSTEM cb1/KERNEL.standard cb1/SYSTEM.standard cb1/driver-profiles.json; do
+      old_size=$(stat -t "/flash/$name" | awk '{print $2}')
+      new_size=$(stat -t "$UPDATE_DIR/$name" | awk '{print $2}')
+      if [ -z "$old_size" -o -z "$new_size" ]; then
+        return 1
+      fi
+      available=$((available + old_size - new_size))
+      if [ "$available" -lt 16777216 ]; then
+        echo "Boot partition too small for paired Debug update; no resize performed."
+        return 1
+      fi
+    done
+    CB1_PAIRED_UPDATE="yes"
+  fi
+  return 0
+}
+
+cb1_write_update() {
+  local name result=0
+  mount -o remount,rw /flash || return 1
+  if ! umount /sysroot; then
+    mount -o remount,ro /flash
+    return 1
+  fi
+  for name in KERNEL SYSTEM cb1/KERNEL.standard cb1/SYSTEM.standard cb1/driver-profiles.json cb1/driver-profiles.sha256; do
+    echo "Updating Debug $name"
+    if ! rm -f "/flash/$name" || ! dd if="$UPDATE_DIR/$name" of="/flash/$name" bs=1M conv=fsync; then
+      result=1
+      break
+    fi
+  done
+  if [ "$result" = "0" ]; then
+    for name in KERNEL.md5 SYSTEM.md5; do
+      if [ -f "$UPDATE_DIR/$name" ]; then
+        cp "$UPDATE_DIR/$name" "/flash/$name" || result=1
+      fi
+    done
+  fi
+  sync
+  mount -o remount,ro /flash || result=1
+  return "$result"
+}
+
 check_update() {
   progress "Checking for updates"
   UPDATE_TAR=$(ls -1 "$UPDATE_DIR"/*.tar 2>/dev/null | head -n 1)
@@ -798,6 +875,12 @@ check_update() {
 
   mount_part "$UPDATE_DIR/$UPDATE_SYSTEM" "/update" "ro,loop"
 
+  if ! cb1_update_allowed; then
+    do_cleanup
+    StartProgress countdown "Normal startup in 30s... " 30 "NOW"
+    return 0
+  fi
+
   # Verify that the new update is compatible with the current system - this should avoid creating
   # non-booting systems after (for example) an RPi tar is incorrectly applied to an RPi2 system.
   if [ ! -f "$UPDATE_ROOT/.nocompat" ]; then
@@ -806,6 +889,17 @@ check_update() {
       StartProgress countdown "Normal startup in 60s... " 60 "NOW"
       return 0
     fi
+  fi
+
+  if [ "$CB1_PAIRED_UPDATE" = "yes" ]; then
+    if ! cb1_write_update; then
+      echo "Paired Debug update failed. Do not reboot; repair from installation media."
+      while true; do debug_shell; done
+    fi
+    update_bootloader
+    do_cleanup
+    do_reboot
+    return 0
   fi
 
   # get sizes
