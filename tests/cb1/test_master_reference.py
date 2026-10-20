@@ -23,7 +23,7 @@ class MasterReferenceTests(unittest.TestCase):
 enum {DVBRIDGE_MODE_DISABLED=0,DVBRIDGE_MODE_MASTER_REFERENCE=5};
 bool eligible(int mode,bool m_directUsable,bool lease=true){
  bool allowAsync=true,asyncSetting=true,fallback=false,m_fallback=false,m_pendingHDR10Fallback=false;
- bool m_hasCommitted=true,sameGeometry=true;struct{int mode;}policy{mode};int m_committedMode=mode;
+ bool m_hasCommitted=true,sameGeometry=true,masterOverlayRefresh=false;struct{int mode;}policy{mode};int m_committedMode=mode;
  struct Binding{int stream=1,revision=1;};struct Layer{bool lease;Binding binding;};
  Layer base{lease,{}},*enhancement=nullptr;Binding m_committedBinding;int revision=1,m_committedRevision=1;
  return @@ELIGIBLE@@;
@@ -198,7 +198,7 @@ int main(){
         self.assertEqual(node.findtext('default'),'0')
         self.assertIn('4',[o.text for o in node.findall('constraints/options/option')])
         bridge=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
-        self.assertIn('dvbridge_render_master_reference(',bridge)
+        self.assertIn('dvbridge_render_master_reference;',bridge)
         self.assertIn('master-reference-unavailable',bridge)
         panel=(tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         self.assertIn('Reference GPU',panel)

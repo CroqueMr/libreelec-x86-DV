@@ -45,7 +45,7 @@ struct Window:CWinSystemGbm,CRenderSystemGLES {
  bool EndDVBridge(){return true;} bool RetireDVContext(){return true;}
  bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
  bool SupportsDVOutputMode(){return true;}
- void CreateNewWindow(const char*,bool,RESOLUTION_INFO&){}
+ bool CreateNewWindow(const char*,bool,RESOLUTION_INFO&){return true;}
  Gfx& GetGfxContext(){static Gfx gfx;return gfx;}
  void RefreshDVOutputCapabilities(){}
  bool set(bool fullScreen,RESOLUTION_INFO& res,bool blankOtherDisplays) METHOD
