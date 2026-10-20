@@ -99,9 +99,8 @@ operation is clip, not a second scene tone map. Neutral/no-anchor controls keep
 the previous Expert mapping. L3 changes the effective L1 descriptors once,
 including pictures without a trim anchor. Source metadata is never rewritten.
 
-CM4 Expert applies the independent primary, midtone and clipping controls,
-with conditional native spatial detail. SDR-only six-vector hue/saturation
-trims are preserved, not executed in HDR10. Adaptive HDR Mapping
+CM4 Expert applies the independent primary, midtone, clipping and secondary
+colour controls, with conditional native spatial detail. Adaptive HDR Mapping
 expands reconstructed pixels using the original metadata and emits consistent
 output descriptors. Unknown target descriptions remain unsupported and preserve
 coherent source metadata. Panel type does not infer display capabilities. The TV retains its TV-Led
@@ -161,7 +160,6 @@ These implementations do not establish equivalence to a licensed Dolby mapper.
 
 Retain `LICENSES/GPL-3.0.txt` and the
 source links above. These origins do not imply endorsement or certification.
-
 ## Independent CM4 numerical reference
 
 The `cb1-cm4-v1` reference uses public IPT/HPE constants from pinned libplacebo

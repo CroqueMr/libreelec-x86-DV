@@ -1,53 +1,81 @@
 # CB1
 
-**CB1 0.3** is an open-source Dolby Vision processing engine, linked into the
-player through a native C API. It is not a separate service or external player.
+CB1 is an open-source Dolby Vision processing engine with HDR10 conversion.
+**CB1 0.3** is a C11 static library linked into the player's render path, without
+a separate service or external player.
 
-## Rendering circuits
 
-| Source | Circuit | Output |
-| --- | --- | --- |
-| Dolby Vision | Standard | Performance-oriented TV-Led Dolby Vision |
-| Dolby Vision | Master Reference | Reference-oriented TV-Led Dolby Vision |
-| Dolby Vision | Adaptive HDR Mapping | Metadata-guided highlight/midtone expansion, TV-Led output |
-| Dolby Vision | HDR10 Reference Basic | Source-guided HDR10 conversion |
-| Dolby Vision | HDR10 Reference Expert | Display-reference HDR10 conversion with compatible creative controls |
-| HDR10 | Dolby Vision Reference AI | AI-estimated L1/L3 without an enhancement grade |
-| HDR10 | Adaptive HDR Mapping AI | AI-guided expansion with Dolby Vision output |
+## Dolby Vision profiles
 
-Expert and Adaptive modes use the display profile. AI modes share the included
-[CB1-L1L3 model](models/l1l3/README.md). Native HDR10, HLG and SDR remain
-player-owned. [Profile coverage](../README.md#supported-dolby-vision-profiles).
+| Profile | Support |
+| --- | --- |
+| 5 | Yes |
+| 7 MEL | Yes |
+| 7 FEL | Yes, including enhancement-layer reconstruction |
+| 8.1 | Yes |
+| 8.2 | Yes |
+| 8.4 | Yes |
+| 10 | Yes |
+| 9, legacy profiles, 20 | No |
 
-## Integration
+CM2.9 and CM4 metadata are supported. Profile support does not imply that every
+source contains creative trims or that every output mode applies every field.
+[Algorithms and metadata](docs/ALGORITHMS.md) explains the processing rules.
 
-The player owns decoding, timing, audio, subtitles, UI and presentation. CB1 owns
-reconstruction, processing and output metadata. The C API shares frame identity,
-FFmpeg metadata and libplacebo/GLES resources; it is not a network API.
+## Conversions
 
-LibreELEC supports Intel and AMD integrated graphics. Dedicated Radeon RX
-5000/6000/7000 and GeForce GTX 16 / RTX 20/30/40/50 support is experimental.
-Hardware support and processing support are separate.
-[Hardware](../docs/cb1/HARDWARE.md).
+| Source | Mode | Output | Result |
+| --- | --- | --- | --- |
+| Dolby Vision | Dolby Vision Standard | Dolby Vision, TV-Led | Prioritize performance with small reconstruction differences and final TV mapping |
+| Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
+| Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
+| Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
+| Dolby Vision | HDR10 Reference Expert | HDR10 | Match HDR10 conversion to the display's peak and gamut, using available creative controls |
+| HDR10 | DV Reference (AI) | Dolby Vision, TV-Led | Enable TV-Led Dolby Vision from HDR10 while preserving the source image |
+| HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
 
-AMD HDMI 3D uses Kodi's native stereoscopic path, outside CB1.
-[3D playback](../docs/cb1/3D.md).
+For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 
-## Source layout
+Expert and Adaptive HDR Mapping require a manual display profile. AI conversion uses the
+included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
+Native HDR10, HLG and SDR remain the player's responsibility.
+
+## Documentation
+
+- [Algorithms and metadata](docs/ALGORITHMS.md): pipeline, equations, ratios and coefficients.
+- [Circuits](docs/CIRCUITS.md): independently versioned end-to-end paths.
+- [Build](docs/BUILD.md) and [API](docs/API.md): dependencies and integration.
+- [Licensing](docs/LICENSING.md): licenses and source attribution.
+
+## Repository layout
 
 | Path | Content |
 | --- | --- |
-| `src/` | Processing library and API |
-| `patches/` | Matched FFmpeg/libplacebo patches |
-| `models/l1l3/` | LightGBM model and runtime contract |
-| `config/` | Dependencies, versions and source manifests |
-| `tests/` | Regression and numerical checks |
-| `docs/` | Algorithms, circuit contracts and integration |
+| `src/` | Processing library and native API |
+| `patches/` | Matched FFmpeg and libplacebo changes |
+| `config/` | Dependencies, circuit and license manifests |
+| `models/l1l3/` | LightGBM model, normalization and runtime contract |
+| `tests/` | Regression and numerical controls |
+| `tools/` | Source verification helpers |
+| `docs/` | Technical and integration documentation |
+| `LICENSES/` | Retained license texts and notices |
 
-[Processing](../docs/cb1/PROCESSING.md) · [Algorithms](docs/ALGORITHMS.md)
-· [Master Reference](docs/MASTER-REFERENCE.md)
-· [Licensing](../docs/cb1/LICENSING.md)
+## Integration
 
-GPU requirements depend on the circuit and content. Visible GUI and heavy
-conversions can exceed low-powered GPUs. Test media and training datasets are
-not included.
+The player owns decoding, timing, audio, subtitles, UI and presentation. CB1
+owns reconstruction, processing and output metadata. Its native C API shares
+FFmpeg metadata and libplacebo/GLES resources, not a network API.
+
+The LibreELEC integration supports Intel and AMD iGPUs; dedicated AMD and NVIDIA GPUs are experimental.
+Performance may vary by hardware. Report playback problems to the integration
+repository with the exact CPU/GPU, display, connection chain and build version.
+
+## Known issues
+
+- On lower-powered GPUs such as Intel N100, displaying the GUI over Dolby Vision playback can cause stuttering.
+- Some 59.94 FPS Dolby Vision sources still drop frames on N100.
+- Adaptive HDR Mapping requires further visual qualification.
+- Profile 5 black-screen reports on some AMD and Intel Xe configurations remain under investigation.
+
+Test media and training datasets are excluded. No affiliation with or certification
+by Dolby, Intel or AMD.

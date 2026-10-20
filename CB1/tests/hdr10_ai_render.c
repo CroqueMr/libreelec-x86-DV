@@ -61,6 +61,10 @@ int main(void)
     const AVDOVIMetadata *m=out->output_metadata;
     const AVDOVIDmData *l1=av_dovi_find_level(m,1),*l3=av_dovi_find_level(m,3),*l5=av_dovi_find_level(m,5);
     assert(l1 && l3 && l5 && l1->l1.min_pq==37 && l1->l1.max_pq==3128 && l1->l1.avg_pq==1412);
+    assert(l3->l3.min_pq_offset==2048 && l3->l3.max_pq_offset==2071 && l3->l3.avg_pq_offset==2050);
+    assert(out->value.source_pq[1]==av_dovi_get_color(m)->source_max_pq);
+    assert(out->value.nominal_target.primaries==PL_COLOR_PRIM_BT_2020);
+    assert(out->value.nominal_target.transfer==PL_COLOR_TRC_PQ);
     uint64_t bits=0;for(unsigned i=0;i<5;++i)bits=bits<<8|l3->dvbridge_original_bytes[i];
     assert((bits>>28&4095)==2048 && (bits>>16&4095)==2071 && (bits>>4&4095)==2050);
     assert(l5->l5.top_offset==120 && l5->l5.bottom_offset==120);

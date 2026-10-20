@@ -1,29 +1,31 @@
-# R1.0.0 Beta4 build
+# R1.0.0 Beta5 build
 
-Requires a Linux x86-64 build host and LibreELEC build dependencies.
-
-Extract `R1.0.0-Beta4-sources.tar.zst` and
-`R1.0.0-Beta4-vendor-inputs.tar.zst` into the same directory, then run:
+Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
 ```sh
-cd libreelec-x86-DV
-python3 scripts/verify-beta4-sources.py
+python3 CB1/tools/verify.py
+python3 scripts/cb1-stage.py
 CB1_HDR10_AI=yes PROJECT=Generic ARCH=x86_64 OFFICIAL=no make image
 ```
 
-The source archive contains the release recipes, complete patched Kodi, FFmpeg,
-libplacebo and Linux sources, CB1, the LightGBM model and dependency downloads.
-The vendor archive contains firmware and NVIDIA redistribution inputs.
-Original licenses and author notices are retained.
+Staging verifies and copies the bundled CB1 sources, model and matched dependency
+patches into LibreELEC's native package directories. Do not mix headers or libraries
+from another version. Native recipes download the pinned upstream archives and apply
+the recorded patches; this tree does not use Beta4's frozen pre-patched archives.
 
-One Generic x86-64 image contains the Intel/AMD display paths, experimental
-dedicated-GPU support and AMD HDMI 3D patches. Separate GPU-specific images are
-not required. [Hardware coverage](HARDWARE.md) · [3D playback](3D.md).
+Intel/AMD display support,
+experimental dedicated-GPU support and AMD HDMI 3D use one Generic image.
 
-The four patched component snapshots are used without reapplying their patches.
-Source inventories and binary-payload identifiers are recorded in
-`config/beta4-release-source.json` and `config/beta4-sources/`.
+The AI model under `CB1/models/l1l3/` is required for the AI circuits. Training data,
+movies, extracted frames and private oracle fixtures are not release inputs.
 
-These archives are the corresponding source for Beta4. The GitHub release target
-alone does not contain all candidate changes. Binary hashes may differ when
-rebuilt because of timestamps, build paths and toolchain differences.
+For regression checks, use the matched-source preparation in
+`.github/scripts/prepare-test-sources.sh` or set the dependency/source paths consumed
+by `tests/cb1`. Engine test requirements are listed in [CB1 build](../../CB1/docs/BUILD.md).
+Hardware-dependent checks require the corresponding GPU and display route.
+
+Component pins are in [versions](VERSIONS.md), `config/cb1-source-lock.json` and
+`CB1/config/dependencies.json`. The model contract is in
+`CB1/config/hdr10-ai-dependencies.json`. Runtime assets and applicable notices must
+remain in corresponding-source exports. Rebuild hashes can vary with the toolchain,
+timestamps and build paths.

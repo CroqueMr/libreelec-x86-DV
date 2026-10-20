@@ -56,7 +56,7 @@ configure_file(dvbridge_pack_sources.h.in dvbridge_pack_sources.h @ONLY)
 set_target_properties(dvbridge_core PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 11)
 target_include_directories(dvbridge_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(dvbridge_core PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(dvbridge_core PUBLIC PkgConfig::DVPlacebo PkgConfig::DVAvutil
+target_link_libraries(dvbridge_core PUBLIC ${CMAKE_DL_LIBS} PkgConfig::DVPlacebo PkgConfig::DVAvutil
                                          PkgConfig::DVAvcodec PkgConfig::DVGles
                                          PkgConfig::DVEgl PkgConfig::DVDrm PkgConfig::DVVa m)
 if(CB1_ENABLE_HDR10_AI)

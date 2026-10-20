@@ -3,6 +3,7 @@
 #include "dvbridge_fel.h"
 #include <libavcodec/bsf.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_vaapi.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -263,8 +264,13 @@ bool dvbridge_fel_device(struct dvbridge_fel *f, AVBufferRef *device)
 {
     if (!f || !device || ((AVHWDeviceContext *)device->data)->type != AV_HWDEVICE_TYPE_VAAPI)
         return false;
-    if (f->opened)
-        return f->decoder->hw_device_ctx->data == device->data && pump(f);
+    if (f->opened) {
+        const AVHWDeviceContext *bound = (void *)f->decoder->hw_device_ctx->data;
+        const AVHWDeviceContext *current = (void *)device->data;
+        const AVVAAPIDeviceContext *a = bound->hwctx, *b = current->hwctx;
+        /* BL decoder renewal can replace the wrapper without changing the VA display. */
+        return a && b && a->display && a->display == b->display && pump(f);
+    }
     f->decoder->hw_device_ctx = av_buffer_ref(device);
     if (!f->decoder->hw_device_ctx || avcodec_open2(f->decoder, f->decoder->codec, NULL) < 0) {
         f->failed = true;

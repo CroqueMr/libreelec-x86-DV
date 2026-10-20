@@ -187,7 +187,7 @@ diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplaceb
 diff --git a/src/renderer.c b/src/renderer.c
 --- a/src/renderer.c
 +++ b/src/renderer.c
-@@ -2143,12 +2143,28 @@
+@@ -2143,12 +2143,26 @@
              pass->img.repr.sys = PL_COLOR_SYSTEM_RGB;
              pass->img.repr.levels = PL_COLOR_LEVELS_FULL;
          } else {
@@ -201,8 +201,6 @@ diff --git a/src/renderer.c b/src/renderer.c
 +                pass->img.repr.sys == PL_COLOR_SYSTEM_DOLBYVISION &&
 +                pass->rotation == PL_ROTATION_0 &&
 +                !params->disable_linear_scaling &&
-+                pl_rect_w(image->crop) == pl_rect_w(pass->target.crop) &&
-+                pl_rect_h(image->crop) == pl_rect_h(pass->target.crop) &&
 +                !image->icc && !image->lut && !params->lut && neutral_adjustment;
              pl_shader_decode_color_ex(sh, pl_color_decode_args(
                  .repr              = &pass->img.repr,
@@ -224,7 +222,7 @@ diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer
      // Requires 1:1 geometry, no color operations/overlays and matched headers.
      bool cb1_dovi_transport;
 +    // CB1 opt-in: return DOVI decode in 203-nit-relative linear RGB.
-+    // Default false; restricted to identity geometry and neutral inputs.
++    // Default false; requires neutral inputs, before any linear scaling.
 +    bool cb1_dovi_linear;
      // Exact native transport sampler cache, default off. Validated GPU only.
      bool cb1_exact_scaler_cache;

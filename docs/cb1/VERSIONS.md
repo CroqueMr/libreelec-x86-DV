@@ -1,8 +1,8 @@
 # Versions
 
-| Component | Beta4 version |
+| Component | Beta5 version |
 | --- | --- |
-| Release | R1.0.0 Beta4, tag `R1.0.0-Beta4` |
+| Release | R1.0.0 Beta5, tag `R1.0.0-Beta5` |
 | LibreELEC | 13.0-devel |
 | Kodi | 22 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
 | CB1 | 0.3 |

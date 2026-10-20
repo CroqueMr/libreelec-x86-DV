@@ -3,14 +3,14 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from shipped_kodi import shipped_code
 
 ROOT=Path(__file__).resolve().parents[2]
 
 
 class PendingInfoTests(unittest.TestCase):
     def test_pending_transition_and_failure_are_distinct_from_next_frame(self):
-        patch=(ROOT/'projects/Generic/patches/kodi/kodi-9996-output-modes-and-info.patch').read_text()
-        code='\n'.join(line[1:] for line in patch.splitlines() if line.startswith('+') and not line.startswith('+++'))
+        code=shipped_code('xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp')
         block=code.split('    const bool transaction=',1)[1].split('    SetProperty("DV.ReferenceWarning"',1)[0]
         metadata=(ROOT/'projects/Generic/patches/kodi/kodi-9990-native-dv.patch').read_text()
         additions='\n'.join(line[1:] for line in metadata.splitlines() if line.startswith('+') and not line.startswith('+++'))

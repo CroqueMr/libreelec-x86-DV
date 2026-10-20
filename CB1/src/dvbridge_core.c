@@ -119,6 +119,7 @@ struct dvbridge_candidate *dvbridge_prepare_source_output(
     return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,true);
 }
 
+
 struct dvbridge_candidate *dvbridge_prepare(
     const struct dvbridge_context *context, const void *metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed)
