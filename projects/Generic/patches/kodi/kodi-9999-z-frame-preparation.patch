@@ -1,69 +1,3 @@
-diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
---- a/addons/resource.language.en_gb/resources/strings.po
-+++ b/addons/resource.language.en_gb/resources/strings.po
-@@ -25833,7 +25833,7 @@
- 
- #: system/settings/settings.xml
- msgctxt "#40817"
--msgid "Press O for player information, again for playback modes, again to close. Disable to restore Kodi's original panel and hide playback modes."
-+msgid "Use enhanced player information when pressing O. Disable to use Kodi's original information panel."
- msgstr ""
- 
- #: addons/skin.estuary/xml/IncludesDVProcessInfo.xml
-@@ -25984,17 +25984,25 @@
- msgstr ""
- 
- msgctxt "#40855"
--msgid "Playback mode menu"
-+msgid "Quick rendering switch"
- msgstr ""
- 
- msgctxt "#40856"
--msgid "Choose a playback mode during the video. Requires enhanced player information."
-+msgid "Press O after player information to choose a rendering mode, then press O again to return to video. Disable to skip this menu."
- msgstr ""
- 
- msgctxt "#40857"
- msgid "Show playback mode at start"
- msgstr ""
- 
-+msgctxt "#40900"
-+msgid "Asynchronous frame preparation"
-+msgstr ""
-+
-+msgctxt "#40901"
-+msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
-+msgstr ""
-+
- msgctxt "#40858"
- msgid "Show the accepted playback mode once when a video starts."
- msgstr ""
-diff --git a/system/settings/settings.xml b/system/settings/settings.xml
---- a/system/settings/settings.xml
-+++ b/system/settings/settings.xml
-@@ -79,12 +79,22 @@
-           <default>true</default>
-           <control type="toggle" />
-         </setting>
-+        <setting id="dvbridge.playbackmenu" type="boolean" label="40855" help="40856">
-+          <requirement>HAVE_DVBRIDGE</requirement>
-+          <level>0</level>
-+          <default>true</default>
-+          <control type="toggle" />
-+        </setting>
-         <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
-           <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
-           <control type="button" format="action" />
-         </setting>
-         <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
-           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>false</default>
-+          <control type="toggle" />
-+        </setting>
-+        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>true</default>
-           <control type="toggle" />
-         </setting>
-       </group>
 diff --git a/system/shaders/GLES/2.0/gles_gui_composite.frag b/system/shaders/GLES/2.0/gles_gui_composite.frag
 --- a/system/shaders/GLES/2.0/gles_gui_composite.frag
 +++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
@@ -100,26 +34,6 @@ diff --git a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp b/xbmc/cores/A
            DiscardStream(msgStreamFree->stream);
            msg->Reply(CActiveAEDataProtocol::ACC);
            return;
-diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
---- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-+++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -138,4 +138,16 @@
-   const auto settings = component ? component->GetSettings() : nullptr;
-   return settings && settings->GetBool("dvbridge.enhancedinfo");
- }
-+inline bool PlaybackMenuEnabled()
-+{
-+  const auto component = CServiceBroker::GetSettingsComponent();
-+  const auto settings = component ? component->GetSettings() : nullptr;
-+  return settings && settings->GetBool("dvbridge.playbackmenu");
-+}
-+inline bool AsyncPreparationEnabled()
-+{
-+  const auto component = CServiceBroker::GetSettingsComponent();
-+  const auto settings = component ? component->GetSettings() : nullptr;
-+  return settings && settings->GetBool("dvbridge.asyncpreparation");
-+}
- } // namespace DVBRIDGE
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
@@ -621,18 +535,6 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/
    };
    CClockSync m_clockSync;
  };
-diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
---- a/xbmc/dialogs/DVPlaybackModes.cpp
-+++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -28,7 +28,7 @@
- 
- bool CDVPlaybackModes::MenuEnabled()
- {
--  return DVBRIDGE::EnhancedInfoEnabled();
-+  return DVBRIDGE::PlaybackMenuEnabled();
- }
- 
- bool CDVPlaybackModes::ConfigureProfile()
 diff --git a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
@@ -1205,87 +1107,6 @@ diff --git a/xbmc/windowing/gbm/ModeChangeHold.h b/xbmc/windowing/gbm/ModeChange
 +} // namespace GBM
 +} // namespace WINDOWING
 +} // namespace KODI
-diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
---- a/xbmc/windowing/gbm/WinSystemGbm.cpp
-+++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -307,21 +307,48 @@
- }
- 
- #ifdef HAVE_DVBRIDGE
--bool CWinSystemGbm::SupportsNativeDVOutput() const
-+bool CWinSystemGbm::SupportsDVOutputMode(bool requireCurrentMode) const
-+{
-+  if (!m_DRM) return false;
-+  const auto usable = [](const drmModeModeInfo* mode) {
-+    if (!mode || mode->hdisplay != 3840 || mode->vdisplay != 2160 ||
-+        (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN))) return false;
-+    const double rate = mode->htotal && mode->vtotal ?
-+        mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
-+    return CResolutionUtils::IsCB1RefreshRate(rate);
-+  };
-+  if (usable(m_DRM->GetSelectedMode())) return true;
-+  if (requireCurrentMode) return false;
-+  auto* connector = m_DRM->GetConnector();
-+  if (!connector || !connector->IsConnected()) return false;
-+  for (int i = 0; i < connector->GetModesCount(); ++i)
-+    if (usable(connector->GetModeForIndex(i))) return true;
-+  return false;
-+}
-+
-+bool CWinSystemGbm::SupportsNativeDVOutput(bool requireCurrentMode) const
- {
-   if (!m_info || !m_info->SupportsStandardDolbyVision() ||
-       !std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
-     return false;
--  const auto* mode = m_DRM->GetSelectedMode();
-   auto* connector = m_DRM->GetConnector();
-   return connector && connector->IsConnected() &&
--         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") && mode &&
--         mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
--         !(mode->flags & DRM_MODE_FLAG_INTERLACE);
--}
--
--bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
--{
-+         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") &&
-+         SupportsDVOutputMode(requireCurrentMode);
-+}
-+
-+bool CWinSystemGbm::CompleteDVBridgePage(int timeoutMs)
-+{
-+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
-+  if (!drm || !drm->HasPendingCB1Page()) return true;
-+  if (!drm->CompleteCB1Page(timeoutMs)) return false;
-+  m_GBM->GetDevice().GetSurface().CompleteTransactionalBuffer(true);
-+  return true;
-+}
-+
-+bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async)
-+{
-+  if (!CompleteDVBridgePage()) return false;
-   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
-   if (!drm || !m_GBM || !state.Captured())
-     return false;
-@@ -340,16 +367,13 @@
-     {
-       const double rate = mode->htotal && mode->vtotal
-                               ? mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
--      valid = false;
--      for (double supported : {24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001,
--                               30.0, 50.0, 60000.0 / 1001, 60.0})
--        valid |= std::abs(rate - supported) < 0.012;
-+      valid = CResolutionUtils::IsCB1RefreshRate(rate);
-     }
-   }
-   if (valid)
-     valid = state.Stage(*drm, restore);
--  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore);
--  surface.CompleteTransactionalBuffer(accepted);
-+  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore, async);
-+  if (!drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(accepted);
-   if (accepted && restore)
-   {
-     surface.EndTransactionalMode();
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
 --- a/xbmc/windowing/gbm/WinSystemGbm.h
 +++ b/xbmc/windowing/gbm/WinSystemGbm.h

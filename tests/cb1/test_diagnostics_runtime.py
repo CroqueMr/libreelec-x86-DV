@@ -25,6 +25,28 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_debug_details_are_automatic_but_keep_the_shared_line_budget(self):
+        for debug in (False, True):
+            self.run_cpp((' #define CB1_DEBUG_BUILD 1\n' if debug else '') + r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+int main(){
+ DVBRIDGE::DiagnosticOpen();
+ for(unsigned i=0;i<100;++i) DVBRIDGE::DiagnosticLog(LOGDEBUG,"detail {}",i);
+ assert(CLog::levels.size()==24);
+ for(int level:CLog::levels) assert(level==EXPECTED);
+}
+'''.replace('EXPECTED', 'LOGINFO' if debug else 'LOGDEBUG'), {'utils/log.h':r'''
+#pragma once
+#include <fmt/format.h>
+#include <vector>
+constexpr int LOGDEBUG=0,LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+ inline static std::vector<int> levels;
+ template<class...T>static void Log(int level,fmt::format_string<T...>,T&&...){levels.push_back(level);}
+};
+'''})
+
     def run_cpp(self, program, files=None):
         with tempfile.TemporaryDirectory(prefix='dv-diagnostic-') as folder:
             root = Path(folder)

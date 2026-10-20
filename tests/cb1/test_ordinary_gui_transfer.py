@@ -24,9 +24,10 @@ struct State {bool Captured(){return false;} bool Stage(CDRMAtomic&,bool){return
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>(); State m_dvState;
  std::optional<int> m_hdrDeepColorPrevious; bool m_dvOrdinaryFrame=false;
- int gui=-1; const VideoPicture* color{}; const VideoPicture* hdr{};
+ int gui=-1; bool hdrAvailable=true; const VideoPicture* color{}; const VideoPicture* hdr{};
  void SetColorimetry(const VideoPicture* p){color=p;}
- void SetHDR(const VideoPicture* p){hdr=p;}
+ bool SetHDR(const VideoPicture* p){hdr=p; return hdrAvailable && p &&
+   (p->color_transfer==AVCOL_TRC_SMPTE2084 || p->color_transfer==AVCOL_TRC_ARIB_STD_B67);}
  void SetGuiCompositing(int transfer){gui=transfer;}
  bool RejectDVOutputSurface(){return false;}
  bool StageOrdinaryDVOutput(const VideoPicture* picture);
@@ -34,12 +35,15 @@ struct CWinSystemGbmGLESContext {
 bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture) BODY
 int main() {
  CWinSystemGbmGLESContext window;
+ for(bool available : {true,false}) {
+ window.hdrAvailable=available;
  for(int transfer : {AVCOL_TRC_BT709,AVCOL_TRC_UNSPECIFIED,
                     AVCOL_TRC_SMPTE2084,AVCOL_TRC_ARIB_STD_B67}) {
    VideoPicture picture{transfer};
    assert(window.StageOrdinaryDVOutput(&picture));
-   assert(window.gui == ((transfer==16 || transfer==18) ? transfer : 0));
+   assert(window.gui == ((available && (transfer==16 || transfer==18)) ? transfer : 0));
    assert(window.hdr==&picture && window.color==&picture && window.m_dvOrdinaryFrame);
+ }
  }
  assert(window.StageOrdinaryDVOutput(nullptr) && window.gui==0);
  window.m_DRM.reset(); window.gui=-1;

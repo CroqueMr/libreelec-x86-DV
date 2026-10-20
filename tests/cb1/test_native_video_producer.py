@@ -24,7 +24,7 @@ using OutputReason=VideoProcessingReason;
 const char* cb1_circuit_version(int id) {return id==1 ? "CB1-HDR10DV.0.1" : "CB1-DVHDR10.0.1";}
 const char* cb1_engine_version() {return "CB1 0.3";}
 enum {CB1_HDR10_DV_REFERENCE=1,CB1_HDR10_DV_ADAPTIVE,
-CB1_DV_DV_REFERENCE,CB1_DV_HDR10_BASIC,CB1_DV_HDR10_EXPERT,CB1_DV_DV_ADAPTIVE,CB1_DV_DV_MASTER_REFERENCE,CB1_DV_DV_ADAPTIVE_B};
+CB1_DV_DV_REFERENCE,CB1_DV_HDR10_BASIC,CB1_DV_HDR10_EXPERT,CB1_DV_DV_ADAPTIVE,CB1_DV_DV_MASTER_REFERENCE,CB1_DV_DV_ADAPTIVE_B,CB1_DV_DV_MASTER_IPT};
 struct CDVPlaybackInfo { enum {HDMI=1,FEL=2,CM4=4,HDR10=8}; };
 namespace DVBRIDGE { using ::SourceBinding; using ::OutputCapabilities; using ::OutputReason; struct StreamSnapshot SNAPSHOT }
 #include "DVProcessingInfo.h"
