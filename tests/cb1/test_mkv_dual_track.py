@@ -38,10 +38,9 @@ def matroska(tracks, el=-1):
 
 class MatroskaDualTrack(unittest.TestCase):
     def test_group_admission_normalized_layers_and_vanilla_rejection(self):
-        if not os.environ.get('FFMPEG_TEST_PREFIX') or not os.environ.get('FFMPEG_MATCHED_SOURCE'):
-            self.skipTest('Matched FFmpeg libraries and BSF producer source required')
+        if not os.environ.get('FFMPEG_TEST_PREFIX'):
+            self.skipTest('Matched FFmpeg libraries required')
         prefix=Path(os.environ['FFMPEG_TEST_PREFIX'])
-        ff=Path(os.environ['FFMPEG_MATCHED_SOURCE'])
         code=(TREE/'xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp').read_text()
         start=code.index('void CDVDDemuxFFmpeg::InitBlurayDovi(')
         end=code.index('int CDVDDemuxFFmpeg::ReadBlurayDovi(',start)
@@ -56,14 +55,6 @@ class MatroskaDualTrack(unittest.TestCase):
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/dovi_meta.h>
-#include <libavcodec/bsf_internal.h>
-extern const FFBitStreamFilter ff_hevc_mp4toannexb_bsf;
-const AVBitStreamFilter* __real_av_bsf_get_by_name(const char*);
-const AVBitStreamFilter* __wrap_av_bsf_get_by_name(const char* name) {
-  // Use the unchanged real filter if the minimal host prefix omitted its registration.
-  const auto* filter=__real_av_bsf_get_by_name(name);
-  return filter?filter:!strcmp(name,"hevc_mp4toannexb")?&ff_hevc_mp4toannexb_bsf.p:nullptr;
-}
 }
 enum {DVDSTREAM_TYPE_BLURAY=1};
 enum {LOGINFO,LOGWARNING,LOGERROR};
@@ -86,6 +77,7 @@ struct CDVDDemuxFFmpeg {
 }
 int main(int argc,char**argv) {
  assert(argc==5);av_log_set_level(AV_LOG_QUIET);
+ assert(av_bsf_get_by_name("hevc_mp4toannexb"));
  for(int sample=1;sample<5;sample++)for(int disabled=0;disabled<2;disabled++) {
   CDVDDemuxFFmpeg d;assert(avformat_open_input(&d.m_pFormatContext,argv[sample],nullptr,nullptr)==0);
   mode=disabled?2:0;d.InitBlurayDovi(UINT_MAX);
@@ -175,12 +167,8 @@ int main(int argc,char**argv) {
             for name,n,el in inputs:
                 (root/(name+'.mkv')).write_bytes(matroska(n,el))
             source=root/'test.cpp';source.write_text(program)
-            obj=root/'hevc.o'
-            compile_filter=subprocess.run(['cc','-fsanitize=address,undefined','-I'+str(ff),'-c',
-                str(ff/'libavcodec/bsf/hevc_mp4toannexb.c'),'-o',str(obj)],capture_output=True,text=True)
-            self.assertEqual(compile_filter.returncode,0,compile_filter.stderr)
             build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined','-I'+str(TREE/'xbmc'),
-                '-I'+str(prefix/'include'),'-I'+str(ff),str(source),str(obj),'-Wl,--wrap=av_bsf_get_by_name',
+                '-I'+str(prefix/'include'),str(source),
                 '-L'+str(prefix/'lib'),'-lavformat','-lavcodec','-lavutil','-lm','-latomic','-pthread','-o',str(root/'check')],
                 capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)

@@ -42,7 +42,7 @@ done
     --disable-doc --disable-network --disable-autodetect --disable-x86asm \
     --enable-gpl --enable-version3 --enable-shared --disable-static \
     --enable-filter=buffer,buffersink,hstack,settb \
-    --enable-demuxer=mov,mpegts --enable-parser=hevc --enable-protocol=file \
+    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc --enable-protocol=file \
     --enable-bsf=hevc_mp4toannexb
   make -j2
   make install
