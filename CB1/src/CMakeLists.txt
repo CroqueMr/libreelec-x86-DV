@@ -45,6 +45,10 @@ pkg_check_modules(DVVa REQUIRED IMPORTED_TARGET libva)
 add_library(dvbridge_core STATIC dvbridge_core.c dvbridge_placebo.c dvbridge_render.c dvbridge_cache.c
                                 dvbridge_gl_frame.c dvbridge_gl_pack.c dvbridge_fel.c dvbridge_dmabuf.c dvbridge_fel_vpp.c
                                 dvbridge_policy.c cb1_circuit.c cb1_master_reference.c dvbridge_creative.c cb1_dv_enhanced.c cb1_processing.c)
+if(CB1_ENABLE_MASTER_IPT)
+  target_sources(dvbridge_core PRIVATE cb1_master_ipt.c)
+  target_compile_definitions(dvbridge_core PUBLIC CB1_ENABLE_MASTER_IPT=1)
+endif()
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert" CB1_PACK_VERTEX)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.frag" CB1_PACK_FRAGMENT)
 foreach(variable CB1_PACK_VERTEX CB1_PACK_FRAGMENT)
@@ -56,7 +60,7 @@ configure_file(dvbridge_pack_sources.h.in dvbridge_pack_sources.h @ONLY)
 set_target_properties(dvbridge_core PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 11)
 target_include_directories(dvbridge_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(dvbridge_core PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(dvbridge_core PUBLIC PkgConfig::DVPlacebo PkgConfig::DVAvutil
+target_link_libraries(dvbridge_core PUBLIC ${CMAKE_DL_LIBS} PkgConfig::DVPlacebo PkgConfig::DVAvutil
                                          PkgConfig::DVAvcodec PkgConfig::DVGles
                                          PkgConfig::DVEgl PkgConfig::DVDrm PkgConfig::DVVa m)
 if(CB1_ENABLE_HDR10_AI)

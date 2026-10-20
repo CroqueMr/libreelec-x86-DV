@@ -3,7 +3,7 @@ Subject: [PATCH] colorspace: opt-in native Dolby Vision reconstruction bounds
 diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colorspace.h
 --- a/src/include/libplacebo/colorspace.h
 +++ b/src/include/libplacebo/colorspace.h
-@@ -128,6 +128,27 @@
+@@ -128,6 +128,30 @@
  PL_API bool pl_bit_encoding_equal(const struct pl_bit_encoding *b1,
                                    const struct pl_bit_encoding *b2);
  
@@ -16,6 +16,7 @@ diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colors
 +
 +#define PL_HAVE_CB1_MASTER_REFERENCE 1
 +struct pl_cb1_dovi_reference {
++    // 1: original layout; 2: exact paired-row intermediate.
 +    uint32_t contract;
 +    uint8_t bl_depth, el_depth, output_depth, denom;
 +    bool residual;
@@ -27,11 +28,13 @@ diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colors
 +};
 +#define PL_CB1_DOVI_REFERENCE_ABI ((PL_HAVE_CB1_MASTER_REFERENCE << 16) | (unsigned)sizeof(struct pl_cb1_dovi_reference))
 +PL_API unsigned pl_cb1_dovi_reference_abi(void);
++// Optional contract 2 capability; contract 1 remains supported.
++PL_API unsigned pl_cb1_dovi_reference_paired_rows_abi(void);
 +
  // Parsed metadata from the Dolby Vision RPU
  struct pl_dovi_metadata {
      // Colorspace transformation metadata
-@@ -164,6 +185,10 @@
+@@ -164,6 +188,10 @@
          float deadzone_slope;     // (2^el_bit_depth - 1) * S / 2^coef_log2_denom
          float deadzone_threshold; // (T - S/2) / 2^coef_log2_denom
      } nlq[3];

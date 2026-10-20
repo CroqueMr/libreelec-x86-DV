@@ -40,7 +40,7 @@ def engine_has_no_kodi_dependency(output, prefix):
     optional = {'cb1_l1l3_model.c', 'cb1_hdr10_features.c', 'cb1_hdr10_extrema.c',
                 'cb1_hdr10_quantiles.c', 'cb1_hdr10_statistics.c', 'cb1_hdr10_filter.c',
                 'cb1_hdr10_ingress.c', 'cb1_hdr10_spatial.c', 'cb1_hdr10_temporal.c',
-                'cb1_hdr10_ai.c'}
+                'cb1_hdr10_ai.c', 'cb1_master_ipt.c'}
     expected={str((ROOT/p).resolve()) for p in origins['files'].keys() | owned.keys()
               if p.endswith('.c') and Path(p).name not in optional}
     assert {str(Path(c['file']).resolve()) for c in commands} == expected, 'Declared runtime units differ from compiled units'

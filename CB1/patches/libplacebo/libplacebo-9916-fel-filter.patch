@@ -50,7 +50,7 @@ diff --git a/src/renderer.c b/src/renderer.c
  
          ident_t sub = sh_subpass(sh, plane_sh);
          pl_dispatch_abort(rr->dp, &plane_sh);
-@@ -1730,9 +1739,98 @@
+@@ -1730,9 +1739,102 @@
  }
  #endif // PL_HAVE_DOVI
  
@@ -104,10 +104,13 @@ diff --git a/src/renderer.c b/src/renderer.c
 +            luma_el=vertical;
 +            continue;
 +        }
-+        planes[c]=get_fbo(pass,c?w/2:w,c?h/2:h,fmt,c?2:1,PL_DEBUG_TAG);
++        if(data->contract==2)fmt=pl_find_fmt(pass->rr->gpu,PL_FMT_FLOAT,1,32,32,
++                              PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
++        if(!fmt)return false;
++        planes[c]=get_fbo(pass,c?w/2:w,c?h/2:h,fmt,data->contract==2?1:c?2:1,PL_DEBUG_TAG);
 +        pl_shader sh=pl_dispatch_begin(pass->rr->dp);
 +        bool ok=planes[c] && skip_reference_chroma_rows(pass,sh) &&
-+            sh_dovi_reference_grid(sh,data,image,c,vertical) &&
++            sh_dovi_reference_grid(sh,data,image,c,vertical,&pass->rr->cb1_mmr_state) &&
 +            pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=planes[c]));
 +        pl_dispatch_abort(pass->rr->dp,&sh);
 +        if (!ok) return false;
@@ -115,20 +118,21 @@ diff --git a/src/renderer.c b/src/renderer.c
 +    bool top_left=false;
 +    for(int p=0;p<image->num_planes;p++)
 +        if(image->planes[p].component_mapping[0]==1)top_left=image->planes[p].shift_y==-.5f;
++    const bool paired=data->contract==2;
 +    pl_fmt fmt=pl_find_fmt(pass->rr->gpu,PL_FMT_FLOAT,2,32,32,
 +                          PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
 +    if (!fmt) return false;
-+    pl_tex chroma=get_fbo(pass,w/2,h,fmt,2,PL_DEBUG_TAG);
++    pl_tex chroma=get_fbo(pass,w/2,paired?h/2:h,fmt,2,PL_DEBUG_TAG);
 +    pl_shader sh=pl_dispatch_begin(pass->rr->dp);
-+    bool ok=chroma && skip_inactive_rows(pass,sh,h,false) &&
-+        sh_dovi_reference_chroma(sh,planes[1],data->output_depth,top_left) &&
++    bool ok=chroma && (paired?skip_reference_chroma_rows(pass,sh):skip_inactive_rows(pass,sh,h,false)) &&
++        sh_dovi_reference_chroma(sh,planes[1],data->output_depth,top_left,paired) &&
 +        pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=chroma));
 +    pl_dispatch_abort(pass->rr->dp,&sh);
 +    if (!ok) return false;
 +    pl_shader luma=pl_dispatch_begin_ex(pass->rr->dp,true);
 +    sh=pl_dispatch_begin_ex(pass->rr->dp,true);
-+    ok=skip_inactive_rows(pass,luma,h,true) && sh_dovi_reference_grid(luma,data,image,false,luma_el) &&
-+        sh_dovi_reference_output(sh,luma,chroma,data->output_depth,w,h);
++    ok=skip_inactive_rows(pass,luma,h,true) && sh_dovi_reference_grid(luma,data,image,false,luma_el,NULL) &&
++        sh_dovi_reference_output(sh,luma,chroma,data->output_depth,w,h,paired);
 +    pl_dispatch_abort(pass->rr->dp,&luma);
 +    if (!ok) {
 +        pl_dispatch_abort(pass->rr->dp,&sh);
@@ -149,7 +153,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      const struct pl_render_params *params = pass->params;
      struct pl_frame *image = &pass->image;
      pl_renderer rr = pass->rr;
-@@ -2138,7 +2236,8 @@
+@@ -2138,7 +2240,8 @@
          }
  #endif
          if (params->cb1_dovi_transport) {

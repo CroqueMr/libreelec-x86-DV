@@ -75,12 +75,13 @@
     "patches/libplacebo/libplacebo-9911-0-policy-scaler-lut-fp32.patch": "ae6335437763c5cf451618675338cc180e72d375f49a146a907b368cfa0d20e4",
     "patches/libplacebo/libplacebo-9911-1-policy-hook-color-space.patch": "496c5c1bcfadcecdd62e6bae738448ca43b795987a19d936f7be00c72eacb345",
     "patches/libplacebo/libplacebo-9912-native-transport.patch": "cd5120ac299f7d85441db7d92ccae770e9e452e10ae296aa738a421c38f636e2",
-    "patches/libplacebo/libplacebo-9913-processing.patch": "b58e5dea9dc10b23f8668b423942b6bb553dc9fb0d2992efc9995d0ee16d00d5",
+    "patches/libplacebo/libplacebo-9913-processing.patch": "13f7dd3ca5143ba982b4b3373635abb35ebf5dbb95636609cc698a18b59aa29e",
     "patches/libplacebo/libplacebo-9914-shared-mmr-intervals.patch": "be5a37db02a43295a72e6e9719fe1874389f1c08dca6c04aaaa77d27906b24d7",
-    "patches/libplacebo/libplacebo-9915-hdr10-linear-conversion.patch": "2a9ec2ab472e7d621c949e3e9c1f6da0402bc2a08bcaa9046948e0db48aa3064",
+    "patches/libplacebo/libplacebo-9915-hdr10-linear-conversion.patch": "f69544ddeb0b350cfc5e19231afc40c346246684ba66d7c70c2c3b30711a7456",
     "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": "f2f7d6ac70566b2035966cfe83db8c02b3d6b874b81d31d41a7be126cb52c55a",
-    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "87a9918fb2c196469f178c0d7e9da7d1be779a0635770f461712bb714ced4d88",
-    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "8a56adae2fa7b033e4721021ce6356b8047dab33b1fa32b8ac90e5c5c3976290"
+    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "23ba043c4e7abd69650dde2f21249356ab0ad0128b8251c63d4bbfb020797919",
+    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "da0f4d8af67d3fa9315c4a517b5cd3e9e945237c71bdb9eb33bf5b5548b1d38f",
+    "patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": "4ce28e60a949a51554d3c0d8d2596b2ca791463baf352d7f250c6e710d0f0ac2"
   },
   "modified_sources": {
     "ffmpeg/libavcodec/dovi_rpudec.c": "8c25559492f09b6d114e05c64aee550b00388d9a187dd84176fe508a1dbb348f",
@@ -89,22 +90,24 @@
     "libplacebo/src/dispatch.c": "72d72ea25d3a13016b08e3e31fcf3e999199da2578fd255add6f199a0ad7aa26",
     "libplacebo/src/opengl/gpu.c": "d76e0547129e142966c9825eb8173269ab9ff4f360f8851e2c3e9789b56a2182",
     "libplacebo/src/opengl/formats.c": "a57ec2a106860a6e7e2ffb0ed992556c9146a37295e5a4790633c93594f9e0c6",
-    "libplacebo/src/include/libplacebo/renderer.h": "9adb52b9bc6c2324cee2367d6c0ac34866433f69e4089e929f69cc432e52215c",
+    "libplacebo/src/include/libplacebo/renderer.h": "e3d35d0d09f4746dbd1aa1f4aa07e521f5eeb08b860436949d7905471a2cd3bf",
     "libplacebo/src/include/libplacebo/shaders/sampling.h": "d5fc6b8a669c0c5fe29e0bd8900d4f5fae51c57de1961a7521a703477d4a48ce",
     "libplacebo/src/include/libplacebo/shaders.h": "bdc29cddb6545d09ce4b2c6602237cbb5d50c5ac2c1c55cecf9fa4794086bb60",
     "libplacebo/src/include/libplacebo/dispatch.h": "2208cbf66dc61069377d645309852319657be4b12fee6297315a2310ceb75d26",
-    "libplacebo/src/renderer.c": "64370633dc6bc828f560fc01f64483d8408ca049780e871b25e381ad3b5d09a6",
+    "libplacebo/src/renderer.c": "01b051316e0fd28961c863548aaf65a819c8604403e3b0ca4ebce40eb8f76c5f",
     "libplacebo/src/shaders/colorspace.c": "874918db4b26ebcbe34e5b1cbca2a8697d44e9a2a58083a57a30f2fe56240b49",
     "libplacebo/src/include/libplacebo/shaders/colorspace.h": "649798823baaa7b5b2a095e10d5979abe7d6613218c3d6625f03aedae925d29d",
     "libplacebo/src/shaders/sampling.c": "9cea111ed767379aa5c87e5db04fe787ed379b5b651cb2ea05cde259bc3cc5b6",
     "ffmpeg/libavcodec/itut35.c": "ccc767c2b4cb19ff31ff65a4226c1fe033d52f8e80fdbe6514d763762b6bb322",
     "ffmpeg/libavcodec/itut35.h": "003f72cd64cf053996ff5b32adb05497f6feae627ba8f432c2258957ec60b3f8",
     "ffmpeg/libavutil/frame.h": "0ce5f16261e98fd7b821e19674b74c0debe2e795e8405f9564650e36eaedea0b",
-    "libplacebo/src/include/libplacebo/colorspace.h": "4ba6e2c22cca97f3939126d764c1a84ff7f1585fd7add30a2f408cb68c539906",
+    "libplacebo/src/include/libplacebo/colorspace.h": "417cf28c6873baed22ccc64033c5bccb56fbec54f931ba5699250339b77d8eee",
     "libplacebo/src/include/libplacebo/utils/libav_internal.h": "efc6965d7a3581c82fad1d4c699ae6305ffba45c26102b0dc003572a362b6c40",
     "libplacebo/src/tests/gpu_tests.c": "3a9b3e24aed74365766f5ad98ed121eb7aa78f0711df0f6165b63cd812ed6e90",
-    "libplacebo/src/shaders/dovi_reference.c": "f797251dd760860825b7a218a32676733547a26fb798102de9c949832980cdb7",
+    "libplacebo/src/shaders/dovi_reference.c": "185b67bbd8f861731be8c8fbe21a04940c6e4cca7f497101ec3c5ff38f69388d",
     "libplacebo/src/shaders/meson.build": "f4ba519f76d227adabbab791814fb62f96d45236c08889409738de7eca31304e",
-    "libplacebo/src/shaders.h": "eb5429c9bf3844fc0c0bf373f02c8aeada578f1b99a40c3001f476a0f9f04a3f"
+    "libplacebo/src/shaders.h": "08eab0c281ec07e7a5f5b3714681678308c84c6f1945d0907d2e70950a8c04c2",
+    "ffmpeg/libavformat/mpegts.c": "229c92abd17c0c9bc37338adf660515d18f84af85ba4339e782ff92e4af21565",
+    "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e"
   }
 }
