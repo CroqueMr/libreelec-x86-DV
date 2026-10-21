@@ -94,7 +94,7 @@ Cr maximum at excerpt PTS 333.041 s, raster coordinate (0, 1605).
 
 ## Theoretical visual impact
 
-Most differences are very small. Larger, rare Cb/Cr excursions can soften a saturated edge or create a local colour fringe; they do not imply a whole-scene brightness change. Y errors are substantially smaller than the largest chroma errors.
+Most differences are very small and unnoticeable. They do not imply a whole-scene brightness change. Y errors are substantially smaller than the largest chroma errors.
 
 The side-by-side crops use one common illustrative SDR transform, not the TV's Dolby Vision display mapping. Difference strips use the actual transport-output code errors and are deliberately amplified. Their brightness is not the visible strength of the defect.
 
