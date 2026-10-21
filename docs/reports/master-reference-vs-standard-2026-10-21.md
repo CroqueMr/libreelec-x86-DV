@@ -2,7 +2,7 @@
 
 Standard makes small, intended-to-be near-imperceptible image trade-offs to increase rendering efficiency. This comparison measures their size and location against Master Reference, alongside GPU load and GPU work per video frame.
 
-Measured on an AMD Ryzen 5 7430U, LibreELEC DV R1.0.0 Beta5 Debug, on 21 October 2026. The rendering code was not modified for the comparison.
+Measured on an AMD Ryzen 5 7430U, LibreELEC DV R1.0.0 Beta5 Debug. The rendering code was not modified for the comparison.
 
 ## Results at a glance
 
