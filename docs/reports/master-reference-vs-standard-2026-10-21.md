@@ -1,6 +1,6 @@
 # Master Reference vs Standard: image fidelity and GPU performance
 
-Standard makes small, intended-to-be near-imperceptible image trade-offs to increase rendering efficiency. This comparison measures their size and location against Master Reference, alongside GPU work per video frame and actual presentation headroom.
+Standard makes small, intended-to-be near-imperceptible image trade-offs to increase rendering efficiency. This comparison measures their size and location against Master Reference, alongside GPU load and GPU work per video frame.
 
 Measured on an AMD Ryzen 5 7430U, LibreELEC DV R1.0.0 Beta5 Debug, on 21 October 2026. The rendering code was not modified for the comparison.
 
@@ -13,20 +13,18 @@ Measured on an AMD Ryzen 5 7430U, LibreELEC DV R1.0.0 Beta5 Debug, on 21 October
 
 GPU busy time per frame is calculated from the measured GFX engine load and the 41.708 ms source-frame period. It describes GPU work, not isolated shader latency or the wall-clock duration of one render call.
 
-Headroom is measured separately: the time left before the next accepted presentation deadline once both rendering and submission are ready. Async preparation leaves both modes ready early, so lower GPU load does not translate directly into more presentation headroom in these tests.
-
 ## Playback performance
 
 Two matched 90-second windows per mode and source, starting at 120 s and 330 s within each excerpt. Async On, no GUI or subtitles. Master Reference uses its reference path; Standard uses its forced Fast path. Display refresh was approximately 23.98 Hz.
 
-| Source | Mode | GFX load | GPU busy time / frame | Mean headroom | p1 headroom | Minimum headroom | Missed presentations |
-|---|---|---:|---:|---:|---:|---:|---:|
-| Avatar | Master Reference | 13.31% | 5.550 ms | 41.083 ms | 40.787 ms | 40.512 ms | 0 |
-| Avatar | Standard | 8.78% | 3.661 ms | 41.083 ms | 40.793 ms | 40.543 ms | 0 |
-| 1917 | Master Reference | 19.44% | 8.107 ms | 41.091 ms | 40.764 ms | 40.590 ms | 0 |
-| 1917 | Standard | 9.68% | 4.039 ms | 41.072 ms | 40.777 ms | 40.570 ms | 0 |
+| Source | Mode | GFX load | GPU busy time / frame | Missed presentations |
+|---|---|---:|---:|---:|
+| Avatar | Master Reference | 13.31% | 5.550 ms | 0 |
+| Avatar | Standard | 8.78% | 3.661 ms | 0 |
+| 1917 | Master Reference | 19.44% | 8.107 ms | 0 |
+| 1917 | Standard | 9.68% | 4.039 ms | 0 |
 
-The p1 value is the 1st percentile: 99% of measured margins are at least this large. Missed presentations come from the DRM/fence observer, not an unavailable Kodi GUI counter. Startup and seeking are excluded.
+Missed presentations come from the DRM/fence observer, not an unavailable Kodi GUI counter. Startup and seeking are excluded.
 
 ## Image comparison
 
