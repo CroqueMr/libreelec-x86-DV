@@ -6,10 +6,10 @@ Measured on an AMD Ryzen 5 7430U, LibreELEC DV R1.0.0 Beta5 Debug, on 21 October
 
 ## Results at a glance
 
-| Source | GPU load reduction | GPU time saved per frame | Mean headroom change |
-|---|---:|---:|---:|
-| Avatar | 34.0% | 1.889 ms | +0.000 ms |
-| 1917 | 50.2% | 4.068 ms | -0.019 ms |
+| Source | GPU load reduction | GPU time saved per frame |
+|---|---:|---:|
+| Avatar | 34.0% | 1.889 ms |
+| 1917 | 50.2% | 4.068 ms |
 
 GPU busy time per frame is calculated from the measured GFX engine load and the 41.708 ms source-frame period. It describes GPU work, not isolated shader latency or the wall-clock duration of one render call.
 
@@ -27,15 +27,6 @@ Two matched 90-second windows per mode and source, starting at 120 s and 330 s w
 | 1917 | Standard | 9.68% | 4.039 ms | 41.072 ms | 40.777 ms | 40.570 ms | 0 |
 
 The p1 value is the 1st percentile: 99% of measured margins are at least this large. Missed presentations come from the DRM/fence observer, not an unavailable Kodi GUI counter. Startup and seeking are excluded.
-
-### Headroom repeatability
-
-| Source | Mean change, Standard minus Master | p1 change | Range of the two matched-window mean changes |
-|---|---:|---:|---:|
-| Avatar | +0.000 ms | +0.005 ms | -0.002 to +0.002 ms |
-| 1917 | -0.019 ms | +0.013 ms | -0.025 to -0.014 ms |
-
-These small headroom differences are not a meaningful reserve increase. The reduction in GPU busy time is the clear performance benefit here; the two-window range is not a confidence interval.
 
 ## Image comparison
 
