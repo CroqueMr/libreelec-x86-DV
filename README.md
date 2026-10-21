@@ -1,7 +1,5 @@
 # LibreELEC with Dolby Vision and AMD 3D support
 
-[Master Reference vs Standard: image differences and GPU performance](docs/reports/master-reference-vs-standard-2026-10-21.md)
-
 Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Intel and AMD integrated graphics
 are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
@@ -45,6 +43,7 @@ format and the active output capabilities.
 
 Adaptive HDR Mapping and HDR10 Expert require a TV profile. Standard, Master
 Reference, Basic and Reference AI do not.
+[Master Reference vs Standard: image differences and GPU performance](docs/reports/master-reference-vs-standard-2026-10-21.md)
 
 For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
 
