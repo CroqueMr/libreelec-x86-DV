@@ -253,7 +253,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_placebo.c": {
       "source": "src/dvbridge_placebo.c",
-      "sha256": "b7cbbf9716e625eb15255c0aa4c4bafaa9a4193b7b84c9bf40502fbe4447e5df"
+      "sha256": "b09ce9d792b11a2d0785d186acf06294dfd8958e6edbcc9813108d3418d6a5a3"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_placebo.h": {
       "source": "src/dvbridge_placebo.h",
@@ -305,7 +305,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "9852f72f7d68519ef2d02f192a083eee1c8e3c3b3c8bd1b29821e62a2c432cd5"
+      "sha256": "46d2f0758b0181ca4227ed8600b962f840047d56b863cfcfbb09d20a314015c1"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

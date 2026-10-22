@@ -22,7 +22,7 @@ int main(void)
 {
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
     struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
-    const double targets[]={600,1000,2000,10000,600};unsigned count=0;
+    const double targets[]={600,1000,2000,2300,10000,600};unsigned count=0;
     for(int master=1000;master<=4000;master+=3000) {
         float pixels[32];input_pixels(pixels,master);
         pl_tex input=reference_texture(gpu,8,1,pixels);
