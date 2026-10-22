@@ -17,6 +17,7 @@ sharing the same Ryzen generation number.
 
 | Family | Representative models | Status |
 | --- | --- | --- |
+| AMD Radeon RX Vega M, DCE11.22 | Vega M GL / GH in Kaby Lake-G systems | Experimental, hardware qualification pending; [transport details](VEGA-M.md) |
 | AMD Radeon RX 5000, RDNA 1 | RX 5500 XT, 5600 XT, 5700 / 5700 XT | Experimental |
 | AMD Radeon RX 6000, RDNA 2 | RX 6400, 6600, 6700 XT, 6800, 6900 XT | Experimental |
 | AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Experimental |

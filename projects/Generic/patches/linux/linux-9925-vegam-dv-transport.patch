@@ -1,0 +1,148 @@
+Subject: [PATCH] drm/amd/display: add experimental Vega M DV transport
+
+Base: Linux 7.2.6 with the Beta5 native DV patches applied.
+Keep DCN/ordinary modes unchanged; admit only Vega M DCE11.22.
+Reuse native DCE packet, gamma, CSC and depth programming.
+No CB1 pixel processing changes. Physical HDMI qualification pending.
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -19,12 +19,13 @@
+ 
+ static bool dv_standard = true;
+ module_param_named(dv_standard, dv_standard, bool, 0444);
+-MODULE_PARM_DESC(dv_standard, "Expose experimental byte-preserving Standard-DV on native DCN HDMI");
+-
+-static bool dv_dcn_supported(enum dce_version version)
++MODULE_PARM_DESC(dv_standard, "Expose experimental byte-preserving Standard-DV on native AMD HDMI");
++
++static bool dv_display_supported(enum dce_version version)
+ {
+ 	/* Explicit families, not a >= comparison that enables unknown hardware. */
+ 	switch (version) {
++	case DCE_VERSION_11_22: /* Vega M only, not Polaris DCE11.2. */
+ 	case DCN_VERSION_1_0: case DCN_VERSION_1_01:
+ 	case DCN_VERSION_2_0: case DCN_VERSION_2_01: case DCN_VERSION_2_1:
+ 	case DCN_VERSION_3_0: case DCN_VERSION_3_01:
+@@ -44,7 +45,7 @@
+ 	struct amdgpu_device *adev = drm_to_adev(connector->base.dev);
+ 
+ 	if (!adev->dm.dc ||
+-	    !dv_dcn_supported(adev->dm.dc->ctx->dce_version) ||
++	    !dv_display_supported(adev->dm.dc->ctx->dce_version) ||
+ 	    connector->base.connector_type != DRM_MODE_CONNECTOR_HDMIA ||
+ 	    !connector->dc_link ||
+ 	    connector->dc_link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A)
+@@ -57,6 +58,9 @@
+ 			drm_object_attach_property(&connector->base.base,
+ 					connector->dv_standard_property, 0);
+ 	}
++	/* This port adds DV only; keep Vega M's native HDR10 interface unchanged. */
++	if (adev->dm.dc->ctx->dce_version == DCE_VERSION_11_22)
++		return;
+ 	connector->hdr10_deep_color_property = drm_property_create_bool(connector->base.dev,
+ 				DRM_MODE_PROP_ATOMIC, "DVBRIDGE_HDR10_DEEP_COLOR");
+ 	if (connector->hdr10_deep_color_property)
+@@ -167,7 +171,7 @@
+ 	struct drm_dvbridge_link link = {
+ 		.requested = state->dv_standard,
+ 		.lab_enabled = dv_standard && stream->ctx &&
+-			dv_dcn_supported(stream->ctx->dce_version),
++			dv_display_supported(stream->ctx->dce_version),
+ 		.sink_standard = edid && drm_dvbridge_edid(edid->raw_edid, edid->length),
+ 		.hdmi = stream->signal == SIGNAL_TYPE_HDMI_TYPE_A &&
+ 			connector->display_info.is_hdmi && connector->display_info.has_hdmi_infoframe,
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+@@ -1516,6 +1516,17 @@
+ 	}
+ }
+ 
++static enum lb_pixel_depth resource_get_lb_depth(
++		const struct dc_plane_state *plane_state,
++		const struct dc_stream_state *stream)
++{
++	/* RGB8 tunnel bytes must not pass through DCE's 10-bit normalization. */
++	if (stream->dv_standard && plane_state->ctx->dce_version == DCE_VERSION_11_22)
++		return LB_PIXEL_DEPTH_24BPP;
++	return plane_state->ctx->dce_version > DCE_VERSION_MAX ?
++		LB_PIXEL_DEPTH_36BPP : LB_PIXEL_DEPTH_30BPP;
++}
++
+ bool resource_build_scaling_params(struct pipe_ctx *pipe_ctx)
+ {
+ 	const struct dc_plane_state *plane_state = pipe_ctx->plane_state;
+@@ -1555,10 +1566,8 @@
+ 		struct spl_in *spl_in = &pipe_ctx->plane_res.spl_in;
+ 		struct spl_out *spl_out = &pipe_ctx->plane_res.spl_out;
+ 
+-		if (plane_state->ctx->dce_version > DCE_VERSION_MAX)
+-			pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_36BPP;
+-		else
+-			pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_30BPP;
++		pipe_ctx->plane_res.scl_data.lb_params.depth =
++			resource_get_lb_depth(plane_state, pipe_ctx->stream);
+ 
+ 		pipe_ctx->plane_res.scl_data.lb_params.alpha_en = plane_state->per_pixel_alpha;
+ 
+@@ -1597,10 +1606,8 @@
+ 	 * neither do DCE-8 at 4k resolution, or DCE-11.2 (broken identify pixel
+ 	 * passthrough). Therefore only use 36 bpp on DCN where it is actually needed.
+ 	 */
+-	if (plane_state->ctx->dce_version > DCE_VERSION_MAX)
+-		pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_36BPP;
+-	else
+-		pipe_ctx->plane_res.scl_data.lb_params.depth = LB_PIXEL_DEPTH_30BPP;
++	pipe_ctx->plane_res.scl_data.lb_params.depth =
++		resource_get_lb_depth(plane_state, pipe_ctx->stream);
+ 
+ 	pipe_ctx->plane_res.scl_data.lb_params.alpha_en = plane_state->per_pixel_alpha;
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c b/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c
+--- a/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c
++++ b/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c
+@@ -157,11 +157,14 @@
+ 		  GRPH_PRESCALE_SCALE_B, params->scale,
+ 		  GRPH_PRESCALE_BIAS_B, params->bias);
+ 
+-	if (params->mode != IPP_PRESCALE_MODE_BYPASS) {
++	if (params->mode != IPP_PRESCALE_MODE_BYPASS &&
++	    params->mode != IPP_PRESCALE_MODE_BYPASS_LUT) {
+ 		REG_UPDATE(PRESCALE_GRPH_CONTROL,
+ 			   GRPH_PRESCALE_BYPASS, 0);
+-
+-		/* If prescale is in use, then legacy lut should be bypassed */
++	}
++
++	/* A transport bypass must also clear a LUT left by ordinary playback. */
++	if (params->mode != IPP_PRESCALE_MODE_BYPASS) {
+ 		REG_UPDATE(INPUT_GAMMA_CONTROL,
+ 			   GRPH_INPUT_GAMMA_MODE, 1);
+ 	}
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+@@ -298,6 +298,8 @@
+ 	tf = &plane_state->in_transfer_func;
+ 
+ 	dce110_prescale_params(&prescale_params, plane_state);
++	if (pipe_ctx->stream->dv_standard)
++		prescale_params.mode = IPP_PRESCALE_MODE_BYPASS_LUT;
+ 	ipp->funcs->ipp_program_prescale(ipp, &prescale_params);
+ 
+ 	if (!plane_state->gamma_correction.is_identity &&
+diff --git a/drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h b/drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h
+--- a/drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h
++++ b/drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h
+@@ -45,7 +45,8 @@
+ 	IPP_PRESCALE_MODE_FIXED_SIGNED,
+ 	IPP_PRESCALE_MODE_FLOAT_SIGNED,
+ 	IPP_PRESCALE_MODE_FIXED_UNSIGNED,
+-	IPP_PRESCALE_MODE_FLOAT_UNSIGNED
++	IPP_PRESCALE_MODE_FLOAT_UNSIGNED,
++	IPP_PRESCALE_MODE_BYPASS_LUT
+ };
+ 
+ struct ipp_prescale_params {
