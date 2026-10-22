@@ -8,6 +8,8 @@
 int main(void)
 {
     assert(dvbridge_policy_validate(NULL) == DVBRIDGE_POLICY_INVALID_VALUE);
+    struct dvbridge_policy hdr10plus={.revision=1,.mode=DVBRIDGE_MODE_HDR10PLUS};
+    assert(dvbridge_policy_validate(&hdr10plus)==DVBRIDGE_POLICY_VALID);
     for (int mode = DVBRIDGE_MODE_DISABLED; mode <= DVBRIDGE_MODE_ENHANCED_DV; ++mode) {
         {
             struct dvbridge_policy p = {.revision = UINT64_MAX, .mode = mode,

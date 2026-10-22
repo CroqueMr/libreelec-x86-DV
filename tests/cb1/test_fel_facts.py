@@ -23,6 +23,8 @@ class FELFactsTests(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #include <memory>
+#include <array>
+#include <optional>
 #include <string>
 struct VideoSourceSideData;
 using pl_tex=void*;
@@ -38,6 +40,9 @@ bool dvbridge_map_color(dvbridge_color*,const void*,size_t,bool) {return true;}
 struct CDVPlaybackInfo {enum : unsigned {HDMI=1,FEL=2,CM4=4,HDR10=8};};
 constexpr int LOGINFO=0;
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
+constexpr int DVBRIDGE_MODE_HDR10PLUS=6,CB1_HDR10PLUS_VSIF_BYTES=31,CB1_HDR10PLUS_OK=0;
+struct AVDynamicHDRPlus {};
+int cb1_hdr10plus_vsif(uint8_t*,const AVDynamicHDRPlus*,bool,bool){assert(false);return 1;}
 namespace DVBRIDGE {
 struct StreamTelemetry {template<class... T> static void Metadata(T&&...) {}};
 int reports{};bool admitted=true,applicable{};std::string request,executed,backend;
@@ -56,13 +61,15 @@ public:
  CDVMetadataBuffer m_pendingMetadata;
  Binding m_hardwareBinding{1,2,3},m_pendingBinding{1,2,3};
  bool m_hardwareFELVpp{},m_hdr10{};unsigned m_pendingInfo{};
+ bool m_prepared{},m_guiComposed{},m_overlayVisible{};
+ std::optional<AVDynamicHDRPlus> m_hdr10plusMetadata;
  bool m_live{true},m_asyncEligible{};unsigned m_pendingHDR10Fallback{},m_outputBits{12};
  int m_hardwareFELFilter{},m_pendingFELFilter{-1},m_pendingFELBackend{},m_reportedFELKey{-1};
  uint64_t m_reportedFELStream{};
  void CaptureMetadata(const CDVMetadataBuffer& metadata,bool fel) CAPTURE
  Submission CaptureSubmission() const GETTER
  void Accepted(const Submission& submission) {ACCEPTED}
- void NativePrepared(const CDVMetadataBuffer& metadata,bool enhancement) NATIVE
+ void NativePrepared(const CDVMetadataBuffer& metadata,bool enhancement) {const bool hdr10plus=false;NATIVE}
  void AIState() {AI_RESET}
 };
 int main() {

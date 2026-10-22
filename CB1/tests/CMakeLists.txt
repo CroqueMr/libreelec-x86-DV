@@ -1,6 +1,6 @@
 foreach(name frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
              placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue dmabuf_layout metadata_bounds
-             policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 dvbridge_cache_key shader_cache dmabuf_identity)
+             policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 dvbridge_cache_key shader_cache dmabuf_identity hdr10plus hdr10plus_analysis hdr10plus_curve dv_hdr10plus)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   if(name STREQUAL "gles_pack" OR name STREQUAL "render_lifecycle")
@@ -79,6 +79,7 @@ target_link_libraries(reference_sampler PRIVATE ${CMAKE_DL_LIBS})
 add_test(NAME reference_sampler COMMAND reference_sampler)
 target_link_options(fel_queue PRIVATE -Wl,--wrap=avcodec_open2 -Wl,--wrap=avcodec_send_packet
                                      -Wl,--wrap=avcodec_receive_frame -Wl,--wrap=avcodec_flush_buffers)
+set_tests_properties(fel_queue PROPERTIES SKIP_RETURN_CODE 77)
 foreach(name task3_basic basic_policy basic_render frozen_reference)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
@@ -105,6 +106,9 @@ if(NOT EXISTS "${CB1_FFMPEG_SOURCE}/libavcodec/dovi_rpudec.c" OR
   message(FATAL_ERROR "CB1_FFMPEG_SOURCE must name configured matched producer sources")
 endif()
 add_executable(ffmpeg_metadata_layout ffmpeg_metadata_layout.c)
+target_sources(ffmpeg_metadata_layout PRIVATE
+  "${CB1_FFMPEG_SOURCE}/libavcodec/dovi_rpu.c"
+  "${CB1_FFMPEG_SOURCE}/libavcodec/golomb.c")
 file(READ "${PROJECT_SOURCE_DIR}/config/dependencies.json" dependency_lock)
 foreach(path libavcodec/dovi_rpudec.c libavutil/dovi_meta.h)
   string(JSON expected_digest GET "${dependency_lock}" modified_sources "ffmpeg/${path}")
@@ -274,3 +278,5 @@ if(CB1_ENABLE_HDR10_AI)
     "${CMAKE_CURRENT_SOURCE_DIR}/test_hdr10_ai_bundles.py"
     --binary "$<TARGET_FILE:hdr10_ai_inference>" --bundle "${CB1_L1L3_TEST_BUNDLE}")
 endif()
+
+target_link_options(hdr10plus_analysis PRIVATE "-Wl,--wrap=glClientWaitSync")

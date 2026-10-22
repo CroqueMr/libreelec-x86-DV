@@ -66,6 +66,10 @@ static AVPacket *packet(int64_t pts)
 
 int main(void)
 {
+    if(!avcodec_find_decoder(AV_CODEC_ID_HEVC)){
+        fputs("SKIP FEL queue witness requires an FFmpeg build with the HEVC decoder\n",stderr);
+        return 77;
+    }
     AVCodecParameters *parameters = avcodec_parameters_alloc();
     assert(parameters);
     parameters->codec_type = AVMEDIA_TYPE_VIDEO;

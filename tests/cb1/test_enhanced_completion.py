@@ -8,7 +8,7 @@ from shipped_kodi import shipped_code
 class EnhancedCompletion(unittest.TestCase):
     def test_bounded_completion_retains_the_current_picture(self):
         code=shipped_code('xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp')
-        start=code.index('  if (capturing || (metadata.Data() && policy.mode == DVBRIDGE_MODE_ENHANCED_DV))')
+        start=code.index('  if (capturing || (metadata.Data() &&')
         end=code.index('  // A paused final surface',start)
         program=r'''
 #include <cassert>
@@ -16,7 +16,7 @@ class EnhancedCompletion(unittest.TestCase):
 #include <cstdint>
 #include <chrono>
 #include <thread>
-constexpr int DVBRIDGE_MODE_ENHANCED_DV=4;
+constexpr int DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
 struct CDVBridgeGLES { enum class FrameStatus {Ready,Pending,Busy,Failed}; };
 using Status=CDVBridgeGLES::FrameStatus;
 static int polls;
