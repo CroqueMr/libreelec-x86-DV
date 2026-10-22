@@ -63,8 +63,9 @@
     "scripts/image": "9e3a399d7423e163a5dca09a75e9887062d7686ca29e9752e61ffde8c04a742e",
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
-    "config/cb1-patch-index.json": "5f5fb0241b99f3c51ab82cb01efb3b4e0c757db2064fd2687218870106a37804",
-    "config/cb1-versions.json": "da30d645a1639efc60c414302436200b9b05a8169be8527c78adbc7224cf7b41"
+    "config/cb1-patch-index.json": "63725bf1bc9a4c3b0e82310e29f108d9668eee9849b90eda348a6c7ab66cbdcb",
+    "config/cb1-versions.json": "da30d645a1639efc60c414302436200b9b05a8169be8527c78adbc7224cf7b41",
+    "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
