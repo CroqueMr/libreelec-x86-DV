@@ -11,6 +11,9 @@
 #include "dvbridge_pack_sources.h"
 #include "cb1_hdr10_ai.h"
 #include "cb1_dv_enhanced.h"
+#include "cb1_trim_math.h"
+#include "cb1_trim_glsl.h"
+#include "cb1_transport_glsl.h"
 #include "cb1_dv_enhanced_shader.h"
 #define CB1_DVE_GPU 1
 #include <libavutil/dovi_meta.h>
@@ -542,29 +545,25 @@ static pl_tex detail_texture(const struct pl_hook_params *p,int w,int h)
 
 static bool cm29_add_sop(pl_shader sh,const struct reference_hook *h)
 {
-    const double *c=h->creative_plan.codes;
-    float sop[4]={c[0]/4096+.5,c[1]/4096-.5,c[2]/4096+.5,
+    double controls[5];cb1_trim_decode(controls,h->creative_plan.codes);
+    float sop[4]={controls[0],controls[1],controls[2],
         h->creative_plan.policy.tv.peak_nits/203};
     struct pl_shader_var var={.var=pl_var_vec4("creative_sop"),.data=sop,.dynamic=true};
     struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .variables=&var,.num_variables=1,.description="Original CM2.9 SOP before tail lookup",
-        .body="vec3 t=clamp(color.rgb/creative_sop.w*creative_sop.x+creative_sop.y,0.0,1.0);\n"
-              "color.rgb=creative_sop.w*pow(t,vec3(creative_sop.z));\n"};
+        .body=CB1_TRIM_SOP_GLSL};
     if(!pl_shader_custom(sh,&shader))return false;
     return true;
 }
 
 static bool cm29_add_chroma(pl_shader sh,const struct reference_hook *h)
 {
-    const double *c=h->creative_plan.codes;
-    float cg[2]={c[3]/4096-.5,c[4]/4096-.5};
+    double controls[5];cb1_trim_decode(controls,h->creative_plan.codes);
+    float cg[2]={controls[3],controls[4]};
     struct pl_shader_var var={.var=pl_var_vec2("creative_color"),.data=cg,.dynamic=true};
     struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .variables=&var,.num_variables=1,.description="Original CM2.9 chroma controls",
-        .body="vec3 t=color.rgb;float Y=dot(t,vec3(0.22897,0.69174,0.07929));\n"
-              "if(Y>0.0 && creative_color.y!=0.0){\n"
-              "for(int i=0;i<3;i++)if(t[i]>0.0)t[i]*=pow((1.0+creative_color.x)*t[i]/Y,creative_color.y);}\n"
-              "color.rgb=t;\n"};
+        .body=CB1_TRIM_CHROMA_GLSL};
     return pl_shader_custom(sh,&shader);
 }
 
@@ -904,9 +903,8 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
     return (struct pl_hook_res){.failed=mask->failed, .output=PL_HOOK_SIG_NONE};
 }
 
-/* Same arithmetic/packing as pack_gles300.frag. Subgroup exchange replaces
- * only the full-precision intermediate texture fetch of the adjacent pixel.
- * Adapted from the existing mpv_dvbridge_fused1.h implementation. */
+/* Retained fused colour/composition adapter. Compatible transport kernels:
+ * cb1_transport_glsl.h. Historical adapter origins remain recorded. */
 static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_params *p)
 {
     struct active_mask *mask = priv;
@@ -942,8 +940,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .binding={.object=mask->scaled_reference,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     }
     unsigned descriptors=(mask->overlay?3:0)+(mask->scaled_reference?1:0);
-    char header[4096];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s",
+    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_CODES_GLSL)+512];
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
@@ -951,7 +949,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
-        "", ""
+        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_CODES_GLSL
     );
     struct pl_custom_shader shader = {
         .prelude=(mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
@@ -1040,19 +1038,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         "#endif\n"
         // Keep the direct transport values out of the subtitle colour branch.
         "if(!compose){\n"
-        "uint y=uint(floor(4095.0*self_ycc.x+.5));\n"
-        "float chroma=(p.x&1)==0?self_ycc.y+peer_ycc.y:self_ycc.z+peer_ycc.z;\n"
-        "uint c=uint(floor(2047.5*chroma+.5));\n"
-        "uint index=uint(p.y*3840+p.x), packet=index/3072u;\n"
-        "if(packet<packet_count){uint bit=index%1024u, byte_index=packet*128u+bit/8u;\n"
-        "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;\n"
-        "#ifdef CB1_REFERENCE_TRANSPORT\n"
-        "uint bits=(c>>1u)^y;bits^=bits>>16u;bits^=bits>>8u;bits^=bits>>4u;bits^=bits>>2u;bits^=bits>>1u;uint parity=bits&1u;\n"
-        "#else\n"
-        "uint parity=uint(bitCount(c>>1u)+bitCount(y))&1u;\n"
-        "#endif\n"
-        "c=(c&4094u)|(value^parity);}\n"
-        "return vec4(float(c>>4u),float(y>>4u),float((y&15u)|((c&15u)<<4u)),255.0)/255.0;}\n"
+        "uvec2 code=cb1_source_codes(self_ycc,peer_ycc,(p.x&1)!=0);\n"
+        "return cb1_carrier(cb1_packet(code,uint(p.y*3840+p.x)));}\n"
         "#endif\n"
         "#ifndef CB1_REFERENCE_TRANSPORT\n"
         "#ifdef CB1_NATIVE_OVERLAY\n"
@@ -1085,16 +1072,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         // Subtitle admission keeps each horizontal pair together.
         "vec3 peer_rgb=subgroupQuadSwapHorizontal(self_rgb);\n"
         "vec3 a=(p.x&1)==0?self_rgb:peer_rgb, b=(p.x&1)==0?peer_rgb:self_rgb;\n"
-        "float ya=dot(a,vec3(.2627,.6780,.0593)), yb=dot(b,vec3(.2627,.6780,.0593));\n"
-        "uint y=uint(floor(256.0+3504.0*((p.x&1)==0?ya:yb)+.5));\n"
-        "float cb=2048.0+3584.0*((a.b-ya)+(b.b-yb))/(2.0*1.8814);\n"
-        "float cr=2048.0+3584.0*((a.r-ya)+(b.r-yb))/(2.0*1.4746);\n"
-        "uint c=uint(floor(((p.x&1)==0?cb:cr)+.5));\n"
-        "uint index=uint(p.y*3840+p.x), packet=index/3072u;\n"
-        "if(packet<packet_count){ uint bit=index%1024u, byte_index=packet*128u+bit/8u;\n"
-        "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;\n"
-        "uint parity=uint(bitCount(c>>1u)+bitCount(y))&1u; c=(c&4094u)|(value^parity); }\n"
-        "color=vec4(float(c>>4u),float(y>>4u),float((y&15u)|((c&15u)<<4u)),255.0)/255.0;\n"
+        "uvec2 luma,chroma;cb1_rgb_codes(a,b,luma,chroma);int side=p.x&1;\n"
+        "color=cb1_carrier(cb1_packet(uvec2(luma[side],chroma[side]),uint(p.y*3840+p.x)));\n"
         "#endif\n"};
     // An early return must reach the transport target, never an intermediate image.
     mask->failed = mask->failed || p->stage != PL_HOOK_OUTPUT ||

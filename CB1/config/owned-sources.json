@@ -36,7 +36,7 @@
   "src/dvbridge_placebo.h": "cdef70eb16a901376321aaba7962bcd82c6be764cdaf50e07f681291961d28ab",
   "src/dvbridge_policy.c": "30b06fd5065c9ea13759377444bb4be3964a1b85befaf5cdd7843f3279cd630a",
   "src/dvbridge_policy.h": "e7f6b11fc394038097e451e69f06122919aae117e1c9c4bad35199c53bf8ae2a",
-  "src/dvbridge_render.c": "7a0878d2c9c0742bf0a353afc3ff8ec140ff47af7630c8be0689873aaf8fbd3c",
+  "src/dvbridge_render.c": "285bd8212ea266e4b0ce94a9a29fe5fb9e600714c8f2bb9a58efa235ee0a0ad4",
   "src/dvbridge_fel_seek.h": "cbf4a7578f889fe48b0ed6dae844086d4b0137df4855f81af647321386c4a862",
   "src/dvbridge_render.h": "65bc890b69ebb98acd781278188734f995a0ec6df46f160361ffdb33c8de5372",
   "src/dvbridge_gl_frame.c": "e6076f3f5162ff58314a9baa7f73bfec77c69546eb22acf6614c30bd24461df6",
@@ -47,7 +47,7 @@
   "src/cb1_processing.h": "79b5a8d6b23c93f3bf56949dd13636fe94790e90ff4e728be21e14cc6216bfd7",
   "src/cb1_dv_enhanced.c": "465742fd573acc47b7a276b06d0df79b75ff6bcf026006e94b02d54701912432",
   "src/cb1_dv_enhanced.h": "bc6003f5a31252f77b1f61190d759aa658606e2184dd1d40cbc5a398be97f691",
-  "src/cb1_dv_enhanced_shader.h": "19adfaf4269d4ab0e43de98f2ef40bd0f45ee7e1c96b706b7da6c8d42f54de63",
+  "src/cb1_dv_enhanced_shader.h": "544a829ee32a3cb3ddc5786f9f029c5253c5c5bd68f94de9e082940f0708ced4",
   "src/dvbridge_dmabuf.c": "43afd8b1f6504c45c7deb10d0c3f69e04a55fa9e9e0bb4c6d015f25215e2fa99",
   "src/dvbridge_cache.c": "f615f36a3c1c8a5727904043c6e5438a713038501e22e0d5414611858f2c9b6b",
   "src/dvbridge_cache.h": "09e56d0fe6e6f10dbf4d68bd38de2ec7dc0a13ef51ecd5ed7887606cfd6a82f9",
@@ -58,5 +58,7 @@
   "src/dvbridge_metadata_bounds.h": "67dfeaee0843dbc7b1c351a9ebc6edab2438684db1fe6905a9db4303ec3143d1",
   "src/mpv_dvbridge_cm4.h": "96f349d4e95bd5ce5f9eb5d19b78ae15a1a915aa51a43414ca30b102c609ab5e",
   "src/pack_gles300.vert": "1d0565b90a136accafa64a1efa0239d4eec917367c73dff5123df9edcd62d4af",
-  "src/cb1_trim_math.h": "178b7ef0b567b61c7d73cea702971b10299a04931367c090be0a3c8561c8cfcc"
+  "src/cb1_trim_math.h": "178b7ef0b567b61c7d73cea702971b10299a04931367c090be0a3c8561c8cfcc",
+  "src/cb1_trim_glsl.h": "e1fe3526210cf5d53ee276c82e41a2e00e7dd78d4a0aa83de316afff809059b8",
+  "src/cb1_transport_glsl.h": "2933d6bf11044d6d0298cef77acb38b73901f8914bf8d9ff3698edf797a6d436"
 }

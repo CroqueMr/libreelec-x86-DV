@@ -16,8 +16,9 @@ grant. This does not relicense their separately implemented dependencies.
 The scalar creative module combines original CM4/resolver/fitter code with
 replacement numerical kernels under GPL-2.0-or-later; see the migration record.
 
-cb1_dv_enhanced_shader.h and
-dvbridge_render.c are GPL-3.0-only. The shared static-library combination is
+The original Adaptive compute shader and replacement GPU trim/carrier kernels
+use GPL-2.0-or-later. The retained fused colour/composition adapter in
+dvbridge_render.c is GPL-3.0-only. The shared static-library combination is
 therefore conveyed under GPL-3.0-only, retaining each file's original notices.
 
 Original tooling/documentation is MIT where declared. The FFmpeg-derived filter

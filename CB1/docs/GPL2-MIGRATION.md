@@ -48,6 +48,8 @@ GPLv3 portions. Historical extraction records and third-party notices remain.
 | `dvbridge_metadata.h` | ETSI GS CCM 001 V1.1.1 clauses 6.2/6.3; FFmpeg's LGPL byte-order and CRC utilities; retained public frame-state API | Full payloads, packet arrays, committed frame state and diagnostics compared byte-for-byte with Beta5 |
 | `pack_gles300.frag`, metadata-only bodies in `dvbridge_gl_pack.c` | ETSI GS CCM 001 clause 6.4 bit placement, parity scrambling and repetition; retained BT.2020 code-value arithmetic | Full 4K RGBA8 frames compared with separately compiled Beta5 packer, including patch and in-place paths |
 | `cb1_trim_math.h`, scalar call sites in `dvbridge_creative.c` | Existing published numerical contract in `ALGORITHMS.md`: affine word decoding, bounded PQ interpolation, linear SOP/chroma equations | Exact scalar RGB, resolver fields, CM4 coefficients/operators, guidance and edited metadata against separately compiled normal Beta5 |
+| `cb1_trim_glsl.h`, CM2.9 GPU call sites | Same numerical SOP/chroma contract and retained float-uniform conversion | Complete FP32 output compared with separately compiled Beta5 |
+| `cb1_transport_glsl.h`, source/RGB/Adaptive packing call sites | ETSI clause 6.4 bit placement/parity and retained pre-quantization colour equations | Full reference/scaled transport and Adaptive compute carriers compared byte-for-byte; quad exchange requires a driver exposing the extension |
 
 The replacement trim kernel implements numerical operations, not a certified
 Dolby mapper. It retains the existing floating-point expression order and
@@ -56,8 +58,11 @@ validation, metadata descriptors, bounded fitter and public API remain covered
 by the owner's grant; no foreign display mapper is incorporated. The historical
 DoViBaker/MPC references remain recorded in `CREATIVE-MAPPING.md`. Their old
 runtime implementation is only an external oracle in this qualification.
-The creative GPU operators in `dvbridge_render.c` are a separate unresolved
-portion; replacing the scalar operations does not clear that file.
+The scalar and CM2.9 GPU numerical kernels are replaced. The retained fused
+colour/composition adapter in `dvbridge_render.c` is a separate unresolved
+portion; replacing the numerical/packet kernels does not clear that file.
+The Adaptive shader combines the replacement carrier with the original
+expansion/statistics algorithm under the owner's grant.
 
 The canonical packer uses a four-bit parity table after folding the 12-bit
 luma/chroma parity word. Metadata-only writes calculate the parity directly
@@ -133,6 +138,20 @@ python3 CB1/tools/compare_beta5_creative.py --baseline /path/to/frozen/Beta5/CB1
 Use `--sanitize` for the ASan/UBSan variant. The test compares declared fields,
 not structure padding, and excludes the fitter's wall-clock duration. A standalone
 math-contract test pins neutral, clipping, fractional and endpoint behavior.
+
+Full shader-output comparison needs separately configured matched engine builds:
+
+```sh
+python3 CB1/tools/compare_beta5_render.py --baseline /path/to/frozen/Beta5/CB1 --baseline-build /path/to/frozen/build --candidate-build /path/to/candidate/build
+```
+
+The runner compiles two standalone probes, not production capture hooks. It
+streams and compares every output byte, including FP32 CM2.9 results, source and
+scaled reference carriers, metadata bits, both orientations, active borders,
+PQ/SDR overlays and Adaptive prepacking/statistics. The local llvmpipe run
+compares 464,748,640 bytes exactly. A deliberate one-byte capture mutation fails.
+The unavailable fragment-quad exchange paths are explicitly unqualified; their
+sampling/admission instructions are unchanged. This is not hardware evidence.
 
 ## Remaining scope
 
