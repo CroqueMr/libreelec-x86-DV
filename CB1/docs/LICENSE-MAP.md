@@ -2,8 +2,8 @@
 
 ## Current distribution
 
-This inventory describes the Beta4 release sources. The complete matching
-runtime is in the [release source archives](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta4);
+This inventory describes the extracted normal Beta5 source tree. The complete matching
+release components are in the [release source archives](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta5);
 the main-branch code is not a substitute for those archives.
 
 The modified Kodi program links the shared rendering and creative modules.
@@ -11,8 +11,8 @@ Those modules contain GPL-3.0-only code; the current combined executable is
 therefore distributed under GPL-3.0-only. This does not change the license of
 Linux, unrelated programs, firmware or each upstream source file.
 
-There are 64 files in the runtime source directory: 6 marked GPL-3.0-only,
-54 GPL-3.0-or-later, 2 LGPL-2.1-or-later, and 2 build/provenance records without a
+There are 61 files in the normal runtime source directory: 6 marked GPL-3.0-only,
+51 GPL-3.0-or-later, 2 LGPL-2.1-or-later, and 2 build/provenance records without a
 file-level SPDX identifier. These are declaration counts, not authorship proof.
 
 ## Parts requiring GPLv3
@@ -140,6 +140,18 @@ clearance flag or infer model rights from LightGBM's MIT license.
 ## A GPLv2-compatible variant
 
 No GPLv2-compatible variant is established by this audit.
+
+The migration target is compatible project additions, not a GPLv2-only image.
+FFmpeg keeps the licensing and options of the exact vanilla LibreELEC reference;
+its current recipe declaration is not a reason to rewrite upstream FFmpeg.
+Existing runtime notices, model weights and rendering remain unchanged.
+
+Documented third-party adaptations require a compatible permission or an
+independent replacement. Files merely declared GPLv3 are not automatically
+third-party derivatives, and checksum inventories do not establish ownership.
+Metadata helpers, generated shaders, Kodi adapters and the compiled dependency
+closure need the same review as the engine sources. No mode may be removed or
+silently replaced with a fallback to satisfy this migration.
 
 - Contributions wholly controlled by the project may receive an additional MIT,
   BSD or GPL-2.0-or-later grant from the relevant rightsholders.

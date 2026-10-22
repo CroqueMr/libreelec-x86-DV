@@ -47,4 +47,8 @@ Changing the engine's directory or linkage does not produce a GPLv2 variant.
 The model's dependency lock records `redistribution_cleared: false`. Hash integrity
 does not establish ownership, training-data rights or a redistribution permission.
 
+The planned GPLv2-compatible migration concerns project additions. FFmpeg retains
+the conditions of the exact vanilla LibreELEC reference. No runtime license grant,
+model asset or rendering behavior has been changed by the provenance audit.
+
 No proprietary Dolby SDK or media are included.

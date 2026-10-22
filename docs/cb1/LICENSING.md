@@ -31,6 +31,10 @@ license texts. The model lock still records `redistribution_cleared: false`;
 this needs a provenance/rights confirmation, not a silent flag change.
 No proprietary Dolby SDK is used. This license inventory is not patent clearance.
 
+The GPLv2-compatible migration targets the project's additions, preserving the
+exact vanilla LibreELEC dependency conditions. Existing license grants and Beta5
+rendering are unchanged. The migration is not yet a qualified distributable build.
+
 ## Credits
 
 - [dangerouslaser](https://github.com/dangerouslaser): Global rendering-engine optimizations.
