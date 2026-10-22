@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_dv_enhanced.h"
 #include <math.h>
 #include <string.h>

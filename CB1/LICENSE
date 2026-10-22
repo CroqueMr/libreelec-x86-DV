@@ -9,7 +9,11 @@ serializer and CM4 wire helpers use GPL-2.0-or-later. Retained third-party notic
 The replacement canonical tunnel shader, GL packer, vertex and generated-source
 wrapper use GPL-2.0-or-later. Fused renderer packing remains under its prior terms.
 
-dvbridge_creative.c/.h, cb1_dv_enhanced.c/.h, cb1_dv_enhanced_shader.h and
+Original frame transactions, Master Reference contract, processing preparation,
+GL frame adapter and CPU Adaptive model use GPL-2.0-or-later under the owner's
+grant. This does not relicense their separately implemented dependencies.
+
+dvbridge_creative.c/.h, cb1_dv_enhanced_shader.h and
 dvbridge_render.c are GPL-3.0-only. The shared static-library combination is
 therefore conveyed under GPL-3.0-only, retaining each file's original notices.
 

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Own frame metadata and commit serializer state only after a successful presentation. */
 #include "dvbridge_core.h"
 #include "dvbridge_metadata.h"

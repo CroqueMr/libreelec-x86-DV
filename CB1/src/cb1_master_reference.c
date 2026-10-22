@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_master_reference.h"
 #include "dvbridge_placebo.h"
 #include "dvbridge_metadata_bounds.h"

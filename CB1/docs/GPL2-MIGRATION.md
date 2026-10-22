@@ -23,6 +23,21 @@ Their implementation text is unchanged. The NumPy BSD-3-Clause summation notices
 remain in the features/temporal modules. The FFmpeg-derived filter retains
 LGPL-2.1-or-later. These individual grants do not relicense the combined program.
 
+The same grant covers these original frame/control modules, also without
+implementation changes:
+
+| Files | Original project portion | Not covered by this grant |
+| --- | --- | --- |
+| `dvbridge_core.c/.h` | Candidate ownership, geometry and presentation commit | Imported serializer implementation, replaced separately |
+| `cb1_master_reference.c/.h` | FFmpeg metadata validation/copying into the exact-reference contract | libplacebo reconstruction shaders |
+| `cb1_processing.c/.h` | Original bounds certification, table preparation and cache/admission management | Processing shader additions in libplacebo |
+| `cb1_dv_enhanced.c/.h` | Original expansion curve, scalar model and temporal state | Creative trim adaptations and expansion/packing GPU shader |
+| `dvbridge_gl_frame.c/.h` | Native decoded-texture wrapping through public libplacebo/GLES APIs | NVIDIA import and unresolved FEL/VAAPI adaptations |
+
+Calling or declaring types from a separately licensed module does not grant
+rights to its implementation. The combined program still includes unresolved
+GPLv3 portions. Historical extraction records and third-party notices remain.
+
 ## Replacements
 
 | Component | Implementation basis | Compatibility check |
