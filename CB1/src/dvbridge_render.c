@@ -82,6 +82,7 @@ struct direct_output {
     struct pl_hook hook;
 };
 static struct pl_hook_res reference_quantize(void *priv, const struct pl_hook_params *p);
+static double dv_ideal_pq(double nits);
 
 #include "cb1_processing.h"
 
@@ -97,7 +98,7 @@ struct cm29_tail_cache_key {
 struct dvbridge_renderer {
     pl_gpu gpu;
     pl_renderer renderer;
-    pl_tex rgb, ai_rgb, enhanced_rgb, enhanced_input;
+    pl_tex rgb, ai_rgb, enhanced_rgb, enhanced_input, native_picture;
     pl_tex cm29_tail_atlas;
     pl_tex cm29_tail_axis;
     struct cm29_tail_cache_key cm29_tail_key;
@@ -1277,6 +1278,7 @@ static void renderer_free(struct dvbridge_renderer *r)
     pl_tex_destroy(r->gpu, &r->ai_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_input);
+    pl_tex_destroy(r->gpu, &r->native_picture);
     pl_tex_destroy(r->gpu, &r->ai_enhanced_stats);
     pl_tex_destroy(r->gpu, &r->ai_enhanced_native);
     pl_tex_destroy(r->gpu, &r->ai_enhanced_packed);
@@ -1335,14 +1337,14 @@ static bool cm29_tail_gain_eligible(double gain_code)
     return gain_code >= 2048.0;
 }
 
-static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
+static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *source,
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry, pl_tex packed, bool flip,
                         const struct dvbridge_hdr10_session *session,
                         const struct dvbridge_policy *policy,
                         const struct dvbridge_native_overlay *overlay,bool force_refresh,
                         struct direct_output *direct,bool enhanced_reconstruction,
-                        const struct pl_cb1_dovi_reference *master)
+                        const struct pl_cb1_dovi_reference *master,bool native_stage)
 {
     if (!r)
         return false;
@@ -1415,7 +1417,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     image.lut = NULL;
     struct pl_frame target = {
         .num_planes = 1,
-        .planes = {{.texture = direct ? direct->texture : packed ? packed :
+        .planes = {{.texture = native_stage ? r->native_picture : direct ? direct->texture : packed ? packed :
                     enhanced_reconstruction && r->enhanced_input ? r->enhanced_input : r->rgb,
                     .flipped = direct ? direct->flip : packed && flip,
                     .components = 4, .component_mapping = {0, 1, 2, 3}}},
@@ -1586,8 +1588,8 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     params.cb1_dovi_transport=mask.source_domain;
     params.cb1_dovi_linear=(enhanced_reconstruction && r->enhanced_linear) ||
         ((session || (policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT)) &&
-         geometry.source_width==3840 && geometry.source_height==2160 &&
-         !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160);
+         (native_stage || (geometry.source_width==3840 && geometry.source_height==2160 &&
+         !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160)));
     if(enhanced_reconstruction && r->enhanced_input)
         params.min_fbo_precision=16;
     params.cb1_exact_scaler_cache=mask.source_domain && r->exact_scaler_cache;
@@ -1731,12 +1733,10 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
          creative.backend==DVBRIDGE_CREATIVE_CM29_COMPATIBILITY) &&
         mapped.color.transfer==PL_COLOR_TRC_PQ &&
         mapped.color.primaries==PL_COLOR_PRIM_BT_2020 && params.cb1_dovi_linear && paired &&
-        mapped.dovi.nlq_active && direct && direct->custom_quantize && !overlay &&
+        mapped.dovi.nlq_active && (native_stage || (direct && direct->custom_quantize)) && !overlay &&
         !source->num_overlays && (!el || !el->num_overlays) && !spatial &&
-        geometry.source_width==3840 && geometry.source_height==2160 &&
-        !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160;
-    if(tail_scope && !r->cm29_tail_key_valid)
-        reference.neutral_cm29=false;
+        !geometry.x && !geometry.y && geometry.width==geometry.source_width &&
+        geometry.height==geometry.source_height;
     reference.gpu_map_eligible=tail_scope && !reference.neutral_cm29;
     if(reference.gpu_map_eligible){
         const struct pl_raw_primaries *bt2020=pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
@@ -1830,6 +1830,78 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
         r->policy_ready = true;
     }
     if(r->ready && direct)r->direct_output=true;
+    return r->ready;
+}
+
+struct expert_scale_mask { struct active_mask area;float maximum_pq; };
+static struct pl_hook_res expert_scale_output(void *priv,const struct pl_hook_params *p)
+{
+    struct expert_scale_mask *mask=priv;mask->area.called=true;
+    struct pl_shader_var vars[]={
+        {.var=pl_var_vec4("expert_scale_area"),.data=mask->area.rect,.dynamic=true},
+        {.var=pl_var_float("expert_scale_peak"),.data=&mask->maximum_pq,.dynamic=true}};
+    struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .variables=vars,.num_variables=2,.description="Expert final-scale bounds and active area",
+        .body="color.rgb=clamp(color.rgb,0.0,expert_scale_peak);\n"
+              "if(gl_FragCoord.x<expert_scale_area.x || gl_FragCoord.y<expert_scale_area.y || "
+              "gl_FragCoord.x>=expert_scale_area.z || gl_FragCoord.y>=expert_scale_area.w)color=vec4(0,0,0,1);\n"};
+    mask->area.failed=p->stage!=PL_HOOK_OUTPUT || p->color.transfer!=PL_COLOR_TRC_PQ ||
+        !pl_shader_custom(p->sh,&shader);
+    return (struct pl_hook_res){.failed=mask->area.failed,.output=PL_HOOK_SIG_NONE};
+}
+
+static bool render(struct dvbridge_renderer *r,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex packed,bool flip,
+    const struct dvbridge_hdr10_session *session,const struct dvbridge_policy *policy,
+    const struct dvbridge_native_overlay *overlay,bool force_refresh,
+    struct direct_output *direct,bool enhanced_reconstruction,
+    const struct pl_cb1_dovi_reference *master)
+{
+    bool scaled=geometry.width!=geometry.source_width || geometry.height!=geometry.source_height;
+    if(!policy || policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT || !scaled || master ||
+       enhanced_reconstruction || (r && r->dv.active))
+        return render_picture(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,
+            session,policy,overlay,force_refresh,direct,enhanced_reconstruction,master,false);
+    if(!r)return false;
+    r->ready=r->direct_output=r->policy_ready=false;
+    struct expert_scale_mask mask={0};
+    if(!source || !dvbridge_metadata_bounds(metadata,bytes) ||
+       !reference_area(mask.area.rect,metadata,geometry))return false;
+    pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+        PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
+    if(!fmt || !pl_tex_recreate(r->gpu,&r->native_picture,pl_tex_params(
+        .w=geometry.source_width,.h=geometry.source_height,.format=fmt,
+        .sampleable=true,.renderable=true)))return false;
+    struct dvbridge_geometry native={geometry.source_width,geometry.source_height,0,0,
+        geometry.source_width,geometry.source_height};
+    if(!render_picture(r,source,metadata,bytes,pts,el_pts,native,NULL,false,
+        session,policy,NULL,force_refresh,NULL,false,NULL,true))return false;
+    struct pl_frame image={.num_planes=1,
+        .planes={{.texture=r->native_picture,.components=4,.component_mapping={0,1,2,3}}},
+        .repr=pl_color_repr_rgb,.color=r->reconstructed_color};
+    struct pl_frame target=image;
+    target.planes[0].texture=direct?direct->texture:r->rgb;
+    target.planes[0].flipped=direct && direct->flip;
+    double sx=(double)geometry.source_width/geometry.width,sy=(double)geometry.source_height/geometry.height;
+    image.crop=(pl_rect2df){-geometry.x*sx,-geometry.y*sy,
+        (3840-geometry.x)*sx,(2160-geometry.y)*sy};
+    target.crop=(pl_rect2df){0,0,3840,2160};
+    mask.maximum_pq=dv_ideal_pq(r->policy_pending.nominal_target.hdr.max_luma);
+    if(direct && direct->flip){float top=mask.area.rect[1];mask.area.rect[1]=2160-mask.area.rect[3];mask.area.rect[3]=2160-top;}
+    const struct pl_hook blank={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
+        .priv=&mask,.hook=expert_scale_output,.signature=0x4342314553430001ULL};
+    const struct pl_hook *hooks[]={&blank,direct?&direct->hook:NULL};
+    struct pl_render_params params=pl_render_default_params;
+    params.min_fbo_precision=32;params.peak_detect_params=NULL;params.dither_params=NULL;
+    params.frame_mixer=NULL;params.sigmoid_params=NULL;params.cb1_nearest_identity=true;
+    params.cb1_stable_pq=true;params.cb1_fp32_scaler_lut=true;
+    params.hooks=hooks;params.num_hooks=direct && direct->custom_quantize?2:1;
+    r->ready=render_image(r,&image,&target,&params,&mask.area,NULL,false);
+    if(direct && direct->custom_quantize)
+        r->ready=r->ready && direct->quantize.called && !direct->quantize.failed;
+    r->direct_output=r->ready && direct;
+    r->policy_pending.geometry=geometry;r->policy_ready=r->ready;
     return r->ready;
 }
 
