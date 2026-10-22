@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Pack transport bytes with isolated GL state; never apply ordinary RGB color processing. */
 #include "dvbridge_gl_pack.h"
 #include <GLES3/gl3.h>
@@ -181,15 +181,15 @@ bool dvbridge_gl_patch(struct dvbridge_gl_packer *p,unsigned texture,unsigned fr
         const char *vertex="#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
         const char *fragment="#version 300 es\nprecision highp float;precision highp int;"
             "uniform highp sampler2D pq_input;uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;out vec4 color;"
-            "uint parity(uint v){v^=v>>16u;v^=v>>8u;v^=v>>4u;v^=v>>2u;return (v^(v>>1u))&1u;}"
-            "void main(){ivec2 p=ivec2(gl_FragCoord.xy);if(flip_y!=0u)p.y=2159-p.y;"
-            "uvec3 b=uvec3(floor(texelFetch(pq_input,p,0).rgb*255.0+.5));"
-            "uint index=uint(p.y*3840+p.x),packet=index/3072u;"
-            "if(packet<packet_count){uint bit=index%1024u,byte_index=packet*128u+bit/8u;"
-            "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;"
-            "uint y=(b.g<<4u)|(b.b&15u),c=(b.r<<4u)|(b.b>>4u);"
-            "b.b=(b.b&239u)|((value^parity(c>>1u)^parity(y))<<4u);}"
-            "color=vec4(vec3(b),255.0)/255.0;}";
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=2159-pixel.y;"
+            "uvec3 bytes=uvec3(floor(texelFetch(pq_input,pixel,0).rgb*255.0+.5));"
+            "uint raster=uint(pixel.y*3840+pixel.x),packet=raster/3072u;"
+            "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
+            "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
+            "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
+            "parity^=parity>>8u;parity^=parity>>4u;parity=(0x6996u>>(parity&15u))&1u;"
+            "bytes.b=(bytes.b&0xefu)|((data^parity)<<4u);}"
+            "color=vec4(vec3(bytes),255.0)/255.0;}";
         p->patch=dvbridge_gl_packer_create(vertex,fragment);
         if(!p->patch)return false;
     }
@@ -206,13 +206,13 @@ bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer
         const char *fragment="#version 300 es\n#extension GL_EXT_shader_framebuffer_fetch_non_coherent:require\n"
             "precision highp float;precision highp int;layout(noncoherent,location=0)inout highp vec4 color;"
             "uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;"
-            "uint parity(uint v){v^=v>>16u;v^=v>>8u;v^=v>>4u;v^=v>>2u;return (v^(v>>1u))&1u;}"
-            "void main(){ivec2 p=ivec2(gl_FragCoord.xy);if(flip_y!=0u)p.y=2159-p.y;"
-            "uvec3 b=uvec3(floor(color.rgb*255.0+.5));uint index=uint(p.y*3840+p.x),packet=index/3072u;"
-            "if(packet<packet_count){uint bit=index%1024u,byte_index=packet*128u+bit/8u;"
-            "uint value=(metadata_words[byte_index/4u][int(byte_index%4u)]>>(7u-bit%8u))&1u;"
-            "uint y=(b.g<<4u)|(b.b&15u),c=(b.r<<4u)|(b.b>>4u);"
-            "b.b=(b.b&239u)|((value^parity(c>>1u)^parity(y))<<4u);}color=vec4(vec3(b),255.0)/255.0;}";
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=2159-pixel.y;"
+            "uvec3 bytes=uvec3(floor(color.rgb*255.0+.5));uint raster=uint(pixel.y*3840+pixel.x),packet=raster/3072u;"
+            "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
+            "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
+            "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
+            "parity^=parity>>8u;parity^=parity>>4u;parity=(0x6996u>>(parity&15u))&1u;"
+            "bytes.b=(bytes.b&0xefu)|((data^parity)<<4u);}color=vec4(vec3(bytes),255.0)/255.0;}";
         p->fetch=create(vertex,fragment,false);if(!p->fetch)return false;
     }
     barrier();

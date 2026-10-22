@@ -31,6 +31,16 @@ LGPL-2.1-or-later. These individual grants do not relicense the combined program
 | `dvbridge_metadata_bounds.h` | Matched FFmpeg public `AVDOVIMetadata` layout, LGPL-2.1-or-later | Same accepted/rejected storage layouts, alignment, stride and bounds |
 | `mpv_dvbridge_cm4.h` | Public field widths and optional-block syntax in MIT dovi_tool `d4ad4ba7` | Same accepted/rejected blocks and exact transport bytes |
 | `dvbridge_metadata.h` | ETSI GS CCM 001 V1.1.1 clauses 6.2/6.3; FFmpeg's LGPL byte-order and CRC utilities; retained public frame-state API | Full payloads, packet arrays, committed frame state and diagnostics compared byte-for-byte with Beta5 |
+| `pack_gles300.frag`, metadata-only bodies in `dvbridge_gl_pack.c` | ETSI GS CCM 001 clause 6.4 bit placement, parity scrambling and repetition; retained BT.2020 code-value arithmetic | Full 4K RGBA8 frames compared with separately compiled Beta5 packer, including patch and in-place paths |
+
+The canonical packer uses a four-bit parity table after folding the 12-bit
+luma/chroma parity word. Metadata-only writes calculate the parity directly
+from stored nibbles. Uniforms, RGBA8 byte order, packet repetition and output
+orientation remain unchanged. The GL resource/state adapter, public header,
+trivial vertex and generated-source wrapper are original project contributions
+covered by the owner's grant. Float conversion constants and operation order
+remain a compatibility contract, not a new image-processing algorithm.
+Fused renderer/Adaptive shader bodies remain outside this replacement lot.
 
 The serializer constructs the fixed header by field offset, orders extension
 descriptors with `qsort` and writes bounded blocks with FFmpeg's big-endian
@@ -71,6 +81,21 @@ programs, compares cache files, validates helper outputs and streams the complet
 serializer output/state for exact comparison. It checks baseline helper hashes
 and rejects disabled assertions. It does not include
 the old GPLv3 implementation in the replacement runtime.
+
+The complete-frame canonical tunnel comparison uses Mesa llvmpipe, not a
+mini-PC or physical output:
+
+```sh
+python3 CB1/tools/compare_beta5_tunnel.py --baseline /path/to/frozen/Beta5/CB1
+```
+
+This compiles the old wrapper with renamed symbols only into a standalone test.
+It compares every byte of six 4K input families in both orientations, packet counts
+1 through 5, normal packing, metadata-only patching and supported in-place
+patching. Finite clipping, near-black, ramps and random colors are included.
+The recorded local run compares 1,194,393,600 bytes with zero differences.
+This is software-driver evidence, not cross-driver equivalence or a complete
+color/patent/certification assessment.
 
 ## Remaining scope
 

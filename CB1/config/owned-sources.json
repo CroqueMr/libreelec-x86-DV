@@ -1,7 +1,7 @@
 {
   "src/dvbridge_fel.c": "f882f40e1fc41c4c331dea9865de35d0ae3d0c41f21a54e651e7dad8cb51a6d7",
-  "src/dvbridge_gl_pack.h": "29e7800616662210fd71776263b6c63bcc8502b7f7910851805ceb3a42e6b6ba",
-  "src/dvbridge_gl_pack.c": "26754ea4f1298f521eabc3594b7d28c80da12f4fc13f3c1c83058c257068be63",
+  "src/dvbridge_gl_pack.h": "a04a7b13c5bb32c571f3ae95b30502f509403ae58e2bb4cdbca582c6397cfb43",
+  "src/dvbridge_gl_pack.c": "ceb3143aeae1843977ab41bc8fad0bc17e14880c871d4f9e2b59d4d87aad6f3b",
   "src/cb1_circuit.c": "5df425d7aedbe5b35879643e2ddf6a3601f76854673aa970a1c4124e2adca999",
   "src/cb1_circuit.h": "463a4f86e9624bf0bba1eceb3c3998f801ba9c35b296ad02da075a268066da9e",
   "src/cb1_hdr10_ai.c": "7b6ea14bcfa565cd0e5504c2352522215e5f99c4d96ce63e7bef1c7e06e7923d",
@@ -31,7 +31,7 @@
   "src/dvbridge_creative.c": "012be30409c5009218f510098e8911fc6c7f947f66fddebdf8d1b40450aabd3a",
   "src/dvbridge_creative.h": "5ae44af7af239049542825c6b7e80d8671a2ac43b49c1a9eb70750981985763b",
   "src/dvbridge_metadata.h": "f6abd3d3d0a3f6c179f398b86a428aad7da67c4d7d14b495dadc9ad56aa794ef",
-  "src/dvbridge_pack_sources.h.in": "9c67e171bacd4ec98434b6591d3e33ae5c3c929a0fd675a45763ea5ed8c639d8",
+  "src/dvbridge_pack_sources.h.in": "167f03c10669f5ce95eb96373bab80fafaca165a13a5f1478c620d01158a907a",
   "src/dvbridge_placebo.c": "b7cbbf9716e625eb15255c0aa4c4bafaa9a4193b7b84c9bf40502fbe4447e5df",
   "src/dvbridge_placebo.h": "cdef70eb16a901376321aaba7962bcd82c6be764cdaf50e07f681291961d28ab",
   "src/dvbridge_policy.c": "30b06fd5065c9ea13759377444bb4be3964a1b85befaf5cdd7843f3279cd630a",
@@ -52,9 +52,10 @@
   "src/dvbridge_cache.c": "f615f36a3c1c8a5727904043c6e5438a713038501e22e0d5414611858f2c9b6b",
   "src/dvbridge_cache.h": "09e56d0fe6e6f10dbf4d68bd38de2ec7dc0a13ef51ecd5ed7887606cfd6a82f9",
   "src/dvbridge_dmabuf.h": "c623eff879ea8bf4e8b2b668e7d9729482172cfd8aee24b2231ea5eaa487216e",
-  "src/pack_gles300.frag": "f05e4f3b27945cb8c53b2f9948d53cec28006f8053bcdd4d4bc89693120346a7",
+  "src/pack_gles300.frag": "0de87e92de9d201848240565587ed358a8f8054c609b032aebac898ff95d61bf",
   "src/cb1_master_reference.c": "6b9e4c84e553ced60c0c0460f7aa2dfb6fc6c84b20d212b8de3492b0226c01cc",
   "src/cb1_master_reference.h": "6ec243f1e7e642900b42f9a55af795de2f157edffc8794d444cf00918aa6816b",
   "src/dvbridge_metadata_bounds.h": "67dfeaee0843dbc7b1c351a9ebc6edab2438684db1fe6905a9db4303ec3143d1",
-  "src/mpv_dvbridge_cm4.h": "96f349d4e95bd5ce5f9eb5d19b78ae15a1a915aa51a43414ca30b102c609ab5e"
+  "src/mpv_dvbridge_cm4.h": "96f349d4e95bd5ce5f9eb5d19b78ae15a1a915aa51a43414ca30b102c609ab5e",
+  "src/pack_gles300.vert": "1d0565b90a136accafa64a1efa0239d4eec917367c73dff5123df9edcd62d4af"
 }
