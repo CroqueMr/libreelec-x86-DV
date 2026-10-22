@@ -6,7 +6,7 @@ Local Beta5 source migration. Full-image and hardware qualification remain open.
 | --- | --- | --- |
 | Kodi `DVBridgeState.cpp/.h` | Replacement GPL-2.0-or-later transaction and property-plan implementation | Public API, capture/rejection decisions, required/optional properties, enum selection, complete stage/restore order, blob ownership and foreign-VSIF rejection |
 | libplacebo `9915-hdr10-linear-conversion` additions | Original CB1 contribution under owner's GPL-2.0-or-later grant; upstream LGPL code/notices retained | Patch implementation bytes unchanged; no shader, ABI or default change |
-| libplacebo `9916-fel-filter` additions | Original CB1 filter/reference adapter under the same grant; upstream LGPL retained | Patch implementation bytes unchanged; integer-reference shader already retains its LGPL notice |
+| libplacebo `9916-fel-filter` additions | Original CB1 filter/reference adapter under the same grant; upstream LGPL retained | Restored omitted recipe hunks match the published implementation exactly; integer-reference shader retains its LGPL notice |
 | libplacebo `9913-processing` | Original ABI/glue GPL-2.0-or-later; replacement lookup/reshape emission LGPL-2.1-or-later | Table dimensions/domains, accumulation order, clipping, null/default behavior and ABI 9 retained; reference code/upstream LGPL unchanged |
 | Renderer source-space GUI/fused colour adapter | GPL-2.0-or-later replacement from numerical/alpha contract | Movie values, pair admission, orientation, transfer tables and matrix arithmetic retained; no extra pass or readback |
 | DMA-BUF descriptor validation | GPL-2.0-or-later replacement using FFmpeg/libdrm descriptor fields | Same formats, bounds, modifier conditions and cache identities; declared chroma format passed unchanged to EGL |
@@ -45,9 +45,10 @@ blob identities/payloads and resource creation/destruction are traced separately
 DRM boundary doubles do not qualify a
 real driver, HDMI link or GPU. Historical oracle sources are not linked into Kodi.
 
-For the two grant-only libplacebo patches, compare the full patch text from the
-first `diff --git` line against normal Beta5. Both are identical; modified-source
-hashes of their implementation and processing ABI 9 remain unchanged.
+For the grant-only `9915` patch, the full text from the first `diff --git` line
+matches normal Beta5. The restored `9916` hunks instead match the published
+component source: their omission was a recipe defect. The complete recipe replay
+matches the locked implementation hashes; processing ABI 9 is unchanged.
 
 The additional original runtime grants cover `dvbridge_fel.c/.h`,
 `dvbridge_fel_seek.h`, `dvbridge_fel_vpp.c/.h`, `dvbridge_placebo.c/.h`, and the
