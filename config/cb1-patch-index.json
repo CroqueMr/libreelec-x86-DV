@@ -947,5 +947,25 @@
       "src/include/libplacebo/utils/libav_internal.h": "Preserve the per-channel residual maxima from decoded metadata.",
       "src/shaders/colorspace.c": "Clamp native input to source pivots and residuals to declared maxima."
     }
+  },
+  "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": {
+    "summary": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_atomic_state_helper.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_atomic_uapi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_connector.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_edid.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/video/hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_connector.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_hdr10plus.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_mode_config.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/linux/hdmi.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD."
+    }
   }
 }
