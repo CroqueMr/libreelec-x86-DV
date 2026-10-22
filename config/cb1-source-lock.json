@@ -46,7 +46,7 @@
     "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "546188b8dc5b24e1d78034879984be0bfa391666579c2763f05656beb0a110ca",
     "projects/Generic/patches/linux/linux-9930-amd-3d.patch": "47fc2be4e35fd51e5ec8769f3b57145e4f6df2eb0e3e6354afe7d31192ec7663",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "b9169706f78483e53b6a802989d5cc6ac290ef2732d6466c7689da71877a086a",
-    "packages/graphics/nvidia/package.mk": "067a4fc6aa24f8f4faa0f9a5369a854b925eb65bfde09464bbe70f114fac3fdf",
+    "packages/graphics/nvidia/package.mk": "fe2bb767124edb14b92b1c2f44d6671e62919021ada7b5fc3998c7c978c5ce79",
     "packages/graphics/nvidia-open-kernel-modules/package.mk": "ef55d66947b6dcbf1140589c366ce012c880e2ded94f9c86c7e11ddb36895f70",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9002-nvkms-integer-rate-twins-of-1000-1001-timings.patch": "34c33c83d1cf0b3613aa722654e30f8d0adefa16316a0eb73d306c28d824e62d",
@@ -64,7 +64,9 @@
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
     "config/cb1-patch-index.json": "5f5fb0241b99f3c51ab82cb01efb3b4e0c757db2064fd2687218870106a37804",
-    "config/cb1-versions.json": "da30d645a1639efc60c414302436200b9b05a8169be8527c78adbc7224cf7b41"
+    "config/cb1-versions.json": "da30d645a1639efc60c414302436200b9b05a8169be8527c78adbc7224cf7b41",
+    "packages/graphics/nvidia-pascal-modeset/package.mk": "73e102f7d812dcd080373b92640ba9c593d14874279acf285a7897006e6397e2",
+    "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9000-dv-transport.patch": "1f93960ac31fcb0634e35ed8e3edc6c177e3eea7237a7273eb9049a43505c5cb"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
