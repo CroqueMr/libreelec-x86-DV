@@ -12,11 +12,13 @@ license grant. [File map and GPLv2 constraints](LICENSE-MAP.md).
 | Adaptive compute shader, replacement GPU trims and carrier kernels | GPL-2.0-or-later; original expansion/statistics and compatible replacement kernels |
 | `dvbridge_render.c` | GPL-3.0-only; remaining fused colour/composition adapter not yet cleared |
 | Replacement cache, metadata bounds, serializer and CM4 wire helpers | GPL-2.0-or-later; [replacement provenance](GPL2-MIGRATION.md) |
-| Canonical tunnel shader and GL packer | GPL-2.0-or-later; replacement bit encoder and original resource/state adapter; fused renderer packing remains unresolved |
+| Canonical tunnel shader and GL packer | GPL-2.0-or-later; replacement bit encoder and original resource/state adapter; surrounding fused composition remains unresolved |
 | Tests and reference operators | Per-file MIT, GPL-3.0-or-later or GPL-3.0-only |
 | Original tooling, build wiring and documentation | MIT |
 | FFmpeg-derived filter and inherited FFmpeg/libplacebo code | LGPL-2.1-or-later notices retained |
-| CB1 libplacebo processing additions | GPL-3.0-or-later; combined modified library distributed under GPLv3-compatible terms |
+| CB1 libplacebo `9913` processing additions | GPL-3.0-or-later; combined modified library still uses GPLv3-compatible terms |
+| Original libplacebo `9915` linear-conversion and `9916` filter/reference additions | GPL-2.0-or-later; upstream LGPL code/notices unchanged |
+| Replacement Kodi output-state transaction | GPL-2.0-or-later; other Kodi/NVIDIA adaptations remain separately scoped |
 | LightGBM | MIT |
 | L1/L3 model assets | GPL-2.0-or-later, owner grant dated 2026-10-22 |
 | NumPy-derived duration summation | BSD-3-Clause |
@@ -31,9 +33,11 @@ The published Beta5 cache was adapted from LibreELEC Hades `v1.0-rc2`
 (`69fc36199f0d5f5d1e5bb4d42f45656e256a6e35`), GPL-3.0-or-later. The local
 replacement uses libplacebo's public cache API and POSIX file operations.
 Kodi's mode-hold and presentation-stall policies retain Hades' GPL-2.0-or-later notices.
-The NVIDIA output-state adapter, half-float output support and driver integration
-reuse LibreELEC Hades RC2 at the same pinned revision, with original notices
-retained. NVIDIA open kernel modules use MIT OR GPL-2.0-only; NVIDIA userspace and
+The published NVIDIA output-state adapter, half-float output support and driver
+integration reused LibreELEC Hades RC2 at the same pinned revision. The local
+output-state replacement is documented in [adapter migration](ADAPTER-MIGRATION.md);
+unreplaced integrations retain their notices. NVIDIA open kernel modules use
+MIT OR GPL-2.0-only; NVIDIA userspace and
 firmware retain their vendor terms in the image's license material. The VAAPI
 bridge is MIT-licensed. CB1's processing algorithms and model are unchanged by
 the NVIDIA backend.
@@ -44,7 +48,7 @@ Redistribution requires corresponding source, build material and notices for
 the complete selected product. CB1 alone is not the complete source of a
 LibreELEC image.
 
-The current static library includes GPL-3.0-only fused rendering/Adaptive code even
+The current static library includes GPL-3.0-only fused composition code even
 without AI. The linked Kodi program therefore uses GPL-3.0-only, while separate
 Linux, driver, tool and firmware components retain their own licenses. FFmpeg is
 also built with GPL and version3 enabled; its OpenSSL 3 dependency is Apache-2.0.

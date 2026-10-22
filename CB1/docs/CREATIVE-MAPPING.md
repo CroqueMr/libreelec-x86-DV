@@ -66,7 +66,8 @@ supplies GPLv3 without a separate later-version grant in the consulted files.
 The derived Beta5 creative module, renderer and scalar reference used GPL-3.0-only;
 inherited files retain their original terms. The local scalar replacement and
 original project portions are tracked in [the migration record](GPL2-MIGRATION.md).
-The GPU implementation is still pending replacement. The Python reference is separate from runtime C.
+The CM2.9 GPU numerical kernels are replaced; the surrounding fused colour/
+composition adapter remains pending. The Python reference is separate from runtime C.
 These references are experimental open implementations, not proof of Dolby
 equivalence. Their different transfer domains must not be mixed silently.
 

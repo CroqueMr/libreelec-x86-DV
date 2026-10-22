@@ -940,7 +940,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .binding={.object=mask->scaled_reference,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     }
     unsigned descriptors=(mask->overlay?3:0)+(mask->scaled_reference?1:0);
-    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_CODES_GLSL)+512];
+    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL)+512];
     snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
@@ -949,7 +949,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
-        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_CODES_GLSL
+        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL
     );
     struct pl_custom_shader shader = {
         .prelude=(mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
@@ -1072,8 +1072,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         // Subtitle admission keeps each horizontal pair together.
         "vec3 peer_rgb=subgroupQuadSwapHorizontal(self_rgb);\n"
         "vec3 a=(p.x&1)==0?self_rgb:peer_rgb, b=(p.x&1)==0?peer_rgb:self_rgb;\n"
-        "uvec2 luma,chroma;cb1_rgb_codes(a,b,luma,chroma);int side=p.x&1;\n"
-        "color=cb1_carrier(cb1_packet(uvec2(luma[side],chroma[side]),uint(p.y*3840+p.x)));\n"
+        "uvec2 code=cb1_rgb_pixel(a,b,(p.x&1)!=0);\n"
+        "color=cb1_carrier(cb1_packet(code,uint(p.y*3840+p.x)));\n"
         "#endif\n"};
     // An early return must reach the transport target, never an intermediate image.
     mask->failed = mask->failed || p->stage != PL_HOOK_OUTPUT ||

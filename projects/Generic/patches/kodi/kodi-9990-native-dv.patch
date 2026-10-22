@@ -3730,8 +3730,9 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils
 diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
 --- /dev/null
 +++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
-@@ -0,0 +1,161 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
+@@ -0,0 +1,174 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/* Snapshot public DRM properties, stage transport, then restore owned values. */
 +#include "DVBridgeState.h"
 +#include "DRMAtomic.h"
 +#include "DRMConnector.h"
@@ -3742,163 +3743,174 @@ diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/D
 +{
 +  if (connector.SupportsProperty("DVBRIDGE_DV_STANDARD_LAB"))
 +    return Backend::KERNEL;
-+  if (connector.GetType() == "HDMI-A" && connector.SupportsProperty("NV_HDMI_VSIF_METADATA") &&
-+      connector.SupportsProperty("max bpc") && connector.SupportsProperty("dithering mode"))
-+    return Backend::NVIDIA;
-+  return Backend::NONE;
++  const bool vendor = connector.GetType() == "HDMI-A" &&
++    connector.SupportsProperty("NV_HDMI_VSIF_METADATA") &&
++    connector.SupportsProperty("max bpc") && connector.SupportsProperty("dithering mode");
++  return vendor ? Backend::NVIDIA : Backend::NONE;
++}
++
++bool CDVBridgeState::Read(CDRMAtomic& drm, std::vector<Change>& changes,
++                        CDRMObject* object, const char* name, uint64_t during,
++                        bool required, bool blob, const char* enumName)
++{
++  const auto before = object->GetPropertyValue(name);
++  if (!before)
++    return required ? Reject(name) : true;
++  if (enumName)
++  {
++    const auto selected = object->GetPropertyEnumValue(name, enumName);
++    if (!selected)
++      return Reject(name);
++    during = *selected;
++  }
++  Change change{object, name, *before, during, {}, {}};
++  if (blob && *before != 0)
++  {
++    auto* data = drmModeGetPropertyBlob(drm.GetFileDescriptor(), *before);
++    if (!data)
++      return Reject(name);
++    change.beforeBlob = CDRMPropertyBlob(drm.GetFileDescriptor(), data->data, data->length);
++    drmModeFreePropertyBlob(data);
++    if (!change.beforeBlob.IsValid())
++      return Reject(name);
++    change.before = change.beforeBlob.Get();
++  }
++  changes.push_back(std::move(change));
++  return true;
 +}
 +
 +bool CDVBridgeState::Capture(CDRMAtomic& drm, uint64_t ownVsif)
 +{
-+  m_captureFailure = "none";
-+  const auto reject = [this](const char* reason) {
-+    m_captureFailure = reason;
-+    return false;
-+  };
++  m_failure = "none";
 +  if (Captured())
-+    return reject("already-captured");
++    return Reject("already-captured");
 +  auto* connector = drm.GetConnector();
 +  auto* crtc = drm.GetCrtc();
 +  auto* plane = drm.GetGuiPlane() ? drm.GetGuiPlane() : drm.GetVideoPlane();
 +  if (!connector || !crtc || !plane || (drm.GetGuiPlane() && drm.GetVideoPlane()))
-+    return reject("output-objects");
++    return Reject("output-objects");
 +  const Backend backend = GetBackend(*connector);
 +  if (backend == Backend::NONE ||
 +      (backend == Backend::KERNEL && connector->GetPropertyValue("DVBRIDGE_DV_STANDARD_LAB") != 0))
-+    return reject("DVBRIDGE_DV_STANDARD_LAB");
-+  const auto vsifBefore = connector->GetPropertyValue("NV_HDMI_VSIF_METADATA");
-+  const bool vsifOwn = ownVsif != 0 && vsifBefore == ownVsif;
-+  if (backend == Backend::NVIDIA && vsifBefore != 0 && !vsifOwn)
-+    return reject("NV_HDMI_VSIF_METADATA");
++    return Reject("DVBRIDGE_DV_STANDARD_LAB");
++  const auto vsif = connector->GetPropertyValue("NV_HDMI_VSIF_METADATA");
++  const bool owned = ownVsif != 0 && vsif == ownVsif;
++  if (backend == Backend::NVIDIA && vsif != 0 && !owned)
++    return Reject("NV_HDMI_VSIF_METADATA");
 +
-+  std::vector<Property> saved;
-+  const auto save = [&](CDRMObject* object, const char* name, uint64_t transport,
-+                        bool required, bool blob, const char* enumName = nullptr) {
-+    auto value = object->GetPropertyValue(name);
-+    if (!value)
-+      return !required || reject(name);
-+    if (enumName)
-+    {
-+      auto selected = object->GetPropertyEnumValue(name, enumName);
-+      if (!selected)
-+        return reject(name);
-+      transport = *selected;
-+    }
-+    Property property{object, name, *value, transport, {}, {}};
-+    if (blob && *value)
-+    {
-+      auto* original = drmModeGetPropertyBlob(drm.GetFileDescriptor(), *value);
-+      if (!original)
-+        return reject(name);
-+      property.blob = CDRMPropertyBlob(drm.GetFileDescriptor(), original->data, original->length);
-+      drmModeFreePropertyBlob(original);
-+      if (!property.blob.IsValid())
-+        return reject(name);
-+      property.original = property.blob.Get();
-+    }
-+    saved.push_back(std::move(property));
-+    return true;
++  std::vector<Change> changes;
++  struct Setting
++  {
++    CDRMObject* object;
++    const char* name;
++    uint64_t value;
++    bool required, blob;
++    const char* enumeration = nullptr;
 +  };
-+
-+  // TV-Led does not require HDR10 static metadata; preserve it when exposed.
-+  if (backend == Backend::KERNEL &&
-+      (!save(connector, "DVBRIDGE_DV_STANDARD_LAB", 1, true, false) ||
-+      !save(connector, "HDR_OUTPUT_METADATA", 0, false, true) ||
-+      !save(connector, "max bpc", 8, true, false) ||
-+      !save(connector, "Broadcast RGB", 0, true, false, "Full") ||
-+      !save(connector, "Colorspace", 0, true, false, "Default")))
-+    return false;
-+
-+  if (backend == Backend::NVIDIA)
++  if (backend == Backend::KERNEL)
 +  {
-+    // Hades RC2: vendor payload, RGB8 depth and neutral NVIDIA color pipeline.
-+    constexpr uint8_t payload[27] = {0x46, 0xd0, 0x00, 0x02};
-+    constexpr uint64_t unity = uint64_t{1} << 32;
-+    CDRMPropertyBlob vsif(drm.GetFileDescriptor(), payload, sizeof(payload));
-+    if (!vsif.IsValid()) return reject("NV_HDMI_VSIF_METADATA");
-+    if (!save(connector, "NV_HDMI_VSIF_METADATA", vsif.Get(), true, true)) return false;
-+    saved.back().transportBlob = std::move(vsif);
-+    if (vsifOwn)
-+    {
-+      saved.back().blob = CDRMPropertyBlob();
-+      saved.back().original = 0;
-+    }
-+    if (!save(connector, "HDR_OUTPUT_METADATA", 0, true, true) ||
-+        !save(connector, "max bpc", 8, true, false) ||
-+        !save(connector, "dithering mode", 0, true, false, "off") ||
-+        !save(connector, "Colorspace", 0, true, false, "Default") ||
-+        !save(crtc, "NV_CRTC_REGAMMA_TF", 0, false, false, "Default") ||
-+        !save(crtc, "NV_CRTC_REGAMMA_LUT", 0, false, true) ||
-+        !save(crtc, "NV_CRTC_REGAMMA_DIVISOR", unity, false, false) ||
-+        !save(crtc, "NV_CRTC_COLOR_PASSTHROUGH", 0, false, false) ||
-+        !save(plane, "NV_INPUT_COLORSPACE", 0, false, false, "None") ||
-+        !save(plane, "NV_HDR_STATIC_METADATA", 0, false, true) ||
-+        !save(plane, "NV_PLANE_LMS_CTM", 0, false, true) ||
-+        !save(plane, "NV_PLANE_LMS_TO_ITP_CTM", 0, false, true) ||
-+        !save(plane, "NV_PLANE_ITP_TO_LMS_CTM", 0, false, true) ||
-+        !save(plane, "NV_PLANE_BLEND_CTM", 0, false, true) ||
-+        !save(plane, "NV_PLANE_DEGAMMA_TF", 0, false, false, "Default") ||
-+        !save(plane, "NV_PLANE_DEGAMMA_LUT", 0, false, true) ||
-+        !save(plane, "NV_PLANE_DEGAMMA_MULTIPLIER", unity, false, false) ||
-+        !save(plane, "NV_PLANE_TMO_LUT", 0, false, true) ||
-+        !save(plane, "NV_PLANE_COLOR_PASSTHROUGH", 0, false, false))
++    const Setting native[] = {
++      {connector,"DVBRIDGE_DV_STANDARD_LAB",1,true,false},
++      {connector,"HDR_OUTPUT_METADATA",0,false,true},
++      {connector,"max bpc",8,true,false},
++      {connector,"Broadcast RGB",0,true,false,"Full"},
++      {connector,"Colorspace",0,true,false,"Default"}};
++    for (const auto& setting : native)
++      if (!Read(drm,changes,setting.object,setting.name,setting.value,
++                setting.required,setting.blob,setting.enumeration))
++        return false;
++  }
++  else
++  {
++    // Vendor VSIF payload and S31.32 neutral factors from the output contract.
++    const uint8_t payload[27] = {0x46,0xd0,0,2};
++    CDRMPropertyBlob transport(drm.GetFileDescriptor(),payload,sizeof(payload));
++    if (!transport.IsValid())
++      return Reject("NV_HDMI_VSIF_METADATA");
++    if (!Read(drm,changes,connector,"NV_HDMI_VSIF_METADATA",transport.Get(),true,true,nullptr))
 +      return false;
-+  }
-+  if (!save(crtc, "CTM", 0, false, true) ||
-+      !save(crtc, "GAMMA_LUT", 0, false, true) ||
-+      !save(crtc, "DEGAMMA_LUT", 0, false, true) ||
-+      !save(crtc, "VRR_ENABLED", 0, false, false) ||
-+      !save(plane, "rotation", DRM_MODE_ROTATE_0, false, false) ||
-+      !save(plane, "alpha", 65535, false, false) ||
-+      !save(plane, "COLOR_PIPELINE", 0, false, false) ||
-+      !save(plane, "pixel blend mode", 0, false, false, "None"))
-+    return false;
-+
-+  // Do not silently corrupt tunnel bytes with another plane or hardware cursor.
-+  auto* planes = drmModeGetPlaneResources(drm.GetFileDescriptor());
-+  if (!planes)
-+    return reject("plane-resources");
-+  bool safe = true;
-+  for (uint32_t i = 0; i < planes->count_planes; ++i)
-+  {
-+    auto* other = drmModeGetPlane(drm.GetFileDescriptor(), planes->planes[i]);
-+    if (!other)
++    changes.back().duringBlob = std::move(transport);
++    if (owned)
 +    {
-+      reject("plane-query");
-+      safe = false;
-+      break;
++      changes.back().beforeBlob = CDRMPropertyBlob();
++      changes.back().before = 0;
 +    }
-+    safe &= other->plane_id == plane->GetId() || other->crtc_id != crtc->GetCrtcId();
-+    if (!safe)
-+      reject("active-plane");
-+    drmModeFreePlane(other);
++    const uint64_t one = uint64_t{1} << 32;
++    const Setting vendor[] = {
++      {connector,"HDR_OUTPUT_METADATA",0,true,true},
++      {connector,"max bpc",8,true,false},
++      {connector,"dithering mode",0,true,false,"off"},
++      {connector,"Colorspace",0,true,false,"Default"},
++      {crtc,"NV_CRTC_REGAMMA_TF",0,false,false,"Default"},
++      {crtc,"NV_CRTC_REGAMMA_LUT",0,false,true},
++      {crtc,"NV_CRTC_REGAMMA_DIVISOR",one,false,false},
++      {crtc,"NV_CRTC_COLOR_PASSTHROUGH",0,false,false},
++      {plane,"NV_INPUT_COLORSPACE",0,false,false,"None"},
++      {plane,"NV_HDR_STATIC_METADATA",0,false,true},
++      {plane,"NV_PLANE_LMS_CTM",0,false,true},
++      {plane,"NV_PLANE_LMS_TO_ITP_CTM",0,false,true},
++      {plane,"NV_PLANE_ITP_TO_LMS_CTM",0,false,true},
++      {plane,"NV_PLANE_BLEND_CTM",0,false,true},
++      {plane,"NV_PLANE_DEGAMMA_TF",0,false,false,"Default"},
++      {plane,"NV_PLANE_DEGAMMA_LUT",0,false,true},
++      {plane,"NV_PLANE_DEGAMMA_MULTIPLIER",one,false,false},
++      {plane,"NV_PLANE_TMO_LUT",0,false,true},
++      {plane,"NV_PLANE_COLOR_PASSTHROUGH",0,false,false}};
++    for (const auto& setting : vendor)
++      if (!Read(drm,changes,setting.object,setting.name,setting.value,
++                setting.required,setting.blob,setting.enumeration))
++        return false;
 +  }
-+  drmModeFreePlaneResources(planes);
++  const Setting neutral[] = {
++    {crtc,"CTM",0,false,true},{crtc,"GAMMA_LUT",0,false,true},
++    {crtc,"DEGAMMA_LUT",0,false,true},{crtc,"VRR_ENABLED",0,false,false},
++    {plane,"rotation",DRM_MODE_ROTATE_0,false,false},{plane,"alpha",65535,false,false},
++    {plane,"COLOR_PIPELINE",0,false,false},{plane,"pixel blend mode",0,false,false,"None"}};
++  for (const auto& setting : neutral)
++    if (!Read(drm,changes,setting.object,setting.name,setting.value,
++              setting.required,setting.blob,setting.enumeration))
++      return false;
++
++  auto* resources = drmModeGetPlaneResources(drm.GetFileDescriptor());
++  if (!resources)
++    return Reject("plane-resources");
++  bool safe = true;
++  for (uint32_t i=0;i<resources->count_planes;i++)
++  {
++    auto* item = drmModeGetPlane(drm.GetFileDescriptor(),resources->planes[i]);
++    if (!item)
++    {
++      Reject("plane-query");safe = false;break;
++    }
++    if (item->plane_id != plane->GetId() && item->crtc_id == crtc->GetCrtcId())
++    {
++      Reject("active-plane");safe = false;
++    }
++    drmModeFreePlane(item);
++  }
++  drmModeFreePlaneResources(resources);
 +  if (!safe)
 +    return false;
-+  m_saved = std::move(saved);
-+  m_owner = &drm;
-+  m_backend = backend;
++  m_changes = std::move(changes);m_owner = &drm;m_backend = backend;
 +  return true;
 +}
 +
 +bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore)
 +{
-+  if (!Captured() || m_owner != &drm || m_saved.front().object != drm.GetConnector())
++  if (!Captured() || m_owner != &drm || m_changes.front().object != drm.GetConnector())
 +    return false;
 +  bool valid = true;
-+  for (const auto& property : m_saved)
-+    valid &= drm.AddProperty(property.object, property.name.c_str(),
-+                             restore ? property.original : property.transport);
++  for (const auto& change : m_changes)
++    if (!drm.AddProperty(change.object,change.name.c_str(),restore ? change.before : change.during))
++      valid = false;
 +  return valid;
 +}
 diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.h b/xbmc/windowing/gbm/drm/DVBridgeState.h
 --- /dev/null
 +++ b/xbmc/windowing/gbm/drm/DVBridgeState.h
 @@ -0,0 +1,40 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
-+
 +#include "DRMObject.h"
 +#include <string>
 +#include <vector>
@@ -3912,27 +3924,28 @@ diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.h b/xbmc/windowing/gbm/drm/DVB
 +{
 +public:
 +  enum class Backend { NONE, KERNEL, NVIDIA };
-+  static Backend GetBackend(CDRMConnector& connector);
-+  bool Capture(CDRMAtomic& drm, uint64_t ownVsif = 0);
-+  bool Stage(CDRMAtomic& drm, bool restore);
-+  void Restored() { m_saved.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
-+  bool Captured() const { return !m_saved.empty(); }
++  static Backend GetBackend(CDRMConnector&);
++  bool Capture(CDRMAtomic&, uint64_t ownVsif = 0);
++  bool Stage(CDRMAtomic&, bool restore);
++  void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
++  bool Captured() const { return !m_changes.empty(); }
 +  Backend CapturedBackend() const { return m_backend; }
-+  const char* CaptureFailure() const { return m_captureFailure; }
++  const char* CaptureFailure() const { return m_failure; }
 +
 +private:
-+  struct Property
++  struct Change
 +  {
 +    CDRMObject* object;
 +    std::string name;
-+    uint64_t original;
-+    uint64_t transport;
-+    CDRMPropertyBlob blob;
-+    CDRMPropertyBlob transportBlob;
++    uint64_t before, during;
++    CDRMPropertyBlob beforeBlob, duringBlob;
 +  };
-+  std::vector<Property> m_saved;
++  bool Reject(const char* reason) { m_failure = reason; return false; }
++  bool Read(CDRMAtomic&, std::vector<Change>&, CDRMObject*, const char*, uint64_t,
++            bool required, bool blob, const char* enumName);
++  std::vector<Change> m_changes;
 +  CDRMAtomic* m_owner = nullptr;
 +  Backend m_backend = Backend::NONE;
-+  const char* m_captureFailure = "none";
++  const char* m_failure = "none";
 +};
 +}

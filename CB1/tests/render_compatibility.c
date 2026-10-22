@@ -92,24 +92,31 @@ static void adaptive_probe(pl_gpu gpu)
     struct cb1_dv_enhanced_plan plan;assert(cb1_dv_enhanced_build(&plan,&source,&policy)==CB1_DVE_READY);
     enum{W=3840,H=2160};size_t count=(size_t)W*H;
     float *pixels=malloc(count*4*sizeof(float));assert(pixels);
-    for(unsigned linear=0;linear<2;linear++){
+    pl_tex gui=reference_texture(gpu,W,H,NULL),lut=reference_texture(gpu,1,1,(float[4]){.1,.2,.3,1});
+    pl_tex_clear(gpu,gui,(float[4]){.1,.05,.025,.5});
+    for(unsigned variant=0;variant<6;variant++){
+        unsigned linear=variant&1;
         for(size_t i=0;i<count;i++)for(unsigned c=0;c<4;c++){
             double nits=.01+(i*(13+c*19)%997);
             pixels[4*i+c]=c==3?1:linear?nits/10000:dv_ideal_pq(nits);
         }
         pl_tex input=reference_texture(gpu,W,H,pixels);
         r->enhanced_linear=linear;r->enhanced_skip_aux=!linear;r->enhanced_authored_curve=true;
+        r->enhanced_authored=variant>=4;
         assert(dve_allocate(r,W,H,false,false) && r->enhanced_prepack);
+        r->dv.enhanced_overlay=variant>=2 && variant<4;
+        r->dv.overlay=(struct dvbridge_native_overlay){.texture=gui,.degamma=lut,.pq=lut,
+            .rect={300,600,3500,1800},.input_pq=linear};
         r->dv.output.value.identity=(struct dvbridge_identity){1,1,1};
         assert(dve_run(r,&plan,input,(unsigned[4]){0,0,111,123}));glFinish();
         assert(r->dv.prepacked && r->dv.mapped[10] && !r->dv.mapped[11]);
-        /* Non-authored mode publishes 12 words; the following four are unused. */
-        emit(r->dv.mapped,12*sizeof(uint32_t));
+        /* Authored mode also publishes four source-statistic words. */
+        emit(r->dv.mapped,(r->enhanced_authored?16:12)*sizeof(uint32_t));
         pl_tex wrapped=pl_opengl_wrap(gpu,pl_opengl_wrap_params(.texture=r->enhanced_packed_texture,
             .width=W,.height=H,.iformat=GL_RGBA8));assert(wrapped);carrier(gpu,wrapped);
         pl_tex_destroy(gpu,&wrapped);pl_tex_destroy(gpu,&input);dv_release(r);
     }
-    free(pixels);dvbridge_renderer_destroy(r);
+    free(pixels);pl_tex_destroy(gpu,&gui);pl_tex_destroy(gpu,&lut);dvbridge_renderer_destroy(r);
 }
 int main(void)
 {

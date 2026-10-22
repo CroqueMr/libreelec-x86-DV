@@ -50,6 +50,7 @@ GPLv3 portions. Historical extraction records and third-party notices remain.
 | `cb1_trim_math.h`, scalar call sites in `dvbridge_creative.c` | Existing published numerical contract in `ALGORITHMS.md`: affine word decoding, bounded PQ interpolation, linear SOP/chroma equations | Exact scalar RGB, resolver fields, CM4 coefficients/operators, guidance and edited metadata against separately compiled normal Beta5 |
 | `cb1_trim_glsl.h`, CM2.9 GPU call sites | Same numerical SOP/chroma contract and retained float-uniform conversion | Complete FP32 output compared with separately compiled Beta5 |
 | `cb1_transport_glsl.h`, source/RGB/Adaptive packing call sites | ETSI clause 6.4 bit placement/parity and retained pre-quantization colour equations | Full reference/scaled transport and Adaptive compute carriers compared byte-for-byte; quad exchange requires a driver exposing the extension |
+| Kodi `DVBridgeState.cpp/.h` | Public Kodi/libdrm snapshot/atomic property APIs, NVIDIA public property types and the fixed output contract | Full capture/stage/restore API traces and payloads against separately compiled Beta5 |
 
 The replacement trim kernel implements numerical operations, not a certified
 Dolby mapper. It retains the existing floating-point expression order and
@@ -71,7 +72,8 @@ orientation remain unchanged. The GL resource/state adapter, public header,
 trivial vertex and generated-source wrapper are original project contributions
 covered by the owner's grant. Float conversion constants and operation order
 remain a compatibility contract, not a new image-processing algorithm.
-Fused renderer/Adaptive shader bodies remain outside this replacement lot.
+Fused carrier and Adaptive packing kernels are covered above. The surrounding
+source-colour/composition adapter remains unresolved.
 
 The serializer constructs the fixed header by field offset, orders extension
 descriptors with `qsort` and writes bounded blocks with FFmpeg's big-endian
@@ -149,16 +151,19 @@ The runner compiles two standalone probes, not production capture hooks. It
 streams and compares every output byte, including FP32 CM2.9 results, source and
 scaled reference carriers, metadata bits, both orientations, active borders,
 PQ/SDR overlays and Adaptive prepacking/statistics. The local llvmpipe run
-compares 464,748,640 bytes exactly. A deliberate one-byte capture mutation fails.
+compares 597,459,264 bytes exactly, including Adaptive GUI and authored-source
+statistics. A deliberate one-byte capture mutation fails.
 The unavailable fragment-quad exchange paths are explicitly unqualified; their
 sampling/admission instructions are unchanged. This is not hardware evidence.
 
 ## Remaining scope
 
-Creative adaptations, shared rendering, remaining image transport/packing,
+Shared fused colour/composition, remaining image transport adapters,
 modified libplacebo and Kodi integration still require portion-level review.
 Their existing GPLv3 notices remain effective. Upstream FFmpeg and vanilla
 LibreELEC dependencies keep their pinned licenses and build configuration.
+[Adapter decisions and boundaries](ADAPTER-MIGRATION.md) distinguish the output
+replacement and original libplacebo grants from remaining third-party portions.
 
 Offline comparisons do not establish hardware performance or display output
 equivalence. No mini-PC or TV is used for this migration stage.

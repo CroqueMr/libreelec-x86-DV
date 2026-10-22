@@ -1,4 +1,5 @@
-CB1 optional FEL spatial filter: SPDX-License-Identifier: GPL-3.0-or-later
+Original CB1 FEL filter/ETSI reference adapter: SPDX-License-Identifier: GPL-2.0-or-later
+Owner's additional grant, 2026-10-22. No implementation change.
 Original libplacebo per-file copyright and LGPL notices remain unchanged.
 
 diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h

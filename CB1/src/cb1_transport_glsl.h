@@ -32,4 +32,13 @@
 "float cr=2048.0+3584.0*((first.r-y0)+(second.r-y1))/(2.0*1.4746);" \
 "chroma=uvec2(uint(floor(cb+.5)),uint(floor(cr+.5)));}\n"
 
+/* Fragment variant quantizes only the current pixel's two words. */
+#define CB1_RGB_PIXEL_GLSL \
+"uvec2 cb1_rgb_pixel(vec3 first,vec3 second,bool odd){" \
+"float y0=dot(first,vec3(.2627,.6780,.0593)),y1=dot(second,vec3(.2627,.6780,.0593));" \
+"uint y=uint(floor(256.0+3504.0*(odd?y1:y0)+.5));" \
+"float cb=2048.0+3584.0*((first.b-y0)+(second.b-y1))/(2.0*1.8814);" \
+"float cr=2048.0+3584.0*((first.r-y0)+(second.r-y1))/(2.0*1.4746);" \
+"return uvec2(y,uint(floor((odd?cr:cb)+.5)));}\n"
+
 #endif
