@@ -4,6 +4,7 @@
  */
 /* Reconstruct video at full precision, then pack the HDMI transport with frame-matched metadata. */
 #include "dvbridge_render.h"
+#include "cb1_hdr10plus_analysis.h"
 #include <dlfcn.h>
 #include "dvbridge_placebo.h"
 #include "dvbridge_metadata.h"
@@ -2380,6 +2381,7 @@ bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *r,enum dvbridge_m
             pl_find_fmt(r->gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE) &&
             pl_find_fmt(r->gpu,PL_FMT_FLOAT,2,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
     if(mode==DVBRIDGE_MODE_STANDARD || mode==DVBRIDGE_MODE_HDR10_BASIC)return true;
+    if(mode==DVBRIDGE_MODE_HDR10PLUS)return cb1_hdr10plus_analysis_supported(r->gpu);
     if(!pl_find_fmt(r->gpu,PL_FMT_UNORM,4,16,16,PL_FMT_CAP_LINEAR) ||
        !pl_find_fmt(r->gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR))return false;
     return mode!=DVBRIDGE_MODE_ENHANCED_DV || dve_requirements(r->gpu);

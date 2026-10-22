@@ -73,6 +73,10 @@ def verify(root, dependency_roots=None, prefix=None):
     # Historical extraction attribution is immutable; owned additions use current digests.
     owned = json.loads(checked(root, 'config/owned-sources.json').read_text())
     if set(owned) != {'src/CMakeLists.txt', 'src/dvbridge_policy.c', 'src/dvbridge_policy.h',
+                      'src/cb1_hdr10plus.c', 'src/cb1_hdr10plus.h',
+                      'src/cb1_hdr10plus_analysis.c', 'src/cb1_hdr10plus_analysis.h',
+                      'src/cb1_hdr10plus_curve.c', 'src/cb1_hdr10plus_curve.h',
+                      'src/cb1_dv_hdr10plus.c', 'src/cb1_dv_hdr10plus.h',
                       'src/cb1_master_reference.c', 'src/cb1_master_reference.h',
                       'src/dvbridge_gl_frame.c', 'src/dvbridge_gl_frame.h',
                       'src/dvbridge_dmabuf.c', 'src/dvbridge_dmabuf.h',

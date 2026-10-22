@@ -83,6 +83,16 @@ int main(void)
     unchanged(r,(enum dvbridge_mode)-1,false);
     unchanged(r,(enum dvbridge_mode)99,false);
     unchanged(r,DVBRIDGE_MODE_MASTER_REFERENCE,true);
+    unchanged(r,DVBRIDGE_MODE_HDR10PLUS,true);
+    old_gles=true;
+    unchanged(r,DVBRIDGE_MODE_HDR10PLUS,false);
+    old_gles=false;
+    low_limit=GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS;
+    unchanged(r,DVBRIDGE_MODE_HDR10PLUS,false);
+    low_limit=0;
+    missing_format=PL_FMT_UNORM;missing_components=4;
+    unchanged(r,DVBRIDGE_MODE_HDR10PLUS,true);
+    missing_components=0;
     {
         pl_gpu actual=r->gpu;struct pl_gpu_t limited=*actual;
         r->gpu=&limited;limited.glsl.gles=true;limited.glsl.version=300;

@@ -12,7 +12,7 @@ class AdaptiveSynchronousPending(unittest.TestCase):
         end=code.index('  if (std::getenv("CB1_PRESENTATION_AUDIT"))',assignment)
         program=r'''
 #include <cassert>
-constexpr int GL_FRAMEBUFFER=0,DVBRIDGE_MODE_ENHANCED_DV=4;
+constexpr int GL_FRAMEBUFFER=0,DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
 void glBindFramebuffer(int,int){}
 struct CDVBridgeGLES{enum class FrameStatus{Ready,Pending,Busy,Failed};};
 using Status=CDVBridgeGLES::FrameStatus;
