@@ -1,0 +1,70 @@
+# Beta5 licensing migration
+
+Work in progress. The linked program still contains GPLv3 dependencies.
+This record does not change the licenses of published Beta5 releases.
+
+## Grants
+
+On 2026-10-22 the project owner authorized GPL-2.0-or-later distribution of
+their original contributions. Third-party code and adaptations are excluded
+from that authorization and retain their own terms until replaced or separately
+authorized. File-by-file provenance determines the scope of any notice change.
+
+The owner also confirmed authorship of the trained L1/L3 model and granted
+GPL-2.0-or-later for the exact [runtime bundle](../models/l1l3/LICENSE.md).
+Weights, normalization, model ID and predictions are unchanged.
+
+The additional grant is applied to these original project modules:
+`cb1_circuit.*`, `dvbridge_policy.*`, `cb1_l1l3_model.*`,
+`cb1_hdr10_ai.*`, `cb1_hdr10_extrema.*`, `cb1_hdr10_features.*`,
+`cb1_hdr10_grid.h`, `cb1_hdr10_ingress.*`, `cb1_hdr10_quantiles.*`,
+`cb1_hdr10_spatial.*`, `cb1_hdr10_statistics.*` and `cb1_hdr10_temporal.*`.
+Their implementation text is unchanged. The NumPy BSD-3-Clause summation notices
+remain in the features/temporal modules. The FFmpeg-derived filter retains
+LGPL-2.1-or-later. These individual grants do not relicense the combined program.
+
+## Replacements
+
+| Component | Implementation basis | Compatibility check |
+| --- | --- | --- |
+| `dvbridge_cache.c/.h` | Public pinned libplacebo cache API and its version-1 storage format, LGPL-2.1-or-later; POSIX temporary-file/rename operations | Same objects, eviction, load counts, save results and persisted bytes as the separately compiled Beta5 wrapper; corruption and persistence-failure tests |
+| `dvbridge_metadata_bounds.h` | Matched FFmpeg public `AVDOVIMetadata` layout, LGPL-2.1-or-later | Same accepted/rejected storage layouts, alignment, stride and bounds |
+| `mpv_dvbridge_cm4.h` | Public field widths and optional-block syntax in MIT dovi_tool `d4ad4ba7` | Same accepted/rejected blocks and exact transport bytes |
+
+The CM helper expands packed big-endian fields into byte/word transport
+fields. It does not implement a display mapper. L3/L4 contain 12-bit fields;
+L8 field presence depends on its original block length; L9/L10 custom
+primaries are present only with index 255. Reserved bits and trailing padding
+retain their Beta5 rejection behavior.
+
+Original extraction hashes and attribution remain in `extraction-origins.json`
+and `PROVENANCE.json`. Current replacement hashes are separate overrides in
+`owned-sources.json`. The old implementations remain external executable
+oracles, with their prior licenses, and are not shipped as replacement code.
+This is a documented replacement process, not a claim of legal clean-room work.
+
+References: [libplacebo cache API](https://github.com/haasn/libplacebo/blob/master/src/include/libplacebo/cache.h),
+[FFmpeg metadata API](https://github.com/FFmpeg/FFmpeg/blob/n9.0/libavutil/dovi_meta.h),
+[MIT dovi_tool syntax](https://github.com/doppingkoala/dovi_tool/tree/d4ad4ba7e6f5acef6c7321dac0139992a082cd8f/dolby_vision/src/rpu/extension_metadata/blocks).
+
+Reproduce the helper comparison with the same pinned libplacebo in
+`PKG_CONFIG_PATH`/the runtime library path:
+
+```sh
+python3 CB1/tools/compare_beta5_helpers.py --baseline /path/to/frozen/Beta5/CB1 --ffmpeg-prefix /path/to/matched/ffmpeg
+```
+
+The baseline must come from the normal Beta5 commit
+`abde400bbf8ef754c971f437dc321bdd03a5986b`. The runner builds separate old/new
+programs, compares cache files and validates helper outputs. It does not include
+the old GPLv3 implementation in the replacement runtime.
+
+## Remaining scope
+
+Creative adaptations, shared rendering, remaining metadata/transport helpers,
+modified libplacebo and Kodi integration still require portion-level review.
+Their existing GPLv3 notices remain effective. Upstream FFmpeg and vanilla
+LibreELEC dependencies keep their pinned licenses and build configuration.
+
+Offline comparisons do not establish hardware performance or display output
+equivalence. No mini-PC or TV is used for this migration stage.

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef CB1_L1L3_MODEL_H
 #define CB1_L1L3_MODEL_H
 #include <stddef.h>

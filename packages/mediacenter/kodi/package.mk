@@ -356,6 +356,7 @@ post_makeinstall_target() {
   if [ "${CB1_HDR10_AI}" = "yes" ]; then
     mkdir -p ${INSTALL}/usr/share/cb1/l1l3
     cp ${PKG_DIR}/cb1-model/data/* ${INSTALL}/usr/share/cb1/l1l3/
+    cp ${PKG_DIR}/cb1-model/LICENSE.md ${INSTALL}/usr/share/cb1/l1l3/
   fi
   mkdir -p ${INSTALL}/.noinstall
   mv ${INSTALL}/usr/share/kodi/addons/skin.estuary \

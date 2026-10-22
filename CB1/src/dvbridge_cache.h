@@ -1,38 +1,25 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Hades: the GPU programs that libplacebo makes, kept in a file from one session to the next. */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_CACHE_H
 #define DVBRIDGE_CACHE_H
 #include <stdbool.h>
 #include <stddef.h>
 #include <libplacebo/cache.h>
 
-/* A pl_cache for pl_gpu_set_cache(), with a file behind it. On OpenGL libplacebo keeps the binary
- * of each program it links there, by a key made of the GL vendor, renderer and version and the
- * source of the program, and takes it back with glProgramBinary() when the same program is made
- * again: the driver then has nothing to compile. A binary that the driver does not take (another
- * driver, a damaged one) is not used, and the program is compiled from its source as without a
- * cache. The file is meant for one GPU, driver and build: the caller names it by them.
- *
- * Not thread safe beyond what pl_cache is; the cache must outlive every pl_gpu that uses it. */
+/* Persistent libplacebo program cache. The caller owns the GPU/build-specific
+ * pathname, serializes open/save/close, and keeps this object alive until its
+ * GPU has been destroyed. GPU cache operations retain libplacebo's locking. */
 struct dvbridge_shader_cache;
 
-/* Takes what the file at path holds when it is a whole file of the format that
- * dvbridge_shader_cache_save() writes: its header and the size of every entry are checked
- * against the file before anything of it is taken, and libplacebo checks the checksum of each
- * entry as it takes it (an entry that does not match is left out, with the ones after it).
- * A missing or bad file is no failure: the cache starts empty.
- * max_bytes bounds what the cache holds (the oldest entries make room) and what is read.
- * Returns NULL only when there is no memory. */
+/* Read a bounded, validated libplacebo cache file. Invalid/missing files yield
+ * an empty cache; NULL indicates allocation failure. No parent directory is
+ * created. max_bytes limits cached objects and their combined payload. */
 struct dvbridge_shader_cache *dvbridge_shader_cache_open(const char *path, size_t max_bytes, pl_log log);
-/* Without saving it. The pl_cache goes with it. */
+/* Destroy without implicitly saving. */
 void dvbridge_shader_cache_close(struct dvbridge_shader_cache *cache);
 pl_cache dvbridge_shader_cache_get(const struct dvbridge_shader_cache *cache);
-/* Entries taken from the file when it was opened. */
 int dvbridge_shader_cache_loaded(const struct dvbridge_shader_cache *cache);
-/* Writes the file when what the cache holds is not what the file holds (it has been loaded or
- * written with other entries): into a file beside it, which then takes its name, so that a file
- * is whole or not there. 1 written, 0 nothing to write, -1 it could not be written. */
+/* Atomic replacement: 1 saved, 0 unchanged, -1 failure. A failed save preserves
+ * the existing file. Do not mutate the cache while saving. */
 int dvbridge_shader_cache_save(struct dvbridge_shader_cache *cache);
-/* What the cache holds: entries and bytes. */
 void dvbridge_shader_cache_size(const struct dvbridge_shader_cache *cache, int *entries, size_t *bytes);
 #endif

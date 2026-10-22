@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef CB1_HDR10_FEATURES_H
 #define CB1_HDR10_FEATURES_H
 #include <stdbool.h>

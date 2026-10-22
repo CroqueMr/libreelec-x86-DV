@@ -16,4 +16,5 @@ The bundle is the exact runtime artifact. File hashes are pinned in
 `config/hdr10-ai-dependencies.json` and checked by `tools/verify.py`.
 No training clips, extracted frames or training dataset are included.
 
-Model assets are distributed under CB1's GPLv3 terms. LightGBM itself is MIT.
+Model assets are distributed under [GPL-2.0-or-later](LICENSE.md).
+LightGBM itself is MIT.

@@ -1,6 +1,10 @@
 # License map
 
-## Current distribution
+## Published Beta5 reference
+
+The tables below retain the published Beta5 declarations. Local compatible
+grants and replacements are tracked in [migration status](GPL2-MIGRATION.md).
+The migration is incomplete and does not yet establish a GPLv2-compatible image.
 
 This inventory describes the extracted normal Beta5 source tree. The complete matching
 release components are in the [release source archives](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta5);
@@ -36,7 +40,7 @@ using a shared library does not remove their licensing requirements.
 The patched decoder also includes `dvbridge_metadata_bounds.h` outside the
 renderer opt-in. `ENABLE_DVBRIDGE=OFF` is not a GPLv2 build.
 
-## Runtime source inventory
+## Published Beta5 runtime source inventory
 
 Paths are relative to `CB1/src/`. SPDX identifiers describe the individual
 files; the combined program must also satisfy its linked dependencies.
@@ -128,14 +132,10 @@ kernel modules have MIT/GPLv2 terms.
 
 ## Model rights record
 
-The model README declares GPL-3.0-or-later. The locked model record still contains
-`redistribution_cleared: false`, and its bundle contains an origin-status hash
-rather than the underlying rights record. These facts do not prove unlawful
-training or redistribution, but do not establish clearance either.
-
-A rights-controlled original model may be offered under another license after
-its provenance and applicable commitments are established. Do not change the
-clearance flag or infer model rights from LightGBM's MIT license.
+On 2026-10-22 the model owner confirmed authorship and an additional
+GPL-2.0-or-later grant. The [model license](../models/l1l3/LICENSE.md) identifies
+the exact unchanged bundle. Its lock now records this permission. LightGBM's
+MIT license remains separate from the model grant.
 
 ## A GPLv2-compatible variant
 
@@ -144,7 +144,8 @@ No GPLv2-compatible variant is established by this audit.
 The migration target is compatible project additions, not a GPLv2-only image.
 FFmpeg keeps the licensing and options of the exact vanilla LibreELEC reference;
 its current recipe declaration is not a reason to rewrite upstream FFmpeg.
-Existing runtime notices, model weights and rendering remain unchanged.
+Model weights and rendering behavior remain unchanged. Original-source grants
+and qualified replacements are recorded separately from the published inventory.
 
 Documented third-party adaptations require a compatible permission or an
 independent replacement. Files merely declared GPLv3 are not automatically

@@ -1,7 +1,11 @@
 This source tree contains separately licensed parts.
 
-Metadata/transport, FEL, Master Reference, processing API and AI runtime files
+Metadata/transport, FEL, Master Reference and shared processing API files
 marked GPL-3.0-or-later retain that license.
+
+Original HDR10 AI, model-adapter, circuit and policy modules are now offered
+under GPL-2.0-or-later by their owner. Replacement cache, metadata-bounds and
+CM4 wire helpers use GPL-2.0-or-later. Retained third-party notices still apply.
 
 dvbridge_creative.c/.h, cb1_dv_enhanced.c/.h, cb1_dv_enhanced_shader.h and
 dvbridge_render.c are GPL-3.0-only. The shared static-library combination is
@@ -11,8 +15,8 @@ Original tooling/documentation is MIT where declared. The FFmpeg-derived filter
 retains LGPL-2.1-or-later. Dependency patches include both inherited LGPL code and
 explicit GPL-3.0-or-later additions; see docs/LICENSE-MAP.md.
 
-Model assets carry a GPL-3.0-or-later declaration, but their recorded
-redistribution clearance remains unresolved. LightGBM itself is MIT.
+The exact L1/L3 model bundle is offered under GPL-2.0-or-later by its owner.
+LightGBM itself is MIT. See models/l1l3/LICENSE.md.
 
 Read docs/LICENSING.md and LICENSES/ before redistribution.
 This index does not relicense any existing file or grant third-party rights.
