@@ -684,9 +684,9 @@ diff --git a/LICENSES/README.md b/LICENSES/README.md
  # Kodi's licensing rules
  Kodi is provided under the terms of the GNU General Public License v2.0 or later, as provided in **[LICENSES/GPL-2.0-or-later](GPL-2.0-or-later)**.
 +
-+This patched Kodi build includes GPL-3.0-or-later DVBridge metadata validation
-+even when `ENABLE_DVBRIDGE` is disabled. The combined build is distributed under GPL-3.0-or-later; see
-+**[LICENSES/GPL-3.0-or-later](GPL-3.0-or-later)**. Existing files retain their
++CB1 additions and metadata validation use GPL-2.0-or-later, including when
++`ENABLE_DVBRIDGE` is disabled. The selected dependency combination retains its
++own license conditions. Existing files retain their
 +original notices. Disabling the adapter does not exclude shared validation.
  
  This file provides a description of how each source file should be annotated to make its license clear and unambiguous. **It doesn't replace Kodi's license**.
@@ -1264,7 +1264,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 @@ -0,0 +1,275 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
@@ -1543,7 +1543,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h b/xbmc/c
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h
 @@ -0,0 +1,47 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include <algorithm>
@@ -1594,7 +1594,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeShaders.h.in b/xbmc/c
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeShaders.h.in
 @@ -0,0 +1,4 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +inline constexpr char DVBRIDGE_VERTEX[] = R"DVGLSL(@DVBRIDGE_VERTEX_SOURCE@)DVGLSL";
 +inline constexpr char DVBRIDGE_FRAGMENT[] = R"DVGLSL(@DVBRIDGE_FRAGMENT_SOURCE@)DVGLSL";
@@ -1602,7 +1602,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/core
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
 @@ -0,0 +1,224 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "HDR10AISource.h"
 +#include <algorithm>
 +#include <chrono>
@@ -1830,7 +1830,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h
 @@ -0,0 +1,73 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
@@ -3026,7 +3026,7 @@ diff --git a/xbmc/windowing/gbm/DVWindowRetirement.h b/xbmc/windowing/gbm/DVWind
 --- /dev/null
 +++ b/xbmc/windowing/gbm/DVWindowRetirement.h
 @@ -0,0 +1,86 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include "cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h"

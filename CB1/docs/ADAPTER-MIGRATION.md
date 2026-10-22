@@ -1,15 +1,17 @@
 # Adapter migration status
 
-Local Beta5 qualification only. The migration remains incomplete.
+Local Beta5 source migration. Full-image and hardware qualification remain open.
 
 | Portion | Current decision | Preserved contract |
 | --- | --- | --- |
 | Kodi `DVBridgeState.cpp/.h` | Replacement GPL-2.0-or-later transaction and property-plan implementation | Public API, capture/rejection decisions, required/optional properties, enum selection, complete stage/restore order, blob ownership and foreign-VSIF rejection |
 | libplacebo `9915-hdr10-linear-conversion` additions | Original CB1 contribution under owner's GPL-2.0-or-later grant; upstream LGPL code/notices retained | Patch implementation bytes unchanged; no shader, ABI or default change |
 | libplacebo `9916-fel-filter` additions | Original CB1 filter/reference adapter under the same grant; upstream LGPL retained | Patch implementation bytes unchanged; integer-reference shader already retains its LGPL notice |
-| libplacebo `9913-processing` | Still GPL-3.0-or-later pending replacement of attributed processing portions | Do not relabel YBLOD adaptations through the original-code grant |
-| Renderer source-space GUI/fused colour adapter | Still GPL-3.0-only pending independent replacement | Replaced carrier kernels do not clear the retained surrounding implementation |
-| Other Kodi integration, import and FEL units | Still under their existing notices pending portion-level review | No blanket grant applied to Hades or other third-party material |
+| libplacebo `9913-processing` | Original ABI/glue GPL-2.0-or-later; replacement lookup/reshape emission LGPL-2.1-or-later | Table dimensions/domains, accumulation order, clipping, null/default behavior and ABI 9 retained; reference code/upstream LGPL unchanged |
+| Renderer source-space GUI/fused colour adapter | GPL-2.0-or-later replacement from numerical/alpha contract | Movie values, pair admission, orientation, transfer tables and matrix arithmetic retained; no extra pass or readback |
+| DMA-BUF descriptor validation | GPL-2.0-or-later replacement using FFmpeg/libdrm descriptor fields | Same formats, bounds, modifier conditions and cache identities; declared chroma format passed unchanged to EGL |
+| Original FEL queue, seek/VPP, metadata mapping and interfaces | Owner's GPL-2.0-or-later grant | Implementation text unchanged; no license change to FFmpeg, libva, EGL or libplacebo |
+| Original Kodi bridge, AI source, screenshot, window retirement, menu layout and scaler stub | Owner's GPL-2.0-or-later grant | Ten original project files change notices only; upstream Kodi/Hades-compatible file notices are unchanged |
 
 The output-state replacement implements the existing property contract as
 ordered data and a snapshot reader using Kodi/libdrm APIs. Successful capture
@@ -45,19 +47,36 @@ real driver, HDMI link or GPU. Historical oracle sources are not linked into Kod
 
 For the two grant-only libplacebo patches, compare the full patch text from the
 first `diff --git` line against normal Beta5. Both are identical; modified-source
-hashes and processing ABI 9 remain unchanged. The combined modified library still
-contains unresolved GPLv3 additions.
+hashes of their implementation and processing ABI 9 remain unchanged.
+
+The additional original runtime grants cover `dvbridge_fel.c/.h`,
+`dvbridge_fel_seek.h`, `dvbridge_fel_vpp.c/.h`, `dvbridge_placebo.c/.h`, and the
+public import/render interfaces. Their implementation text is unchanged. These
+are project-specific state, validation and API adapters, not imported decoder,
+VPP or colour-mapper implementations. The separate DMA-BUF validator and fused
+composition are replacements, not notice-only grants. Historical Hades/YBLOD
+attribution remains recorded and does not authorize third-party implementations.
 
 ## Dependency qualification
 
 The offline comparisons use a new library built from the published normal-Beta5
 libplacebo component archive, SHA-256
 `1a42b5d62a3d84740fb3923901f867fc8acc5cd2b3ea08c1b20a780424dbf087`.
-Every locked modified-source hash matches. Frozen Beta5 and the candidate use
-that same rebuilt library; dependency hashes are not relaxed.
+This snapshot supplies the frozen library. The candidate is rebuilt separately
+with only the `colorspace.c` lookup/reshape replacement. That source hash is
+updated to its new implementation; unchanged modified-source locks still match.
+The comparison runners load each version's own library, not a shared candidate
+library for both sides. No dependency hashes are relaxed.
 
 Replaying the current upstream archive and patch recipe does not reproduce that
 published source snapshot: paired-row contract-2 reconstruction additions are
 missing from the replay. This pre-existing recipe/snapshot gap remains open.
 No unrelated reconstruction change or new dependency pin is included here.
 Complete image reproducibility is not established by these engine tests.
+
+Additional differential checks compare 48 complete FP32 processing captures and
+24,000 import-layout/normalized identity records. The full-frame composition
+probe uses distinct GUI transfer textures and initialized GUI pixels. It rejects
+GPU validation failures instead of accepting stale target data. Deliberate GUI
+colour, lookup-table and layout mutations are negative controls. Fragment-quad
+paths absent on llvmpipe remain unqualified.

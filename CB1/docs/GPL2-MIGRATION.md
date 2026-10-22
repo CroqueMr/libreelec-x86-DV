@@ -35,8 +35,11 @@ implementation changes:
 | `dvbridge_gl_frame.c/.h` | Native decoded-texture wrapping through public libplacebo/GLES APIs | NVIDIA import and unresolved FEL/VAAPI adaptations |
 
 Calling or declaring types from a separately licensed module does not grant
-rights to its implementation. The combined program still includes unresolved
-GPLv3 portions. Historical extraction records and third-party notices remain.
+rights to its implementation. Historical extraction records and third-party
+notices remain. The original FEL, seek/VPP, validation and public import/render
+interfaces also receive the owner's grant, with their implementation text
+unchanged. Ten original project-specific Kodi adapters change notices only.
+See [adapter decisions](ADAPTER-MIGRATION.md).
 
 ## Replacements
 
@@ -51,6 +54,9 @@ GPLv3 portions. Historical extraction records and third-party notices remain.
 | `cb1_trim_glsl.h`, CM2.9 GPU call sites | Same numerical SOP/chroma contract and retained float-uniform conversion | Complete FP32 output compared with separately compiled Beta5 |
 | `cb1_transport_glsl.h`, source/RGB/Adaptive packing call sites | ETSI clause 6.4 bit placement/parity and retained pre-quantization colour equations | Full reference/scaled transport and Adaptive compute carriers compared byte-for-byte; quad exchange requires a driver exposing the extension |
 | Kodi `DVBridgeState.cpp/.h` | Public Kodi/libdrm snapshot/atomic property APIs, NVIDIA public property types and the fixed output contract | Full capture/stage/restore API traces and payloads against separately compiled Beta5 |
+| `cb1_composite_glsl.h`, fused shader call site | Published source-space alpha contract, ST2084 equations, supplied matrices and existing GUI transfer tables | Complete reference/scaled outputs with variable alpha, SDR/PQ GUI, borders and metadata match Beta5 |
+| `dvbridge_dmabuf_validate_p010` | Public FFmpeg DRM layout, libdrm format identifiers and bounded linear-plane storage | 24,000 validation/normalized cache-identity records match Beta5 |
+| libplacebo `9913` lookup/reshape emitters | Public processing ABI and table/axis/MMR numerical contract | 48 complete FP32 processing captures match the frozen library; no ABI or model change |
 
 The replacement trim kernel implements numerical operations, not a certified
 Dolby mapper. It retains the existing floating-point expression order and
@@ -59,9 +65,9 @@ validation, metadata descriptors, bounded fitter and public API remain covered
 by the owner's grant; no foreign display mapper is incorporated. The historical
 DoViBaker/MPC references remain recorded in `CREATIVE-MAPPING.md`. Their old
 runtime implementation is only an external oracle in this qualification.
-The scalar and CM2.9 GPU numerical kernels are replaced. The retained fused
-colour/composition adapter in `dvbridge_render.c` is a separate unresolved
-portion; replacing the numerical/packet kernels does not clear that file.
+The scalar, CM2.9 GPU, carrier and fused colour/composition numerical kernels
+are replaced. Original libplacebo hook/resource integration receives the owner's
+grant; imported implementations are not covered by that grant.
 The Adaptive shader combines the replacement carrier with the original
 expansion/statistics algorithm under the owner's grant.
 
@@ -73,7 +79,7 @@ trivial vertex and generated-source wrapper are original project contributions
 covered by the owner's grant. Float conversion constants and operation order
 remain a compatibility contract, not a new image-processing algorithm.
 Fused carrier and Adaptive packing kernels are covered above. The surrounding
-source-colour/composition adapter remains unresolved.
+source-colour/composition uses the separately qualified replacement helper.
 
 The serializer constructs the fixed header by field offset, orders extension
 descriptors with `qsort` and writes bounded blocks with FFmpeg's big-endian
@@ -156,14 +162,16 @@ statistics. A deliberate one-byte capture mutation fails.
 The unavailable fragment-quad exchange paths are explicitly unqualified; their
 sampling/admission instructions are unchanged. This is not hardware evidence.
 
-## Remaining scope
+## Qualification still required
 
-Shared fused colour/composition, remaining image transport adapters,
-modified libplacebo and Kodi integration still require portion-level review.
-Their existing GPLv3 notices remain effective. Upstream FFmpeg and vanilla
-LibreELEC dependencies keep their pinned licenses and build configuration.
+The identified project runtime replacements and original-code grants do not
+establish a qualified complete LibreELEC image. Canonical dependency-recipe
+closure, complete product compilation and authorized hardware qualification
+remain separate gates. Upstream FFmpeg and vanilla LibreELEC dependencies keep
+their declared licenses and build configuration; they are not rewritten to
+force a GPLv2-only image.
 [Adapter decisions and boundaries](ADAPTER-MIGRATION.md) distinguish the output
-replacement and original libplacebo grants from remaining third-party portions.
+replacements and original grants from retained upstream component terms.
 
 Offline comparisons do not establish hardware performance or display output
 equivalence. No mini-PC or TV is used for this migration stage.

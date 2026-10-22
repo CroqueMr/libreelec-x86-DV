@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "dvbridge_fel_vpp.h"
 #include <limits.h>
 #include <stdlib.h>

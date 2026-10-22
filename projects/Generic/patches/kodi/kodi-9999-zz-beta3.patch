@@ -3526,7 +3526,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeVAScaler.cpp b/xbmc/c
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeVAScaler.cpp
 @@ -0,0 +1,11 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeVAScaler.h"
 +struct CDVBridgeVAScaler::State {};
 +CDVBridgeVAScaler::CDVBridgeVAScaler() : m_state(std::make_unique<State>()) {}
@@ -3541,7 +3541,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeVAScaler.h b/xbmc/cor
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeVAScaler.h
 @@ -0,0 +1,16 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeGLES.h"
 +
@@ -10800,7 +10800,7 @@ new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 @@ -0,0 +1,2052 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
 +#include "DVBridgeShaders.h"

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Validate parsed Dolby Vision metadata before handing reshaping parameters to libplacebo. */
 #include "dvbridge_placebo.h"
 #include "dvbridge_metadata.h"

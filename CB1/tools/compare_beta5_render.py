@@ -14,7 +14,15 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(source, build_dir, binary, mutate=False):
+def library_environment(build, base):
+    for line in (build/'CMakeCache.txt').read_text().splitlines():
+        if line.startswith('CB1_PRIVATE_PLACEBO_LIBRARY:'):
+            library=Path(line.split('=',1)[1]).resolve(strict=True)
+            return dict(base,LD_LIBRARY_PATH=str(library.parent)+':'+base.get('LD_LIBRARY_PATH',''))
+    raise ValueError('Build lacks a pinned private libplacebo')
+
+
+def build(source, build_dir, binary, mutate=False, invalid_bindings=False):
     flags_file = build_dir/'tests/CMakeFiles/scaled_adaptive.dir/flags.make'
     flags = []
     for line in flags_file.read_text().splitlines():
@@ -25,6 +33,8 @@ def build(source, build_dir, binary, mutate=False):
                '-I'+str(source/'src'), '-I'+str(ROOT/'tests'), str(ROOT/'tests/render_compatibility.c')]
     if mutate:
         command.append('-DCB1_MUTATE_CAPTURE=1')
+    if invalid_bindings:
+        command.append('-DCB1_INVALID_GUI_BINDINGS=1')
     subprocess.run([*command, '-o', str(binary), *link[link.index('-o')+2:]],
                    cwd=build_dir/'tests', check=True)
 
@@ -45,6 +55,8 @@ def main():
     parser.add_argument('--baseline-build', type=Path, required=True)
     parser.add_argument('--candidate-build', type=Path, required=True)
     parser.add_argument('--negative-control', action='store_true', help='Intentionally corrupt one candidate capture byte')
+    parser.add_argument('--negative-composition', action='store_true', help='Intentionally change one GUI colour coefficient in a private build')
+    parser.add_argument('--negative-validation', action='store_true', help='Intentionally bind the same GUI texture twice')
     args = parser.parse_args()
     old = args.baseline.resolve()
     if old == ROOT:
@@ -53,16 +65,34 @@ def main():
     actual = hashlib.sha256((old/'src/dvbridge_render.c').read_bytes()).hexdigest()
     if actual != expected:
         parser.error('Frozen Beta5 renderer identity mismatch: '+actual)
-    env = dict(os.environ, EGL_PLATFORM='surfaceless', LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe')
+    env = dict(os.environ, EGL_PLATFORM='surfaceless', LIBGL_ALWAYS_SOFTWARE='1', GALLIUM_DRIVER='llvmpipe',
+               CB1_REFERENCE_TRACE='1')
     with tempfile.TemporaryDirectory(prefix='cb1-render-') as temp:
         binaries = [Path(temp)/'old', Path(temp)/'new']
         build(old, args.baseline_build.resolve(), binaries[0])
-        build(ROOT, args.candidate_build.resolve(), binaries[1], args.negative_control)
+        candidate = ROOT
+        if args.negative_composition:
+            candidate = Path(temp)/'mutated'
+            (candidate/'src').mkdir(parents=True)
+            changed = False
+            for name in ('dvbridge_render.c', 'cb1_composite_glsl.h'):
+                path = ROOT/'src'/name
+                if not path.exists():
+                    continue
+                source = path.read_text()
+                changed |= '.6274' in source
+                (candidate/'src'/name).write_text(source.replace('.6274', '.5274'))
+            if not changed:
+                raise SystemExit('GUI colour coefficient not found for negative control')
+        build(candidate, args.candidate_build.resolve(), binaries[1], args.negative_control,args.negative_validation)
         with tempfile.TemporaryFile() as old_log, tempfile.TemporaryFile() as new_log:
-            processes = [subprocess.Popen([str(binary)], stdout=subprocess.PIPE, stderr=log, env=env)
-                         for binary, log in zip(binaries, (old_log, new_log))]
+            builds=(args.baseline_build.resolve(),args.candidate_build.resolve())
+            processes = [subprocess.Popen([str(binary)], stdout=subprocess.PIPE, stderr=log,
+                         env=library_environment(build,env))
+                         for binary,log,build in zip(binaries,(old_log,new_log),builds)]
             total = 0
             mismatch = None
+            validation_failed = False
             try:
                 while True:
                     a, b = [read_block(p.stdout, 1024*1024) for p in processes]
@@ -80,7 +110,11 @@ def main():
                 exits = [p.wait() for p in processes]
                 for log in (old_log, new_log):
                     log.seek(0)
-                    print(log.read().decode(errors='replace'), end='', file=sys.stderr)
+                    logged=log.read().decode(errors='replace')
+                    validation_failed |= 'Validation failed:' in logged
+                    print(logged, end='', file=sys.stderr)
+            if validation_failed:
+                raise SystemExit('GPU validation failed; captures are not qualified')
             if mismatch is not None:
                 raise SystemExit('First different capture byte: '+str(mismatch))
             if any(exits) or not total:

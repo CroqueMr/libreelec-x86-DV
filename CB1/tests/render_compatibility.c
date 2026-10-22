@@ -6,6 +6,12 @@
 static unsigned records;
 static void emit(const void *bytes,size_t count)
 {
+    if(getenv("CB1_CAPTURE_DIGEST")){
+        uint64_t digest=UINT64_C(14695981039346656037);
+        const unsigned char *p=bytes;
+        for(size_t i=0;i<count;i++)digest=(digest^p[i])*UINT64_C(1099511628211);
+        fprintf(stderr,"capture %u: %zu bytes, %016llx\n",records,count,(unsigned long long)digest);
+    }
 #ifdef CB1_MUTATE_CAPTURE
     if(!records && count){
         unsigned char first=*(const unsigned char *)bytes^1;
@@ -50,11 +56,36 @@ static void transport_probe(pl_gpu gpu,pl_dispatch dp,bool quad)
     float *pixels=malloc(count*4*sizeof(float));assert(pixels);
     for(size_t i=0;i<count;i++)for(unsigned c=0;c<4;c++)
         pixels[4*i+c]=c==3?1:(float)((i*(17+c*13)+c*971)%65536)/65535;
-    pl_tex input=reference_texture(gpu,W,H,pixels);free(pixels);
+    pl_tex input=reference_texture(gpu,W,H,pixels);
     pl_tex target=pl_tex_create(gpu,pl_tex_params(.w=W,.h=H,.format=pl_find_named_fmt(gpu,"rgba8"),.renderable=true));assert(target);
-    pl_tex gui=reference_texture(gpu,W,H,NULL),lut=reference_texture(gpu,1,1,(float[4]){.1,.2,.3,1});
-    pl_tex_clear(gpu,gui,(float[4]){.08,.12,.04,.5});
-    struct dvbridge_native_overlay overlay={.texture=gui,.degamma=lut,.pq=lut,.rect={0,0,3840,2160}};
+    for(size_t i=0;i<count;i++){
+        float alpha=(float)(i%5)/4;
+        pixels[4*i]=alpha*.24f;pixels[4*i+1]=alpha*.36f;
+        pixels[4*i+2]=alpha*.12f;pixels[4*i+3]=alpha;
+    }
+    pl_tex gui=reference_texture(gpu,W,H,pixels);free(pixels);
+    float check[4];reference_read(gpu,gui,2,0,1,1,check);
+    assert(check[0]==.12f && check[3]==.5f);
+    float lookup[256*4];
+    for(unsigned i=0;i<256;i++)for(unsigned c=0;c<4;c++)
+        lookup[4*i+c]=c==3?1:(float)i/255;
+    pl_tex lut=reference_texture(gpu,256,1,lookup);
+    pl_tex pq=reference_texture(gpu,256,1,lookup);
+    pl_shader verify=pl_dispatch_begin(dp);
+    assert(pl_shader_custom(verify,&(struct pl_custom_shader){
+        .input=PL_SHADER_SIG_NONE,.output=PL_SHADER_SIG_COLOR,.output_w=W,.output_h=H,
+        .descriptors=(struct pl_shader_desc[]){{.desc={.name="probe_gui",.type=PL_DESC_SAMPLED_TEX},
+            .binding={.object=gui,.sample_mode=PL_TEX_SAMPLE_LINEAR,.address_mode=PL_TEX_ADDRESS_CLAMP}}},
+        .num_descriptors=1,.body="color=texture(probe_gui,gl_FragCoord.xy/vec2(3840.,2160.));"}));
+    assert(pl_dispatch_finish(dp,pl_dispatch_params(.shader=&verify,.target=target)));
+    unsigned char check_gui[4];unsigned verify_fbo;
+    pl_opengl_unwrap(gpu,target,NULL,NULL,&verify_fbo);glBindFramebuffer(GL_FRAMEBUFFER,verify_fbo);
+    glReadPixels(2,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,check_gui);glBindFramebuffer(GL_FRAMEBUFFER,0);
+    assert(check_gui[3]==128);
+    struct dvbridge_native_overlay overlay={.texture=gui,.degamma=lut,.pq=pq,.rect={0,0,3840,2160}};
+#ifdef CB1_INVALID_GUI_BINDINGS
+    overlay.pq=lut;
+#endif
     uint32_t words[640];for(unsigned i=0;i<640;i++)words[i]=(i*173+71)&255;
     for(unsigned reference=0;reference<2;reference++){
         if(!reference && !quad)continue;
@@ -64,7 +95,10 @@ static void transport_probe(pl_gpu gpu,pl_dispatch dp,bool quad)
                 .rect={2,111,3838,2037},.packets=words,.count=5,.flip=flip,
                 .overlay=gui_state?&overlay:NULL,.source_overlay=gui_state!=0,
                 .scaled_reference=scaled?input:NULL,.scaled_rect={0,0,1,1}};
-            for(unsigned i=0;i<3;i++){mask.nonlinear[4*i]=1;mask.linear[4*i]=1;}
+            for(unsigned i=0;i<3;i++){
+                mask.nonlinear[4*i]=.95f;mask.linear[4*i]=.9f;
+                mask.offset[i]=.001f*(i+1);
+            }
             overlay.input_pq=gui_state==2;
             pl_shader sh=pl_dispatch_begin(dp);
             if(!scaled)assert(pl_shader_sample_direct(sh,pl_sample_src(.tex=input)));
@@ -81,7 +115,7 @@ static void transport_probe(pl_gpu gpu,pl_dispatch dp,bool quad)
         assert(!pack_active_area(&mask,&p).failed && mask.called);
         assert(pl_dispatch_finish(dp,pl_dispatch_params(.shader=&sh,.target=target)));carrier(gpu,target);
     }
-    pl_tex_destroy(gpu,&gui);pl_tex_destroy(gpu,&lut);pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&target);
+    pl_tex_destroy(gpu,&gui);pl_tex_destroy(gpu,&lut);pl_tex_destroy(gpu,&pq);pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&target);
 }
 static void adaptive_probe(pl_gpu gpu)
 {
@@ -92,8 +126,10 @@ static void adaptive_probe(pl_gpu gpu)
     struct cb1_dv_enhanced_plan plan;assert(cb1_dv_enhanced_build(&plan,&source,&policy)==CB1_DVE_READY);
     enum{W=3840,H=2160};size_t count=(size_t)W*H;
     float *pixels=malloc(count*4*sizeof(float));assert(pixels);
-    pl_tex gui=reference_texture(gpu,W,H,NULL),lut=reference_texture(gpu,1,1,(float[4]){.1,.2,.3,1});
-    pl_tex_clear(gpu,gui,(float[4]){.1,.05,.025,.5});
+    for(size_t i=0;i<count;i++){
+        pixels[4*i]=.1f;pixels[4*i+1]=.05f;pixels[4*i+2]=.025f;pixels[4*i+3]=.5f;
+    }
+    pl_tex gui=reference_texture(gpu,W,H,pixels),lut=reference_texture(gpu,1,1,(float[4]){.1,.2,.3,1});
     for(unsigned variant=0;variant<6;variant++){
         unsigned linear=variant&1;
         for(size_t i=0;i<count;i++)for(unsigned c=0;c<4;c++){

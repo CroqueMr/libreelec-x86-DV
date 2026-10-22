@@ -1,7 +1,6 @@
-/* SPDX-License-Identifier: GPL-3.0-only
- * Original engine contributions: GPL-3.0-or-later.
- * Creative numerical adaptations: see docs/CREATIVE-MAPPING.md, 2026-10-04.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Replacement kernels and retained original engine integration:
+ * docs/GPL2-MIGRATION.md. Historical sources remain attributed. */
 /* Reconstruct video at full precision, then pack the HDMI transport with frame-matched metadata. */
 #include "dvbridge_render.h"
 #include <dlfcn.h>
@@ -14,6 +13,7 @@
 #include "cb1_trim_math.h"
 #include "cb1_trim_glsl.h"
 #include "cb1_transport_glsl.h"
+#include "cb1_composite_glsl.h"
 #include "cb1_dv_enhanced_shader.h"
 #define CB1_DVE_GPU 1
 #include <libavutil/dovi_meta.h>
@@ -903,8 +903,7 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
     return (struct pl_hook_res){.failed=mask->failed, .output=PL_HOOK_SIG_NONE};
 }
 
-/* Retained fused colour/composition adapter. Compatible transport kernels:
- * cb1_transport_glsl.h. Historical adapter origins remain recorded. */
+/* Public libplacebo hook/resource adapter for the replacement fused kernels. */
 static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_params *p)
 {
     struct active_mask *mask = priv;
@@ -940,8 +939,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .binding={.object=mask->scaled_reference,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     }
     unsigned descriptors=(mask->overlay?3:0)+(mask->scaled_reference?1:0);
-    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s",
+    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL)+512];
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
@@ -949,7 +948,8 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
-        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL
+        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL,
+        CB1_COMPOSITE_HEADER_GLSL
     );
     struct pl_custom_shader shader = {
         .prelude=(mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
@@ -961,120 +961,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         .variables=vars, .num_variables=
             mask->scaled_reference ? 9 : mask->overlay ? 8 : 4,
         .descriptors=desc, .num_descriptors=descriptors,
-        .body=
-        "ivec2 p=ivec2(gl_FragCoord.xy); if(flip_y!=0u) p.y=2159-p.y;\n"
-        "#ifdef CB1_SCALED_REFERENCE\n"
-        "color=texelFetch(scaled_reference,ivec2(scaled_rect.xy+(vec2(p)+.5)*scaled_rect.zw),0);\n"
-        "#endif\n"
-        "bool inactive=float(p.x)<active_area.x || float(p.x)>=active_area.z || float(p.y)<active_area.y || float(p.y)>=active_area.w;\n"
-        "vec3 self_rgb=vec3(0); bool compose=false; vec4 gui=vec4(0);\n"
-        "#ifdef CB1_SOURCE_DOMAIN\n"
-        "if(inactive) color=vec4(.0625,.5,.5,1.0);\n"
-        "vec3 self_ycc=clamp(color.rgb,0.0,1.0);\n"
-        "vec3 peer_ycc;\n"
-        "#ifdef CB1_SCALED_REFERENCE\n"
-        "vec2 peer_pos=vec2(p^ivec2(1,0))+.5;\n"
-        "peer_ycc=clamp(texelFetch(scaled_reference,ivec2(scaled_rect.xy+peer_pos*scaled_rect.zw),0).rgb,0.0,1.0);\n"
-        "if(inactive)peer_ycc=vec3(.0625,.5,.5);\n"
-        "#elif defined(CB1_REFERENCE_TRANSPORT)\n"
-        "peer_ycc=self_ycc;\n"
-        "#elif !defined(CB1_SOURCE_OVERLAY)\n"
-        "peer_ycc=subgroupQuadSwapHorizontal(self_ycc);\n"
-        "#endif\n"
-        "#else\n"
-        "self_rgb=inactive?vec3(0):clamp(color.rgb,0.0,1.0);\n"
-        "#endif\n"
-        "#ifdef CB1_NATIVE_OVERLAY\n"
-        "compose=float(p.x)>=overlay_area.x && float(p.x)<overlay_area.z && float(p.y)>=overlay_area.y && float(p.y)<overlay_area.w;\n"
-        "if(compose) gui=texture(subtitle_gui,vec2((float(p.x)+.5)/3840.0,(2159.0-float(p.y)+.5)/2160.0));\n"
-        "#ifdef CB1_REFERENCE_TRANSPORT\n"
-        "vec4 peer_gui=texture(subtitle_gui,vec2((float(p.x^1)+.5)/3840.0,(2159.0-float(p.y)+.5)/2160.0));\n"
-        "float peer_alpha=peer_gui.a;\n"
-        "#else\n"
-        "float peer_alpha=subgroupQuadSwapHorizontal(gui.a);\n"
-        "#endif\n"
-        "compose=compose && (gui.a>0.0 || peer_alpha>0.0);\n"
-        "#endif\n"
-        "#ifdef CB1_SOURCE_DOMAIN\n"
-        /* Convert only GUI pixels; leave reconstructed movie values in YCC.
-         * Source-space composition follows YBLOD pre2's GPLv3 transport design. */
-        "#ifdef CB1_SOURCE_OVERLAY\n"
-        "#ifdef CB1_REFERENCE_TRANSPORT\n"
-        "for(int side=0;side<2;side++){vec4 layer=side==0?gui:peer_gui;\n"
-        "if(compose && layer.a>0.0){\n"
-        "vec3 straight=clamp(layer.rgb/layer.a,0.0,1.0);\n"
-        "#ifdef CB1_OVERLAY_PQ\n"
-        "vec3 q=straight;\n"
-        "#else\n"
-        "vec3 linear=vec3(texture(subtitle_degamma,vec2(straight.r,.5)).r,texture(subtitle_degamma,vec2(straight.g,.5)).r,texture(subtitle_degamma,vec2(straight.b,.5)).r);\n"
-        "linear=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*linear;\n"
-        "vec3 q=vec3(texture(subtitle_pq,vec2(linear.r,.5)).r,texture(subtitle_pq,vec2(linear.g,.5)).r,texture(subtitle_pq,vec2(linear.b,.5)).r);\n"
-        "#endif\n"
-        "q=pow(max(q,0.0),vec3(1.0/(2523.0/32.0)));\n"
-        "q=max(q-vec3(3424.0/4096.0),0.0)/(vec3(2413.0/128.0)-vec3(2392.0/128.0)*q);\n"
-        "q=overlay_linear*pow(q,vec3(1.0/(2610.0/16384.0)));\n"
-        "q=pow(max(q,0.0),vec3(2610.0/16384.0));\n"
-        "q=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*q)/(vec3(1.0)+vec3(2392.0/128.0)*q);\n"
-        "vec3 ycc=clamp(overlay_decode*(pow(q,vec3(2523.0/32.0))-overlay_offset)*layer.a+(side==0?self_ycc:peer_ycc)*(1.0-layer.a),0.0,1.0);\n"
-        "if(side==0)color.rgb=ycc;else peer_ycc=ycc;}}\n"
-        "if(compose && gui.a>0.0)self_ycc=color.rgb;\n"
-        "#else\n"
-        "if(compose && gui.a>0.0){\n"
-        "vec3 straight=clamp(gui.rgb/gui.a,0.0,1.0);\n"
-        "vec3 linear=vec3(texture(subtitle_degamma,vec2(straight.r,.5)).r,texture(subtitle_degamma,vec2(straight.g,.5)).r,texture(subtitle_degamma,vec2(straight.b,.5)).r);\n"
-        "linear=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*linear;\n"
-        "vec3 q=vec3(texture(subtitle_pq,vec2(linear.r,.5)).r,texture(subtitle_pq,vec2(linear.g,.5)).r,texture(subtitle_pq,vec2(linear.b,.5)).r);\n"
-        "q=pow(max(q,0.0),vec3(1.0/(2523.0/32.0)));\n"
-        "q=max(q-vec3(3424.0/4096.0),0.0)/(vec3(2413.0/128.0)-vec3(2392.0/128.0)*q);\n"
-        "q=overlay_linear*pow(q,vec3(1.0/(2610.0/16384.0)));\n"
-        "q=pow(max(q,0.0),vec3(2610.0/16384.0));\n"
-        "q=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*q)/(vec3(1.0)+vec3(2392.0/128.0)*q);\n"
-        "q=pow(q,vec3(2523.0/32.0));\n"
-        "vec3 gui_ycc=overlay_decode*(q-overlay_offset);\n"
-        "self_ycc=clamp(gui_ycc*gui.a+self_ycc*(1.0-gui.a),0.0,1.0);}\n"
-        "peer_ycc=subgroupQuadSwapHorizontal(self_ycc);\n"
-        "#endif\n"
-        "compose=false;\n"
-        "#endif\n"
-        // Keep the direct transport values out of the subtitle colour branch.
-        "if(!compose){\n"
-        "uvec2 code=cb1_source_codes(self_ycc,peer_ycc,(p.x&1)!=0);\n"
-        "return cb1_carrier(cb1_packet(code,uint(p.y*3840+p.x)));}\n"
-        "#endif\n"
-        "#ifndef CB1_REFERENCE_TRANSPORT\n"
-        "#ifdef CB1_NATIVE_OVERLAY\n"
-        "if(compose){\n"
-        "#ifdef CB1_SOURCE_DOMAIN\n"
-        // libplacebo's post-reconstruction color decode, restricted to subtitle pairs.
-        "if(!inactive){\n"
-        "self_rgb=overlay_decode*color.rgb+overlay_offset;\n"
-        "self_rgb=pow(max(self_rgb,0.0),vec3(1.0/(2523.0/32.0)));\n"
-        "self_rgb=max(self_rgb-vec3(3424.0/4096.0),0.0)/(vec3(2413.0/128.0)-vec3(2392.0/128.0)*self_rgb);\n"
-        "self_rgb=pow(self_rgb,vec3(1.0/(2610.0/16384.0)));\n"
-        "self_rgb=overlay_linear*self_rgb;\n"
-        "self_rgb=pow(max(self_rgb,0.0),vec3(2610.0/16384.0));\n"
-        "self_rgb=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*self_rgb)/(vec3(1.0)+vec3(2392.0/128.0)*self_rgb);\n"
-        "self_rgb=pow(self_rgb,vec3(2523.0/32.0));}\n"
-        "#endif\n"
-        "#ifdef CB1_OVERLAY_PQ\n"
-        "self_rgb=clamp(gui.rgb+self_rgb*(1.0-gui.a),0.0,1.0);\n"
-        "#else\n"
-        "#ifdef CB1_STRAIGHT_OVERLAY\n"
-        "gui.rgb=gui.a>0.0?clamp(gui.rgb/gui.a,0.0,1.0):vec3(0);\n"
-        "#endif\n"
-        "vec3 linear=vec3(texture(subtitle_degamma,vec2(gui.r,.5)).r,texture(subtitle_degamma,vec2(gui.g,.5)).r,texture(subtitle_degamma,vec2(gui.b,.5)).r);\n"
-        "linear=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*linear;\n"
-        "vec3 gui_pq=vec3(texture(subtitle_pq,vec2(linear.r,.5)).r,texture(subtitle_pq,vec2(linear.g,.5)).r,texture(subtitle_pq,vec2(linear.b,.5)).r);\n"
-        "self_rgb=clamp(gui_pq*gui.a+self_rgb*(1.0-gui.a),0.0,1.0);\n"
-        "#endif\n"
-        "}\n"
-        "#endif\n"
-        // Subtitle admission keeps each horizontal pair together.
-        "vec3 peer_rgb=subgroupQuadSwapHorizontal(self_rgb);\n"
-        "vec3 a=(p.x&1)==0?self_rgb:peer_rgb, b=(p.x&1)==0?peer_rgb:self_rgb;\n"
-        "uvec2 code=cb1_rgb_pixel(a,b,(p.x&1)!=0);\n"
-        "color=cb1_carrier(cb1_packet(code,uint(p.y*3840+p.x)));\n"
-        "#endif\n"};
+        .body=CB1_COMPOSITE_BODY_GLSL};
     // An early return must reach the transport target, never an intermediate image.
     mask->failed = mask->failed || p->stage != PL_HOOK_OUTPUT ||
                    (mask->early_mask && mask->native_shader != p->sh) || pl_shader_is_compute(p->sh) ||

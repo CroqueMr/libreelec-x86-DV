@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_PLACEBO_H
 #define DVBRIDGE_PLACEBO_H
 #include <stdbool.h>

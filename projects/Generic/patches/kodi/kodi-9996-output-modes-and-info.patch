@@ -2194,7 +2194,7 @@ diff --git a/xbmc/dialogs/DVPlaybackMenuLayout.h b/xbmc/dialogs/DVPlaybackMenuLa
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackMenuLayout.h
 @@ -0,0 +1,13 @@
-+/* SPDX-License-Identifier: GPL-3.0-or-later */
++/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include <algorithm>

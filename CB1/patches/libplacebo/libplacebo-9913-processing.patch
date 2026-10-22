@@ -1,5 +1,7 @@
-CB1 processing additions: SPDX-License-Identifier: GPL-3.0-or-later
-Algorithm attribution: dangerouslaser, YBLOD pre2/pre3. See docs/SOURCE-TRANSPORT.md.
+Original CB1 processing ABI/glue: SPDX-License-Identifier: GPL-2.0-or-later
+Replacement lookup/reshape emitters: SPDX-License-Identifier: LGPL-2.1-or-later
+Historical transport/optimization attribution: dangerouslaser, YBLOD pre2/pre3.
+See docs/SOURCE-TRANSPORT.md and docs/ADAPTER-MIGRATION.md.
 Original libplacebo copyright and license notices remain unchanged.
 
 diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
@@ -105,7 +107,7 @@ diff --git a/src/shaders.h b/src/shaders.h
 diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 --- a/src/shaders/colorspace.c
 +++ b/src/shaders/colorspace.c
-@@ -51,6 +51,39 @@
+@@ -51,6 +51,42 @@
           "vec3 v2=v*v, v4=v2*v2, v8=v4*v4, v16=v8*v8, v32=v16*v16, v64=v32*v32;\n"
           "%s = ((v64*v8)*v4)*v2*pow(v, vec3(0.84375));\n"
           "}\n", signal, signal);
@@ -127,35 +129,72 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 +static bool cb1_colour_lookup(pl_shader sh, const struct pl_cb1_dovi_processing *p,
 +                              bool encode)
 +{
-+    if (!p || !(p->groups & 8) || !p->pq_texture[encode]) return false;
-+    ident_t lut=sh_bind(sh,p->pq_texture[encode],PL_TEX_ADDRESS_CLAMP,
-+                       PL_TEX_SAMPLE_LINEAR,"cb1_colour_lut",NULL,NULL,NULL);
++    /* Public processing ABI: one 4096-entry table for each PQ direction. */
++    if (!p || !(p->groups & 8)) return false;
++    pl_tex texture = p->pq_texture[encode ? 1 : 0];
++    if (!texture) return false;
++    ident_t sample = sh_bind(sh, texture, PL_TEX_ADDRESS_CLAMP,
++                            PL_TEX_SAMPLE_LINEAR, "cb1_colour_lut", NULL, NULL, NULL);
++    const double domain[2][2] = {{0.02, 0.98}, {0.0000152587890625, 0.95}};
 +    if (!encode) GLSL("vec3 cb1_pq_source=color.rgb;bool cb1_decode_coarse=false;\n");
-+    /* Per-fragment refinement is bounded: out-of-domain values stay dense. */
-+    GLSL("if (all(greaterThan(color.rgb, vec3("$"))) && "
-+         "all(lessThan(color.rgb, vec3("$")))) {\n",
-+         SH_FLOAT(encode ? 0.0000152587890625 : 0.02), SH_FLOAT(encode ? 0.95 : 0.98));
-+    if (encode) GLSL("vec3 cb1_pos=sqrt(sqrt(color.rgb));\n");
-+    else GLSL("cb1_decode_coarse=true;vec3 cb1_pos=color.rgb;\n");
-+    GLSL("cb1_pos=(cb1_pos*4095.0+vec3(0.5))/4096.0;\n"
-+         "color.rgb=vec3(texture("$",vec2(cb1_pos.r,0.5)).r,\n"
-+         "texture("$",vec2(cb1_pos.g,0.5)).r,texture("$",vec2(cb1_pos.b,0.5)).r);\n"
-+         "} else {\n",lut,lut,lut);
++    GLSL("if(all(greaterThan(color.rgb,vec3("$"))) && all(lessThan(color.rgb,vec3("$")))){\n",
++         SH_FLOAT(domain[encode][0]), SH_FLOAT(domain[encode][1]));
++    GLSL(encode ? "vec3 cb1_pos=sqrt(sqrt(color.rgb));\n" :
++                  "cb1_decode_coarse=true;vec3 cb1_pos=color.rgb;\n");
++    GLSL("cb1_pos=(cb1_pos*4095.0+vec3(0.5))/4096.0;\ncolor.rgb=vec3(\n");
++    const char *lanes[] = {"r", "g", "b"};
++    for (int c = 0; c != 3; c++)
++        GLSL("texture("$",vec2(cb1_pos.%s,0.5)).r%s\n", sample, lanes[c], c == 2 ? ");" : ",");
++    GLSL("}else{\n");
 +    return true;
  }
  
  void pl_shader_set_alpha(pl_shader sh, struct pl_color_repr *repr,
-@@ -215,7 +248,8 @@
+@@ -215,7 +251,42 @@
  #endif
  }
  
++/* Evaluate the processing ABI's axis tables and the remaining MMR cross terms.
++ * Keep axis/order accumulation and clamping identical to the numerical contract. */
++static bool cb1_reshape_texture(pl_shader sh, const struct pl_cb1_dovi_processing *p,
++                               const struct pl_reshape_data *curve, int channel, ident_t texture)
++{
++    if (!p || !texture) return false;
++    unsigned component = 1u << channel;
++    if (p->poly_components & component) {
++        ident_t row = SH_FLOAT((channel * 3 + 0.5) / 9.0);
++        ident_t low = SH_FLOAT_DYN(curve->pivots[0]);
++        ident_t high = SH_FLOAT_DYN(curve->pivots[curve->num_pivots - 1]);
++        GLSL("color[%d]=clamp(texture("$",vec2((sig[%d]*1023.0+0.5)/1024.0,"$")).r,"$","$");\n",
++             channel, texture, channel, row, low, high);
++        return true;
++    }
++    if (!(p->narrow_components & component)) return false;
++    GLSL("s="$";\n", SH_FLOAT_DYN(curve->mmr_constant[0]));
++    for (int axis = 0; axis != 3; axis++) {
++        ident_t row = SH_FLOAT((channel * 3 + axis + 0.5) / 9.0);
++        GLSL("s+=texture("$",vec2((sig[%d]*1023.0+0.5)/1024.0,"$")).r;\n", texture, axis, row);
++    }
++    GLSL("{vec4 cross1=vec4(sig.x*sig.y,sig.x*sig.z,sig.y*sig.z,sig.x*sig.y*sig.z);\n");
++    const char *terms[] = {"cross1", "cross1*cross1", "cross1*cross1*cross1"};
++    for (int order = 0; order < curve->mmr_order[0]; order++) {
++        ident_t weights = sh_var(sh, (struct pl_shader_var){.var=pl_var_vec4("cb1_cross"),
++            .data=&curve->mmr_coeffs[0][order][3]});
++        GLSL("s+=dot("$",%s);\n", weights, terms[order]);
++    }
++    ident_t low = SH_FLOAT_DYN(curve->pivots[0]);
++    ident_t high = SH_FLOAT_DYN(curve->pivots[curve->num_pivots - 1]);
++    GLSL("color[%d]=clamp(s,"$","$");}\n", channel, low, high);
++    return true;
++}
++
 -void pl_shader_dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data)
 +static void dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data,
 +                         const struct pl_cb1_dovi_processing *processing)
  {
  #ifdef PL_HAVE_DOVI
      if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0) || !data)
-@@ -231,6 +265,11 @@
+@@ -231,6 +302,11 @@
  
      float coeffs_data[8][4];
      float mmr_packed_data[8*6][4];
@@ -167,45 +206,17 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  
      for (int c = 0; c < 3; c++) {
          const struct pl_reshape_data *comp = &data->comp[c];
-@@ -270,6 +309,37 @@
+@@ -270,6 +346,9 @@
          }
          if (identity) {
              GLSL("color[%d] = sig[%d]; \n", c, c);
 +            continue;
 +        }
-+        if (processing && mmr_lut && (processing->poly_components&(1u<<c))) {
-+            ident_t row=SH_FLOAT((c*3+0.5)/9.0);
-+            ident_t lo=SH_FLOAT_DYN(comp->pivots[0]);
-+            ident_t hi=SH_FLOAT_DYN(comp->pivots[comp->num_pivots-1]);
-+            GLSL("color[%d]=clamp(texture("$",vec2((sig[%d]*1023.0+0.5)/1024.0,"$")).r,"$","$"); \n",
-+                c,mmr_lut,c,row,lo,hi);
-+            continue;
-+        }
-+        if (processing && mmr_lut &&
-+            (processing->narrow_components&(1u<<c))) {
-+            ident_t constant=SH_FLOAT_DYN(comp->mmr_constant[0]);
-+            GLSL("s = "$"; \n",constant);
-+            for (int input=0;input<3;input++) {
-+                ident_t row=SH_FLOAT((c*3+input+0.5)/9.0);
-+                GLSL("s += texture("$",vec2((sig[%d]*1023.0+0.5)/1024.0,"$")).r; \n",
-+                     mmr_lut,input,row);
-+            }
-+            GLSL("{ vec4 cross1=vec4(sig.x*sig.y,sig.x*sig.z,sig.y*sig.z,sig.x*sig.y*sig.z); \n");
-+            for (int order=0;order<comp->mmr_order[0];order++) {
-+                float values[4];
-+                memcpy(values,&comp->mmr_coeffs[0][order][3],sizeof(values));
-+                ident_t cross=sh_var(sh,(struct pl_shader_var){.var=pl_var_vec4("cb1_cross"),.data=values});
-+                if (order==0) GLSL("s += dot("$",cross1); \n",cross);
-+                if (order==1) GLSL("s += dot("$",cross1*cross1); \n",cross);
-+                if (order==2) GLSL("s += dot("$",cross1*cross1*cross1); \n",cross);
-+            }
-+            ident_t lo=SH_FLOAT_DYN(comp->pivots[0]);
-+            ident_t hi=SH_FLOAT_DYN(comp->pivots[comp->num_pivots-1]);
-+            GLSL("color[%d]=clamp(s,"$","$"); } \n",c,lo,hi);
++        if (cb1_reshape_texture(sh, processing, comp, c, mmr_lut)) {
              continue;
          }
          if (reshape_univariate_mmr(sh, comp, c))
-@@ -425,9 +495,25 @@
+@@ -425,9 +504,25 @@
  #endif
  }
  
@@ -231,7 +242,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
      if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0))
          return;
      if (!repr || repr->sys != PL_COLOR_SYSTEM_DOLBYVISION || !repr->dovi) {
-@@ -436,7 +522,7 @@
+@@ -436,7 +531,7 @@
      }
      ident_t scale = SH_FLOAT(pl_color_repr_normalize(repr));
      GLSL("color.rgb *= vec3("$"); \n", scale);
@@ -240,7 +251,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
      if (enhancement_layer && repr->dovi->nlq_active) {
          ident_t el = sh_subpass(sh, enhancement_layer);
          if (el)
-@@ -455,7 +541,7 @@
+@@ -455,7 +550,7 @@
      GLSL("// pl_shader_decode_color \n"
           "{ \n");
      if (repr->sys == PL_COLOR_SYSTEM_DOLBYVISION)
@@ -249,7 +260,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  
      enum pl_color_system orig_sys = repr->sys;
      pl_transform3x3 tr = pl_color_repr_decode(repr, params);
-@@ -572,18 +658,20 @@
+@@ -572,18 +667,20 @@
          });
  
          // PQ EOTF
@@ -279,7 +290,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
          if (SH_PARAMS(sh).cb1_stable_pq) {
              cb1_pq_oetf(sh, "color.rgb");
          } else {
-@@ -593,6 +681,7 @@
+@@ -593,6 +690,7 @@
               "color.rgb = pow(color.rgb, vec3(%f));                 \n",
               PQ_M1, PQ_C1, PQ_C2, PQ_C3, PQ_M2);
          }

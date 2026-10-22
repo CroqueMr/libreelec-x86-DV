@@ -1,13 +1,13 @@
 This source tree contains separately licensed parts.
 
-Metadata/transport, FEL, Master Reference and shared processing API files
-marked GPL-3.0-or-later retain that license.
+Project runtime contributions and compatible replacement implementations use
+GPL-2.0-or-later where marked. Original LGPL, MIT and BSD notices remain effective.
 
 Original HDR10 AI, model-adapter, circuit and policy modules are now offered
 under GPL-2.0-or-later by their owner. Replacement cache, metadata-bounds,
 serializer and CM4 wire helpers use GPL-2.0-or-later. Retained third-party notices still apply.
 The replacement canonical tunnel shader, GL packer, vertex and generated-source
-wrapper use GPL-2.0-or-later. Fused renderer packing remains under its prior terms.
+wrapper and replacement fused composition use GPL-2.0-or-later.
 
 Original frame transactions, Master Reference contract, processing preparation,
 GL frame adapter and CPU Adaptive model use GPL-2.0-or-later under the owner's
@@ -16,14 +16,16 @@ grant. This does not relicense their separately implemented dependencies.
 The scalar creative module combines original CM4/resolver/fitter code with
 replacement numerical kernels under GPL-2.0-or-later; see the migration record.
 
-The original Adaptive compute shader and replacement GPU trim/carrier kernels
-use GPL-2.0-or-later. The retained fused colour/composition adapter in
-dvbridge_render.c is GPL-3.0-only. The shared static-library combination is
-therefore conveyed under GPL-3.0-only, retaining each file's original notices.
+The original Adaptive shader and replacement GPU trim/carrier/composition kernels
+use GPL-2.0-or-later. Original FEL, metadata-validation and player adapters receive
+the owner's additional grant. Imported implementations are replaced separately,
+not covered by that grant.
 
 Original tooling/documentation is MIT where declared. The FFmpeg-derived filter
 retains LGPL-2.1-or-later. Dependency patches include both inherited LGPL code and
-explicit GPL-3.0-or-later additions; see docs/LICENSE-MAP.md.
+compatible project additions; see docs/GPL2-MIGRATION.md. Upstream LibreELEC and
+dependency declarations/build conditions are unchanged. Test-only oracles retain
+their per-file licenses and are not linked into the runtime.
 
 The exact L1/L3 model bundle is offered under GPL-2.0-or-later by its owner.
 LightGBM itself is MIT. See models/l1l3/LICENSE.md.
