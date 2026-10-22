@@ -4,6 +4,7 @@
 
 | Family | Dolby Vision support |
 | --- | --- |
+| Intel Core 7th generation, Kaby Lake | Existing Display9/iHD path; physical qualification pending. [Details](INTEL-KABY-LAKE.md) |
 | Intel Core 8th generation and newer | Supported |
 | Intel Core Ultra Series 1 / 2, including 200V | Supported |
 | Intel N-series, including N100 / N150 | Supported |
