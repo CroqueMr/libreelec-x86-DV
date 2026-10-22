@@ -189,11 +189,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_creative.c": {
       "source": "src/dvbridge_creative.c",
-      "sha256": "012be30409c5009218f510098e8911fc6c7f947f66fddebdf8d1b40450aabd3a"
+      "sha256": "a78356648f3d3e80a5479dba3c03ac640a2ee06fb2e088463e2f8e029c20c822"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_creative.h": {
       "source": "src/dvbridge_creative.h",
-      "sha256": "5ae44af7af239049542825c6b7e80d8671a2ac43b49c1a9eb70750981985763b"
+      "sha256": "fe0ec3b92e0c526ba4da90132a338aadbb5cb38786a193d88dd97c00e458272b"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_dmabuf.c": {
       "source": "src/dvbridge_dmabuf.c",
@@ -305,7 +305,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "3e6c7baca2432888c74e0ec4321835045315bbb256afd14d5015068575bc5eb2"
+      "sha256": "87252fe6e1956d6dfa5b2858809ad8d4c51e6795a24368a4621d018a49d1bb5d"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -476,8 +476,12 @@
       "sha256": "716df2583a736790bed19af4084ce3270a6ca8d1439caec70b577fb6cb27c661"
     },
     "packages/mediacenter/kodi/cb1-model/LICENSE.md": {
-      "sha256": "bc2fd46117c2d4e48ff13a74d2bc95176d7e3e524bb41a8568af646c303bb931",
-      "source": "models/l1l3/LICENSE.md"
+      "source": "models/l1l3/LICENSE.md",
+      "sha256": "bc2fd46117c2d4e48ff13a74d2bc95176d7e3e524bb41a8568af646c303bb931"
+    },
+    "packages/mediacenter/kodi/cb1/src/cb1_trim_math.h": {
+      "source": "src/cb1_trim_math.h",
+      "sha256": "178b7ef0b567b61c7d73cea702971b10299a04931367c090be0a3c8561c8cfcc"
     }
   }
 }

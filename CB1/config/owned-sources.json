@@ -28,8 +28,8 @@
   "src/CMakeLists.txt": "5831d87607abd6bfe610c5595984cc59098aa9b912c6cd6a986f4b2283b4a959",
   "src/dvbridge_core.c": "24def454df3746c425a47e6ef641c4bd7ea033a14cb7262eb4aa1602e9d33db8",
   "src/dvbridge_core.h": "89e2cfb8da8116a07e322db29c84755615b422fad6cb5cb12ae89c97bdf761cf",
-  "src/dvbridge_creative.c": "012be30409c5009218f510098e8911fc6c7f947f66fddebdf8d1b40450aabd3a",
-  "src/dvbridge_creative.h": "5ae44af7af239049542825c6b7e80d8671a2ac43b49c1a9eb70750981985763b",
+  "src/dvbridge_creative.c": "a78356648f3d3e80a5479dba3c03ac640a2ee06fb2e088463e2f8e029c20c822",
+  "src/dvbridge_creative.h": "fe0ec3b92e0c526ba4da90132a338aadbb5cb38786a193d88dd97c00e458272b",
   "src/dvbridge_metadata.h": "f6abd3d3d0a3f6c179f398b86a428aad7da67c4d7d14b495dadc9ad56aa794ef",
   "src/dvbridge_pack_sources.h.in": "167f03c10669f5ce95eb96373bab80fafaca165a13a5f1478c620d01158a907a",
   "src/dvbridge_placebo.c": "b7cbbf9716e625eb15255c0aa4c4bafaa9a4193b7b84c9bf40502fbe4447e5df",
@@ -57,5 +57,6 @@
   "src/cb1_master_reference.h": "716df2583a736790bed19af4084ce3270a6ca8d1439caec70b577fb6cb27c661",
   "src/dvbridge_metadata_bounds.h": "67dfeaee0843dbc7b1c351a9ebc6edab2438684db1fe6905a9db4303ec3143d1",
   "src/mpv_dvbridge_cm4.h": "96f349d4e95bd5ce5f9eb5d19b78ae15a1a915aa51a43414ca30b102c609ab5e",
-  "src/pack_gles300.vert": "1d0565b90a136accafa64a1efa0239d4eec917367c73dff5123df9edcd62d4af"
+  "src/pack_gles300.vert": "1d0565b90a136accafa64a1efa0239d4eec917367c73dff5123df9edcd62d4af",
+  "src/cb1_trim_math.h": "178b7ef0b567b61c7d73cea702971b10299a04931367c090be0a3c8561c8cfcc"
 }

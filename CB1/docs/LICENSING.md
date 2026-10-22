@@ -8,7 +8,8 @@ license grant. [File map and GPLv2 constraints](LICENSE-MAP.md).
 | Remaining fused transport, FEL, import and rendering adapters | GPL-3.0-or-later pending migration |
 | Original HDR10 AI, model adapter, circuit and policy modules | GPL-2.0-or-later; retained NumPy BSD notices where applicable |
 | Original frame transaction, Master Reference contract, processing preparation, GL frame and CPU Adaptive model | GPL-2.0-or-later; owner's additional grant, implementation unchanged |
-| `dvbridge_creative.c/.h`, `cb1_dv_enhanced_shader.h`, `dvbridge_render.c` | GPL-3.0-only |
+| Creative scalar implementation and private trim math | GPL-2.0-or-later; original CM4/resolver/fitter plus replacement scalar kernels |
+| `cb1_dv_enhanced_shader.h`, `dvbridge_render.c` | GPL-3.0-only |
 | Replacement cache, metadata bounds, serializer and CM4 wire helpers | GPL-2.0-or-later; [replacement provenance](GPL2-MIGRATION.md) |
 | Canonical tunnel shader and GL packer | GPL-2.0-or-later; replacement bit encoder and original resource/state adapter; fused renderer packing remains unresolved |
 | Tests and reference operators | Per-file MIT, GPL-3.0-or-later or GPL-3.0-only |
@@ -42,7 +43,7 @@ Redistribution requires corresponding source, build material and notices for
 the complete selected product. CB1 alone is not the complete source of a
 LibreELEC image.
 
-The current static library includes GPL-3.0-only creative/rendering objects even
+The current static library includes GPL-3.0-only fused rendering/Adaptive code even
 without AI. The linked Kodi program therefore uses GPL-3.0-only, while separate
 Linux, driver, tool and firmware components retain their own licenses. FFmpeg is
 also built with GPL and version3 enabled; its OpenSSL 3 dependency is Apache-2.0.

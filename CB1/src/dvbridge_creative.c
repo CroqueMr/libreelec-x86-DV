@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
-/* Open CM2.9 numerical references: DoViBaker and MPC Video Renderer.
- * See docs/CREATIVE-MAPPING.md for pinned revisions and qualified domains. */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Original CM4/resolver/fitter and replacement scalar trim kernels.
+ * Historical adaptations and replacement scope: docs/GPL2-MIGRATION.md. */
 #include "dvbridge_creative.h"
 #include "cb1_dv_enhanced.h"
 #include "dvbridge_metadata.h"
+#include "cb1_trim_math.h"
 #include <libavutil/mem.h>
 #include <stdlib.h>
 #include <time.h>
@@ -33,8 +34,7 @@ static void l2_detail_resolve(struct dvbridge_creative_plan *p,
         .codes={a->l2.ms_weight},.target_pq={a->l2.target_max_pq}};
     bool bracketed=lower && upper;
     if(bracketed && a!=b){
-        d->upper_weight=fmax(0,fmin(1,(p->target_pq-a->l2.target_max_pq)/
-            (b->l2.target_max_pq-a->l2.target_max_pq)));
+        d->upper_weight=cb1_trim_weight(p->target_pq,a->l2.target_max_pq,b->l2.target_max_pq);
         d->num_anchors=2;d->codes[1]=b->l2.ms_weight;d->target_pq[1]=b->l2.target_max_pq;
     }
     if(d->codes[0]==-1 && (d->num_anchors==1 || d->codes[1]==-1))
@@ -253,8 +253,8 @@ static bool cm4_decode(struct dvbridge_cm4_coefficients *c,const struct dvbridge
     if(raw->present_fields&~31u)return false;
     if(raw->present_fields&DVBRIDGE_CM4_PRIMARY){
         for(int i=0;i<6;i++)if(raw->primary[i]>4095)return false;
-        c->sop[0]=raw->primary[0]/4096.0+.5;
-        c->sop[1]=raw->primary[1]/4096.0-.5;c->sop[2]=raw->primary[2]/4096.0+.5;
+        double words[5],decoded[5];for(unsigned i=0;i<5;i++)words[i]=raw->primary[i];
+        cb1_trim_decode(decoded,words);memcpy(c->sop,decoded,sizeof(c->sop));
         c->chroma_base=exp2(((double)raw->primary[3]-2048)/4096);
         c->saturation_gain=exp2(((double)raw->primary[4]-2048)/4096);
         c->detail_mix=.30*((double)raw->primary[5]-2048)/2048;c->present=63;
@@ -622,7 +622,7 @@ static bool fit_anchor(struct trim_fit *f,const struct dvbridge_creative_plan *p
         }
         if(!lower)lower=upper;
         double q1=lower?lower->l2.target_max_pq:0,q2=upper?upper->l2.target_max_pq:p->master_pq;
-        double w=q2<=q1?(p->target_pq>q1?1:0):bound((p->target_pq-q1)/(q2-q1));
+        double w=cb1_trim_weight(p->target_pq,q1,q2);
         f->influence=(lower==e?1-w:0)+(upper==e?w:0);
     }
     basis.cm4=true;basis.cm4_targets=DVBRIDGE_CM4_TARGETS_RESOLVED;basis.cm4_output=a.target;
@@ -745,8 +745,7 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
         double q1=lower->l2.target_max_pq,q2;
         if(upper){controls(high,upper);q2=upper->l2.target_max_pq;}
         else {for(int j=0;j<5;j++)high[j]=2048;q2=p.master_pq;}
-        double w=q2<=q1?(p.target_pq>q1?1:0):fmax(0,fmin(1,(p.target_pq-q1)/(q2-q1)));
-        for(int j=0;j<5;j++)p.codes[j]=low[j]+w*(high[j]-low[j]);
+        cb1_trim_blend(p.codes,low,high,5,cb1_trim_weight(p.target_pq,q1,q2));
     }
     p.backend=p.anchor_present?(p.cm4?DVBRIDGE_CREATIVE_CM29_COMPATIBILITY:DVBRIDGE_CREATIVE_CM29):DVBRIDGE_CREATIVE_NONE;
     p.reason=!p.anchor_present?DVBRIDGE_CREATIVE_NO_ANCHOR:p.cm4?DVBRIDGE_CREATIVE_CM4_RENDER_PARTIAL:
@@ -942,13 +941,5 @@ enum dvbridge_creative_status dvbridge_creative_edit(void **output,size_t *outpu
 bool dvbridge_creative_trim_rgb(const struct dvbridge_creative_plan *p,const double input[3],double out[3])
 {
     if(!p || !input || !out || p->status==DVBRIDGE_CREATIVE_INVALID || p->policy.tv.peak_nits<=0)return false;
-    double s=p->codes[0]/4096+.5,o=p->codes[1]/4096-.5,power=p->codes[2]/4096+.5;
-    double chroma=p->codes[3]/4096-.5,gain=p->codes[4]/4096-.5,peak=p->policy.tv.peak_nits;
-    double v[3],y=0;const double weights[3]={.22897,.69174,.07929};
-    for(int i=0;i<3;i++){
-        if(!isfinite(input[i]))return false;
-        v[i]=peak*pow(fmax(0,fmin(1,input[i]/peak*s+o)),power);y+=weights[i]*v[i];
-    }
-    for(int i=0;i<3;i++)out[i]=(gain && y>0 && v[i]>0)?v[i]*pow((1+chroma)*v[i]/y,gain):v[i];
-    return isfinite(out[0]) && isfinite(out[1]) && isfinite(out[2]);
+    return cb1_trim_rgb(out,input,p->policy.tv.peak_nits,p->codes);
 }

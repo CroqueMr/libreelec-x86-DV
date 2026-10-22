@@ -47,6 +47,17 @@ GPLv3 portions. Historical extraction records and third-party notices remain.
 | `mpv_dvbridge_cm4.h` | Public field widths and optional-block syntax in MIT dovi_tool `d4ad4ba7` | Same accepted/rejected blocks and exact transport bytes |
 | `dvbridge_metadata.h` | ETSI GS CCM 001 V1.1.1 clauses 6.2/6.3; FFmpeg's LGPL byte-order and CRC utilities; retained public frame-state API | Full payloads, packet arrays, committed frame state and diagnostics compared byte-for-byte with Beta5 |
 | `pack_gles300.frag`, metadata-only bodies in `dvbridge_gl_pack.c` | ETSI GS CCM 001 clause 6.4 bit placement, parity scrambling and repetition; retained BT.2020 code-value arithmetic | Full 4K RGBA8 frames compared with separately compiled Beta5 packer, including patch and in-place paths |
+| `cb1_trim_math.h`, scalar call sites in `dvbridge_creative.c` | Existing published numerical contract in `ALGORITHMS.md`: affine word decoding, bounded PQ interpolation, linear SOP/chroma equations | Exact scalar RGB, resolver fields, CM4 coefficients/operators, guidance and edited metadata against separately compiled normal Beta5 |
+
+The replacement trim kernel implements numerical operations, not a certified
+Dolby mapper. It retains the existing floating-point expression order and
+coefficients as an output contract. The original CM4 operator, field/target
+validation, metadata descriptors, bounded fitter and public API remain covered
+by the owner's grant; no foreign display mapper is incorporated. The historical
+DoViBaker/MPC references remain recorded in `CREATIVE-MAPPING.md`. Their old
+runtime implementation is only an external oracle in this qualification.
+The creative GPU operators in `dvbridge_render.c` are a separate unresolved
+portion; replacing the scalar operations does not clear that file.
 
 The canonical packer uses a four-bit parity table after folding the 12-bit
 luma/chroma parity word. Metadata-only writes calculate the parity directly
@@ -111,6 +122,17 @@ patching. Finite clipping, near-black, ramps and random colors are included.
 The recorded local run compares 1,194,393,600 bytes with zero differences.
 This is software-driver evidence, not cross-driver equivalence or a complete
 color/patent/certification assessment.
+
+Scalar creative comparison, using the same pinned libplacebo and matched
+FFmpeg producer:
+
+```sh
+python3 CB1/tools/compare_beta5_creative.py --baseline /path/to/frozen/Beta5/CB1 --ffmpeg-prefix /path/to/matched/ffmpeg
+```
+
+Use `--sanitize` for the ASan/UBSan variant. The test compares declared fields,
+not structure padding, and excludes the fitter's wall-clock duration. A standalone
+math-contract test pins neutral, clipping, fractional and endpoint behavior.
 
 ## Remaining scope
 

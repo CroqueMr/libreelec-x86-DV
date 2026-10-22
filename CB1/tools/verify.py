@@ -83,7 +83,7 @@ def verify(root, dependency_roots=None, prefix=None):
                       'src/dvbridge_core.c', 'src/dvbridge_core.h',
                       'src/dvbridge_metadata.h', 'src/dvbridge_metadata_bounds.h', 'src/mpv_dvbridge_cm4.h',
                       'src/dvbridge_pack_sources.h.in', 'src/pack_gles300.frag', 'src/pack_gles300.vert',
-                      'src/dvbridge_creative.c', 'src/dvbridge_creative.h',
+                      'src/dvbridge_creative.c', 'src/dvbridge_creative.h', 'src/cb1_trim_math.h',
                       'src/cb1_dv_enhanced.c', 'src/cb1_dv_enhanced.h', 'src/cb1_dv_enhanced_shader.h',
                       'src/cb1_circuit.c', 'src/cb1_circuit.h',
                       'src/cb1_processing.c', 'src/cb1_processing.h',
