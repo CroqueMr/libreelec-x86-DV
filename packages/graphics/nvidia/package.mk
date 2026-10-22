@@ -7,9 +7,15 @@ PKG_SHA256="e9d5167f4ca67f58b2b3447584b1e4273218d5088aba210d3aef2a407e522892"
 PKG_ARCH="x86_64"
 PKG_LICENSE="LicenseRef-nonfree"
 PKG_SITE="https://www.nvidia.com/en-us/drivers/unix/"
-PKG_URL="https://download.nvidia.com/XFree86/Linux-x86_64/${PKG_VERSION}/NVIDIA-Linux-x86_64-${PKG_VERSION}-no-compat32.run"
 PKG_DEPENDS_TARGET="toolchain util-macros libglvnd nvidia-open-kernel-modules"
 PKG_LONGDESC="The GBM/Wayland graphic driver for NVIDIA GPUs from Turing (GeForce GTX 16 and RTX 20 Series) on."
+if [ "${CB1_NVIDIA_PASCAL:-no}" = yes ]; then
+  PKG_VERSION="580.178.04"
+  PKG_SHA256="1833c8c5c53481dfab46df442c3de26ec5d4c35084e03d94ad93746d29899750"
+  PKG_DEPENDS_TARGET="toolchain util-macros libglvnd linux nvidia-pascal-modeset"
+  PKG_LONGDESC="Experimental GBM Pascal driver with a source-built R580 DV transport."
+fi
+PKG_URL="https://download.nvidia.com/XFree86/Linux-x86_64/${PKG_VERSION}/NVIDIA-Linux-x86_64-${PKG_VERSION}-no-compat32.run"
 PKG_TOOLCHAIN="manual"
 # Hades: NVIDIA's licence lets its files be passed on only as they are. They come already
 # stripped, and the strip of the build happens to leave them byte for byte as they were; another
@@ -41,11 +47,31 @@ unpack() {
 }
 
 make_target() {
-  # The kernel modules come from nvidia-open-kernel-modules, built from source.
-  :
+  if [ "${CB1_NVIDIA_PASCAL:-no}" = yes ]; then
+    local public="$(get_build_dir nvidia-pascal-modeset)"
+    # Keep RM proprietary; build the modified modeset core and DRM adapter from source.
+    cp "${public}/src/nvidia-modeset/_out/Linux_x86_64/nv-modeset-kernel.o" \
+       "${PKG_BUILD}/kernel/nvidia-modeset/nv-modeset-kernel.o_binary"
+    cp "${public}/src/nvidia-modeset/kapi/interface/nvkms-kapi.h" \
+       "${public}/src/common/inc/nvkms-cb1-vsif.h" "${PKG_BUILD}/kernel/common/inc/"
+    local name
+    for name in nvidia-drm-connector.c nvidia-drm-connector.h nvidia-drm-drv.c nvidia-drm-priv.h; do
+      cp "${public}/kernel-open/nvidia-drm/${name}" "${PKG_BUILD}/kernel/nvidia-drm/${name}"
+    done
+    make -C "${PKG_BUILD}/kernel" modules \
+      NV_KERNEL_MODULES="nvidia nvidia-modeset nvidia-drm nvidia-uvm" \
+      CC="${CC}" LD="${LD}" SYSSRC="$(kernel_path)" SYSOUT="$(kernel_path)"
+  fi
 }
 
 makeinstall_target() {
+  if [ "${CB1_NVIDIA_PASCAL:-no}" = yes ]; then
+    mkdir -p "${INSTALL}/$(get_full_module_dir)/nvidia"
+    local module
+    for module in nvidia nvidia-modeset nvidia-drm nvidia-uvm; do
+      cp -p "kernel/${module}.ko" "${INSTALL}/$(get_full_module_dir)/nvidia/"
+    done
+  fi
   # Hades: the agreement that NVIDIA's files come under goes wherever they go. The copy in
   # licenses/, which the release .tar and the boot partition of the image carry, has to be the one
   # of this driver.
@@ -57,7 +83,9 @@ makeinstall_target() {
   # GSP firmware and the ucode images the open kernel modules also request
   mkdir -p ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
     cp firmware/gsp*.bin           ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
-    cp firmware/ucodes*.bin        ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
+    if [ "${CB1_NVIDIA_PASCAL:-no}" != yes ]; then
+      cp firmware/ucodes*.bin      ${INSTALL}/$(get_full_firmware_dir)/nvidia/${PKG_VERSION}
+    fi
 
   # GBM
   mkdir -p ${INSTALL}/usr/lib/gbm
