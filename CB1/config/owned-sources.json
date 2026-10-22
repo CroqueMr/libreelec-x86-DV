@@ -30,7 +30,7 @@
   "src/dvbridge_core.h": "a721d10d054c903401a2e05ab1416bc6ca52f3730658183483955577ebc7ea1f",
   "src/dvbridge_creative.c": "012be30409c5009218f510098e8911fc6c7f947f66fddebdf8d1b40450aabd3a",
   "src/dvbridge_creative.h": "5ae44af7af239049542825c6b7e80d8671a2ac43b49c1a9eb70750981985763b",
-  "src/dvbridge_metadata.h": "e75d7210b2c605aed52df28bc1b42413b83e261e264de634025cd8a682f1d66d",
+  "src/dvbridge_metadata.h": "f6abd3d3d0a3f6c179f398b86a428aad7da67c4d7d14b495dadc9ad56aa794ef",
   "src/dvbridge_pack_sources.h.in": "9c67e171bacd4ec98434b6591d3e33ae5c3c929a0fd675a45763ea5ed8c639d8",
   "src/dvbridge_placebo.c": "b7cbbf9716e625eb15255c0aa4c4bafaa9a4193b7b84c9bf40502fbe4447e5df",
   "src/dvbridge_placebo.h": "cdef70eb16a901376321aaba7962bcd82c6be764cdaf50e07f681291961d28ab",

@@ -4,8 +4,8 @@ Metadata/transport, FEL, Master Reference and shared processing API files
 marked GPL-3.0-or-later retain that license.
 
 Original HDR10 AI, model-adapter, circuit and policy modules are now offered
-under GPL-2.0-or-later by their owner. Replacement cache, metadata-bounds and
-CM4 wire helpers use GPL-2.0-or-later. Retained third-party notices still apply.
+under GPL-2.0-or-later by their owner. Replacement cache, metadata-bounds,
+serializer and CM4 wire helpers use GPL-2.0-or-later. Retained third-party notices still apply.
 
 dvbridge_creative.c/.h, cb1_dv_enhanced.c/.h, cb1_dv_enhanced_shader.h and
 dvbridge_render.c are GPL-3.0-only. The shared static-library combination is

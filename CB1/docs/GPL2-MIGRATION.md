@@ -30,6 +30,16 @@ LGPL-2.1-or-later. These individual grants do not relicense the combined program
 | `dvbridge_cache.c/.h` | Public pinned libplacebo cache API and its version-1 storage format, LGPL-2.1-or-later; POSIX temporary-file/rename operations | Same objects, eviction, load counts, save results and persisted bytes as the separately compiled Beta5 wrapper; corruption and persistence-failure tests |
 | `dvbridge_metadata_bounds.h` | Matched FFmpeg public `AVDOVIMetadata` layout, LGPL-2.1-or-later | Same accepted/rejected storage layouts, alignment, stride and bounds |
 | `mpv_dvbridge_cm4.h` | Public field widths and optional-block syntax in MIT dovi_tool `d4ad4ba7` | Same accepted/rejected blocks and exact transport bytes |
+| `dvbridge_metadata.h` | ETSI GS CCM 001 V1.1.1 clauses 6.2/6.3; FFmpeg's LGPL byte-order and CRC utilities; retained public frame-state API | Full payloads, packet arrays, committed frame state and diagnostics compared byte-for-byte with Beta5 |
+
+The serializer constructs the fixed header by field offset, orders extension
+descriptors with `qsort` and writes bounded blocks with FFmpeg's big-endian
+accessors. FFmpeg's IEEE CRC table supplies the MPEG CRC with the required
+initial value and byte order. Known vectors and complete Beta5 packets agree.
+The pinned 32-block limit keeps the sort within glibc's stack workspace.
+Source/canonical matrices, scene refresh, repeated frames, ID wrapping and L5
+placement keep the Beta5 contract. Failed operations produce no valid output;
+the existing frame owner commits only successful candidates.
 
 The CM helper expands packed big-endian fields into byte/word transport
 fields. It does not implement a display mapper. L3/L4 contain 12-bit fields;
@@ -46,6 +56,7 @@ This is a documented replacement process, not a claim of legal clean-room work.
 References: [libplacebo cache API](https://github.com/haasn/libplacebo/blob/master/src/include/libplacebo/cache.h),
 [FFmpeg metadata API](https://github.com/FFmpeg/FFmpeg/blob/n9.0/libavutil/dovi_meta.h),
 [MIT dovi_tool syntax](https://github.com/doppingkoala/dovi_tool/tree/d4ad4ba7e6f5acef6c7321dac0139992a082cd8f/dolby_vision/src/rpu/extension_metadata/blocks).
+The serializer format is specified by [ETSI GS CCM 001 V1.1.1](https://www.etsi.org/deliver/etsi_gs/CCM/001_099/001/01.01.01_60/gs_ccm001v010101p.pdf).
 
 Reproduce the helper comparison with the same pinned libplacebo in
 `PKG_CONFIG_PATH`/the runtime library path:
@@ -56,12 +67,14 @@ python3 CB1/tools/compare_beta5_helpers.py --baseline /path/to/frozen/Beta5/CB1 
 
 The baseline must come from the normal Beta5 commit
 `abde400bbf8ef754c971f437dc321bdd03a5986b`. The runner builds separate old/new
-programs, compares cache files and validates helper outputs. It does not include
+programs, compares cache files, validates helper outputs and streams the complete
+serializer output/state for exact comparison. It checks baseline helper hashes
+and rejects disabled assertions. It does not include
 the old GPLv3 implementation in the replacement runtime.
 
 ## Remaining scope
 
-Creative adaptations, shared rendering, remaining metadata/transport helpers,
+Creative adaptations, shared rendering, remaining image transport/packing,
 modified libplacebo and Kodi integration still require portion-level review.
 Their existing GPLv3 notices remain effective. Upstream FFmpeg and vanilla
 LibreELEC dependencies keep their pinned licenses and build configuration.
