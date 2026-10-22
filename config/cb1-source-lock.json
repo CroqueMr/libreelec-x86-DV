@@ -289,7 +289,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "208c548173a43ccd10b951261fe7735c78b2f567f98237c2f9782c0cdbbf914d"
+      "sha256": "c79a6542b7631d3e02a2e16b711e506c81643e86e8d04ff57eebbcb33fa9ce4c"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -425,7 +425,7 @@
     },
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-9913-processing.patch": {
       "source": "patches/libplacebo/libplacebo-9913-processing.patch",
-      "sha256": "b9edd517fe5ec2f31a791d9b5e4964d0d79710d20617bb45c9e8fde2dd19b847"
+      "sha256": "3ae8d1a78a0e8de3d9049922e190096b342d58cb138e7154a5d97b8c54772364"
     },
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-9914-shared-mmr-intervals.patch": {
       "source": "patches/libplacebo/libplacebo-9914-shared-mmr-intervals.patch",
@@ -449,7 +449,7 @@
     },
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-9916-fel-filter.patch": {
       "source": "patches/libplacebo/libplacebo-9916-fel-filter.patch",
-      "sha256": "9962765c59d1ead84efeca1eed0bb18a780f38e4fecdcfd99360d9274f35c48e"
+      "sha256": "64dc4272a5dabd33edfd49d963623ae77cf99d2cad23ee83a8851741a2738da6"
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch",
@@ -465,7 +465,7 @@
     },
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-9917-native-bounds.patch": {
       "source": "patches/libplacebo/libplacebo-9917-native-bounds.patch",
-      "sha256": "8a56adae2fa7b033e4721021ce6356b8047dab33b1fa32b8ac90e5c5c3976290"
+      "sha256": "de5c68839d919b5440ee2ad8a4d143365e14a3123aabf32d7dc2859effc933eb"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_master_reference.c": {
       "source": "src/cb1_master_reference.c",

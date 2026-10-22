@@ -68,11 +68,12 @@ updated to its new implementation; unchanged modified-source locks still match.
 The comparison runners load each version's own library, not a shared candidate
 library for both sides. No dependency hashes are relaxed.
 
-Replaying the current upstream archive and patch recipe does not reproduce that
-published source snapshot: paired-row contract-2 reconstruction additions are
-missing from the replay. This pre-existing recipe/snapshot gap remains open.
-No unrelated reconstruction change or new dependency pin is included here.
-Complete image reproducibility is not established by these engine tests.
+The canonical patch recipe now includes the paired-row contract-2 reconstruction
+and exact MMR table additions already present in the published source snapshot.
+All 18 locked libplacebo files and 176 compilation inputs match the qualified
+candidate byte-for-byte. No modified-source expectation or upstream pin changed.
+CI replays the complete dependency recipe and checks those source locks before
+running the integration suite. Complete-image qualification is recorded separately.
 
 Additional differential checks compare 48 complete FP32 processing captures and
 24,000 import-layout/normalized identity records. The full-frame composition

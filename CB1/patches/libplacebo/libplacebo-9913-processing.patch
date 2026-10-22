@@ -107,11 +107,10 @@ diff --git a/src/shaders.h b/src/shaders.h
 diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 --- a/src/shaders/colorspace.c
 +++ b/src/shaders/colorspace.c
-@@ -51,6 +51,42 @@
-          "vec3 v2=v*v, v4=v2*v2, v8=v4*v4, v16=v8*v8, v32=v16*v16, v64=v32*v32;\n"
+@@ -52,6 +52,43 @@
           "%s = ((v64*v8)*v4)*v2*pow(v, vec3(0.84375));\n"
           "}\n", signal, signal);
-+}
+ }
 +
 +static void cb1_colour_dense_eotf(pl_shader sh)
 +{
@@ -147,13 +146,16 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 +        GLSL("texture("$",vec2(cb1_pos.%s,0.5)).r%s\n", sample, lanes[c], c == 2 ? ");" : ",");
 +    GLSL("}else{\n");
 +    return true;
- }
++}
++
  
  void pl_shader_set_alpha(pl_shader sh, struct pl_color_repr *repr,
-@@ -215,7 +251,42 @@
+                          enum pl_alpha_mode mode)
+@@ -215,7 +252,42 @@
  #endif
  }
  
+-void pl_shader_dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data)
 +/* Evaluate the processing ABI's axis tables and the remaining MMR cross terms.
 + * Keep axis/order accumulation and clamping identical to the numerical contract. */
 +static bool cb1_reshape_texture(pl_shader sh, const struct pl_cb1_dovi_processing *p,
@@ -188,13 +190,12 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 +    return true;
 +}
 +
--void pl_shader_dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data)
 +static void dovi_reshape(pl_shader sh, const struct pl_dovi_metadata *data,
 +                         const struct pl_cb1_dovi_processing *processing)
  {
  #ifdef PL_HAVE_DOVI
      if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0) || !data)
-@@ -231,6 +302,11 @@
+@@ -231,6 +303,11 @@
  
      float coeffs_data[8][4];
      float mmr_packed_data[8*6][4];
@@ -206,7 +207,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  
      for (int c = 0; c < 3; c++) {
          const struct pl_reshape_data *comp = &data->comp[c];
-@@ -270,6 +346,9 @@
+@@ -270,6 +347,9 @@
          }
          if (identity) {
              GLSL("color[%d] = sig[%d]; \n", c, c);
@@ -216,7 +217,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
              continue;
          }
          if (reshape_univariate_mmr(sh, comp, c))
-@@ -425,9 +504,25 @@
+@@ -425,9 +505,25 @@
  #endif
  }
  
@@ -242,7 +243,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
      if (!sh_require(sh, PL_SHADER_SIG_COLOR, 0, 0))
          return;
      if (!repr || repr->sys != PL_COLOR_SYSTEM_DOLBYVISION || !repr->dovi) {
-@@ -436,7 +531,7 @@
+@@ -436,7 +532,7 @@
      }
      ident_t scale = SH_FLOAT(pl_color_repr_normalize(repr));
      GLSL("color.rgb *= vec3("$"); \n", scale);
@@ -251,7 +252,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
      if (enhancement_layer && repr->dovi->nlq_active) {
          ident_t el = sh_subpass(sh, enhancement_layer);
          if (el)
-@@ -455,7 +550,7 @@
+@@ -455,7 +551,7 @@
      GLSL("// pl_shader_decode_color \n"
           "{ \n");
      if (repr->sys == PL_COLOR_SYSTEM_DOLBYVISION)
@@ -260,7 +261,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  
      enum pl_color_system orig_sys = repr->sys;
      pl_transform3x3 tr = pl_color_repr_decode(repr, params);
-@@ -572,18 +667,20 @@
+@@ -572,18 +668,20 @@
          });
  
          // PQ EOTF
@@ -290,7 +291,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
          if (SH_PARAMS(sh).cb1_stable_pq) {
              cb1_pq_oetf(sh, "color.rgb");
          } else {
-@@ -593,6 +690,7 @@
+@@ -593,6 +691,7 @@
               "color.rgb = pow(color.rgb, vec3(%f));                 \n",
               PQ_M1, PQ_C1, PQ_C2, PQ_C3, PQ_M2);
          }

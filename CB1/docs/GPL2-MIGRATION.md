@@ -166,7 +166,8 @@ sampling/admission instructions are unchanged. This is not hardware evidence.
 
 The identified project runtime replacements and original-code grants do not
 establish a qualified complete LibreELEC image. Canonical dependency-recipe
-closure, complete product compilation and authorized hardware qualification
+closure is now verified against the qualified published snapshot. Complete
+product compilation and authorized hardware qualification
 remain separate gates. Upstream FFmpeg and vanilla LibreELEC dependencies keep
 their declared licenses and build configuration; they are not rewritten to
 force a GPLv2-only image.
