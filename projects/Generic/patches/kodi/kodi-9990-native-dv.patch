@@ -1332,7 +1332,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +        const DVBRIDGE::OutputPreferences& preferences);
 +    cb1_ai_status BeginHDR10AI(const char* bundle,
 +        const DVBRIDGE::OutputPreferences& preferences, DVBRIDGE::SourceBinding binding,
-+        double pts, uint64_t now);
++        double pts, uint64_t now, bool buffered = true);
 +    cb1_ai_status AnalyseHDR10AI(const Layer& base, double headPts);
 +    HDR10AISource::Decision PrepareHDR10AIQueue(std::span<const Layer> queue,
 +        const DVBRIDGE::OutputPreferences& preferences, const char* bundle,
@@ -1601,7 +1601,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeShaders.h.in b/xbmc/c
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,226 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "HDR10AISource.h"
 +#include <algorithm>
@@ -1645,7 +1645,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/core
 +
 +cb1_ai_status HDR10AISource::Begin(pl_gpu gpu, const char* bundle,
 +    const DVBRIDGE::OutputPreferences& preferences, DVBRIDGE::SourceBinding binding,
-+    double pts, uint64_t now)
++    double pts, uint64_t now, bool buffered)
 +{
 +  if (!binding.Valid() || !std::isfinite(pts) || !gpu)
 +    return CB1_AI_INVALID;
@@ -1664,11 +1664,13 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/core
 +    if (m_active)
 +    {
 +      m_activation.Begin(binding.stream,m_revision,now);
++      if (!buffered) m_activation.WaitForInput();
 +      m_activation.SetPaused(m_paused,now);
 +    }
 +    else m_activation.Stop();
 +  }
 +  if (m_fallback) return CB1_AI_INCOMPATIBLE;
++  if (buffered) m_activation.InputReady(now);
 +  // A policy/seek reset must not release a decoder surface still read by the GPU.
 +  if (m_job)
 +  {
@@ -1829,7 +1831,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/core
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,74 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1853,7 +1855,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
 +  // Called only after the owning context's retirement fence has completed.
 +  void ReleaseRetired();
 +  cb1_ai_status Begin(pl_gpu gpu, const char* bundle, const DVBRIDGE::OutputPreferences& preferences,
-+      DVBRIDGE::SourceBinding binding, double pts, uint64_t now);
++      DVBRIDGE::SourceBinding binding, double pts, uint64_t now, bool buffered = true);
 +  cb1_ai_status Submit(const pl_frame* frame, DVBRIDGE::SourceBinding binding, double pts,
 +      double headPts, std::shared_ptr<void> lease);
 +  cb1_ai_status Seal(double pts);
@@ -1874,6 +1876,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
 +  }
 +  uint64_t LastSubmitted() const { return m_lastSubmitted; }
 +  void SetPresentationDeadline(uint64_t deadline) { m_activation.SetPresentationDeadline(deadline); }
++  void InputReady(uint64_t now) { m_activation.InputReady(now); }
 +  void SetPaused(bool paused, uint64_t now)
 +  {
 +    m_paused = paused;
