@@ -11,10 +11,27 @@
 static int64_t ready[64];
 static unsigned count;
 static bool end, bad_pts, send_error;
+static int native_pool, initialized_pool = -1;
+int __wrap_avcodec_get_hw_frames_parameters(AVCodecContext *ctx, AVBufferRef *device,
+                                           enum AVPixelFormat format, AVBufferRef **frames)
+{
+    assert(ctx && device == ctx->hw_device_ctx && format == AV_PIX_FMT_VAAPI);
+    *frames = av_buffer_allocz(sizeof(AVHWFramesContext));
+    assert(*frames);
+    ((AVHWFramesContext *)(*frames)->data)->initial_pool_size = native_pool;
+    return 0;
+}
+int __wrap_av_hwframe_ctx_init(AVBufferRef *frames)
+{
+    initialized_pool = ((AVHWFramesContext *)frames->data)->initial_pool_size;
+    return 0;
+}
 int __wrap_avcodec_open2(AVCodecContext *ctx, const AVCodec *codec, AVDictionary **options)
 {
     (void)codec; (void)options;
     assert(ctx->hw_device_ctx && ctx->get_format && ctx->thread_count == 1);
+    const enum AVPixelFormat formats[] = {AV_PIX_FMT_VAAPI, AV_PIX_FMT_NONE};
+    assert(ctx->get_format(ctx, formats) == AV_PIX_FMT_VAAPI);
     return 0;
 }
 void __wrap_avcodec_flush_buffers(AVCodecContext *ctx)
@@ -92,6 +109,7 @@ int main(void)
     ((AVHWDeviceContext *)device->data)->type = AV_HWDEVICE_TYPE_VAAPI;
     ((AVHWDeviceContext *)device->data)->hwctx = &va_device;
     assert(dvbridge_fel_device(f, device));
+    assert(initialized_pool == 0); /* Preserve FFmpeg's dynamically growing VAAPI pool. */
     assert(dvbridge_fel_take(f, 0, &frame) == 1 && frame->pts == 0);
     assert(dvbridge_fel_take(f, 0, &frame) == -1); /* refuse overwriting ownership */
     av_frame_free(&frame);
@@ -145,6 +163,18 @@ int main(void)
     send_error = false;
     dvbridge_fel_reset(f);
     assert(!dvbridge_fel_failed(f));
+    dvbridge_fel_destroy(f);
+    native_pool = 5;
+    parameters = avcodec_parameters_alloc();
+    assert(parameters);
+    parameters->codec_type = AVMEDIA_TYPE_VIDEO;
+    parameters->codec_id = AV_CODEC_ID_HEVC;
+    parameters->width = 3840;
+    parameters->height = 2160;
+    f = dvbridge_fel_create(parameters, (AVRational){1,1000000});
+    avcodec_parameters_free(&parameters);
+    assert(f && dvbridge_fel_device(f, device));
+    assert(initialized_pool == 41); /* Fixed pools retain the existing 32+4 headroom. */
     dvbridge_fel_destroy(f);
     av_buffer_unref(&device);
     parameters = avcodec_parameters_alloc();

@@ -115,7 +115,8 @@ add_test(NAME reference_transfer COMMAND reference_transfer)
 target_link_libraries(reference_sampler PRIVATE ${CMAKE_DL_LIBS})
 add_test(NAME reference_sampler COMMAND reference_sampler)
 target_link_options(fel_queue PRIVATE -Wl,--wrap=avcodec_open2 -Wl,--wrap=avcodec_send_packet
-                                     -Wl,--wrap=avcodec_receive_frame -Wl,--wrap=avcodec_flush_buffers)
+                                     -Wl,--wrap=avcodec_receive_frame -Wl,--wrap=avcodec_flush_buffers
+                                     -Wl,--wrap=avcodec_get_hw_frames_parameters -Wl,--wrap=av_hwframe_ctx_init)
 set_tests_properties(fel_queue PROPERTIES SKIP_RETURN_CODE 77)
 foreach(name task3_basic basic_policy basic_render frozen_reference)
   add_executable(${name} ${name}.c)

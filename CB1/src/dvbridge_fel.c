@@ -74,7 +74,9 @@ static enum AVPixelFormat hardware_format(AVCodecContext *ctx, const enum AVPixe
     if (avcodec_get_hw_frames_parameters(ctx, ctx->hw_device_ctx, AV_PIX_FMT_VAAPI, &frames) < 0)
         return AV_PIX_FMT_NONE;
     AVHWFramesContext *hw = (void *)frames->data;
-    hw->initial_pool_size += QUEUE_MAX + 4;
+    /* Zero selects FFmpeg's dynamic VAAPI pool; only extend a fixed pool. */
+    if (hw->initial_pool_size)
+        hw->initial_pool_size += QUEUE_MAX + 4;
     if (av_hwframe_ctx_init(frames) < 0) {
         av_buffer_unref(&frames);
         return AV_PIX_FMT_NONE;
