@@ -14361,7 +14361,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +250,308 @@
+@@ -128,16 +250,312 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -14462,7 +14462,11 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +bool CWinSystemGbmGLESContext::BeginRender()
 +{
 +  // A prepared picture already includes its GUI; wait before drawing it again.
-+  if (m_cb1FramePending && m_dvFrame && !CompleteDVBridgePage(8)) return false;
++  if (m_cb1FramePending && m_dvFrame)
++  {
++    PresentFrame(false, true);
++    return false;
++  }
 +  return CRenderSystemGLES::BeginRender();
 +}
 +#endif

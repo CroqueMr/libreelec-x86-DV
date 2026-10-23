@@ -27,7 +27,7 @@
     "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "f2c4c6670beaf80f6babb9bd2cc8efdcbc12a9b3fcc0e6a62ada3599a31af5b4",
     "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": "93a7543fbd6d0d3e85978fff15c3d171d6b91b0f42fdf4007d73fae7f36811ff",
     "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": "5cc47ceb4130f18ed171399e61b3b7c351b5d8d70dec12bcdc7279e6523a4623",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "e0f850228679fa12933cb3f40f3951590a327d0672c158e7dab1a1ef2f86490d",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "92b9aabab7fa18b61841763a560abfd48bdafd02c33ba3ea3d44a5b6c1115b6a",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
     "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
     "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
