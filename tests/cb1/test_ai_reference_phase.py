@@ -152,6 +152,37 @@ int main(){
    other.PrepareNextRender();
    assert(other.m_presentstep==PRESENT_READY && other.m_queued.front()==2);
  }
+ // Catch-up uses the admission deadline, including latency, but not an old edge's age.
+ // At 60 Hz, two queued pictures are overdue; the fourth is still in the future.
+ for(bool nativeEdge:{false,true})for(double age:{0.0,8333.333333333}){
+   window.async=true;window.native=nativeEdge;window.age=age;
+   CRenderManager delayed;delayed.renderer.lookahead=false;delayed.m_fps=60;
+   delayed.m_dvdClock.now=1000000;delayed.m_displayLatency=33333.333333333;
+   delayed.m_clockSync.m_syncOffset=0;delayed.m_queued={2,3,4};
+   delayed.m_Queue[2].pts=983333.333333333;
+   delayed.m_Queue[3].pts=1000000;
+   delayed.m_Queue[4].pts=1083333.333333333;
+   delayed.PrepareNextRender();
+   assert(delayed.m_presentsource==3 && delayed.m_queued.front()==4);
+ }
+ // Half-refresh-old completion must not retain one frame at the native edge.
+ window.async=true;window.native=true;window.age=8333.333333333;
+ CRenderManager boundaryCatchup;boundaryCatchup.renderer.lookahead=false;boundaryCatchup.m_fps=60;
+ boundaryCatchup.m_dvdClock.now=1000000;boundaryCatchup.m_displayLatency=33334;
+ boundaryCatchup.m_clockSync.m_syncOffset=0;boundaryCatchup.m_queued={2,3,4};
+ boundaryCatchup.m_Queue[2].pts=1016667;boundaryCatchup.m_Queue[3].pts=1033333;
+ boundaryCatchup.m_Queue[4].pts=1050000;
+ boundaryCatchup.PrepareNextRender();
+ assert(boundaryCatchup.m_presentsource==3 && boundaryCatchup.m_queued.front()==4);
+ // A current presentation anchor must not postpone ordinary, async-off selection.
+ window.async=false;window.native=false;window.age=8333.333333333;
+ CRenderManager vanilla;vanilla.renderer.lookahead=false;vanilla.m_fps=60;
+ vanilla.m_dvdClock.now=1000000;vanilla.m_displayLatency=33333.333333333;
+ vanilla.m_clockSync.m_syncOffset=0;vanilla.m_queued={2,3,4};
+ vanilla.m_Queue[2].pts=983333.333333333;vanilla.m_Queue[3].pts=1000000;
+ vanilla.m_Queue[4].pts=1083333.333333333;
+ vanilla.PrepareNextRender();
+ assert(vanilla.m_presentsource==3 && vanilla.m_queued.front()==4);
 }
 '''.replace('FUNCTION', function)
         with tempfile.TemporaryDirectory() as temporary:
