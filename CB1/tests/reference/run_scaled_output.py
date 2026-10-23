@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: MIT
-"""Complete output check of independently frozen additional scaler fixtures."""
+"""Complete output check against the source-first independent scalar oracle."""
 import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
 import reference as R
+from image_reference import source_first_pq
 from run_gpu_images import wire
 ROOT=Path(__file__).resolve().parent
 hdr_quality = '--hdr-conversion-quality' in sys.argv
@@ -17,6 +18,8 @@ assert data['source_vectors_sha256']==hashlib.sha256((ROOT/'vectors.json').read_
 assert len(data['cases'])==3
 failures=0
 for case in data['cases']:
+    # Retain immutable legacy fixtures; the approved processing order changed.
+    case = dict(case, expected=source_first_pq(case['input']))
     result=subprocess.run([sys.argv[1]],input=wire(case),capture_output=True,text=True)
     print(case['id'],'exit',result.returncode,flush=True);print(result.stderr,end='')
     if result.returncode:
@@ -34,7 +37,6 @@ for case in data['cases']:
         print('FAIL',error,'max PQ error',worst,'pixel',index//3,'component',index%3,
               'actual=',json.dumps(actual),flush=True)
         continue
-    print('PASS HDR conversion PQ/code/black/hue budgets' if hdr_quality else
-          'PASS unchanged complete-output PQ/code/black/hue budgets', 'max PQ error',worst,flush=True)
+    print('PASS source-first PQ/code/black/hue budgets', 'max PQ error',worst,flush=True)
 print('additional complete cases',len(data['cases']),'failures',failures,flush=True)
 sys.exit(bool(failures))

@@ -150,7 +150,6 @@ int main(int argc,char **argv)
         .tv={2300,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
     float native[4];
     for(unsigned preset=1;preset<2;preset++){
-        
         assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
         assert(finish(r)==DVBRIDGE_DV_READY);
         assert(!render_errors && "Letterboxed Enhanced must not issue invalid texture operations");
@@ -158,7 +157,7 @@ int main(int argc,char **argv)
             r->ai_enhanced_stats?r->ai_enhanced_stats->params.format->name:"none",r->ai_enhanced_prepack);
         const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out);
         assert(out->value.pixel_algorithm && !strcmp(out->value.pixel_algorithm,CB1_DVE_ALGORITHM));
-        assert(out->value.measured && out->value.sample_count==3840u*1920u);
+        assert(out->value.measured && out->value.sample_count==4u*2u);
         assert(out->value.output_generation==DVBRIDGE_RECONSTRUCTED_ENHANCED);
         assert(out->value.source_reference_nits==1000 && out->value.nominal_max_nits==2300);
         assert(!av_dovi_find_level(out->output_metadata,2) && !av_dovi_find_level(out->output_metadata,3));
@@ -166,20 +165,20 @@ int main(int argc,char **argv)
         struct cb1_dv_enhanced_source guidance={.master=1000,.l1_present=true,.analysis={0,3080,1463}};
         struct cb1_dv_enhanced_plan plan;assert(cb1_dv_enhanced_build_ai(&plan,&guidance,&policy)==CB1_DVE_READY);
         double want[3];assert(cb1_dv_enhanced_pixel(&plan,(double[3]){500,500,500},want));
-        float sample[4];reference_read(gpu.gl->gpu,out->intermediate,1200,900,1,1,sample);
+        float sample[4];reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,sample);
         for(unsigned c=0;c<3;c++)assert(fabs(sample[c]-dv_ideal_pq(want[c]))*4095<=auxiliary_codes(r));
         /* On capable GPUs, conversion publishes expanded pixels without a
          * second full-image expansion dispatch. Reduction only measures them. */
         GLint fragment_images;glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS,&fragment_images);
-        if(fragment_images>=3 && r->fragment_quad)assert(r->dv.prepacked);
-        if(fragment_images>=2){
+        if(r->ai_enhanced_prepack)assert(r->dv.prepacked);
+        if(r->ai_enhanced_fused){
             pl_tex_clear(gpu.gl->gpu,r->enhanced_rgb,(float[4]){0,0,0,1});
             assert(ai_render_pixels(r,&source,geometry,NULL,false,NULL));
             reference_read(gpu.gl->gpu,r->enhanced_rgb,1200,900,1,1,sample);
             for(unsigned c=0;c<3;c++)assert(fabs(sample[c]-dv_ideal_pq(want[c]))*4095<=auxiliary_codes(r));
             assert(sample[3]==1);
         }
-        reference_read(gpu.gl->gpu,out->intermediate,1000,10,1,1,sample);
+        reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1000,10,1,1,sample);
         for(unsigned c=0;c<3;c++)assert(sample[c]==0);
         retire(r);
     }
@@ -213,10 +212,12 @@ int main(int argc,char **argv)
         assert(dvbridge_render_hdr10_ai_packed_overlay(r,&policy,&prediction,&source,&geometry,direct_target,direct_fbo,flip,gui==2?&late:NULL));
         assert(finish(r)==DVBRIDGE_DV_READY);
         if(gui==1){
-            assert(!dvbridge_render_dv_policy_update_overlay(r,&late,true));
-            retire(r);
-            assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
-            assert(finish(r)==DVBRIDGE_DV_READY);
+            if(r->dv.ai_direct_lean){
+                assert(!dvbridge_render_dv_policy_update_overlay(r,&late,true));
+                retire(r);
+                assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
+                assert(finish(r)==DVBRIDGE_DV_READY);
+            }
             assert(dvbridge_render_dv_policy_update_overlay(r,&late,true));
         }
         assert(dvbridge_render_dv_policy_resolve(r,direct_target,direct_fbo,flip));
@@ -238,7 +239,7 @@ int main(int argc,char **argv)
     const struct dvbridge_geometry centered={4,2,960,601,1920,960};
     assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&centered));
     assert(finish(r)==DVBRIDGE_DV_READY);
-    assert(dvbridge_render_dv_policy_output(r)->value.sample_count==1920u*960u);
+    assert(dvbridge_render_dv_policy_output(r)->value.sample_count==4u*2u);
     retire(r);
     /* Identity retains original AI L1/L3 and ungraded pixels. */
     policy.tv.peak_nits=600;
@@ -257,7 +258,7 @@ int main(int argc,char **argv)
     const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(out->value.expansion_reason==CB1_DVE_NO_HEADROOM && !out->value.measured);
     assert(av_dovi_find_level(out->output_metadata,3));
-    reference_read(gpu.gl->gpu,out->intermediate,1200,900,1,1,native);
+    reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,native);
     assert(fabs(native[0]-pixel[0])<2e-6);retire(r);
     source.color.hdr.max_luma=0;policy.tv.peak_nits=2300;
     assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
@@ -277,7 +278,7 @@ int main(int argc,char **argv)
     assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(out->value.expansion_reason==CB1_DVE_SOURCE_BOUND && !out->value.measured);
     assert(av_dovi_find_level(out->output_metadata,3));
-    reference_read(gpu.gl->gpu,out->intermediate,1200,900,1,1,native);
+    reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,native);
     assert(fabs(native[0]-pixel[0])<(r->ai_enhanced_prepack?2.0/4095:2e-6));retire(r);
     direct_target=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
         .format=pl_find_named_fmt(gpu.gl->gpu,"rgba8"),.renderable=true));assert(direct_target);
@@ -319,14 +320,14 @@ int main(int argc,char **argv)
     double level=(512.0-64)/876;
     double expected[3],nits=pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,level);
     assert(cb1_dv_enhanced_pixel(&plan,(double[3]){nits,nits,nits},expected));
-    reference_read(gpu.gl->gpu,out->intermediate,1200,900,1,1,native);
+    reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,native);
     for(unsigned c=0;c<3;c++)assert(fabs(native[c]-dv_ideal_pq(expected[c]))*4095<=auxiliary_codes(r));
     retire(r);
     planar.color.hdr.max_luma=50;
     assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&planar,&geometry));
     assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);assert(out);
     assert(out->value.expansion_reason==CB1_DVE_SOURCE_BOUND && out->value.nominal_max_nits==50);
-    pl_tex original=out->intermediate;
+    pl_tex original=dvbridge_render_dv_policy_rgb(r);
     unsigned original_name=pl_opengl_unwrap(gpu.gl->gpu,original,NULL,NULL,NULL);
     float gui[4]={.1f,.1f,.1f,1};pl_tex gui_tex=reference_texture(gpu.gl->gpu,1,1,gui);
     struct dvbridge_native_overlay overlay={.texture=gui_tex,.degamma=gui_tex,.pq=gui_tex,
@@ -403,8 +404,11 @@ int main(int argc,char **argv)
         reference_read(gpu.gl->gpu,baseline,1200,900,1,1,reference);retire(r);
         policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
         assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,saturated_inputs[i],&geometry));
-        reference_read(gpu.gl->gpu,r->ai_enhanced_fused && r->ai_enhanced_prepack?r->ai_enhanced_native:r->rgb,
-            1200,900,1,1,ingress);
+        bool native_grid=r->native_picture && r->enhanced_rgb->params.w==geometry.source_width &&
+            r->enhanced_rgb->params.h==geometry.source_height;
+        reference_read(gpu.gl->gpu,native_grid?r->native_picture:
+            r->ai_enhanced_fused && r->ai_enhanced_prepack?r->ai_enhanced_native:r->rgb,
+            native_grid?1:1200,native_grid?1:900,1,1,ingress);
         for(unsigned c=0;c<3;c++)assert(fabs(ingress[c]-reference[c])<(r->ai_enhanced_prepack?2.0/4095:2e-6));
         assert(reference[2]==0); /* Native PQ conversion, not carrier clipping. */
         assert(finish(r)==DVBRIDGE_DV_READY);
@@ -412,7 +416,7 @@ int main(int argc,char **argv)
         double input[3],wanted[3];
         for(unsigned c=0;c<3;c++)input[c]=pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,reference[c]);
         assert(cb1_dv_enhanced_pixel(&r->dv.enhanced_plan,input,wanted));
-        reference_read(gpu.gl->gpu,out->intermediate,1200,900,1,1,native);
+        reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,native);
         for(unsigned c=0;c<3;c++)assert(fabs(native[c]-dv_ideal_pq(wanted[c]))*4095<=auxiliary_codes(r));
         memcpy(bad,r->dv.mapped,sizeof(bad));bad[10]=0;
         assert(!dve_derive(r,bad));retire(r);

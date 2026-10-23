@@ -5,7 +5,7 @@ Original libplacebo per-file copyright and LGPL notices remain unchanged.
 diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
 --- a/src/include/libplacebo/renderer.h
 +++ b/src/include/libplacebo/renderer.h
-@@ -371,8 +371,13 @@
+@@ -373,8 +373,13 @@
      // Default off. Requires matched renderer headers and library.
  #define PL_CB1_CHROMA_FILTER_API 1
      bool cb1_fast_chroma;
@@ -19,7 +19,7 @@ diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer
  
  
      // If this is true, all shaders will be generated as "dynamic" shaders,
-@@ -415,6 +420,8 @@
+@@ -417,6 +422,8 @@
  #define pl_render_params(...) (&(struct pl_render_params) { PL_RENDER_DEFAULTS __VA_ARGS__ })
  PL_API extern const struct pl_render_params pl_render_fast_params;
  
@@ -47,7 +47,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      for (int i = 0; i < PL_ARRAY_SIZE(rr->lut_state); i++)
          pl_shader_obj_destroy(&rr->lut_state[i]);
      for (int i = 0; i < PL_ARRAY_SIZE(rr->grain_state); i++)
-@@ -1706,8 +1708,17 @@
+@@ -1707,8 +1709,17 @@
          pl_shader plane_sh = pl_dispatch_begin_ex(rr->dp, true);
          enum sampler_usage usage = detect_plane_type(plane, &el->repr) == PLANE_CHROMA ?
                                     SAMPLER_CHROMA : SAMPLER_PLANE;
@@ -67,7 +67,7 @@ diff --git a/src/renderer.c b/src/renderer.c
  
          ident_t sub = sh_subpass(sh, plane_sh);
          pl_dispatch_abort(rr->dp, &plane_sh);
-@@ -1730,9 +1741,102 @@
+@@ -1731,9 +1742,124 @@
  }
  #endif // PL_HAVE_DOVI
  
@@ -99,6 +99,28 @@ diff --git a/src/renderer.c b/src/renderer.c
 +        pass->params->lut || pass->rotation || pl_rect_w(pass->target.crop)!=w ||
 +        pl_rect_h(pass->target.crop)!=h || w<=0 || h<=0) return false;
 +    pl_tex planes[2]={0};
++    if(pass->params->cb1_fast_chroma){
++        pl_fmt fmt=pl_find_fmt(pass->rr->gpu,PL_FMT_UNORM,2,16,16,
++                              PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR);
++        pl_tex chroma=fmt?get_fbo(pass,w/2,h/2,fmt,2,PL_DEBUG_TAG):NULL;
++        pl_shader sh=pl_dispatch_begin(pass->rr->dp);
++        bool ok=chroma && skip_reference_chroma_rows(pass,sh) &&
++            sh_dovi_p5_fast_grid(sh,data,image,true) &&
++            pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=chroma));
++        pl_dispatch_abort(pass->rr->dp,&sh);
++        if(!ok)return false;
++        pl_shader luma=pl_dispatch_begin_ex(pass->rr->dp,true);
++        sh=pl_dispatch_begin_ex(pass->rr->dp,true);
++        ok=skip_inactive_rows(pass,luma,h,true) && sh_dovi_p5_fast_grid(luma,data,image,false) &&
++            sh_dovi_p5_fast_output(sh,luma,chroma,w,h);
++        pl_dispatch_abort(pass->rr->dp,&luma);
++        if(!ok){pl_dispatch_abort(pass->rr->dp,&sh);return false;}
++        pass->img=(struct img){.sh=sh,.w=w,.h=h,.comps=3,.repr=pl_color_repr_rgb,
++            .color=image->color,.rect={0,0,w,h}};
++        pass->ref_rect=pass->img.rect;
++        pass_hook(pass,&pass->img,PL_HOOK_NATIVE);
++        return true;
++    }
 +    pl_tex luma_el=NULL;
 +    const struct pl_frame *el=image->enhancement_layer;
 +    bool resize=data->residual && el && el->crop.x1*2==w && el->crop.y1*2==h;
@@ -170,7 +192,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      const struct pl_render_params *params = pass->params;
      struct pl_frame *image = &pass->image;
      pl_renderer rr = pass->rr;
-@@ -2138,7 +2242,8 @@
+@@ -2139,7 +2265,8 @@
          }
  #endif
          if (params->cb1_dovi_transport) {
@@ -183,10 +205,10 @@ diff --git a/src/renderer.c b/src/renderer.c
 diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
 --- a/src/shaders/dovi_reference.c
 +++ b/src/shaders/dovi_reference.c
-@@ -2,6 +2,62 @@
- #include "shaders.h"
+@@ -3,6 +3,62 @@
  #include <libplacebo/shaders/colorspace.h>
  #include <libplacebo/renderer.h>
+ #include <math.h>
 +#include "mmr_lut.h"
 +
 +struct reference_mmr_key {
@@ -246,7 +268,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  
  static ident_t wide_values(pl_shader sh, const char *name, const int64_t *values, int count)
  {
-@@ -22,10 +78,10 @@
+@@ -23,10 +79,10 @@
  
  static bool reference_component(pl_shader sh, const struct pl_cb1_dovi_reference *data,
                                  int component, ident_t bl_signal, ident_t el_signal,
@@ -259,7 +281,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
          (data->bl_depth != 8 && data->bl_depth != 10) || data->denom > 23 ||
          (data->output_depth != 10 && data->output_depth != 12) || !bl_signal ||
          (data->residual && (!el_signal || (data->el_depth != 8 && data->el_depth != 10))) ||
-@@ -95,6 +151,12 @@
+@@ -96,6 +152,12 @@
      for (int p=0;p+1<comp->num_pivots;p++)
          identity &= comp->method[p]==0 && comp->order[p]==1 &&
              comp->poly[p][0]==0 && comp->poly[p][1]==(INT64_C(1)<<data->denom);
@@ -272,7 +294,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
      if (identity)
          GLSL("accumulator="$"(uvec2(s[%d],0u),%du);\n",shl,component,data->denom+20-data->bl_depth);
      for (int p = 0; !identity && p + 1 < comp->num_pivots; p++) {
-@@ -114,13 +176,17 @@
+@@ -115,13 +177,17 @@
                   20-data->bl_depth,20-data->bl_depth,20-data->bl_depth,
                   20-2*data->bl_depth,20-2*data->bl_depth,20-2*data->bl_depth,qmul);
              GLSL("accumulator="$"("$"[%d],1048576u);\n", coefficient_mul, coeff, offset);
@@ -294,7 +316,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
          }
          GLSL("}\n");
      }
-@@ -166,7 +232,7 @@
+@@ -167,7 +233,7 @@
      if (!base || !data || (data->residual && !enhancement)) return false;
      ident_t bl = sh_subpass(sh,base), el = NULL_IDENT;
      if (data->residual) el = sh_subpass(sh,enhancement);
@@ -303,7 +325,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  }
  
  /* Raw 4:2:0 grids, without normalization, interpolation or crop recentering. */
-@@ -253,7 +319,7 @@
+@@ -273,7 +339,7 @@
      return true;
  }
  
@@ -312,7 +334,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  {
      ident_t vertical=sh_fresh(sh,"ref_el_cached");
      GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));"
-@@ -262,14 +328,18 @@
+@@ -282,7 +348,10 @@
      ident_t horizontal = sh_fresh(sh,"ref_el_horizontal");
      GLSLH("int "$"(ivec2 p){int x=p.x/2;if((p.x&1)==0)return "$"(ivec2(x,p.y));int s=0;\n",horizontal,vertical);
      const int weights[8] = {22,94,-524,2456,2456,-524,94,22};
@@ -324,16 +346,17 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
          GLSLH("s+=%d*"$"(ivec2(x+%d,p.y));\n",weights[t],vertical,t-3);
      GLSLH("return clamp((s+2048)>>12,0,65535);}\n");
      return horizontal;
+@@ -332,7 +401,8 @@
  }
  
- bool sh_dovi_reference_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
--                            const struct pl_frame *image, bool chroma, pl_tex vertical)
-+                            const struct pl_frame *image, bool chroma, pl_tex vertical,
-+                            pl_shader_obj *mmr_state)
+ static bool reference_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
+-                           const struct pl_frame *image, bool chroma, pl_tex vertical, bool fast)
++                           const struct pl_frame *image, bool chroma, pl_tex vertical, bool fast,
++                           pl_shader_obj *mmr_state)
  {
      if (!data || !image || !sh_require(sh,PL_SHADER_SIG_NONE,0,0)) return false;
      GLSL("vec4 color;\n");
-@@ -296,7 +366,7 @@
+@@ -359,7 +429,7 @@
                                      "ref_el_vertical",NULL,NULL,NULL);
              if (!sampler) return false;
              for (int c=chroma?1:0;c<(chroma?3:1);c++) {
@@ -342,7 +365,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
              }
          }
      }
-@@ -322,30 +392,54 @@
+@@ -385,6 +455,7 @@
      ident_t bounds[2]={
          sh_var(sh,(struct pl_shader_var){.var=pl_var_uvec3("ref_low"),.data=lows,.dynamic=true}),
          sh_var(sh,(struct pl_shader_var){.var=pl_var_uvec3("ref_high"),.data=highs,.dynamic=true})};
@@ -350,18 +373,43 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
      for (int c=chroma?1:0;c<(chroma?3:1);c++) {
          ident_t esig=NULL_IDENT;
          if (data->residual) {
-             esig=sh_fresh(sh,"ref_el_signal");
+@@ -392,25 +463,29 @@
              GLSLH("vec4 "$"(){return vec4(float("$"(ivec2("$"))));}\n",esig,el[c],position);
          }
--        if (!reference_component(sh,data,c,signal,esig,bounds)) return false;
-+        if (!reference_component(sh,data,c,signal,esig,bounds,mmr_lut)) return false;
+         if (fast ? !p5_fast_component(sh,data,c,signal,bounds) :
+-                   !reference_component(sh,data,c,signal,esig,bounds)) return false;
++                   !reference_component(sh,data,c,signal,esig,bounds,mmr_lut)) return false;
          if (chroma && c==1) GLSL("float ref_cb=color.r;\n");
      }
 -    if (chroma) GLSL("color=vec4(ref_cb,color.r,0.0,1.0);\n");
 +    if (chroma) {
-+        if(data->contract==2)GLSL("color=vec4(float(uint(ref_cb)|(uint(color.r)<<12u)),0.0,0.0,1.0);\n");
++        if(data->contract==2 && !fast)GLSL("color=vec4(float(uint(ref_cb)|(uint(color.r)<<12u)),0.0,0.0,1.0);\n");
 +        else GLSL("color=vec4(ref_cb,color.r,0.0,1.0);\n");
 +    }
+     if (chroma && fast) GLSL("color.rg/=4095.0;\n");
+     return true;
+ }
+ 
+ bool sh_dovi_reference_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
+-                            const struct pl_frame *image, bool chroma, pl_tex vertical)
+-{
+-    return reference_grid(sh,data,image,chroma,vertical,false);
++                            const struct pl_frame *image, bool chroma, pl_tex vertical,
++                            pl_shader_obj *mmr_state)
++{
++    return reference_grid(sh,data,image,chroma,vertical,false,mmr_state);
+ }
+ 
+ bool sh_dovi_p5_fast_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
+                          const struct pl_frame *image, bool chroma)
+ {
+     if(!data || data->residual || data->bl_depth!=10 || data->output_depth!=12)return false;
+-    return reference_grid(sh,data,image,chroma,NULL,true);
++    return reference_grid(sh,data,image,chroma,NULL,true,NULL);
+ }
+ 
+ bool sh_dovi_p5_fast_output(pl_shader sh, pl_shader luma, pl_tex chroma, int w, int h)
+@@ -436,17 +511,37 @@
      return true;
  }
  
@@ -401,7 +449,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
      for (int phase=0;phase<2;phase++) {
          GLSL("%s((p.y&1)==%d){\n",phase?"else if":"if",phase);
          int count=top_left?(phase?8:1):6;
-@@ -361,7 +455,7 @@
+@@ -462,7 +557,7 @@
      return true;
  }
  
@@ -410,7 +458,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  {
      if ((depth!=10 && depth!=12) || !sh_require(sh,PL_SHADER_SIG_NONE,0,0)) return false;
      ident_t y=sh_subpass(sh,luma);
-@@ -369,7 +463,11 @@
+@@ -470,7 +565,11 @@
      if (!y || !c) return false;
      ident_t position=sh_attr_vec2(sh,"ref_position",&(pl_rect2df){0,0,w,h});
      if (!position) return false;
@@ -437,9 +485,9 @@ diff --git a/src/shaders.h b/src/shaders.h
 +    pl_shader_obj *mmr_state);
 +bool sh_dovi_reference_chroma(pl_shader sh, pl_tex chroma, unsigned depth, bool top_left, bool paired);
 +bool sh_dovi_reference_output(pl_shader sh, pl_shader luma, pl_tex chroma, unsigned depth, int w, int h, bool paired);
- 
- // Add the NLQ-decoded enhancement-layer residual to the (already reshaped)
- // base layer. `el_signal` names a no-arg function (typically produced by
+ bool sh_dovi_p5_fast_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
+                          const struct pl_frame *image, bool chroma);
+ bool sh_dovi_p5_fast_output(pl_shader sh, pl_shader luma, pl_tex chroma, int w, int h);
 diff --git a/src/mmr_lut.h b/src/mmr_lut.h
 --- /dev/null
 +++ b/src/mmr_lut.h

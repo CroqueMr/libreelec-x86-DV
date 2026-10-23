@@ -38,7 +38,7 @@ struct dvbridge_retirement_owner;
 #define DVBRIDGE_CM4_GPU_API 1
 /* Trim-only shader in linear 203-nit units. The caller retains the shader. */
 bool dvbridge_creative_cm4_shader(pl_shader shader,const struct dvbridge_cm4_coefficients *coefficients);
-#define DVBRIDGE_DV_POLICY_API 6
+#define DVBRIDGE_DV_POLICY_API 7
 enum dvbridge_output_generation { DVBRIDGE_ETSI_LEGACY_LITERAL=1, DVBRIDGE_SOURCE_METADATA=2,
     DVBRIDGE_RECONSTRUCTED_ENHANCED=3 };
 struct dvbridge_dv_policy_snapshot {
@@ -69,9 +69,11 @@ struct dvbridge_dv_policy_output {
     const void *output_metadata;
     size_t bytes;
     const struct dvbridge_candidate *candidate;
-    pl_tex intermediate;
+    pl_tex intermediate; /* May be source-sized; use the RGB accessor for a 4K consumer. */
     uint64_t resolve_serial;
 };
+/* Materialize output-sized PQ only for an RGB consumer. Borrowed until cancel. */
+pl_tex dvbridge_render_dv_policy_rgb(struct dvbridge_renderer *renderer);
 enum dvbridge_dv_policy_status {
     DVBRIDGE_DV_FAILED, DVBRIDGE_DV_UNSUPPORTED, DVBRIDGE_DV_BUSY,
     DVBRIDGE_DV_PENDING, DVBRIDGE_DV_READY, DVBRIDGE_DV_IDLE

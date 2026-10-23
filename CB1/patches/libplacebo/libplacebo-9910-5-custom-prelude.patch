@@ -1,22 +1,24 @@
 From: Intel DV contributors
-Subject: [PATCH] dispatch: emit custom extension directives before declarations
+Subject: [PATCH] dispatch: isolate custom and subgroup preludes by shader stage
 
-Honor pl_custom_shader.prelude's documented placement. GLES rejects extension
-directives after precision/uniform declarations; the fragment quad operation
-used by exact DV transport only needs basic/quad subgroup capabilities, not
-libplacebo's stronger global subgroup feature set. No capability is fabricated.
+Keep extension directives before declarations and out of the raster vertex
+shader. Preserve the fragment/compute custom prelude and common declarations.
+
+Includes Christian Hewitt's stage-isolation correction:
+https://github.com/chewitt/libplacebo/commit/b776078bef9a7d8ffd1da4001a29457544c5b890
 
 --- a/src/dispatch.c
 +++ b/src/dispatch.c
-@@ -30,6 +30,7 @@
+@@ -30,6 +30,8 @@
  
  enum {
      TMP_PRELUDE,   // GLSL version, global definitions, etc.
 +    TMP_CUSTOM_PRELUDE, // custom extension directives, before declarations
++    TMP_PRELUDE_TAIL, // precision and declarations, after the extensions
      TMP_MAIN,      // main GLSL shader body
      TMP_VERT_HEAD, // vertex shader inputs/outputs
      TMP_VERT_BODY, // vertex shader body
-@@ -302,6 +303,12 @@ static void generate_shaders(pl_dispatch dp,
+@@ -302,6 +304,12 @@
      void *tmp = params->tmp;
      struct pass *pass = params->pass;
      struct pl_pass_params *pass_params = params->pass_params;
@@ -29,12 +31,60 @@ libplacebo's stronger global subgroup feature set. No capability is fabricated.
      pl_str_builder shader_body = sh_finalize_internal(sh);
  
      pl_str_builder pre = dp->tmp[TMP_PRELUDE];
-@@ -380,6 +387,8 @@ static void generate_shaders(pl_dispatch dp,
+@@ -309,18 +317,6 @@
+         (gpu->glsl.gles && gpu->glsl.version > 100) ? " es" : "");
+     if (pass_params->type == PL_PASS_COMPUTE)
+         ADD(pre, "#extension GL_ARB_compute_shader : enable\n");
+-
+-    // Enable this unconditionally if the GPU supports it, since we have no way
+-    // of knowing whether subgroups are being used or not
+-    if (gpu->glsl.subgroup_size) {
+-        ADD(pre, "#extension GL_KHR_shader_subgroup_basic : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_vote : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_arithmetic : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_ballot : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_shuffle : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_clustered : enable \n"
+-                 "#extension GL_KHR_shader_subgroup_quad : enable \n");
+-    }
+ 
+     // Enable all extensions needed for different types of input
+     bool has_ssbo = false, has_ubo = false, has_img = false, has_texel = false,
+@@ -379,6 +375,9 @@
+         ADD(pre, "#extension GL_EXT_shader_image_load_formatted : enable\n");
      if (has_gather && !gpu->glsl.gles)
          ADD(pre, "#extension GL_ARB_texture_gather : enable\n");
- 
-+    pl_str_builder_concat(pre, custom_pre);
 +
++    pl_str_builder head = pre;
++    pre = dp->tmp[TMP_PRELUDE_TAIL];
+ 
      if (gpu->glsl.gles) {
          // Use 32-bit precision for floats if possible
-         ADD(pre, "#ifdef GL_FRAGMENT_PRECISION_HIGH \n"
+@@ -604,6 +603,19 @@
+     }
+ 
+     pl_str_builder glsl = dp->tmp[TMP_MAIN];
++    ADD_CAT(glsl, head);
++    // Enable this unconditionally if the GPU supports it, since we have no way
++    // of knowing whether subgroups are being used or not
++    if (gpu->glsl.subgroup_size) {
++        ADD(glsl, "#extension GL_KHR_shader_subgroup_basic : enable \n"
++                  "#extension GL_KHR_shader_subgroup_vote : enable \n"
++                  "#extension GL_KHR_shader_subgroup_arithmetic : enable \n"
++                  "#extension GL_KHR_shader_subgroup_ballot : enable \n"
++                  "#extension GL_KHR_shader_subgroup_shuffle : enable \n"
++                  "#extension GL_KHR_shader_subgroup_clustered : enable \n"
++                  "#extension GL_KHR_shader_subgroup_quad : enable \n");
++    }
++    ADD_CAT(glsl, custom_pre);
+     ADD_CAT(glsl, pre);
+ 
+     switch(pass_params->type) {
+@@ -616,6 +628,7 @@
+         bool has_loc = gpu->glsl.version >= 430;
+ 
+         // Set up a trivial vertex shader
++        ADD_CAT(vert_head, head);
+         ADD_CAT(vert_head, pre);
+         ADD(vert_body, "void main() {\n");
+         for (int i = 0; i < sh->vas.num; i++) {

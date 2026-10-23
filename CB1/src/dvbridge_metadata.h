@@ -37,7 +37,7 @@ struct dvbridge_dv {
     uint64_t frames,changes;
     double last_pts;
     int source_w,source_h,dest_x,dest_y,dest_w,dest_h;
-    bool fel_verified,source_transport;
+    bool fel_verified,source_transport,profile5_transport;
     unsigned compatibility_omissions;
 };
 
@@ -48,28 +48,46 @@ static inline bool dvbridge_dv_wire_rational(AVRational value,int64_t scale,int6
     return numerator%value.den==0 && numerator/value.den>=low && numerator/value.den<=high;
 }
 
-static inline bool cb1_wire_signal(const AVDOVIMetadata *metadata)
+static inline bool dvbridge_dv_profile5(const AVDOVIMetadata *metadata)
+{
+    const AVDOVIRpuDataHeader *header=av_dovi_get_header(metadata);
+    return header->vdr_rpu_profile==0 && header->bl_video_full_range_flag;
+}
+
+static inline bool cb1_wire_signal_space(const AVDOVIMetadata *metadata,bool ipt)
 {
     const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
     return av_dovi_get_header(metadata)->vdr_bit_depth==12 && color->signal_bit_depth==12 &&
-        color->signal_color_space==0 && color->signal_full_range_flag==1 &&
+        color->signal_color_space==(ipt?2:0) && color->signal_full_range_flag==1 &&
         color->signal_eotf==65535 && color->signal_eotf_param0==0 &&
         color->signal_eotf_param1==0 && color->signal_eotf_param2==0;
 }
 
-static inline bool cb1_wire_offsets(const AVDOVIColorMetadata *color)
+static inline bool cb1_wire_signal(const AVDOVIMetadata *metadata)
+{
+    return cb1_wire_signal_space(metadata,false);
+}
+
+static inline bool cb1_wire_offsets_space(const AVDOVIColorMetadata *color,bool ipt)
 {
     for(unsigned channel=0;channel<3;channel++){
         AVRational value=color->ycc_to_rgb_offset[channel];
-        if(value.den<=0 || (int64_t)value.num*(channel?2:16)!=value.den)return false;
+        if(value.den<=0 || (ipt && !channel?value.num!=0:
+            (int64_t)value.num*(channel?2:16)!=value.den))return false;
     }
     return true;
 }
 
-static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *metadata)
+static inline bool cb1_wire_offsets(const AVDOVIColorMetadata *color)
+{
+    return cb1_wire_offsets_space(color,false);
+}
+
+static inline bool dvbridge_dv_source_transport_valid(const AVDOVIMetadata *metadata,bool ipt)
 {
     const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
-    if(!cb1_wire_signal(metadata) || color->signal_chroma_format || !cb1_wire_offsets(color))return false;
+    if(!cb1_wire_signal_space(metadata,ipt) || color->signal_chroma_format ||
+       !cb1_wire_offsets_space(color,ipt))return false;
     const AVRational *matrix[2]={color->ycc_to_rgb_matrix,color->rgb_to_lms_matrix};
     for(unsigned index=0;index<2;index++){
         double values[9];
@@ -85,6 +103,19 @@ static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *metadata)
         if(!isfinite(determinant) || fabs(determinant)<1e-8)return false;
     }
     return true;
+}
+
+static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *metadata)
+{
+    return dvbridge_dv_source_transport_valid(metadata,false);
+}
+
+/* Exact Master P5 IPT carrier; Standard alone uses characterized Fast reshaping. */
+static inline bool dvbridge_dv_profile5_transport(const AVDOVIMetadata *metadata)
+{
+    const AVDOVIRpuDataHeader *header=av_dovi_get_header(metadata);
+    return dvbridge_dv_profile5(metadata) && header->bl_bit_depth==10 &&
+        header->disable_residual_flag && dvbridge_dv_source_transport_valid(metadata,true);
 }
 
 static inline bool dvbridge_dv_source_matches_output(const AVDOVIMetadata *metadata)
@@ -185,7 +216,8 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *state,const A
        color->signal_eotf_param0 || color->signal_eotf_param1 || color->signal_eotf_param2 ||
        color->source_min_pq>color->source_max_pq || color->source_max_pq>4095 ||
        metadata->num_ext_blocks<=0 || metadata->num_ext_blocks>AV_DOVI_MAX_EXT_BLOCKS ||
-       (state->source_transport && !dvbridge_dv_source_transport(metadata)))return false;
+       (state->source_transport && !(state->profile5_transport?
+           dvbridge_dv_profile5_transport(metadata):dvbridge_dv_source_transport(metadata))))return false;
     uint8_t base[71]={0};
     bool repeat=state->frames && pts==state->last_pts;
     bool discontinuity=!state->frames || pts<state->last_pts || pts-state->last_pts>0.1;
@@ -196,8 +228,8 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *state,const A
         unsigned lms=state->source_transport?(uint16_t)((int64_t)b.num*16384/b.den):dvbridge_output_lms[element];
         AV_WB16(base+2+element*2,ycc);AV_WB16(base+32+element*2,lms);
     }
-    AV_WB32(base+20,16777216);AV_WB32(base+24,134217728);AV_WB32(base+28,134217728);
-    AV_WB16(base+50,65535);base[60]=12;base[62]=1;base[63]=1;
+    AV_WB32(base+20,state->profile5_transport?0:16777216);AV_WB32(base+24,134217728);AV_WB32(base+28,134217728);
+    AV_WB16(base+50,65535);base[60]=12;base[61]=state->profile5_transport?2:0;base[62]=1;base[63]=1;
     AV_WB16(base+64,color->source_min_pq);AV_WB16(base+66,color->source_max_pq);
     AV_WB16(base+68,state->source_transport?color->source_diagonal:42);
     memcpy(state->payload,base,sizeof(base));state->size=sizeof(base);

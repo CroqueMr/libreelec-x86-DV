@@ -1,6 +1,6 @@
 # Dolby Vision Master Reference
 
-Circuit: `CB1-DVDVMR.0.4`. Engine: `CB1 0.3`.
+Circuit: `CB1-DVDVMR.0.5`. Engine: `CB1 0.3`.
 
 Opt-in integer reconstruction for source-domain Dolby Vision output.
 Standard playback and the existing conversion circuits are unchanged.
@@ -9,7 +9,7 @@ Standard playback and the existing conversion circuits are unchanged.
 
 - Sources up to 3840x2160, including 1080p and cropped movies, fitted into a
   qualified 3840x2160 Dolby Vision HDMI carrier.
-- PQ YCC, 12-bit reconstruction and exactly representable source colour matrices
+- PQ YCC or Profile 5 IPT-PQ-C2, 12-bit reconstruction and exactly representable source colour matrices
   accepted by the existing source-domain transport.
 - Decoded 8/10-bit BL and, when required, frame-matched raw 8/10-bit EL.
 - NV12, P010 or planar 10-bit 4:2:0 storage, with left or top-left chroma.
@@ -18,13 +18,20 @@ Standard playback and the existing conversion circuits are unchanged.
 - ESSL 3.10 or desktop GLSL 4.00 and renderable FP32 component planes.
 - Default spatial filters and a single mapping partition.
 
-IPT/Profile 5, HLG, custom filters, invalid geometry, other chroma positions
+HLG, custom filters, invalid geometry, other chroma positions
 and unsafe arithmetic are not admitted. The existing output-selection fallback
 applies. A rejected Master frame never silently uses Standard reconstruction.
 
 Fast is effectively off. FEL uses `Reference GPU`, independently of the saved
 VAAPI/Nearest preference. Preferences are retained for other circuits. No display
 calibration is required.
+
+Profile 5 retains its full-range IPT-PQ-C2 domain through integer RPU reshaping,
+chroma resampling and RGB8 tunnel packing. Its original colour matrices,
+offsets and creative metadata are transmitted for TV-Led processing. Movie
+pixels do not undergo a YCbCr/RGB/LMS conversion or a PQ/linear round trip.
+The diagnostic Master Reference IPT mode uses this same Profile 5 path.
+GUI conversion is confined to the overlay footprint; the IPT black code is zero.
 
 Standard always uses Fast, even when the global preference is Off. Master never
 uses Fast, even when the preference is On. In Auto, sustained low presentation
@@ -105,6 +112,12 @@ and the target orientation. Already reconstructed codes bypass ordinary colour
 conversion. Resized outputs include spatial resampling and are not labelled
 bit-identical to an unscaled source. The full-raster 4K reference path is unchanged.
 
+For scaled Profile 5 on GPUs supporting fragment quad exchange, the final
+FP32 scaling pass packs the carrier directly. Horizontal neighbours exchange
+their filtered values without materializing another 4K FP32 image. The filter,
+quantization and metadata are unchanged. Other profiles and unsupported GPUs
+retain the materialized transport path.
+
 The independent test-only integer oracle covers signed arithmetic, polynomial
 pivots, MMR orders, NLQ and spatial filters. GPU tests compare logical codes and
 complete carrier bytes. SDR/PQ overlay tests check the movie region outside the
@@ -113,3 +126,11 @@ declared footprint. Unsupported inputs fail explicitly.
 Exactness is relative to this documented contract. It does not establish Dolby
 certification or equality to a certified player's physical HDMI output.
 Hardware throughput requires separate measurement.
+
+Profile 5 remains in its decoded IPT-PQ-C2 domain through reconstruction and
+transport. Master uses integer reconstruction and the exact chroma filter,
+independently of the Fast preference. Standard may use FP32 reconstruction and
+a compact five-tap chroma filter on supported left-sited 10-bit inputs. Its
+mapped chroma grid uses RG UNORM16; metadata and tunnel packing are shared with
+Master. Unsupported Standard inputs retain the existing YCbCr path. Other
+profiles and conversion circuits do not select this Profile 5 strategy.

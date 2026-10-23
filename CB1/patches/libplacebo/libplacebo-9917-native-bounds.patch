@@ -53,7 +53,7 @@ diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplaceb
  // conversion. Caller owns their representation and subsequent transport.
  #define PL_HAVE_CB1_DOVI_TRANSPORT 1
 -#define PL_HAVE_CB1_PROCESSING 7
-+#define PL_HAVE_CB1_PROCESSING 9
++#define PL_HAVE_CB1_PROCESSING 10
  
  // CB1-owned source contract. No decoder objects cross this boundary.
 -struct pl_cb1_dovi_component {
@@ -65,7 +65,7 @@ diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplaceb
  struct pl_cb1_dovi_processing {
      uint32_t groups, narrow_components, poly_components;
      uint8_t bit_depth, denominator;
-@@ -62,6 +56,10 @@
+@@ -62,6 +56,12 @@
  };
  #define PL_CB1_PROCESSING_ABI ((PL_HAVE_CB1_PROCESSING << 16) | (unsigned)sizeof(struct pl_cb1_dovi_processing))
  PL_API unsigned pl_cb1_processing_abi(void);
@@ -73,6 +73,8 @@ diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplaceb
 +// Produces the reconstructed integer code replicated in RGB, without normalization.
 +PL_API bool pl_shader_dovi_reference_component(pl_shader sh,
 +    const struct pl_cb1_dovi_reference *data,int component,pl_shader base,pl_shader enhancement);
++struct pl_frame;
++PL_API bool pl_cb1_dovi_reference_frame_supported(const struct pl_frame *frame, unsigned depth);
  
  // Borrowed for shader preparation; null preserves the reference path.
  PL_API void pl_shader_dovi_reconstruct_ex(pl_shader sh, struct pl_color_repr *repr,

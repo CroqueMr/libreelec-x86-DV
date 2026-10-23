@@ -360,6 +360,24 @@ def resolve_image(pixels, bits=10, limited=True):
     return [[math.floor(offset+span*max(0,min(1,v))+0.5) for v in pixel] for pixel in pixels]
 
 
+def source_first_pq(inputs):
+    """Independent post-reconstruction oracle: map native pixels, then resize.
+
+    Uses pinned public CPU tables and scalar convolution, never CB1 GPU output.
+    The input fixture is already reconstructed BT.2020 PQ.
+    """
+    linear = [[R.pq_decode(c) for c in pixel] for pixel in inputs['rgb']]
+    _, mapped = map_image(linear, inputs, source_policy(inputs))
+    native = container_image(mapped, inputs['gamut'])
+    scaled = scale_image(native, inputs['size'], inputs['output_size'])
+    pq = [[R.pq_encode(max(0, min(inputs['peak'], c))) for c in pixel] for pixel in scaled]
+    pq = geometry_image(pq, inputs)
+    if inputs.get('flip_y'):
+        width, height = inputs['output_size']
+        pq = [pq[y*width+x] for y in range(height-1, -1, -1) for x in range(width)]
+    return {'rgb': pq, 'codes': resolve_image(pq, inputs.get('bits', 10), inputs.get('limited', True))}
+
+
 def evaluate_image(case):
     inputs, operation = case["input"], case["operation"]
     reconstructed = reconstruct_image(inputs)
