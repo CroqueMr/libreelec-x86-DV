@@ -10799,7 +10799,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2052 @@
+@@ -0,0 +1,2056 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11027,6 +11027,10 @@ new file mode 100644
 +  return true;
 +}
 +bool CDVBridgeGLES::Context::Quarantined() const { return m_state->quarantined; }
++bool CDVBridgeGLES::Context::AsyncPreparationConfigured() const
++{
++  return m_state->preparationStream && m_state->asyncPreparation;
++}
 +bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t stream)
 +{
 +  if (stream && stream != m_state->preparationStream)
@@ -14210,7 +14214,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  #include "utils/BufferObjectFactory.h"
  #include "utils/DMAHeapBufferObject.h"
-@@ -35,14 +45,73 @@
+@@ -35,14 +45,78 @@
  #include "utils/XTimeUtils.h"
  #include "utils/log.h"
  #include "windowing/WindowSystemFactory.h"
@@ -14248,7 +14252,12 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +#ifdef HAVE_DVBRIDGE
 +float CWinSystemGbmGLESContext::GetDisplayLatency()
 +{
-+  if (CB1AsyncPlayback())
++  // Native policy changes commit synchronously without changing the configured queue depth.
++  const bool authored = CB1AsyncAvailable() && !m_hdrConversion && !m_dvBridge->Advanced() &&
++      (m_dvSelection.policy.mode == DVBRIDGE_MODE_STANDARD ||
++       m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE);
++  const auto context = authored ? m_dvBridge->GetContext() : nullptr;
++  if (CB1AsyncPlayback() || (context && context->AsyncPreparationConfigured()))
 +  {
 +    const float refresh = m_DRM->GetCurrentMode().fRefreshRate;
 +    const float fps = CServiceBroker::GetDataCacheCore().GetVideoFps();
@@ -16514,3 +16523,15 @@ diff --git a/xbmc/guilib/GUIFadeLabelControl.cpp b/xbmc/guilib/GUIFadeLabelContr
  }
  
  std::string CGUIFadeLabelControl::GetDescription() const
+
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -51,6 +51,7 @@
+     bool Close();
+     bool Quarantined() const;
+     bool AsyncPreparation(uint64_t stream);
++    bool AsyncPreparationConfigured() const;
+     bool FELHardwareUpscaling(uint64_t stream);
+     pl_opengl GL() const;
+     pl_log Log() const;
