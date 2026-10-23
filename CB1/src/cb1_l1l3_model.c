@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #define _POSIX_C_SOURCE 200809L
 #include "cb1_l1l3_model.h"
 #include "cb1_l1l3_bundle.h"

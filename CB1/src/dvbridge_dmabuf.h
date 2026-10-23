@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_DMABUF_H
 #define DVBRIDGE_DMABUF_H
 #include "dvbridge_gl_frame.h"

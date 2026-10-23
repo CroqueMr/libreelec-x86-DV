@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Map native decoded planes to renderer textures while preserving layout and bit depth. */
 #include "dvbridge_gl_frame.h"
 #include <GLES3/gl3.h>

@@ -1,5 +1,7 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later
- * Player-independent metadata serializer derived from the reviewed mpv adapter.
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Metadata wire format: ETSI GS CCM 001 V1.1.1, clauses 6.2 and 6.3.
+ * FFmpeg supplies the metadata layout, byte-order accessors and CRC primitive.
+ * See docs/GPL2-MIGRATION.md for replacement provenance and compatibility.
  */
 #ifndef MPV_DVBRIDGE_DV_H
 #define MPV_DVBRIDGE_DV_H
@@ -8,266 +10,280 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <libavutil/dovi_meta.h>
-#include "dvbridge_metadata_bounds.h"
-#include "mpv_dvbridge_cm4.h"
 #include <stdio.h>
 #include <limits.h>
-
-static inline bool dvbridge_dv_wire_rational(AVRational a, int64_t scale,
-                                            int64_t low, int64_t high)
-{
-    if (a.den <= 0) return false;
-    int64_t v=(int64_t)a.num*scale;
-    return v%a.den==0 && v/a.den>=low && v/a.den<=high;
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <libavutil/dovi_meta.h>
+#include <libavutil/intreadwrite.h>
+#include <libavutil/bswap.h>
+#include <libavutil/crc.h>
+#ifdef __cplusplus
 }
+#endif
+#include "dvbridge_metadata_bounds.h"
+#include "mpv_dvbridge_cm4.h"
 
-/* Full-raster opponent transport. Other encodings retain RGB conversion. */
-static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *m)
-{
-    const AVDOVIColorMetadata *c=av_dovi_get_color(m);
-    const AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
-    if (h->vdr_bit_depth!=12 || c->signal_bit_depth!=12 || c->signal_color_space ||
-        c->signal_chroma_format || c->signal_full_range_flag!=1 || c->signal_eotf!=65535 ||
-        c->signal_eotf_param0 || c->signal_eotf_param1 || c->signal_eotf_param2) return false;
-    for (int i=0;i<9;i++)
-        if (!dvbridge_dv_wire_rational(c->ycc_to_rgb_matrix[i],8192,INT16_MIN,INT16_MAX) ||
-            !dvbridge_dv_wire_rational(c->rgb_to_lms_matrix[i],16384,INT16_MIN,INT16_MAX)) return false;
-    for (int i=0;i<3;i++) {
-        AVRational a=c->ycc_to_rgb_offset[i];
-        if (a.den<=0 || (int64_t)a.num*(i?2:16)!=a.den) return false;
-    }
-    /* Singular matrices cannot describe a reversible source colour volume. */
-    const AVRational *matrices[]={c->ycc_to_rgb_matrix,c->rgb_to_lms_matrix};
-    for (int n=0;n<2;n++) {
-        double v[9];
-        for (int i=0;i<9;i++) v[i]=(double)matrices[n][i].num/matrices[n][i].den;
-        double det=v[0]*(v[4]*v[8]-v[5]*v[7])-v[1]*(v[3]*v[8]-v[5]*v[6])+v[2]*(v[3]*v[7]-v[4]*v[6]);
-        if (!isfinite(det) || fabs(det)<1e-8) return false;
-    }
-    return true;
-}
-
-static const int16_t dvbridge_output_ycc[9] = {9574,0,13802,9574,-1540,-5348,9574,17610,0};
-static const uint16_t dvbridge_output_lms[9] = {7222,8771,390,2654,12430,1300,0,422,15962};
+static const int16_t dvbridge_output_ycc[9]={9574,0,13802,9574,-1540,-5348,9574,17610,0};
+static const uint16_t dvbridge_output_lms[9]={7222,8771,390,2654,12430,1300,0,422,15962};
 #define DVBRIDGE_SOURCE_TRANSPORT 1
-/* Only an exact transform match can retain the source-domain samples. */
-static inline bool dvbridge_dv_source_matches_output(const AVDOVIMetadata *m)
-{
-    const AVDOVIColorMetadata *c=av_dovi_get_color(m);
-    const AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
-    if(h->vdr_bit_depth!=12 || c->signal_bit_depth!=12 || c->signal_color_space ||
-       c->signal_full_range_flag!=1 || c->signal_eotf!=65535 ||
-       c->signal_eotf_param0 || c->signal_eotf_param1 || c->signal_eotf_param2)return false;
-    for(int i=0;i<9;i++) {
-        AVRational a=c->ycc_to_rgb_matrix[i],b=c->rgb_to_lms_matrix[i];
-        if(a.den<=0 || b.den<=0 || (int64_t)a.num*8192!=(int64_t)dvbridge_output_ycc[i]*a.den ||
-           (int64_t)b.num*16384!=(int64_t)dvbridge_output_lms[i]*b.den)return false;
-    }
-    for(int i=0;i<3;i++) {
-        AVRational a=c->ycc_to_rgb_offset[i];
-        if(a.den<=0 || (int64_t)a.num*(i?2:16)!=a.den)return false;
-    }
-    return true;
-}
 
+/* Public state layout retained for the player's transactional frame owner. */
 struct dvbridge_dv {
-    uint8_t payload[512], previous[512];
-    unsigned size, previous_size, id;
-    uint32_t packets[640], count;
-    uint64_t frames, changes;
+    uint8_t payload[512],previous[512];
+    unsigned size,previous_size,id;
+    uint32_t packets[640],count;
+    uint64_t frames,changes;
     double last_pts;
-    int source_w, source_h, dest_x, dest_y, dest_w, dest_h;
-    bool fel_verified, source_transport;
+    int source_w,source_h,dest_x,dest_y,dest_w,dest_h;
+    bool fel_verified,source_transport;
     unsigned compatibility_omissions;
 };
-#define DV_REQUIRE(x) do { if (!(x)) return false; } while (0)
-static inline bool dvbridge_dv_bounds(const AVDOVIMetadata *m, size_t bytes)
+
+static inline bool dvbridge_dv_wire_rational(AVRational value,int64_t scale,int64_t low,int64_t high)
 {
-    return dvbridge_metadata_bounds(m, bytes) && m->num_ext_blocks > 0;
+    if(value.den<=0)return false;
+    int64_t numerator=(int64_t)value.num*scale;
+    return numerator%value.den==0 && numerator/value.den>=low && numerator/value.den<=high;
 }
-/* All scaling/letterboxing precedes transport packing. L5 describes the
- * final HDMI raster, not the dimensions of a cropped source file. */
-static inline bool dvbridge_dv_geometry(struct dvbridge_dv *d, int w, int h,
-                              int x, int y, int dw, int dh)
+
+static inline bool cb1_wire_signal(const AVDOVIMetadata *metadata)
 {
-    DV_REQUIRE(w > 0 && h > 0 && w <= 3840 && h <= 2160);
-    DV_REQUIRE(dw > 0 && dh > 0 && x >= 0 && y >= 0 && x+dw <= 3840 && y+dh <= 2160);
-    DV_REQUIRE(!(x & 1) && !(dw & 1));
-    DV_REQUIRE(fabs((double)dw*h/w - dh) <= 1.01);
-    d->source_w=w;d->source_h=h;d->dest_x=x;d->dest_y=y;d->dest_w=dw;d->dest_h=dh;
-    return true;
+    const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
+    return av_dovi_get_header(metadata)->vdr_bit_depth==12 && color->signal_bit_depth==12 &&
+        color->signal_color_space==0 && color->signal_full_range_flag==1 &&
+        color->signal_eotf==65535 && color->signal_eotf_param0==0 &&
+        color->signal_eotf_param1==0 && color->signal_eotf_param2==0;
 }
-static inline bool dvbridge_dv_area(struct dvbridge_dv *d, unsigned l, unsigned r,
-                          unsigned t, unsigned b, unsigned v[4])
+
+static inline bool cb1_wire_offsets(const AVDOVIColorMetadata *color)
 {
-    int w=d->source_w ? d->source_w : 3840, h=d->source_h ? d->source_h : 2160;
-    int dw=d->dest_w ? d->dest_w : 3840, dh=d->dest_h ? d->dest_h : 2160;
-    DV_REQUIRE(l < (unsigned)w && r < (unsigned)w-l && t < (unsigned)h && b < (unsigned)h-t);
-    v[0]=d->dest_x+lround((double)l*dw/w);
-    v[1]=3840-d->dest_x-dw+lround((double)r*dw/w);
-    v[2]=d->dest_y+lround((double)t*dh/h);
-    v[3]=2160-d->dest_y-dh+lround((double)b*dh/h);
-    return v[0]+v[1]<3840 && v[2]+v[3]<2160;
-}
-/* Same canonical no-residual criterion as libplacebo's DOVI mapper.
- * P7 MEL can carry disable_residual_flag=0 while its NLQ is exactly trivial.
- * Do not mistake it for FEL, and do not accept non-trivial NLQ without EL.
- * Caller already validated the metadata buffer and its mapping region. */
-static inline bool dvbridge_dv_is_mel(const AVDOVIMetadata *m)
-{
-    if (!m) return false;
-    const AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
-    const AVDOVIDataMapping *map=av_dovi_get_mapping(m);
-    if (h->disable_residual_flag || h->coef_log2_denom > 32 ||
-        map->nlq_method_idc != AV_DOVI_NLQ_LINEAR_DZ) return false;
-    uint64_t maximum=UINT64_C(1) << h->coef_log2_denom;
-    for (int c=0;c<3;c++) {
-        const AVDOVINLQParams *n=&map->nlq[c];
-        if (n->nlq_offset || n->vdr_in_max != maximum ||
-            n->linear_deadzone_slope || n->linear_deadzone_threshold) return false;
+    for(unsigned channel=0;channel<3;channel++){
+        AVRational value=color->ycc_to_rgb_offset[channel];
+        if(value.den<=0 || (int64_t)value.num*(channel?2:16)!=value.den)return false;
     }
     return true;
 }
-static inline void dvbridge_dv_u16(struct dvbridge_dv *d, unsigned v)
-{ d->payload[d->size++] = v >> 8; d->payload[d->size++] = v; }
-static inline void dvbridge_dv_u32(struct dvbridge_dv *d, unsigned v)
-{ dvbridge_dv_u16(d, v >> 16); dvbridge_dv_u16(d, v & 65535); }
-static inline uint32_t dvbridge_dv_crc(const uint8_t *p, size_t n)
+
+static inline bool dvbridge_dv_source_transport(const AVDOVIMetadata *metadata)
 {
-    uint32_t c = 0xffffffff;
-    for (size_t j = 0; j < n; j++) {
-        c ^= (uint32_t)p[j] << 24;
-        for (int i = 0; i < 8; i++) c = (c << 1) ^ ((c >> 31) ? 0x04c11db7u : 0);
+    const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
+    if(!cb1_wire_signal(metadata) || color->signal_chroma_format || !cb1_wire_offsets(color))return false;
+    const AVRational *matrix[2]={color->ycc_to_rgb_matrix,color->rgb_to_lms_matrix};
+    for(unsigned index=0;index<2;index++){
+        double values[9];
+        for(unsigned element=0;element<9;element++){
+            AVRational value=matrix[index][element];
+            if(!dvbridge_dv_wire_rational(value,index?16384:8192,INT16_MIN,INT16_MAX))return false;
+            values[element]=(double)value.num/value.den;
+        }
+        double a=values[4]*values[8]-values[5]*values[7];
+        double b=values[3]*values[8]-values[5]*values[6];
+        double c=values[3]*values[7]-values[4]*values[6];
+        double determinant=values[0]*a-values[1]*b+values[2]*c;
+        if(!isfinite(determinant) || fabs(determinant)<1e-8)return false;
     }
-    return c;
+    return true;
 }
-/* Called with metadata from the exact pl_frame being rendered, not the
- * decoder's newest frame. Repeated PTS keeps a stable payload while paused.
- * A discontinuity forces scene refresh; no stale RPU across a seek. */
-static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *d, const AVDOVIMetadata *m,
-                                       double pts, const unsigned margins[4], bool force_refresh)
+
+static inline bool dvbridge_dv_source_matches_output(const AVDOVIMetadata *metadata)
 {
-    DV_REQUIRE(m && isfinite(pts));
-    const AVDOVIColorMetadata *c = av_dovi_get_color(m);
-    const AVDOVIRpuDataHeader *h = av_dovi_get_header(m);
-    DV_REQUIRE(c && h && (h->disable_residual_flag == 1 || d->fel_verified || dvbridge_dv_is_mel(m)));
-    DV_REQUIRE(c->signal_eotf == 65535 && (c->signal_color_space == 0 || c->signal_color_space == 2));
-    DV_REQUIRE(!c->signal_eotf_param0 && !c->signal_eotf_param1 && !c->signal_eotf_param2);
-    DV_REQUIRE(c->source_min_pq <= c->source_max_pq && c->source_max_pq <= 4095);
-    DV_REQUIRE(m->num_ext_blocks > 0 && m->num_ext_blocks <= AV_DOVI_MAX_EXT_BLOCKS);
-    bool repeat = d->frames && pts == d->last_pts;
-    bool refresh = !d->frames || pts < d->last_pts || pts - d->last_pts > 0.1;
-    d->size = 0;
-    d->payload[d->size++] = 0;
-    d->payload[d->size++] = force_refresh ? 1 : repeat ? d->previous[1] : refresh ? 1 : c->scene_refresh_flag;
-    DV_REQUIRE(!d->source_transport || dvbridge_dv_source_transport(m));
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
-        (uint16_t)((int64_t)c->ycc_to_rgb_matrix[i].num*8192/c->ycc_to_rgb_matrix[i].den) :
-        (uint16_t)(
-            dvbridge_output_ycc[i]));
-    dvbridge_dv_u32(d, 16777216); dvbridge_dv_u32(d, 134217728); dvbridge_dv_u32(d, 134217728);
-    for (int i = 0; i < 9; i++) dvbridge_dv_u16(d, d->source_transport ?
-        (uint16_t)((int64_t)c->rgb_to_lms_matrix[i].num*16384/c->rgb_to_lms_matrix[i].den) :
-        (
-            dvbridge_output_lms[i]));
-    dvbridge_dv_u16(d, 65535); dvbridge_dv_u32(d, 0); dvbridge_dv_u32(d, 0);
-    d->payload[d->size++] = 12; d->payload[d->size++] = 0;
-    d->payload[d->size++] = 1; d->payload[d->size++] = 1;
-    dvbridge_dv_u16(d, c->source_min_pq); dvbridge_dv_u16(d, c->source_max_pq);
-    dvbridge_dv_u16(d, d->source_transport ? c->source_diagonal : 42);
-    unsigned count_pos = d->size++;
-    d->payload[count_pos] = 0;
-    unsigned l1 = 0, area = 0, targets[AV_DOVI_MAX_EXT_BLOCKS], ntargets = 0;
-    const AVDOVIDmData *ordered[AV_DOVI_MAX_EXT_BLOCKS];
-    unsigned order[AV_DOVI_MAX_EXT_BLOCKS];
-    for(int i=0;i<m->num_ext_blocks;i++) {
-        const AVDOVIDmData *e=av_dovi_get_ext(m,i);
-        unsigned rank=e->level;
-        if(e->level==3 || (e->level>=8 && e->level<=11) || e->level==254)rank+=256;
-        int j=i;
-        while(j>0 && order[j-1]>rank) {ordered[j]=ordered[j-1];order[j]=order[j-1];j--;}
-        ordered[j]=e;order[j]=rank;
+    if(!cb1_wire_signal(metadata))return false;
+    const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
+    for(unsigned element=0;element<9;element++){
+        AVRational ycc=color->ycc_to_rgb_matrix[element],lms=color->rgb_to_lms_matrix[element];
+        if(ycc.den<=0 || lms.den<=0 ||
+           (int64_t)ycc.num*8192!=(int64_t)dvbridge_output_ycc[element]*ycc.den ||
+           (int64_t)lms.num*16384!=(int64_t)dvbridge_output_lms[element]*lms.den)return false;
     }
-    for (int i = 0; i < m->num_ext_blocks; i++) {
-        const AVDOVIDmData *e = ordered[i];
-        unsigned v[7] = {0}, n = 0;
-        switch (e->level) {
+    return cb1_wire_offsets(color);
+}
+
+static inline bool dvbridge_dv_bounds(const AVDOVIMetadata *metadata,size_t bytes)
+{
+    return dvbridge_metadata_bounds(metadata,bytes) && metadata->num_ext_blocks>0;
+}
+
+static inline bool dvbridge_dv_geometry(struct dvbridge_dv *state,int w,int h,int x,int y,int dw,int dh)
+{
+    if(w<=0 || h<=0 || w>3840 || h>2160 || dw<=0 || dh<=0 || x<0 || y<0 ||
+       dw>3840 || dh>2160 || x>3840-dw || y>2160-dh || (x&1) || (dw&1) ||
+       fabs((double)dw*h/w-dh)>1.01)return false;
+    state->source_w=w;state->source_h=h;state->dest_x=x;state->dest_y=y;state->dest_w=dw;state->dest_h=dh;
+    return true;
+}
+
+static inline bool dvbridge_dv_area(struct dvbridge_dv *state,unsigned left,unsigned right,
+                                   unsigned top,unsigned bottom,unsigned out[4])
+{
+    unsigned w=state->source_w?state->source_w:3840,h=state->source_h?state->source_h:2160;
+    int dw=state->dest_w?state->dest_w:3840,dh=state->dest_h?state->dest_h:2160;
+    if(left>=w || right>=w-left || top>=h || bottom>=h-top)return false;
+    out[0]=state->dest_x+lround((double)left*dw/w);
+    out[1]=3840-state->dest_x-dw+lround((double)right*dw/w);
+    out[2]=state->dest_y+lround((double)top*dh/h);
+    out[3]=2160-state->dest_y-dh+lround((double)bottom*dh/h);
+    return out[0]+out[1]<3840 && out[2]+out[3]<2160;
+}
+
+static inline bool dvbridge_dv_is_mel(const AVDOVIMetadata *metadata)
+{
+    if(!metadata)return false;
+    const AVDOVIRpuDataHeader *header=av_dovi_get_header(metadata);
+    const AVDOVIDataMapping *mapping=av_dovi_get_mapping(metadata);
+    if(header->disable_residual_flag || header->coef_log2_denom>32 ||
+       mapping->nlq_method_idc!=AV_DOVI_NLQ_LINEAR_DZ)return false;
+    uint64_t maximum=UINT64_C(1)<<header->coef_log2_denom;
+    for(unsigned channel=0;channel<3;channel++){
+        const AVDOVINLQParams *nlq=&mapping->nlq[channel];
+        if(nlq->nlq_offset || nlq->vdr_in_max!=maximum ||
+           nlq->linear_deadzone_slope || nlq->linear_deadzone_threshold)return false;
+    }
+    return true;
+}
+
+static inline void dvbridge_dv_u16(struct dvbridge_dv *state,unsigned value)
+{
+    AV_WB16(state->payload+state->size,value);state->size+=2;
+}
+static inline void dvbridge_dv_u32(struct dvbridge_dv *state,unsigned value)
+{
+    AV_WB32(state->payload+state->size,value);state->size+=4;
+}
+static inline uint32_t dvbridge_dv_crc(const uint8_t *data,size_t size)
+{
+    return av_bswap32(av_crc(av_crc_get_table(AV_CRC_32_IEEE),UINT32_MAX,data,size));
+}
+
+struct cb1_wire_block {const AVDOVIDmData *data;unsigned rank,index;};
+static inline int cb1_wire_block_compare(const void *first,const void *second)
+{
+    const struct cb1_wire_block *a=(const struct cb1_wire_block *)first,*b=(const struct cb1_wire_block *)second;
+    if(a->rank!=b->rank)return a->rank>b->rank?1:-1;
+    return (a->index>b->index)-(a->index<b->index);
+}
+
+static inline bool cb1_wire_append(struct dvbridge_dv *state,unsigned level,const uint8_t *bytes,unsigned count)
+{
+    if(count>sizeof(state->payload)-5 || state->size>sizeof(state->payload)-5-count)return false;
+    dvbridge_dv_u32(state,count);state->payload[state->size++]=level;
+    memcpy(state->payload+state->size,bytes,count);state->size+=count;
+    state->payload[70]++;
+    return true;
+}
+
+/* Failed operations have no output payload. The owner commits only success. */
+static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *state,const AVDOVIMetadata *metadata,
+                                              double pts,const unsigned margins[4],bool force_refresh)
+{
+    if(!metadata || !isfinite(pts))return false;
+    const AVDOVIRpuDataHeader *header=av_dovi_get_header(metadata);
+    const AVDOVIColorMetadata *color=av_dovi_get_color(metadata);
+    if((header->disable_residual_flag!=1 && !state->fel_verified && !dvbridge_dv_is_mel(metadata)) ||
+       color->signal_eotf!=65535 || (color->signal_color_space!=0 && color->signal_color_space!=2) ||
+       color->signal_eotf_param0 || color->signal_eotf_param1 || color->signal_eotf_param2 ||
+       color->source_min_pq>color->source_max_pq || color->source_max_pq>4095 ||
+       metadata->num_ext_blocks<=0 || metadata->num_ext_blocks>AV_DOVI_MAX_EXT_BLOCKS ||
+       (state->source_transport && !dvbridge_dv_source_transport(metadata)))return false;
+    uint8_t base[71]={0};
+    bool repeat=state->frames && pts==state->last_pts;
+    bool discontinuity=!state->frames || pts<state->last_pts || pts-state->last_pts>0.1;
+    base[1]=force_refresh?1:repeat?state->previous[1]:discontinuity?1:color->scene_refresh_flag;
+    for(unsigned element=0;element<9;element++){
+        AVRational a=color->ycc_to_rgb_matrix[element],b=color->rgb_to_lms_matrix[element];
+        unsigned ycc=state->source_transport?(uint16_t)((int64_t)a.num*8192/a.den):(uint16_t)dvbridge_output_ycc[element];
+        unsigned lms=state->source_transport?(uint16_t)((int64_t)b.num*16384/b.den):dvbridge_output_lms[element];
+        AV_WB16(base+2+element*2,ycc);AV_WB16(base+32+element*2,lms);
+    }
+    AV_WB32(base+20,16777216);AV_WB32(base+24,134217728);AV_WB32(base+28,134217728);
+    AV_WB16(base+50,65535);base[60]=12;base[62]=1;base[63]=1;
+    AV_WB16(base+64,color->source_min_pq);AV_WB16(base+66,color->source_max_pq);
+    AV_WB16(base+68,state->source_transport?color->source_diagonal:42);
+    memcpy(state->payload,base,sizeof(base));state->size=sizeof(base);
+    struct cb1_wire_block blocks[AV_DOVI_MAX_EXT_BLOCKS];
+    for(int index=0;index<metadata->num_ext_blocks;index++){
+        const AVDOVIDmData *data=av_dovi_get_ext(metadata,index);
+        unsigned level=data->level;
+        unsigned rank=level+((level==3 || (level>=8 && level<=11) || level==254)?256:0);
+        blocks[index]=(struct cb1_wire_block){data,rank,(unsigned)index};
+    }
+    qsort(blocks,metadata->num_ext_blocks,sizeof(*blocks),cb1_wire_block_compare);
+    unsigned l1_count=0,l5_count=0,targets[AV_DOVI_MAX_EXT_BLOCKS],target_count=0;
+    for(int index=0;index<metadata->num_ext_blocks;index++){
+        const AVDOVIDmData *data=blocks[index].data;
+        unsigned values[7],words=0;uint8_t bytes[32];
+        switch(data->level){
         case 1:
-            DV_REQUIRE(!area); l1++; n = 3;
-            v[0] = e->l1.min_pq; v[1] = e->l1.max_pq; v[2] = e->l1.avg_pq;
-            DV_REQUIRE(v[0] <= v[2] && v[2] <= v[1]); break;
+            if(l5_count)return false;
+            l1_count++;words=3;
+            values[0]=data->l1.min_pq;values[1]=data->l1.max_pq;values[2]=data->l1.avg_pq;
+            if(values[0]>values[2] || values[2]>values[1])return false;
+            break;
         case 2:
-            DV_REQUIRE(!area); n = 7;
-            v[0] = e->l2.target_max_pq; v[1] = e->l2.trim_slope; v[2] = e->l2.trim_offset;
-            v[3] = e->l2.trim_power; v[4] = e->l2.trim_chroma_weight;
-            v[5] = e->l2.trim_saturation_gain; v[6] = (uint16_t)e->l2.ms_weight;
-            for (unsigned j = 0; j < ntargets; j++) DV_REQUIRE(targets[j] != v[0]);
-            targets[ntargets++] = v[0]; break;
+            if(l5_count)return false;
+            words=7;values[0]=data->l2.target_max_pq;values[1]=data->l2.trim_slope;
+            values[2]=data->l2.trim_offset;values[3]=data->l2.trim_power;
+            values[4]=data->l2.trim_chroma_weight;values[5]=data->l2.trim_saturation_gain;
+            values[6]=(uint16_t)data->l2.ms_weight;
+            for(unsigned t=0;t<target_count;t++)if(targets[t]==values[0])return false;
+            targets[target_count++]=values[0];break;
         case 5:
-            area++; DV_REQUIRE(l1 == 1 && area == 1); n = 4;
-            memcpy(v, margins, 4 * sizeof(*margins)); break;
-        case 4: case 3: case 8: case 9: case 10: case 11: case 254: {
-            uint8_t wire[32];
-            DV_REQUIRE(e->dvbridge_raw_magic==0x41424456);
-            int size=dvbridge_cm4_wire(e->level,e->dvbridge_original_bytes,e->dvbridge_original_length,wire);
-            if(size<0) {
-                fprintf(stderr,"DVBRIDGE_CM4_REJECT level=%d length=%u\n",e->level,e->dvbridge_original_length);
+            if(l1_count!=1 || l5_count++)return false;
+            words=4;memcpy(values,margins,4*sizeof(*margins));break;
+        case 6:continue;
+        case 3:case 4:case 8:case 9:case 10:case 11:case 254:{
+            if(data->dvbridge_raw_magic!=0x41424456)return false;
+            int length=dvbridge_cm4_wire(data->level,data->dvbridge_original_bytes,data->dvbridge_original_length,bytes);
+            if(length<0){
+                fprintf(stderr,"DVBRIDGE_CM4_REJECT level=%d length=%u\n",data->level,data->dvbridge_original_length);
                 return false;
             }
-            DV_REQUIRE(d->size+5+size<=sizeof(d->payload));
-            dvbridge_dv_u32(d,size);d->payload[d->size++]=e->level;
-            memcpy(d->payload+d->size,wire,size);d->size+=size;d->payload[count_pos]++;
+            if(!cb1_wire_append(state,data->level,bytes,(unsigned)length))return false;
             continue;
         }
-        case 6: continue; /* Static HDR10 fallback, not dynamic DV wire data. */
-        default: fprintf(stderr,"DVBRIDGE_DV_UNSUPPORTED_METADATA level=%d\n",e->level); return false;
+        default:
+            fprintf(stderr,"DVBRIDGE_DV_UNSUPPORTED_METADATA level=%d\n",data->level);return false;
         }
-        for (unsigned j = 0; j < n; j++)
-            DV_REQUIRE(v[j] <= 4095 || (e->level == 2 && j == 6 && v[j] == 65535));
-        DV_REQUIRE(d->size+5+n*2<=sizeof(d->payload));
-        dvbridge_dv_u32(d, n * 2); d->payload[d->size++] = e->level;
-        for (unsigned j = 0; j < n; j++) dvbridge_dv_u16(d, v[j]);
-        d->payload[count_pos]++;
+        for(unsigned word=0;word<words;word++){
+            if(values[word]>4095 && !(data->level==2 && word==6 && values[word]==65535))return false;
+            AV_WB16(bytes+word*2,values[word]);
+        }
+        if(!cb1_wire_append(state,data->level,bytes,words*2))return false;
     }
-    DV_REQUIRE(l1 == 1);
-    if (!area) {
-        DV_REQUIRE(d->size+13 <= sizeof(d->payload));
-        dvbridge_dv_u32(d,8);d->payload[d->size++]=5;
-        for (int j=0;j<4;j++) dvbridge_dv_u16(d,margins[j]);
-        d->payload[count_pos]++;
+    if(l1_count!=1)return false;
+    if(!l5_count){
+        uint8_t bytes[8];for(unsigned i=0;i<4;i++)AV_WB16(bytes+i*2,margins[i]);
+        if(!cb1_wire_append(state,5,bytes,sizeof(bytes)))return false;
     }
-    DV_REQUIRE(d->size<=sizeof(d->payload) && d->payload[count_pos]<=AV_DOVI_MAX_EXT_BLOCKS);
-    if (d->frames && (d->previous_size != d->size || memcmp(d->previous, d->payload, d->size))) {
-        d->id = (d->id + 1) & 15; d->changes++;
+    if(state->payload[70]>AV_DOVI_MAX_EXT_BLOCKS)return false;
+    if(state->frames && (state->previous_size!=state->size || memcmp(state->previous,state->payload,state->size))){
+        state->id=(state->id+1)&15;state->changes++;
     }
-    memcpy(d->previous, d->payload, d->size); d->previous_size = d->size;
-    d->count = d->size <= 119 ? 1 : 1 + (d->size - 119 + 120) / 121;
-    DV_REQUIRE(d->count <= 5);
-    memset(d->packets, 0, sizeof(d->packets));
-    unsigned off = 0;
-    for (unsigned i = 0; i < d->count; i++) {
-        uint8_t p[128] = {0};
-        p[0] = (d->count == 1 ? 0 : i == 0 ? 1 : i + 1 == d->count ? 3 : 2) << 6;
-        p[1] = (d->id << 4) | d->id;
-        unsigned start = i ? 3 : 5, room = i ? 121 : 119;
-        unsigned take = d->size - off; if (take > room) take = room;
-        if (!i) { p[3] = d->size >> 8; p[4] = d->size; }
-        memcpy(p + start, d->payload + off, take); off += take;
-        uint32_t crc = dvbridge_dv_crc(p, 124);
-        for (int j = 0; j < 4; j++) p[124+j] = crc >> (24-j*8);
-        DV_REQUIRE(!dvbridge_dv_crc(p, 128));
-        for (unsigned j = 0; j < 128; j++) d->packets[i*128+j] = p[j];
+    memcpy(state->previous,state->payload,state->size);state->previous_size=state->size;
+    state->count=1+(state->size>119?(state->size-119+120)/121:0);
+    if(state->count>5)return false;
+    memset(state->packets,0,sizeof(state->packets));
+    unsigned consumed=0;
+    for(unsigned index=0;index<state->count;index++){
+        uint8_t packet[128]={0};
+        unsigned type=state->count==1?0:index==0?1:index+1==state->count?3:2;
+        packet[0]=type<<6;packet[1]=(state->id<<4)|state->id;
+        unsigned start=index?3:5,room=124-start;
+        unsigned remaining=state->size-consumed,take=remaining<room?remaining:room;
+        if(!index)AV_WB16(packet+3,state->size);
+        memcpy(packet+start,state->payload+consumed,take);consumed+=take;
+        AV_WB32(packet+124,dvbridge_dv_crc(packet,124));
+        if(dvbridge_dv_crc(packet,sizeof(packet)))return false;
+        for(unsigned byte=0;byte<sizeof(packet);byte++)state->packets[index*128+byte]=packet[byte];
     }
-    d->last_pts = pts; d->frames++;
+    state->last_pts=pts;state->frames++;
     return true;
 }
 
-static inline bool dvbridge_dv_metadata(struct dvbridge_dv *d, const AVDOVIMetadata *m,
-                                       double pts, const unsigned margins[4])
+static inline bool dvbridge_dv_metadata(struct dvbridge_dv *state,const AVDOVIMetadata *metadata,
+                                       double pts,const unsigned margins[4])
 {
-    return dvbridge_dv_metadata_output(d,m,pts,margins,false);
+    return dvbridge_dv_metadata_output(state,metadata,pts,margins,false);
 }
-
-
 #endif

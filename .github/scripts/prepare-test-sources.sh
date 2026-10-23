@@ -17,16 +17,21 @@ download() {
 test_root=$(mktemp -d "${RUNNER_TEMP:?}/cb1-tests.XXXXXX")
 kodi_version=$(pin PKG_VERSION packages/mediacenter/kodi/package.mk)
 ffmpeg_version=$(pin PKG_VERSION packages/multimedia/ffmpeg/package.mk)
-test -n "$kodi_version" && test -n "$ffmpeg_version"
+placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk
+placebo_version=$(pin PKG_VERSION "$placebo_recipe")
+test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_version"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
   "$test_root/kodi.tar.gz" "$(pin PKG_SHA256 packages/mediacenter/kodi/package.mk)"
 download "https://ffmpeg.org/releases/ffmpeg-$ffmpeg_version.tar.xz" \
   "$test_root/ffmpeg.tar.xz" "$(pin PKG_SHA256 packages/multimedia/ffmpeg/package.mk)"
+download "https://github.com/haasn/libplacebo/archive/$placebo_version.tar.gz" \
+  "$test_root/libplacebo.tar.gz" "$(pin PKG_SHA256 "$placebo_recipe")"
 
 python3 scripts/cb1-stage.py
-mkdir "$test_root/kodi" "$test_root/ffmpeg"
+mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo"
 tar -xf "$test_root/kodi.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg.tar.xz" -C "$test_root/ffmpeg" --strip-components=1
+tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
 for patch_file in packages/mediacenter/kodi/patches/*.patch projects/Generic/patches/kodi/*.patch \
                   projects/Generic/patches/kodi/x86/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/kodi" < "$patch_file"
@@ -36,6 +41,11 @@ for patch_file in packages/multimedia/ffmpeg/patches/postproc/*.patch \
                   projects/Generic/patches/ffmpeg/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/ffmpeg" < "$patch_file"
 done
+for patch_file in CB1/patches/libplacebo/*.patch; do
+  patch --batch --forward --fuzz=0 -p1 -d "$test_root/libplacebo" < "$patch_file"
+done
+python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
+  --libplacebo-source "$test_root/libplacebo"
 (
   cd "$test_root/ffmpeg"
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \

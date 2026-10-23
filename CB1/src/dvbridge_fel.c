@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Split and hardware-decode the enhancement layer; pair surfaces by exact presentation time. */
 #include "dvbridge_fel.h"
 #include <libavcodec/bsf.h>

@@ -3,7 +3,7 @@ Subject: [PATCH] colorspace: opt-in native Dolby Vision reconstruction bounds
 diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colorspace.h
 --- a/src/include/libplacebo/colorspace.h
 +++ b/src/include/libplacebo/colorspace.h
-@@ -128,6 +128,27 @@
+@@ -128,6 +128,30 @@
  PL_API bool pl_bit_encoding_equal(const struct pl_bit_encoding *b1,
                                    const struct pl_bit_encoding *b2);
  
@@ -16,6 +16,7 @@ diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colors
 +
 +#define PL_HAVE_CB1_MASTER_REFERENCE 1
 +struct pl_cb1_dovi_reference {
++    // 1: original layout; 2: exact paired-row intermediate.
 +    uint32_t contract;
 +    uint8_t bl_depth, el_depth, output_depth, denom;
 +    bool residual;
@@ -27,11 +28,13 @@ diff --git a/src/include/libplacebo/colorspace.h b/src/include/libplacebo/colors
 +};
 +#define PL_CB1_DOVI_REFERENCE_ABI ((PL_HAVE_CB1_MASTER_REFERENCE << 16) | (unsigned)sizeof(struct pl_cb1_dovi_reference))
 +PL_API unsigned pl_cb1_dovi_reference_abi(void);
++// Optional contract 2 capability; contract 1 remains supported.
++PL_API unsigned pl_cb1_dovi_reference_paired_rows_abi(void);
 +
  // Parsed metadata from the Dolby Vision RPU
  struct pl_dovi_metadata {
      // Colorspace transformation metadata
-@@ -164,6 +185,10 @@
+@@ -164,6 +188,10 @@
          float deadzone_slope;     // (2^el_bit_depth - 1) * S / 2^coef_log2_denom
          float deadzone_threshold; // (T - S/2) / 2^coef_log2_denom
      } nlq[3];
@@ -95,7 +98,7 @@ diff --git a/src/include/libplacebo/utils/libav_internal.h b/src/include/libplac
 diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
 --- a/src/shaders/colorspace.c
 +++ b/src/shaders/colorspace.c
-@@ -243,8 +243,14 @@
+@@ -247,8 +247,14 @@
      vec3 el_centered = el_sample - $off;                              \
      vec3 noise = 2.384185791015625e-7 * max(abs(el_sample), abs($off)); \
      el_centered = mix(el_centered, vec3(0.0), lessThanEqual(abs(el_centered), noise)); \
@@ -112,7 +115,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  #endif
  }
  
-@@ -262,6 +268,16 @@
+@@ -300,6 +306,16 @@
           "vec4 coeffs;                          \n"
           "float s;                              \n"
           "sig = clamp(color.rgb, 0.0, 1.0);     \n");
@@ -129,7 +132,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
  
      float coeffs_data[8][4];
      float mmr_packed_data[8*6][4];
-@@ -277,6 +293,13 @@
+@@ -315,6 +331,13 @@
              continue;
  
          pl_assert(comp->num_pivots >= 2 && comp->num_pivots <= 9);
@@ -143,7 +146,7 @@ diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
          struct pl_reshape_data compact;
          bool common_mmr = comp->num_pivots > 2 && comp->method[0] == 1;
          for (int i = 1; common_mmr && i < comp->num_pivots - 1; i++)
-@@ -515,6 +538,11 @@
+@@ -525,6 +548,11 @@
  unsigned pl_cb1_processing_abi(void)
  {
      return PL_CB1_PROCESSING_ABI;

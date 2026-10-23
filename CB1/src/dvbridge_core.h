@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_CORE_H
 #define DVBRIDGE_CORE_H
 #include <stdbool.h>

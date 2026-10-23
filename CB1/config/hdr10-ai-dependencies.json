@@ -33,7 +33,9 @@
     "backend_version": "4.7.0",
     "heads": 6,
     "features": 222,
-    "redistribution_cleared": false,
+    "redistribution_cleared": true,
+    "license": "GPL-2.0-or-later",
+    "permission_record": "models/l1l3/LICENSE.md",
     "version": "0.1",
     "artifact_id": "acfab5e0e94c1ab0be011d809dd6b5c98f9b9d7a79ff2e28c9993a1da3ebcc26",
     "files": {

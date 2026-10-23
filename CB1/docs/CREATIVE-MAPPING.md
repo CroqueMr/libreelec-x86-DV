@@ -61,10 +61,13 @@ Renderer `DX11VideoProcessor.cpp` at
 Trim coefficient decoding and the linear-nits SOP/color reference follow
 DoViBaker `DoViProcessor.cpp` at
 [`ffba39830b694ddca0bf5f73dcf1b462713bb7f4`](https://github.com/erazortt/DoViBaker/blob/ffba39830b694ddca0bf5f73dcf1b462713bb7f4/DoViBaker/DoViProcessor.cpp).
-MPC-BE declares GPLv3-or-later in the consulted source headers. DoViBaker
+The published Beta5 reference used these adaptations. MPC-BE declares GPLv3-or-later in the consulted source headers. DoViBaker
 supplies GPLv3 without a separate later-version grant in the consulted files.
-The derived creative module, renderer and scalar reference use GPL-3.0-only;
-inherited files retain their original terms. The Python reference is separate from runtime C.
+The derived Beta5 creative module, renderer and scalar reference used GPL-3.0-only;
+inherited files retain their original terms. The local scalar replacement and
+original project portions are tracked in [the migration record](GPL2-MIGRATION.md).
+The CM2.9 GPU and fused colour/composition kernels are replaced and tracked
+separately. The Python reference is separate from runtime C.
 These references are experimental open implementations, not proof of Dolby
 equivalence. Their different transfer domains must not be mixed silently.
 
@@ -106,7 +109,7 @@ output descriptors. Unknown target descriptions remain unsupported and preserve
 coherent source metadata. Panel type does not infer display capabilities. The TV retains its TV-Led
 display mapping; this is not the licensed Dolby display mapper.
 
-## Adaptation record
+## Published Beta5 adaptation record
 
 | Origin | Use in this series | Destination |
 | --- | --- | --- |

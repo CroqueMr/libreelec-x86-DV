@@ -1,4 +1,5 @@
-CB1 HDR10 linear-conversion additions: SPDX-License-Identifier: GPL-3.0-or-later
+Original CB1 HDR10 linear-conversion additions: SPDX-License-Identifier: GPL-2.0-or-later
+Owner's additional grant, 2026-10-22. No implementation change.
 Original libplacebo per-file copyright and LGPL license notices remain unchanged.
 
 diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
