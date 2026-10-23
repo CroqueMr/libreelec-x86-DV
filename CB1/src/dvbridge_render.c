@@ -41,7 +41,7 @@
 #include <string.h>
 
 struct dvbridge_dv_slot {
-    bool active, retiring, ready, quarantined, allocated;
+    bool active, retiring, ready, quarantined;
     GLsync fence;
     PFNGLCLIENTWAITSYNCPROC wait_sync;
     PFNGLDELETESYNCPROC delete_sync;
@@ -52,7 +52,7 @@ struct dvbridge_dv_slot {
     struct dvbridge_dv_policy_output output;
     double pts;
     PFNGLBUFFERSTORAGEEXTPROC buffer_storage;
-    GLuint buffers[3], programs[2], sampler;
+    GLuint buffers[3], program, sampler;
     const uint32_t *mapped;
     void *source_metadata;
     unsigned groups;
@@ -110,14 +110,11 @@ struct dvbridge_renderer {
     bool ready, direct_output, overlay_visible;
     bool p5_native_pending;
     bool packed, fragment_quad, exact_scaler_cache, optimized_dv, fast_chroma;
-    bool enhanced_linear, enhanced_program_linear;
+    bool enhanced_linear;
     unsigned enhanced_margins[4];
-    bool enhanced_fast_pq, enhanced_program_fast_pq;
-    bool enhanced_authored, enhanced_program_authored;
-    bool enhanced_skip_aux, enhanced_program_skip_aux;
-    bool enhanced_authored_curve, enhanced_program_curve;
-    bool enhanced_prepack, enhanced_program_prepack, enhanced_program_quad;
-    bool ai_enhanced_fused, enhanced_program_fused, ai_fusion_failed;
+    bool enhanced_fast_pq, enhanced_authored, enhanced_skip_aux, enhanced_authored_curve;
+    bool enhanced_prepack, ai_enhanced_fused, ai_fusion_failed;
+    unsigned enhanced_program_key;
     bool ai_enhanced_prepack;
     GLuint ai_enhanced_stats_texture;
     pl_tex ai_enhanced_stats;
@@ -1186,6 +1183,20 @@ void dvbridge_renderer_destroy(struct dvbridge_renderer *r)
     renderer_free(r);
 }
 
+/* Destroy wrappers before the immutable GL storage they borrow. */
+static void dve_release_images(struct dvbridge_renderer *r)
+{
+    pl_tex_destroy(r->gpu,&r->ai_enhanced_stats);
+    pl_tex_destroy(r->gpu,&r->ai_enhanced_native);
+    pl_tex_destroy(r->gpu,&r->ai_enhanced_packed);
+    glDeleteTextures(1,&r->ai_enhanced_stats_texture);r->ai_enhanced_stats_texture=0;
+    glDeleteTextures(1,&r->ai_enhanced_native_texture);r->ai_enhanced_native_texture=0;
+    pl_tex_destroy(r->gpu,&r->enhanced_rgb);
+    glDeleteTextures(1,&r->enhanced_texture);r->enhanced_texture=0;
+    glDeleteTextures(1,&r->enhanced_packed_texture);r->enhanced_packed_texture=0;
+    glDeleteFramebuffers(1,&r->enhanced_packed_fbo);r->enhanced_packed_fbo=0;
+}
+
 static void renderer_free(struct dvbridge_renderer *r)
 {
     cb1_processing_reset(&r->processing,r->gpu);
@@ -1198,15 +1209,8 @@ static void renderer_free(struct dvbridge_renderer *r)
     pl_tex_destroy(r->gpu, &r->p5_native);
     pl_tex_destroy(r->gpu, &r->native_picture);
     pl_tex_destroy(r->gpu, &r->ai_rgb);
-    pl_tex_destroy(r->gpu, &r->enhanced_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_input);
-    pl_tex_destroy(r->gpu, &r->ai_enhanced_stats);
-    pl_tex_destroy(r->gpu, &r->ai_enhanced_native);
-    pl_tex_destroy(r->gpu, &r->ai_enhanced_packed);
-    glDeleteTextures(1,&r->ai_enhanced_stats_texture);
-    glDeleteTextures(1,&r->ai_enhanced_native_texture);
-    glDeleteTextures(1,&r->enhanced_texture);
-    glDeleteTextures(1,&r->enhanced_packed_texture);glDeleteFramebuffers(1,&r->enhanced_packed_fbo);
+    dve_release_images(r);
     pl_tex_destroy(r->gpu, &r->cm29_tail_atlas);
     pl_tex_destroy(r->gpu, &r->cm29_tail_axis);
     pl_renderer_destroy(&r->renderer);
@@ -2203,18 +2207,7 @@ static struct pl_hook_res reference_quantize(void *priv, const struct pl_hook_pa
 bool dvbridge_render_hdr10_policy_resolve(struct dvbridge_renderer *r, pl_tex output,
                                          bool flip, bool limited, unsigned bits)
 {
-    if (!r || !r->policy_ready || !r->ready || !output || output == r->rgb ||
-        bits < 10 || bits > 16 || output->params.w != 3840 || output->params.h != 2160 ||
-        !output->params.renderable || output->params.format->num_components < 3) {
-        dvbridge_render_policy_cancel(r); return false;
-    }
-    /* Validate stored RGB, not host transfer bits or intermediate precision.
-     * Binary32 preserves all requested 10..16-bit codes; smaller floats are
-     * not a proven final representation for this API. */
-    pl_fmt fmt=output->params.format;
-    for (int c=0;c<3;c++) {
-        if ((fmt->type==PL_FMT_UNORM && fmt->component_depth[c]>=(int)bits) ||
-            (fmt->type==PL_FMT_FLOAT && fmt->component_depth[c]>=32)) continue;
+    if (!r || !r->policy_ready || !r->ready || !direct_target_valid(r,output,bits)) {
         dvbridge_render_policy_cancel(r); return false;
     }
     struct pl_frame source = {.num_planes=1,
@@ -2318,7 +2311,7 @@ static void dv_release_slot(struct dvbridge_dv_slot *s)
     if(s->mapped){GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[2]);glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);}
-    glDeleteBuffers(3,s->buffers);glDeleteProgram(s->programs[1]);
+    glDeleteBuffers(3,s->buffers);
     glDeleteSamplers(1,&s->sampler);
     av_free(s->source_metadata);
     /* Programs belong to the renderer; storage and metadata belong to the frame. */
@@ -2349,7 +2342,7 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_advance(struct dvbridge
     if(status!=DVBRIDGE_DV_IDLE)return status;
     struct dvbridge_dv_slot *s=&r->dv;
     if(!s->retiring || !s->packed_target || s->mapped || s->source_metadata ||
-       s->buffers[0] || s->buffers[1] || s->buffers[2] || s->sampler || s->programs[1])
+       s->buffers[0] || s->buffers[1] || s->buffers[2] || s->sampler)
         return dvbridge_render_dv_policy_poll(r);
     status=dv_retire_slot(s);
     if(status!=DVBRIDGE_DV_BUSY)return status;
@@ -2496,7 +2489,7 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
     if(glGetError()==GL_NO_ERROR)s->mapped=glMapBufferRange(GL_SHADER_STORAGE_BUFFER,0,result_size,flags);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);
     if(!r->dv_analysis_program)r->dv_analysis_program=dv_compute_program();
-    s->programs[0]=r->dv_analysis_program;
+    s->program=r->dv_analysis_program;
     /* Borrowed libplacebo textures need an explicit non-mipmapped sampler. */
     glGenSamplers(1,&s->sampler);
     glSamplerParameteri(s->sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
@@ -2506,9 +2499,9 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
     if(!r->dv_transport_packer)
         r->dv_transport_packer=dvbridge_gl_packer_create(cb1_pack_vertex,cb1_pack_fragment);
     s->packer=r->dv_transport_packer;
-    s->allocated=s->mapped && s->programs[0] && s->packer && glGetError()==GL_NO_ERROR;
-    if(!s->allocated)dv_release(r);
-    return s->allocated;
+    bool ok=s->mapped && s->program && s->packer && glGetError()==GL_NO_ERROR;
+    if(!ok)dv_release(r);
+    return ok;
 }
 
 static bool dv_allocate_transport(struct dvbridge_renderer *r)
@@ -2524,9 +2517,9 @@ static bool dv_allocate_transport(struct dvbridge_renderer *r)
     if(!r->dv_transport_packer)
         r->dv_transport_packer=dvbridge_gl_packer_create(cb1_pack_vertex,cb1_pack_fragment);
     s->packer=r->dv_transport_packer;
-    s->allocated=s->wait_sync && s->delete_sync && s->fence_sync && s->packer && glGetError()==GL_NO_ERROR;
-    if(!s->allocated)dv_release(r);
-    return s->allocated;
+    bool ok=s->wait_sync && s->delete_sync && s->fence_sync && s->packer && glGetError()==GL_NO_ERROR;
+    if(!ok)dv_release(r);
+    return ok;
 }
 
 
@@ -2547,22 +2540,22 @@ static bool dv_analyze(struct dvbridge_renderer *r,pl_tex texture)
         glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START,i,&offsets[i]);
         glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE,i,&sizes[i]);
     }
-    glUseProgram(s->programs[0]);
+    glUseProgram(s->program);
     glBindTexture(GL_TEXTURE_2D,pl_opengl_unwrap(r->gpu,texture,NULL,NULL,NULL));
     glBindSampler(0,s->sampler);
-    glUniform4ui(glGetUniformLocation(s->programs[0],"area"),m[0],m[2],3840-m[1],2160-m[3]);
+    glUniform4ui(glGetUniformLocation(s->program,"area"),m[0],m[2],3840-m[1],2160-m[3]);
     const struct dvbridge_identity *id=&s->output.value.identity;
-    glUniform2ui(glGetUniformLocation(s->programs[0],"stream_id"),id->stream,id->stream>>32);
-    glUniform2ui(glGetUniformLocation(s->programs[0],"picture_id"),id->picture,id->picture>>32);
-    glUniform2ui(glGetUniformLocation(s->programs[0],"revision_id"),id->revision,id->revision>>32);
+    glUniform2ui(glGetUniformLocation(s->program,"stream_id"),id->stream,id->stream>>32);
+    glUniform2ui(glGetUniformLocation(s->program,"picture_id"),id->picture,id->picture>>32);
+    glUniform2ui(glGetUniformLocation(s->program,"revision_id"),id->revision,id->revision>>32);
     unsigned count=s->groups,pass=0,input=1,output=0;
     while(count){unsigned dispatch=(count+127)/128;
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,s->buffers[input]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER,1,s->buffers[output]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER,2,s->buffers[2]);
-        glUniform1ui(glGetUniformLocation(s->programs[0],"count"),count);
-        glUniform1ui(glGetUniformLocation(s->programs[0],"pass"),pass);
-        glUniform1ui(glGetUniformLocation(s->programs[0],"final_pass"),dispatch==1);
+        glUniform1ui(glGetUniformLocation(s->program,"count"),count);
+        glUniform1ui(glGetUniformLocation(s->program,"pass"),pass);
+        glUniform1ui(glGetUniformLocation(s->program,"final_pass"),dispatch==1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);glDispatchCompute(dispatch,1,1);
         if(dispatch==1)break;
         count=dispatch;
@@ -2604,11 +2597,13 @@ static bool dve_requirements(pl_gpu gpu)
 static bool dve_program(struct dvbridge_renderer *r,bool pq_lookup)
 {
     bool quad=r->ai_enhanced_prepack;
-    if(r->enhanced_program && (pq_lookup!=r->enhanced_pq_lookup || r->enhanced_program_linear!=r->enhanced_linear ||
-        r->enhanced_program_fast_pq!=r->enhanced_fast_pq ||
-        r->enhanced_program_prepack!=r->enhanced_prepack || r->enhanced_program_fused!=r->ai_enhanced_fused ||
-        r->enhanced_program_quad!=quad || r->enhanced_program_authored!=r->enhanced_authored ||
-        r->enhanced_program_skip_aux!=r->enhanced_skip_aux || r->enhanced_program_curve!=r->enhanced_authored_curve)){
+    /* One cache identity for the exact preprocessor configuration below. */
+    unsigned key=(unsigned)pq_lookup | (unsigned)r->enhanced_fast_pq<<1 |
+        (unsigned)r->enhanced_linear<<2 | (unsigned)r->enhanced_prepack<<3 |
+        (unsigned)r->ai_enhanced_fused<<4 | (unsigned)quad<<5 |
+        (unsigned)r->enhanced_authored<<6 | (unsigned)r->enhanced_skip_aux<<7 |
+        (unsigned)r->enhanced_authored_curve<<8;
+    if(r->enhanced_program && r->enhanced_program_key!=key){
         glDeleteProgram(r->enhanced_program);r->enhanced_program=0;
     }
     if(!r->enhanced_program){
@@ -2631,16 +2626,9 @@ static bool dve_program(struct dvbridge_renderer *r,bool pq_lookup)
         glGetProgramiv(r->enhanced_program,GL_LINK_STATUS,&ok);
         if(!ok){glDeleteProgram(r->enhanced_program);r->enhanced_program=0;return false;}
         r->enhanced_pq_lookup=pq_lookup;
-        r->enhanced_program_linear=r->enhanced_linear;
-        r->enhanced_program_fast_pq=r->enhanced_fast_pq;
-        r->enhanced_program_prepack=r->enhanced_prepack;
-        r->enhanced_program_fused=r->ai_enhanced_fused;
-        r->enhanced_program_quad=quad;
-        r->enhanced_program_authored=r->enhanced_authored;
-        r->enhanced_program_skip_aux=r->enhanced_skip_aux;
-        r->enhanced_program_curve=r->enhanced_authored_curve;
+        r->enhanced_program_key=key;
     }
-    r->dv.programs[0]=r->enhanced_program;
+    r->dv.program=r->enhanced_program;
     return true;
 }
 static bool dve_immutable(struct dvbridge_renderer *r,pl_tex *texture,GLuint *name,
@@ -2704,16 +2692,9 @@ static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned hei
             .texture=r->enhanced_packed_texture,.width=width,.height=height,.iformat=GL_RGBA8));
         ok=r->ai_enhanced_packed!=NULL;
     }
-    r->dv.programs[0]=r->enhanced_program;
+    r->dv.program=r->enhanced_program;
     if(!ok || glGetError()!=GL_NO_ERROR){
-        pl_tex_destroy(r->gpu,&r->ai_enhanced_stats);
-        pl_tex_destroy(r->gpu,&r->ai_enhanced_native);pl_tex_destroy(r->gpu,&r->ai_enhanced_packed);
-        glDeleteTextures(1,&r->ai_enhanced_stats_texture);r->ai_enhanced_stats_texture=0;
-        glDeleteTextures(1,&r->ai_enhanced_native_texture);r->ai_enhanced_native_texture=0;
-        pl_tex_destroy(r->gpu,&r->enhanced_rgb);glDeleteTextures(1,&r->enhanced_texture);
-        glDeleteTextures(1,&r->enhanced_packed_texture);glDeleteFramebuffers(1,&r->enhanced_packed_fbo);
-        r->enhanced_packed_texture=r->enhanced_packed_fbo=0;
-        r->enhanced_texture=0;dv_release(r);return false;
+        dve_release_images(r);dv_release(r);return false;
     }
     return true;
 }

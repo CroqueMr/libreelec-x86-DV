@@ -70,7 +70,7 @@ static void state_probe(struct dvbridge_renderer *r)
 {
     assert(ensure_rgb(r));
     assert(dv_allocate(r,259200));
-    const GLuint analysis_program=r->dv.programs[0];
+    const GLuint analysis_program=r->dv.program;
     struct dvbridge_gl_packer *transport_packer=r->dv.packer;
     r->dv.active=true;
     r->dv.output.value.identity=(struct dvbridge_identity){1,2,3};
@@ -111,7 +111,7 @@ static void state_probe(struct dvbridge_renderer *r)
     /* Completed pictures retain immutable programs, not frame-owned storage. */
     assert(glIsProgram(analysis_program));
     assert(!r->dv.active && !r->dv.mapped && !r->dv.buffers[2]);
-    assert(dv_allocate(r,259200) && r->dv.programs[0]==analysis_program &&
+    assert(dv_allocate(r,259200) && r->dv.program==analysis_program &&
            r->dv.packer==transport_packer);
     r->dv.active=true;
     assert(dv_last_use(r));

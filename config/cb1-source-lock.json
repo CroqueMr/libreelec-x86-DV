@@ -269,7 +269,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "bb02efa61924d575eb41ab75de74b0e931fdf3611a7d1d1c4ac5682a80c41e9c"
+      "sha256": "bdfb20172fa005040bc89b54a0f12b35b7a6792ab6662c94d427f965df6a5efa"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",

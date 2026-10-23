@@ -72,7 +72,7 @@ set_tests_properties(fel_vpp PROPERTIES SKIP_RETURN_CODE 77 ENVIRONMENT "EGL_PLA
 if(CB1_ENABLE_HDR10_AI)
   target_compile_definitions(hdr10_ai_contract PRIVATE CB1_EXPECT_HDR10_AI=1)
 endif()
-foreach(name adaptive_variants enhanced_metadata enhanced_dv_lifecycle enhanced_dv_capability renderer_capabilities creative_dv enhanced_pixel_plan enhanced_ai_plan enhanced_pixel_source enhanced_pixel_images enhanced_pixel_lifecycle scaled_adaptive)
+foreach(name adaptive_variants enhanced_metadata enhanced_dv_lifecycle enhanced_dv_capability renderer_capabilities render_state creative_dv enhanced_pixel_plan enhanced_ai_plan enhanced_pixel_source enhanced_pixel_images enhanced_pixel_lifecycle scaled_adaptive)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   add_test(NAME ${name} COMMAND ${name})
