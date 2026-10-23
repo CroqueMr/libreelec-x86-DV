@@ -468,15 +468,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    bool combined = false;
    if (m_presentsourcePast >= 0)
    {
-@@ -1292,14 +1385,20 @@
+@@ -1292,14 +1385,17 @@
      auto iter = m_queued.begin();
      int idx = *iter;
      ++iter;
-+    // Future display preparation and CPU scheduling phase are not presentation lateness.
-+    double latePts = cb1Async && !isPaused ?
-+        frameOnScreen + std::min(0.0, m_displayLatency) :
-+        renderPts;
-+    latePts -= completionAge.value_or(0.0);
++    // Catch up against the same deadline used to admit this presentation.
++    const double latePts = renderPts;
      while (iter != m_queued.end())
      {
        // the slot for rendering in time is [pts .. (pts +  x * frametime)]
@@ -491,7 +488,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
          break;
        idx = *iter;
        ++iter;
-@@ -1317,7 +1416,11 @@
+@@ -1317,7 +1413,11 @@
        m_queued.pop_front();
      }
  
@@ -504,7 +501,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
                                              static_cast<double>(m_fps / DVD_TIME_BASE));
      if (lateframes)
        m_lateframes += lateframes;
-@@ -1333,7 +1436,8 @@
+@@ -1333,7 +1433,8 @@
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
    }
