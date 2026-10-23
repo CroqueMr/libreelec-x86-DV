@@ -165,7 +165,7 @@ int main(){
  automaticFastRendering.store(true);
  p.fastRenderingMode=0;assert(SelectOutput(p,caps).policy.mode==5);
  p.fastRenderingMode=1;assert(SelectOutput(p,caps).policy.mode==5);
- p.fastRenderingMode=2;assert(SelectOutput(p,caps).policy.mode==1);
+ p.fastRenderingMode=2;assert(SelectOutput(p,caps).policy.mode==5);
  assert(p.output==OutputMode::MasterReference && p.Policy().mode==5);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_STANDARD)==1);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_MASTER_REFERENCE)==0);

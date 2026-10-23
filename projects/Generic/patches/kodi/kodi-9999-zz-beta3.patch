@@ -9093,7 +9093,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/c
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,79 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9139,9 +9139,6 @@ new file mode 100644
 +    return result;
 +  }
 +  auto policy = preferences.Policy();
-+  if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && preferences.fastRenderingMode == 2 &&
-+      automaticFastRendering.load())
-+    policy.mode = DVBRIDGE_MODE_STANDARD;
 +  const auto admission = [&](dvbridge_mode mode) {
 +    if ((mode == DVBRIDGE_MODE_HDR10_EXPERT || mode == DVBRIDGE_MODE_ENHANCED_DV) &&
 +        !preferences.ProfileValid())
@@ -15001,7 +14998,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +935,1565 @@
+@@ -397,13 +935,1566 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16044,7 +16041,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    const auto preferences = DVBRIDGE::FrameOutputSettings();
 +    const bool matched = std::isfinite(fps) && fps >= 10 && fps <= 240 &&
 +        std::isfinite(refresh) && std::abs(fps-refresh) < fps * .005;
-+    const bool measure = preferences.fastRenderingMode == 2 && !m_fastRendering.Enabled() &&
++    const bool measure = preferences.EffectiveFastRenderingMode(m_dvSelection.policy.mode) == 2 && !m_fastRendering.Enabled() &&
 +        m_fastRenderEligible && matched;
 +    drm->SetCB1TimingPeriod(measure ? std::llround(1e9 / fps) : 0);
 +    m_fastSubmittedEligible = measure;
@@ -16085,7 +16082,8 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  const auto margin = drm->TakeCB1Headroom();
 +  const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
 +  const auto preferences = DVBRIDGE::FrameOutputSettings();
-+  const bool eligible = margin && m_fastSubmittedEligible && preferences.fastRenderingMode == 2 &&
++  const bool eligible = margin && m_fastSubmittedEligible &&
++      preferences.EffectiveFastRenderingMode(m_dvSelection.policy.mode) == 2 &&
 +      player && player->IsPlayingVideo() && player->GetPlaySpeed() == 1 &&
 +      !(m_guiWillRender && GetGUIElementCount()) && !m_dvOverlays;
 +  if (m_fastRendering.Enabled() && !DVBRIDGE::automaticFastRendering.load())
