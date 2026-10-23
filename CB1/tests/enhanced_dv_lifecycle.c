@@ -53,7 +53,7 @@ static void failed_fence_process(void)
     if(!child){
         struct reference_gpu g=reference_gpu_create();
         struct dvbridge_retirement_owner *o=dvbridge_retirement_owner_create(g.gl->gpu);assert(o);
-        struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(o);assert(r && dv_allocate(r));
+        struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(o);assert(r && dv_allocate(r,259200));
         r->dv.active=true;r->dv.fence_sync=failed_fence;
         assert(!dv_last_use(r) && r->dv.quarantined);
         dvbridge_render_dv_policy_cancel(r);
@@ -68,7 +68,7 @@ static void failed_fence_process(void)
 }
 static void state_probe(struct dvbridge_renderer *r)
 {
-    assert(dv_allocate(r));
+    assert(dv_allocate(r,259200));
     const GLuint analysis_program=r->dv.programs[0];
     struct dvbridge_gl_packer *transport_packer=r->dv.packer;
     r->dv.active=true;
@@ -110,7 +110,7 @@ static void state_probe(struct dvbridge_renderer *r)
     /* Completed pictures retain immutable programs, not frame-owned storage. */
     assert(glIsProgram(analysis_program));
     assert(!r->dv.active && !r->dv.mapped && !r->dv.buffers[2]);
-    assert(dv_allocate(r) && r->dv.programs[0]==analysis_program &&
+    assert(dv_allocate(r,259200) && r->dv.programs[0]==analysis_program &&
            r->dv.packer==transport_packer);
     r->dv.active=true;
     assert(dv_last_use(r));

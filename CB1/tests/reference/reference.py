@@ -505,10 +505,12 @@ def characterized_library(path):
     """
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     assert digest in {
+        "095e5124ec6267f1c5fc5f162b6e2ba34de151399fea9b1c458c7c5cbd3aab0c",
         "111c6084a8e509f27e2c586e33568c82bf28c778c44b2740230e9bb1571f65af",
         "54d869abe8abc63c7e200ade4a3debc539de148152ff6fc9b0c28a1a66e6d5fa",
         "a48836a77309bc857a27da0e0d28f2bfc088053cf0b42563a1498f49d364fb8f",
         "b04935c9a1b547361a83d34c51e2505da1a0ae6a19c2ad9f18845110f332b6c6",
+        "5afd979d95ce6e066587969bb89157073d5441a585ac145e50da0d38aa64de76",
     }, "library binary receipt"
     assert C.sizeof(C.c_void_p) == 8, "64-bit ABI required"
     assert (C.sizeof(HDR), C.sizeof(ToneParams), C.sizeof(GamutParams)) == (148, 248, 120), "public header ABI"

@@ -31,7 +31,7 @@ static void exact_prepack(struct dvbridge_renderer *r,unsigned fbo,bool flip)
         assert(dve_run(r,&r->dv.enhanced_plan,r->rgb,r->dv.output.value.margins));
         glFinish();pq=r->enhanced_rgb;r->enhanced_skip_aux=true;
     }
-    if(r->dv.enhanced_overlay){pq=dve_compose(r,pq);assert(pq);}
+    if(r->dv.enhanced_overlay){pq=dve_compose(r,pq,true);assert(pq);}
     assert(dvbridge_gl_pack(r->dv.packer,pl_opengl_unwrap(r->gpu,pq,NULL,NULL,NULL),fbo,3840,2160,packets,count,flip));
     glBindFramebuffer(GL_FRAMEBUFFER,fbo);glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,expected);
     glBindFramebuffer(GL_FRAMEBUFFER,0);
@@ -214,7 +214,7 @@ int main(void)
             overlay_texture=reference_texture(g.gl->gpu,1,1,(float[4]){.8f*a,0,0,a});
             r->dv.overlay.texture=overlay_texture;
             r->dv.overlay.input_pq=pq;
-            pl_tex composed=dve_compose(r,out->intermediate);assert(composed);
+            pl_tex composed=dve_compose(r,out->intermediate,true);assert(composed);
             unsigned texture=pl_opengl_unwrap(r->gpu,composed,NULL,NULL,NULL);
             assert(dvbridge_gl_pack(r->dv.packer,texture,fbo,3840,2160,packets,count,flip));
             unsigned char expected[64],actual[64];

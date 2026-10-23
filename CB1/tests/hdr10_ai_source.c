@@ -14,10 +14,33 @@ static pl_fmt test_format(pl_gpu gpu,enum pl_fmt_type type,int components,int de
 #define pl_find_fmt test_format
 #include "../src/cb1_hdr10_extrema.c"
 #undef pl_find_fmt
+#include "../src/cb1_hdr10_ai.c"
+static void check_producer(pl_gpu gpu,const struct pl_frame *source,const float expected[35],bool benchmark)
+{
+    struct cb1_hdr10_ai *c=calloc(1,sizeof(*c));assert(c);
+    c->ingress=cb1_hdr10_ingress_create(gpu);c->extrema=cb1_hdr10_extrema_create(gpu);
+    c->statistics=cb1_hdr10_statistics_create(gpu);c->quantiles=cb1_hdr10_quantiles_create(gpu);
+    c->spatial=cb1_hdr10_spatial_create(gpu);c->temporal=cb1_hdr10_temporal_create();
+    assert(c->ingress && c->extrema && c->statistics && c->quantiles && c->spatial && c->temporal);
+    for(unsigned i=0;i<(benchmark?24:1);i++){
+        cb1_hdr10_ai_reset(c,1,1);
+        c->last_valid=true;c->last=(struct cb1_ai_identity){1,1,1};c->last_pts=1;
+        c->calibration_until=1;
+        pl_gpu_finish(gpu);uint64_t start=now_ns();
+        assert(cb1_hdr10_ai_submit(c,source,(struct cb1_ai_identity){1,2,1},1.04)==CB1_AI_PENDING);
+        pl_gpu_finish(gpu);assert(collect(c)==CB1_AI_READY);
+        uint64_t elapsed=elapsed_ns(start);
+        assert(!memcmp(c->descriptor.global,expected,35*sizeof(float)));
+        if(benchmark && i>=8)printf("ANALYSIS,%u,%.6f\n",i-8,elapsed/1e6);
+    }
+    if(!benchmark)assert(!c->rgb && "Post-calibration 1080p analysis must not materialize RGB");
+    cb1_hdr10_ai_destroy(&c);
+}
 static unsigned gpu_errors;
 static void strict_log(void *priv,enum pl_log_level level,const char *message)
 {(void)priv;if(level<=PL_LOG_ERR){++gpu_errors;fprintf(stderr,"%s\n",message);}}
-int main(void){
+int main(int argc,char **argv){
+    bool benchmark=argc>1 && !strcmp(argv[1],"bench");
     setenv("CB1_REFERENCE_TRACE","1",1);
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
     pl_log_update(g.log,pl_log_params(.log_cb=strict_log,.log_level=PL_LOG_ERR));
@@ -27,6 +50,7 @@ int main(void){
     assert(legacy && ext[0] && ext[1] && stat[0] && stat[1]);
     unsigned compared=0;double maximum_error=0;
     for(unsigned fixture=0;fixture<49;fixture++){
+        if(benchmark && fixture!=4)continue;
         int width=fixture<4?3840:fixture<8?1920:256;
         int height=fixture<4?(fixture%2?1600:2160):fixture<8?1080:144;
         if(fixture==12){width=3842;height=1602;}
@@ -120,6 +144,7 @@ int main(void){
             if(error!=0)fprintf(stderr,"fixture=%u field=%u old=%.9g new=%.9g\n",fixture,j,out[0][j],out[1][j]);
             assert(error==0);
         }
+        if(fixture>=4 && fixture<=6)check_producer(gpu,&frame,out[0],benchmark);
         ++compared;
         printf("fixture=%u %dx%d depth=%d packed=%d sub=%d crop=%d bounds_exact=true mean_exact=%s\n",
             fixture,width,height,depth,packed,sub,padding,out[0][2]==out[1][2]?"true":"false");fflush(stdout);

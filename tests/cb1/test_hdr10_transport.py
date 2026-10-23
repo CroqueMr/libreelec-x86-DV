@@ -37,6 +37,82 @@ class HDR10Transport(unittest.TestCase):
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_amd_deep_420_retry_after_real_422_bandwidth_rejection(self):
+        path=Path(os.environ['CB1_KERNEL_SOURCE'])/'drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c'
+        source=path.read_text().replace('struct dc_stream_state *\ncreate_validate_stream_for_sink',
+                                        'struct dc_stream_state *create_validate_stream_for_sink')
+        native=function(source,'create_validate_stream_for_sink')
+        code=r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+enum dc_status {DC_OK,DC_ERROR_UNEXPECTED,DC_FAIL_ENC_VALIDATE,DC_EXCEED_DONGLE_CAP,
+ DC_NO_DP_LINK_BANDWIDTH,DC_FAIL_BANDWIDTH_VALIDATE,DC_FAIL_ATTACH_SURFACES};
+enum {DRM_MODE_CONNECTOR_WRITEBACK, SIGNAL_TYPE_HDMI_TYPE_A, SIGNAL_TYPE_HDMI_FRL,
+ DISPLAY_DONGLE_DP_HDMI_CONVERTER,PIXEL_ENCODING_RGB,PIXEL_ENCODING_YCBCR422,PIXEL_ENCODING_YCBCR420};
+struct drm_display_info {bool mode420;};
+struct drm_connector {void *dev;int connector_type;struct drm_display_info display_info;};
+struct drm_connector_state {int max_requested_bpc;};
+struct dm_connector_state {struct drm_connector_state base;bool hdr10_deep_color,invalid;};
+struct drm_display_mode {int hdisplay,vdisplay,clock;};
+struct dc_stream_state {int signal;struct {int pixel_encoding,display_color_depth;}timing;};
+struct amdgpu_dm_connector {struct drm_connector base;struct {int connector_signal;
+ struct {int dongle_type;}dpcd_caps;}*dc_link;bool force_yuv422_output,force_yuv420_output;};
+struct amdgpu_device {struct {void *dc;}dm;};
+static struct amdgpu_device device;
+static struct amdgpu_device *drm_to_adev(void *unused){(void)unused;return &device;}
+#define to_amdgpu_dm_connector(p) ((struct amdgpu_dm_connector *)(p))
+#define drm_dbg_kms(...) ((void)0)
+#define drm_err(...) ((void)0)
+static __attribute__((unused)) bool drm_mode_is_420(const struct drm_display_info *i,const struct drm_display_mode *m)
+{(void)m;return i->mode420;}
+static __attribute__((unused)) int amdgpu_dm_hdr10_validate(const struct dm_connector_state *s){return s->invalid;}
+static unsigned calls;static bool shallow420,fail420;
+static struct dc_stream_state streams[32];
+static struct dc_stream_state *create_stream_for_sink(struct drm_connector *con,
+ const struct drm_display_mode *mode,const struct dm_connector_state *state,
+ const struct dc_stream_state *old,int requested){
+ (void)mode;(void)old;assert(calls<32);struct dc_stream_state *s=&streams[calls++];
+ struct amdgpu_dm_connector *a=to_amdgpu_dm_connector(con);
+ s->signal=SIGNAL_TYPE_HDMI_TYPE_A;
+ s->timing.pixel_encoding=a->force_yuv420_output?PIXEL_ENCODING_YCBCR420:
+   state->hdr10_deep_color && requested>=10?PIXEL_ENCODING_YCBCR422:PIXEL_ENCODING_RGB;
+ s->timing.display_color_depth=s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR420 && !shallow420?10:
+   s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR422?10:8;
+ return s;
+}
+static int dc_validate_stream(void *dc,struct dc_stream_state *s){(void)dc;(void)s;return DC_OK;}
+static int dm_dp_mst_is_port_support_mode(void *a,void *s){(void)a;(void)s;return DC_OK;}
+#define SIGNAL_TYPE_DISPLAY_PORT_MST 100
+static int dm_validate_stream_and_context(void *dc,struct dc_stream_state *s){
+ (void)dc;return s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR422 ||
+   (fail420 && s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR420)?DC_FAIL_BANDWIDTH_VALIDATE:DC_OK;
+}
+static void dc_stream_release(void *s){(void)s;}
+@@NATIVE@@
+int main(){
+ struct amdgpu_dm_connector a={.base={.connector_type=1,.display_info={true}}};
+ __typeof__(*a.dc_link) link={.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A};a.dc_link=&link;
+ struct dm_connector_state state={.base={16},.hdr10_deep_color=true};
+ struct drm_display_mode mode={3840,2160,594000};
+ for(int scenario=0;scenario<6;++scenario){
+  calls=0;shallow420=scenario==3;fail420=scenario==4;
+  a.base.display_info.mode420=scenario!=2;state.hdr10_deep_color=scenario!=1;
+  state.invalid=scenario==5;
+  struct dc_stream_state *s=create_validate_stream_for_sink(&a.base,&mode,&state,NULL);
+  assert(!a.force_yuv420_output && !a.force_yuv422_output);
+  if(scenario==0){assert(s && s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR420);
+   assert(s->timing.display_color_depth==10 && calls==2);}
+  if(scenario==1 || scenario==2 || scenario==5)
+   assert(s && s->timing.pixel_encoding==PIXEL_ENCODING_RGB);
+  if(scenario==3)assert(s && s->timing.display_color_depth==8);
+  if(scenario==4)assert(!s); // Failed validation remains a rejection.
+ }
+}
+'''
+        self.compile_run(code.replace('@@NATIVE@@',native))
+
     def test_amd_rgb_first_then_deep_transport_without_changing_timing(self):
         root = Path(os.environ['CB1_KERNEL_SOURCE'])/'drivers/gpu/drm/amd/display/amdgpu_dm'
         dm = (root/'amdgpu_dm.c').read_text()

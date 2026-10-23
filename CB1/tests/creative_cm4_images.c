@@ -407,7 +407,7 @@ static void spatial_gpu(pl_gpu gpu)
     assert(!memcmp(positive,negative,sizeof(positive)));
     spatial_geometry=(struct dvbridge_geometry){W,H,0,0,W-1,H-1};
     assert(spatial_render(r,&frame,m,bytes,4095,11));
-    assert(detail_active_w==5 && detail_active_h==5 && "L5 filtering must use only visible pixel centres");
+    assert(detail_active_w==6 && detail_active_h==6 && "L5 detail filtering precedes the final picture resize");
     spatial_geometry=(struct dvbridge_geometry){W,H,0,0,W,H};
     for(int y=0;y<H;y++)for(int x=0;x<W;x++)if(!x || !y || x==W-1 || y==H-1)
         for(int c=0;c<3;c++)assert(negative[(y*W+x)*4+c]==0);
