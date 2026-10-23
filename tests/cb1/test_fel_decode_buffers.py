@@ -112,7 +112,7 @@ enum class ESyncState {SYNC_STARTING,SYNC_INSYNC};
 struct VideoPicture {bool doviEnhancement=true;int iFlags=DVD_CODEC_CTRL_DROP_ANY;double pts=100,iDuration=10;};
 struct CLog {template<class... T>static void Log(T...) {}};
 struct Player {
- bool m_bAllowDrop=true;int m_speed=DVD_PLAYSPEED_NORMAL;ESyncState m_syncState=ESyncState::SYNC_INSYNC;
+ bool m_bAllowDrop=true,m_paused=false;int m_speed=DVD_PLAYSPEED_NORMAL;ESyncState m_syncState=ESyncState::SYNC_INSYNC;
  struct Stats {int gains=0;void AddOutputDropGain(double,int n){gains+=n;}}m_droppingStats;
  int OutputPicture(const VideoPicture* pPicture,double iPlayingClock){
  DECISION
@@ -125,6 +125,7 @@ int main(){
   assert(player.m_droppingStats.gains==(paired&&clock>=110));
  }
  Player player;VideoPicture picture;
+ player.m_paused=true;assert(!player.OutputPicture(&picture,200));player.m_paused=false;
  for(int speed:{0,-1000,2000}){player.m_speed=speed;assert(!player.OutputPicture(&picture,200));}
  player.m_speed=DVD_PLAYSPEED_NORMAL;player.m_bAllowDrop=false;assert(!player.OutputPicture(&picture,200));
  player.m_bAllowDrop=true;player.m_syncState=ESyncState::SYNC_STARTING;assert(!player.OutputPicture(&picture,200));
