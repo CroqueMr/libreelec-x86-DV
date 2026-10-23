@@ -18,7 +18,7 @@ int main(int argc,char **argv)
     struct reference_gpu g=reference_gpu_create();
     struct dvbridge_retirement_owner *o=dvbridge_retirement_owner_create(g.gl->gpu);assert(o);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(o);assert(r);
-    if(!dv_allocate(r)){dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&o));free(image);reference_gpu_destroy(&g);return 77;}
+    if(!dv_allocate(r,259200)){dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&o));free(image);reference_gpu_destroy(&g);return 77;}
     pl_tex_clear(r->gpu,r->rgb,(float[4]){constant,constant,constant,1});
     if(!uniform){
         glBindTexture(GL_TEXTURE_2D,pl_opengl_unwrap(r->gpu,r->rgb,NULL,NULL,NULL));

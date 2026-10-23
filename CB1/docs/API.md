@@ -30,7 +30,7 @@ target or unqualified colour-converted route is unsupported, not Standard.
 The raw descriptor is copied into dispatch variables before this call returns.
 See [Master Reference](MASTER-REFERENCE.md) for admission and output contracts.
 
-Direct-DV Adaptive uses policy API 6. Both preparation entries may
+Direct-DV Adaptive uses policy API 7. Both preparation entries may
 return Pending. Poll before resolving; commit only the matching presented
 identity and resolve serial. Generation 3 denotes reconstructed Adaptive HDR Mapping output
 with measured LMS/PQ statistics. Authored-Dolby Vision Adaptive HDR Mapping updates its authored
@@ -39,6 +39,10 @@ creative trims remain authored. HDR10 AI Adaptive HDR Mapping keeps absolute ana
 Generation 2 retains source metadata;
 generation 1 remains the legacy AI analysis contract. Algorithm/model names in
 snapshots describe the committed producer, not physical display measurements.
+
+READY can retain a source-sized intermediate until final scale/pack. RGB consumers
+call `dvbridge_render_dv_policy_rgb` for a cached output-sized PQ image. Repeated
+access preserves caller composition; metadata and presentation identity are unchanged.
 
 `dvbridge_render_dv_policy_wait` accepts a bounded timeout in nanoseconds for
 authored Adaptive pixel analysis. `dvbridge_render_dv_policy_poll` remains
@@ -49,13 +53,14 @@ source lease.
 
 `dvbridge_prepare_source_output` prepares metadata for pixels retained in the
 source opponent domain. It preserves exactly representable Q13/Q14 colour
-matrices and the source diagonal. It requires full-raster 3840x2160 1:1 geometry,
-PQ, a 12-bit full-range representation and canonical black offsets. Rejection
+matrices and the source diagonal. It accepts qualified source-sized and placed
+pictures fitted into a 3840x2160 carrier, PQ, a 12-bit full-range representation
+and canonical black offsets. Rejection
 does not advance presentation state.
 
 The optimized packed renderer uses this path for compatible single-layer and
-MEL sources. Active FEL reconstruction retains its existing route. Incompatible
-geometry, source representation or GUI composition uses canonical RGB output.
+MEL sources. Active FEL reconstruction retains its existing route. Unsupported
+source representations or GUI composition use canonical RGB output.
 Admission is automatic; no separate player setting is required. HDR10
 conversion and AI output retain their existing routing.
 

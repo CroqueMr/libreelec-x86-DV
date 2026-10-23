@@ -10853,10 +10853,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
    if (m_synctype == SYNC_DISCON)
    {
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2056 @@
+@@ -0,0 +1,2055 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11894,8 +11893,7 @@ new file mode 100644
 +    }
 +  }
 +  if (!m_hdr10 && allowPacked && (m_directUsable || m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE) &&
-+      m_scanout && (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ||
-+      (!geometry.x && !geometry.y && geometry.width == 3840 && geometry.height == 2160)))
++      m_scanout)
 +  {
 +    if(m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE)
 +    {
@@ -12319,7 +12317,7 @@ new file mode 100644
 +{
 +  const auto* dv = m_advanced && m_dvPolicyActive ?
 +      dvbridge_render_dv_policy_output(m_renderer) : nullptr;
-+  const auto texture = m_prepared ? (dv ? dv->intermediate : dvbridge_render_texture(m_renderer)) : nullptr;
++  const auto texture = m_prepared ? (dv ? dvbridge_render_dv_policy_rgb(m_renderer) : dvbridge_render_texture(m_renderer)) : nullptr;
 +  return texture ? pl_opengl_unwrap(m_gl->gpu, texture, nullptr, nullptr, nullptr) : 0;
 +}
 +
@@ -12913,6 +12911,7 @@ new file mode 100644
 +#endif
 +  return true;
 +}
+
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 new file mode 100644
 --- /dev/null
@@ -14350,7 +14349,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  CWinSystemGbmGLESContext::CWinSystemGbmGLESContext()
    : CWinSystemGbmEGLContext(EGL_PLATFORM_GBM_MESA, "EGL_MESA_platform_gbm")
-@@ -52,6 +121,19 @@
+@@ -52,6 +126,19 @@
  void CWinSystemGbmGLESContext::Register()
  {
    CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem, "gbm");
@@ -14370,7 +14369,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  std::unique_ptr<CWinSystemBase> CWinSystemGbmGLESContext::CreateWinSystem()
-@@ -111,15 +193,55 @@
+@@ -111,15 +198,55 @@
    return true;
  }
  
@@ -14427,7 +14426,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +250,312 @@
+@@ -128,16 +255,312 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -14741,7 +14740,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    if (rendered || videoLayer)
    {
-@@ -175,23 +589,51 @@
+@@ -175,23 +598,51 @@
  #endif
      }
  
@@ -14803,7 +14802,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
-@@ -203,7 +645,11 @@
+@@ -203,7 +654,11 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -14816,7 +14815,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -225,6 +671,12 @@
+@@ -225,6 +680,12 @@
    }
    else
    {
@@ -14829,7 +14828,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -290,8 +742,29 @@
+@@ -290,8 +751,29 @@
    if (!guiWillRender)
      return true;
  
@@ -14859,7 +14858,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +764,11 @@
+@@ -300,6 +782,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -14871,7 +14870,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    return true;
  }
-@@ -308,6 +777,11 @@
+@@ -308,6 +795,11 @@
  {
    if (m_guiWillRender)
      m_guiFbo.EndRender();
@@ -14883,7 +14882,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +814,32 @@
+@@ -340,17 +832,32 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -14919,7 +14918,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +849,27 @@
+@@ -360,6 +867,27 @@
    if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
        m_DRM->GetGuiPlane() != nullptr)
      return;
@@ -14947,7 +14946,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +890,21 @@
+@@ -380,11 +908,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
@@ -14971,7 +14970,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +917,1565 @@
+@@ -397,13 +935,1565 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16540,7 +16539,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2489,16 @@
+@@ -417,5 +2507,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -16580,7 +16579,6 @@ diff --git a/xbmc/guilib/GUIFadeLabelControl.cpp b/xbmc/guilib/GUIFadeLabelContr
  }
  
  std::string CGUIFadeLabelControl::GetDescription() const
-
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h

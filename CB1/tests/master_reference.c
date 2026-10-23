@@ -57,8 +57,8 @@ static void raw_contract(void)
 {
 #ifdef CB1_MASTER_REFERENCE_API
     assert(CB1_DV_DV_MASTER_REFERENCE==9 && DVBRIDGE_MODE_MASTER_REFERENCE==5);
-    assert(!strcmp(cb1_circuit_version(CB1_DV_DV_REFERENCE),"CB1-DVDVR.0.3"));
-    assert(!strcmp(cb1_circuit_version(CB1_DV_DV_MASTER_REFERENCE),"CB1-DVDVMR.0.4"));
+    assert(!strcmp(cb1_circuit_version(CB1_DV_DV_REFERENCE),"CB1-DVDVR.0.5"));
+    assert(!strcmp(cb1_circuit_version(CB1_DV_DV_MASTER_REFERENCE),"CB1-DVDVMR.0.5"));
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_MASTER_REFERENCE};
     assert(dvbridge_policy_validate(&policy)==DVBRIDGE_POLICY_VALID);
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);

@@ -15,7 +15,8 @@ static unsigned __int128 magnitude(int64_t value)
 bool cb1_master_reference_transport(const void *metadata,size_t bytes)
 {
     return metadata && !((uintptr_t)metadata%_Alignof(AVDOVIMetadata)) &&
-        dvbridge_metadata_bounds(metadata,bytes) && dvbridge_dv_source_transport(metadata);
+        dvbridge_metadata_bounds(metadata,bytes) &&
+        (dvbridge_dv_source_transport(metadata) || dvbridge_dv_profile5_transport(metadata));
 }
 
 enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *out,
@@ -31,9 +32,11 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
     const AVDOVIDataMapping *map=av_dovi_get_mapping(m);
     const AVDOVIColorMetadata *color=av_dovi_get_color(m);
     const bool residual=!h->disable_residual_flag && !dvbridge_dv_is_mel(m);
+    const bool profile5=dvbridge_dv_profile5(m);
     if((h->bl_bit_depth!=8 && h->bl_bit_depth!=10) ||
        (h->vdr_bit_depth!=10 && h->vdr_bit_depth!=12) ||
-       h->coef_log2_denom>23 || color->signal_color_space ||
+       h->coef_log2_denom>23 ||
+       (profile5 ? !dvbridge_dv_profile5_transport(m) : color->signal_color_space!=0) ||
        color->signal_eotf!=65535 || color->signal_eotf_param0 ||
        color->signal_eotf_param1 || color->signal_eotf_param2 ||
        map->mapping_color_space || map->mapping_chroma_format_idc ||

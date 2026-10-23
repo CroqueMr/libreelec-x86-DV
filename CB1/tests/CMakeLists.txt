@@ -5,7 +5,7 @@ add_test(NAME trim_contract COMMAND trim_contract)
 
 foreach(name frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
              placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue dmabuf_layout metadata_bounds
-             policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 dvbridge_cache_key shader_cache dmabuf_identity)
+             policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 dvbridge_cache_key shader_cache dmabuf_identity profile5_direct)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   if(name STREQUAL "gles_pack" OR name STREQUAL "render_lifecycle")
@@ -19,6 +19,36 @@ add_executable(fel_filter_images fel_filter_images.c)
 add_executable(native_fidelity native_fidelity.c)
 target_link_libraries(native_fidelity PRIVATE dvbridge_core)
 add_executable(master_reference master_reference.c)
+add_executable(profile5_images profile5_images.c)
+add_executable(profile5_standard profile5_standard.c)
+target_link_libraries(profile5_standard PRIVATE dvbridge_core)
+add_test(NAME profile5_standard COMMAND profile5_standard)
+target_link_libraries(profile5_images PRIVATE dvbridge_core)
+add_test(NAME profile5_images COMMAND profile5_images)
+add_executable(resolution_contract resolution_contract.c)
+target_link_libraries(resolution_contract PRIVATE dvbridge_core)
+foreach(mode standard hdr10 adaptive ai)
+  add_test(NAME resolution_${mode} COMMAND resolution_contract --case ${mode})
+  add_test(NAME resolution_${mode}_cropped COMMAND "${CMAKE_COMMAND}" -E env
+    CB1_TEST_CROPPED=1 "$<TARGET_FILE:resolution_contract>" --case ${mode})
+  add_test(NAME resolution_${mode}_noquad COMMAND "${CMAKE_COMMAND}" -E env
+    CB1_TEST_CROPPED=1 CB1_TEST_NO_QUAD=1 "$<TARGET_FILE:resolution_contract>" --case ${mode})
+  set_tests_properties(resolution_${mode} resolution_${mode}_cropped resolution_${mode}_noquad
+    PROPERTIES SKIP_RETURN_CODE 77)
+endforeach()
+foreach(mode adaptive ai)
+  add_test(NAME resolution_${mode}_ceiling COMMAND "${CMAKE_COMMAND}" -E env
+    CB1_TEST_CEILING=1 "$<TARGET_FILE:resolution_contract>" --case ${mode})
+endforeach()
+add_test(NAME resolution_adaptive_flipped COMMAND "${CMAKE_COMMAND}" -E env
+  CB1_TEST_CROPPED=1 CB1_TEST_FLIP=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
+add_test(NAME resolution_adaptive_recovery_retirement COMMAND "${CMAKE_COMMAND}" -E env
+  CB1_TEST_RECOVERY=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
+add_test(NAME resolution_adaptive_fast COMMAND "${CMAKE_COMMAND}" -E env
+  CB1_TEST_FAST=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
+add_test(NAME resolution_adaptive_no_clone COMMAND "${CMAKE_COMMAND}" -E env
+  CB1_TEST_CLONE=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
+set_tests_properties(resolution_adaptive_no_clone PROPERTIES SKIP_RETURN_CODE 77)
 target_link_libraries(master_reference PRIVATE dvbridge_core)
 target_link_options(master_reference PRIVATE -Wl,--wrap=pl_render_image_cb1_active_rows)
 add_test(NAME master_reference_active_rows COMMAND master_reference --case rows --implementation master)
@@ -49,6 +79,8 @@ foreach(name adaptive_variants enhanced_metadata enhanced_dv_lifecycle enhanced_
 endforeach()
 add_executable(enhanced_dv_records enhanced_dv_records.c)
 add_test(NAME scaled_adaptive_domain COMMAND scaled_adaptive domain)
+add_test(NAME scaled_adaptive_fast COMMAND "${CMAKE_COMMAND}" -E env
+  CB1_TEST_FAST=1 "$<TARGET_FILE:scaled_adaptive>")
 add_test(NAME scaled_adaptive_recovery_area COMMAND scaled_adaptive area)
 target_link_libraries(enhanced_dv_records PRIVATE dvbridge_core)
 foreach(witness 0 1 2 3)
@@ -84,6 +116,7 @@ target_link_libraries(reference_sampler PRIVATE ${CMAKE_DL_LIBS})
 add_test(NAME reference_sampler COMMAND reference_sampler)
 target_link_options(fel_queue PRIVATE -Wl,--wrap=avcodec_open2 -Wl,--wrap=avcodec_send_packet
                                      -Wl,--wrap=avcodec_receive_frame -Wl,--wrap=avcodec_flush_buffers)
+set_tests_properties(fel_queue PROPERTIES SKIP_RETURN_CODE 77)
 foreach(name task3_basic basic_policy basic_render frozen_reference)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
@@ -193,11 +226,14 @@ add_test(NAME extraction_matches_cumulative_tree COMMAND "${Python3_EXECUTABLE}"
   --cumulative "${CB1_CUMULATIVE_SOURCE}")
 add_test(NAME frozen_reference COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/freeze-reference.py"
   --binary "$<TARGET_FILE:frozen_reference>" --source-commit "${CB1_SOURCE_COMMIT}"
-  --probe-contract native-basic-v1 --reference "${CB1_REFERENCE}"
+  --probe-contract native-basic-v1 --reference "${CB1_REFERENCE}" --native-only
   --evidence-dir "${CMAKE_CURRENT_BINARY_DIR}/reference-evidence" --runs 3)
 get_property(engine_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${engine_tests} PROPERTIES ENVIRONMENT
   "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_summary=1:print_stacktrace=1;ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=1:print_summary=1")
+find_library(CB1_REFERENCE_LIBRARY NAMES placebo REQUIRED)
+set_property(TEST reference_scaled_output APPEND PROPERTY ENVIRONMENT
+  "CB1_REFERENCE_LIBRARY=${CB1_REFERENCE_LIBRARY}")
 if(CB1_ENABLE_HDR10_AI)
   set(CB1_L1L3_TEST_BUNDLE "" CACHE PATH "Private frozen test bundle")
   if(NOT EXISTS "${CB1_L1L3_BUNDLE_CONTRACT}/cb1_native_fixtures.h" OR
