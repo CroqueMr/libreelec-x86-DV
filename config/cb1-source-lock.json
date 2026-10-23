@@ -43,7 +43,7 @@
     "projects/Generic/patches/linux/linux-9903-diagnostics.patch": "5c21813bdc2db60a0d7117487b220900825b37da605a8c8ac9e8f39b13d4147b",
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "da09fb390eeebd912e889f44bab70ee27f1f882bd75c68aac598afcb2769139d",
     "projects/Generic/patches/linux/linux-9910-common-dv-policy.patch": "ac514dfdeb54c6704936a320cbf08ca1397a2ea87e321eec047821119d95485c",
-    "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "546188b8dc5b24e1d78034879984be0bfa391666579c2763f05656beb0a110ca",
+    "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "f00d3d6190bcb1fc2cbda425661cb4b3babb850c59ce23eee702a36de7c68dc5",
     "projects/Generic/patches/linux/linux-9930-amd-3d.patch": "47fc2be4e35fd51e5ec8769f3b57145e4f6df2eb0e3e6354afe7d31192ec7663",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "b9169706f78483e53b6a802989d5cc6ac290ef2732d6466c7689da71877a086a",
     "packages/graphics/nvidia/package.mk": "067a4fc6aa24f8f4faa0f9a5369a854b925eb65bfde09464bbe70f114fac3fdf",
