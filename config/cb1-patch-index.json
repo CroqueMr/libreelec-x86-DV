@@ -947,5 +947,12 @@
       "src/include/libplacebo/utils/libav_internal.h": "Preserve the per-channel residual maxima from decoded metadata.",
       "src/shaders/colorspace.c": "Clamp native input to source pivots and residuals to declared maxima."
     }
+  },
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": {
+    "summary": "Identify Matroska Profile 7 BL/EL from real RPU carriage",
+    "component": "ffmpeg",
+    "files": {
+      "libavformat/matroskadec.c": "Require a unique HEVC pair, Profile 7 signalling and EL/RPU access units without changing payloads."
+    }
   }
 }

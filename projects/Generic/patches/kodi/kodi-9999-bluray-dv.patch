@@ -305,7 +305,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h b/xbmc/cores/Vi
  class CDVDInputStream;
  class CURL;
  struct ChapterFFmpeg;
-@@ -149,6 +152,13 @@
+@@ -149,6 +152,15 @@
  
    StreamHdrType DetermineHdrType(AVStream* pStream);
  
@@ -314,6 +314,8 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h b/xbmc/cores/Vi
 +  int ReadBlurayDovi(AVPacket* packet);
 +  std::unique_ptr<CBlurayDovi> m_blurayDovi;
 +  int m_blurayBase{-1}, m_blurayEnhancement{-1};
++  unsigned m_doviGroups{0};
++  bool m_blurayAwaitBase{false};
 +#endif
 +
    CCriticalSection m_critSection;
