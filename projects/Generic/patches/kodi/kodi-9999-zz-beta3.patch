@@ -8435,11 +8435,10 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -656,6 +757,79 @@
- }
+@@ -657,6 +758,79 @@
  
  CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPicture)
-+{
+ {
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvFel)
 +  {
@@ -8512,10 +8511,31 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +}
 +
 +CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(VideoPicture* pVideoPicture)
- {
++{
    if (!m_startedInput)
    {
-@@ -793,21 +967,8 @@
+     return VC_BUFFER;
+@@ -671,6 +845,9 @@
+   {
+     int flags = m_codecControlFlags;
+     flags &= ~DVD_CODEC_CTRL_DRAIN;
++#ifdef HAVE_DVBRIDGE
++    if (m_dvFel) flags &= ~DVD_CODEC_CTRL_DROP_ANY;
++#endif
+     m_pHardware->SetCodecControl(flags);
+     CDVDVideoCodec::VCReturn ret = m_pHardware->Decode(m_pCodecContext, nullptr);
+     if (ret == VC_PICTURE)
+@@ -739,6 +916,9 @@
+     {
+       int flags = m_codecControlFlags;
+       flags |= DVD_CODEC_CTRL_DRAIN;
++#ifdef HAVE_DVBRIDGE
++      if (m_dvFel) flags &= ~DVD_CODEC_CTRL_DROP_ANY;
++#endif
+       m_pHardware->SetCodecControl(flags);
+       int ret = m_pHardware->Decode(m_pCodecContext, nullptr);
+       if (ret == VC_PICTURE)
+@@ -793,21 +973,8 @@
    }
  
    // here we got a frame
@@ -8539,7 +8559,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +996,9 @@
+@@ -835,6 +1002,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -8549,7 +8569,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1060,13 @@
+@@ -896,8 +1066,13 @@
          need_reopen = true;
      }
  
@@ -8564,7 +8584,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1095,22 @@
+@@ -926,6 +1101,22 @@
    return VC_NONE;
  }
  
@@ -8587,7 +8607,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1139,14 @@
+@@ -954,6 +1145,14 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -8602,7 +8622,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1162,7 @@
+@@ -969,6 +1168,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -8610,7 +8630,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1186,48 @@
+@@ -992,8 +1192,48 @@
    return VC_REOPEN;
  }
  
@@ -8659,7 +8679,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1279,10 @@
+@@ -1045,6 +1285,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -8670,7 +8690,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1336,9 @@
+@@ -1098,6 +1342,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
@@ -8680,7 +8700,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1375,23 @@
+@@ -1134,7 +1381,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
@@ -8705,7 +8725,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,35 +1402,89 @@
+@@ -1145,35 +1408,89 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
@@ -8810,7 +8830,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
            }
          }
        }
-@@ -1193,6 +1504,9 @@
+@@ -1193,6 +1510,9 @@
      }
    }
  
@@ -8820,7 +8840,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1558,7 @@
+@@ -1244,7 +1564,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -8829,7 +8849,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1616,20 @@
+@@ -1302,7 +1622,20 @@
      return result;
    }
  
@@ -8851,7 +8871,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1644,22 @@
+@@ -1317,7 +1650,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -8875,7 +8895,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1695,8 @@
+@@ -1353,6 +1701,8 @@
      return result;
    }
  
@@ -8884,7 +8904,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1713,8 @@
+@@ -1369,6 +1719,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -8893,7 +8913,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1722,7 @@
+@@ -1376,6 +1728,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -8901,7 +8921,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1733,14 @@
+@@ -1386,7 +1739,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -8917,7 +8937,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1765,18 @@
+@@ -1411,6 +1771,18 @@
      return VC_ERROR;
    }
  
@@ -8936,7 +8956,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1421,6 +1787,31 @@
+@@ -1421,6 +1793,31 @@
  {
    return m_iLastKeyframe;
  }
@@ -8968,7 +8988,19 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-@@ -1497,4 +1888,3 @@
+@@ -1455,6 +1852,11 @@
+ void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)
+ {
+   m_codecControlFlags = flags;
++#ifdef HAVE_DVBRIDGE
++  // Keep the native drop request on the picture, not either layer's decoder.
++  if (m_dvFel)
++    flags &= ~DVD_CODEC_CTRL_DROP_ANY;
++#endif
+ 
+   if (m_pCodecContext)
+   {
+@@ -1497,4 +1899,3 @@
  {
    return m_pHardware;
  }
@@ -16590,3 +16622,34 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
      bool FELHardwareUpscaling(uint64_t stream);
      pl_opengl GL() const;
      pl_log Log() const;
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -33,6 +33,7 @@
+ #include "windowing/WinSystem.h"
+ 
+ #include <iomanip>
++#include <cmath>
+ #include <iterator>
+ #include <map>
+ #include <memory>
+@@ -1083,7 +1084,18 @@
+     }
+   }
+ 
+-  if ((pPicture->iFlags & DVP_FLAG_DROPPED))
++#ifdef HAVE_DVBRIDGE
++  // Pair first; a native catch-up request must not discard a future picture.
++  const bool latePairedPicture = pPicture->doviEnhancement &&
++      (pPicture->iFlags & DVD_CODEC_CTRL_DROP_ANY) && m_bAllowDrop &&
++      m_speed == DVD_PLAYSPEED_NORMAL && m_syncState == ESyncState::SYNC_INSYNC &&
++      pPicture->pts != DVD_NOPTS_VALUE && std::isfinite(pPicture->pts) &&
++      std::isfinite(pPicture->iDuration) && pPicture->iDuration > 0 &&
++      std::isfinite(iPlayingClock) && pPicture->pts + pPicture->iDuration <= iPlayingClock;
++#else
++  constexpr bool latePairedPicture = false;
++#endif
++  if ((pPicture->iFlags & DVP_FLAG_DROPPED) || latePairedPicture)
+   {
+     m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
+     CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);

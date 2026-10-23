@@ -15,6 +15,135 @@ from test_native_video_source import TREE, body
 
 
 class FELDecodeBufferTests(unittest.TestCase):
+    def test_paired_layers_skip_late_output_not_layer_decoding(self):
+        source = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
+        function = body(source, 'void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)')
+        drop = 'if (m_codecControlFlags & DVD_CODEC_CTRL_DROP)'+body(source,
+            'if (m_codecControlFlags & DVD_CODEC_CTRL_DROP)')
+        forwards=re.findall(r'int flags = m_codecControlFlags;.*?m_pHardware->SetCodecControl\(flags\);',
+                            body(source,'CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture('),re.S)
+        self.assertEqual(len(forwards),2)
+        program = r'''
+#include <cassert>
+#define HAVE_DVBRIDGE 1
+constexpr int DVD_CODEC_CTRL_DROP_ANY=1,DVD_CODEC_CTRL_DROP=2,DVD_CODEC_CTRL_HURRY=4;
+constexpr int DVD_CODEC_CTRL_DRAIN=128;
+constexpr int AVDISCARD_DEFAULT=0,AVDISCARD_NONREF=8;
+constexpr int DVP_FLAG_DROPPED=32;
+struct VideoPicture {int iFlags=0;};
+struct AVCodecContext {int skip_frame=0,skip_idct=0,skip_loop_filter=0;};
+struct Hardware {
+ bool deint=false;int flags=-1;
+ bool CanSkipDeint(){return deint;}
+ void SetCodecControl(int value){flags=value;}
+};
+struct CDVDVideoCodecFFmpeg {
+ AVCodecContext context;AVCodecContext* m_pCodecContext=&context;
+ Hardware hardware;Hardware* m_pHardware=&hardware;
+ bool m_dvFel=false,m_requestSkipDeint=false;int m_codecControlFlags=-1;
+ void SetCodecControl(int flags) FUNCTION
+ void Forward(){FORWARD}
+ void Drain(){DRAIN}
+ bool Dropped()const {VideoPicture picture;auto* pVideoPicture=&picture;DROP_BLOCK;return picture.iFlags&DVP_FLAG_DROPPED;}
+};
+int main(){
+ for(bool paired:{false,true})for(bool deint:{false,true}){
+  CDVDVideoCodecFFmpeg codec;codec.m_dvFel=paired;codec.hardware.deint=deint;
+  codec.SetCodecControl(DVD_CODEC_CTRL_DROP_ANY|DVD_CODEC_CTRL_HURRY);
+  const int expected=paired || deint?AVDISCARD_DEFAULT:AVDISCARD_NONREF;
+  assert(codec.context.skip_frame==expected && codec.context.skip_idct==expected &&
+         codec.context.skip_loop_filter==expected);
+  assert(codec.m_codecControlFlags==(DVD_CODEC_CTRL_DROP_ANY|DVD_CODEC_CTRL_HURRY));
+  assert(codec.hardware.flags==(paired?DVD_CODEC_CTRL_HURRY:codec.m_codecControlFlags));
+  codec.Forward();
+  assert(codec.hardware.flags==(paired?DVD_CODEC_CTRL_HURRY:codec.m_codecControlFlags));
+  codec.Drain();
+  assert(codec.hardware.flags==((paired?DVD_CODEC_CTRL_HURRY:codec.m_codecControlFlags)|DVD_CODEC_CTRL_DRAIN));
+  assert(codec.m_requestSkipDeint==(!paired && deint));
+  assert(!codec.Dropped());
+  codec.SetCodecControl(DVD_CODEC_CTRL_DROP_ANY);
+  assert(codec.m_codecControlFlags==DVD_CODEC_CTRL_DROP_ANY);
+  assert(codec.hardware.flags==(paired?0:DVD_CODEC_CTRL_DROP_ANY));
+  assert(!codec.Dropped());
+  codec.SetCodecControl(DVD_CODEC_CTRL_DROP|DVD_CODEC_CTRL_HURRY);
+  assert(codec.hardware.flags==(DVD_CODEC_CTRL_DROP|DVD_CODEC_CTRL_HURRY));
+  assert(codec.context.skip_frame==AVDISCARD_DEFAULT);
+  assert(codec.Dropped());
+  codec.context.skip_frame=codec.context.skip_idct=codec.context.skip_loop_filter=AVDISCARD_NONREF;
+  codec.m_dvFel=true;
+  codec.SetCodecControl(DVD_CODEC_CTRL_DROP_ANY|DVD_CODEC_CTRL_HURRY|8|16);
+  assert(codec.m_codecControlFlags==(DVD_CODEC_CTRL_DROP_ANY|DVD_CODEC_CTRL_HURRY|8|16));
+  assert(codec.hardware.flags==(DVD_CODEC_CTRL_HURRY|8|16));
+  assert(codec.context.skip_frame==AVDISCARD_DEFAULT && codec.context.skip_idct==AVDISCARD_DEFAULT &&
+         codec.context.skip_loop_filter==AVDISCARD_DEFAULT);
+  assert(!codec.Dropped());
+  codec.SetCodecControl(0);
+  assert(codec.m_codecControlFlags==0 && codec.hardware.flags==0 && !codec.Dropped());
+ }
+ CDVDVideoCodecFFmpeg software;software.m_pHardware=nullptr;software.m_dvFel=true;
+ software.SetCodecControl(DVD_CODEC_CTRL_DROP_ANY);
+ assert(software.context.skip_frame==AVDISCARD_DEFAULT);
+}
+'''.replace('FUNCTION', function).replace('DROP_BLOCK',drop).replace('FORWARD',forwards[0]).replace('DRAIN}',forwards[1]+'}')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'test.cpp').write_text('#include <initializer_list>\n'+program)
+            built = subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],
+                                   capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            ran = subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stderr)
+
+    def test_late_pair_drop_uses_current_picture_deadline(self):
+        source = (TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
+        function = body(source, 'CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(')
+        start = function.rfind('#ifdef HAVE_DVBRIDGE', 0, function.index('  const bool latePairedPicture'))
+        end = function.index('  auto timeToDisplay', start)
+        program = r'''
+#include <cassert>
+#include <cmath>
+#include <limits>
+#include <initializer_list>
+#define HAVE_DVBRIDGE 1
+constexpr int DVD_NOPTS_VALUE=-1000,DVD_PLAYSPEED_NORMAL=1000,DVP_FLAG_DROPPED=32;
+constexpr int DVD_CODEC_CTRL_DROP_ANY=64;
+constexpr int LOGDEBUG=0,OUTPUT_DROPPED=1;
+enum class ESyncState {SYNC_STARTING,SYNC_INSYNC};
+struct VideoPicture {bool doviEnhancement=true;int iFlags=DVD_CODEC_CTRL_DROP_ANY;double pts=100,iDuration=10;};
+struct CLog {template<class... T>static void Log(T...) {}};
+struct Player {
+ bool m_bAllowDrop=true;int m_speed=DVD_PLAYSPEED_NORMAL;ESyncState m_syncState=ESyncState::SYNC_INSYNC;
+ struct Stats {int gains=0;void AddOutputDropGain(double,int n){gains+=n;}}m_droppingStats;
+ int OutputPicture(const VideoPicture* pPicture,double iPlayingClock){
+ DECISION
+ return 0;}
+};
+int main(){
+ for(bool paired:{false,true})for(double clock:{99.,100.,109.,110.,111.}){
+  Player player;VideoPicture picture;picture.doviEnhancement=paired;
+  assert(player.OutputPicture(&picture,clock)==(paired&&clock>=110));
+  assert(player.m_droppingStats.gains==(paired&&clock>=110));
+ }
+ Player player;VideoPicture picture;
+ for(int speed:{0,-1000,2000}){player.m_speed=speed;assert(!player.OutputPicture(&picture,200));}
+ player.m_speed=DVD_PLAYSPEED_NORMAL;player.m_bAllowDrop=false;assert(!player.OutputPicture(&picture,200));
+ player.m_bAllowDrop=true;player.m_syncState=ESyncState::SYNC_STARTING;assert(!player.OutputPicture(&picture,200));
+ player.m_syncState=ESyncState::SYNC_INSYNC;picture.pts=DVD_NOPTS_VALUE;assert(!player.OutputPicture(&picture,200));
+ picture.pts=100;picture.iDuration=0;assert(!player.OutputPicture(&picture,200));
+ picture.iDuration=10;picture.iFlags=0;assert(!player.OutputPicture(&picture,200));
+ picture.iFlags=DVD_CODEC_CTRL_DROP_ANY;picture.iDuration=std::numeric_limits<double>::infinity();
+ assert(!player.OutputPicture(&picture,200));picture.iDuration=10;
+ assert(!player.OutputPicture(&picture,std::numeric_limits<double>::quiet_NaN()));
+ picture.iFlags=DVP_FLAG_DROPPED;assert(player.OutputPicture(&picture,50)==OUTPUT_DROPPED);
+}
+'''.replace('DECISION', function[start:end])
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stderr)
+
     def test_delayed_el_does_not_starve_native_render_pool(self):
         base = TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         source = (base/'VAAPI.cpp').read_text()
