@@ -8235,7 +8235,7 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +          <control type="toggle" />
 +        </setting>
 +        <setting id="dvbridge.fastchroma" type="integer" label="40904" help="40905">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>2</default>
++          <requirement>HAVE_DVBRIDGE</requirement><visible>false</visible><level>2</level><default>2</default>
 +          <constraints><options><option label="106">0</option><option label="107">1</option><option label="16316">2</option></options></constraints>
 +          <control type="list" format="string" />
 +        </setting>
@@ -9180,7 +9180,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,194 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -9245,10 +9245,9 @@ new file mode 100644
 +  }
 +
 +#ifdef HAVE_DVBRIDGE
-+  int EffectiveFastRenderingMode(dvbridge_mode mode, bool hdr10AI = false) const
++  int EffectiveFastRenderingMode(dvbridge_mode mode, bool /*hdr10AI*/ = false) const
 +  {
-+    return hdr10AI ? fastRenderingMode : mode == DVBRIDGE_MODE_STANDARD ? 1 :
-+        mode == DVBRIDGE_MODE_MASTER_REFERENCE ? 0 : fastRenderingMode;
++    return mode == DVBRIDGE_MODE_DISABLED || mode == DVBRIDGE_MODE_MASTER_REFERENCE ? 0 : 1;
 +  }
 +  bool EffectiveFastChroma(dvbridge_mode mode, bool hdr10AI = false) const
 +  {
@@ -11492,7 +11491,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  m_effectiveMode = policy.mode;
 +  m_requested = preferences;
 +  dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
-+  dvbridge_renderer_set_fast_chroma(m_renderer,preferences.fastChroma);
++  dvbridge_renderer_set_fast_chroma(m_renderer,preferences.EffectiveFastChroma(policy.mode, true));
 +  dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
 +  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
 +  m_pendingOverlayRevision = m_nativeOverlayRevision;

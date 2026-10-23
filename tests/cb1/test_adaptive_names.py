@@ -90,7 +90,7 @@ int main() {
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
         self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1])
 
-    def test_authored_fast_uses_effective_policy_without_affecting_ai_or_hdr10(self):
+    def test_active_pipelines_require_fast_except_exact_master(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         from test_native_video_source import body
         header = (tree / 'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
@@ -147,12 +147,13 @@ int main(){using namespace DVBRIDGE;
    assert(int(p.output)==(saved==3?5:saved));
    assert(p.fastRenderingMode==global && p.fastChroma==(global==1 || (global==2 && automatic)));
    for(auto mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_MASTER_REFERENCE,DVBRIDGE_MODE_HDR10_BASIC,DVBRIDGE_MODE_HDR10_EXPERT,DVBRIDGE_MODE_ENHANCED_DV}){
-    const bool expected=mode==DVBRIDGE_MODE_STANDARD ? true : mode==DVBRIDGE_MODE_MASTER_REFERENCE ? false : p.fastChroma;
+    const bool expected=mode!=DVBRIDGE_MODE_MASTER_REFERENCE;
     assert(prepare(p,mode)==expected);assert(frame(p,mode)==expected);
-    assert(ai(p,mode)==p.fastChroma);
-    telemetry(p,mode,false,expected,mode==DVBRIDGE_MODE_STANDARD?1:mode==DVBRIDGE_MODE_MASTER_REFERENCE?0:global);
-    telemetry(p,mode,true,p.fastChroma,global);
+    assert(ai(p,mode)==expected);
+    telemetry(p,mode,false,expected,expected?1:0);
+    telemetry(p,mode,true,expected,expected?1:0);
    }
+   assert(!p.EffectiveFastChroma(DVBRIDGE_MODE_DISABLED));
   }
  }
 }
