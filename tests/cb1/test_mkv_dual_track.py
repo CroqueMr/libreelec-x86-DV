@@ -7,7 +7,7 @@ import unittest
 from test_native_video_source import TREE
 
 
-def matroska(tracks, el=-1):
+def matroska(tracks, el=-1, configured=None, packet_pair=None):
     def raw(n):
         return n.to_bytes(max(1, (n.bit_length()+7)//8), 'big')
     def element(n, data):
@@ -21,7 +21,7 @@ def matroska(tracks, el=-1):
         entry = number(0xd7,i+1)+number(0x73c5,100+i)+number(0x83,1)
         entry += element(0x86,b'V_MPEGH/ISO/HEVC')+element(0x63a2,hvcc)
         entry += element(0xe0,number(0xb0,1920 if i else 3840)+number(0xba,1080 if i else 2160))
-        if i==el:
+        if i in (configured if configured is not None else {el}):
             flags = (7<<9)|(6<<3)|7
             config = bytes([1,0,flags>>8,flags&255,0x60])+bytes(19)
             entry += element(0x41e4,number(0x41e7,0x64766343)+element(0x41ed,config))
@@ -31,7 +31,8 @@ def matroska(tracks, el=-1):
     # Tiny framing fixtures, not decodable or third-party video.
     cluster = number(0xe7,0)
     for i in range(tracks):
-        cluster += element(0xa3,bytes([0x81+i,0,0,0x80,0,0,0,3,0x26,1,0x55]))
+        payload = packet_pair[i] if packet_pair is not None else b'\0\0\0\3\x26\1\x55'
+        cluster += element(0xa3,bytes([0x81+i,0,0,0x80])+payload)
     return element(0x1a45dfa3,header)+element(0x18538067,
         element(0x1549a966,number(0x2ad7b1,1000000))+element(0x1654ae6b,entries)+element(0x1f43b675,cluster))
 
@@ -68,6 +69,8 @@ struct CDemuxStream {int index;};
 struct CDVDDemuxFFmpeg {
   AVFormatContext* m_pFormatContext{};bool m_bMatroska{true};Input input;Input* m_pInput{&input};
   std::unique_ptr<CBlurayDovi> m_blurayDovi;int m_blurayBase{-1},m_blurayEnhancement{-1};
+  unsigned m_doviGroups=0;
+  bool m_blurayAwaitBase=false;
   struct AVCodecParametersDeleter {void operator()(AVCodecParameters* p)const{avcodec_parameters_free(&p);}};
   void InitBlurayDovi(unsigned int program);
   CDemuxStream* AddStream(int streamIdx);
@@ -80,6 +83,10 @@ int main(int argc,char**argv) {
  assert(av_bsf_get_by_name("hevc_mp4toannexb"));
  for(int sample=1;sample<5;sample++)for(int disabled=0;disabled<2;disabled++) {
   CDVDDemuxFFmpeg d;assert(avformat_open_input(&d.m_pFormatContext,argv[sample],nullptr,nullptr)==0);
+  AVPacket* probe=av_packet_alloc();assert(probe);
+  while(av_read_frame(d.m_pFormatContext,probe)==0)av_packet_unref(probe);
+  av_packet_free(&probe);
+  assert(av_seek_frame(d.m_pFormatContext,0,0,AVSEEK_FLAG_BACKWARD)>=0);
   mode=disabled?2:0;d.InitBlurayDovi(UINT_MAX);
   if(sample!=1 || disabled){assert(!d.m_blurayDovi);avformat_close_input(&d.m_pFormatContext);continue;}
   assert(d.m_blurayDovi && "MKV Dolby layer group must reach the existing assembler");
@@ -165,7 +172,8 @@ int main(int argc,char**argv) {
             root=Path(temporary)
             inputs=[('paired',2,1),('independent',2,-1),('ambiguous',3,1),('single',1,0)]
             for name,n,el in inputs:
-                (root/(name+'.mkv')).write_bytes(matroska(n,el))
+                packets=[b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc'] if name=='paired' else None
+                (root/(name+'.mkv')).write_bytes(matroska(n,el,packet_pair=packets))
             source=root/'test.cpp';source.write_text(program)
             build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined','-I'+str(TREE/'xbmc'),
                 '-I'+str(prefix/'include'),str(source),
