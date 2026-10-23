@@ -6,34 +6,34 @@ build. Existing upstream files retain their own notices.
 
 | Part | Current terms |
 | --- | --- |
-| Creative trim resolver, Adaptive calculation/shader and shared rendering implementation | GPL-3.0-only |
-| DV metadata serialization, packing, reconstruction/FEL helpers, Master Reference and processing API | GPL-3.0-or-later |
-| Persistent shader cache adapted from Hades | GPL-3.0-or-later |
-| HDR10 AI analysis and inference adapter | GPL-3.0-or-later; FFmpeg-derived filter remains LGPL-2.1-or-later |
-| Modified libplacebo processing, linear-conversion and FEL-filter additions | GPL-3.0-or-later; upstream LGPL notices retained |
+| Original project rendering, Adaptive, creative trims and player adapters | GPL-2.0-or-later where granted; third-party notices retained |
+| Replacement metadata serialization, cache, transport and composition helpers | GPL-2.0-or-later; provenance in the engine migration record |
+| HDR10 AI analysis and inference adapter | GPL-2.0-or-later; FFmpeg-derived filter remains LGPL-2.1-or-later |
+| Modified libplacebo additions | Per-file GPL-2.0-or-later/LGPL-2.1-or-later terms; upstream notices retained |
 | FFmpeg libraries in this build | GPL-3.0-or-later, with `--enable-gpl --enable-version3` |
-| Kodi's added DV renderer/output adapters and marked helpers | GPL-3.0-or-later; upstream Kodi is GPL-2.0-or-later |
+| Modified Kodi executable in this build | GPL-3.0-only under the selected combined-build conditions; compatible project adapters do not change that |
 | Intel/AMD display-driver and HDMI 3D changes | Existing MIT/GPL-2.0-compatible file notices; Linux remains GPL-2.0-only |
 | LightGBM library | MIT |
-| L1/L3 model assets | Declared GPL-3.0-or-later; redistribution-clearance record unresolved |
+| L1/L3 model assets | GPL-2.0-or-later, owner's additional grant dated 2026-10-22 |
 | NVIDIA open kernel modules | MIT OR GPL-2.0-only |
 | NVIDIA userspace/firmware | NVIDIA redistribution terms, not GPL |
 | Original project tooling/documentation and other dependencies | MIT where declared; otherwise their retained upstream/file terms |
 
-The GPLv3 requirement is not confined to a single conversion mode. Creative and
-shared rendering modules are linked unconditionally; disabling a mode is not a
-GPLv2 build. An API or shared-library boundary does not by itself remove license
-requirements. [Engine license details](../../CB1/docs/LICENSING.md).
+The GPLv2 migration covers the project's additions and replacements, not the
+complete image. FFmpeg retains `--enable-gpl --enable-version3` and the selected
+Kodi build retains its GPLv3 conditions. An API or shared-library boundary does
+not remove those requirements. [Engine license details](../../CB1/docs/LICENSING.md).
 
 Source archives provide release sources, patches, the model and build material.
 Keep source and vendor inputs available alongside the binaries, with notices and
-license texts. The model lock still records `redistribution_cleared: false`;
-this needs a provenance/rights confirmation, not a silent flag change.
+license texts. The model lock records the owner's additional grant and
+`redistribution_cleared: true`; weights and normalization are unchanged.
 No proprietary Dolby SDK is used. This license inventory is not patent clearance.
 
-The GPLv2-compatible migration targets the project's additions, preserving the
-exact vanilla LibreELEC dependency conditions. Existing license grants and Beta5
-rendering are unchanged. The migration is not yet a qualified distributable build.
+Published Beta5's historical inventory is retained in the
+[license map](../../CB1/docs/LICENSE-MAP.md). The current replacements and grants
+are documented in the [migration record](../../CB1/docs/GPL2-MIGRATION.md).
+Offline comparisons do not certify hardware or establish patent clearance.
 
 ## Credits
 

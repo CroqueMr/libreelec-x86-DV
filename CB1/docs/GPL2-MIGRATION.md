@@ -176,3 +176,17 @@ replacements and original grants from retained upstream component terms.
 
 Offline comparisons do not establish hardware performance or display output
 equivalence. No mini-PC or TV is used for this migration stage.
+
+## RC1 Preview1 port
+
+RC1 Preview1 adds the retained normal candidate fixes to this migration base:
+prepared-picture handoff, GUI clipping/font state, presentation latency,
+dual-layer association, AI preparation overlap, P5 IPT and source-grid rendering,
+fragment-only shader preludes and AMD HDR10 transport selection.
+
+The replacement serializer, creative kernels, cache and composition helpers are
+preserved. P5 IPT transport fields are implemented in the replacement serializer.
+Processing ABI 10 and renderer API 7 require matching library, engine and headers.
+Source-before-scale rendering has its own numerical contract; the older Beta5
+exact-output comparison is not proof of identity for that changed operation order.
+New RC hardware and complete-image qualification are recorded separately.
