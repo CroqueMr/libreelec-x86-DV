@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_hdr10_ingress.h"
 #include "cb1_hdr10_filter.h"
 #include <libplacebo/dispatch.h>

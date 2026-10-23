@@ -51,6 +51,12 @@ class OwnedSources(unittest.TestCase):
         path=self.root/'src/cb1_master_reference.h'
         path.write_bytes(path.read_bytes()+b'\n')
         with self.assertRaisesRegex(ValueError,'checksum mismatch'):verify.verify(self.root)
+    def test_replacement_helpers_keep_extraction_attribution(self):
+        origins=json.loads((self.root/'config/extraction-origins.json').read_text())['files']
+        for name in ('src/dvbridge_metadata_bounds.h','src/mpv_dvbridge_cm4.h'):
+            self.assertIn(name,self.owned)
+            self.assertNotEqual(origins[name]['sha256'],self.owned[name])
+        verify.verify(self.root)
     def test_modified_master_shader_owner_fails(self):
         path=self.root/'patches/libplacebo/libplacebo-9913-processing.patch'
         path.write_bytes(path.read_bytes()+b'\n')

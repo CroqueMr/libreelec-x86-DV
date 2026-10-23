@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef CB1_DV_ENHANCED_H
 #define CB1_DV_ENHANCED_H
 #include "dvbridge_creative.h"

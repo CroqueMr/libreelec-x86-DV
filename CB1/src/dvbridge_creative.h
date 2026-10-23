@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_CREATIVE_H
 #define DVBRIDGE_CREATIVE_H
 #include <stddef.h>

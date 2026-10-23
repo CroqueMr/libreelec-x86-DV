@@ -73,7 +73,7 @@ class StagingTests(unittest.TestCase):
     def test_release_declares_complete_model_from_cb1(self):
         tree = SCRIPT.parents[1]
         lock = json.loads((tree / "config/cb1-source-lock.json").read_text())
-        expected = {"contract/cb1_l1l3_bundle.h", "data/manifest.json",
+        expected = {"LICENSE.md", "contract/cb1_l1l3_bundle.h", "data/manifest.json",
                     "data/normalization.f32", "data/cb1_l1l3_schema.h"}
         expected.update(f"data/field-{i}.txt" for i in range(6))
         prefix = "packages/mediacenter/kodi/cb1-model/"

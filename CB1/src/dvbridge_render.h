@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef DVBRIDGE_RENDER_H
 #define DVBRIDGE_RENDER_H
 #include <libplacebo/renderer.h>

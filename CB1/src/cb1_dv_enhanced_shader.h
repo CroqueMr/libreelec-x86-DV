@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#include "cb1_transport_glsl.h"
 /* Expand and analyse all active pixels once. The retained native frame is
  * selected before presentation if any source-bound guard fails. */
 static const char dve_shader_uniforms[] =
@@ -119,6 +120,7 @@ static const char dve_shader[] =
 "return uvec4(floatBitsToUint(vec3(min(x.x,y.x),x.y+y.y,max(x.z,y.z))),"
 "((a.w&0x3fffffffu)+(b.w&0x3fffffffu))|((a.w|b.w)&0xc0000000u));}\n"
 "#ifdef CB1_DVE_PREPACK\n"
+CB1_CARRIER_GLSL CB1_RGB_CODES_GLSL
 "vec3 compose(vec3 q,vec2 p){if(gui_visible&&p.x>=gui_rect.x&&p.y>=gui_rect.y&&p.x<gui_rect.z&&p.y<gui_rect.w){"
 "vec4 g=texture(gui,vec2(p.x/3840.0,1.0-p.y/2160.0));"
 "if(!gui_is_pq){vec3 straight=g.a>0.0?clamp(g.rgb/g.a,0.0,1.0):vec3(0);"
@@ -126,15 +128,12 @@ static const char dve_shader[] =
 "lin=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*lin;"
 "g.rgb=g.a*vec3(texture(gui_pq,vec2(lin.r,.5)).r,texture(gui_pq,vec2(lin.g,.5)).r,texture(gui_pq,vec2(lin.b,.5)).r);}"
 "q=clamp(g.rgb+q*(1.0-g.a),0.0,1.0);}return clamp(q,0.0,1.0);}\n"
-"vec4 pack_pixel(uint y,uint c){return vec4(float(c>>4u),float(y>>4u),float((y&15u)|((c&15u)<<4u)),255.0)/255.0;}\n"
 "void pack_pair(uint index,vec3 a,vec3 b){ivec2 p=ivec2(index%width,index/width);"
 "\n#ifdef CB1_DVE_AUTHORED_CURVE\np.y+=int(origin_y);\n#endif\n"
 "a=compose(a,vec2(p)+vec2(.5));b=compose(b,vec2(p)+vec2(1.5,.5));"
-"float ya=dot(a,vec3(.2627,.6780,.0593)),yb=dot(b,vec3(.2627,.6780,.0593));"
-"uint y0=uint(floor(256.0+3504.0*ya+.5)),y1=uint(floor(256.0+3504.0*yb+.5));"
-"uint cb=uint(floor(2048.0+3584.0*((a.b-ya)+(b.b-yb))/(2.0*1.8814)+.5));"
-"uint cr=uint(floor(2048.0+3584.0*((a.r-ya)+(b.r-yb))/(2.0*1.4746)+.5));"
-"imageStore(packed_target,p,pack_pixel(y0,cb));imageStore(packed_target,p+ivec2(1,0),pack_pixel(y1,cr));}\n"
+"uvec2 y,c;cb1_rgb_codes(a,b,y,c);"
+"imageStore(packed_target,p,cb1_carrier(uvec2(y.x,c.x)));"
+"imageStore(packed_target,p+ivec2(1,0),cb1_carrier(uvec2(y.y,c.y)));}\n"
 "#endif\n"
 "void main(){uint lane=gl_LocalInvocationID.x,index=gl_GlobalInvocationID.x;"
 "uvec4 v=uvec4(0x7f800000u,0u,0xff800000u,0u);"

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Import validated VAAPI DMA-BUF planes without copying decoded video to the CPU. */
 #include "dvbridge_dmabuf.h"
 #include <EGL/eglext.h>
@@ -47,29 +47,30 @@ bool dvbridge_dmabuf_key_equal(const struct dvbridge_dmabuf_key *a,
 
 bool dvbridge_dmabuf_validate_p010(const AVDRMFrameDescriptor *desc, int width, int height)
 {
-    if (!desc || width < 1 || width > 4096 || height < 1 || height > 2304 ||
-        desc->nb_layers != 2 || desc->nb_objects < 1 || desc->nb_objects > AV_DRM_MAX_PLANES)
+    /* FFmpeg's public DRM descriptor and libdrm FourCC define this layout.
+     * Chroma byte order is declared by the driver, never rewritten for EGL. */
+    if (!desc || width <= 0 || height <= 0 || width > 4096 || height > 2304 ||
+        desc->nb_layers != 2 || desc->nb_objects <= 0 || desc->nb_objects > AV_DRM_MAX_PLANES)
         return false;
-    for (int i = 0; i < 2; ++i) {
-        const AVDRMLayerDescriptor *layer = &desc->layers[i];
-        const AVDRMPlaneDescriptor *plane = &layer->planes[0];
-        /* Hades RC1 (9a06cf50), patch 324ceb05: NVIDIA exports RG1616 chroma.
-         * Keep the declared FourCC for EGL, exactly as for the base-layer import. */
-        const bool format = i ? layer->format == DRM_FORMAT_GR1616 || layer->format == DRM_FORMAT_RG1616
-                              : layer->format == DRM_FORMAT_R16;
-        if (layer->nb_planes != 1 || !format ||
-            plane->object_index < 0 || plane->object_index >= desc->nb_objects)
+    for (unsigned channel = 0; channel != 2; channel++) {
+        const AVDRMLayerDescriptor *layout = desc->layers + channel;
+        const uint32_t first = channel ? DRM_FORMAT_GR1616 : DRM_FORMAT_R16;
+        const uint32_t second = channel ? DRM_FORMAT_RG1616 : DRM_FORMAT_R16;
+        if (layout->nb_planes != 1 || (layout->format != first && layout->format != second))
             return false;
-        const AVDRMObjectDescriptor *object = &desc->objects[plane->object_index];
-        uint64_t row_bytes = i ? ((width + 1) / 2) * 4 : width * 2;
-        uint64_t rows = i ? (height + 1) / 2 : height;
-        if (object->fd < 0 || plane->offset < 0 || plane->offset > INT_MAX ||
-            plane->pitch <= 0 || plane->pitch > INT_MAX || (uint64_t)plane->pitch < row_bytes ||
-            (uint64_t)plane->offset >= object->size)
+        const AVDRMPlaneDescriptor *plane = layout->planes;
+        if (plane->object_index < 0 || plane->object_index >= desc->nb_objects ||
+            plane->offset < 0 || plane->offset > INT_MAX || plane->pitch <= 0 || plane->pitch > INT_MAX)
             return false;
-        if (object->format_modifier == DRM_FORMAT_MOD_LINEAR &&
-            (uint64_t)plane->offset + (rows - 1) * plane->pitch + row_bytes > object->size)
+        const AVDRMObjectDescriptor *storage = desc->objects + plane->object_index;
+        const uint64_t rows = channel ? (height + 1) / 2 : height;
+        const uint64_t bytes = channel ? 4 * ((width + 1) / 2) : 2 * width;
+        if (storage->fd < 0 || (uint64_t)plane->pitch < bytes || (uint64_t)plane->offset >= storage->size)
             return false;
+        if (storage->format_modifier == DRM_FORMAT_MOD_LINEAR) {
+            uint64_t end = (uint64_t)plane->offset + (rows - 1) * plane->pitch + bytes;
+            if (end > storage->size) return false;
+        }
     }
     return true;
 }
