@@ -1,0 +1,131 @@
+Associate Matroska Profile 7 layers from declared DV and actual EL/RPU access units.
+
+--- a/libavformat/matroskadec.c
++++ b/libavformat/matroskadec.c
+@@ -3348,18 +3348,19 @@
+     return 0;
+ }
+ 
+-static int matroska_parse_dovi_streams(AVFormatContext *s)
++static int matroska_parse_dovi_streams(AVFormatContext *s, const AVPacket *pkt)
+ {
+     AVStream *bl_st = NULL, *el_st = NULL;
++    const AVPacketSideData *source_config = NULL;
+     AVStreamGroup *stg;
++    const uint8_t *data;
++    int remaining, length_size, has_rpu = 0, has_vcl = 0;
+     int err;
+ 
+-    /* Matroska has no explicit cross-track Dolby Vision reference, so the
+-     * pairing is recovered from the dvcC/dvvC config records. Find a single
+-     * HEVC track whose record declares a profile 7 enhancement layer
+-     * (el_present_flag=1) and a single sibling HEVC BL candidate. If either
+-     * side is ambiguous, leave the streams ungrouped. */
+-    if (s->nb_streams <= 1)
++    /* A configuration record may describe both layers from either track.
++     * Require Profile 7 signalling and actual EL/RPU access-unit evidence. */
++    if (s->nb_stream_groups || s->nb_streams <= 1 ||
++        s->streams[pkt->stream_index]->codecpar->codec_id != AV_CODEC_ID_HEVC)
+         return 0;
+ 
+     for (int i = 0; i < s->nb_streams; i++) {
+@@ -3373,28 +3374,56 @@
+         sd = av_packet_side_data_get(st->codecpar->coded_side_data,
+                                      st->codecpar->nb_coded_side_data,
+                                      AV_PKT_DATA_DOVI_CONF);
+-        if (sd) {
++        if (sd && sd->size >= sizeof(*dovi)) {
+             dovi = (const AVDOVIDecoderConfigurationRecord *)sd->data;
+-            if (dovi->dv_profile == 7 && dovi->el_present_flag) {
+-                /* bl_present_flag is not checked, because the files in the
+-                 * wild set it to 1 for EL stream, while the expectation, based
+-                 * on Dolby spec for MPEG-TS would be that it's set to 0.
+-                 * Ignore this, if we have EL track and single other video track
+-                 * it's safe to assume it's BL. */
+-                if (el_st)
+-                    return 0;
+-                el_st = st;
+-                continue;
+-            }
+-        }
+-
+-        if (bl_st)
++            if (dovi->dv_profile != 7 || !dovi->el_present_flag || !dovi->rpu_present_flag)
++                return 0;
++            if (!source_config || st->index == pkt->stream_index)
++                source_config = sd;
++        }
++
++        if (st->index == pkt->stream_index)
++            el_st = st;
++        else {
++            if (bl_st)
++                return 0;
++            bl_st = st;
++        }
++    }
++
++    if (!source_config || !el_st || !bl_st ||
++        el_st->codecpar->width > bl_st->codecpar->width ||
++        el_st->codecpar->height > bl_st->codecpar->height ||
++        el_st->codecpar->extradata_size < 23 || el_st->codecpar->extradata[0] != 1)
++        return 0;
++
++    length_size = (el_st->codecpar->extradata[21] & 3) + 1;
++    data = pkt->data;
++    remaining = pkt->size;
++    while (remaining >= length_size) {
++        unsigned size = 0;
++        for (int j = 0; j < length_size; j++)
++            size = (size << 8) | *data++;
++        remaining -= length_size;
++        if (size < 2 || size > remaining || (data[0] & 0x80) || !(data[1] & 7))
+             return 0;
+-        bl_st = st;
+-    }
+-
+-    if (!el_st || !bl_st)
++        has_vcl |= (data[0] >> 1) < 32;
++        has_rpu |= (data[0] >> 1) == 62;
++        data += size;
++        remaining -= size;
++    }
++    if (remaining || !has_rpu || !has_vcl)
+         return 0;
++
++    if (!av_packet_side_data_get(el_st->codecpar->coded_side_data,
++                                el_st->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF)) {
++        AVPacketSideData *sd = av_packet_side_data_new(&el_st->codecpar->coded_side_data,
++            &el_st->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF, source_config->size, 0);
++        if (!sd)
++            return AVERROR(ENOMEM);
++        memcpy(sd->data, source_config->data, source_config->size);
++        ffstream(el_st)->need_context_update = 1;
++    }
+ 
+     stg = avformat_stream_group_create(s, AV_STREAM_GROUP_PARAMS_DOLBY_VISION, NULL);
+     if (!stg)
+@@ -3565,10 +3594,6 @@
+     matroska_add_index_entries(matroska);
+ 
+     matroska_convert_tags(s);
+-
+-    res = matroska_parse_dovi_streams(s);
+-    if (res < 0)
+-        return res;
+ 
+     return 0;
+ }
+@@ -4255,6 +4280,12 @@
+     pkt->pos = pos;
+     pkt->duration = lace_duration;
+ 
++    res = matroska_parse_dovi_streams(matroska->ctx, pkt);
++    if (res < 0) {
++        av_packet_unref(pkt);
++        return res;
++    }
++
+     res = ff_packet_list_put(&matroska->queue, pkt, NULL, 0);
+     if (res < 0) {
+         av_packet_unref(pkt);

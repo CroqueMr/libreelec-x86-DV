@@ -61,6 +61,7 @@
     "patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": "953cfb01339263c02c7932eb67e30ea6603613a1800fa4041f46b5f3ffb10fe0",
     "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": "f2f7d6ac70566b2035966cfe83db8c02b3d6b874b81d31d41a7be126cb52c55a",
     "patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": "4ce28e60a949a51554d3c0d8d2596b2ca791463baf352d7f250c6e710d0f0ac2",
+    "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": "5c463382da9b54a4786bb3f4ad087ec7cc1e6a3f948240433ebf87c243e9cb52",
     "patches/ffmpeg/ffmpeg-9910-mvc.patch": "58886cc463a811a226024da50e5014dd561f79230d6fa9dd9b94b6e84acce5e6",
     "patches/libplacebo/libplacebo-9900-0-src__dispatch.c.patch": "6011006138e5c40670e4d7eb83cf86523354e23d4ca7ea2a622eafd4dee581bb",
     "patches/libplacebo/libplacebo-9900-1-src__opengl__gpu.c.patch": "acc0e901671fc8a0c7fa442dbb69ef149d524c1af47ad40b6d7da919d3f820ad",
@@ -108,6 +109,7 @@
     "libplacebo/src/shaders/meson.build": "f4ba519f76d227adabbab791814fb62f96d45236c08889409738de7eca31304e",
     "libplacebo/src/shaders.h": "08eab0c281ec07e7a5f5b3714681678308c84c6f1945d0907d2e70950a8c04c2",
     "ffmpeg/libavformat/mpegts.c": "229c92abd17c0c9bc37338adf660515d18f84af85ba4339e782ff92e4af21565",
-    "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e"
+    "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e",
+    "ffmpeg/libavformat/matroskadec.c": "ab6010ab5f3350c91f50c8c4241aa70269bf87dfdc2397910639112fb7a4413b"
   }
 }

@@ -10029,7 +10029,39 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
          m_timeout.SetInfinite();
        }
  
-@@ -1292,6 +1347,13 @@
+@@ -1142,7 +1197,31 @@
+                          0);
+ 
+           // update streams
++#ifdef HAVE_DVBRIDGE
++          const bool wasJoined = bool(m_blurayDovi);
++#endif
+           CreateStreams(m_program);
++
++#ifdef HAVE_DVBRIDGE
++          if (!wasJoined && m_blurayDovi)
++          {
++            // Start at a complete pair; never expose a saved raw layer as joined video.
++            m_blurayDovi->Reset(true);
++            m_blurayAwaitBase = true;
++            if (m_pkt.pkt.stream_index == m_blurayBase)
++            {
++              m_blurayAwaitBase = !m_blurayDovi->Push(&m_pkt.pkt, false);
++              if (m_blurayAwaitBase)
++                CLog::Log(LOGERROR, "DV layers: saved BL rejected: {}", m_blurayDovi->LastError());
++            }
++            if (m_pkt.pkt.stream_index == m_blurayBase ||
++                m_pkt.pkt.stream_index == m_blurayEnhancement)
++            {
++              av_packet_unref(&m_pkt.pkt);
++              m_pkt.result = -1;
++            }
++          }
++#endif
+ 
+           pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
+           pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
+@@ -1292,6 +1371,13 @@
        return pPacket;
      }
  
@@ -10043,7 +10075,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
      pPacket->iStreamId = stream->uniqueId;
      pPacket->demuxerId = GetDemuxerId();
    }
-@@ -1410,8 +1472,50 @@
+@@ -1410,8 +1496,50 @@
        ret = -1;
      }
      else
@@ -10096,7 +10128,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  
      if (ret < 0)
      {
-@@ -1482,7 +1586,12 @@
+@@ -1482,7 +1610,12 @@
    int ret = av_seek_frame(m_pFormatContext, -1, pos, AVSEEK_FLAG_BYTE);
  
    if (ret >= 0)
@@ -10109,7 +10141,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  
    m_pkt.result = -1;
    av_packet_unref(&m_pkt.pkt);
-@@ -1606,6 +1715,9 @@
+@@ -1606,6 +1739,9 @@
  
  void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
  {
@@ -10119,7 +10151,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
    // changes must keep increasing across rebuilds; consumers detect a rebuild by comparing values
    std::map<int, int> prevChanges;
    for (const auto& [streamIdx, stream] : m_streams)
-@@ -1664,7 +1776,11 @@
+@@ -1664,7 +1800,11 @@
        for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
        {
          m_pFormatContext->streams[i]->discard = AVDISCARD_NONE;
@@ -10132,7 +10164,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
            m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
        }
      }
-@@ -1818,10 +1934,16 @@
+@@ -1818,10 +1958,16 @@
      delete it->second;
    m_streams.clear();
    m_parsers.clear();
@@ -10149,7 +10181,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
    AVStream* pStream = m_pFormatContext->streams[streamIdx];
    if (pStream && pStream->discard != AVDISCARD_ALL)
    {
-@@ -1974,10 +2096,16 @@
+@@ -1974,10 +2120,16 @@
            sideData =
                av_packet_side_data_get(pStream->codecpar->coded_side_data,
                                        pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
@@ -10167,7 +10199,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
          }
  
          sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,
-@@ -2012,13 +2140,56 @@
+@@ -2012,13 +2164,56 @@
          }
  
          // detect stereoscopic mode
@@ -10227,7 +10259,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  
          if (m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD))
          {
-@@ -2084,6 +2255,11 @@
+@@ -2084,6 +2279,11 @@
  
            if (av_dict_get(pStream->metadata, "title", NULL, 0))
              st->m_description = av_dict_get(pStream->metadata, "title", NULL, 0)->value;
@@ -10239,7 +10271,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
            break;
          }
        }
-@@ -2207,8 +2383,13 @@
+@@ -2207,8 +2407,13 @@
        // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
        if (pStream->id == 0x1015)
        {
@@ -10253,7 +10285,21 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
          delete stream;
          return nullptr;
        }
-@@ -2454,8 +2635,12 @@
+@@ -2419,6 +2624,13 @@
+ 
+ bool CDVDDemuxFFmpeg::IsProgramChange()
+ {
++#ifdef HAVE_DVBRIDGE
++  unsigned groups = 0;
++  for (unsigned i = 0; i < m_pFormatContext->nb_stream_groups; ++i)
++    groups += m_pFormatContext->stream_groups[i]->type == AV_STREAM_GROUP_PARAMS_DOLBY_VISION;
++  if (groups != m_doviGroups)
++    return true;
++#endif
+   if (m_program == UINT_MAX)
+     return false;
+ 
+@@ -2454,8 +2666,12 @@
  
    for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
    {
@@ -10268,7 +10314,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
        continue;
      CDemuxStream* stream = GetStream(idx);
      if (!stream)
-@@ -2558,6 +2743,161 @@
+@@ -2558,6 +2774,161 @@
    }
  
    return stereoMode;
@@ -10430,7 +10476,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  }
  
  std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap* conversionMap)
-@@ -2840,6 +3180,260 @@
+@@ -2840,6 +3211,270 @@
    }
  }
  
@@ -10456,6 +10502,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 +        group->streams[1]->codecpar->codec_id == AV_CODEC_ID_HEVC)
 +      ++qualified;
 +  }
++  m_doviGroups = groups;
 +  // No source URL, filename or metadata: cloud URLs can contain access tokens.
 +  const auto report = [&](const char* reason)
 +  {
@@ -10495,6 +10542,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 +    }
 +  m_blurayDovi.reset();
 +  m_blurayBase = m_blurayEnhancement = -1;
++  m_blurayAwaitBase = false;
 +  const bool mov = std::strcmp(format, "mov") == 0 || std::strncmp(format, "mov,", 4) == 0;
 +  const bool transport = std::strcmp(format, "mpegts") == 0;
 +  const bool normalize = !bluray && (m_bMatroska || mov || transport);
@@ -10669,7 +10717,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 +    }
 +    if (packet->stream_index != m_blurayBase && packet->stream_index != m_blurayEnhancement)
 +      return result;
++    if (m_blurayAwaitBase && packet->stream_index == m_blurayEnhancement)
++    {
++      av_packet_unref(packet);
++      result = AVERROR(EAGAIN);
++      continue;
++    }
 +    const bool accepted = m_blurayDovi->Push(packet, packet->stream_index == m_blurayEnhancement);
++    if (accepted && packet->stream_index == m_blurayBase)
++      m_blurayAwaitBase = false;
 +    if (m_blurayDovi->TakeDiscontinuity())
 +      CLog::Log(LOGINFO, "DV Blu-ray: reset layer pairing after transport DTS discontinuity");
 +    if (!accepted)
@@ -10691,6 +10747,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
  {
    StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
+
 diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
 --- a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp

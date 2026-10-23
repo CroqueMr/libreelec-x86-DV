@@ -42,6 +42,8 @@ struct CDVDDemuxFFmpeg {
  AVFormatContext* m_pFormatContext{avformat_alloc_context()};bool m_bMatroska{};
  Input input;Input* m_pInput{&input};std::unique_ptr<CBlurayDovi> m_blurayDovi;
  int m_blurayBase{-1},m_blurayEnhancement{-1};
+ unsigned m_doviGroups=0;
+ bool m_blurayAwaitBase=false;
  struct AVCodecParametersDeleter {void operator()(AVCodecParameters* p)const{avcodec_parameters_free(&p);}};
  void InitBlurayDovi(unsigned int);
  CDVDDemuxFFmpeg(){assert(m_pFormatContext);static const AVInputFormat format{.name="mpegts"};m_pFormatContext->iformat=&format;

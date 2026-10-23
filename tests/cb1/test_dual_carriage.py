@@ -69,7 +69,7 @@ def mp4(kind, packet_pair=None, configuration=None):
     return ftyp+moov+atom(b'mdat', packets[0]*2+packets[1]*2)
 
 
-def transport(kind, m2ts=False):
+def transport(kind, m2ts=False, hevc_el=False):
     """Minimal PAT/PMT/PES with HDMV or explicit DV dependency signalling."""
     def section(table, body):
         data = bytes([table])+struct.pack('>H', 0xb000+len(body)+4)+body
@@ -96,7 +96,7 @@ def transport(kind, m2ts=False):
             info = b''
             stream_type = 0x24
             if kind in ('dovi', 'late') and pid == el:
-                stream_type = 6
+                stream_type = 0x24 if hevc_el else 6
                 if descriptor:
                     flags = (7<<9)|(9<<3)|6
                     desc = bytes([1, 0, flags>>8, flags&255])+struct.pack('>H', base<<3)+b'\x60'
@@ -138,6 +138,11 @@ class DualCarriage(unittest.TestCase):
     def test_late_ts_descriptor_updates_initialized_codec(self):
         self.run_carriage([('late.ts', transport('late'), True)])
 
+    def test_late_group_preserves_saved_base_for_assembly(self):
+        data = transport('late', hevc_el=True)
+        self.run_carriage([('late-start.ts', data, True), ('late-start-el.ts', data, True),
+                           ('late-start-audio.ts', data, True)])
+
     def run_carriage(self, fixtures):
         root_name = os.environ.get('CB1_CARRIAGE_ROOT')
         compiler = os.environ.get('CB1_CARRIAGE_CXX')
@@ -155,6 +160,8 @@ class DualCarriage(unittest.TestCase):
         layer = code.index('      int64_t layerPosition = -1;')
         reset = code[code.rfind('#ifdef HAVE_DVBRIDGE', 0, layer)+len('#ifdef HAVE_DVBRIDGE'):layer]
         seek_byte = body(code, 'bool CDVDDemuxFFmpeg::SeekByte(')
+        rebuild_start = code.index('          // update streams')
+        rebuild = code[rebuild_start:code.index('          pPacket =', rebuild_start)]
         program = r'''
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
@@ -168,6 +175,12 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include "dvbridge_fel_seek.h"
 }
+std::deque<AVPacket*> scripted;
+extern "C" int __real_av_read_frame(AVFormatContext*,AVPacket*);
+extern "C" int __wrap_av_read_frame(AVFormatContext* f,AVPacket* p){
+ if(scripted.empty())return __real_av_read_frame(f,p);
+ auto* next=scripted.front();scripted.pop_front();av_packet_move_ref(p,next);av_packet_free(&next);return 0;
+}
 enum { DVDSTREAM_TYPE_BLURAY=1,LOGINFO,LOGWARNING,LOGERROR };
 struct CLog { template<class... T> static void Log(T&&...) {} };
 static int mode;
@@ -180,14 +193,18 @@ constexpr double DVD_NOPTS_VALUE=-1;
 struct CDVDDemuxFFmpeg {
  AVFormatContext* m_pFormatContext{};bool m_bMatroska{};Input input;Input* m_pInput{&input};
  std::unique_ptr<CBlurayDovi> m_blurayDovi;int m_blurayBase{-1},m_blurayEnhancement{-1};
+ unsigned m_doviGroups=0,m_program=0;
+ bool m_blurayAwaitBase=false;
  std::mutex m_critSection;double m_currentPts{};
  struct {int result{};AVPacket pkt{};} m_pkt;
  struct AVCodecParametersDeleter {void operator()(AVCodecParameters* p)const{avcodec_parameters_free(&p);}};
  void InitBlurayDovi(unsigned int);int ReadBlurayDovi(AVPacket*);CDemuxStream* AddStream(int);
+ void CreateStreams(unsigned program){InitBlurayDovi(program);}
+ void RebuildForTest(){ REBUILD_BODY }
  void BeforeSeek() { RESET_BODY }
  bool SeekByte(int64_t pos) SEEK_BYTE
 };
-''' .replace('RESET_BODY', reset).replace('SEEK_BYTE', seek_byte) + code[start:end] + code[add_start:add_end] + r'''
+''' .replace('RESET_BODY', reset).replace('SEEK_BYTE', seek_byte).replace('REBUILD_BODY', rebuild) + code[start:end] + code[add_start:add_end] + r'''
  return new CDemuxStream{streamIdx}; // Unchanged stream-construction boundary.
 }
 int main(int argc,char**argv) {
@@ -196,6 +213,51 @@ int main(int argc,char**argv) {
  for(int i=1;i<argc;i+=2)for(int disabled : {0,2}){
   CDVDDemuxFFmpeg d;assert(avformat_open_input(&d.m_pFormatContext,argv[i],nullptr,nullptr)==0);
   bool want=atoi(argv[i+1]);mode=disabled;
+  if(strstr(argv[i],"late-start")){
+   d.InitBlurayDovi(UINT_MAX);assert(!d.m_blurayDovi);
+   while(av_read_frame(d.m_pFormatContext,&d.m_pkt.pkt)==0){
+    if(d.m_pFormatContext->nb_stream_groups)break;
+    av_packet_unref(&d.m_pkt.pkt);
+   }
+   const bool startsEl=strstr(argv[i],"start-el");
+   const bool startsAudio=strstr(argv[i],"start-audio");
+   if(startsEl){
+    while(d.m_pkt.pkt.stream_index!=1){av_packet_unref(&d.m_pkt.pkt);
+     assert(av_read_frame(d.m_pFormatContext,&d.m_pkt.pkt)==0);}
+   }
+   assert(d.m_pFormatContext->nb_stream_groups==1 && d.m_pkt.pkt.stream_index==int(startsEl));
+   const auto savedPts=d.m_pkt.pkt.pts;
+   if(startsAudio){
+    // Model a queued audio packet returned while an EL triggers group discovery internally.
+    for(int j=0;j<3;j++){
+     const uint8_t el[]={0,0,0,1,0x26,1,uint8_t(j?0x22:0x11),0,0,0,1,0x7c,1,0xcc};
+     const uint8_t bl[]={0,0,0,1,0x26,1,0xaa};
+     auto* next=av_packet_alloc();assert(next && av_new_packet(next,j==1?sizeof(bl):sizeof(el))==0);
+     memcpy(next->data,j==1?bl:el,next->size);next->stream_index=j==1?0:1;
+     next->pts=next->dts=savedPts+(j?3754:0);
+     scripted.push_back(next);
+    }
+    auto* audio=avformat_new_stream(d.m_pFormatContext,nullptr);assert(audio && audio->index==2);
+    audio->codecpar->codec_type=AVMEDIA_TYPE_AUDIO;audio->codecpar->codec_id=AV_CODEC_ID_PCM_S16LE;
+    d.m_pkt.pkt.stream_index=2;
+   }
+   d.m_pkt.result=0;d.RebuildForTest();
+   if(!disabled){
+    assert(d.m_blurayDovi && d.m_blurayDovi->Pending()==(!startsEl && !startsAudio));
+    if(startsAudio){assert(d.m_pkt.result==0 && d.m_pkt.pkt.stream_index==2);av_packet_unref(&d.m_pkt.pkt);}
+    else assert(d.m_pkt.result<0 && !d.m_pkt.pkt.data && "Saved BL must be queued, not emitted unjoined");
+    AVPacket* joined=av_packet_alloc();assert(joined);
+    int status;
+    status=d.ReadBlurayDovi(joined);
+    assert(status==0 && joined->stream_index==0 && joined->pts==savedPts+((startsEl||startsAudio)?3754:0));
+    const uint8_t marker=startsAudio?0x22:0xbb;
+    std::vector<uint8_t> expected={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,marker,0,0,0,1,0x7c,1,0xcc};
+    assert(joined->size==int(expected.size()) && !memcmp(joined->data,expected.data(),expected.size()));
+    av_packet_free(&joined);
+   }else assert(d.m_pkt.result==0 && d.m_pkt.pkt.data && !d.m_blurayDovi);
+   for(auto* p:scripted)av_packet_free(&p);scripted.clear();
+   av_packet_unref(&d.m_pkt.pkt);avformat_close_input(&d.m_pFormatContext);continue;
+  }
   if(strstr(argv[i],"late.ts")){
    assert(d.m_pFormatContext->nb_stream_groups==0);
    AVPacket* packet=av_packet_alloc();int ret;bool received=false;
@@ -289,7 +351,7 @@ int main(int argc,char**argv) {
                                                  '-Wl,-rpath,'+prefix+'/lib']
             built = subprocess.run([compiler, '-std=c++20', '-O2', '-I'+str(TREE/'xbmc'),
                                     '-I'+str(Path(__file__).resolve().parents[2]/'CB1/src'), *dependency_flags,
-                                    str(source), '-lavformat', '-lavcodec', '-lavutil', '-o', str(binary)],
+                                    str(source), '-Wl,--wrap=av_read_frame', '-lavformat', '-lavcodec', '-lavutil', '-o', str(binary)],
                                    text=True, capture_output=True)
             self.assertEqual(built.returncode, 0, built.stderr)
             path = '/'+folder.relative_to(runtime).as_posix() if target else str(folder)

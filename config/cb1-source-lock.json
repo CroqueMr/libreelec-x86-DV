@@ -24,10 +24,10 @@
     "projects/Generic/patches/kodi/kodi-9996-output-modes-and-info.patch": "42b2d7d53d8629ec9e9ff8d5fdf6a9cfad914a51e9f07ecb41886f76fd6f0c3f",
     "projects/Generic/patches/kodi/kodi-9997-dv-static-metadata-latch.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "projects/Generic/patches/kodi/kodi-9998-activeae-sink-retry.patch": "5fbca2f8b7036b8a08da2ec21bcac2d5c0409a6897fc2eb6c2ac3d2fb124e5dd",
-    "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "f2c4c6670beaf80f6babb9bd2cc8efdcbc12a9b3fcc0e6a62ada3599a31af5b4",
+    "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "26da34c1c968ee4eeffa2aa886f10f9c368989fbdb0eb0cb1ae251e222b4ebeb",
     "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": "93a7543fbd6d0d3e85978fff15c3d171d6b91b0f42fdf4007d73fae7f36811ff",
     "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": "5cc47ceb4130f18ed171399e61b3b7c351b5d8d70dec12bcdc7279e6523a4623",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "07ea9cbf9421eab44f0abcce44203e090044d30c08b1ca33f6ad2dc6dc4f14e0",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "66097619b16a358057ed21749738ad3ac865a8de994b3ee3482c62845255d00f",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
     "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
     "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
@@ -63,7 +63,7 @@
     "scripts/image": "9e3a399d7423e163a5dca09a75e9887062d7686ca29e9752e61ffde8c04a742e",
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
-    "config/cb1-patch-index.json": "5f5fb0241b99f3c51ab82cb01efb3b4e0c757db2064fd2687218870106a37804",
+    "config/cb1-patch-index.json": "b3070b4899d2c63929063535d2b7c3137773b459de9cb0ab642e970a7086ce24",
     "config/cb1-versions.json": "0988fb6b59496452705db0a51d220b19d0b6b1636ed3435e135909ed5a0da121"
   },
   "staging": {
@@ -289,7 +289,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "1e2a349bb6903901e1d3f2258c16405dab94b41ca03e5f5ddc61aee781163959"
+      "sha256": "0c9fdd3087bb85e7075bc23d5a0c70f98ab94a63c86f1409289e25a36284415b"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -494,6 +494,10 @@
     "packages/mediacenter/kodi/cb1/src/cb1_composite_glsl.h": {
       "source": "src/cb1_composite_glsl.h",
       "sha256": "e97a6e743584147712aece05dfa81426d9e6143de0c9d86de926769dfffaa2d0"
+    },
+    "projects/Generic/patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": {
+      "source": "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch",
+      "sha256": "5c463382da9b54a4786bb3f4ad087ec7cc1e6a3f948240433ebf87c243e9cb52"
     }
   }
 }
