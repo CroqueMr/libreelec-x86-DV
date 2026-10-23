@@ -54,6 +54,7 @@ static void test_p5_ai_transition(struct reference_gpu *g,struct dvbridge_render
     struct dvbridge_geometry screen={3840,2160,0,0,3840,2160};
     for(int path=0;path<2;path++){
         struct dvbridge_renderer *current=path?control:r;
+        assert(ensure_rgb(current));
         dvbridge_renderer_reset(current);
         dvbridge_destroy(current->context);current->context=dvbridge_create();assert(current->context);
         assert(ai_render_pixels(current,&ai,screen,NULL,false,NULL));
