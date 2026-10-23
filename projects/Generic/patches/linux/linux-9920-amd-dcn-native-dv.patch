@@ -152,6 +152,27 @@
  	if (property == dev->mode_config.scaling_mode_property) {
  		switch (dm_state->scaling) {
  		case RMX_CENTER:
+@@ -8590,6 +8655,20 @@
++			/* Retry native 4:2:0 before accepting an 8-bit bandwidth fallback. */
++			if (dm_state->hdr10_deep_color &&
++			    !amdgpu_dm_hdr10_validate(dm_state) && requested_bpc >= 10 &&
++			    dc_result == DC_FAIL_BANDWIDTH_VALIDATE &&
++			    stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422 &&
++			    !aconnector->force_yuv420_output &&
++			    drm_mode_is_420(&connector->display_info, drm_mode)) {
++				dc_stream_release(stream);
++				aconnector->force_yuv420_output = true;
++				stream = create_validate_stream_for_sink(connector, drm_mode,
++								 dm_state, old_stream);
++				aconnector->force_yuv420_output = false;
++				return stream;
++			}
+ 			dc_stream_release(stream);
+ 			stream = NULL;
+ 			requested_bpc -= 2; /* lower bpc to retry validation */
+ 		}
+ 
+ 	} while (stream == NULL && requested_bpc >= bpc_limit);
 @@ -8721,6 +8756,17 @@
  
  	if (!crtc)
