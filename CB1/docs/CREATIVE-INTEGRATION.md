@@ -5,7 +5,8 @@ No kernel, driver, display query, player UI, audio or scheduling patch is includ
 
 ## Caller contract
 
-- Rebuild adapters: `DVBRIDGE_HDR10_POLICY_API` is 4 and `DVBRIDGE_DV_POLICY_API` is 6.
+- Rebuild adapters: `DVBRIDGE_HDR10_POLICY_API` is 4 and `DVBRIDGE_DV_POLICY_API` is 7.
+- DV READY may retain a source-sized intermediate. Resolve scales and packs it directly. RGB consumers call `dvbridge_render_dv_policy_rgb` to materialize and cache output-sized PQ without changing the metadata or presentation state.
   The embedded creative snapshot now includes CM4 targets and field-presence
   masks. These layouts are not binary compatible with earlier adapters.
 - Adaptive exposes one policy, without a preset field or Natural/Signature selector.

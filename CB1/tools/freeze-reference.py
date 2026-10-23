@@ -52,9 +52,12 @@ parser.add_argument("--probe-contract", choices=(PROBE_CONTRACT,), required=True
 parser.add_argument("--reference", type=Path, default=here / "frozen-reference.json")
 parser.add_argument("--evidence-dir", type=Path, default=here / "evidence")
 parser.add_argument("--freeze", action="store_true")
+parser.add_argument("--native-only", action="store_true", help="Compare native packets/pixels; Basic has a separate source-first oracle")
 parser.add_argument("--runs", type=int, choices=(1,3), default=1)
 parser.add_argument("--evidence-prefix", default=None)
 args = parser.parse_args()
+if args.freeze and args.native_only:
+    parser.error("--native-only does not create or replace references")
 if not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
     parser.error("--source-commit requires a full lowercase Git commit identity")
 destination = args.reference
@@ -76,6 +79,7 @@ for i in range(3 if args.freeze else args.runs):
     Path(str(prefix)+'.json').write_text(json.dumps({'command':[args.binary],'exit_code':run.returncode,
         'source_commit':args.source_commit,
         'probe_contract':args.probe_contract,
+        'compared_outputs':['native_pq'] if args.native_only else ['native_pq','hdr10_basic_pq'],
         'probe_tool_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         'sanitizer_environment':{key:environment[key] for key in ('ASAN_OPTIONS','UBSAN_OPTIONS')},
         'binary_sha256':hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(),
@@ -107,7 +111,7 @@ for data in runs:
             raise SystemExit("Packet count changed")
         if expected["packet_words"] != actual["packet_words"]:
             raise SystemExit("Exact integer transport changed")
-        for name in ("native_pq", "hdr10_basic_pq"):
+        for name in (("native_pq",) if args.native_only else ("native_pq", "hdr10_basic_pq")):
             for ep, ap in zip(expected[name],actual[name],strict=True):
                 for e, a in zip(ep,ap,strict=True):
                     maximum = max(maximum,abs(e-a))

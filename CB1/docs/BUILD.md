@@ -6,8 +6,8 @@ FFmpeg/libplacebo sources recorded in `config/dependencies.json`.
 Required dependencies: FFmpeg, libplacebo, GLESv2, EGL and libdrm. Headers and
 libraries must come from the same modified build.
 
-Master Reference requires matched private processing ABI 9 and reference
-contract 1. Mixed ABI 8/9 headers and libraries are rejected at configuration.
+CB1 requires matched private processing ABI 10 and reference contract 1.
+Mixed headers and libraries are rejected at configuration.
 
 ```sh
 python3 tools/verify.py

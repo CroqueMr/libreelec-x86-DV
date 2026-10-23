@@ -40,6 +40,10 @@ struct dvbridge_candidate *dvbridge_prepare_output(
 struct dvbridge_candidate *dvbridge_prepare_source_output(
     const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
+/* Exact Master source transport, including full-range IPT Profile 5. */
+struct dvbridge_candidate *dvbridge_prepare_master_source_output(
+    const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
 #define DVBRIDGE_OVERLAY_METADATA_API 1
 /* Applies to pictures prepared after the call; default false. While GUI or
  * subtitles are composed over the picture, the outgoing L5 reports the full

@@ -1,10 +1,12 @@
 diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
 --- a/src/include/libplacebo/renderer.h
 +++ b/src/include/libplacebo/renderer.h
-@@ -358,6 +358,12 @@
+@@ -358,6 +358,14 @@
      // CB policy opt-in: colour management consumes the current hook domain.
      // Default false retains original source-domain handling. Matched ABI only.
      bool cb1_hook_color_space;
++    // Exact 2x centered taps; caller validates fragment quad support.
++    bool cb1_quad_scaler;
 +    // CB native transport opt-in. Reconstruct opponent components instead of
 +    // RGB; a caller-provided output hook packs them with matching DM matrices.
 +    // Requires 1:1 geometry, no color operations/overlays and matched headers.
@@ -14,7 +16,7 @@ diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer
  
  
      // If this is true, all shaders will be generated as "dynamic" shaders,
-@@ -759,6 +765,14 @@
+@@ -759,6 +767,14 @@
                              const struct pl_frame *target,
                              const struct pl_render_params *params);
  
@@ -48,12 +50,14 @@ diff --git a/src/include/libplacebo/shaders/colorspace.h b/src/include/libplaceb
 diff --git a/src/include/libplacebo/shaders/sampling.h b/src/include/libplacebo/shaders/sampling.h
 --- a/src/include/libplacebo/shaders/sampling.h
 +++ b/src/include/libplacebo/shaders/sampling.h
-@@ -168,6 +168,8 @@
+@@ -168,6 +168,10 @@
      // CB policy-only orthogonal LUT FLOAT4 depth32 LINEAR format, default off.
      // Requires matched CB-patched headers/library. No polar-path change.
      bool cb1_fp32_lut;
 +    // Opt-in cache for the validated native transport interpolation behavior.
 +    bool cb1_exact_lut_cache;
++    // Exact 2x centered taps; caller validates fragment quad support.
++    bool cb1_quad_scaler;
  
  
      // This shader object is used to store the LUT, and will be recreated
@@ -104,7 +108,10 @@ diff --git a/src/renderer.c b/src/renderer.c
      if (!sampler)
          goto fallback;
  
-@@ -751,6 +776,7 @@
+@@ -749,8 +774,10 @@
+     struct pl_sample_filter_params fparams = {
++        .cb1_quad_scaler = params->cb1_quad_scaler,
+         .filter      = *info.config,
          .antiring    = params->antiringing_strength,
          .no_widening = params->skip_anti_aliasing && usage != SAMPLER_LOWPASS,
          .cb1_fp32_lut = params->cb1_fp32_scaler_lut,
@@ -112,7 +119,7 @@ diff --git a/src/renderer.c b/src/renderer.c
          .lut         = lut,
      };
  
-@@ -774,6 +800,11 @@
+@@ -774,6 +801,11 @@
          src2.rect.y1 = src1.new_h;
  
          pl_shader tsh = pl_dispatch_begin(rr->dp);
@@ -124,7 +131,7 @@ diff --git a/src/renderer.c b/src/renderer.c
          ok = pl_shader_sample_ortho2(tsh, &src1, &fparams);
          if (!ok) {
              pl_dispatch_abort(rr->dp, &tsh);
-@@ -2096,11 +2127,18 @@
+@@ -2096,11 +2128,18 @@
              }
          }
  #endif
@@ -148,7 +155,7 @@ diff --git a/src/renderer.c b/src/renderer.c
          pl_dispatch_abort(rr->dp, &el_sh);
      }
  
-@@ -2319,6 +2357,8 @@
+@@ -2319,6 +2358,8 @@
  static void pass_convert_colors(struct pass_state *pass)
  {
      const struct pl_render_params *params = pass->params;
@@ -157,7 +164,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      const struct pl_frame *image = &pass->image;
      const struct pl_frame *target = &pass->target;
      pl_renderer rr = pass->rr;
-@@ -3641,9 +3681,9 @@
+@@ -3641,9 +3682,9 @@
      return true;
  }
  
@@ -169,7 +176,7 @@ diff --git a/src/renderer.c b/src/renderer.c
  {
      params = PL_DEF(params, &pl_render_default_params);
      pl_dispatch_mark_dynamic(rr->dp, params->dynamic_constants);
-@@ -3657,6 +3697,7 @@
+@@ -3657,6 +3698,7 @@
          .image = *pimage,
          .target = *ptarget,
          .info.stage = PL_RENDER_STAGE_FRAME,
@@ -177,7 +184,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      };
  
      if (!pass_init(&pass, true))
-@@ -3684,6 +3725,27 @@
+@@ -3684,6 +3726,27 @@
      PL_ERR(rr, "Failed rendering image!");
      pass_uninit(&pass);
      return false;
@@ -452,7 +459,7 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
      }
  }
  
-@@ -1098,6 +1130,19 @@
+@@ -1098,6 +1130,24 @@
      bool use_ar = cfg.antiring > 0 && ratio[pass] > 1.0;
      bool use_linear = obj->filter->radius == obj->filter->radius_zero;
      use_ar &= !use_linear; // filter has no negative weights
@@ -460,6 +467,11 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
 +        !use_linear && N == 6 && !params->cb1_fp32_lut &&
 +        (ratio[pass] == 2.0f || ratio[pass] == 4.0f);
 +    ident_t exact_lut = 0;
++    bool quad_reuse = params->cb1_quad_scaler && centered && !use_linear &&
++        N == 6 && comps == 0xF && sh_glsl(sh).subgroup_size &&
++        ratio[pass] == 2.0f && ratio[1-pass] == 1.0f &&
++        src->rect.x0 == 0 && src->rect.y0 == 0 &&
++        src->rect.x1 == src->tex->params.w && src->rect.y1 == src->tex->params.h;
 +    if (exact_cache) {
 +        exact_lut = sh_lut(sh, sh_lut_params(
 +            .object=&obj->exact_lut, .var_type=PL_VAR_FLOAT,
@@ -472,7 +484,7 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
  
  #pragma GLSL /* pl_shader_sample_ortho */                                       \
      vec4 color = vec4(0.0, 0.0, 0.0, 1.0);                                      \
-@@ -1109,7 +1154,7 @@
+@@ -1109,9 +1159,28 @@
      vec2 fcoord2 = fract(pos * size - vec2(0.5));                               \
      float fcoord = dot(fcoord2, dir);                                           \
      vec2 base = pos - fcoord * pt - pt * vec2(${const float: N / 2 - 1});       \
@@ -480,8 +492,29 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
 +    PRECISE vec4 ws;                                                            \
      float off;                                                                  \
      ${vecType: comps} c;                                                        \
++    @if (quad_reuse) {                                                         \
++        @if (pass == SEP_HORIZ)                                                \
++            bool odd = (int(gl_FragCoord.x) & 1) != 0;                          \
++        @else                                                                  \
++            bool odd = (int(gl_FragCoord.y) & 1) != 0;                          \
++        vec4 f0 = textureLod($src_tex, base + pt * float(0), 0.0);             \
++        vec4 f2 = textureLod($src_tex, base + pt * float(2), 0.0);             \
++        vec4 f4 = textureLod($src_tex, base + pt * float(4), 0.0);             \
++        @if (pass == SEP_HORIZ) {                                              \
++            vec4 p0 = subgroupQuadSwapHorizontal(f0);                          \
++            vec4 p2 = subgroupQuadSwapHorizontal(f2);                          \
++            vec4 p4 = subgroupQuadSwapHorizontal(f4);                          \
++        @} else {                                                              \
++            vec4 p0 = subgroupQuadSwapVertical(f0);                            \
++            vec4 p2 = subgroupQuadSwapVertical(f2);                            \
++            vec4 p4 = subgroupQuadSwapVertical(f4);                            \
++        @}                                                                     \
++        vec4 last = odd ? textureLod($src_tex, base + pt * float(5), 0.0) : p4; \
++    @}                                                                         \
      /* Mark the accumulators as `precise` to avoid accumulating the error. */   \
-@@ -1119,10 +1164,19 @@
+     PRECISE float wsum = 0.0;                                                   \
+     PRECISE ${vecType: comps} ca = ${vecType: comps}(0.0);                      \
+@@ -1119,14 +1188,28 @@
          ${vecType: comps} hi = ${vecType: comps}(0.0);                          \
          ${vecType: comps} lo = ${vecType: comps}(1e9);                          \
      @}                                                                          \
@@ -503,7 +536,17 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
          off = float(n);                                                         \
          @if (use_linear)                                                        \
              off += ws[n % 4u + 1u];                                             \
-@@ -1134,8 +1188,11 @@
+-        c = textureLod($src_tex, base + pt * off, 0.0).${swizzle: comps};       \
++        @if (quad_reuse) {                                                     \
++            c = (n & 1u) == 0u ? (n == 0u ? f0 : n == 2u ? f2 : f4) :        \
++                n == 1u ? (odd ? p2 : p0) : n == 3u ? (odd ? p4 : p2) : last; \
++        @} else {                                                              \
++            c = textureLod($src_tex, base + pt * off, 0.0).${swizzle: comps};   \
++        @}                                                                     \
+         @if (use_ar) {                                                          \
+             if (n == ${uint: N} / 2u - 1u || n == ${uint: N} / 2u) {            \
+                 lo = min(lo, c);                                                \
+@@ -1134,8 +1217,11 @@
              }                                                                   \
          @}                                                                      \
          ca += ws[n % 4u] * c;                                                   \
