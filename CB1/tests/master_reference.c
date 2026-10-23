@@ -427,6 +427,9 @@ static void transport(bool lifecycle,bool rows)
 {
     struct reference_gpu g=reference_gpu_create();
     struct dvbridge_renderer *renderer=dvbridge_renderer_create(g.gl->gpu);assert(renderer);
+    assert(!renderer->rgb && "Direct transport must not allocate composition backing");
+    assert(dvbridge_renderer_supports_mode(renderer,DVBRIDGE_MODE_STANDARD));
+    assert(dvbridge_renderer_supports_mode(renderer,DVBRIDGE_MODE_MASTER_REFERENCE));
     if(g.log){pl_renderer_destroy(&renderer->renderer);renderer->renderer=pl_renderer_create(g.log,g.gl->gpu);}
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);
     AVDOVIRpuDataHeader *h=av_dovi_get_header(m);
@@ -480,6 +483,7 @@ static void transport(bool lifecycle,bool rows)
     dvbridge_renderer_set_fel_nearest(renderer,true);
     dvbridge_renderer_set_processing_optimizations(renderer,true);
     assert(dvbridge_render_master_reference(renderer,&source,m,bytes,1,lifecycle?NAN:1,geometry,output,false,NULL)==CB1_MASTER_READY);
+    assert(!renderer->rgb && "Full-raster Master writes transport directly");
     const struct dvbridge_candidate *candidate=dvbridge_render_candidate(renderer);assert(candidate);
     unsigned count;const uint32_t *packets=dvbridge_packets(candidate,&count);assert(packets && count);
     GLuint fbo;glGenFramebuffers(1,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);

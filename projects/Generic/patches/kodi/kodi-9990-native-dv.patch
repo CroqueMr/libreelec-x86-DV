@@ -1954,21 +1954,25 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
  
    if (m_isVAAPIBuffer)
    {
-@@ -101,7 +112,13 @@
+@@ -101,7 +112,16 @@
      interop.eglDisplay = m_pWinSystem->GetEGLDisplay();
  
      m_texturePool.ReleaseAll();
+-    m_texturePool.Init(interop);
++    size_t importedSurfaces = VAAPI::CVaapiTexturePool::MAX_ENTRIES;
 +#ifdef CB1_HAS_HDR10_AI
-+    // Keep imported textures for the expanded decoder pool.
-+    m_texturePool.Init(interop, VAAPI::CVaapiTexturePool::MAX_ENTRIES +
-+                                  (m_aiBuffers > NUM_BUFFERS ? m_aiBuffers - NUM_BUFFERS : 0));
-+#else
-     m_texturePool.Init(interop);
++    importedSurfaces += m_aiBuffers > NUM_BUFFERS ? m_aiBuffers - NUM_BUFFERS : 0;
 +#endif
++#ifdef HAVE_DVBRIDGE
++    // Pairing retains decoded surfaces, not additional rendering slots.
++    if (picture.doviSourceInfo.profile)
++      importedSurfaces = std::max(importedSurfaces, size_t(pic->decodeSurfaceCount));
++#endif
++    m_texturePool.Init(interop, importedSurfaces);
      for (auto& tex : m_vaapiTextures)
        tex = nullptr;
  
-@@ -114,9 +131,32 @@
+@@ -114,9 +134,32 @@
    return CLinuxRendererGLES::Configure(picture, fps, orientation);
  }
  
@@ -2001,7 +2005,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
        (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
      return true;
-@@ -171,6 +211,189 @@
+@@ -171,6 +214,189 @@
    return false;
  }
  
@@ -2191,7 +2195,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
  bool CRendererVAAPIGLES::CreateTexture(int index)
  {
    if (!m_isVAAPIBuffer)
-@@ -237,6 +460,11 @@
+@@ -237,6 +463,11 @@
  
  bool CRendererVAAPIGLES::UploadTexture(int index)
  {
@@ -2203,7 +2207,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    if (!m_isVAAPIBuffer)
    {
      CPictureBuffer& buf = m_buffers[index];
-@@ -315,6 +543,18 @@
+@@ -315,6 +546,18 @@
    }
  
    CalculateTextureSourceRects(index, 3);
@@ -2238,7 +2242,64 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
-@@ -251,9 +251,10 @@
+@@ -32,35 +32,33 @@
+ {
+   if (m_imported)
+     return true;
+-
++  VADRMPRIMESurfaceDescriptor surface{};
++  const VAStatus status = vaExportSurfaceHandle(pic->vadsp, pic->procPic.videoSurface,
++      VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
++      VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS, &surface);
++  if (status != VA_STATUS_SUCCESS)
++  {
++    CLog::Log(LOGWARNING, "CVaapi2Texture::Import: export failed: {}", vaErrorStr(status));
++    return false;
++  }
++  std::array<KODI::UTILS::POSIX::CFileHandle, 4> drmFDs;
++  for (unsigned i = 0; i < surface.num_objects && i < drmFDs.size(); ++i)
++    drmFDs[i].attach(surface.objects[i].fd);
++  return Import(pic, surface);
++}
++
++bool CVaapi2Texture::Import(CVaapiRenderPicture* pic, const VADRMPRIMESurfaceDescriptor& surface)
++{
++  if (m_imported)
++    return true;
+   auto failImport = [this]()
+   {
+-    // also destroys images/textures a partly failed import created
+     Reset();
+     return false;
+   };
+-
++  if (!surface.num_objects || surface.num_objects > 4 || !surface.num_layers || surface.num_layers > 4)
++    return failImport();
+   VAStatus status;
+-
+-  VADRMPRIMESurfaceDescriptor surface;
+-
+-  status = vaExportSurfaceHandle(pic->vadsp, pic->procPic.videoSurface,
+-    VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
+-    VA_EXPORT_SURFACE_READ_ONLY | VA_EXPORT_SURFACE_SEPARATE_LAYERS,
+-    &surface);
+-
+-  if (status != VA_STATUS_SUCCESS)
+-  {
+-    CLog::Log(LOGWARNING, "CVaapi2Texture::Import: vaExportSurfaceHandle failed - Error: {} ({})",
+-              vaErrorStr(status), status);
+-    return failImport();
+-  }
+-
+-  // EGL takes its own dma-buf reference at import; the fds need not outlive this function
+-  std::array<KODI::UTILS::POSIX::CFileHandle, 4> drmFDs;
+-  for (uint32_t object = 0; object < surface.num_objects && object < drmFDs.size(); object++)
+-    drmFDs[object].attach(surface.objects[object].fd);
+-
+   status = vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
+   if (status != VA_STATUS_SUCCESS)
+   {
+@@ -251,9 +249,10 @@
  
  } // namespace
  
@@ -2250,7 +2311,22 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
  }
  
  CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
-@@ -300,7 +301,10 @@
+@@ -270,10 +269,11 @@
+     return nullptr;
+   }
+ 
+-  // this export only identifies the memory; Import on a miss re-exports its own fds
++  // Retain these descriptors through a miss; EGL borrows them during import.
+   const auto identity = IdentityFromVaDescriptor(surface, pic->DVDPic.iWidth, pic->DVDPic.iHeight);
+-  for (uint32_t i = 0; i < surface.num_objects; i++)
+-    close(surface.objects[i].fd);
++  std::array<KODI::UTILS::POSIX::CFileHandle, 4> drmFDs;
++  for (unsigned i = 0; i < surface.num_objects && i < drmFDs.size(); ++i)
++    drmFDs[i].attach(surface.objects[i].fd);
+   if (!identity)
+     return nullptr;
+ 
+@@ -300,11 +300,14 @@
      else
      {
        slot = m_entries.size();
@@ -2262,7 +2338,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
        m_entries[slot]->Init(m_interop);
      }
  
-@@ -321,7 +325,8 @@
+-    if (!m_entries[slot]->Import(pic))
++    if (!m_entries[slot]->Import(pic, surface))
+     {
+       m_free.push_back(slot);
+       return nullptr;
+@@ -321,7 +324,8 @@
    protect.push_back(handle);
    for (size_t slot = 0; slot < m_entries.size(); slot++)
    {
@@ -2272,7 +2353,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
        protect.push_back(static_cast<uint32_t>(slot) + 1);
    }
  
-@@ -337,13 +342,16 @@
+@@ -337,13 +341,16 @@
  void CVaapiTexturePool::ReleaseAll()
  {
    m_cache.TakeAll();
@@ -2297,7 +2378,23 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
-@@ -92,10 +92,11 @@
+@@ -18,6 +18,7 @@
+ #include <vector>
+ 
+ #include <va/va.h>
++#include <va/va_drmcommon.h>
+ 
+ #include "system_egl.h"
+ #include "system_gl.h"
+@@ -58,6 +59,7 @@
+ {
+ public:
+   bool Import(CVaapiRenderPicture* pic) override;
++  bool Import(CVaapiRenderPicture* pic, const VADRMPRIMESurfaceDescriptor& surface);
+   void Reset() override;
+   void Init(InteropInfo &interop) override;
+ 
+@@ -92,10 +94,11 @@
    // must exceed the largest VAAPI surface pool (AV1: 27) or cycling evicts every frame
    static constexpr size_t MAX_ENTRIES = 32;
  
@@ -2310,7 +2407,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h b/xbmc
    //! \brief Reset and drop every cached texture; needs the GL context current.
    void ReleaseAll();
  
-@@ -103,8 +104,7 @@
+@@ -103,8 +106,7 @@
    InteropInfo m_interop{};
    DRMPRIME::CDmaBufIdentityCache m_cache{MAX_ENTRIES, "vaapi"};
    // cache handle = entry index + 1; freed slots are recycled

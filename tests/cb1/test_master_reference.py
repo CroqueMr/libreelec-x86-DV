@@ -158,19 +158,20 @@ int main(){
  stored->ints["dvbridge.felupscaling"]=1;
  auto p=FrameOutputSettings();assert(p.output==OutputMode::MasterReference);
  assert(p.Policy().mode==DVBRIDGE_MODE_MASTER_REFERENCE && p.Policy().tv.peak_nits==0);
- assert(p.fastChroma && p.felUpscaling==1); // Stored preferences are not forced off.
+ assert(p.felUpscaling==1 && !p.EffectiveFastChroma(DVBRIDGE_MODE_MASTER_REFERENCE));
  OutputCapabilities caps{};caps.sourceKnown=caps.isDV=caps.nativeDV=caps.processingKnown=caps.hdr10=true;
  for(auto& mode:caps.processing)mode={true,OutputReason::None};
  auto out=SelectOutput(p,caps);assert(out.route==OutputRoute::NativeDV && out.policy.mode==5);
- automaticFastRendering.store(true);
- p.fastRenderingMode=0;assert(SelectOutput(p,caps).policy.mode==5);
- p.fastRenderingMode=1;assert(SelectOutput(p,caps).policy.mode==5);
- p.fastRenderingMode=2;assert(SelectOutput(p,caps).policy.mode==5);
+ const auto revision=p.revision;
+ for(int legacy:{0,1,2}){
+  stored->ints["dvbridge.fastchroma"]=legacy;p=FrameOutputSettings();
+  assert(p.revision==revision && "Unused legacy Fast values must not invalidate a frame transaction");
+  assert(SelectOutput(p,caps).policy.mode==5);
+ }
  assert(p.output==OutputMode::MasterReference && p.Policy().mode==5);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_STANDARD)==1);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_MASTER_REFERENCE)==0);
- automaticFastRendering.store(false);assert(SelectOutput(p,caps).policy.mode==5);
- p.fastRenderingMode=1;
+ assert(SelectOutput(p,caps).policy.mode==5);
  caps.processing[5]={false,OutputReason::SourceIneligible};
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::HDR10 && out.policy.mode==2);
  assert(out.reason==OutputReason::SourceIneligible);

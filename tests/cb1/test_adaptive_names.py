@@ -23,7 +23,6 @@ class AdaptiveNamesTests(unittest.TestCase):
 #include <cmath>
 #include <cstdint>
 #include "utils/DVBridgeFastRendering.h"
-using DVBRIDGE::FastRenderingEnabled;
 enum class OutputMode ENUMS
 struct OutputPreferences PREFS
 int main() {
@@ -139,13 +138,12 @@ void telemetry(DVBRIDGE::OutputPreferences m_requested,dvbridge_mode m_effective
  assert(output.fastChroma==expected && output.fastRenderingMode==expectedMode);
 }
 int main(){using namespace DVBRIDGE;
- for(int global=0;global<3;++global) for(bool automatic:{false,true}){
-  stored->ints["dvbridge.fastchroma"]=global;automaticFastRendering=automatic;
+ for(int global=0;global<3;++global){
+  stored->ints["dvbridge.fastchroma"]=global;
   for(int saved:{0,1,2,3,4,5}){
    stored->ints["dvbridge.outputmode"]=saved;FrameOutputSettings();
-   automaticFastRendering=automatic;auto p=FrameOutputSettings();
+   auto p=FrameOutputSettings();
    assert(int(p.output)==(saved==3?5:saved));
-   assert(p.fastRenderingMode==global && p.fastChroma==(global==1 || (global==2 && automatic)));
    for(auto mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_MASTER_REFERENCE,DVBRIDGE_MODE_HDR10_BASIC,DVBRIDGE_MODE_HDR10_EXPERT,DVBRIDGE_MODE_ENHANCED_DV}){
     const bool expected=mode!=DVBRIDGE_MODE_MASTER_REFERENCE;
     assert(prepare(p,mode)==expected);assert(frame(p,mode)==expected);

@@ -697,7 +697,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/Video
      pic->valid = false;
    }
    procPicId = 0;
-@@ -2338,7 +2375,7 @@
+@@ -2269,6 +2306,7 @@
+     m_bufferPool->processedPicsAway.push_back(pic);
+     retPic->procPic = pic;
+     retPic->vadsp = m_config.dpy;
++    retPic->decodeSurfaceCount = m_config.maxReferences;
+   }
+   else
+   {
+@@ -2338,7 +2376,7 @@
  
  void COutput::EnsureBufferPool()
  {
@@ -717,15 +725,16 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h b/xbmc/cores/VideoPl
    CVAAPIContext *context;
    VADisplay dpy;
    VAProfile profile;
-@@ -262,6 +263,7 @@
+@@ -262,6 +263,8 @@
  class CVaapiRenderPicture : public CVideoBuffer
  {
  public:
 +  unsigned renderBufferCount{6};
++  unsigned decodeSurfaceCount{};
    explicit CVaapiRenderPicture(int id) : CVideoBuffer(id) { }
    void GetPlanes(uint8_t*(&planes)[YuvImage::MAX_PLANES]) override;
    void GetStrides(int(&strides)[YuvImage::MAX_PLANES]) override;
-@@ -549,7 +551,14 @@
+@@ -549,7 +552,14 @@
    virtual void Close();
    long Release() override;
    bool CanSkipDeint() override;
@@ -741,7 +750,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h b/xbmc/cores/VideoPl
  
    CDVDVideoCodec::VCReturn Check(AVCodecContext* avctx) override;
    const std::string Name() override { return "vaapi"; }
-@@ -588,6 +597,9 @@
+@@ -588,6 +598,9 @@
  
    bool m_vaapiConfigured;
    CVaapiConfig  m_vaapiConfig;

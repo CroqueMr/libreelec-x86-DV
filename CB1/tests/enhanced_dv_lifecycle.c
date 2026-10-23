@@ -68,6 +68,7 @@ static void failed_fence_process(void)
 }
 static void state_probe(struct dvbridge_renderer *r)
 {
+    assert(ensure_rgb(r));
     assert(dv_allocate(r,259200));
     const GLuint analysis_program=r->dv.programs[0];
     struct dvbridge_gl_packer *transport_packer=r->dv.packer;

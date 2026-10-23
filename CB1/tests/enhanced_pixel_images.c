@@ -134,6 +134,7 @@ int main(void)
     assert(dve_run(r,&plan,varied,(unsigned[4]){0}));glFinish();
     assert(r->dv.mapped[3]==N && !r->dv.mapped[10]);
     pl_tex_destroy(r->gpu,&varied);dv_release(r);
+    assert(ensure_rgb(r)); /* The full-raster fixture supplies its own input pixels. */
     GLuint fill;glGenFramebuffers(1,&fill);glBindFramebuffer(GL_FRAMEBUFFER,fill);
     glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,pl_opengl_unwrap(r->gpu,r->rgb,NULL,NULL,NULL),0);
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);

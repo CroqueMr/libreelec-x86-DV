@@ -82,7 +82,7 @@ int main() {
   auto nearest=DVBRIDGE::FrameOutputSettings();
   assert(nearest.felUpscaling==1 && nearest.revision!=old.revision);
   assert(DVBRIDGE::FrameOutputSettings().revision==nearest.revision);
-  assert(nearest.output==old.output && nearest.fastChroma==old.fastChroma);
+  assert(nearest.output==old.output);
   stored->ints["dvbridge.felupscaling"]=0;
   auto reset=DVBRIDGE::FrameOutputSettings();
   assert(reset.felUpscaling==0 && reset.revision!=nearest.revision);

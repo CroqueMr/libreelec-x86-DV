@@ -811,12 +811,24 @@ static bool reference_area(float rect[4], const void *metadata,
 }
 
 /* Restore deferred P5 backing contents before another path writes them. */
-static void p5_preserve_backing(struct dvbridge_renderer *r)
+static bool ensure_rgb(struct dvbridge_renderer *r)
 {
-    if(!r->p5_native_pending)return;
+    if(r->rgb)return true;
+    pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+        PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
+    if(fmt)r->rgb=pl_tex_create(r->gpu,pl_tex_params(.w=3840,.h=2160,.format=fmt,
+        .sampleable=true,.renderable=true,.blit_dst=true));
+    return r->rgb!=NULL;
+}
+
+static bool p5_preserve_backing(struct dvbridge_renderer *r)
+{
+    if(!r->p5_native_pending)return true;
+    if(!ensure_rgb(r))return false;
     pl_rect3d rect={.x1=r->p5_native->params.w,.y1=r->p5_native->params.h};
     pl_tex_blit(r->gpu,pl_tex_blit_params(.src=r->p5_native,.dst=r->rgb,.src_rc=rect,.dst_rc=rect));
     r->p5_native_pending=false;
+    return true;
 }
 
 struct active_mask {
@@ -1107,10 +1119,7 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
     r->context = dvbridge_create();
     pl_fmt fmt = pl_find_fmt(gpu, PL_FMT_FLOAT, 4, 32, 32,
                              PL_FMT_CAP_RENDERABLE | PL_FMT_CAP_SAMPLEABLE);
-    if (fmt)
-        r->rgb = pl_tex_create(gpu, pl_tex_params(.w = 3840, .h = 2160, .format = fmt,
-            .sampleable = true, .renderable = true, .blit_dst = true));
-    if (!r->renderer || !r->context || !r->rgb) {
+    if (!r->renderer || !r->context || !fmt) {
         dvbridge_renderer_destroy(r);
         return NULL;
     }
@@ -1297,6 +1306,9 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
            dvbridge_creative_resolve(&creative,metadata,bytes,policy)==DVBRIDGE_CREATIVE_INVALID)return false;
     } else if (!dvbridge_map_color(&mapped, metadata, bytes, paired)) return false;
+    // Other pipelines retain their FP32 backing; native direct transport needs none.
+    if((session || policy || enhanced_reconstruction || native_stage || (!packed && !direct)) &&
+       !ensure_rgb(r))return false;
     mapped.dovi.cb1_native_bounds=!session && !policy && !enhanced_reconstruction;
     unsigned margins[4]={0};
     float policy_area[4];
@@ -1456,7 +1468,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         geometry.source_width*9==geometry.source_height*16 && !source->num_overlays;
     if(r->p5_native_pending && (!reuse_p5 || r->p5_native->params.w!=geometry.source_width ||
         r->p5_native->params.h!=geometry.source_height)){
-        p5_preserve_backing(r);
+        if(!p5_preserve_backing(r))return false;
     }
     bool packed_picture=packed && !session && !policy && !source->num_overlays &&
         (!el || !el->num_overlays);
@@ -1471,12 +1483,18 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         if(!direct_reference){
             /* Reconstruct on the original sampling grid before fitting the carrier. */
             struct pl_frame native=target;
-            native.planes[0].texture=r->rgb;native.planes[0].flipped=false;
+            native.planes[0].flipped=false;
             if(reuse_p5){
+                pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+                    PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
+                if(!fmt)return false;
                 if(!pl_tex_recreate(r->gpu,&r->p5_native,pl_tex_params(
                         .w=geometry.source_width,.h=geometry.source_height,
-                        .format=r->rgb->params.format,.sampleable=true,.renderable=true,.blit_src=true)))return false;
+                        .format=fmt,.sampleable=true,.renderable=true,.blit_src=true)))return false;
                 native.planes[0].texture=mask.reference_source=r->p5_native;
+            }else{
+                if(!ensure_rgb(r))return false;
+                native.planes[0].texture=r->rgb;
             }
             native.crop=(struct pl_rect2df){0,0,geometry.source_width,geometry.source_height};
             struct pl_render_params reconstruction=params;
@@ -1841,7 +1859,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     params.cb1_stable_pq=true;
     params.cb1_fp32_scaler_lut=policy!=NULL;params.hooks=hooks;
     params.num_hooks=direct && direct->custom_quantize?2:1;
-    p5_preserve_backing(r);
+    if(!p5_preserve_backing(r))return false;
     r->ready=render_image(r,&image,&target,&params,&mask,NULL,false);
     if(direct && direct->custom_quantize)
         r->ready=r->ready && direct->quantize.called && !direct->quantize.failed;
@@ -2404,7 +2422,7 @@ static bool dv_transport_requirements(pl_gpu gpu)
 bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *r,enum dvbridge_mode mode)
 {
     if(!r || mode<=DVBRIDGE_MODE_DISABLED || mode>=DVBRIDGE_MODE_COUNT ||
-       !r->gpu || !r->renderer || !r->rgb ||
+       !r->gpu || !r->renderer ||
        !pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE))return false;
     if(mode==DVBRIDGE_MODE_MASTER_REFERENCE)
         return r->gpu->glsl.version >= (r->gpu->glsl.gles?310:400) &&
@@ -3322,7 +3340,7 @@ static pl_tex dve_compose(struct dvbridge_renderer *r,pl_tex input,bool compose)
     pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
     if(!fmt || (compose && !pl_tex_recreate(r->gpu,&r->ai_rgb,pl_tex_params(.w=3840,.h=2160,
         .format=fmt,.sampleable=true,.renderable=true))))return NULL;
-    if(!compose)p5_preserve_backing(r);
+    if(!compose && !p5_preserve_backing(r))return NULL;
     pl_tex output=compose?r->ai_rgb:r->rgb;
     if(output==input)return NULL;
     struct pl_frame image={.num_planes=1,.planes={{.texture=input,.components=4,.component_mapping={0,1,2,3}}},
@@ -3631,7 +3649,7 @@ static bool ai_render_pixels(struct dvbridge_renderer *r,
     bool direct=prepack && r->dv.ai_direct_target;
     if(direct)flip=r->dv.ai_direct_flip;
     pl_tex rgb=native?r->native_picture:prepack?r->ai_enhanced_native:r->rgb;
-    if(!packed && !prepack)p5_preserve_backing(r);
+    if(!packed && !prepack && !p5_preserve_backing(r))return false;
     /* Keep the native PQ result at FP32 precision for shared validation. */
     struct pl_frame image=*source,target={.num_planes=1,
         .planes={{.texture=packed?packed:direct?r->dv.ai_direct_target:prepack?r->ai_enhanced_packed:rgb,
@@ -3794,7 +3812,7 @@ static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_
     const struct cb1_ai_result *prediction,const struct pl_frame *source,const struct dvbridge_geometry *geometry,
     pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
-    if(!r)return NULL;
+    if(!r || !ensure_rgb(r))return NULL;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return NULL;}
     dvbridge_render_policy_cancel(r);dvbridge_candidate_destroy(r->pending);r->pending=NULL;r->packed=false;
     if(!policy || !prediction || !source || !geometry || prediction->id.revision!=policy->revision ||
