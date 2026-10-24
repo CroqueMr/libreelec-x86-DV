@@ -1368,9 +1368,6 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     if (!master && enhanced_reconstruction && r->enhanced_linear && r->fast_chroma &&
         paired && mapped.dovi.nlq_active)
         processing &= ~CB1_PROCESSING_COLOUR;
-    if (processing && cb1_processing_prepare(&r->processing,r->gpu,
-            source,metadata,bytes,paired,processing&~r->processing_failed_groups))
-        params.cb1_processing=&r->processing.view;
     struct pl_color_map_params color_map = pl_color_map_default_params;
     if (session) {
         params.cb1_nearest_identity = true;
@@ -1552,6 +1549,11 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         }
     }
     params.cb1_dovi_transport=mask.source_domain;
+    /* Source-domain transport reshapes without PQ decoding or encoding. */
+    if(mask.source_domain)processing &= ~CB1_PROCESSING_COLOUR;
+    if(processing && cb1_processing_prepare(&r->processing,r->gpu,
+            source,metadata,bytes,paired,processing&~r->processing_failed_groups))
+        params.cb1_processing=&r->processing.view;
     params.cb1_dovi_linear=(enhanced_reconstruction && r->enhanced_linear) ||
         ((session || (policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT)) &&
          (native_stage || (geometry.source_width==3840 && geometry.source_height==2160 &&
@@ -2001,7 +2003,7 @@ static int master_chroma_phase(const struct pl_frame *source)
     return phase;
 }
 
-static enum cb1_master_status render_master_reference(struct dvbridge_renderer *r,
+enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *r,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip,
     const struct dvbridge_native_overlay *overlay)
@@ -2022,17 +2024,11 @@ static enum cb1_master_status render_master_reference(struct dvbridge_renderer *
     if(!target || !cb1_master_reference_transport(metadata,bytes) || phase<0 ||
        (raw.residual && phase!=master_chroma_phase(source->enhancement_layer)))return CB1_MASTER_UNSUPPORTED;
     if(!dvbridge_renderer_supports_mode(r,DVBRIDGE_MODE_MASTER_REFERENCE))return CB1_MASTER_GPU_UNAVAILABLE;
+    /* Paired rows preserve the integer result and avoid duplicate reconstruction. */
+    raw.contract=2;
     return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,false)?
         CB1_MASTER_READY:CB1_MASTER_FAILED;
 }
-
-enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *r,
-    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
-    struct dvbridge_geometry geometry,pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay)
-{
-    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay);
-}
-
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
 {

@@ -264,14 +264,14 @@ fail:
 
 bool dvbridge_fel_device(struct dvbridge_fel *f, AVBufferRef *device)
 {
-    if (!f || !device || ((AVHWDeviceContext *)device->data)->type != AV_HWDEVICE_TYPE_VAAPI)
+    if (!f || f->failed || !device || ((AVHWDeviceContext *)device->data)->type != AV_HWDEVICE_TYPE_VAAPI)
         return false;
     if (f->opened) {
         const AVHWDeviceContext *bound = (void *)f->decoder->hw_device_ctx->data;
         const AVHWDeviceContext *current = (void *)device->data;
         const AVVAAPIDeviceContext *a = bound->hwctx, *b = current->hwctx;
         /* BL decoder renewal can replace the wrapper without changing the VA display. */
-        return a && b && a->display && a->display == b->display && pump(f);
+        return a && b && a->display && a->display == b->display;
     }
     f->decoder->hw_device_ctx = av_buffer_ref(device);
     if (!f->decoder->hw_device_ctx || avcodec_open2(f->decoder, f->decoder->codec, NULL) < 0) {
@@ -279,7 +279,7 @@ bool dvbridge_fel_device(struct dvbridge_fel *f, AVBufferRef *device)
         return false;
     }
     f->opened = true;
-    return pump(f);
+    return true;
 }
 
 
@@ -311,7 +311,7 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
         if (result < 0) {
             av_packet_free(&copy);
             if (result == AVERROR(EAGAIN))
-                return pump(f);
+                return true; /* Submit EL when a decoded BL requests its matching picture. */
             goto fail;
         }
         if (f->num_packets == QUEUE_MAX || copy->size <= 0 ||
@@ -362,12 +362,8 @@ bool dvbridge_fel_drain(struct dvbridge_fel *f)
     return pump(f);
 }
 
-int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
+static int take_ready(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 {
-    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || !pump(f))
-        return -1;
-    if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
-        return 2; /* Preroll before a recoverable EL picture, not a substitute. */
     for (unsigned i = 0; i < f->num_frames;) {
         AVFrame *candidate = f->frames[i];
         if (candidate->pts > pts) {
@@ -383,6 +379,22 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
         }
         av_frame_free(&candidate);
     }
+    return 0;
+}
+
+int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
+{
+    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || f->failed)
+        return -1;
+    if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
+        return 2; /* Preroll before a recoverable EL picture, not a substitute. */
+    /* Return available work before submitting future enhancement pictures. */
+    if (take_ready(f, pts, frame))
+        return 1;
+    if (!pump(f))
+        return -1;
+    if (take_ready(f, pts, frame))
+        return 1;
     /* A later decoded EL frame does not prove the requested one is missing.
      * Keep bounded lookahead and never substitute a neighbouring surface. */
     return f->eof || f->num_frames == QUEUE_MAX ? -1 : 0;

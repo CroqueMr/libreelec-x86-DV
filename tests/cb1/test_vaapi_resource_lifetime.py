@@ -10,20 +10,43 @@ from test_native_video_source import TREE,body
 class VAAPIResourceTests(unittest.TestCase):
     def test_producer_exposes_its_pool_without_removing_decode_wait(self):
         source=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp').read_text()
-        block=body(body(source,'CVaapiRenderPicture* COutput::ProcessPicture('),
-            'if (pic.source->UseVideoSurface())')
+        block=body(source,'CVaapiRenderPicture* COutput::ProcessPicture(')
         program=r'''
 #include <cassert>
 #include <vector>
-int waited{};int vaSyncSurface(void*,unsigned surface){assert(surface==17);++waited;return 0;}
-struct Picture{unsigned videoSurface{17},id{};};
+constexpr int VA_STATUS_SUCCESS=0;
+constexpr unsigned VA_INVALID_ID=~0u;
+constexpr int LOGERROR=1,DVD_NOPTS_VALUE=-1;
+struct CLog{template<class...T>static void Log(T&&...){}};
+int waited{},failure{};int vaSyncSurface(void*,unsigned surface){assert(surface==17);++waited;return failure;}
+struct AVFrame{int pixels{};};
+void av_frame_move_ref(AVFrame* to,AVFrame* from){to->pixels=from->pixels;from->pixels=0;}
+struct VideoPicture{int dts{},iWidth{},iHeight{};void SetParams(const VideoPicture& p){*this=p;}};
+struct CVaapiProcessedPicture;
+struct Source{bool hardware{true};int cleared{};bool UseVideoSurface(){return hardware;}
+ void ClearRef(CVaapiProcessedPicture&){++cleared;}};
+struct CVaapiProcessedPicture{VideoPicture DVDPic;unsigned videoSurface{17},id{},fourcc{};Source* source{};AVFrame* frame{};};
+struct CVaapiRenderPicture{VideoPicture DVDPic;CVaapiProcessedPicture procPic;
+ AVFrame storage,*avFrame=&storage;void* vadsp{};unsigned decodeSurfaceCount{};
+ bool decodeCompleted{},valid{};int released{};void Release(){++released;}};
+struct Output{
+ struct{void* dpy{};unsigned maxReferences{38},pixelFormat{10};int vidWidth{3840},vidHeight{2160};}m_config;
+ struct Pool{unsigned procPicId{};std::vector<CVaapiProcessedPicture>processedPicsAway;
+  CVaapiRenderPicture picture;CVaapiRenderPicture* GetVaapi(){return &picture;}}pool,*m_bufferPool=&pool;
+ CVaapiRenderPicture* ProcessPicture(CVaapiProcessedPicture& pic) @@BLOCK@@
+};
 int main(){
- Picture pic;struct{Picture procPic;void* vadsp{};unsigned decodeSurfaceCount{};}picture,*retPic=&picture;
- struct{void* dpy{};unsigned maxReferences{38};}m_config;
- struct{unsigned procPicId{};std::vector<Picture>processedPicsAway;}pool,*m_bufferPool=&pool;
- @@BLOCK@@
- assert(retPic->decodeSurfaceCount==38 && waited==1);
- assert(pool.processedPicsAway.size()==1 && retPic->procPic.videoSurface==17);
+ Output output;Source source;AVFrame frame{123};CVaapiProcessedPicture pic;pic.source=&source;pic.frame=&frame;
+ auto* current=output.ProcessPicture(pic);
+ assert(current && current->decodeSurfaceCount==38 && waited==1 && current->decodeCompleted);
+ assert(output.pool.processedPicsAway.size()==1 && current->procPic.videoSurface==17);
+ source.hardware=false;assert(output.ProcessPicture(pic)==current);
+ assert(!current->decodeCompleted && waited==1 && current->storage.pixels==123 && frame.pixels==0 && source.cleared==1);
+ assert(current->valid && current->procPic.videoSurface==VA_INVALID_ID);
+ source.hardware=true;failure=1;assert(output.ProcessPicture(pic)==current);
+ assert(waited==2 && !current->decodeCompleted);
+ failure=0;assert(output.ProcessPicture(pic)==current && current->decodeCompleted);
+ pic.source=nullptr;assert(!output.ProcessPicture(pic) && !current->decodeCompleted && current->released==1);
 }
 '''.replace('@@BLOCK@@',block)
         self.run_native(program)
@@ -38,13 +61,15 @@ constexpr int VA_STATUS_SUCCESS=0,LOGERROR=1;using VAStatus=int;
 struct CLog{template<class...T>static void Log(T&&...){}};
 const char* vaErrorStr(int){return "error";}
 int waited{},failure{};int vaSyncSurface(void*,unsigned surface){assert(surface==17);++waited;return failure;}
-struct CVaapiRenderPicture{void* vadsp{};struct{unsigned videoSurface{17};}procPic;};
+struct CVaapiRenderPicture{void* vadsp{};struct{unsigned videoSurface{17};}procPic;bool decodeCompleted{};};
 struct VADRMPRIMESurfaceDescriptor{unsigned num_objects{2},num_layers{2};};
 struct Texture{bool m_imported{};int resets{};void Reset(){++resets;m_imported=false;}
  bool Import(CVaapiRenderPicture* pic,const VADRMPRIMESurfaceDescriptor& surface) @@CODE@@
 };
 int main(){Texture texture;CVaapiRenderPicture pic;VADRMPRIMESurfaceDescriptor surface;
  assert(texture.Import(&pic,surface) && waited==1 && !texture.resets);
+ pic.decodeCompleted=true;assert(texture.Import(&pic,surface) && waited==1);
+ pic.decodeCompleted=false;
  failure=1;assert(!texture.Import(&pic,surface) && waited==2 && texture.resets==1);
  failure=0;surface.num_objects=5;assert(!texture.Import(&pic,surface) && waited==2 && texture.resets==2);
 }
@@ -83,7 +108,7 @@ constexpr int VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2=1;
 constexpr int VA_EXPORT_SURFACE_READ_ONLY=2,VA_EXPORT_SURFACE_SEPARATE_LAYERS=4;
 struct CLog{template<class...T> static void Log(T&&...){}};
 struct InteropInfo{};
-struct CVaapiRenderPicture{void* vadsp{};unsigned decodeSurfaceCount{38};
+struct CVaapiRenderPicture{void* vadsp{};unsigned decodeSurfaceCount{38};bool decodeCompleted{};
  struct{unsigned videoSurface{};}procPic;
  struct{int iWidth{3840},iHeight{2160};}DVDPic;};
 struct VADRMPRIMESurfaceDescriptor{unsigned num_objects{2},key{};struct{int fd{-1};}objects[4];};
@@ -107,7 +132,7 @@ struct CVaapi2Texture{
   bool ok=Import(pic,d);for(unsigned i=0;i<d.num_objects;i++)close(d.objects[i].fd);return ok;}
  bool Import(CVaapiRenderPicture* pic,const VADRMPRIMESurfaceDescriptor& d){
   for(unsigned i=0;i<d.num_objects;i++)assert(openFDs.contains(d.objects[i].fd));
-  assert(d.key==pic->procPic.videoSurface);++imports;vaSyncSurface(nullptr,d.key);return importOK;}
+  assert(d.key==pic->procPic.videoSurface);++imports;if(!pic->decodeCompleted)vaSyncSurface(nullptr,d.key);return importOK;}
 };
 using CVaapiTexture=CVaapi2Texture;
 class CVaapiTexturePool{
@@ -139,6 +164,8 @@ int main(){
  assert(exports==76 && "One descriptor export per access, including import misses");
  assert(waits==76 && "Cached storage still waits for its current decoded content");
  assert(closes==exports*2 && openFDs.empty());
+ {CVaapiRenderPicture pic;pic.decodeCompleted=true;int previous=waits;
+  assert(f.m_texturePool.Get(&pic,{}));assert(waits==previous && openFDs.empty());}
  f.configure(false,22);f.cycle(22,2);assert(imports==22 && waits==44);
  f.configure(false,30,14);f.cycle(38,2);assert(imports==38 && waits==76);
  f.configure(false,38);f.cycle(38,2);assert(imports>38 && "Unrelated native cache policy is unchanged");

@@ -332,8 +332,11 @@ int main(int argc,char **argv)
         for(unsigned i=0;i<3;i++)c->ycc_to_rgb_offset[i]=(AVRational){1,i?2:16};
         assert(dvbridge_dv_source_transport(metadata));
         dvbridge_renderer_set_optimized_dv(r,true);dvbridge_renderer_set_fast_chroma(r,true);
+        dvbridge_renderer_set_processing_optimizations(r,true);
         assert(dvbridge_render_packed(r,&source,metadata,bytes,0,NAN,geometry,target,false));
         assert(reconstructed_source_domain && "Scaling must not add a movie colour conversion");
+        assert(!r->processing.pq_texture[0] && !r->processing.pq_texture[1] &&
+            "Source-domain transport must not allocate unused PQ conversions");
     }else assert(!"Unknown resolution-contract case");
 cleanup:
     tracing=false;dvbridge_render_dv_policy_cancel(r);glFinish();

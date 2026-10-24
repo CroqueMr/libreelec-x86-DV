@@ -16,20 +16,54 @@ extern bool pl_shader_dovi_reference_component(pl_shader,const struct pl_cb1_dov
     int,pl_shader,pl_shader) __attribute__((weak));
 #endif
 
+static const struct pl_render_params *reference_test_params(const struct pl_render_params *,
+    struct pl_render_params *,struct pl_cb1_dovi_reference *);
 static bool track_reference_render(pl_renderer renderer,const struct pl_frame *source,
     const struct pl_frame *target,const struct pl_render_params *params)
 {
     if(params->cb1_dovi_reference && target->planes[0].texture->params.format->type==PL_FMT_FLOAT)
         reference_intermediates++;
+    struct pl_render_params copy;
+    struct pl_cb1_dovi_reference legacy;
+    params=reference_test_params(params,&copy,&legacy);
     return pl_render_image(renderer,source,target,params);
 }
 
 static bool full_reference_rows;
+static bool paired_reference_contract;
+static bool expect_identity_fusion;
+static bool expect_identity_quad;
+static unsigned observed_reference_passes;
+static void count_reference_pass(void *priv,const struct pl_render_info *info)
+{
+    (void)priv;observed_reference_passes++;
+    if(expect_identity_quad && info->pass->shader->params.gpu->glsl.subgroup_size)
+        assert(strstr(info->pass->shader->description,"Exact identity chroma quad reuse"));
+}
+static const struct pl_render_params *reference_test_params(const struct pl_render_params *params,
+    struct pl_render_params *copy,struct pl_cb1_dovi_reference *legacy)
+{
+    if(paired_reference_contract && params->cb1_dovi_reference){
+        /* The adapter must select the existing exact paired-row implementation. */
+        assert(params->cb1_dovi_reference->contract==2);
+        if(full_reference_rows){
+            *copy=*params;*legacy=*params->cb1_dovi_reference;
+            legacy->contract=1;copy->cb1_dovi_reference=legacy;params=copy;
+        }else if(expect_identity_fusion){
+            assert(!params->info_callback);
+            *copy=*params;copy->info_callback=count_reference_pass;params=copy;
+        }
+    }
+    return params;
+}
 bool __real_pl_render_image_cb1_active_rows(pl_renderer,const struct pl_frame *,
     const struct pl_frame *,const struct pl_render_params *,int,int);
 bool __wrap_pl_render_image_cb1_active_rows(pl_renderer r,const struct pl_frame *source,
     const struct pl_frame *target,const struct pl_render_params *params,int y0,int y1)
 {
+    struct pl_render_params copy;
+    struct pl_cb1_dovi_reference legacy;
+    params=reference_test_params(params,&copy,&legacy);
     return full_reference_rows?pl_render_image(r,source,target,params):
         __real_pl_render_image_cb1_active_rows(r,source,target,params,y0,y1);
 }
@@ -576,8 +610,8 @@ static void transport(bool lifecycle,bool rows)
             int w=texture->params.w,hh=texture->params.h,n=p?2:1;
             uint16_t *data=malloc((size_t)w*hh*n*sizeof(*data));assert(data);
             for(int y=0;y<hh;y++)for(int x=0;x<w;x++)for(int c=0;c<n;c++)
-                data[((size_t)y*w+x)*n+c]=(f?(384+(x*17+y*43+c*67)%256):
-                    (64+(x*29+y*31+c*157)%896))<<6;
+                /* BL enumerates every storage word, including ignored low bits. */
+                data[((size_t)y*w+x)*n+c]=f?(384+(x*17+y*43+c*67)%256)<<6:(uint16_t)(x+(size_t)y*w+c*137);
             glBindTexture(GL_TEXTURE_2D,pl_opengl_unwrap(g.gl->gpu,texture,NULL,NULL,NULL));
             glTexSubImage2D(GL_TEXTURE_2D,0,0,0,w,hh,p?GL_RG:GL_RED,GL_UNSIGNED_SHORT,data);
             assert(glGetError()==GL_NO_ERROR);
@@ -607,17 +641,36 @@ static void transport(bool lifecycle,bool rows)
         struct dvbridge_native_overlay overlay={.texture=gui,.degamma=decode,.pq=encode,.rect={100,269,104,285}};
         size_t frame_bytes=(size_t)3840*2160*4;
         uint8_t *expected=malloc(frame_bytes),*actual=malloc(frame_bytes);assert(expected && actual);
-        const int offsets[][2]={{277,281},{1,3},{279,276},{0,0},{275,279}};
+        const int offsets[][2]={{277,281},{1,3},{279,276},{0,0},{275,279},{0,0},{7,11},{3,5},{0,0},{279,283},{3,9},{279,283}};
         for(unsigned test=0;test<sizeof(offsets)/sizeof(offsets[0]);test++)for(int flip=0;flip<2;flip++){
+            geometry.y=test==9?1:0; /* An odd destination row must not exchange adjacent source phases. */
+            source.crop.y1=geometry.source_height=geometry.height=test==9?2158:2160;
+            if(test>=5){
+                h->disable_residual_flag=test!=7;
+                for(int c=0;c<3;c++){
+                    AVDOVIReshapingCurve *curve=&av_dovi_get_mapping(m)->curves[c];
+                    curve->pivots[0]=test==8?256:0;curve->pivots[1]=test==8?768:1023;
+                    curve->mapping_idc[0]=AV_DOVI_MAPPING_POLYNOMIAL;
+                    curve->poly_order[0]=1;curve->poly_coef[0][0]=0;
+                    curve->poly_coef[0][1]=1<<23;curve->poly_coef[0][2]=0;
+                }
+                if(test==10)av_dovi_get_mapping(m)->curves[0].poly_coef[0][0]=1<<20;
+                source.planes[1].shift_y=(test==6 || test==9)?0:-.5f;
+            }
             av_dovi_get_ext(m,1)->l5.top_offset=offsets[test][0];
             av_dovi_get_ext(m,1)->l5.bottom_offset=offsets[test][1];
             uint32_t expected_packets[1024];unsigned expected_count=0;
             for(int full=0;full<2;full++){
                 full_reference_rows=full;
+                expect_identity_fusion=paired_reference_contract && test>=5 && test!=7 && test!=10 && !geometry.y;
+                observed_reference_passes=0;
                 struct dvbridge_renderer *current=full?control:renderer;
-                dvbridge_renderer_set_overlay_visible(current,test==0);
+                const bool with_gui=test==0 || test==9 || test==11;
+                dvbridge_renderer_set_overlay_visible(current,with_gui);
                 assert(dvbridge_render_master_reference(current,&source,m,bytes,2+test,2+test,
-                    geometry,output,flip,test==0?&overlay:NULL)==CB1_MASTER_READY);
+                    geometry,output,flip,with_gui?&overlay:NULL)==CB1_MASTER_READY);
+                if(expect_identity_fusion && !full)
+                    assert(observed_reference_passes==(g.gl->gpu->glsl.subgroup_size?1:3));
                 const struct dvbridge_candidate *pending=dvbridge_render_candidate(current);assert(pending);
                 unsigned n;const uint32_t *p=dvbridge_packets(pending,&n);assert(n<=1024);
                 if(!full){expected_count=n;memcpy(expected_packets,p,n*sizeof(*p));}
@@ -631,12 +684,18 @@ static void transport(bool lifecycle,bool rows)
                 assert(dvbridge_render_commit(current));
             }
             full_reference_rows=false;
-            if(memcmp(expected,actual,frame_bytes))fprintf(stderr,"L5 rows mismatch case %u flip %d\n",test,flip);
+            if(memcmp(expected,actual,frame_bytes)){
+                fprintf(stderr,"L5 rows mismatch case %u flip %d\n",test,flip);
+                unsigned shown=0;
+                for(size_t i=0;i<frame_bytes && shown<8;i++)if(expected[i]!=actual[i]){
+                    fprintf(stderr,"byte %zu x%zu y%zu channel%zu %u != %u\n",i,(i/4)%3840,i/(4*3840),i%4,expected[i],actual[i]);shown++;
+                }
+            }
             assert(!memcmp(expected,actual,frame_bytes));
         }
         free(expected);free(actual);dvbridge_renderer_destroy(control);
         pl_tex_destroy(g.gl->gpu,&gui);pl_tex_destroy(g.gl->gpu,&decode);pl_tex_destroy(g.gl->gpu,&encode);
-        puts("PASS 10 complete FEL/MMR carriers: odd/asymmetric L5, flip, reused state, GUI across bars");
+        puts("PASS 24 complete FEL/MMR/identity carriers: L5, flip, identity+GUI, both chroma phases, residual and pivot guards");
     }
     pl_gpu_finish(g.gl->gpu);
     assert(renderer->fast_chroma && renderer->fel_nearest && renderer->processing_optimizations);
@@ -768,6 +827,8 @@ int main(int argc,char **argv)
     if(!strcmp(argv[2],"transport")){transport(false,false);return 0;}
     if(!strcmp(argv[2],"lifecycle")){transport(true,false);return 0;}
     if(!strcmp(argv[2],"rows")){transport(false,true);return 0;}
+    if(!strcmp(argv[2],"paired")){paired_reference_contract=true;transport(false,true);return 0;}
+    if(!strcmp(argv[2],"paired-quad")){expect_identity_quad=true;paired_reference_contract=true;transport(false,true);return 0;}
     if(!strcmp(argv[2],"resolutions")){resolutions(false);return 0;}
     if(!strcmp(argv[2],"placement")){resolutions(true);return 0;}
     assert(!"Master Reference GPU route missing");

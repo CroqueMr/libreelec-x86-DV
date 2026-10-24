@@ -52,6 +52,7 @@ set_tests_properties(resolution_adaptive_no_clone PROPERTIES SKIP_RETURN_CODE 77
 target_link_libraries(master_reference PRIVATE dvbridge_core)
 target_link_options(master_reference PRIVATE -Wl,--wrap=pl_render_image_cb1_active_rows)
 add_test(NAME master_reference_active_rows COMMAND master_reference --case rows --implementation master)
+add_test(NAME master_reference_paired_rows COMMAND master_reference --case paired --implementation master)
 foreach(mode current capabilities spatial reconstruction transport lifecycle resolutions placement)
   if(mode STREQUAL "current")
     set(master_test master_current_stages)

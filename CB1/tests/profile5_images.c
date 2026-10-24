@@ -212,7 +212,17 @@ int main(void)
             assert(scaled_materializations);
             GLuint fbo;glGenFramebuffers(1,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
             glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,pl_opengl_unwrap(g.gl->gpu,output,NULL,NULL,NULL),0);
-            glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,b);assert(glGetError()==GL_NO_ERROR && !memcmp(a,b,n));
+            glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,b);assert(glGetError()==GL_NO_ERROR);
+            if(memcmp(a,b,n)){
+                size_t count=0,first=n;unsigned maximum=0;
+                for(size_t i=0;i<n;i++)if(a[i]!=b[i]){
+                    if(first==n)first=i;count++;
+                    unsigned delta=abs((int)a[i]-(int)b[i]);if(delta>maximum)maximum=delta;
+                }
+                fprintf(stderr,"P5 scaler case%u: %zu bytes, max%u, first %zu,%zu channel%zu: %u/%u\n",
+                    test,count,maximum,first/4%3840,first/4/3840,first%4,a[first],b[first]);
+            }
+            assert(!memcmp(a,b,n));
             glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&fbo);assert(dvbridge_render_commit(r));
             r->fragment_quad=true;
             /* Varied chroma catches an incorrect neighbouring quad lane. */

@@ -91,6 +91,11 @@ this is a reproducible ETSI-based contract, not a certified-player comparison.
 
 ## Execution
 
+EL packets enter the existing bounded queue and are decoded when pairing needs
+them or at drain. An already buffered exact-PTS picture is returned before
+submitting future packets. Decoder references, completion fences and queue limits
+are unchanged.
+
 Reconstruction stays on the GPU. Pooled FP32 planes retain exact integer results
 for the separable EL filter, reconstructed chroma and output chroma. Luma
 reconstruction is fused with final sampling. L5-masked rows omit reconstruction
@@ -126,6 +131,19 @@ declared footprint. Unsupported inputs fail explicitly.
 Exactness is relative to this documented contract. It does not establish Dolby
 certification or equality to a certified player's physical HDMI output.
 Hardware throughput requires separate measurement.
+
+The renderer selects exact paired-row reconstruction in the matched library.
+Identity mappings without a residual can combine reconstruction, integer chroma
+filtering and transport in one pass on GPUs supporting fragment quad operations.
+Each aligned 2x2 fragment quad shares the overlapping integer chroma taps for
+both row phases. Odd destination rows, other mappings and unsupported GPUs
+retain the general integer path. Filters, rounding and outgoing metadata do not
+change; no extra decode or presentation queue is introduced.
+The fused UNORM unpack returns the same integer codes for every supported
+8/16-bit storage word, including words with nonzero ignored low bits.
+Identity taps accumulate before depth widening: the absolute eight-tap bound
+is 6,334,416, below2^23. FP32 represents these integer sums exactly; the original
+signed rounding is preserved by power-of-two division and floor.
 
 Profile 5 remains in its decoded IPT-PQ-C2 domain through reconstruction and
 transport. Master uses integer reconstruction and the exact chroma filter,

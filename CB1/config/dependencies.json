@@ -81,7 +81,7 @@
     "patches/libplacebo/libplacebo-9913-processing.patch": "d0df8878eecdeaaee0899650faa0a9f692703ca99580d695c81d50986dceca43",
     "patches/libplacebo/libplacebo-9914-shared-mmr-intervals.patch": "be5a37db02a43295a72e6e9719fe1874389f1c08dca6c04aaaa77d27906b24d7",
     "patches/libplacebo/libplacebo-9915-hdr10-linear-conversion.patch": "4736a693879367a5b7f63c245568f0ddeae40a52b8fe1938393f83da4d11da33",
-    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "ac9d116a50603bd8787f8a3a1e69cd209e5e2dce46fde56b00308d7f6f6156ba",
+    "patches/libplacebo/libplacebo-9916-fel-filter.patch": "b49d68e53d5bea48153dd345b9bba83394d72cb5fd506dfb4669142493f20007",
     "patches/libplacebo/libplacebo-9917-native-bounds.patch": "1da49eabf1c5f2ee190abbcd5eab0d2a865f077c7e035c21147dd56cdd8d336a"
   },
   "modified_sources": {
@@ -95,7 +95,7 @@
     "libplacebo/src/include/libplacebo/shaders/sampling.h": "f04810908f907a5a16320b18b9222b0b5006647e2f0a1f66d1002bcdc2ad4496",
     "libplacebo/src/include/libplacebo/shaders.h": "bdc29cddb6545d09ce4b2c6602237cbb5d50c5ac2c1c55cecf9fa4794086bb60",
     "libplacebo/src/include/libplacebo/dispatch.h": "2208cbf66dc61069377d645309852319657be4b12fee6297315a2310ceb75d26",
-    "libplacebo/src/renderer.c": "12b14408a64ea5f7c8167762a1a8bec82601698f6bc36d089975066b813353f7",
+    "libplacebo/src/renderer.c": "db1ddbccfe4d314102716b37a5c75e492c67b47e7b13d00896e1c7b6e05f420b",
     "libplacebo/src/shaders/colorspace.c": "918aeb67ad0ea0d78e0a2b1bd4589ee9d1727ffeadd9fd004790bfc01e670f53",
     "libplacebo/src/include/libplacebo/shaders/colorspace.h": "a4eedb6838b7b625c2f852d80153639328de8fcf6df66129918d9d9b031e1eef",
     "libplacebo/src/shaders/sampling.c": "d5229c6366d455725990ff348fec499507cd86e5949081c6f94b927aa0603584",
@@ -105,9 +105,9 @@
     "libplacebo/src/include/libplacebo/colorspace.h": "417cf28c6873baed22ccc64033c5bccb56fbec54f931ba5699250339b77d8eee",
     "libplacebo/src/include/libplacebo/utils/libav_internal.h": "efc6965d7a3581c82fad1d4c699ae6305ffba45c26102b0dc003572a362b6c40",
     "libplacebo/src/tests/gpu_tests.c": "3a9b3e24aed74365766f5ad98ed121eb7aa78f0711df0f6165b63cd812ed6e90",
-    "libplacebo/src/shaders/dovi_reference.c": "f63c022d7ade690142fff9608c136e63e7e024b9d571b8090a5235d6f6eea10c",
+    "libplacebo/src/shaders/dovi_reference.c": "f8c215217530f9c2190a53238f42bc2489028b094734399c149e26d3fa396486",
     "libplacebo/src/shaders/meson.build": "f4ba519f76d227adabbab791814fb62f96d45236c08889409738de7eca31304e",
-    "libplacebo/src/shaders.h": "6cc9a7963432e4571cc2c357ce832f5d5d03b7241c5dada77576520290a5ba57",
+    "libplacebo/src/shaders.h": "c3cbb9e5dda36355a5db1258151ae3d4d7a3f59cd834ab24a5cc0f2be7670df3",
     "ffmpeg/libavformat/mpegts.c": "229c92abd17c0c9bc37338adf660515d18f84af85ba4339e782ff92e4af21565",
     "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e",
     "ffmpeg/libavformat/matroskadec.c": "ab6010ab5f3350c91f50c8c4241aa70269bf87dfdc2397910639112fb7a4413b"

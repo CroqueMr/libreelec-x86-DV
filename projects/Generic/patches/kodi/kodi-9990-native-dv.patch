@@ -2242,7 +2242,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp
-@@ -32,35 +32,33 @@
+@@ -32,36 +32,34 @@
  {
    if (m_imported)
      return true;
@@ -2296,9 +2296,11 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
 -  for (uint32_t object = 0; object < surface.num_objects && object < drmFDs.size(); object++)
 -    drmFDs[object].attach(surface.objects[object].fd);
 -
-   status = vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
+-  status = vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
++  status = pic->decodeCompleted ? VA_STATUS_SUCCESS : vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
    if (status != VA_STATUS_SUCCESS)
    {
+     CLog::Log(LOGERROR, "CVaapi2Texture::Import: vaSyncSurface - Error: {} ({})",
 @@ -251,9 +249,10 @@
  
  } // namespace
@@ -2311,7 +2313,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
  }
  
  CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
-@@ -270,10 +269,11 @@
+@@ -270,18 +269,19 @@
      return nullptr;
    }
  
@@ -2326,6 +2328,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp b/xb
    if (!identity)
      return nullptr;
  
+   uint32_t handle = m_cache.Lookup(*identity);
+   if (handle)
+   {
+-    // Import syncs only on a miss; a cached texture still needs this frame's decode done
+-    status = vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
++    // The producer's completion belongs to this picture, not to the cached storage.
++    status = pic->decodeCompleted ? VA_STATUS_SUCCESS : vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
+     if (status != VA_STATUS_SUCCESS)
+     {
+       CLog::Log(LOGERROR, "CVaapiTexturePool::{}: vaSyncSurface - Error: {} ({})", __FUNCTION__,
 @@ -300,11 +300,14 @@
      else
      {

@@ -9,7 +9,7 @@
 
 /* Real FFmpeg splitter and ownership; deterministic decoder replaces VAAPI ioctls. */
 static int64_t ready[64];
-static unsigned count;
+static unsigned count, submissions;
 static bool end, bad_pts, send_error;
 static int native_pool, initialized_pool = -1;
 int __wrap_avcodec_get_hw_frames_parameters(AVCodecContext *ctx, AVBufferRef *device,
@@ -43,6 +43,7 @@ void __wrap_avcodec_flush_buffers(AVCodecContext *ctx)
 int __wrap_avcodec_send_packet(AVCodecContext *ctx, const AVPacket *packet)
 {
     (void)ctx;
+    ++submissions;
     if (send_error)
         return AVERROR_INVALIDDATA;
     if (!packet) {
@@ -110,6 +111,7 @@ int main(void)
     ((AVHWDeviceContext *)device->data)->hwctx = &va_device;
     assert(dvbridge_fel_device(f, device));
     assert(initialized_pool == 0); /* Preserve FFmpeg's dynamically growing VAAPI pool. */
+    assert(submissions == 0); /* Device binding must not submit EL before a BL request. */
     assert(dvbridge_fel_take(f, 0, &frame) == 1 && frame->pts == 0);
     assert(dvbridge_fel_take(f, 0, &frame) == -1); /* refuse overwriting ownership */
     av_frame_free(&frame);
@@ -154,15 +156,45 @@ int main(void)
     assert(dvbridge_fel_take(f, 1, &frame) == -1 && !frame);
     assert(!dvbridge_fel_submit(f, p));
     dvbridge_fel_reset(f);
+    unsigned queued = submissions;
+    for (int i = 0; i < 3; ++i) {
+        p->pts = p->dts = i * 41708;
+        assert(dvbridge_fel_submit(f, p));
+    }
+    assert(submissions == queued);
+    assert(dvbridge_fel_drain(f)); /* EOF must submit and retain all deferred pictures. */
+    for (int i = 0; i < 3; ++i) {
+        assert(dvbridge_fel_take(f, i * 41708, &frame) == 1 && frame->pts == i * 41708);
+        av_frame_free(&frame);
+    }
+    assert(dvbridge_fel_exhausted(f));
+    assert(dvbridge_fel_take(f, 3 * 41708, &frame) == -1 && !frame);
+    dvbridge_fel_reset(f);
+    p->pts = p->dts = 0;
     bad_pts = true;
-    assert(!dvbridge_fel_submit(f, p) && dvbridge_fel_failed(f));
+    assert(dvbridge_fel_submit(f, p));
+    assert(dvbridge_fel_take(f, p->pts, &frame) == -1 && dvbridge_fel_failed(f));
     bad_pts = false;
     dvbridge_fel_reset(f);
     send_error = true;
-    assert(!dvbridge_fel_submit(f, p) && dvbridge_fel_failed(f));
+    assert(dvbridge_fel_submit(f, p));
+    assert(dvbridge_fel_take(f, p->pts, &frame) == -1 && dvbridge_fel_failed(f));
     send_error = false;
     dvbridge_fel_reset(f);
     assert(!dvbridge_fel_failed(f));
+    p->pts = p->dts = 0; assert(dvbridge_fel_submit(f, p));
+    p->pts = p->dts = 41708; assert(dvbridge_fel_submit(f, p));
+    assert(dvbridge_fel_take(f, 0, &frame) == 1 && frame->pts == 0);
+    av_frame_free(&frame);
+    p->pts = p->dts = 83416; assert(dvbridge_fel_submit(f, p));
+    unsigned before = submissions;
+    send_error = true;
+    assert(dvbridge_fel_take(f, 41708, &frame) == 1 && frame->pts == 41708);
+    assert(submissions == before); /* A ready picture does not wait for future EL work. */
+    av_frame_free(&frame);
+    assert(dvbridge_fel_take(f, 83416, &frame) == -1 && dvbridge_fel_failed(f));
+    assert(!dvbridge_fel_device(f, device));
+    send_error = false;
     dvbridge_fel_destroy(f);
     native_pool = 5;
     parameters = avcodec_parameters_alloc();
@@ -176,7 +208,6 @@ int main(void)
     assert(f && dvbridge_fel_device(f, device));
     assert(initialized_pool == 41); /* Fixed pools retain the existing 32+4 headroom. */
     dvbridge_fel_destroy(f);
-    av_buffer_unref(&device);
     parameters = avcodec_parameters_alloc();
     parameters->codec_type = AVMEDIA_TYPE_VIDEO;
     parameters->codec_id = AV_CODEC_ID_HEVC;
@@ -191,9 +222,11 @@ int main(void)
     }
     p->pts = 32;
     assert(!dvbridge_fel_submit(f, p) && dvbridge_fel_failed(f));
+    assert(!dvbridge_fel_device(f, device)); /* Failure before the first binding stays terminal. */
     dvbridge_fel_reset(f);
     assert(dvbridge_fel_submit(f, p));
     dvbridge_fel_destroy(f);
+    av_buffer_unref(&device);
     av_packet_free(&p);
     puts("PASS: real EL split, immutable input, bounded queue, exact PTS, reset, EOF and errors");
 }
