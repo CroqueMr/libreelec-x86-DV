@@ -17,6 +17,8 @@ sharing the same Ryzen generation number.
 
 | Family | Representative models | Status |
 | --- | --- | --- |
+| Intel Arc A-series, Alchemist / DG2 | A310, A380, A580, A750, A770 | Experimental; native HDMI only |
+| Intel Arc B-series, Battlemage | B570, B580 | Experimental; native HDMI only |
 | AMD Radeon RX 5000, RDNA 1 | RX 5500 XT, 5600 XT, 5700 / 5700 XT | Experimental |
 | AMD Radeon RX 6000, RDNA 2 | RX 6400, 6600, 6700 XT, 6800, 6900 XT | Experimental |
 | AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Experimental |
@@ -29,6 +31,12 @@ sharing the same Ryzen generation number.
 The AMD Dolby Vision driver covers selected DCN 1.x, 2.x and 3.x display engines.
 RX 9000 / DCN 4, Polaris RX 400 / 500 and discrete Vega cards are outside its
 current allowlist. Vega-based Ryzen APUs listed above use a different display path.
+
+Intel Arc uses the existing i915/xe display code, Mesa iris and Intel iHD VAAPI
+driver. Battlemage also requires the `xe/` firmware bundled by this build.
+An HDMI socket wired through a DisplayPort converter does not qualify as native
+HDMI. Arc Dolby Vision HDMI output has not been hardware-qualified here.
+[Intel Arc integration](INTEL-ARC.md).
 
 NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
 and a VAAPI-to-NVDEC bridge. Pascal / GTX 10 and earlier are not supported by this

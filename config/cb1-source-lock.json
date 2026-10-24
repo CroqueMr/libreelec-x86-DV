@@ -56,7 +56,7 @@
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-panel.png": "36480b14914c7b2a0a5f6db253132142b041496a9e59a9392884b7f27aca61a3",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "8d2c6ca2bbff567f605adfb5ec333d346074dda187848345ae2a764ef98a121b",
     "packages/sysutils/busybox/config/busybox-init.conf": "747ef97a8bc053add17961092bab59d27f6528f165694cd098a5bd51a5f701c8",
-    "packages/linux/package.mk": "9430d047802cd56edbbb3d112f4b7c58611e73ee9a091748d0ddd405888a588f",
+    "packages/linux/package.mk": "26196f0d3a742766e94851fd14ac8d688a8a70bef51ec1589ece758f2db71e9d",
     "packages/tools/installer/scripts/installer": "a7353e217a6096d41cf7b9719541a9a71fe950f4a6f518d75f58ac1817ee2f66",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlayerProcessInfo.xml": "95d8997b81e0e9cfd74beeca70c008071aada0a5cfeabc393d3cfddbbc9ef380",
     "packages/sysutils/busybox/scripts/init": "956a56f1ad6349ec9db4c7488557ac20b9bdae24878a15dc26b874b618719b69",

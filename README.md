@@ -2,7 +2,7 @@
 
 Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Intel and AMD integrated graphics
-are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
+are supported. Dedicated Intel Arc, AMD Radeon and NVIDIA GeForce GPUs are experimental.
 
 **R1.0.0 Beta5** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
 
@@ -99,6 +99,7 @@ A 3D-capable display and suitable glasses are required.
 | Hardware | Dolby Vision support |
 | --- | --- |
 | Intel iGPU: Core 8th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
+| Intel dedicated GPU: Arc A-series / B-series | Experimental; native HDMI required |
 | AMD iGPU: Ryzen 2000G / 3000G and corresponding mobile APUs, 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
 | AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Experimental |
 | NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Experimental |
@@ -116,7 +117,7 @@ build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 - Screenshots are unavailable in Dolby Vision Master Reference.
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
-- Dedicated AMD and NVIDIA GPU support is experimental.
+- Dedicated Intel Arc, AMD and NVIDIA GPU support is experimental.
 - HDR10 Support issue on Intel 8th & 9th gen.
 - HDR10+ not supported. 
 
