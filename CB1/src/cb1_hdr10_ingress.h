@@ -37,6 +37,9 @@ enum cb1_ai_status cb1_hdr10_ingress_rgb(struct cb1_hdr10_ingress *ctx,
 /* Direct source-plane downsampling, quantized through binary16 for the model. */
 enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
     const struct pl_frame *source,pl_tex *out);
+/* Model preview with frozen intermediate UNORM16 and final binary16 rounding. */
+enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *ctx,
+    const struct pl_frame *source,pl_tex *out);
 #ifdef __cplusplus
 }
 #endif

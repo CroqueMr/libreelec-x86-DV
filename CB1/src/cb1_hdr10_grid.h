@@ -38,4 +38,24 @@ static inline GLuint cb1_hdr10_grid_texture(pl_gpu gpu,pl_tex texture)
     GLuint name=pl_opengl_unwrap(gpu,texture,&target,NULL,NULL);
     return target==GL_TEXTURE_2D?name:0;
 }
+static inline bool cb1_hdr10_grid_source_inputs(pl_gpu gpu,const struct pl_frame *source,GLuint inputs[3])
+{
+    for(unsigned i=0;i<3;i++){
+        GLenum target=0;
+        pl_tex texture=source->planes[i==2 && source->num_planes==2?1:i].texture;
+        inputs[i]=pl_opengl_unwrap(gpu,texture,&target,NULL,NULL);
+        if(!inputs[i] || target!=GL_TEXTURE_2D)return false;
+    }
+    return true;
+}
+
+static inline void cb1_hdr10_grid_source_uniforms(GLuint program,const struct pl_frame *source)
+{
+    glUniform1ui(glGetUniformLocation(program,"subsampled"),source->planes[1].texture->params.w==source->planes[0].texture->params.w/2);
+    glUniform1ui(glGetUniformLocation(program,"source_packed"),source->num_planes==2);
+    glUniform1ui(glGetUniformLocation(program,"height"),(unsigned)(source->crop.y1-source->crop.y0));
+    glUniform1i(glGetUniformLocation(program,"depth_shift"),source->repr.bits.color_depth-8);
+    glUniform1i(glGetUniformLocation(program,"bit_shift"),source->repr.bits.bit_shift);
+    glUniform2i(glGetUniformLocation(program,"origin"),(int)source->crop.x0,(int)source->crop.y0);
+}
 #endif

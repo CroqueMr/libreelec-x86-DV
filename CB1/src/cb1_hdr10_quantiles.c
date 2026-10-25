@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_hdr10_quantiles.h"
+#include "cb1_hdr10_ingress.h"
 #include "cb1_hdr10_grid.h"
 #include <libplacebo/opengl.h>
 #include <GLES3/gl31.h>
@@ -12,6 +13,11 @@
 static const char shader_source[] =
     "#version 310 es\nprecision highp float;precision highp int;\n"
     "layout(local_size_x=128)in;layout(binding=0)uniform highp sampler2D video;"
+    "layout(binding=2)uniform highp sampler2D Y_input;layout(binding=3)uniform highp sampler2D U_input;"
+    "layout(binding=4)uniform highp sampler2D V_input;"
+    "uniform bool source_direct;uniform uint subsampled,source_packed,height;uniform int depth_shift,bit_shift;uniform ivec2 origin;"
+    CB1_HDR10_SOURCE_GLSL
+    "vec3 source_at(ivec2 p){return source_direct?analysis_rgb(p).rgb:texelFetch(video,p,0).rgb;}"
     "layout(std430,binding=0)buffer Histogram{uint bins[];};"
     "layout(std430,binding=1)writeonly buffer Result{uint codes[14];};"
     "layout(std430,binding=2)writeonly buffer Command{uint dispatch_groups[3];};"
@@ -31,7 +37,7 @@ static const char shader_source[] =
     "uint count=((size.x+step_size.x-1u)/step_size.x)*((size.y+step_size.y-1u)/step_size.y);"
     "if(pass==4u){if(i==0u){dispatch_groups[0]=(count+127u)/128u;dispatch_groups[1]=1u;dispatch_groups[2]=1u;}return;}"
     "if(pass==1u){if(i>=count)return;uint w=(area.z-area.x+step_size.x-1u)/step_size.x;"
-    "uvec2 p=area.xy+uvec2(i%w,i/w)*step_size;vec3 q=texelFetch(video,ivec2(p),0).rgb;"
+    "uvec2 p=area.xy+uvec2(i%w,i/w)*step_size;vec3 q=source_at(ivec2(p));"
     "if(any(isnan(q))||any(isinf(q))||any(lessThan(q,vec3(0.0)))||any(greaterThan(q,vec3(1.0))))"
     "{atomicOr(bins[65536],1u);return;}"
     "uint code=uint(roundEven(max(q.r,max(q.g,q.b))*65535.0));atomicAdd(bins[code],1u);return;}"
@@ -120,20 +126,23 @@ void cb1_hdr10_quantiles_reset(struct cb1_hdr10_quantiles *ctx, uint64_t stream,
 }
 
 static enum cb1_ai_status submit(struct cb1_hdr10_quantiles *ctx, pl_tex texture,
-    struct cb1_hdr10_bounds bounds, struct cb1_ai_identity id,pl_tex pending_bounds,bool flush)
+    struct cb1_hdr10_bounds bounds, struct cb1_ai_identity id,pl_tex pending_bounds,bool flush,const struct pl_frame *source)
 {
-    if (!ctx || ctx->failed || !ctx->active || id.stream!=ctx->stream || id.revision!=ctx->revision ||
-        !texture || !texture->params.sampleable || texture->params.d ||
+    if (!ctx || ctx->failed || !ctx->active || id.stream!=ctx->stream || id.revision!=ctx->revision)
+        return CB1_AI_INVALID;
+    if(!source){
+        if(!texture || !texture->params.sampleable || texture->params.d ||
         texture->params.w<1 || texture->params.h<1 || texture->params.w>4096 || texture->params.h>4096 ||
         (size_t)texture->params.w*texture->params.h>4096*2160 ||
         bounds.x0>=bounds.x1 || bounds.y0>=bounds.y1 || bounds.x1>(unsigned)texture->params.w ||
         bounds.y1>(unsigned)texture->params.h || bounds.minimum>bounds.maximum ||
         texture->params.format->num_components<3 ||
         (texture->params.format->type!=PL_FMT_FLOAT && texture->params.format->type!=PL_FMT_UNORM))
-        return CB1_AI_INVALID;
-    for (unsigned i=0; i<3; ++i)
-        if (texture->params.format->component_depth[i]<
-            (texture->params.format->type==PL_FMT_FLOAT?32:16)) return CB1_AI_INCOMPATIBLE;
+            return CB1_AI_INVALID;
+        for (unsigned i=0; i<3; ++i)
+            if (texture->params.format->component_depth[i]<
+                (texture->params.format->type==PL_FMT_FLOAT?32:16)) return CB1_AI_INCOMPATIBLE;
+    }
     if (ctx->pending) return CB1_AI_PENDING;
     GLenum target=0;
     GLuint video=pl_opengl_unwrap(ctx->gpu,texture,&target,NULL,NULL);
@@ -152,11 +161,14 @@ static enum cb1_ai_status submit(struct cb1_hdr10_quantiles *ctx, pl_tex texture
         ctx->fraction[i]=index-floor(index);
     }
     if (fesetround(rounding)) return CB1_AI_INVALID;
-    GLint program,active,binding[2],sampler[2],generic,indirect,indexed[3]; GLint64 offsets[3],sizes[3];
+    GLint program,active,binding[5],sampler[5],generic,indirect,indexed[3]; GLint64 offsets[3],sizes[3];
+    const unsigned bindings=source?5:2;
+    GLuint inputs[5]={video,bound_name,0,0,0};
+    if(source && !cb1_hdr10_grid_source_inputs(ctx->gpu,source,inputs+2))return CB1_AI_INCOMPATIBLE;
     glGetIntegerv(GL_CURRENT_PROGRAM,&program); glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
-    for(unsigned i=0;i<2;++i){glActiveTexture(GL_TEXTURE0+i);
+    for(unsigned i=0;i<bindings;++i){glActiveTexture(GL_TEXTURE0+i);
         glGetIntegerv(GL_TEXTURE_BINDING_2D,&binding[i]);glGetIntegerv(GL_SAMPLER_BINDING,&sampler[i]);
-        glBindTexture(GL_TEXTURE_2D,i?bound_name:video);glBindSampler(i,ctx->sampler);}
+        glBindTexture(GL_TEXTURE_2D,inputs[i]);glBindSampler(i,ctx->sampler);}
     glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&generic);
     glGetIntegerv(GL_DISPATCH_INDIRECT_BUFFER_BINDING,&indirect);
     for (unsigned i=0; i<3; ++i) {
@@ -166,8 +178,12 @@ static enum cb1_ai_status submit(struct cb1_hdr10_quantiles *ctx, pl_tex texture
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER,i,ctx->buffers[i]);
     }
     glUseProgram(ctx->program);
+    glUniform1i(glGetUniformLocation(ctx->program,"source_direct"),source!=NULL);
+    if(source)cb1_hdr10_grid_source_uniforms(ctx->program,source);
     glUniform4ui(glGetUniformLocation(ctx->program,"input_area"),bounds.x0,bounds.y0,bounds.x1,bounds.y1);
-    glUniform2ui(glGetUniformLocation(ctx->program,"dimensions"),texture->params.w,texture->params.h);
+    unsigned source_width=source?(unsigned)(source->crop.x1-source->crop.x0):(unsigned)texture->params.w;
+    unsigned source_height=source?(unsigned)(source->crop.y1-source->crop.y0):(unsigned)texture->params.h;
+    glUniform2ui(glGetUniformLocation(ctx->program,"dimensions"),source_width,source_height);
     glUniform1ui(glGetUniformLocation(ctx->program,"deferred_bounds"),pending_bounds!=NULL);
     glUniform1uiv(glGetUniformLocation(ctx->program,"ranks"),14,ranks);
     if(pending_bounds){
@@ -192,23 +208,23 @@ static enum cb1_ai_status submit(struct cb1_hdr10_quantiles *ctx, pl_tex texture
     }
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,(GLuint)generic); glUseProgram((GLuint)program);
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER,(GLuint)indirect);
-    for(unsigned i=0;i<2;++i){glActiveTexture(GL_TEXTURE0+i);
+    for(unsigned i=0;i<bindings;++i){glActiveTexture(GL_TEXTURE0+i);
         glBindSampler(i,(GLuint)sampler[i]);glBindTexture(GL_TEXTURE_2D,(GLuint)binding[i]);}
     glActiveTexture((GLenum)active);
     if (!ok || glGetError()!=GL_NO_ERROR) { ctx->failed=true; return CB1_AI_INVALID; }
     ctx->pending=true; ctx->id=id;ctx->deferred=pending_bounds!=NULL;
-    ctx->width=texture->params.w;ctx->height=texture->params.h;return CB1_AI_PENDING;
+    ctx->width=source_width;ctx->height=source_height;return CB1_AI_PENDING;
 }
 
 enum cb1_ai_status cb1_hdr10_quantiles_submit(struct cb1_hdr10_quantiles *ctx,pl_tex texture,
     struct cb1_hdr10_bounds bounds,struct cb1_ai_identity id)
-{ return submit(ctx,texture,bounds,id,NULL,true); }
+{ return submit(ctx,texture,bounds,id,NULL,true,NULL); }
 
 enum cb1_ai_status cb1_hdr10_quantiles_submit_pending(struct cb1_hdr10_quantiles *ctx,pl_tex texture,
     pl_tex bounds,struct cb1_ai_identity id)
 {
     if(!texture || !bounds)return CB1_AI_INVALID;
-    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,true);
+    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,true,NULL);
 }
 
 enum cb1_ai_status cb1_hdr10_quantiles_poll_bounds(struct cb1_hdr10_quantiles *ctx,
@@ -264,5 +280,18 @@ enum cb1_ai_status cb1_hdr10_quantiles_queue_pending(struct cb1_hdr10_quantiles 
     pl_tex texture,pl_tex bounds,struct cb1_ai_identity id)
 {
     if(!texture || !bounds)return CB1_AI_INVALID;
-    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false);
+    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false,NULL);
+}
+
+enum cb1_ai_status cb1_hdr10_quantiles_queue_source(struct cb1_hdr10_quantiles *ctx,
+    const struct pl_frame *source,pl_tex bounds,struct cb1_ai_identity id)
+{
+    enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);
+    if(status!=CB1_AI_READY)return status;
+    if(!bounds)return CB1_AI_INVALID;
+    if(source->planes[1].texture->params.w!=source->planes[0].texture->params.w/2 ||
+       source->planes[1].texture->params.h!=source->planes[0].texture->params.h/2)
+        return CB1_AI_INCOMPATIBLE;
+    return submit(ctx,source->planes[0].texture,(struct cb1_hdr10_bounds){0,0,
+        (unsigned)(source->crop.x1-source->crop.x0),(unsigned)(source->crop.y1-source->crop.y0),0,65535},id,bounds,false,source);
 }

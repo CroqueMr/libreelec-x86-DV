@@ -69,10 +69,13 @@ static const char tiled_scan_body[] =
 static const char reduce_body[] =
     "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;bool bad=false;"
-    "for(uint i=0u;i<128u;i++){uint index=coalesced!=0u?group+i*((count+127u)/128u):group*128u+i;if(index>=count)break;"
-    "vec4 r=texelFetch(pq_input,ivec2(index%input_width,index/input_width),0);"
-    "\n#ifdef CB1_COMPACT_INPUT\nr=unpack_record(r,index,(dimensions.x+3u)/4u);\n#endif\n"
-    "merge_record(r,lo,hi,low,high,bad);}"
+    "uint stride=coalesced!=0u?(count+127u)/128u:1u;uint start=coalesced!=0u?group:group*128u;"
+    "uvec2 position=uvec2(start%input_width,start/input_width),step=uvec2(stride%input_width,stride/input_width);"
+    "for(uint i=0u;i<128u;i++){uint index=start+i*stride;if(index>=count)break;"
+    "vec4 r=texelFetch(pq_input,ivec2(position),0);"
+    "\n#ifdef CB1_COMPACT_INPUT\nr=unpack_record(r,position*uvec2(SOURCE_TILE,2u));\n#endif\n"
+    "merge_record(r,lo,hi,low,high,bad);"
+    "position+=step;if(position.x>=input_width){position.x-=input_width;position.y++;}}"
     "color=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),bad?-1.0:low,high);";
 
 static const char direct_codes[]=
@@ -82,21 +85,45 @@ static const char direct_codes[]=
     "if(maximum>1){lo=min(lo,p);hi=max(hi,p);}}";
 static const char direct_tile_body[]=
     "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
-    "uint columns=(dimensions.x+3u)/4u,rows=(dimensions.y+1u)/2u;"
+    "uint columns=(dimensions.x+SOURCE_TILE-1u)/SOURCE_TILE,rows=(dimensions.y+1u)/2u;"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;"
-    "if(group<columns*rows){uvec2 tb=uvec2(group%columns,group/columns)*uvec2(4u,2u);"
+    "if(group<columns*rows){uvec2 tb=uvec2(gl_FragCoord.xy)*uvec2(SOURCE_TILE,2u);"
     "int row=int(tb.y)/2,last=int(height)/2-1;"
-    "for(uint i=0u;i<2u;i++){uint x=tb.x+2u*i;if(x>=dimensions.x)break;"
+    "\n#ifdef CB1_SOURCE_GATHER\n"
+    "vec2 uv_pos=vec2(ivec2(int(tb.x)/2,row)+origin/2)+vec2(1.0,0.0);"
+    "vec2 uv_size=vec2(textureSize(U_input,0));"
+    "ivec4 ua=ivec4(roundEven(textureGather(U_input,uv_pos/uv_size,0)*65535.0))>>ivec4(bit_shift);"
+    "ivec4 va=ivec4(roundEven((source_packed!=0u?textureGather(U_input,uv_pos/uv_size,1):textureGather(V_input,uv_pos/uv_size,0))*65535.0))>>ivec4(bit_shift);"
+    "uv_pos.y+=1.0;"
+    "ivec4 ub=ivec4(roundEven(textureGather(U_input,uv_pos/uv_size,0)*65535.0))>>ivec4(bit_shift);"
+    "ivec4 vb=ivec4(roundEven((source_packed!=0u?textureGather(U_input,uv_pos/uv_size,1):textureGather(V_input,uv_pos/uv_size,0))*65535.0))>>ivec4(bit_shift);"
+    "ivec2 up_u=row>0?ua.wz:ua.xy,up_v=row>0?va.wz:va.xy;"
+    "ivec2 down_u=row<last?ub.xy:ua.xy,down_v=row<last?vb.xy:va.xy;"
+    "ivec2 even_pair[2]=ivec2[2](3*ivec2(ua.x,va.x)+ivec2(up_u.x,up_v.x),3*ivec2(ua.y,va.y)+ivec2(up_u.y,up_v.y));"
+    "ivec2 odd_pair[2]=ivec2[2](3*ivec2(ua.x,va.x)+ivec2(down_u.x,down_v.x),3*ivec2(ua.y,va.y)+ivec2(down_u.y,down_v.y));"
+    "\n#endif\n"
+    "for(uint i=0u;i<SOURCE_TILE/2u;i++){uint x=tb.x+2u*i;if(x>=dimensions.x)break;"
+    "\n#ifdef CB1_SOURCE_GATHER\n"
+    "ivec2 yp=ivec2(x,tb.y)+origin;"
+    "ivec4 ys=ivec4(roundEven(textureGather(Y_input,(vec2(yp)+1.0)/vec2(textureSize(Y_input,0)),0)*65535.0))>>ivec4(bit_shift);"
+    "\n#else\n"
+    "ivec4 ys=ivec4(sample_y(ivec2(x,tb.y+1u)),sample_y(ivec2(x+1u,tb.y+1u)),"
+    "sample_y(ivec2(x+1u,tb.y)),sample_y(ivec2(x,tb.y)));"
+    "\n#endif\n"
+    "\n#ifdef CB1_SOURCE_GATHER\n"
+    "ivec2 even=even_pair[i],odd=odd_pair[i];"
+    "\n#else\n"
     "ivec2 uv=sample_uv(ivec2(int(x)/2,row));"
     "ivec2 even=3*uv+sample_uv(ivec2(int(x)/2,max(row-1,0)));"
     "ivec2 odd=3*uv+sample_uv(ivec2(int(x)/2,min(row+1,last)));"
-    "mark_code(analysis_code(sample_y(ivec2(x,tb.y)),even),uvec2(x,tb.y),lo,hi,low,high);"
-    "mark_code(analysis_code(sample_y(ivec2(x+1u,tb.y)),even),uvec2(x+1u,tb.y),lo,hi,low,high);"
-    "mark_code(analysis_code(sample_y(ivec2(x,tb.y+1u)),odd),uvec2(x,tb.y+1u),lo,hi,low,high);"
-    "mark_code(analysis_code(sample_y(ivec2(x+1u,tb.y+1u)),odd),uvec2(x+1u,tb.y+1u),lo,hi,low,high);}}"
+    "\n#endif\n"
+    "mark_code(analysis_code(ys.w,even),uvec2(x,tb.y),lo,hi,low,high);"
+    "mark_code(analysis_code(ys.z,even),uvec2(x+1u,tb.y),lo,hi,low,high);"
+    "mark_code(analysis_code(ys.x,odd),uvec2(x,tb.y+1u),lo,hi,low,high);"
+    "mark_code(analysis_code(ys.y,odd),uvec2(x+1u,tb.y+1u),lo,hi,low,high);}}"
     "\n#ifdef CB1_COMPACT_OUTPUT\n"
-    "uvec2 tb=uvec2(group%columns,group/columns)*uvec2(4u,2u);"
-    "uint local=lo.x==4096u?0u:1u+(lo.x-tb.x)+4u*(lo.y-tb.y)+8u*(hi.x-tb.x)+32u*(hi.y-tb.y);"
+    "uvec2 tb=uvec2(gl_FragCoord.xy)*uvec2(SOURCE_TILE,2u);"
+    "uint local=lo.x==4096u?0u:1u+(lo.x-tb.x)+SOURCE_TILE*(lo.y-tb.y)+2u*SOURCE_TILE*(hi.x-tb.x)+2u*SOURCE_TILE*SOURCE_TILE*(hi.y-tb.y);"
     "color=vec4(float(local),low,high,0.0)/65535.0;"
     "\n#else\ncolor=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),low,high);\n#endif\n";
 
@@ -108,17 +135,17 @@ static const char crop_reduce_body[] =
     "bool full=all(equal(begin,uvec2(0u))) && all(equal(end,dimensions));"
     "if(full){color=bounds;}else{"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;bool bad=bounds.z<0.0;"
-    "uint columns=(dimensions.x+3u)/4u,tile_width=uint(textureSize(tile_input,0).x);"
+    "uint columns=(dimensions.x+SOURCE_TILE-1u)/SOURCE_TILE,tile_width=uint(textureSize(tile_input,0).x);"
     "for(uint n=0u;n<128u;n++){uint index=coalesced!=0u?group+n*((count+127u)/128u):group*128u+n;if(index>=count)break;"
-    "uvec2 tb=uvec2(index%columns,index/columns)*uvec2(4u,2u);"
-    "uvec2 te=min(tb+uvec2(4u,2u),dimensions);"
+    "uvec2 tb=uvec2(index%columns,index/columns)*uvec2(SOURCE_TILE,2u);"
+    "uvec2 te=min(tb+uvec2(SOURCE_TILE,2u),dimensions);"
     "if(any(greaterThanEqual(tb,end)) || any(lessThanEqual(te,begin)))continue;"
     "if(all(greaterThanEqual(tb,begin)) && all(lessThanEqual(te,end))){"
     "vec4 r=texelFetch(tile_input,ivec2(index%tile_width,index/tile_width),0);"
-    "\n#ifdef CB1_COMPACT_CROP\nr=unpack_record(r,index,columns);\n#endif\n"
+    "\n#ifdef CB1_COMPACT_CROP\nr=unpack_record(r,tb);\n#endif\n"
     "merge_record(vec4(pack_xy(tb),pack_xy(te-1u),r.z,r.w),lo,hi,low,high,bad);"
     "}else{"
-    "for(uint i=0u;i<8u;i++){uvec2 p=tb+uvec2(i%4u,i/4u);"
+    "for(uint i=0u;i<2u*SOURCE_TILE;i++){uvec2 p=tb+uvec2(i%SOURCE_TILE,i/SOURCE_TILE);"
     "if(any(greaterThanEqual(p,te)) || any(lessThan(p,begin)) || any(greaterThanEqual(p,end)))continue;"
     "vec3 q=source_at(p);"
     "if(any(isnan(q))||any(isinf(q))||any(lessThan(q,vec3(0.0)))||any(greaterThan(q,vec3(1.0)))){bad=true;continue;}"
@@ -207,10 +234,10 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
         .desc={.name="tile_input",.type=PL_DESC_SAMPLED_TEX},
         .binding={.object=ctx->scan,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     static const char decode[]=
-        "vec4 unpack_record(vec4 r,uint index,uint columns){uvec3 code=uvec3(roundEven(r.rgb*65535.0));"
+        "vec4 unpack_record(vec4 r,uvec2 tb){uvec3 code=uvec3(roundEven(r.rgb*65535.0));"
         "if(code.x==0u)return vec4(-1.0,0.0,float(code.y),float(code.z));"
-        "uint v=code.x-1u;uvec2 tb=uvec2(index%columns,index/columns)*uvec2(4u,2u);"
-        "uvec2 lo=tb+uvec2(v&3u,(v>>2u)&1u),hi=tb+uvec2((v>>3u)&3u,(v>>5u)&1u);"
+        "uint v=code.x-1u;"
+        "uvec2 lo=tb+uvec2(v&(SOURCE_TILE-1u),(v>>SOURCE_BITS)&1u),hi=tb+uvec2((v>>(SOURCE_BITS+1u))&(SOURCE_TILE-1u),(v>>(2u*SOURCE_BITS+1u))&1u);"
         "return vec4(pack_xy(lo),pack_xy(hi),float(code.y),float(code.z));}";
     char compact_header[sizeof(header)+sizeof(decode)+192];
     if(ctx->compact){
@@ -220,6 +247,13 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
             source && cropped?"#define CB1_COMPACT_CROP 1\n":"",shader_header,decode);
         shader_header=compact_header;
     }
+    char source_header[sizeof(compact_header)+128];
+    bool gather=source && ctx->gpu->glsl.version>=310;
+    if(source)for(int p=0;p<source->num_planes;p++)
+        gather=gather && source->planes[p].texture->params.format->gatherable;
+    snprintf(source_header,sizeof(source_header),"#define SOURCE_TILE 4u\n#define SOURCE_BITS 2u\n%s%s",
+        gather?"#define CB1_SOURCE_GATHER 1\n":"",shader_header);
+    shader_header=source_header;
     pl_shader shader = pl_dispatch_begin(ctx->dispatch);
     bool ok = !source || !scan || cb1_hdr10_ingress_source_shader(shader,source);
     if(ok && source && scan)ok=pl_shader_custom(shader,&(struct pl_custom_shader){
@@ -362,7 +396,7 @@ static enum cb1_ai_status submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
     pl_fmt scan_format=ctx->compact?pl_find_fmt(ctx->gpu,PL_FMT_UNORM,4,16,16,
         PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE):ctx->format;
     if(!scan_format){ctx->compact=false;scan_format=ctx->format;}
-    unsigned scan_width=groups<256?groups:256;
+    unsigned scan_width=source?(ctx->width+tile_width-1)/tile_width:groups<256?groups:256;
     bool ok=scan_format && pl_tex_recreate(ctx->gpu,&ctx->scan,pl_tex_params(.w=scan_width,
         .h=(groups+scan_width-1)/scan_width,.format=scan_format,.sampleable=true,.renderable=true)) &&
         dispatch(ctx,texture,ctx->scan,count,true,false,source) &&

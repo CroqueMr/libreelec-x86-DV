@@ -285,6 +285,7 @@ if(CB1_ENABLE_HDR10_AI)
     add_test(NAME hdr10_ai_gpu_${name} COMMAND hdr10_ai_${name})
   endforeach()
   target_link_options(hdr10_ai_spatial PRIVATE -Wl,--wrap=glReadPixels)
+  target_link_options(hdr10_ai_source PRIVATE -Wl,--wrap=pl_tex_recreate)
   add_test(NAME hdr10_ai_gpu_source_nocompact COMMAND "${CMAKE_COMMAND}" -E env
     CB1_TEST_NO_COMPACT=1 "$<TARGET_FILE:hdr10_ai_source>")
   pkg_check_modules(AIOracleScale REQUIRED IMPORTED_TARGET libswscale)

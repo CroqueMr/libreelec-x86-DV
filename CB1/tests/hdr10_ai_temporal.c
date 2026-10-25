@@ -6,8 +6,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void post_calibration_fields(void)
+{
+    struct cb1_hdr10_temporal *ctx[2]={cb1_hdr10_temporal_create(),cb1_hdr10_temporal_create()};
+    assert(ctx[0] && ctx[1]);
+    for(unsigned v=0;v<2;v++)cb1_hdr10_temporal_reset(ctx[v],17,19);
+    for(unsigned i=0;i<96;i++){
+        struct cb1_hdr10_descriptor d={.pts=i/24.+(i>=60?2:0)};
+        d.global[0]=.05f;d.global[1]=.9f;d.global[2]=.4f+.1f*sinf(i);d.global[3]=.1f;
+        for(unsigned j=4;j<=10;j++)d.global[j]=.1f*(j-3);
+        for(unsigned j=11;j<=17;j++)d.global[j]=.1f*(1+(i+j)%4);
+        d.global[18]=1;d.global[26]=1;
+        for(unsigned j=0;j<38;j++)d.spatial[j]=.2f+.01f*((i+j)%5);
+        float motion[1728];for(unsigned j=0;j<1728;j++)
+            motion[j]=((j%32)<16)^(i>=48 && i<60 || i>=86)?.75f:.25f;
+        struct cb1_ai_identity id={17,i+1,19};
+        assert(cb1_hdr10_temporal_push(ctx[0],&d,motion,id)==CB1_AI_READY);
+        bool prefix=i<=24 || (i>=60 && i<=84);
+        if(!prefix){
+            for(unsigned j=3;j<35;j++)if(j!=18)d.global[j]=0;
+            memset(d.spatial,0,sizeof(d.spatial));
+        }
+        assert(cb1_hdr10_temporal_push(ctx[1],&d,motion,id)==CB1_AI_READY);
+    }
+    for(unsigned v=0;v<2;v++)cb1_hdr10_temporal_end(ctx[v]);
+    for(unsigned i=0;i<96;i++){
+        struct cb1_hdr10_temporal_result a,b;struct cb1_ai_identity id={17,i+1,19};
+        assert(cb1_hdr10_temporal_poll(ctx[0],id,&a)==CB1_AI_READY);
+        assert(cb1_hdr10_temporal_poll(ctx[1],id,&b)==CB1_AI_READY);
+        assert(!memcmp(a.base,b.base,sizeof(a.base)) && a.peak==b.peak);
+        assert(!memcmp(a.calibration,b.calibration,sizeof(a.calibration)));
+        assert(a.pts==b.pts && a.observed_until==b.observed_until);
+    }
+    for(unsigned v=0;v<2;v++)cb1_hdr10_temporal_destroy(&ctx[v]);
+}
 int main(void)
 {
+    post_calibration_fields();
     struct cb1_hdr10_temporal *ctx=cb1_hdr10_temporal_create();assert(ctx);
     cb1_hdr10_temporal_reset(ctx,11,13);
     struct cb1_hdr10_temporal_result out;

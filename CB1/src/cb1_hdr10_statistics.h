@@ -12,9 +12,10 @@ struct cb1_hdr10_statistics *cb1_hdr10_statistics_create(pl_gpu gpu);
 /* GPU bounds and RGB must belong to the same retained picture. */
 enum cb1_ai_status cb1_hdr10_statistics_submit_pending(struct cb1_hdr10_statistics *ctx,pl_tex pq,
     pl_tex bounds,struct cb1_ai_identity id);
-/* Internal GPU batch; source and bounds belong to the same retained picture. */
+/* Internal GPU batch; source and bounds belong to the same retained picture.
+ * After calibration, full_features=false retains slots0..2 and18; others are zero. */
 enum cb1_ai_status cb1_hdr10_statistics_queue_source(struct cb1_hdr10_statistics *ctx,
-    const struct pl_frame *source,pl_tex bounds,struct cb1_ai_identity id);
+    const struct pl_frame *source,pl_tex bounds,struct cb1_ai_identity id,bool full_features);
 enum cb1_ai_status cb1_hdr10_statistics_poll_bounds(struct cb1_hdr10_statistics *ctx,
     struct cb1_ai_identity id,struct cb1_hdr10_bounds bounds,float out[35]);
 void cb1_hdr10_statistics_destroy(struct cb1_hdr10_statistics **ctx);

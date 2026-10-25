@@ -217,7 +217,7 @@ enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,
     *out=ctx->small;return CB1_AI_READY;
 }
 
-/* Private experiment: filter source planes before RGB clipping. */
+/* Filter source planes before RGB clipping, retaining intermediate UNORM rounding. */
 enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *ctx,
     const struct pl_frame *source, pl_tex *out)
 {
@@ -244,16 +244,36 @@ enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *ctx,
             int w=(width+1)/2,h=(height+1)/2;
             if (w<target_w) w=target_w;
             if (h<72) h=72;
+            bool fused=pass==0 && width%4==0 && height%4==0 && width/4>=target_w && height/4>=72;
+            if(fused){w=width/4;h=height/4;}
             pl_tex *target=&ctx->preview[p*6+pass];
             if (!pl_tex_recreate(ctx->gpu,target,pl_tex_params(.w=w,.h=h,.format=fmt,
                 .sampleable=true,.renderable=true))) return CB1_AI_INCOMPATIBLE;
             pl_shader shader=pl_dispatch_begin(ctx->dispatch);
-            bool ok=pl_shader_sample_bilinear(shader,pl_sample_src(.tex=input,.rect=rect,.new_w=w,.new_h=h));
+            bool ok;
+            if(fused){
+                float origin[2]={rect.x0,rect.y0},step[2]={1.f/input->params.w,1.f/input->params.h};
+                float gain=(float)(1<<(16-source->repr.bits.color_depth-source->repr.bits.bit_shift));
+                struct pl_shader_desc desc={.desc={.name="preview_input",.type=PL_DESC_SAMPLED_TEX},
+                    .binding={.object=input,.sample_mode=PL_TEX_SAMPLE_LINEAR}};
+                struct pl_shader_var vars[]={
+                    {.var=pl_var_vec2("preview_origin"),.data=origin,.dynamic=true},
+                    {.var=pl_var_vec2("preview_step"),.data=step,.dynamic=true},
+                    {.var=pl_var_float("preview_gain"),.data=&gain,.dynamic=true}};
+                ok=pl_shader_custom(shader,&(struct pl_custom_shader){.descriptors=&desc,.num_descriptors=1,
+                    .variables=vars,.num_variables=3,.output=PL_SHADER_SIG_COLOR,
+                    .body="vec2 uv=(preview_origin+4.0*floor(gl_FragCoord.xy)+1.0)*preview_step;"
+                        "vec4 a=roundEven(texture(preview_input,uv)*preview_gain*65535.0);"
+                        "vec4 b=roundEven(texture(preview_input,uv+vec2(2,0)*preview_step)*preview_gain*65535.0);"
+                        "vec4 c=roundEven(texture(preview_input,uv+vec2(0,2)*preview_step)*preview_gain*65535.0);"
+                        "vec4 d=roundEven(texture(preview_input,uv+vec2(2,2)*preview_step)*preview_gain*65535.0);"
+                        "color=(a+b+c+d)/(4.0*65535.0);"});
+            }else ok=pl_shader_sample_bilinear(shader,pl_sample_src(.tex=input,.rect=rect,.new_w=w,.new_h=h));
             /* Normalize low-aligned words before quantizing the first target.
              * Later passes then retain ~16 significant bits, not only 10/12.
              * All following planes/steps share the exact same normalized scale. */
 #ifndef CB1_PROBE_U16_NO_NORMALIZE
-            if (ok && pass==0) {
+            if (ok && pass==0 && !fused) {
                 float gain=(float)(1<<(16-source->repr.bits.color_depth-source->repr.bits.bit_shift));
                 struct pl_shader_var normalization={.var=pl_var_float("preview_gain"),.data=&gain,.dynamic=true};
                 ok=pl_shader_custom(shader,&(struct pl_custom_shader){

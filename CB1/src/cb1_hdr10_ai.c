@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "cb1_hdr10_ai.h"
 #include "cb1_hdr10_ingress.h"
-extern enum cb1_ai_status cb1_hdr10_ingress_preview_u16(struct cb1_hdr10_ingress *,const struct pl_frame *,pl_tex *);
 #include "cb1_hdr10_statistics.h"
 #include "cb1_hdr10_quantiles.h"
 #include "cb1_hdr10_spatial.h"
@@ -146,7 +145,7 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     const uint64_t dispatch=now_ns();
     ++c->metrics.gpu_submissions;
     status=cb1_hdr10_ingress_validate(frame);if(status!=CB1_AI_READY)goto submit_fail;
-    const bool source_analysis=!calibration &&
+    const bool source_analysis=
         frame->planes[1].texture->params.w==frame->planes[0].texture->params.w/2 &&
         frame->planes[1].texture->params.h==frame->planes[0].texture->params.h/2;
     if(!source_analysis){
@@ -156,11 +155,13 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     status=source_analysis?cb1_hdr10_extrema_submit_source(c->extrema,frame,id):
         cb1_hdr10_extrema_submit(c->extrema,c->rgb,id);if(status!=CB1_AI_PENDING)goto submit_fail;
     pl_tex bounds=cb1_hdr10_extrema_pending(c->extrema,id);
-    status=source_analysis?cb1_hdr10_statistics_queue_source(c->statistics,frame,bounds,id):
+    /* Only the frozen prefix consumes full model features; scene tracking uses L1 and motion. */
+    status=source_analysis?cb1_hdr10_statistics_queue_source(c->statistics,frame,bounds,id,calibration):
         cb1_hdr10_statistics_queue_pending(c->statistics,c->rgb,bounds,id);
     if(status!=CB1_AI_PENDING)goto submit_fail;
     if(calibration){
-        status=cb1_hdr10_quantiles_queue_pending(c->quantiles,c->rgb,bounds,id);
+        status=source_analysis?cb1_hdr10_quantiles_queue_source(c->quantiles,frame,bounds,id):
+            cb1_hdr10_quantiles_queue_pending(c->quantiles,c->rgb,bounds,id);
         if(status!=CB1_AI_PENDING)goto submit_fail;
     }else memset(c->quantile_values,0,sizeof(c->quantile_values));
     pl_tex small;

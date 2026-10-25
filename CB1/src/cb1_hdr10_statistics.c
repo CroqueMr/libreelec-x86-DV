@@ -15,7 +15,7 @@ static const char shader_source[] =
     "layout(local_size_x=128)in;layout(binding=0)uniform highp sampler2D video;"
     "layout(binding=2)uniform highp sampler2D Y_input;layout(binding=3)uniform highp sampler2D U_input;"
     "layout(binding=4)uniform highp sampler2D V_input;"
-    "uniform bool source_direct;uniform uint subsampled,source_packed,height;uniform int depth_shift,bit_shift;uniform ivec2 origin;"
+    "uniform bool source_direct,full_features;uniform uint subsampled,source_packed,height;uniform int depth_shift,bit_shift;uniform ivec2 origin;"
     CB1_HDR10_SOURCE_GLSL
     "vec3 source_at(ivec2 p){return source_direct?analysis_rgb(p).rgb:texelFetch(video,p,0).rgb;}"
     "layout(std430,binding=0)buffer Partial{float data[];};"
@@ -32,7 +32,7 @@ static const char shader_source[] =
     "void merge(inout vec4 a,inout vec4 v,vec4 b,vec4 w){"
     "if(b.w==0.0)return;if(a.w==0.0){a=b;v=w;return;}"
     "float n=a.w+b.w;vec3 d=b.xyz-a.xyz;"
-    "v.xyz+=w.xyz+d*d*(a.w*b.w/n);a.xyz+=d*(b.w/n);a.w=n;}"
+    "if(full_features)v.xyz+=w.xyz+d*d*(a.w*b.w/n);a.xyz+=d*(b.w/n);a.w=n;}"
     "void main(){if(pass==2u && gl_LocalInvocationID.x!=0u)return;"
     "uvec4 area=analysis_area();uvec2 size=area.zw-area.xy;"
     "uvec2 step_size=max(size/uvec2(256u,144u),uvec2(1u));"
@@ -41,37 +41,38 @@ static const char shader_source[] =
     "if(pass==2u){if(lane==0u){dispatch_groups[0]=groups;dispatch_groups[1]=1u;dispatch_groups[2]=1u;}return;}"
     "means[lane]=vec4(0);"
     "variance[lane]=vec4(0);rgb[lane]=vec4(0);edges[lane]=vec2(0);invalid[lane]=0u;"
-    "for(uint j=0u;j<16u;j++)histogram[j][lane]=0.0;"
+    "if(full_features)for(uint j=0u;j<16u;j++)histogram[j][lane]=0.0;"
     "if(pass==0u){uint i=gl_GlobalInvocationID.x;"
     "if(i<count){uint width=(area.z-area.x+step_size.x-1u)/step_size.x;"
     "uvec2 p=area.xy+uvec2(i%width,i/width)*step_size;"
     "vec3 original=source_at(ivec2(p));"
     "if(any(isnan(original))||any(isinf(original))||any(lessThan(original,vec3(0)))||any(greaterThan(original,vec3(1))))"
     "{invalid[lane]=1u;}else{vec3 q=sample_code(ivec2(p));"
-    "float peak=max(q.r,max(q.g,q.b)),chroma=peak-min(q.r,min(q.g,q.b));"
-    "float log_luma=log(1.0+dot(pq(q),vec3(.2627,.6780,.0593)))/log(10001.0);"
-    "means[lane]=vec4(peak,log_luma,chroma,1);rgb[lane]=vec4(q,0);"
-    "histogram[min(15u,uint(peak*16.0))][lane]=1.0;"
-    "if(i>=width){vec3 previous=sample_code(ivec2(p-uvec2(0,step_size.y)));"
+    "float peak=max(q.r,max(q.g,q.b)),chroma=0.0,log_luma=0.0;"
+    "if(full_features){chroma=peak-min(q.r,min(q.g,q.b));"
+    "log_luma=log(1.0+dot(pq(q),vec3(.2627,.6780,.0593)))/log(10001.0);}"
+    "means[lane]=vec4(peak,log_luma,chroma,1);if(full_features)rgb[lane]=vec4(q,0);"
+    "if(full_features)histogram[min(15u,uint(peak*16.0))][lane]=1.0;"
+    "if(full_features && i>=width){vec3 previous=sample_code(ivec2(p-uvec2(0,step_size.y)));"
     "edges[lane]=vec2(abs(peak-max(previous.r,max(previous.g,previous.b))),1);}}}}"
     "else{for(uint g=lane;g<groups;g+=128u){uint o=g*32u;"
     "merge(means[lane],variance[lane],vec4(data[o],data[o+1u],data[o+2u],data[o+3u]),"
     "vec4(data[o+4u],data[o+5u],data[o+6u],0));"
-    "rgb[lane].xyz+=vec3(data[o+7u],data[o+8u],data[o+9u]);"
+    "if(full_features){rgb[lane].xyz+=vec3(data[o+7u],data[o+8u],data[o+9u]);"
     "edges[lane]+=vec2(data[o+10u],data[o+11u]);"
-    "for(uint j=0u;j<16u;j++)histogram[j][lane]+=data[o+12u+j];"
+    "for(uint j=0u;j<16u;j++)histogram[j][lane]+=data[o+12u+j];}"
     "invalid[lane]|=uint(data[o+28u]);}}"
     "barrier();for(uint stride=64u;stride>0u;stride>>=1u){if(lane<stride){"
     "merge(means[lane],variance[lane],means[lane+stride],variance[lane+stride]);"
-    "rgb[lane]+=rgb[lane+stride];edges[lane]+=edges[lane+stride];"
-    "for(uint j=0u;j<16u;j++)histogram[j][lane]+=histogram[j][lane+stride];"
+    "if(full_features){rgb[lane]+=rgb[lane+stride];edges[lane]+=edges[lane+stride];"
+    "for(uint j=0u;j<16u;j++)histogram[j][lane]+=histogram[j][lane+stride];}"
     "invalid[lane]|=invalid[lane+stride];}barrier();}"
     "if(lane!=0u)return;uint o=pass==0u?gl_WorkGroupID.x*32u:0u;float r[32];"
     "for(uint j=0u;j<32u;j++)r[j]=0.0;"
     "for(uint j=0u;j<4u;j++)r[j]=means[0][j];"
     "for(uint j=0u;j<3u;j++){r[4u+j]=variance[0][j];r[7u+j]=rgb[0][j];}"
     "r[10]=edges[0].x;r[11]=edges[0].y;"
-    "for(uint j=0u;j<16u;j++)r[12u+j]=histogram[j][0];r[28]=float(invalid[0]);"
+    "if(full_features)for(uint j=0u;j<16u;j++)r[12u+j]=histogram[j][0];r[28]=float(invalid[0]);"
     "for(uint j=0u;j<32u;j++){if(pass==0u)data[o+j]=r[j];else result[j]=r[j];}}";
 
 struct cb1_hdr10_statistics {
@@ -153,7 +154,7 @@ void cb1_hdr10_statistics_reset(struct cb1_hdr10_statistics *ctx,uint64_t stream
 }
 
 static enum cb1_ai_status submit(struct cb1_hdr10_statistics *ctx,pl_tex texture,
-    struct cb1_hdr10_bounds bounds,struct cb1_ai_identity id,pl_tex pending_bounds,bool flush,const struct pl_frame *source)
+    struct cb1_hdr10_bounds bounds,struct cb1_ai_identity id,pl_tex pending_bounds,bool flush,const struct pl_frame *source,bool full_features)
 {
     if(!ctx || ctx->failed || !ctx->active || id.stream!=ctx->stream || id.revision!=ctx->revision)
         return CB1_AI_INVALID;
@@ -183,13 +184,7 @@ static enum cb1_ai_status submit(struct cb1_hdr10_statistics *ctx,pl_tex texture
     GLint program,active,binding[5],sampler[5],generic,indirect,indexed[3]; GLint64 offsets[3],sizes[3];
     const unsigned bindings=source?5:2;
     GLuint inputs[5]={video,bound_name,0,0,0};
-    if(source){
-        const struct pl_frame *f=source;
-        for(unsigned i=0;i<3;i++){
-            inputs[i+2]=pl_opengl_unwrap(ctx->gpu,f->planes[i==2 && f->num_planes==2?1:i].texture,&target,NULL,NULL);
-            if(!inputs[i+2] || target!=GL_TEXTURE_2D)return CB1_AI_INCOMPATIBLE;
-        }
-    }
+    if(source && !cb1_hdr10_grid_source_inputs(ctx->gpu,source,inputs+2))return CB1_AI_INCOMPATIBLE;
     glGetIntegerv(GL_CURRENT_PROGRAM,&program); glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
     for(unsigned i=0;i<bindings;++i){glActiveTexture(GL_TEXTURE0+i);
         glGetIntegerv(GL_TEXTURE_BINDING_2D,&binding[i]);glGetIntegerv(GL_SAMPLER_BINDING,&sampler[i]);
@@ -204,15 +199,8 @@ static enum cb1_ai_status submit(struct cb1_hdr10_statistics *ctx,pl_tex texture
     }
     glUseProgram(ctx->program);
     glUniform1i(glGetUniformLocation(ctx->program,"source_direct"),source!=NULL);
-    if(source){
-        const struct pl_frame *f=source;
-        glUniform1ui(glGetUniformLocation(ctx->program,"subsampled"),f->planes[1].texture->params.w==f->planes[0].texture->params.w/2);
-        glUniform1ui(glGetUniformLocation(ctx->program,"source_packed"),f->num_planes==2);
-        glUniform1ui(glGetUniformLocation(ctx->program,"height"),(unsigned)(source->crop.y1-source->crop.y0));
-        glUniform1i(glGetUniformLocation(ctx->program,"depth_shift"),f->repr.bits.color_depth-8);
-        glUniform1i(glGetUniformLocation(ctx->program,"bit_shift"),f->repr.bits.bit_shift);
-        glUniform2i(glGetUniformLocation(ctx->program,"origin"),(int)f->crop.x0,(int)f->crop.y0);
-    }
+    glUniform1i(glGetUniformLocation(ctx->program,"full_features"),full_features);
+    if(source)cb1_hdr10_grid_source_uniforms(ctx->program,source);
     glUniform4ui(glGetUniformLocation(ctx->program,"input_area"),bounds.x0,bounds.y0,bounds.x1,bounds.y1);
     glUniform2ui(glGetUniformLocation(ctx->program,"dimensions"),source?(unsigned)(source->crop.x1-source->crop.x0):(unsigned)texture->params.w,
         source?(unsigned)(source->crop.y1-source->crop.y0):(unsigned)texture->params.h);
@@ -249,13 +237,13 @@ static enum cb1_ai_status submit(struct cb1_hdr10_statistics *ctx,pl_tex texture
 
 enum cb1_ai_status cb1_hdr10_statistics_submit(struct cb1_hdr10_statistics *ctx,pl_tex texture,
     struct cb1_hdr10_bounds bounds,struct cb1_ai_identity id)
-{ return submit(ctx,texture,bounds,id,NULL,true,NULL); }
+{ return submit(ctx,texture,bounds,id,NULL,true,NULL,true); }
 
 enum cb1_ai_status cb1_hdr10_statistics_submit_pending(struct cb1_hdr10_statistics *ctx,pl_tex texture,
     pl_tex bounds,struct cb1_ai_identity id)
 {
     if(!texture || !bounds)return CB1_AI_INVALID;
-    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,true,NULL);
+    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,true,NULL,true);
 }
 
 enum cb1_ai_status cb1_hdr10_statistics_poll_bounds(struct cb1_hdr10_statistics *ctx,
@@ -311,13 +299,13 @@ enum cb1_ai_status cb1_hdr10_statistics_queue_pending(struct cb1_hdr10_statistic
     pl_tex texture,pl_tex bounds,struct cb1_ai_identity id)
 {
     if(!texture || !bounds)return CB1_AI_INVALID;
-    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false,NULL);
+    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false,NULL,true);
 }
 
 
 /* Source planes are consumed only while queuing this identity-bound GPU batch. */
 enum cb1_ai_status cb1_hdr10_statistics_queue_source(struct cb1_hdr10_statistics *ctx,
-    const struct pl_frame *source,pl_tex bounds,struct cb1_ai_identity id)
+    const struct pl_frame *source,pl_tex bounds,struct cb1_ai_identity id,bool full_features)
 {
     enum cb1_ai_status status=cb1_hdr10_ingress_validate(source);
     if(status!=CB1_AI_READY)return status;
@@ -326,5 +314,5 @@ enum cb1_ai_status cb1_hdr10_statistics_queue_source(struct cb1_hdr10_statistics
        source->planes[1].texture->params.h!=source->planes[0].texture->params.h/2)
         return CB1_AI_INCOMPATIBLE;
     return submit(ctx,source->planes[0].texture,(struct cb1_hdr10_bounds){0,0,
-        (unsigned)(source->crop.x1-source->crop.x0),(unsigned)(source->crop.y1-source->crop.y0),0,65535},id,bounds,false,source);
+        (unsigned)(source->crop.x1-source->crop.x0),(unsigned)(source->crop.y1-source->crop.y0),0,65535},id,bounds,false,source,full_features);
 }
