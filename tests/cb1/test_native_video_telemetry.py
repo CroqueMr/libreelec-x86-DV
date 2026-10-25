@@ -102,6 +102,17 @@ int main() {
  assert(!failedRestore({dv}));
  assert(cache.GetVideoProcessingInfo().transaction.reason==VideoProcessingReason::RestoreFailed);
  assert(cache.GetVideoProcessingInfo().output.flags==CDVPlaybackInfo::HDMI);
+ // Admitted Basic is usable for rendering while still explaining HDR10+ compatibility.
+ output.flags=CDVPlaybackInfo::HDR10;output.effective=2;output.requested=6;
+ DVBRIDGE::StreamTelemetry::NativeSelection(id,{},6,2,DVBRIDGE::OutputReason::NoHDR10PlusTransport);
+ DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
+ auto compatibility=DVBRIDGE::StreamTelemetry::Read();
+ assert(compatibility.output.fallback);
+ assert(compatibility.output.reason==DVBRIDGE::OutputReason::NoHDR10PlusTransport);
+ // An unrelated presentation cannot inherit an old transaction's explanation.
+ ++output.picture;DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
+ compatibility=DVBRIDGE::StreamTelemetry::Read();
+ assert(!compatibility.output.fallback && compatibility.output.reason==DVBRIDGE::OutputReason::None);
 }
 '''.replace('IMPLEMENTATIONS',implementations).replace('FAILED',failed).replace('RESTORE',restore)
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
