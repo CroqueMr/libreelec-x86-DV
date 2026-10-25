@@ -13,7 +13,7 @@ extern enum cb1_dv_enhanced_status cb1_dv_enhanced_build_ai(
 int main(int argc,char **argv)
 {
     assert(cb1_dv_enhanced_build_ai && "AI must use the shared Enhanced plan");
-    assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_ADAPTIVE),"CB1-HDR10DVA.0.6"));
+    assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_ADAPTIVE),"CB1-HDR10DVA.0.7"));
     assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_REFERENCE),"CB1-HDR10DVR.0.1.3"));
     struct cb1_dv_enhanced_source s={.master=1000,.l1_present=true,.analysis={0,3080,1463}};
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,

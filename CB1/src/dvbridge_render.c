@@ -3542,6 +3542,24 @@ static bool dve_copy_packed(struct dvbridge_renderer *r,unsigned framebuffer,boo
     if(scissor)glEnable(GL_SCISSOR_TEST);
     return ok && dvbridge_gl_patch(r->dv.packer,r->enhanced_packed_texture,framebuffer,3840,2160,packets,count,flip);
 }
+/* Reuse the prepack scratch for only the metadata rows when framebuffer fetch
+ * is unavailable. The remaining movie pixels never leave the final target. */
+static bool ai_patch_direct(struct dvbridge_renderer *r,unsigned framebuffer,
+    const uint32_t *packets,unsigned count,bool flip)
+{
+    if(pl_opengl_has_ext(pl_opengl_get(r->gpu),"GL_EXT_shader_framebuffer_fetch_non_coherent"))
+        return dvbridge_gl_patch_inplace(r->dv.packer,framebuffer,packets,count,flip);
+    if(!count || count>5 || !r->enhanced_packed_fbo)return false;
+    unsigned rows=(count*3072+3839)/3840;
+    GLint read,draw;glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&read);glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&draw);
+    GLboolean scissor=glIsEnabled(GL_SCISSOR_TEST);glDisable(GL_SCISSOR_TEST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,r->enhanced_packed_fbo);
+    glBlitFramebuffer(0,flip?2160:0,3840,flip?2160-rows:rows,0,0,3840,rows,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+    bool ok=glGetError()==GL_NO_ERROR;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER,read);glBindFramebuffer(GL_DRAW_FRAMEBUFFER,draw);
+    if(scissor)glEnable(GL_SCISSOR_TEST);
+    return ok && dvbridge_gl_patch(r->dv.packer,r->enhanced_packed_texture,framebuffer,3840,2160,packets,count,flip);
+}
 bool dvbridge_render_dv_policy_resolve(struct dvbridge_renderer *r,pl_tex target,unsigned framebuffer,bool flip)
 {
     const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);
@@ -3576,7 +3594,7 @@ bool dvbridge_render_dv_policy_resolve(struct dvbridge_renderer *r,pl_tex target
     bool ok;
     if(r->dv.ai_direct_target && r->dv.prepacked && r->dv.enhanced_plan.status==CB1_DVE_READY){
         ok=target==r->dv.ai_direct_target && framebuffer==r->dv.ai_direct_framebuffer && flip==r->dv.ai_direct_flip &&
-            dvbridge_gl_patch_inplace(r->dv.packer,framebuffer,packets,count,flip);
+            ai_patch_direct(r,framebuffer,packets,count,flip);
     }else if(r->dv.prepacked && r->dv.enhanced_plan.status==CB1_DVE_READY){
         ok=dve_copy_packed(r,framebuffer,flip,packets,count);
     }else if(!intermediate && r->dv.enhanced_pixels && r->enhanced_skip_aux &&
@@ -3927,12 +3945,32 @@ static pl_tex ai_enhanced(struct dvbridge_renderer *r,const struct dvbridge_poli
     return s->output.intermediate;
 }
 
+/* A full-raster no-headroom plan changes metadata only, not HDR10 pixels. */
+static bool ai_identity_transport(const struct dvbridge_policy *policy,const struct pl_frame *source,
+    const struct dvbridge_geometry *g,const struct dvbridge_native_overlay *overlay)
+{
+#ifdef CB1_HAS_HDR10_AI
+    if(!policy || policy->mode!=DVBRIDGE_MODE_ENHANCED_DV || policy->adaptive!=DVBRIDGE_ADAPTIVE_A ||
+       dvbridge_policy_validate(policy)!=DVBRIDGE_POLICY_VALID || !source || !g || overlay ||
+       g->source_width!=3840 || g->source_height!=2160 || g->x || g->y || g->width!=3840 || g->height!=2160 ||
+       source->crop.x0 || source->crop.y0 || cb1_hdr10_ingress_validate(source)!=CB1_AI_READY ||
+       source->planes[1].texture->params.w!=1920 || source->planes[1].texture->params.h!=1080)return false;
+    double master=source->color.hdr.max_luma;
+    if(!isfinite(master) || master<0 || master>10000)return false;
+    if(!master)master=10000;
+    return master>10 && policy->tv.peak_nits<=master;
+#else
+    (void)policy;(void)source;(void)g;(void)overlay;return false;
+#endif
+}
+
 static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_policy *policy,
     const struct cb1_ai_result *prediction,const struct pl_frame *source,const struct dvbridge_geometry *geometry,
     pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
     if(!r)return NULL;
-    if((!packed || !policy || policy->mode!=DVBRIDGE_MODE_STANDARD) && !ensure_rgb(r))return NULL;
+    bool identity=packed && ai_identity_transport(policy,source,geometry,overlay);
+    if((!packed || !policy || (policy->mode!=DVBRIDGE_MODE_STANDARD && !identity)) && !ensure_rgb(r))return NULL;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return NULL;}
     dvbridge_render_policy_cancel(r);dvbridge_candidate_destroy(r->pending);r->pending=NULL;r->packed=false;
     if(!policy || !prediction || !source || !geometry || prediction->id.revision!=policy->revision ||
@@ -3956,7 +3994,12 @@ static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_
        (g.x&1) || (g.width&1) || fabs((double)g.width*g.source_height/g.source_width-g.height)>1.01)return NULL;
     unsigned margins[4]={g.x,3840-g.x-g.width,g.y,2160-g.y-g.height};size_t bytes;
     AVDOVIMetadata *metadata=ai_output_metadata(prediction,&source->color,margins,&bytes);if(!metadata)return NULL;
-    if(policy->mode==DVBRIDGE_MODE_ENHANCED_DV)
+    struct cb1_dv_enhanced_plan identity_plan;
+    if(identity && (!ai_enhanced_plan(&identity_plan,metadata,bytes,prediction,&source->color,policy) ||
+        identity_plan.status!=CB1_DVE_IDENTITY || identity_plan.reason!=CB1_DVE_NO_HEADROOM)){
+        av_free(metadata);return NULL;
+    }
+    if(policy->mode==DVBRIDGE_MODE_ENHANCED_DV && !identity)
         return ai_enhanced(r,policy,prediction,source,g,metadata,bytes,margins,packed,flip,overlay);
     if(!r->owner || !dv_allocate_transport(r)){av_free(metadata);return NULL;}
     /* Standard metadata is already complete; the output hook needs its exact packets. */
@@ -3975,6 +4018,13 @@ static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_
         .nominal_max_nits=source->color.hdr.max_luma};
     s->output.value.source_pq[0]=av_dovi_get_color(metadata)->source_min_pq;
     s->output.value.source_pq[1]=av_dovi_get_color(metadata)->source_max_pq;
+    if(identity){
+        s->ai_source=s->enhanced_pixels=true;s->enhanced_plan=identity_plan;
+        s->output.value.pixel_algorithm=CB1_DVE_ALGORITHM;
+        s->output.value.expansion_reason=identity_plan.reason;
+        s->output.value.source_reference_nits=source->color.hdr.max_luma;
+        s->output.value.display_reference_nits=identity_plan.target;
+    }
     memcpy(s->output.value.margins,margins,sizeof(margins));r->policy_ready=false;
     s->output_metadata=metadata;s->output_bytes=bytes;
     if(!packed)r->pending=ai_prepare_candidate(r,metadata,bytes,prediction);
@@ -4014,8 +4064,7 @@ bool dvbridge_render_hdr10_ai_packed_overlay(struct dvbridge_renderer *r,const s
        (policy->mode==DVBRIDGE_MODE_STANDARD && (geometry->x || geometry->y || geometry->width!=3840 || geometry->height!=2160) &&
         (!r || !r->optimized_dv || geometry->width!=geometry->source_width || geometry->height!=geometry->source_height)) ||
        (!packed_transport_supported(r,target,false) && !rgb_scanout) || !overlay_valid(overlay))return false;
-    if(policy->mode==DVBRIDGE_MODE_ENHANCED_DV && (!r->fragment_quad ||
-        !pl_opengl_has_ext(pl_opengl_get(r->gpu),"GL_EXT_shader_framebuffer_fetch_non_coherent")))return false;
+    if(policy->mode==DVBRIDGE_MODE_ENHANCED_DV && !r->fragment_quad)return false;
     if(!source || source->num_planes<1 || source->num_planes>4)return false;
     for(int p=0;p<source->num_planes;p++)
         if(!source->planes[p].texture || source->planes[p].texture==target)return false;

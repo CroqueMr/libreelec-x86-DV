@@ -155,6 +155,18 @@ static void native_signal(struct dvbridge_renderer *r,pl_gpu gpu,pl_tex target,u
         assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=pixels)));
         assert(!memcmp(pixels,control,bytes) && "Empty GUI must preserve native HDR10 carrier and metadata");
         retire(r);
+        struct dvbridge_policy identity=policy;
+        identity.mode=DVBRIDGE_MODE_ENHANCED_DV;
+        identity.tv=(struct dvbridge_tv_profile){2500,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020};
+        assert(dvbridge_render_hdr10_ai_packed(r,&identity,&prediction,&source,&geometry,target,fbo,flip) &&
+            "An identity Adaptive plan must reuse Reference transport, without framebuffer fetch");
+        assert(dvbridge_render_dv_policy_resolve(r,target,fbo,flip));
+        out=dvbridge_render_dv_policy_output(r);assert(out);
+        assert(out->value.policy.mode==DVBRIDGE_MODE_ENHANCED_DV &&
+            out->value.expansion_reason==CB1_DVE_NO_HEADROOM && !out->value.measured && !out->intermediate);
+        assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=pixels)));
+        assert(!memcmp(pixels,control,bytes) && "Identity Adaptive must preserve the complete Reference carrier and metadata");
+        retire(r);
         for(unsigned p=0;p<source.num_planes;p++)pl_tex_destroy(gpu,&source.planes[p].texture);
     }
     pl_tex_destroy(gpu,&degamma);pl_tex_destroy(gpu,&pq);

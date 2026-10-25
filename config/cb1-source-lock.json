@@ -27,7 +27,7 @@
     "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "26da34c1c968ee4eeffa2aa886f10f9c368989fbdb0eb0cb1ae251e222b4ebeb",
     "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": "93a7543fbd6d0d3e85978fff15c3d171d6b91b0f42fdf4007d73fae7f36811ff",
     "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": "7e912dfb3c6d52db94759244e305f985380629aa7fa372e5a410ecbd38c3476f",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "4af26f2b3c8f52ed4888eb76bb2856ef8ca5dccfca37961726b2fe6ae35d69ad",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "89538a52575735c2b96d2e1896b10e1eb371475d67641a833ea5e1d285f2926b",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
     "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
     "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
@@ -82,7 +82,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": {
       "source": "src/cb1_circuit.c",
-      "sha256": "cc56b422678422e43d88ae1dc1125ececf5e925af348cde2fc48ea8ed72553ef"
+      "sha256": "8c1ed88cea113cad5f5f0c18e7744eaa6dcec4cfbf27f7dbb6f3342857ce94ec"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": {
       "source": "src/cb1_circuit.h",
@@ -270,7 +270,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "881e88aa7486f2a309f0ab4a83a018ffcf602bafa4000e71559f10707e8fc35f"
+      "sha256": "e31aa5ed6c2f4ad3ce2caca009c47be319cf33f7298b4366a0ba08f915aafaec"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -306,7 +306,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "823da95ec82d1fe4b132bec2de951a46746b9507a2992ed64142880c7abc678a"
+      "sha256": "34e9cb21157930c657d139674819604fc4696e4bf54071d91364e14d8bf52eae"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

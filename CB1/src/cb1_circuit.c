@@ -15,7 +15,7 @@ const char *cb1_circuit_version(enum cb1_circuit circuit)
         [CB1_DV_HDR10_EXPERT] = "CB1-DVHDR10X.0.10",
         [CB1_DV_DV_ADAPTIVE] = "CB1-DVDVA.0.9",
         [CB1_HDR10_DV_REFERENCE] = "CB1-HDR10DVR.0.1.3",
-        [CB1_HDR10_DV_ADAPTIVE] = "CB1-HDR10DVA.0.6",
+        [CB1_HDR10_DV_ADAPTIVE] = "CB1-HDR10DVA.0.7",
         [CB1_DV_DV_MASTER_REFERENCE] = "CB1-DVDVMR.0.5",
         [CB1_DV_DV_ADAPTIVE_B] = "CB1-DVDVA.0.11",
     };

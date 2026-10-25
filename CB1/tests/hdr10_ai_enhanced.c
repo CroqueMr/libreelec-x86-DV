@@ -111,8 +111,7 @@ int main(int argc,char **argv)
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu.gl->gpu);assert(owner);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
     GLint fragment_images;glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS,&fragment_images);
-    const bool can_direct=r->fragment_quad && fragment_images>=3 &&
-        ai_test_has_ext(gpu.gl,"GL_EXT_shader_framebuffer_fetch_non_coherent");
+    const bool can_direct=r->fragment_quad && fragment_images>=3;
     if(argc==2 && !strcmp(argv[1],"--metadata-shape")){
         for(unsigned count=0;count<=5;count++){
             uint32_t words[640]={0};
@@ -143,7 +142,7 @@ int main(int argc,char **argv)
     struct pl_frame source=reference_frame(tex,4,2);source.repr=pl_color_repr_rgb;
     source.color=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,
         .transfer=PL_COLOR_TRC_PQ,.hdr={.max_luma=1000}};
-    const struct dvbridge_geometry geometry={4,2,0,120,3840,1920};
+    struct dvbridge_geometry geometry={4,2,0,120,3840,1920};
     struct cb1_ai_result prediction={.id={3,4,7},.pts=0,
         .raw={.l1_min=0,.l1_max=3080,.l1_avg=1463,.l3_min=2048,.l3_max=2048,.l3_avg=2048}};
     struct dvbridge_policy policy={.revision=7,.mode=DVBRIDGE_MODE_ENHANCED_DV,
@@ -199,8 +198,14 @@ int main(int argc,char **argv)
     for(unsigned i=0;i<32;i++)pixel[i]=i%4==3?1:dv_ideal_pq(100+(i*103)%750);
     pl_tex_destroy(gpu.gl->gpu,&tex);tex=reference_texture(gpu.gl->gpu,4,2,pixel);
     source.planes[0].texture=tex;
+    pl_tex full_source=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
+        .format=pl_find_named_fmt(gpu.gl->gpu,"rgba32f"),.sampleable=true,.renderable=true));assert(full_source);
+    pl_tex_clear(gpu.gl->gpu,full_source,(float[4]){pixel[0],pixel[1],pixel[2],1});
     for(unsigned preset=0;can_direct && preset<2;preset++)for(unsigned flip=0;flip<2;flip++)for(unsigned gui=0;gui<3;gui++){
-        
+        source.planes[0].texture=preset?full_source:tex;
+        source.crop=preset?(pl_rect2df){0,0,3840,2160}:(pl_rect2df){0,0,4,2};
+        geometry=preset?(struct dvbridge_geometry){3840,2160,0,0,3840,2160}:
+            (struct dvbridge_geometry){4,2,0,120,3840,1920};
         dvbridge_renderer_set_overlay_visible(r,gui==2);
         assert(render_hdr10_ai(r,&policy,&prediction,&source,&geometry,NULL,false,gui==2?&late:NULL));
         assert(finish(r)==DVBRIDGE_DV_READY);
@@ -230,6 +235,8 @@ int main(int argc,char **argv)
         }
         retire(r);
     }
+    pl_tex_destroy(gpu.gl->gpu,&full_source);source.planes[0].texture=tex;
+    source.crop=(pl_rect2df){0,0,4,2};geometry=(struct dvbridge_geometry){4,2,0,120,3840,1920};
     for(unsigned i=0;i<3;i++)pl_tex_destroy(gpu.gl->gpu,&overlay_planes[i]);
     free(control_bytes);free(direct_bytes);pl_tex_destroy(gpu.gl->gpu,&direct_target);
     for(unsigned i=0;i<32;i++)pixel[i]=i%4==3?1:dv_ideal_pq(500);
