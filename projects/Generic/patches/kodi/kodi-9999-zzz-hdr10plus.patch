@@ -18,11 +18,11 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgid "Basic uses source metadata. Expert requires a TV profile. HDR10+ sends picture statistics and representable trims to a compatible display."
 +msgstr ""
 +
-+msgctxt "#40920"
++msgctxt "#40922"
 +msgid "HDR10+ conversion (experimental)"
 +msgstr ""
 +
-+msgctxt "#40921"
++msgctxt "#40923"
 +msgid "HDR10+ output requires a supported HDMI driver and display."
  msgstr ""
  
@@ -35,7 +35,7 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
            <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">1</dependency></dependencies>
            <constraints><options>
 -            <option label="40822">0</option><option label="40823">1</option>
-+            <option label="40822">0</option><option label="40823">1</option><option label="40920">2</option>
++            <option label="40822">0</option><option label="40823">1</option><option label="40922">2</option>
            </options></constraints>
            <control type="list" format="string"><usedetails>true</usedetails></control>
          </setting>
@@ -103,7 +103,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/core
    inline static std::atomic<unsigned> presented{0};
    static int ReasonLabel(DVBRIDGE::OutputReason reason)
 -  { return reason == DVBRIDGE::OutputReason::None ? 0 : 40840 + static_cast<int>(reason); }
-+  { return reason == DVBRIDGE::OutputReason::NoHDR10PlusTransport ? 40921 :
++  { return reason == DVBRIDGE::OutputReason::NoHDR10PlusTransport ? 40923 :
 +      reason == DVBRIDGE::OutputReason::None ? 0 : 40840 + static_cast<int>(reason); }
  
    static const char* Reason(DVBRIDGE::OutputReason reason)
@@ -490,7 +490,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
    constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
        {5,0,40914},
 -      {2,0,40814},{1,0,40822},{1,1,40823}};
-+      {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40920}};
++      {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922}};
    const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
    if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
    const bool hdr10Source=source.isHDR10 && !source.isDV;
