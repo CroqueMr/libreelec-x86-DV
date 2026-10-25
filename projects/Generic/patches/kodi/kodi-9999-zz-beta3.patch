@@ -5873,7 +5873,7 @@ diff --git a/xbmc/settings/DisplaySettings.h b/xbmc/settings/DisplaySettings.h
 diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRendering.h
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeFastRendering.h
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,67 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <cstdint>
@@ -5921,6 +5921,12 @@ diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRenderi
 +  unsigned m_warm{},m_samples{},m_low{};
 +  bool m_enabled{},m_active{};
 +};
++
++inline uint64_t MasterFramePeriodNs(double fps)
++{
++  return std::isfinite(fps) && fps >= 10 && fps <= 240 ?
++      static_cast<uint64_t>(std::llround(1e9/fps)) : 0;
++}
 +
 +inline std::optional<int64_t> PresentationHeadroom(uint64_t previousNs, uint64_t readyNs,
 +    uint64_t submittedNs, uint64_t presentedNs, uint64_t periodNs)
@@ -7285,12 +7291,12 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
 +  ResetCB1Timing();
 +}
 +
-+void CDRMAtomic::ResetCB1Timing()
++void CDRMAtomic::ResetCB1Timing(bool discardSample)
 +{
 +  if (m_cb1TimingInput >= 0) close(m_cb1TimingInput);
 +  m_cb1TimingInput = -1;
 +  m_cb1SubmittedNs = 0;
-+  m_cb1Headroom.reset();
++  if (discardSample) m_cb1Headroom.reset();
 +}
 +
 +void CDRMAtomic::SetCB1TimingPeriod(uint64_t periodNs)
@@ -7348,11 +7354,12 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    close(m_cb1OutFence);
    m_cb1OutFence = -1;
    m_cb1Pending = false;
-@@ -400,11 +480,18 @@
+@@ -400,11 +480,19 @@
    }
    // Stable scanout keeps the accepted mode. Transitions still validate it fully.
    const bool asynchronous = async && !restore && CanAsyncDVBridge() && m_inFenceFd >= 0;
-+  ResetCB1Timing();
++  // The next render still owns the completed picture's timing sample.
++  ResetCB1Timing(false);
 +  if (asynchronous && m_cb1TimingPeriodNs)
 +    m_cb1TimingInput = fcntl(m_inFenceFd, F_DUPFD_CLOEXEC, 3);
    const int flags = (m_need_modeset || m_dvActivating || restore)
@@ -7368,7 +7375,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    if (accepted)
    {
      m_need_modeset = false;
-@@ -425,12 +512,31 @@
+@@ -425,12 +513,31 @@
    return accepted;
  }
  
@@ -7402,7 +7409,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    struct drm_fb* drm_fb = nullptr;
    uint32_t flags = 0;
  
-@@ -454,11 +560,7 @@
+@@ -454,11 +561,7 @@
      CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
    }
  
@@ -7414,7 +7421,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  }
  
  bool CDRMAtomic::InitDrm()
-@@ -572,45 +674,52 @@
+@@ -572,45 +675,52 @@
        (strcmp(name, "MODE_ID") == 0 || strcmp(name, "ACTIVE") == 0 ||
         strcmp(name, "DVBRIDGE_DV_STANDARD_LAB") == 0 || strcmp(name, "HDR_OUTPUT_METADATA") == 0 ||
         strcmp(name, "Colorspace") == 0 || strcmp(name, "max bpc") == 0 ||
@@ -7497,7 +7504,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  
  CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())
  {
-@@ -629,6 +738,7 @@
+@@ -629,6 +739,7 @@
      return false;
  
    m_atomicRequestItems[object][propertyId] = value;
@@ -7505,7 +7512,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    return true;
  }
  
-@@ -690,13 +800,16 @@
+@@ -690,13 +801,16 @@
            name != "max bpc" && name != "Broadcast RGB" && name != "Colorspace" &&
            name != "CRTC_ID" && name != "ACTIVE" && name != "VRR_ENABLED" &&
            name != "CTM" && name != "GAMMA_LUT" && name != "DEGAMMA_LUT" &&
@@ -7585,7 +7592,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
 +  int m_cb1TimingInput{-1};
 +  uint64_t m_cb1TimingPeriodNs{}, m_cb1SubmittedNs{};
 +  std::optional<int64_t> m_cb1Headroom;
-+  void ResetCB1Timing();
++  void ResetCB1Timing(bool discardSample = true);
    void ResetCB1PresentationTime() { m_cb1CompletedNs = m_cb1PreviousCompletedNs = 0; }
 -#ifdef HAVE_DVBRIDGE
    bool m_lastPageAccepted{};
@@ -15000,7 +15007,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +934,1571 @@
+@@ -397,13 +934,1572 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16108,8 +16115,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +      m_fastSourceStream == layer.binding.stream &&
 +      DVBRIDGE::ContinuousFastRenderingPicture(layer.pts, m_fastSourcePts) &&
 +      m_dvSelection.reason == DVBRIDGE::OutputReason::None;
-+  m_masterFramePeriodNs=m_fastRenderEligible ?
-+      static_cast<uint64_t>(std::llround((layer.pts-m_fastSourcePts)*1000.0)) : 0;
++  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  m_masterFramePeriodNs=m_fastRenderEligible && preferences.allowMasterFallback &&
++      m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
++      DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
 +  if(auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
 +  {
 +    const auto margin=drm->TakeCB1Headroom();
@@ -16121,7 +16130,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    }
 +    if(switched)
 +    {
-+      DVBRIDGE::DiagnosticLog(LOGWARNING,
++      CLog::Log(LOGWARNING,
 +          "CB1 Master safety: sustained headroom below 2.5ms; next accepted mode is Standard");
 +      DVBRIDGE::PlaybackNotification::ArmMasterRecovery();
 +    }
@@ -16129,7 +16138,6 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  }
 +  m_fastPreparedStream = layer.binding.stream;
 +  m_fastPreparedPts = layer.pts;
-+  const auto preferences = DVBRIDGE::FrameOutputSettings();
 +  const bool subtitlesOnly = !capturing && m_guiWillRender && m_guiFbo.IsValid() &&
 +      m_guiFboWidth == 3840 && m_guiFboHeight == 2160 && m_compositeShader &&
 +      m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
@@ -16575,7 +16583,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2512,16 @@
+@@ -417,5 +2513,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
