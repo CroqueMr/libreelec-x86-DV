@@ -16,7 +16,7 @@
     "packages/multimedia/lightgbm/package.mk": "5a9edbeca727e3b4b40c5bf7c214a5512a2f967a689837eeccce92e9074ca644",
     "projects/Generic/filesystem/usr/bin/dv-diagnostics": "ee77b1f0c9a93a1ebd8680229b6b94b7cfcdd07b651e7eed07d38c6a3df2bdaf",
     "projects/Generic/linux/7.2.6/linux.x86_64.conf": "d399a8320e2ec568f18e79a64718b4aea8613f425c750531d6397ca03045cf91",
-    "projects/Generic/options": "08a336778099e443ede1c4e83a4c8779176e1a0bf1d0a45f81de562c5f19edb3",
+    "projects/Generic/options": "1c6fd999cfae9f784d6962338019f6257039580ab90b0cd949d0c60aad111b7a",
     "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "99ff4c74455dee5cb596702bbe9e3e6b2a091744468b4e51a93d55feb671d948",
     "projects/Generic/patches/kodi/kodi-9993-fel-presentation-pairing.patch": "e285499837a5df7208776d4f49d99b233bad6a1f1b9c35d042ea0efde0897a32",
     "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": "aa85bfe853c8fb6050a5a7d6ce7d00e08cff8b1dba4633cb1802174a33a717b8",
@@ -64,7 +64,7 @@
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
     "config/cb1-patch-index.json": "b3070b4899d2c63929063535d2b7c3137773b459de9cb0ab642e970a7086ce24",
-    "config/cb1-versions.json": "a1cbf3c864b72bc20d4f16bf2886ddad27129d0f983d3061c671730dbf4167cf",
+    "config/cb1-versions.json": "285395ba0b78cd123ae168a8acb2537b5977d0fc791ae021dd157dd56a95c106",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1"
   },
   "staging": {
