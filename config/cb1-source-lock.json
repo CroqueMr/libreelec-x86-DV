@@ -269,7 +269,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "61a51da7837d8d7a504ca228195477f802e193979e24cc144fef5df2f6b67c25"
+      "sha256": "51357b7ea2cadb6446a4c336540a40591d9deaaa5cc29d4f65ccc55a0058ec46"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -305,7 +305,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "00fa708115a91c83cc3e562287acee515fd21faa97e4b1706175abed5a08b694"
+      "sha256": "d5642a62e3a73f2ffe8ae78e016076271f99cce2a3b02ad4dd56e1099fd28436"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

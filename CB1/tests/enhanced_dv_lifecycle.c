@@ -49,11 +49,15 @@ static void quarantine_process(void)
 }
 static void failed_fence_process(void)
 {
+    for(unsigned authored=0;authored<2;authored++){
     pid_t child=fork();assert(child>=0);
     if(!child){
         struct reference_gpu g=reference_gpu_create();
         struct dvbridge_retirement_owner *o=dvbridge_retirement_owner_create(g.gl->gpu);assert(o);
-        struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(o);assert(r && dv_allocate(r,259200));
+        struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(o);assert(r);
+        r->reuse_authored_storage=true;
+        r->enhanced_authored=authored;assert(dv_allocate(r,259200));
+        GLuint storage[3];memcpy(storage,r->dv.buffers,sizeof(storage));
         r->dv.active=true;r->dv.fence_sync=failed_fence;
         assert(!dv_last_use(r) && r->dv.quarantined);
         dvbridge_render_dv_policy_cancel(r);
@@ -61,10 +65,12 @@ static void failed_fence_process(void)
         dvbridge_renderer_reset(r);dvbridge_renderer_destroy(r);
         assert(o->lease && !dvbridge_retirement_owner_destroy(&o));
         assert(dvbridge_retirement_owner_poll(o)==DVBRIDGE_DV_FAILED && !dvbridge_renderer_create_with_owner(o));
+        for(unsigned k=0;k<3;k++)assert(glIsBuffer(storage[k]) && "Failed fences must quarantine borrowed storage too");
         puts("PASS injected failed fence creation quarantines real allocated resources through reset/destroy; no reusable recovery");fflush(stdout);
         _Exit(0); /* Process teardown is the only claimed quarantine recovery. */
     }
     int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && !WEXITSTATUS(result));
+    }
 }
 static void state_probe(struct dvbridge_renderer *r)
 {

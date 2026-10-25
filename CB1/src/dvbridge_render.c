@@ -42,6 +42,7 @@
 
 struct dvbridge_dv_slot {
     bool active, retiring, ready, quarantined;
+    bool borrowed_storage, ordered_handoff;
     GLsync fence;
     PFNGLCLIENTWAITSYNCPROC wait_sync;
     PFNGLDELETESYNCPROC delete_sync;
@@ -66,6 +67,11 @@ struct dvbridge_dv_slot {
     bool enhanced_pixels, enhanced_overlay, overlay_dirty, ai_source;
     struct cb1_dv_enhanced_plan enhanced_plan;
     struct dvbridge_native_overlay overlay;
+};
+struct dvbridge_analysis_storage {
+    GLuint buffers[3],sampler;
+    const uint32_t *mapped;
+    size_t scratch_bytes,result_bytes;
 };
 struct dvbridge_retirement_owner {
     pl_gpu gpu;
@@ -129,7 +135,12 @@ struct dvbridge_renderer {
     bool policy_ready, policy_has_committed;
     struct dvbridge_retirement_owner *owner;
     struct dvbridge_dv_slot dv, retired_packed;
-    GLuint dv_analysis_program, enhanced_program, enhanced_texture;
+    struct dvbridge_analysis_storage analysis_storage;
+    bool reuse_authored_storage;
+#ifdef CB1_TEST_LEGACY_ANALYSIS
+    GLuint dv_analysis_program;
+#endif
+    GLuint enhanced_program, enhanced_texture;
     GLuint enhanced_packed_texture, enhanced_packed_fbo;
     bool enhanced_pq_lookup;
     struct dvbridge_gl_packer *dv_transport_packer;
@@ -148,6 +159,7 @@ static void renderer_free(struct dvbridge_renderer *r);
 static bool dve_requirements(pl_gpu gpu);
 static double dv_ideal_pq(double nits);
 static enum dvbridge_dv_policy_status dv_retire(struct dvbridge_renderer *r);
+static void dv_delete_storage(GLuint buffers[3],GLuint sampler,const void *mapped);
 
 struct reference_hook {
     float rect[4];
@@ -807,7 +819,7 @@ static bool reference_area(float rect[4], const void *metadata,
     return true;
 }
 
-/* Restore deferred P5 backing contents before another path writes them. */
+/* Allocate full-size RGB backing only for an actual consumer. */
 static bool ensure_rgb(struct dvbridge_renderer *r)
 {
     if(r->rgb)return true;
@@ -1100,6 +1112,8 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
     if (gl) {
         const char *vendor = (const char *)glGetString(GL_VENDOR);
         const char *renderer = (const char *)glGetString(GL_RENDERER);
+        /* Retain storage/overlap only on the driver with a measured gain. */
+        r->reuse_authored_storage=vendor && !strcmp(vendor,"Intel");
         // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
         r->exact_scaler_cache = vendor && !strcmp(vendor, "Intel") &&
                                 renderer && strstr(renderer, "(ADL-N)");
@@ -1199,8 +1213,12 @@ static void dve_release_images(struct dvbridge_renderer *r)
 
 static void renderer_free(struct dvbridge_renderer *r)
 {
+    if(r->analysis_storage.mapped)
+        dv_delete_storage(r->analysis_storage.buffers,r->analysis_storage.sampler,r->analysis_storage.mapped);
     cb1_processing_reset(&r->processing,r->gpu);
+#ifdef CB1_TEST_LEGACY_ANALYSIS
     glDeleteProgram(r->dv_analysis_program);
+#endif
     glDeleteProgram(r->enhanced_program);
     dvbridge_gl_packer_destroy(r->dv_transport_packer);
     dvbridge_candidate_destroy(r->pending);
@@ -1312,6 +1330,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     } else if (!dvbridge_map_color(&mapped, metadata, bytes, paired)) return false;
     // Other pipelines retain their FP32 backing; native direct transport needs none.
     if((session || policy || enhanced_reconstruction || native_stage || (!packed && !direct)) &&
+       !(enhanced_reconstruction && r->reuse_authored_storage && r->enhanced_authored && r->enhanced_input) &&
        !ensure_rgb(r))return false;
     mapped.dovi.cb1_native_bounds=!session && !policy && !enhanced_reconstruction;
     unsigned margins[4]={0};
@@ -2247,8 +2266,9 @@ bool dvbridge_render_policy_committed(const struct dvbridge_renderer *r,
 }
 
 
-/* Each group has 128 lanes and a contiguous pairwise tree. Counts carry one
- * invalid-input bit internally; the fixed 48-byte record has a separate flag. */
+#ifdef CB1_TEST_LEGACY_ANALYSIS
+/* Historical test oracle. 128-lane reduction; counts carry an invalid-input
+ * bit, while the fixed48-byte record has a separate flag. */
 static const char dv_analysis_shader[] =
     "#version 310 es\nprecision highp float;precision highp int;\n"
     "layout(local_size_x=128)in;\n"
@@ -2301,16 +2321,22 @@ static GLuint dv_compute_program(void)
     if(!ok){glDeleteProgram(program);return 0;}return program;
 }
 
+#endif
+
+static void dv_delete_storage(GLuint buffers[3],GLuint sampler,const void *mapped)
+{
+    if(mapped){GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,buffers[2]);glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);}
+    glDeleteBuffers(3,buffers);
+    glDeleteSamplers(1,&sampler);
+}
 static void dv_release_slot(struct dvbridge_dv_slot *s)
 {
     if(s->fence)s->delete_sync(s->fence);
-    if(s->mapped){GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[2]);glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);}
-    glDeleteBuffers(3,s->buffers);
-    glDeleteSamplers(1,&s->sampler);
+    if(!s->borrowed_storage)dv_delete_storage(s->buffers,s->sampler,s->mapped);
     av_free(s->source_metadata);
-    /* Programs belong to the renderer; storage and metadata belong to the frame. */
+    /* Borrowed analysis storage survives; transaction metadata never does. */
     av_free(s->output_metadata);
     memset(s,0,sizeof(*s));
 }
@@ -2337,11 +2363,20 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_advance(struct dvbridge
     enum dvbridge_dv_policy_status status=dv_retire_slot(&r->retired_packed);
     if(status!=DVBRIDGE_DV_IDLE)return status;
     struct dvbridge_dv_slot *s=&r->dv;
-    if(!s->retiring || !s->packed_target || s->mapped || s->source_metadata ||
-       s->buffers[0] || s->buffers[1] || s->buffers[2] || s->sampler)
+    bool authored=s->ordered_handoff && s->borrowed_storage && !s->ai_source && !s->source_metadata;
+    if(!s->retiring || (!s->packed_target && !authored) ||
+       (!authored && (s->mapped || s->source_metadata ||
+        s->buffers[0] || s->buffers[1] || s->buffers[2] || s->sampler)))
         return dvbridge_render_dv_policy_poll(r);
     status=dv_retire_slot(s);
     if(status!=DVBRIDGE_DV_BUSY)return status;
+    if(authored){
+        /* The committed resolve no longer reads analysis storage. Order its
+         * remaining image reads before the next reconstruction/compute write. */
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT|GL_FRAMEBUFFER_BARRIER_BIT|GL_TEXTURE_FETCH_BARRIER_BIT);
+        if(glGetError()!=GL_NO_ERROR){s->quarantined=true;return DVBRIDGE_DV_FAILED;}
+        memset(s->buffers,0,sizeof(s->buffers));s->mapped=NULL;s->sampler=0;s->borrowed_storage=false;
+    }
     r->retired_packed=*s;
     memset(s,0,sizeof(*s));
     return DVBRIDGE_DV_IDLE;
@@ -2471,23 +2506,41 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
 {
     if(!dv_gpu_requirements(r->gpu))return false;
     struct dvbridge_dv_slot *s=&r->dv;
+    bool reuse=r->enhanced_authored && r->reuse_authored_storage;
+    if(reuse && (s->active || s->fence || s->mapped || s->buffers[0] || s->sampler))return false;
     s->buffer_storage=(PFNGLBUFFERSTORAGEEXTPROC)eglGetProcAddress("glBufferStorageEXT");
     s->wait_sync=(PFNGLCLIENTWAITSYNCPROC)eglGetProcAddress("glClientWaitSync");
     s->delete_sync=(PFNGLDELETESYNCPROC)eglGetProcAddress("glDeleteSync");
     s->fence_sync=(PFNGLFENCESYNCPROC)eglGetProcAddress("glFenceSync");
-    GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
-    glGenBuffers(3,s->buffers);
-    for(unsigned i=0;i<2;i++){glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[i]);glBufferData(GL_SHADER_STORAGE_BUFFER,scratch_bytes,NULL,GL_STREAM_DRAW);}
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[2]);
-    GLbitfield flags=GL_MAP_READ_BIT|GL_MAP_PERSISTENT_BIT_EXT|GL_MAP_COHERENT_BIT_EXT;
-    const uint32_t empty[16]={0};size_t result_size=r->enhanced_authored?64:48;
-    s->buffer_storage(GL_SHADER_STORAGE_BUFFER,result_size,empty,flags);
-    if(glGetError()==GL_NO_ERROR)s->mapped=glMapBufferRange(GL_SHADER_STORAGE_BUFFER,0,result_size,flags);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);
+    size_t result_size=r->enhanced_authored?64:48;
+    struct dvbridge_analysis_storage *storage=&r->analysis_storage;
+    /* Authored DV alone borrows storage; AI keeps its existing frame ownership.
+     * Admission still waits the transaction's final fence, including late GUI. */
+    if(reuse && storage->mapped &&
+       (storage->scratch_bytes<scratch_bytes || storage->result_bytes<result_size)){
+        dv_delete_storage(storage->buffers,storage->sampler,storage->mapped);
+        memset(storage,0,sizeof(*storage));
+    }
+    if(reuse && storage->mapped){
+        memcpy(s->buffers,storage->buffers,sizeof(s->buffers));
+        s->mapped=storage->mapped;s->sampler=storage->sampler;s->borrowed_storage=true;
+    }else{
+        GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
+        glGenBuffers(3,s->buffers);
+        for(unsigned i=0;i<2;i++){glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[i]);glBufferData(GL_SHADER_STORAGE_BUFFER,scratch_bytes,NULL,GL_STREAM_DRAW);}
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,s->buffers[2]);
+        GLbitfield flags=GL_MAP_READ_BIT|GL_MAP_PERSISTENT_BIT_EXT|GL_MAP_COHERENT_BIT_EXT;
+        const uint32_t empty[16]={0};
+        s->buffer_storage(GL_SHADER_STORAGE_BUFFER,result_size,empty,flags);
+        if(glGetError()==GL_NO_ERROR)s->mapped=glMapBufferRange(GL_SHADER_STORAGE_BUFFER,0,result_size,flags);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);
+        glGenSamplers(1,&s->sampler);
+    }
+#ifdef CB1_TEST_LEGACY_ANALYSIS
     if(!r->dv_analysis_program)r->dv_analysis_program=dv_compute_program();
     s->program=r->dv_analysis_program;
+#endif
     /* Borrowed libplacebo textures need an explicit non-mipmapped sampler. */
-    glGenSamplers(1,&s->sampler);
     glSamplerParameteri(s->sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
     glSamplerParameteri(s->sampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
     glSamplerParameteri(s->sampler,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
@@ -2495,7 +2548,15 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
     if(!r->dv_transport_packer)
         r->dv_transport_packer=dvbridge_gl_packer_create(cb1_pack_vertex,cb1_pack_fragment);
     s->packer=r->dv_transport_packer;
-    bool ok=s->mapped && s->program && s->packer && glGetError()==GL_NO_ERROR;
+    bool ok=s->mapped && s->packer && glGetError()==GL_NO_ERROR;
+#ifdef CB1_TEST_LEGACY_ANALYSIS
+    ok=ok && s->program;
+#endif
+    if(ok && reuse && !s->borrowed_storage){
+        memcpy(storage->buffers,s->buffers,sizeof(s->buffers));storage->mapped=s->mapped;
+        storage->sampler=s->sampler;storage->scratch_bytes=scratch_bytes;storage->result_bytes=result_size;
+        s->borrowed_storage=true;
+    }
     if(!ok)dv_release(r);
     return ok;
 }
@@ -2519,6 +2580,7 @@ static bool dv_allocate_transport(struct dvbridge_renderer *r)
 }
 
 
+#ifdef CB1_TEST_LEGACY_ANALYSIS
 static bool dv_analyze(struct dvbridge_renderer *r,pl_tex texture)
 {
     if(!texture)return false;
@@ -2567,6 +2629,8 @@ static bool dv_analyze(struct dvbridge_renderer *r,pl_tex texture)
     glBindSampler(0,sampler);glBindTexture(GL_TEXTURE_2D,binding);glActiveTexture(active);
     return dv_last_use(r) && ok && glGetError()==GL_NO_ERROR;
 }
+
+#endif
 
 static uint16_t dv_wire_code(double pq)
 { return (uint16_t)fmin(4095,floor(4096*pq+.5)); }
@@ -2664,7 +2728,8 @@ static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned hei
      * textures. Wrap one native immutable texture, retaining explicit ownership. */
     /* Direct packing keeps full precision. Half-float PQ is retained only for
      * later GUI composition and guarded native recovery in this AI route. */
-    bool ok=dve_immutable(r,&r->enhanced_rgb,&r->enhanced_texture,width,height,r->ai_enhanced_prepack?GL_RGBA16F:GL_RGBA32F);
+    bool ok=(r->reuse_authored_storage && r->enhanced_authored && r->enhanced_skip_aux) ||
+        dve_immutable(r,&r->enhanced_rgb,&r->enhanced_texture,width,height,r->ai_enhanced_prepack?GL_RGBA16F:GL_RGBA32F);
     if(ok && r->ai_enhanced_fused){
         bool quad=r->ai_enhanced_prepack;
         ok=dve_immutable(r,&r->ai_enhanced_stats,&r->ai_enhanced_stats_texture,
@@ -2717,7 +2782,8 @@ static bool dve_clear_rows(unsigned framebuffer,unsigned first,unsigned end)
 static bool dve_run(struct dvbridge_renderer *r,const struct cb1_dv_enhanced_plan *p,
     pl_tex texture,const unsigned margins[4])
 {
-    if(!texture || !r->enhanced_rgb || p->status!=CB1_DVE_READY)return false;
+    bool skip_image=r->reuse_authored_storage && r->enhanced_authored && r->enhanced_skip_aux;
+    if(!texture || (!r->enhanced_rgb && !skip_image) || p->status!=CB1_DVE_READY)return false;
     /* Reuse the calibrated transfer tables; unsupported GPUs keep analytic PQ. */
     bool pq_lookup=r->enhanced_pq_lookup;
     struct dvbridge_dv_slot *s=&r->dv;
@@ -2779,7 +2845,8 @@ static bool dve_run(struct dvbridge_renderer *r,const struct cb1_dv_enhanced_pla
         glSamplerParameteri(s->sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
         glSamplerParameteri(s->sampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
     }
-    if(!r->ai_enhanced_fused)glBindImageTexture(0,pl_opengl_unwrap(r->gpu,r->enhanced_rgb,NULL,NULL,NULL),0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA32F);
+    if(!r->ai_enhanced_fused && !skip_image)
+        glBindImageTexture(0,pl_opengl_unwrap(r->gpu,r->enhanced_rgb,NULL,NULL,NULL),0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA32F);
     if(prepack){
         glBindImageTexture(1,r->enhanced_packed_texture,0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA8);
         glUniform1i(glGetUniformLocation(shader,"gui_visible"),s->enhanced_overlay);
@@ -2914,6 +2981,7 @@ static bool dv_derive(struct dvbridge_renderer *r,const uint32_t record[12])
 void dvbridge_render_dv_policy_cancel(struct dvbridge_renderer *r)
 {
     if(!r)return;
+    r->dv.ordered_handoff=false;
     if(r->dv.active){r->dv.retiring=true;r->dv.ready=false;}
     r->ready=false;
     memset(&r->dv.output,0,sizeof(r->dv.output));
@@ -3073,8 +3141,10 @@ bool dvbridge_render_dv_policy_update_overlay(struct dvbridge_renderer *r,
      * Materialize it once; later redraws only replace the final overlay. */
     if(!s->ai_source && r->enhanced_skip_aux && s->enhanced_plan.status==CB1_DVE_READY){
         r->enhanced_skip_aux=r->enhanced_prepack=false;
-        if(!dve_program(r,r->enhanced_pq_lookup) ||
-           !dve_run(r,&s->enhanced_plan,r->enhanced_input?r->enhanced_input:r->rgb,r->enhanced_margins))
+        pl_tex input=r->enhanced_input?r->enhanced_input:r->rgb;
+        if(!input || !dve_immutable(r,&r->enhanced_rgb,&r->enhanced_texture,input->params.w,input->params.h,GL_RGBA32F) ||
+           !dve_program(r,r->enhanced_pq_lookup) ||
+           !dve_run(r,&s->enhanced_plan,input,r->enhanced_margins))
             return false;
         s->output.intermediate=r->enhanced_rgb;
     }
@@ -3099,6 +3169,7 @@ static struct pl_hook_res dve_linear_decode(void *priv,const struct pl_hook_para
 static bool dve_native_pq(struct dvbridge_renderer *r)
 {
     pl_tex input=r->enhanced_input?r->enhanced_input:r->rgb;
+    if(!input || !dve_immutable(r,&r->enhanced_rgb,&r->enhanced_texture,input->params.w,input->params.h,GL_RGBA32F))return false;
     struct pl_frame image={.num_planes=1,
         .planes={{.texture=input,.components=4,.component_mapping={0,1,2,3}}},
         .repr=pl_color_repr_rgb,.color=r->reconstructed_color,.crop={0,0,input->params.w,input->params.h}};
@@ -3314,6 +3385,7 @@ static pl_tex dve_compose(struct dvbridge_renderer *r,pl_tex input,bool compose)
 {
     const struct dvbridge_native_overlay *o=&r->dv.overlay;
     if(!input || (compose && (!o->texture || !o->degamma || !o->pq)))return NULL;
+    if(!compose && !ensure_rgb(r))return NULL;
     pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
     if(!fmt || (compose && !pl_tex_recreate(r->gpu,&r->ai_rgb,pl_tex_params(.w=3840,.h=2160,
         .format=fmt,.sampleable=true,.renderable=true))))return NULL;
@@ -3502,7 +3574,15 @@ bool dvbridge_render_dv_policy_commit(struct dvbridge_renderer *r,
         r->enhanced_committed=r->dv.enhanced_plan;r->enhanced_pts=r->dv.pts;
         r->enhanced_stream=id->stream;r->enhanced_has_committed=true;
     }else r->enhanced_has_committed=false;
-    r->dv_committed=out->value;r->dv_has_committed=true;dvbridge_render_dv_policy_cancel(r);return true;
+    bool handoff=r->dv.borrowed_storage && r->dv.enhanced_pixels && !r->dv.ai_source &&
+        r->dv.enhanced_plan.status==CB1_DVE_READY && r->dv.prepacked && r->enhanced_skip_aux &&
+        r->fast_chroma && !r->overlay_visible && !r->dv.enhanced_overlay &&
+        out->value.policy.adaptive!=DVBRIDGE_ADAPTIVE_A &&
+        out->value.geometry.source_width==3840 && out->value.geometry.source_height==2160 &&
+        !out->value.geometry.x && !out->value.geometry.y &&
+        out->value.geometry.width==3840 && out->value.geometry.height==2160;
+    r->dv_committed=out->value;r->dv_has_committed=true;dvbridge_render_dv_policy_cancel(r);
+    r->dv.ordered_handoff=handoff;return true;
 }
 bool dvbridge_render_dv_policy_committed(const struct dvbridge_renderer *r,struct dvbridge_dv_policy_snapshot *out)
 { if(!r || !out || !r->dv_has_committed)return false;*out=r->dv_committed;return true; }

@@ -1,6 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "reference_test.h"
+static unsigned compute_compilations;
+static GLuint count_shader(GLenum type)
+{if(type==GL_COMPUTE_SHADER)compute_compilations++;return glCreateShader(type);}
+#define glCreateShader count_shader
 #include "../src/dvbridge_render.c"
+#undef glCreateShader
 #include <time.h>
 extern bool dvbridge_gl_patch(struct dvbridge_gl_packer *,unsigned,unsigned,int,int,
     const uint32_t[512],unsigned,bool) __attribute__((weak));
@@ -52,10 +57,240 @@ static void exact_prepack(struct dvbridge_renderer *r,unsigned fbo,bool flip)
     }
     free(expected);free(actual);
 }
+static void adaptive_ordered_handoff(pl_gpu,const struct pl_frame *,const AVDOVIMetadata *,size_t);
+static void adaptive_guidance_equivalence(pl_gpu gpu)
+{
+    enum {W=3840,H=2160};
+    float *pixels=malloc((size_t)W*H*4*sizeof(*pixels));assert(pixels);
+    pl_matrix3x3 matrix=pl_ipt_rgb2lms(pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020));
+    float tile[64][4];
+    for(unsigned i=0;i<64;i++){
+        double rgb[3];
+        for(unsigned c=0;c<3;c++)rgb[c]=i<8?(double[]){0,.001,.1,1,5,9,10,10.1}[i]:
+            20+((i*(17+13*c))%880);
+        for(unsigned c=0;c<3;c++)tile[i][c]=dv_ideal_pq(
+            matrix.m[c][0]*rgb[0]+matrix.m[c][1]*rgb[1]+matrix.m[c][2]*rgb[2]);
+        tile[i][3]=1;
+    }
+    for(unsigned i=0;i<W*H;i++)memcpy(pixels+4*i,tile[(i+i/W)%64],sizeof(tile[0]));
+    pl_tex input=reference_texture(gpu,W,H,pixels);free(pixels);
+    struct pl_frame frame=reference_frame(input,W,H);
+    pl_fmt fmt=pl_find_named_fmt(gpu,"rgba8");assert(fmt);
+    pl_tex target=pl_tex_create(gpu,pl_tex_params(.w=W,.h=H,.format=fmt,.renderable=true));assert(target);
+    unsigned fbo;pl_opengl_unwrap(gpu,target,NULL,NULL,&fbo);
+    const size_t n=(size_t)W*H*4;
+    unsigned char *expected=malloc(n),*actual=malloc(n);assert(expected && actual);
+    size_t bytes;AVDOVIMetadata *metadata=task3_fixture(&bytes);
+    av_dovi_get_color(metadata)->source_max_pq=3079;metadata->num_ext_blocks=3;
+    *av_dovi_get_ext(metadata,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=3079,.avg_pq=1463}};
+    *av_dovi_get_ext(metadata,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=2851,
+        .trim_slope=2048,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,
+        .trim_saturation_gain=2048,.ms_weight=-1}};
+    *av_dovi_get_ext(metadata,2)=(AVDOVIDmData){.level=5,.l5={.top_offset=18,.bottom_offset=22}};
+    struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+        .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
+    for(unsigned color=0;color<3;color++){
+        if(color){av_dovi_get_ext(metadata,1)->l2.trim_chroma_weight=2300;
+            av_dovi_get_ext(metadata,1)->l2.trim_saturation_gain=2200;}
+        if(color==2)for(unsigned c=1;c<3;c++){
+            AVDOVIReshapingCurve *curve=&av_dovi_get_mapping(metadata)->curves[c];
+            curve->mapping_idc[0]=AV_DOVI_MAPPING_MMR;curve->mmr_order[0]=1;
+            curve->mmr_coef[0][0][c]=4096;curve->mmr_coef[0][0][0]=16;
+        }
+        void *reference=NULL;size_t reference_bytes=0;
+        for(unsigned fast=0;fast<2;fast++){
+            struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
+            struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
+            const char *vendor=(const char *)glGetString(GL_VENDOR);
+            assert(r->reuse_authored_storage==(vendor && !strcmp(vendor,"Intel")));
+            r->reuse_authored_storage=true; /* Verify the optimized contract on both GPUs. */
+            dvbridge_renderer_set_fast_chroma(r,fast);
+            compute_compilations=0;
+            struct dvbridge_identity id={71,83,1};
+            enum dvbridge_dv_policy_status prepared=dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,&frame,metadata,bytes,0,0,
+                (struct dvbridge_geometry){W,H,0,0,W,H},target,false,NULL);
+            assert(prepared==DVBRIDGE_DV_PENDING);
+            assert(!r->rgb && !r->enhanced_rgb &&
+                "Packed FP16 Adaptive must not allocate unused full-frame FP32 images");
+            assert(compute_compilations==1u &&
+                "Only the active authored kernel may be compiled");
+            GLuint storage[3],sampler=r->dv.sampler;memcpy(storage,r->dv.buffers,sizeof(storage));
+            const uint32_t *mapping=r->dv.mapped;
+            assert(finish(r)==DVBRIDGE_DV_READY);
+            const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);
+            assert(out && out->value.output_generation==DVBRIDGE_RECONSTRUCTED_ENHANCED &&
+                out->value.expansion_reason==CB1_DVE_ACTIVE);
+            if(!fast){reference_bytes=out->bytes;reference=av_memdup(out->output_metadata,reference_bytes);assert(reference);}
+            else assert(out->bytes==reference_bytes && !memcmp(reference,out->output_metadata,reference_bytes) &&
+                "Authored transport must preserve every output metadata byte");
+            assert(dvbridge_render_dv_policy_resolve(r,target,fbo,false));
+            glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+            glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,fast?actual:expected);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);assert(glGetError()==GL_NO_ERROR);
+            if(fast && memcmp(expected,actual,n)){
+                unsigned max_y=0,max_c=0,max_black=0;size_t changed=0;double sum_y=0,sum_c=0;
+                for(size_t i=0;i<n;i+=4){
+                    unsigned y0=16*expected[i+1]+(expected[i+2]&15),y1=16*actual[i+1]+(actual[i+2]&15);
+                    unsigned c0=(16*expected[i]+(expected[i+2]>>4))&~1u,c1=(16*actual[i]+(actual[i+2]>>4))&~1u;
+                    unsigned y=abs((int)y0-(int)y1),c=abs((int)c0-(int)c1);
+                    if(y>max_y)max_y=y;if(c>max_c)max_c=c;sum_y+=y;sum_c+=c;changed+=y||c;
+                    if(y0<=256 && y>max_black)max_black=y;
+                }
+                fprintf(stderr,"Adaptive carrier error12: maxY=%u maxC=%u meanY=%g meanC=%g black=%u changed=%zu/%u\n",
+                    max_y,max_c,sum_y/(W*H),sum_c/(W*H),max_black,changed,W*H);
+                assert(!memcmp(expected,actual,n) &&
+                    "Authored transport must preserve every movie byte");
+            }
+            uint64_t digest=UINT64_C(14695981039346656037);
+            const unsigned char *carrier=fast?actual:expected;
+            for(size_t i=0;i<n;i++)digest=(digest^carrier[i])*UINT64_C(1099511628211);
+            fprintf(stderr,"CARRIER_HASH colour=%u fast=%u fnv1a=%016llx\n",color,fast,(unsigned long long)digest);
+            if(fast)memcpy(expected,actual,n);
+            dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
+            for(unsigned k=0;k<3;k++)assert(glIsBuffer(storage[k]) &&
+                "Completed Adaptive storage must stay owned by the renderer");
+            assert(glIsSampler(sampler));
+            if(fast){
+                id.picture++;
+                assert(dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,&frame,metadata,bytes,0,0,
+                    (struct dvbridge_geometry){W,H,0,0,W,H},target,false,NULL)==DVBRIDGE_DV_PENDING);
+                assert(!memcmp(storage,r->dv.buffers,sizeof(storage)) && r->dv.mapped==mapping &&
+                    r->dv.sampler==sampler && "Reuse storage, never the previous frame identity");
+                assert(finish(r)==DVBRIDGE_DV_READY);
+                assert(dvbridge_render_dv_policy_update_overlay(r,NULL,true));
+                assert(dvbridge_render_dv_policy_update_overlay(r,NULL,false));
+                assert(dvbridge_render_dv_policy_resolve(r,target,fbo,false));
+                glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+                glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+                glBindFramebuffer(GL_FRAMEBUFFER,0);assert(glGetError()==GL_NO_ERROR);
+                assert(!memcmp(expected,actual,n) && "Late GUI materialization must preserve carrier/RPU");
+                dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
+            }
+            dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
+            for(unsigned k=0;k<3;k++)assert(!glIsBuffer(storage[k]));
+            assert(!glIsSampler(sampler));
+        }
+        av_free(reference);
+        if(color==1)adaptive_ordered_handoff(gpu,&frame,metadata,bytes);
+    }
+    av_free(metadata);free(expected);free(actual);
+    pl_tex_destroy(gpu,&target);pl_tex_destroy(gpu,&input);
+    puts("PASS Adaptive transport: exact4K carrier/RPU/late-GUI, colour guidance, shadows and L5");
+}
+static GLenum storage_timeout(GLsync sync,GLbitfield flags,GLuint64 timeout)
+{assert(sync && !flags && !timeout);return GL_TIMEOUT_EXPIRED;}
+static void adaptive_storage_ownership(pl_gpu gpu)
+{
+    struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
+    struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
+    r->reuse_authored_storage=true;
+    GLuint held[3]={0},sampler=0;const uint32_t *mapping=NULL;
+    const size_t sizes[]={256,128,4096};
+    r->enhanced_authored=true;
+    for(unsigned step=0;step<3;step++){
+        assert(dv_allocate(r,sizes[step]));
+        if(step==1)assert(!memcmp(held,r->dv.buffers,sizeof(held)) && r->dv.mapped==mapping && r->dv.sampler==sampler);
+        memcpy(held,r->dv.buffers,sizeof(held));mapping=r->dv.mapped;sampler=r->dv.sampler;
+        GLint previous;glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&previous);
+        for(unsigned k=0;k<2;k++){
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER,held[k]);GLint64 capacity;
+            glGetBufferParameteri64v(GL_SHADER_STORAGE_BUFFER,GL_BUFFER_SIZE,&capacity);assert(capacity>=(GLint64)sizes[step]);
+        }
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,previous);
+        r->dv.active=true;assert(dv_last_use(r));
+        PFNGLCLIENTWAITSYNCPROC genuine=r->dv.wait_sync;
+        r->dv.wait_sync=storage_timeout;dvbridge_render_dv_policy_cancel(r);
+        assert(dvbridge_render_dv_policy_poll(r)==DVBRIDGE_DV_BUSY);
+        assert(!dv_allocate(r,sizes[step]) && "Pending cancellation cannot recycle storage");
+        for(unsigned k=0;k<3;k++)assert(glIsBuffer(held[k]));
+        r->dv.wait_sync=genuine;assert(finish(r)==DVBRIDGE_DV_IDLE);
+    }
+    /* The AI allocation contract remains frame-owned while DV storage is idle. */
+    r->enhanced_authored=false;assert(dv_allocate(r,128));
+    GLuint owned[3];memcpy(owned,r->dv.buffers,sizeof(owned));assert(!r->dv.borrowed_storage);
+    r->dv.active=true;assert(dv_last_use(r));dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
+    for(unsigned k=0;k<3;k++)assert(!glIsBuffer(owned[k]) && glIsBuffer(held[k]));
+    r->enhanced_authored=true;assert(dv_allocate(r,256));
+    assert(!memcmp(held,r->dv.buffers,sizeof(held)) && r->dv.mapped==mapping);
+    r->dv.active=true;assert(dv_last_use(r));PFNGLCLIENTWAITSYNCPROC genuine=r->dv.wait_sync;
+    r->dv.wait_sync=storage_timeout;dvbridge_renderer_destroy(r);
+    assert(owner->lease && !owner->attached && dvbridge_retirement_owner_poll(owner)==DVBRIDGE_DV_BUSY);
+    for(unsigned k=0;k<3;k++)assert(glIsBuffer(held[k]));
+    owner->lease->dv.wait_sync=genuine;glFinish();
+    assert(dvbridge_retirement_owner_poll(owner)==DVBRIDGE_DV_IDLE);
+    for(unsigned k=0;k<3;k++)assert(!glIsBuffer(held[k]));
+    assert(!glIsSampler(sampler) && dvbridge_retirement_owner_destroy(&owner));
+    puts("PASS Adaptive storage: capacity/reuse, AI isolation, pending cancellation and deferred destruction");
+}
+static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
+    const AVDOVIMetadata *metadata,size_t bytes)
+{
+    const size_t size=3840u*2160u*4;unsigned char *reference[2]={malloc(size),malloc(size)},*actual=malloc(size);
+    void *expected_metadata[2]={0};size_t expected_bytes[2]={0};assert(reference[0]&&reference[1]&&actual);
+    AVDOVIMetadata *changed=av_memdup(metadata,bytes);assert(changed);
+    AVDOVIDmData *l1=(AVDOVIDmData *)av_dovi_find_level(changed,1);assert(l1);
+    l1->l1.max_pq=2800;l1->l1.avg_pq=1229;
+    pl_fmt fmt=pl_find_named_fmt(gpu,"rgba8");pl_tex targets[2];unsigned fbos[2];
+    for(unsigned i=0;i<2;i++){
+        targets[i]=pl_tex_create(gpu,pl_tex_params(.w=3840,.h=2160,.format=fmt,.renderable=true));assert(targets[i]);
+        pl_opengl_unwrap(gpu,targets[i],NULL,NULL,&fbos[i]);
+    }
+    for(unsigned ordered=0;ordered<2;ordered++){
+        struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
+        struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
+        if(ordered)r->reuse_authored_storage=true; /* Exercise the ordered contract on both drivers. */
+        dvbridge_renderer_set_fast_chroma(r,true);
+        struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+            .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
+        for(unsigned i=0;i<2;i++){
+            const AVDOVIMetadata *m=i?changed:metadata;struct dvbridge_identity id={71,83+i,1};
+            assert(dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,frame,m,bytes,i/60.0,i/60.0,
+                (struct dvbridge_geometry){3840,2160,0,0,3840,2160},targets[i],false,NULL)==DVBRIDGE_DV_PENDING);
+            assert(finish(r)==DVBRIDGE_DV_READY);
+            const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out);
+            if(!ordered){expected_bytes[i]=out->bytes;expected_metadata[i]=av_memdup(out->output_metadata,out->bytes);assert(expected_metadata[i]);}
+            else assert(out->bytes==expected_bytes[i] && !memcmp(out->output_metadata,expected_metadata[i],out->bytes));
+            assert(dvbridge_render_dv_policy_resolve(r,targets[i],fbos[i],false));
+            uint64_t serial=out->resolve_serial;
+            assert(dvbridge_render_dv_policy_commit(r,&id,targets[i],serial));
+            if(!ordered && !i){
+                const char *vendor=(const char *)glGetString(GL_VENDOR);
+                assert(r->dv.ordered_handoff==(vendor && !strcmp(vendor,"Intel")) &&
+                    "Only measured beneficial drivers may overlap Adaptive analysis");
+            }
+            if(!ordered)assert(finish(r)==DVBRIDGE_DV_IDLE);
+            else if(!i){
+                PFNGLCLIENTWAITSYNCPROC genuine=r->dv.wait_sync;r->dv.wait_sync=storage_timeout;
+                assert(dvbridge_render_dv_policy_advance(r)==DVBRIDGE_DV_IDLE &&
+                    "A committed resolve must hand off without a CPU final-fence wait");
+                assert(r->retired_packed.active && !r->dv.active);
+                r->retired_packed.wait_sync=genuine;
+            }else{
+                PFNGLCLIENTWAITSYNCPROC genuine=r->retired_packed.wait_sync;r->retired_packed.wait_sync=storage_timeout;
+                assert(dvbridge_render_dv_policy_advance(r)==DVBRIDGE_DV_BUSY && "Only one retired transaction is allowed");
+                r->retired_packed.wait_sync=genuine;
+            }
+        }
+        glFinish();assert(finish(r)==DVBRIDGE_DV_IDLE);
+        for(unsigned i=0;i<2;i++){
+            glBindFramebuffer(GL_FRAMEBUFFER,fbos[i]);
+            glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,ordered?actual:reference[i]);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);assert(glGetError()==GL_NO_ERROR);
+            if(ordered)assert(!memcmp(actual,reference[i],size) && "Ordered handoff must preserve both complete carriers");
+        }
+        dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
+    }
+    assert(memcmp(reference[0],reference[1],size) && "The two graded frames must be distinguishable");
+    for(unsigned i=0;i<2;i++){free(reference[i]);av_free(expected_metadata[i]);pl_tex_destroy(gpu,&targets[i]);}
+    av_free(changed);free(actual);puts("PASS Adaptive ordered handoff: distinct carriers/RPUs and bounded final-fence retirement");
+}
+
 int main(void)
 {
     assert(dvbridge_gl_patch && "Prepacked transport requires metadata-only patching");
     struct reference_gpu g=reference_gpu_create();
+    adaptive_storage_ownership(g.gl->gpu);
+    adaptive_guidance_equivalence(g.gl->gpu);
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(g.gl->gpu);assert(owner);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
@@ -447,7 +682,9 @@ int main(void)
     }
     if(r->fragment_quad){
         /* B must retain the whole-frame guard without materializing a PQ cache. */
-        p.adaptive=DVBRIDGE_ADAPTIVE_B_FP32;
+        for(unsigned fast=0;fast<2;fast++){
+        p.adaptive=fast?DVBRIDGE_ADAPTIVE_B_FP16:DVBRIDGE_ADAPTIVE_B_FP32;
+        dvbridge_renderer_set_fast_chroma(r,fast);
         av_dovi_get_color(m)->source_max_pq=2500;id.picture++;
         assert(dvbridge_render_dv_policy_prepare_packed(r,&p,&id,&full_frame,m,bytes,5,5,full_geometry,target,false,NULL)==DVBRIDGE_DV_PENDING);
         assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);
@@ -466,6 +703,7 @@ int main(void)
         assert(!memcmp(expected,actual,size) && "Fused B recovery must preserve every transport byte");
         free(expected);free(actual);
         dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
+        }
     }
     dvbridge_renderer_destroy(canonical);pl_tex_destroy(r->gpu,&full);
     dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
