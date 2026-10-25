@@ -30,6 +30,7 @@ implementation changes:
 | --- | --- | --- |
 | `dvbridge_core.c/.h` | Candidate ownership, geometry and presentation commit | Imported serializer implementation, replaced separately |
 | `cb1_master_reference.c/.h` | FFmpeg metadata validation/copying into the exact-reference contract | libplacebo reconstruction shaders |
+| `cb1_master_ipt.c/.h`, `cb1_master_ipt_shader.h` | Original scalar matrix inversion, ST2084 table generation and final IPT colour transform restored for RC1 Preview D | Historical serializer and GUI composition, not copied; separately licensed libplacebo reconstruction |
 | `cb1_processing.c/.h` | Original bounds certification, table preparation and cache/admission management | Processing shader additions in libplacebo |
 | `cb1_dv_enhanced.c/.h` | Original expansion curve, scalar model and temporal state | Creative trim adaptations and expansion/packing GPU shader |
 | `dvbridge_gl_frame.c/.h` | Native decoded-texture wrapping through public libplacebo/GLES APIs | NVIDIA import and unresolved FEL/VAAPI adaptations |

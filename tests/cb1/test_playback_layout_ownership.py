@@ -4,10 +4,41 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import struct
+import xml.etree.ElementTree as ET
 
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class PlaybackLayoutOwnership(unittest.TestCase):
+    def test_owned_panel_keeps_fixed_corners_for_every_row_count(self):
+        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        layout=ET.parse(tree/'addons/skin.estuary/xml/Includes_DialogSelect.xml')
+        texture=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9101']/texture")
+        self.assertIsNotNone(texture)
+        self.assertEqual(texture.text,'special://xbmc/media/cb1-panel.png')
+        repo=Path(__file__).resolve().parents[2]
+        png=(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1-panel.png').read_bytes()
+        width,height=struct.unpack('>II',png[16:24])
+        border=int(texture.get('border','0'))
+        self.assertEqual((width,height,border),(120,120,60))
+        # Native nine-slice keeps source corners square while the centre grows.
+        for count in range(1,7):
+            self.assertGreater(112+50*count,2*border)
+            self.assertGreater(660,2*border)
+
+    def test_master_settings_are_fixed_and_intrinsic_fast_has_no_saved_control(self):
+        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        settings=ET.parse(tree/'system/settings/settings.xml')
+        self.assertIsNone(settings.find(".//setting[@id='dvbridge.fastchroma']"))
+        output=settings.find(".//setting[@id='dvbridge.masteroutput']")
+        fallback=settings.find(".//setting[@id='dvbridge.masterfallback']")
+        self.assertEqual(output.findtext('default'),'0')
+        self.assertEqual(output.findtext('level'),'3')
+        self.assertEqual([o.text for o in output.findall('constraints/options/option')],['0','1'])
+        self.assertEqual(fallback.findtext('default'),'true')
+        for node in (output,fallback):
+            self.assertEqual(node.findtext("dependencies/dependency[@setting='dvbridge.outputmode']"),'4')
+
     def test_foreign_control_ids_keep_their_geometry(self):
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) /
                   'xbmc/dialogs/GUIDialogSelect.cpp').read_text()

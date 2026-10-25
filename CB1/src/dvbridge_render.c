@@ -14,6 +14,8 @@
 #include "cb1_trim_math.h"
 #include "cb1_trim_glsl.h"
 #include "cb1_transport_glsl.h"
+#include "cb1_master_ipt.h"
+#include "cb1_master_ipt_shader.h"
 #include "cb1_composite_glsl.h"
 #include "cb1_dv_enhanced_shader.h"
 #define CB1_DVE_GPU 1
@@ -108,6 +110,7 @@ struct dvbridge_renderer {
     pl_gpu gpu;
     pl_renderer renderer;
     pl_tex rgb, ai_rgb, enhanced_rgb, enhanced_input, p5_native, native_picture;
+    pl_tex ipt_pq[2];
     pl_tex cm29_tail_atlas;
     pl_tex cm29_tail_axis;
     struct cm29_tail_cache_key cm29_tail_key;
@@ -874,6 +877,9 @@ struct active_mask {
     pl_shader native_shader;
     bool early_mask, source_domain, source_overlay, straight_overlay, linear_output;
     bool reference_transport, profile5_transport, scaled_quad;
+    bool ipt_quad;
+    const struct cb1_master_ipt *ipt;
+    const pl_tex *ipt_pq;
     pl_tex reference_target;
     pl_tex reference_source;
     pl_tex scaled_reference;
@@ -933,7 +939,7 @@ static struct pl_hook_res skip_inactive_area(struct active_mask *mask,
         .description="Skip reconstruction outside the DV active picture",
         .header=
             mask->linear_output ? "#define CB1_LINEAR_EARLY_OUTPUT 1\n" :
-            mask->profile5_transport ? (mask->overlay ?
+            (mask->profile5_transport || mask->ipt_quad) ? (mask->overlay ?
                 "#define CB1_PROFILE5_TRANSPORT 1\n#define CB1_NATIVE_OVERLAY 1\n" :
                 "#define CB1_PROFILE5_TRANSPORT 1\n") :
             mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
@@ -995,6 +1001,15 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
     mask->called = true;
     if(!clamp_picture(p->sh,mask->maximum_pq))
         return (struct pl_hook_res){.failed=mask->failed=true};
+    float ipt_decode[9]={0},ipt_linear[9]={0},ipt_encode[9]={0},ipt_offset[3]={0};
+    if(mask->ipt)for(int i=0;i<3;i++) {
+        ipt_offset[i]=mask->ipt->offset[i];
+        for(int j=0;j<3;j++) {
+            ipt_decode[j*3+i]=mask->ipt->decode[i*3+j];
+            ipt_linear[j*3+i]=mask->ipt->linear[i*3+j];
+            ipt_encode[j*3+i]=mask->ipt->encode[i*3+j];
+        }
+    }
     struct pl_shader_var vars[] = {
         {.var = pl_var_vec4("active_area"), .data = mask->rect, .dynamic = true},
         {.var = {.name="metadata_words", .type=PL_VAR_UINT, .dim_v=4, .dim_m=1, .dim_a=32*(mask->count ? mask->count : 1)},
@@ -1006,6 +1021,10 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         {.var=pl_var_vec3("overlay_offset"), .data=mask->offset, .dynamic=true},
         {.var=pl_var_mat3("overlay_linear"), .data=mask->linear, .dynamic=true},
         {.var=pl_var_vec4("scaled_rect"), .data=mask->scaled_rect, .dynamic=true},
+        {.var=pl_var_mat3("ipt_decode"), .data=ipt_decode, .dynamic=true},
+        {.var=pl_var_mat3("ipt_linear"), .data=ipt_linear, .dynamic=true},
+        {.var=pl_var_mat3("ipt_encode"), .data=ipt_encode, .dynamic=true},
+        {.var=pl_var_vec3("ipt_offset"), .data=ipt_offset, .dynamic=true},
     };
     struct pl_shader_desc desc[6]={0};
     if(mask->overlay) {
@@ -1024,8 +1043,12 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .binding={.object=mask->scaled_reference,.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     }
     unsigned descriptors=(mask->overlay?3:0)+(mask->scaled_reference?1:0);
-    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s",
+    if(mask->ipt)for(int i=0;i<2;i++)
+        desc[descriptors++]=(struct pl_shader_desc){
+            .desc={.name=i?"ipt_oetf":"ipt_eotf",.type=PL_DESC_SAMPLED_TEX},
+            .binding={.object=mask->ipt_pq[i],.sample_mode=PL_TEX_SAMPLE_NEAREST}};
+    char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL CB1_MASTER_IPT_GLSL CB1_IPT_CODES_GLSL)+512];
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
@@ -1035,19 +1058,24 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
         mask->profile5_transport ? "#define CB1_SOURCE_BLACK 0.0\n" :
             "#define CB1_SOURCE_BLACK .0625\n",
-        mask->scaled_quad ? "#define CB1_SCALED_QUAD 1\n" : "",
-        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL,
+        mask->scaled_quad || mask->ipt_quad ? "#define CB1_SCALED_QUAD 1\n" : "",
+        mask->ipt_quad ? "#define CB1_IPT_QUAD 1\n" : "",
+        mask->ipt ? CB1_MASTER_IPT_GLSL : "",
+        mask->ipt ? "#define CB1_SOURCE_NEUTRAL (ipt_offset*(4096.0/4095.0))\n" :
+            "#define CB1_SOURCE_NEUTRAL vec3(CB1_SOURCE_BLACK,.5,.5)\n",
+        CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_RGB_PIXEL_GLSL,
+        mask->ipt ? CB1_IPT_CODES_GLSL : CB1_SOURCE_CODES_GLSL,
         CB1_COMPOSITE_HEADER_GLSL
     );
     struct pl_custom_shader shader = {
-        .prelude=!mask->scaled_quad && (mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
+        .prelude=!mask->scaled_quad && !mask->ipt_quad && (mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
                  "#extension GL_KHR_shader_subgroup_quad : require\n",
         .header=header,
         .input=mask->scaled_reference?PL_SHADER_SIG_NONE:PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
         .description="Exact full-raster DV transport without intermediate image",
         .output_w=mask->scaled_reference?3840:0,.output_h=mask->scaled_reference?2160:0,
         .variables=vars, .num_variables=
-            mask->scaled_reference ? 9 : mask->overlay ? 8 : 4,
+            mask->ipt ? 13 : mask->scaled_reference ? 9 : mask->overlay ? 8 : 4,
         .descriptors=desc, .num_descriptors=descriptors,
         .body=CB1_COMPOSITE_BODY_GLSL};
     // An early return must reach the transport target, never an intermediate image.
@@ -1250,6 +1278,7 @@ static void renderer_free(struct dvbridge_renderer *r)
     dvbridge_candidate_destroy(r->pending);
     dvbridge_destroy(r->context);
     pl_tex_destroy(r->gpu, &r->rgb);
+    for(int i=0;i<2;i++)pl_tex_destroy(r->gpu,&r->ipt_pq[i]);
     pl_tex_destroy(r->gpu, &r->p5_native);
     pl_tex_destroy(r->gpu, &r->native_picture);
     pl_tex_destroy(r->gpu, &r->ai_rgb);
@@ -1313,7 +1342,8 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
                         const struct dvbridge_policy *policy,
                         const struct dvbridge_native_overlay *overlay,bool force_refresh,
                         struct direct_output *direct,bool enhanced_reconstruction,
-                        const struct pl_cb1_dovi_reference *master,bool p5_fast,bool native_stage)
+                        const struct pl_cb1_dovi_reference *master,bool p5_fast,
+                        const struct cb1_master_ipt *ipt,bool native_stage)
 {
     if (!r)
         return false;
@@ -1497,15 +1527,18 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     mask.overlay=overlay;
     mask.reference_transport=master!=NULL;
     mask.profile5_transport=master && dvbridge_dv_profile5_transport(metadata);
+    mask.ipt=ipt;
+    mask.ipt_pq=r->ipt_pq;
     mask.straight_overlay=r->optimized_dv && overlay && !overlay->input_pq;
-    bool full_transport=packed && !session && !policy && !source->num_overlays &&
+    bool full_transport=packed && (!ipt || r->fragment_quad) && !session && !policy && !source->num_overlays &&
         (!el || !el->num_overlays) &&
         geometry.source_width==3840 && geometry.source_height==2160 && !geometry.x && !geometry.y &&
         geometry.width==3840 && geometry.height==2160;
-    bool placed_reference=master && !full_transport && !source->num_overlays &&
+    bool placed_reference=master && !ipt && !full_transport && !source->num_overlays &&
         (!el || !el->num_overlays) && geometry.width==geometry.source_width &&
         geometry.height==geometry.source_height && !(geometry.x&1);
     bool direct_reference=master && (full_transport || placed_reference);
+    mask.ipt_quad=ipt && direct_reference;
     /* P5 keeps the same FP32 scaler; exchange its neighbour before packing. */
     mask.scaled_quad=mask.profile5_transport && !direct_reference && r->fragment_quad;
     mask.reference_target=placed_reference?packed:NULL;
@@ -1608,6 +1641,9 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     params.cb1_exact_scaler_cache=mask.source_domain && r->exact_scaler_cache;
     if(!session && !policy) {
         r->pending=
+            ipt ?
+            dvbridge_prepare_ipt_output(r->context,metadata,bytes,pts,geometry,
+                paired && mapped.dovi.nlq_active,force_refresh) :
             master ?
             dvbridge_prepare_master_source_output(r->context,metadata,bytes,pts,geometry,
                 paired && mapped.dovi.nlq_active,force_refresh) :
@@ -1626,7 +1662,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     mask.packets = dvbridge_packets(r->pending, &mask.count);
     bool authored_linear = enhanced_reconstruction && r->enhanced_linear && r->fast_chroma &&
                            paired && mapped.dovi.nlq_active;
-    mask.early_mask = !(master && !full_transport) && (packed || authored_linear) && geometry.source_width == 3840 && geometry.source_height == 2160 &&
+    mask.early_mask = (!ipt || mask.ipt_quad) && !(master && !full_transport) && (packed || authored_linear) && geometry.source_width == 3840 && geometry.source_height == 2160 &&
                       (margins[0] || margins[1] || margins[2] || margins[3]);
     const struct pl_hook hook = {
         .stages = PL_HOOK_OUTPUT | (mask.early_mask || placed_reference ? PL_HOOK_NATIVE : 0) |
@@ -1634,7 +1670,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         .input = master && !direct_reference && !mask.scaled_quad ? PL_HOOK_SIG_TEX : PL_HOOK_SIG_COLOR,
         .priv = &mask, .hook = placed_reference ? pack_placed_reference :
             master && !direct_reference && !mask.scaled_quad ? pack_scaled_reference : packed ? pack_active_area : mask_active_area,
-        .signature = packed ? 0x4456425246555302ULL : 0x445642524c350001ULL};
+        .signature = ipt ? 0x4342314950540001ULL : packed ? 0x4456425246555302ULL : 0x445642524c350001ULL};
     const struct pl_hook *hooks[] = {&hook};
     params.hooks = hooks;
     params.num_hooks = 1;
@@ -1870,13 +1906,13 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     const struct dvbridge_hdr10_session *session,const struct dvbridge_policy *policy,
     const struct dvbridge_native_overlay *overlay,bool force_refresh,
     struct direct_output *direct,bool enhanced_reconstruction,
-    const struct pl_cb1_dovi_reference *master,bool p5_fast)
+    const struct pl_cb1_dovi_reference *master,bool p5_fast,const struct cb1_master_ipt *ipt)
 {
     bool hdr10=session || (policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT);
     bool scaled=geometry.width!=geometry.source_width || geometry.height!=geometry.source_height;
     if(!hdr10 || !scaled || master || enhanced_reconstruction || (r && r->dv.active))
         return render_picture(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,
-            session,policy,overlay,force_refresh,direct,enhanced_reconstruction,master,p5_fast,false);
+            session,policy,overlay,force_refresh,direct,enhanced_reconstruction,master,p5_fast,ipt,false);
     if(!r)return false;
     r->ready=r->direct_output=r->policy_ready=false;
     unsigned margins[4]={0};float area[4];
@@ -1892,7 +1928,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     struct dvbridge_geometry native={geometry.source_width,geometry.source_height,0,0,
         geometry.source_width,geometry.source_height};
     if(!render_picture(r,source,metadata,bytes,pts,el_pts,native,NULL,false,
-        session,policy,NULL,force_refresh,NULL,false,NULL,false,true))return false;
+        session,policy,NULL,force_refresh,NULL,false,NULL,false,NULL,true))return false;
     struct pl_frame image={.num_planes=1,
         .planes={{.texture=r->native_picture,.components=4,.component_mapping={0,1,2,3}}},
         .repr=pl_color_repr_rgb,.color=r->reconstructed_color,
@@ -1935,7 +1971,7 @@ bool dvbridge_render_rgb(struct dvbridge_renderer *r, const struct pl_frame *sou
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry)
 {
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL, NULL,false,NULL,false,NULL,false);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, NULL, NULL,false,NULL,false,NULL,false,NULL);
 }
 
 bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
@@ -1948,7 +1984,7 @@ bool dvbridge_render_hdr10_rgb(struct dvbridge_renderer *r,
         dvbridge_renderer_reset(r);
         return false;
     }
-    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL, NULL,false,NULL,false,NULL,false);
+    return render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, session, NULL, NULL,false,NULL,false,NULL,false,NULL);
 }
 
 bool dvbridge_render_packed(struct dvbridge_renderer *r, const struct pl_frame *source,
@@ -1985,7 +2021,7 @@ static bool overlay_valid(const struct dvbridge_native_overlay *overlay)
 static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay,bool force_refresh,
-    const struct pl_cb1_dovi_reference *master,bool p5_fast)
+    const struct pl_cb1_dovi_reference *master,bool p5_fast,const struct cb1_master_ipt *ipt)
 {
     if (r && r->dv.active)
         dvbridge_render_dv_policy_cancel(r);
@@ -2010,7 +2046,7 @@ static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_fr
         glDisable(caps[i]);
     }
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,p5_fast);
+    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,p5_fast,ipt);
     ok = glGetError() == GL_NO_ERROR && ok;
     glColorMask(mask[0], mask[1], mask[2], mask[3]);
     for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
@@ -2039,8 +2075,8 @@ bool dvbridge_render_packed_overlay(struct dvbridge_renderer *r,const struct pl_
        pl_find_fmt(r->gpu,PL_FMT_UNORM,2,16,16,
                    PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR) &&
        dvbridge_renderer_supports_mode(r,DVBRIDGE_MODE_MASTER_REFERENCE))
-        return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,true);
-    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,NULL,false);
+        return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,true,NULL);
+    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,NULL,false,NULL);
 }
 
 static int master_chroma_phase(const struct pl_frame *source)
@@ -2060,10 +2096,10 @@ static int master_chroma_phase(const struct pl_frame *source)
     return phase;
 }
 
-enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *r,
+static enum cb1_master_status render_master_reference(struct dvbridge_renderer *r,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip,
-    const struct dvbridge_native_overlay *overlay)
+    const struct dvbridge_native_overlay *overlay,bool ipt_output)
 {
     if(r)r->ready=false;
     if(!r || !source)return CB1_MASTER_INVALID;
@@ -2083,8 +2119,29 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     if(!dvbridge_renderer_supports_mode(r,DVBRIDGE_MODE_MASTER_REFERENCE))return CB1_MASTER_GPU_UNAVAILABLE;
     /* Paired rows preserve the integer result and avoid duplicate reconstruction. */
     raw.contract=2;
-    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,false)?
+    /* Profile5 is already IPT: both Master preferences retain its direct path. */
+    ipt_output=ipt_output && !dvbridge_dv_profile5_transport(metadata);
+    struct cb1_master_ipt ipt;
+    if(ipt_output && !cb1_master_ipt_prepare(&ipt,metadata,bytes))return CB1_MASTER_UNSUPPORTED;
+    if(ipt_output && !cb1_master_ipt_tables(r->gpu,r->ipt_pq))return CB1_MASTER_GPU_UNAVAILABLE;
+    return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,false,ipt_output?&ipt:NULL)?
         CB1_MASTER_READY:CB1_MASTER_FAILED;
+}
+
+enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *r,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip,
+    const struct dvbridge_native_overlay *overlay)
+{
+    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false);
+}
+
+enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_renderer *r,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip,
+    const struct dvbridge_native_overlay *overlay)
+{
+    return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,true);
 }
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
@@ -2163,7 +2220,7 @@ bool dvbridge_render_hdr10_policy_rgb(struct dvbridge_renderer *r,
         !pl_find_fmt(r->gpu, PL_FMT_UNORM, 4, 16, 16, PL_FMT_CAP_LINEAR) ||
         !pl_find_fmt(r->gpu, PL_FMT_FLOAT, 1, 32, 32, PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR))
         return false;
-    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy, NULL,false,NULL,false,NULL,false))
+    if (!render(r, source, metadata, bytes, pts, el_pts, geometry, NULL, false, NULL, policy, NULL,false,NULL,false,NULL,false,NULL))
         return false;
     r->policy_pending.identity = *identity;
     return true;
@@ -2210,7 +2267,7 @@ bool dvbridge_render_hdr10_direct(struct dvbridge_renderer *r,
        !direct_geometry_valid(geometry) || !direct_target_valid(r,target,bits))return false;
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,false);
-    return render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,session,NULL,NULL,false,&direct,false,NULL,false);
+    return render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,session,NULL,NULL,false,&direct,false,NULL,false,NULL);
 }
 
 bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *r,
@@ -2229,7 +2286,7 @@ bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *r,
        !direct_geometry_valid(geometry) || !direct_target_valid(r,target,bits))return false;
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,true);
-    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,policy,NULL,false,&direct,false,NULL,false))return false;
+    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,policy,NULL,false,&direct,false,NULL,false,NULL))return false;
     r->policy_pending.identity=*identity;
     r->policy_pending.resolved=true;
     r->policy_pending.final_target=target;
@@ -3092,8 +3149,8 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     if(!s->output_metadata){dv_release(r);return DVBRIDGE_DV_FAILED;}
     bool force=!r->dv_has_committed || r->dv_committed.identity.stream!=id->stream ||
         r->dv_committed.identity.revision!=id->revision;
-    bool ok=packed && !pixels ? render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,overlay,force,NULL,false) :
-        render(r,source,metadata,bytes,pts,el_pts,reconstruction,NULL,false,NULL,NULL,NULL,force,NULL,pixels,NULL,false);
+    bool ok=packed && !pixels ? render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,overlay,force,NULL,false,NULL) :
+        render(r,source,metadata,bytes,pts,el_pts,reconstruction,NULL,false,NULL,NULL,NULL,force,NULL,pixels,NULL,false,NULL);
     s->active=true;s->pts=pts;
     if(!ok){dv_last_use(r);dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}
     if(!r->pending){dv_last_use(r);dvbridge_render_dv_policy_cancel(r);return DVBRIDGE_DV_FAILED;}

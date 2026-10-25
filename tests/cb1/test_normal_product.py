@@ -12,7 +12,7 @@ class NormalProductTests(unittest.TestCase):
         # Source archives must not contain an optional second product either.
         forbidden = (b'CB1_ENABLE_MASTER_IPT', b'CB1_DEBUG_BUILD', b'CB1_DEBUG_PROFILES_DIR',
                      b'cb1-driver-profile', b'cb1-debug-profiles', b'cb1standarddrivers',
-                     b'cb1_master_ipt', b'MasterReferenceIPT')
+                     b'MasterReferenceIPT')
         roots = ('CB1/src', 'CB1/patches', 'projects/Generic', 'packages', 'scripts', 'config')
         found = []
         names = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '-z']).decode().split('\0')

@@ -32,12 +32,12 @@
 "bool inactive=float(p.x)<active_area.x || float(p.x)>=active_area.z || float(p.y)<active_area.y || float(p.y)>=active_area.w;" \
 "bool compose=false;vec4 gui=vec4(0);vec3 rgb=vec3(0);\n" \
 "#ifdef CB1_SOURCE_DOMAIN\n" \
-"if(inactive)color=vec4(CB1_SOURCE_BLACK,.5,.5,1.0);" \
+"if(inactive)color=vec4(CB1_SOURCE_NEUTRAL,1.0);" \
 "vec3 own=clamp(color.rgb,0.0,1.0),peer;\n" \
 "#ifdef CB1_SCALED_REFERENCE\n" \
 "vec2 neighbor=vec2(p^ivec2(1,0))+.5;" \
 "peer=clamp(texelFetch(scaled_reference,ivec2(scaled_rect.xy+neighbor*scaled_rect.zw),0).rgb,0.0,1.0);" \
-"if(inactive)peer=vec3(CB1_SOURCE_BLACK,.5,.5);\n" \
+"if(inactive)peer=CB1_SOURCE_NEUTRAL;\n" \
 "#elif defined(CB1_SCALED_QUAD)\npeer=subgroupQuadSwapHorizontal(own);\n" \
 "#elif defined(CB1_REFERENCE_TRANSPORT)\npeer=own;\n" \
 "#elif !defined(CB1_SOURCE_OVERLAY)\npeer=subgroupQuadSwapHorizontal(own);\n#endif\n" \

@@ -10,6 +10,10 @@ struct dvbridge_renderer;
 struct dvbridge_native_overlay;
 
 struct cb1_ai_result;
+enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_renderer *renderer,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
+    const struct dvbridge_native_overlay *overlay);
 enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer *renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
@@ -38,7 +42,7 @@ struct dvbridge_retirement_owner;
 #define DVBRIDGE_CM4_GPU_API 1
 /* Trim-only shader in linear 203-nit units. The caller retains the shader. */
 bool dvbridge_creative_cm4_shader(pl_shader shader,const struct dvbridge_cm4_coefficients *coefficients);
-#define DVBRIDGE_DV_POLICY_API 7
+#define DVBRIDGE_DV_POLICY_API 8
 enum dvbridge_output_generation { DVBRIDGE_ETSI_LEGACY_LITERAL=1, DVBRIDGE_SOURCE_METADATA=2,
     DVBRIDGE_RECONSTRUCTED_ENHANCED=3 };
 struct dvbridge_dv_policy_snapshot {

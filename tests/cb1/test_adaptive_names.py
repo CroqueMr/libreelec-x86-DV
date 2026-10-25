@@ -247,7 +247,7 @@ struct TiXmlElement:TiXmlNode {
 struct CSettingsBase {inline static std::map<std::string,std::string> loaded;
  static bool LoadValuesFromXml(const TiXmlElement* root,bool&){loaded.clear();
   for(const auto& child:root->children)loaded[child->id]=child->text;
-  return loaded["dvbridge.outputmode"]!="3" && loaded["dvbridge.fastchroma"]!="true";}
+  return loaded["dvbridge.outputmode"]!="3";}
 };
 struct CSettings:CSettingsBase {
  bool Load(const TiXmlNode*){return true;}
@@ -260,7 +260,7 @@ int main(){for(bool reverse:{false,true})for(int saved:{0,1,2,3,4,5}){
  if(!reverse)root.Add("dvbridge.fastchroma","true");
  CSettings settings;bool updated=false;assert(settings.Load(&root,updated));
  assert(settings.loaded["dvbridge.outputmode"]==std::to_string(saved==3?5:saved));
- assert(settings.loaded["dvbridge.fastchroma"]=="1" && updated);
+ assert(settings.loaded["dvbridge.fastchroma"]=="true"); // Retired, never read or migrated.
  assert(root.children[reverse?1:0]->text==std::to_string(saved));
 }}
 '''.replace('@@LOAD@@', implementation)

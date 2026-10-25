@@ -367,7 +367,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h b/x
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,67 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "cores/VideoProcessingInfo.h"
@@ -396,6 +396,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/co
 +  accepted.creativeEdited=output.creativeEdited; accepted.creativeStatus=output.creativeStatus;
 +  accepted.creativeReason=output.creativeReason; accepted.fastChroma=output.fastChroma;
 +  accepted.fastRenderingMode=output.fastRenderingMode;
++  accepted.iptTransport=output.iptTransport;
 +  accepted.felUpscaling=output.felUpscaling;
 +#ifdef CB1_HAS_HDR10_AI
 +  accepted.hdr10AI=output.hdr10AI; accepted.aiL1L3=output.aiL1L3;
@@ -2100,7 +2101,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/
 diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
 --- /dev/null
 +++ b/xbmc/cores/VideoProcessingInfo.h
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,77 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -2151,6 +2152,7 @@ diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
 +    uint32_t creativeApplied{}, creativeEdited{};
 +    int creativeStatus{}, creativeReason{};
 +    bool fastChroma{};
++    bool iptTransport{};
 +    int fastRenderingMode{};
 +    int felUpscaling{-1};
 +    bool hdr10AI{}, emittedL1Known{};

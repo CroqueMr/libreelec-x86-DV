@@ -75,11 +75,12 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
 static struct dvbridge_candidate *prepare_output(
     const struct dvbridge_context *context, const void *metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh,
-    bool source_transport, bool profile5_transport)
+    bool source_transport, bool profile5_transport, bool ipt_transport)
 {
     if (!context || !dvbridge_dv_bounds(metadata, bytes)) return NULL;
     if (source_transport && !(profile5_transport ? dvbridge_dv_profile5_transport(metadata) :
         dvbridge_dv_source_transport(metadata))) return NULL;
+    if (ipt_transport && !dvbridge_dv_source_transport(metadata)) return NULL;
     unsigned margins[4];
     if (!dvbridge_frame_area(margins, metadata, bytes, geometry)) return NULL;
     struct dvbridge_candidate *candidate = calloc(1, sizeof(*candidate));
@@ -90,6 +91,7 @@ static struct dvbridge_candidate *prepare_output(
     candidate->state.fel_verified = fel_reconstructed;
     candidate->state.source_transport = source_transport;
     candidate->state.profile5_transport = profile5_transport;
+    candidate->state.ipt_transport = ipt_transport;
     /* Only the transmitted L5 changes; the caller masks with the source margins
      * before composing overlays. Both visibility edges refresh the display. */
     static const unsigned full_raster[4];
@@ -111,14 +113,14 @@ struct dvbridge_candidate *dvbridge_prepare_output(
     const struct dvbridge_context *context, const void *metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
 {
-    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,false,false);
+    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,false,false,false);
 }
 
 struct dvbridge_candidate *dvbridge_prepare_source_output(
     const struct dvbridge_context *context, const void *metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
 {
-    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,true,false);
+    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,true,false,false);
 }
 
 struct dvbridge_candidate *dvbridge_prepare_master_source_output(
@@ -127,7 +129,14 @@ struct dvbridge_candidate *dvbridge_prepare_master_source_output(
 {
     if(!dvbridge_dv_bounds(metadata,bytes))return NULL;
     return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,
-        true,dvbridge_dv_profile5(metadata));
+        true,dvbridge_dv_profile5(metadata),false);
+}
+
+struct dvbridge_candidate *dvbridge_prepare_ipt_output(
+    const struct dvbridge_context *context, const void *metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh)
+{
+    return prepare_output(context,metadata,bytes,pts,geometry,fel_reconstructed,force_refresh,false,false,true);
 }
 
 struct dvbridge_candidate *dvbridge_prepare(

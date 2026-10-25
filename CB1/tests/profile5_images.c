@@ -145,7 +145,7 @@ int main(void)
             memcpy(overlay.rect,(float[4]){100,100,104,102},sizeof(overlay.rect));
         }
         const int modes=
-#ifdef CB1_ENABLE_MASTER_IPT
+#ifdef CB1_TEST_MASTER_IPT
             3;
 #else
             2;
@@ -159,7 +159,7 @@ int main(void)
                 if(mode==modes-1)
                     status=dvbridge_render_packed_overlay(r,&source,m,bytes,0,NAN,geo,output,flip,test==8?&overlay:NULL)?CB1_MASTER_READY:CB1_MASTER_FAILED;
                 else
-#ifdef CB1_ENABLE_MASTER_IPT
+#ifdef CB1_TEST_MASTER_IPT
                 if(mode)status=dvbridge_render_master_reference_ipt(r,&source,m,bytes,0,NAN,geo,output,flip,test==8?&overlay:NULL);
                 else
 #endif
@@ -196,7 +196,7 @@ int main(void)
                 if(mode==modes-1)
                     assert(dvbridge_render_packed(r,&source,m,bytes,i/25.0,NAN,geo,output,false));
                 else
-#ifdef CB1_ENABLE_MASTER_IPT
+#ifdef CB1_TEST_MASTER_IPT
                 if(mode)assert(dvbridge_render_master_reference_ipt(r,&source,m,bytes,i/25.0,NAN,geo,output,false,NULL)==CB1_MASTER_READY);
                 else
 #endif

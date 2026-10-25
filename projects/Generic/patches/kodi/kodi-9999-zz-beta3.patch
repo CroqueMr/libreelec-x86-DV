@@ -5873,16 +5873,13 @@ diff --git a/xbmc/settings/DisplaySettings.h b/xbmc/settings/DisplaySettings.h
 diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRendering.h
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeFastRendering.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,61 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <cstdint>
 +#include <algorithm>
 +#include <optional>
-+#include <cctype>
 +#include <cmath>
-+#include <string>
-+#include <string_view>
 +
 +namespace DVBRIDGE
 +{
@@ -5893,15 +5890,37 @@ diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRenderi
 +      currentUs > previousUs && currentUs - previousUs < 250000;
 +}
 +
-+inline std::optional<int> LegacyFastRendering(std::string_view value)
++// One picture of timing per accepted fence; no quality change before a latched switch.
++class MasterSafety
 +{
-+  std::string text(value);
-+  std::transform(text.begin(), text.end(), text.begin(),
-+      [](unsigned char c) { return std::tolower(c); });
-+  if (text == "false") return 0;
-+  if (text == "true") return 1;
-+  return std::nullopt;
-+}
++public:
++  void Begin(uint64_t stream,uint64_t policy,uint64_t source,double pts,bool enabled)
++  {
++    const bool reset=!enabled || stream!=m_stream || policy!=m_policy || source!=m_source ||
++        !std::isfinite(pts) || (pts!=m_pts && !ContinuousFastRenderingPicture(pts,m_pts));
++    if(reset){m_warm=m_samples=m_low=0;m_active=false;}
++    m_stream=stream;m_policy=policy;m_source=source;m_pts=pts;m_enabled=enabled;
++  }
++  bool Observe(std::optional<int64_t> headroom,bool eligible)
++  {
++    if(!m_enabled || m_active || !eligible || !headroom)return false;
++    if(m_warm<60){++m_warm;return false;}
++    m_low+=*headroom<2500000;
++    if(++m_samples<60)return false;
++    const bool switchNow=m_low>=12;
++    m_samples=m_low=0;
++    m_active=switchNow;
++    return switchNow;
++  }
++  bool Active() const{return m_active;}
++  bool Active(uint64_t stream,uint64_t policy,uint64_t source) const
++  {return m_active && stream==m_stream && policy==m_policy && source==m_source;}
++private:
++  uint64_t m_stream{},m_policy{},m_source{};
++  double m_pts{};
++  unsigned m_warm{},m_samples{},m_low{};
++  bool m_enabled{},m_active{};
++};
 +
 +inline std::optional<int64_t> PresentationHeadroom(uint64_t previousNs, uint64_t readyNs,
 +    uint64_t submittedNs, uint64_t presentedNs, uint64_t periodNs)
@@ -7054,10 +7073,12 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    void PresentFrame(bool rendered, bool videoLayer);
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
-@@ -147,9 +183,15 @@
+@@ -147,9 +183,17 @@
    bool RetireDVContext();
    bool CB1AsyncAvailable() const;
    bool CreateCB1GPUFence(const CDVBridgeGLES::Submission& submission);
++  DVBRIDGE::MasterSafety m_masterSafety;
++  uint64_t m_masterFramePeriodNs{};
 +  bool m_fastRenderEligible{};
 +  uint64_t m_fastSourceStream{};
 +  double m_fastSourcePts{};
@@ -7070,7 +7091,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    bool RecoverDVActivation();
    void ResetDVActivation(const VideoPicture* picture);
    bool m_dvRecoveryPending{}, m_dvNativeFailed{}, m_dvHDR10Failed{}, m_dvFallbackActive{};
-@@ -189,6 +231,8 @@
+@@ -189,6 +233,8 @@
    bool m_dvStopPending{};
    bool m_hdrConversion = false;
    std::optional<dvbridge_hdr10_session> m_hdr10Session;
@@ -7079,7 +7100,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    uint64_t m_hdr10SessionStream{};
    std::optional<uint64_t> m_hdrDeepColorPrevious;
    bool m_failedHDR10SetupRestore = false;
-@@ -196,6 +240,7 @@
+@@ -196,6 +242,7 @@
    CRect m_dvSubtitleBounds;
    unsigned m_dvSubtitleDraws{};
    uint64_t m_dvSubtitleContent{};
@@ -7751,7 +7772,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,275 @@
+@@ -25795,3 +25795,299 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -8027,6 +8048,30 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgid "Insufficient rendering headroom. Switching to Dolby Vision Standard."
 +msgstr ""
 +
++msgctxt "#40916"
++msgid "Master Reference output"
++msgstr ""
++
++msgctxt "#40917"
++msgid "Preferred TV-Led transport. Profile 5 remains direct IPT."
++msgstr ""
++
++msgctxt "#40918"
++msgid "YCbCr"
++msgstr ""
++
++msgctxt "#40919"
++msgid "IPT-PQc2"
++msgstr ""
++
++msgctxt "#40920"
++msgid "Allow Master Reference to switch to Standard"
++msgstr ""
++
++msgctxt "#40921"
++msgid "Switch when sustained rendering headroom is insufficient. Off keeps Master Reference strict."
++msgstr ""
++
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
@@ -8039,7 +8084,7 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +      <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
 +      <control type="image" id="9101">
 +        <left>0</left><top>0</top><width>660</width><height>412</height>
-+        <texture colordiffuse="dialog_tint">special://xbmc/media/cb1-panel.png</texture>
++        <texture border="60" colordiffuse="dialog_tint">special://xbmc/media/cb1-panel.png</texture>
 +      </control>
 +      <control type="label" id="1">
 +        <left>20</left><top>12</top><width>620</width><height>40</height><font>font12</font><scroll>true</scroll>
@@ -8096,7 +8141,7 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -2,6 +2,105 @@
+@@ -2,6 +2,111 @@
  <settings version="1">
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
@@ -8188,10 +8233,16 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
 +          <control type="toggle" />
 +        </setting>
-+        <setting id="dvbridge.fastchroma" type="integer" label="40904" help="40905">
-+          <requirement>HAVE_DVBRIDGE</requirement><visible>false</visible><level>2</level><default>2</default>
-+          <constraints><options><option label="106">0</option><option label="107">1</option><option label="16316">2</option></options></constraints>
++        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
 +          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>true</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <control type="toggle" />
 +        </setting>
 +        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
@@ -9044,10 +9095,9 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
    std::unique_ptr<IDVDVideoPP> m_postProc;
  
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,82 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9109,6 +9159,8 @@ new file mode 100644
 +  result.reason = !(requestedDV ? caps.nativeDV : caps.hdr10) ?
 +      (requestedDV ? OutputReason::NoDVTransport : OutputReason::NoHDR10Transport) : candidate.reason;
 +  if (!requestedDV) return result;
++  if(policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE && !preferences.allowMasterFallback)
++    return {OutputRoute::Vanilla,policy,result.reason};
 +  if (!caps.hdr10)
 +  {
 +    result.reason = OutputReason::NoHDR10Transport;
@@ -9121,6 +9173,7 @@ new file mode 100644
 +    return result;
 +  }
 +  policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
++  policy.master_ipt = false;
 +  policy.adaptive = DVBRIDGE_ADAPTIVE_A;
 +  policy.tv = {};
 +  return {OutputRoute::HDR10, policy, result.reason};
@@ -9130,7 +9183,7 @@ new file mode 100644
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,188 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -9171,6 +9224,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +  int method{0}, panel{0}, gamut{0};
 +  double peak{0};
 +  bool optimizedDV{true};
++  bool masterIPT{false}, allowMasterFallback{true};
 +  int felUpscaling{0};
 +  bool processingOptimizations{false};
 +  uint64_t revision{1};
@@ -9185,6 +9239,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +  {
 +    return output == other.output && hdr10Source == other.hdr10Source && method == other.method &&
 +        panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
++        masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
 +        felUpscaling == other.felUpscaling &&
 +        processingOptimizations == other.processingOptimizations &&
 +        std::bit_cast<uint64_t>(peak) == std::bit_cast<uint64_t>(other.peak);
@@ -9212,7 +9267,8 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +        result.mode=DVBRIDGE_MODE_ENHANCED_DV;
 +        result.adaptive=DVBRIDGE_ADAPTIVE_B_FP16;
 +        break;
-+      case OutputMode::MasterReference: result.mode = DVBRIDGE_MODE_MASTER_REFERENCE; break;
++      case OutputMode::MasterReference:
++        result.mode = DVBRIDGE_MODE_MASTER_REFERENCE; result.master_ipt = masterIPT; break;
 +      case OutputMode::HDR10:
 +        result.mode = method == 1 ? DVBRIDGE_MODE_HDR10_EXPERT : DVBRIDGE_MODE_HDR10_BASIC;
 +        break;
@@ -9228,6 +9284,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +  {
 +    auto result = Policy();
 +    result.adaptive=DVBRIDGE_ADAPTIVE_A;
++    result.master_ipt=false;
 +    result.mode = hdr10Source == HDR10SourceMode::ReferenceDV ? DVBRIDGE_MODE_STANDARD :
 +        hdr10Source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
 +    result.tv = result.mode == DVBRIDGE_MODE_ENHANCED_DV ?
@@ -9271,6 +9328,8 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +    next.panel = settings->GetInt("dvbridge.tvpanel");
 +    next.gamut = settings->GetInt("dvbridge.tvgamut");
 +    next.felUpscaling = settings->GetInt("dvbridge.felupscaling");
++    next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
++    next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
 +  }
 +  if (next.method < 0 || next.method > 1) next.method = 0;
 +  if (next.felUpscaling < 0 || next.felUpscaling > 1) next.felUpscaling = 0;
@@ -9453,10 +9512,9 @@ new file mode 100644
 +  }
 +};
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,412 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -9523,6 +9581,7 @@ new file mode 100644
 +    uint32_t creativeApplied{}, creativeEdited{};
 +    int creativeStatus{}, creativeReason{};
 +    bool fastChroma{};
++    bool iptTransport{};
 +    int fastRenderingMode{};
 +    int felUpscaling{-1};
 +#ifdef CB1_HAS_HDR10_AI
@@ -9544,7 +9603,7 @@ new file mode 100644
 +        if (effective==2) return cb1_circuit_version(CB1_DV_HDR10_BASIC);
 +        if (effective==3) return cb1_circuit_version(CB1_DV_HDR10_EXPERT);
 +        if (effective==4) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE);
-+        if (effective==5) return cb1_circuit_version(CB1_DV_DV_MASTER_REFERENCE);
++        if (effective==5) return cb1_circuit_version(iptTransport ? CB1_DV_DV_MASTER_IPT : CB1_DV_DV_MASTER_REFERENCE);
 +        if (effective==6) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE_B);
 +      }
 +      return "";
@@ -10824,7 +10883,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2058 @@
+@@ -0,0 +1,2062 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11869,7 +11928,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  {
 +    if(m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE)
 +    {
-+      auto renderMaster=dvbridge_render_master_reference;
++      auto renderMaster=m_requested.masterIPT ? dvbridge_render_master_reference_ipt : dvbridge_render_master_reference;
 +      const auto status=renderMaster(m_renderer,&bl.frame,metadata.Data(),metadata.Size(),
 +          base.pts,elPts,geometry,m_scanout,true,m_nativeOverlayEnabled ? &m_nativeOverlay : nullptr);
 +      m_direct=status==CB1_MASTER_READY;
@@ -11983,7 +12042,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
 +  const bool asyncSetting = m_context->AsyncPreparation(base.binding.stream);
 +  auto policy = selected ? *selected : preferences.Policy();
-+  const bool fallback = selected ? policy.mode != preferences.Policy().mode :
++  const bool masterRecovery=selected && preferences.output==DVBRIDGE::OutputMode::MasterReference &&
++      preferences.allowMasterFallback && policy.mode==DVBRIDGE_MODE_STANDARD;
++  const bool fallback = selected ? policy.mode != preferences.Policy().mode && !masterRecovery :
 +      (policy.mode == DVBRIDGE_MODE_HDR10_EXPERT || policy.mode == DVBRIDGE_MODE_ENHANCED_DV) && !preferences.ProfileValid();
 +  if (fallback && !selected)
 +  {
@@ -12762,6 +12823,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    }
 +  }
 +#endif
++  output.iptTransport = (output.flags & CDVPlaybackInfo::HDMI) &&
++      (m_pendingSourceInfo.profile==5 || (m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE && m_requested.masterIPT));
 +  output.fastChroma = m_requested.EffectiveFastChroma(m_effectiveMode, CDVPlaybackInfo::IsHDR10AI(output));
 +  output.fastRenderingMode = m_requested.EffectiveFastRenderingMode(m_effectiveMode, CDVPlaybackInfo::IsHDR10AI(output));
 +  output.effective = static_cast<int>(m_effectiveMode);
@@ -12883,7 +12946,6 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +#endif
 +  return true;
 +}
-
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
@@ -13135,7 +13197,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
  
  CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
      : CGUIDialog(WINDOW_DIALOG_PLAYER_PROCESS_INFO, "DialogPlayerProcessInfo.xml")
-@@ -19,11 +39,261 @@
+@@ -19,11 +39,262 @@
  
  CGUIDialogPlayerProcessInfo::~CGUIDialogPlayerProcessInfo(void) = default;
  
@@ -13281,7 +13343,8 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
 +    SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
 +        StringUtils::Format(localizer.Get(40852),data.output.minimumLinkBits) : "");
 +    SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
-+    SetProperty("DV.SignalIntent", active & CDVPlaybackInfo::HDMI ? "TV-Led Dolby Vision tunnel" :
++    SetProperty("DV.SignalIntent", active & CDVPlaybackInfo::HDMI ?
++        (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
 +        hdr10 ? "PQ / BT.2020" : "");
 +    SetProperty("DV.Committed", active && data.output.stream ? StringUtils::Format("{} / {} / {}",
 +        data.output.stream,data.output.picture,data.output.revision) : "");
@@ -13619,7 +13682,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
  
  #include "Settings.h"
 +#ifdef HAVE_DVBRIDGE
-+#include "utils/DVBridgeFastRendering.h"
++#include <optional>
 +#endif
 +#ifdef HAVE_DVBRIDGE
 +#include "dialogs/DVPlaybackModes.h"
@@ -13627,7 +13690,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
  
  #include "Autorun.h"
  #include "GUIPassword.h"
-@@ -211,8 +217,38 @@
+@@ -211,8 +217,36 @@
    if (!root)
      return false;
  
@@ -13639,9 +13702,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
 +    const char* id = setting->Attribute("id");
 +    const char* value = setting->GetText();
 +    if (!id || !value) continue;
-+    const auto legacy = std::string_view(id) == "dvbridge.fastchroma" ?
-+        DVBRIDGE::LegacyFastRendering(value) :
-+        std::string_view(id) == "dvbridge.outputmode" && std::string_view(value) == "3" ?
++    const auto legacy = std::string_view(id) == "dvbridge.outputmode" && std::string_view(value) == "3" ?
 +            std::optional<int>{5} : std::nullopt;
 +    if (!legacy) continue;
 +    if (!migrated) migrated.reset(root->Clone()->ToElement());
@@ -13666,7 +13727,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
  
    return Load(static_cast<const TiXmlNode*>(root));
  }
-@@ -535,6 +571,8 @@
+@@ -535,6 +569,8 @@
  
  void CSettings::InitializeISettingsHandlers()
  {
@@ -13675,7 +13736,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
    // register ISettingsHandler implementations
    // The order of these matters! Handlers are processed in the order they were registered.
    GetSettingsManager()->RegisterSettingsHandler(&CMediaSourceSettings::GetInstance());
-@@ -549,6 +587,8 @@
+@@ -549,6 +585,8 @@
  
  void CSettings::UninitializeISettingsHandlers()
  {
@@ -13684,7 +13745,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
    // unregister ISettingsHandler implementations
    GetSettingsManager()->UnregisterSettingsHandler(&CMediaSettings::GetInstance());
    GetSettingsManager()->UnregisterSettingsHandler(&g_langInfo);
-@@ -582,6 +622,10 @@
+@@ -582,6 +620,10 @@
  
  void CSettings::InitializeISettingCallbacks()
  {
@@ -13695,7 +13756,7 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
    // register any ISettingCallback implementations
    GetSettingsManager()->RegisterCallback(
        &CMediaSettings::GetInstance(),
-@@ -644,6 +688,9 @@
+@@ -644,6 +686,9 @@
  
  void CSettings::UninitializeISettingCallbacks()
  {
@@ -14939,7 +15000,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +934,1526 @@
+@@ -397,13 +934,1571 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -15312,6 +15373,17 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    }
 +  }
 +  auto result = DVBRIDGE::SelectOutput(preferences, caps);
++  if(result.route==DVBRIDGE::OutputRoute::NativeDV &&
++      result.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE && preferences.allowMasterFallback &&
++      caps.processing[DVBRIDGE_MODE_STANDARD].usable)
++  {
++    std::lock_guard lock(m_dvCapabilityMutex);
++    if(m_masterSafety.Active(binding.stream,preferences.revision,binding.revision))
++    {
++      result.policy.mode=DVBRIDGE_MODE_STANDARD;
++      result.policy.master_ipt=false;
++    }
++  }
 +#ifdef CB1_HAS_HDR10_AI
 +  if (caps.isHDR10)
 +  {
@@ -15795,6 +15867,14 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +      (!capabilities.processingKnown || (picture.strDVELType == "FEL" && !picture.doviEnhancement)))
 +    return false;
 +  auto selectionCapabilities = capabilities;
++  {
++    const auto masterBinding=picture.doviSourceBinding.Valid() ?
++        picture.doviSourceBinding : picture.doviMetadata.Binding();
++    std::lock_guard lock(m_dvCapabilityMutex);
++    m_masterSafety.Begin(masterBinding.stream,preferences.revision,masterBinding.revision,picture.pts,
++        capabilities.isDV && preferences.output==DVBRIDGE::OutputMode::MasterReference &&
++        preferences.allowMasterFallback);
++  }
 +  m_dvSelection = SelectedDVOutput(&picture, preferences, selectionCapabilities);
 +  // Retained renderer facts belong to this render-side phase, never Configure.
 +  const auto binding = picture.doviSourceBinding.Valid() ?
@@ -15829,8 +15909,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  const auto& source = picture.doviSourceInfo;
 +  const bool ordinaryBL = !source.profile || source.profile == 7 ||
 +      source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
++  const bool strictMaster=preferences.output==DVBRIDGE::OutputMode::MasterReference &&
++      !preferences.allowMasterFallback;
 +  if (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla && capabilities.processingKnown &&
-+      !ordinaryBL &&
++      (!ordinaryBL || strictMaster) &&
 +      preferences.output != DVBRIDGE::OutputMode::Disabled &&
 +      !(source.el && !picture.doviEnhancement))
 +  {
@@ -16026,6 +16108,25 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +      m_fastSourceStream == layer.binding.stream &&
 +      DVBRIDGE::ContinuousFastRenderingPicture(layer.pts, m_fastSourcePts) &&
 +      m_dvSelection.reason == DVBRIDGE::OutputReason::None;
++  m_masterFramePeriodNs=m_fastRenderEligible ?
++      static_cast<uint64_t>(std::llround((layer.pts-m_fastSourcePts)*1000.0)) : 0;
++  if(auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
++  {
++    const auto margin=drm->TakeCB1Headroom();
++    bool switched=false;
++    {
++      std::lock_guard lock(m_dvCapabilityMutex);
++      switched=m_masterSafety.Observe(margin,m_fastRenderEligible &&
++          m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
++    }
++    if(switched)
++    {
++      DVBRIDGE::DiagnosticLog(LOGWARNING,
++          "CB1 Master safety: sustained headroom below 2.5ms; next accepted mode is Standard");
++      DVBRIDGE::PlaybackNotification::ArmMasterRecovery();
++    }
++    drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
++  }
 +  m_fastPreparedStream = layer.binding.stream;
 +  m_fastPreparedPts = layer.pts;
 +  const auto preferences = DVBRIDGE::FrameOutputSettings();
@@ -16318,6 +16419,11 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  }
 +  if (m_modeHold.Holding() == CModeChangeHold::Kind::STOP &&
 +      !m_modeHold.Commits(DVBRIDGE::DiagnosticNowMs())) return false;
++  {
++    std::lock_guard lock(m_dvCapabilityMutex);
++    m_masterSafety={};
++  }
++  m_masterFramePeriodNs=0;
 +  m_fastRenderEligible = false;
 +  m_fastSourceStream = 0;
 +  m_fastSourcePts = 0;
@@ -16469,7 +16575,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2467,16 @@
+@@ -417,5 +2512,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }

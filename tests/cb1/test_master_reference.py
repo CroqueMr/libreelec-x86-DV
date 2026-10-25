@@ -169,12 +169,24 @@ int main(){
   assert(SelectOutput(p,caps).policy.mode==5);
  }
  assert(p.output==OutputMode::MasterReference && p.Policy().mode==5);
+ assert(!p.masterIPT && p.allowMasterFallback);
+ stored->ints["dvbridge.masteroutput"]=1;p=FrameOutputSettings();
+ assert(p.masterIPT && p.Policy().master_ipt && p.revision!=revision);
+ const auto iptRevision=p.revision;
+ assert(FrameOutputSettings().revision==iptRevision);
+ assert(!p.HDR10Policy().master_ipt);
+ stored->ints["dvbridge.masteroutput"]=0;p=FrameOutputSettings();
+ assert(!p.masterIPT && !p.Policy().master_ipt && p.revision!=iptRevision);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_STANDARD)==1);
  assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_MASTER_REFERENCE)==0);
  assert(SelectOutput(p,caps).policy.mode==5);
  caps.processing[5]={false,OutputReason::SourceIneligible};
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::HDR10 && out.policy.mode==2);
  assert(out.reason==OutputReason::SourceIneligible);
+ p.allowMasterFallback=false;out=SelectOutput(p,caps);
+ assert(out.route==OutputRoute::Vanilla && out.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
+ assert(out.reason==OutputReason::SourceIneligible);
+ p.allowMasterFallback=true;
  caps.isDV=false;caps.isHDR10=true;
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::Vanilla);
  p.hdr10Source=HDR10SourceMode::ReferenceDV;
@@ -200,6 +212,7 @@ int main(){
         self.assertIn('4',[o.text for o in node.findall('constraints/options/option')])
         bridge=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         self.assertIn('dvbridge_render_master_reference;',bridge)
+        self.assertIn('dvbridge_render_master_reference_ipt',bridge)
         self.assertIn('master-reference-unavailable',bridge)
         panel=(tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         self.assertIn('Reference GPU',panel)

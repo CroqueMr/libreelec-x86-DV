@@ -44,6 +44,11 @@ struct dvbridge_candidate *dvbridge_prepare_source_output(
 struct dvbridge_candidate *dvbridge_prepare_master_source_output(
     const struct dvbridge_context *context, const void *output_metadata, size_t bytes,
     double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
+#define DVBRIDGE_IPT_OUTPUT_API 1
+/* IPT conversion changes the output declaration, not the source metadata. */
+struct dvbridge_candidate *dvbridge_prepare_ipt_output(
+    const struct dvbridge_context *context, const void *metadata, size_t bytes,
+    double pts, struct dvbridge_geometry geometry, bool fel_reconstructed, bool force_refresh);
 #define DVBRIDGE_OVERLAY_METADATA_API 1
 /* Applies to pictures prepared after the call; default false. While GUI or
  * subtitles are composed over the picture, the outgoing L5 reports the full

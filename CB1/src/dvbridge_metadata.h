@@ -24,6 +24,7 @@ extern "C" {
 #endif
 #include "dvbridge_metadata_bounds.h"
 #include "mpv_dvbridge_cm4.h"
+#include "cb1_master_ipt.h"
 
 static const int16_t dvbridge_output_ycc[9]={9574,0,13802,9574,-1540,-5348,9574,17610,0};
 static const uint16_t dvbridge_output_lms[9]={7222,8771,390,2654,12430,1300,0,422,15962};
@@ -37,7 +38,7 @@ struct dvbridge_dv {
     uint64_t frames,changes;
     double last_pts;
     int source_w,source_h,dest_x,dest_y,dest_w,dest_h;
-    bool fel_verified,source_transport,profile5_transport;
+    bool fel_verified,source_transport,profile5_transport,ipt_transport;
     unsigned compatibility_omissions;
 };
 
@@ -217,21 +218,24 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *state,const A
        color->source_min_pq>color->source_max_pq || color->source_max_pq>4095 ||
        metadata->num_ext_blocks<=0 || metadata->num_ext_blocks>AV_DOVI_MAX_EXT_BLOCKS ||
        (state->source_transport && !(state->profile5_transport?
-           dvbridge_dv_profile5_transport(metadata):dvbridge_dv_source_transport(metadata))))return false;
+           dvbridge_dv_profile5_transport(metadata):dvbridge_dv_source_transport(metadata))) ||
+       (state->ipt_transport && (state->source_transport || !dvbridge_dv_source_transport(metadata))))return false;
     uint8_t base[71]={0};
     bool repeat=state->frames && pts==state->last_pts;
     bool discontinuity=!state->frames || pts<state->last_pts || pts-state->last_pts>0.1;
     base[1]=force_refresh?1:repeat?state->previous[1]:discontinuity?1:color->scene_refresh_flag;
     for(unsigned element=0;element<9;element++){
         AVRational a=color->ycc_to_rgb_matrix[element],b=color->rgb_to_lms_matrix[element];
-        unsigned ycc=state->source_transport?(uint16_t)((int64_t)a.num*8192/a.den):(uint16_t)dvbridge_output_ycc[element];
-        unsigned lms=state->source_transport?(uint16_t)((int64_t)b.num*16384/b.den):dvbridge_output_lms[element];
+        unsigned ycc=state->source_transport?(uint16_t)((int64_t)a.num*8192/a.den):
+            (uint16_t)(state->ipt_transport?cb1_ipt_output_ycc[element]:dvbridge_output_ycc[element]);
+        unsigned lms=state->source_transport?(uint16_t)((int64_t)b.num*16384/b.den):
+            (uint16_t)(state->ipt_transport?cb1_ipt_output_lms[element]:dvbridge_output_lms[element]);
         AV_WB16(base+2+element*2,ycc);AV_WB16(base+32+element*2,lms);
     }
-    AV_WB32(base+20,state->profile5_transport?0:16777216);AV_WB32(base+24,134217728);AV_WB32(base+28,134217728);
-    AV_WB16(base+50,65535);base[60]=12;base[61]=state->profile5_transport?2:0;base[62]=1;base[63]=1;
+    AV_WB32(base+20,state->profile5_transport || state->ipt_transport?0:16777216);AV_WB32(base+24,134217728);AV_WB32(base+28,134217728);
+    AV_WB16(base+50,65535);base[60]=12;base[61]=state->profile5_transport || state->ipt_transport?2:0;base[62]=1;base[63]=1;
     AV_WB16(base+64,color->source_min_pq);AV_WB16(base+66,color->source_max_pq);
-    AV_WB16(base+68,state->source_transport?color->source_diagonal:42);
+    AV_WB16(base+68,state->source_transport || state->ipt_transport?color->source_diagonal:42);
     memcpy(state->payload,base,sizeof(base));state->size=sizeof(base);
     struct cb1_wire_block blocks[AV_DOVI_MAX_EXT_BLOCKS];
     for(int index=0;index<metadata->num_ext_blocks;index++){
