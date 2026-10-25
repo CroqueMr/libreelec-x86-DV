@@ -111,6 +111,7 @@ struct dvbridge_renderer {
     pl_tex cm29_tail_axis;
     struct cm29_tail_cache_key cm29_tail_key;
     bool cm29_tail_key_valid;
+    bool expert_warp_lookup;
     struct dvbridge_context *context;
     struct dvbridge_candidate *pending;
     bool ready, direct_output, overlay_visible;
@@ -166,6 +167,7 @@ struct reference_hook {
     float enhancement[4]; /* peak/203, brightness, chroma, scene mask */
     bool enhanced;
     pl_matrix3x3 to_xyz, to_bt2020;
+    bool composed_matrix;
     pl_shader scaled_shader;
     struct reference_resolve *quantize;
     bool early_l5_black;
@@ -400,18 +402,31 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
                     .desc={.name="cm29_tail_atlas",.type=PL_DESC_SAMPLED_TEX},
                     .binding={.object=h->gpu_map_atlas,.sample_mode=PL_TEX_SAMPLE_LINEAR},
                 };
+                const bool warp_lookup=h->renderer->expert_warp_lookup && h->pq_encoder;
+                struct pl_shader_desc descriptors[]={atlas,{
+                    .desc={.name="cm29_warp_encoder",.type=PL_DESC_SAMPLED_TEX},
+                    .binding={.object=h->pq_encoder,.sample_mode=PL_TEX_SAMPLE_LINEAR},
+                }};
                 struct pl_custom_shader lookup={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
                     .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),
                     .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),
-                    .variables=&var,.num_variables=1,.descriptors=&atlas,.num_descriptors=1,
+                    .variables=&var,.num_variables=1,.descriptors=descriptors,.num_descriptors=warp_lookup?2:1,
+                    .prelude=warp_lookup?"#define CB1_CM29_WARP_LOOKUP 1\n":"",
                     .header="vec2 cm29_tail_uv(float b,vec2 rg){vec2 tile=vec2(mod(b,8.0),floor(b/8.0));"
                             "return (tile*" CM29_STR(CM29_GPU_MAP_GRID) ".0+rg+vec2(0.5))/vec2(" CM29_STR(CM29_GPU_MAP_GRID) ".0*8.0," CM29_STR(CM29_GPU_MAP_GRID) ".0*" CM29_STR(CM29_GPU_MAP_GRID) ".0/8.0);}\n",
                     .description="Cached CM2.9 HDR10 chroma and output mapping",
                     .body="vec3 x=clamp(color.rgb/cm29_tail_peak_scale,0.0,1.0);\n"
                           "bvec3 tail_zero=lessThanEqual(x,vec3(0.0));\n"
+                          "#ifdef CB1_CM29_WARP_LOOKUP\n"
+                          "vec3 u=sqrt(sqrt(x));\n"
+                          "vec3 pq=vec3(texture(cm29_warp_encoder,vec2((u.r*4095.0+0.5)/4096.0,0.5)).r,"
+                          "texture(cm29_warp_encoder,vec2((u.g*4095.0+0.5)/4096.0,0.5)).r,"
+                          "texture(cm29_warp_encoder,vec2((u.b*4095.0+0.5)/4096.0,0.5)).r);\n"
+                          "#else\n"
                           "vec3 v=pow(x,vec3(2610.0/16384.0));\n"
                           "v=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*v)/(vec3(1.0)+vec3(2392.0/128.0)*v);\n"
                           "vec3 pq=clamp(pow(v,vec3(2523.0/32.0)),0.0,1.0);\n"
+                          "#endif\n"
                           "vec3 q=(0.5*pq+0.5*x)*(" CM29_STR(CM29_GPU_MAP_GRID) ".0-1.0);\n"
                           "q=mix(q,vec3(0.0),tail_zero);\n"
                           "vec2 rg=q.rg;float b0=floor(q.b),b1=min(b0+1.0," CM29_STR(CM29_GPU_MAP_GRID) ".0-1.0);\n"
@@ -509,17 +524,17 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
     }
     const int keep_black=!h->creative || (h->cm4?h->cm4_coefficients.sop[1]<=0:h->creative_plan.codes[1]<=2048);
     struct pl_shader_var vars[] = {
-        {.var=pl_var_mat3("reference_xyz"),.data=&h->to_xyz,.dynamic=true},
         {.var=pl_var_mat3("reference_bt2020"),.data=&h->to_bt2020,.dynamic=true},
         {.var=pl_var_vec4("reference_area"),.data=h->rect,.dynamic=true},
         {.var=pl_var_int("reference_keep_black"),.data=&keep_black,.dynamic=true},
+        {.var=pl_var_mat3("reference_xyz"),.data=&h->to_xyz,.dynamic=true},
     };
     struct pl_shader_desc encoder_desc={
         .desc={.name="reference_pq_encoder",.type=PL_DESC_SAMPLED_TEX},
         .binding={.object=h->pq_encoder,.sample_mode=PL_TEX_SAMPLE_LINEAR},
     };
     const char *conversion_body = h->pq_encoder ?
-        "color.rgb=reference_bt2020*(reference_xyz*color.rgb);\n"
+        "color.rgb=CB1_REFERENCE_TRANSFORM(color.rgb);\n"
         "bvec3 zero=lessThanEqual(color.rgb,vec3(0.0));\n"
         "vec3 linear=clamp(color.rgb*(203.0/10000.0),0.0,1.0);\n"
         "vec3 u=sqrt(sqrt(linear));\n"
@@ -530,7 +545,7 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
         "color.rgb=mix(encoded,vec3(0.0),zero);\n"
         "if((dvbridge_signal_black && reference_keep_black!=0) || gl_FragCoord.x<reference_area.x || gl_FragCoord.x>=reference_area.z || "
         "gl_FragCoord.y<reference_area.y || gl_FragCoord.y>=reference_area.w)color=vec4(0,0,0,1);\n" :
-        "color.rgb=reference_bt2020*(reference_xyz*color.rgb);\n"
+        "color.rgb=CB1_REFERENCE_TRANSFORM(color.rgb);\n"
         "bvec3 zero=lessThanEqual(color.rgb,vec3(0.0));\n"
         "vec3 v=pow(clamp(color.rgb*(203.0/10000.0),0.0,1.0),vec3(2610.0/16384.0));\n"
         "v=vec3(1.0)-(21.0/128.0)*(vec3(1.0)-v)/(vec3(1.0)+(2392.0/128.0)*v);\n"
@@ -538,7 +553,11 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
         "if((dvbridge_signal_black && reference_keep_black!=0) || gl_FragCoord.x<reference_area.x || gl_FragCoord.x>=reference_area.z || "
         "gl_FragCoord.y<reference_area.y || gl_FragCoord.y>=reference_area.w)color=vec4(0,0,0,1);\n";
     struct pl_custom_shader conversion = {.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-        .variables=vars,.num_variables=4,.description="Expert nominal LINEAR to BT2020 PQ before caller overlays",
+        .variables=vars,.num_variables=h->composed_matrix?3:4,
+        .header=h->neutral_cm29 && h->composed_matrix ? "#define CB1_REFERENCE_TRANSFORM(v) (v)\n" :
+            h->composed_matrix ? "#define CB1_REFERENCE_TRANSFORM(v) (reference_bt2020*(v))\n" :
+            "#define CB1_REFERENCE_TRANSFORM(v) (reference_bt2020*(reference_xyz*(v)))\n",
+        .description="Expert nominal LINEAR to BT2020 PQ before caller overlays",
         .body=conversion_body,.descriptors=h->pq_encoder?&encoder_desc:NULL,
         .num_descriptors=h->pq_encoder?1:0};
     h->failed = h->failed || !pl_shader_custom(p->sh, &conversion);
@@ -562,13 +581,16 @@ static bool cm29_add_sop(pl_shader sh,const struct reference_hook *h)
     struct pl_shader_var var={.var=pl_var_vec4("creative_sop"),.data=sop,.dynamic=true};
     struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .variables=&var,.num_variables=1,.description="Original CM2.9 SOP before tail lookup",
-        .body=CB1_TRIM_SOP_GLSL};
+        .body=h->creative_plan.codes[0]==2048 && h->creative_plan.codes[1]==2048 &&
+            h->creative_plan.codes[2]==2048 ?
+            "color.rgb=clamp(color.rgb,0.0,creative_sop.w);\n" : CB1_TRIM_SOP_GLSL};
     if(!pl_shader_custom(sh,&shader))return false;
     return true;
 }
 
 static bool cm29_add_chroma(pl_shader sh,const struct reference_hook *h)
 {
+    if(h->creative_plan.codes[4]==2048)return true;
     double controls[5];cb1_trim_decode(controls,h->creative_plan.codes);
     float cg[2]={controls[3],controls[4]};
     struct pl_shader_var var={.var=pl_var_vec2("creative_color"),.data=cg,.dynamic=true};
@@ -649,7 +671,8 @@ static bool cm29_gpu_map_cache(struct reference_hook *h,const struct pl_hook_par
     const int n=CM29_GPU_MAP_GRID,w=8*n,height=n*n/8;
     if(!r->cm29_tail_atlas){
         const int caps=PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_LINEAR;
-        pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,caps);
+        /* The atlas stores bounded PQ, not scene-linear HDR values. */
+        pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_UNORM,4,16,16,caps);
         if(!fmt)return false;
         r->cm29_tail_atlas=pl_tex_create(r->gpu,pl_tex_params(.w=w,.h=height,
             .format=fmt,.sampleable=true,.renderable=true));
@@ -1114,6 +1137,8 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
         const char *renderer = (const char *)glGetString(GL_RENDERER);
         /* Retain storage/overlap only on the driver with a measured gain. */
         r->reuse_authored_storage=vendor && !strcmp(vendor,"Intel");
+        /* The existing encoder saves ALU work on radeonsi, not on Intel. */
+        r->expert_warp_lookup=renderer && strstr(renderer,"radeonsi");
         // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
         r->exact_scaler_cache = vendor && !strcmp(vendor, "Intel") &&
                                 renderer && strstr(renderer, "(ADL-N)");
@@ -1679,6 +1704,11 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         reference.creative_mapper.gamut_expansion=false;
         reference.neutral_cm29=neutral_cm29 && !use_cm4;
         reference.neutral_target=nominal;
+        if(reference.neutral_cm29){
+            /* Keep the P3 volume constraint, not a redundant P3 pixel carrier. */
+            reference.neutral_target.primaries=target.color.primaries=PL_COLOR_PRIM_BT_2020;
+            reference.to_xyz=pl_get_rgb2xyz_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020));
+        }
         reference.creative_source=mapped.color;
         if(creative.l1_present){
             reference.creative_source.hdr.max_pq_y=creative.analysis[1]/4095.0f;
@@ -1716,6 +1746,9 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         direct->early_l5_black=early_l5_black;
     reference.quantize=direct && direct->custom_quantize ? &direct->quantize : NULL;
     reference.early_l5_black=early_l5_black;
+    /* Retain dense mapping beyond the lattice's qualified 2500-nit range. */
+    const bool cache_neutral=reference.neutral_cm29 && nominal.primaries!=PL_COLOR_PRIM_BT_2020 &&
+        nominal.hdr.max_luma<=2500.0f;
     bool tail_scope=policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
         cm29_tail_gain_eligible(creative.codes[4]) &&
         !use_cm4 && creative.status==DVBRIDGE_CREATIVE_READY &&
@@ -1723,13 +1756,12 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         (creative.backend==DVBRIDGE_CREATIVE_CM29 ||
          creative.backend==DVBRIDGE_CREATIVE_CM29_COMPATIBILITY) &&
         mapped.color.transfer==PL_COLOR_TRC_PQ &&
-        mapped.color.primaries==PL_COLOR_PRIM_BT_2020 && params.cb1_dovi_linear && paired &&
-        mapped.dovi.nlq_active && direct && direct->custom_quantize && !overlay &&
+        mapped.color.primaries==PL_COLOR_PRIM_BT_2020 && params.cb1_dovi_linear &&
+        ((paired && mapped.dovi.nlq_active) || cache_neutral) && direct && direct->custom_quantize && !overlay &&
         !source->num_overlays && (!el || !el->num_overlays) && !spatial &&
         geometry.source_width==3840 && geometry.source_height==2160 &&
         !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160;
-    if(tail_scope && !r->cm29_tail_key_valid)
-        reference.neutral_cm29=false;
+    if(tail_scope && cache_neutral)reference.neutral_cm29=false;
     reference.gpu_map_eligible=tail_scope && !reference.neutral_cm29;
     if(reference.gpu_map_eligible){
         const struct pl_raw_primaries *bt2020=pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
@@ -1737,6 +1769,10 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
             .transfer=PL_COLOR_TRC_PQ,.hdr={.prim=*bt2020,.min_luma=PL_COLOR_HDR_BLACK,
                 .max_luma=nominal.hdr.max_luma}};
         target.color=reference.gpu_map_container;
+    }
+    if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
+        pl_matrix3x3_mul(&reference.to_bt2020,&reference.to_xyz);
+        reference.composed_matrix=true;
     }
     /* Public matrices are row-major; shader uniforms consume column-major. */
     for (int i=0;i<3;i++) for (int j=i+1;j<3;j++) {
@@ -1802,6 +1838,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         /* Retry the dense map before publishing, retaining the same frame leases. */
         target.color=reference.neutral_target;
         reference.gpu_map_eligible=reference.gpu_map_used=false;
+        if(cache_neutral)reference.neutral_cm29=true;
         reference.gpu_map_atlas=NULL;
         r->cm29_tail_key_valid=false;
         if(direct){
