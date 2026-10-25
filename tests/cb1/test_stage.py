@@ -12,6 +12,19 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/cb1-stage.py"
 
 
 class StagingTests(unittest.TestCase):
+    def test_hdr10plus_helpers_are_staged_with_matching_receipts(self):
+        tree = SCRIPT.parents[1]
+        lock = json.loads((tree / "config/cb1-source-lock.json").read_text())
+        for stem in ('cb1_hdr10plus', 'cb1_hdr10plus_analysis',
+                     'cb1_hdr10plus_curve', 'cb1_dv_hdr10plus'):
+            for suffix in ('.c', '.h'):
+                source = 'src/' + stem + suffix
+                destination = 'packages/mediacenter/kodi/cb1/' + source
+                self.assertIn(destination, lock['staging'])
+                self.assertEqual(lock['staging'][destination], {
+                    'source': source,
+                    'sha256': hashlib.sha256((tree/'CB1'/source).read_bytes()).hexdigest()})
+
     def test_libplacebo_patches_use_the_native_flat_patch_directory(self):
         tree = SCRIPT.parents[1]
         lock = json.loads((tree / "config/cb1-source-lock.json").read_text())

@@ -6,6 +6,10 @@ GPL-2.0-or-later where marked. Original LGPL, MIT and BSD notices remain effecti
 Original HDR10 AI, model-adapter, circuit and policy modules are now offered
 under GPL-2.0-or-later by their owner. Replacement cache, metadata-bounds,
 serializer and CM4 wire helpers use GPL-2.0-or-later. Retained third-party notices still apply.
+Original HDR10+ serialization, analysis, curve fitting and DV metadata adapters
+are included under the same project-owner GPL-2.0-or-later direction. They reuse
+the current GPL-2.0-compatible creative implementation, not the former GPLv3
+dependency implementations. Third-party code is not covered by this grant.
 The replacement canonical tunnel shader, GL packer, vertex and generated-source
 wrapper and replacement fused composition use GPL-2.0-or-later.
 

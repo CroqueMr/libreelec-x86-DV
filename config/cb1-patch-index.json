@@ -954,5 +954,53 @@
     "files": {
       "libavformat/matroskadec.c": "Require a unique HEVC pair, Profile 7 signalling and EL/RPU access units without changing payloads."
     }
+  },
+  "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": {
+    "summary": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_atomic_state_helper.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_atomic_uapi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_connector.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/drm_edid.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "drivers/video/hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_connector.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_hdr10plus.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/drm/drm_mode_config.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
+      "include/linux/hdmi.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": {
+    "summary": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "system/settings/settings.xml": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoProcessingInfo.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoSourceSideData.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoSourceSideData.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/settings/SettingConditions.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/utils/DisplayInfo.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/utils/DisplayInfo.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
+    }
   }
 }

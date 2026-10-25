@@ -19,6 +19,7 @@ const char *cb1_circuit_version(enum cb1_circuit circuit)
         [CB1_DV_DV_MASTER_REFERENCE] = "CB1-DVDVMR.0.5",
         [CB1_DV_DV_ADAPTIVE_B] = "CB1-DVDVA.0.11",
         [CB1_DV_DV_MASTER_IPT] = "CB1-DVDVMRI.0.1",
+        [CB1_DV_HDR10PLUS] = "CB1-DVHDR10P.0.1",
     };
     return (unsigned)circuit < CB1_CIRCUIT_COUNT ? versions[circuit] : NULL;
 }

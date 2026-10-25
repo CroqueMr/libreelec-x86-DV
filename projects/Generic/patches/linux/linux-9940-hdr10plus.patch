@@ -1,0 +1,698 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -91,6 +91,7 @@
+ #include <drm/drm_fixed.h>
+ #include <drm/drm_fourcc.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_hdr10plus.h>
+ #include <drm/drm_eld.h>
+ #include <drm/drm_mode.h>
+ #include <drm/drm_utils.h>
+@@ -7696,6 +7697,33 @@
+ }
+ #endif
+ 
++static bool hdr10plus_has_frame_update(struct drm_atomic_commit *state,
++				      struct drm_crtc *crtc)
++{
++	struct drm_plane_state *plane = drm_atomic_get_new_plane_state(state, crtc->primary);
++
++	/* Packet programming accompanies the primary surface update. Do not
++	 * acknowledge metadata-only commits that leave the hardware packet stale. */
++	return plane && plane->crtc == crtc && plane->fb && to_dm_plane_state(plane)->dc_state;
++}
++
++static int fill_hdr10plus_info_packet(const struct drm_property_blob *blob,
++				     struct dc_info_packet *out)
++{
++	const u8 *packet = blob->data;
++	struct dc_info_packet result = {0};
++
++	if (!drm_hdr10plus_infoframe_valid(packet, blob->length))
++		return -EINVAL;
++	result.hb0 = packet[0];
++	result.hb1 = packet[1];
++	result.hb2 = packet[2];
++	memcpy(result.sb, packet + 3, 28);
++	result.valid = true;
++	*out = result;
++	return 0;
++}
++
+ static struct dc_stream_state *
+ create_stream_for_sink(struct drm_connector *connector,
+ 		       const struct drm_display_mode *drm_mode,
+@@ -7913,6 +7941,11 @@
+ 	}
+ 	if (dm_state->dv_standard &&
+ 	    amdgpu_dm_dv_configure_stream(stream, dm_state, drm_mode)) {
++		dc_stream_release(stream);
++		stream = NULL;
++	}
++	if (stream && dm_state->base.hdr10plus_metadata &&
++	    fill_hdr10plus_info_packet(dm_state->base.hdr10plus_metadata, &stream->vsp_infopacket)) {
+ 		dc_stream_release(stream);
+ 		stream = NULL;
+ 	}
+@@ -8879,6 +8912,9 @@
+ 		return -EINVAL;
+ 
+ 	trace_amdgpu_dm_connector_atomic_check(new_con_state);
++	if (drm_connector_check_hdr10plus(new_con_state) ||
++	    (new_con_state->hdr10plus_metadata && to_dm_connector_state(new_con_state)->dv_standard))
++		return -EINVAL;
+ 
+ 	if (conn->connector_type == DRM_MODE_CONNECTOR_DisplayPort) {
+ 		ret = drm_dp_mst_root_conn_atomic_check(new_con_state, &aconn->mst_mgr);
+@@ -8891,6 +8927,7 @@
+ 
+ 	if (to_dm_connector_state(new_con_state)->dv_standard !=
+ 	    to_dm_connector_state(old_con_state)->dv_standard ||
++	    !!new_con_state->hdr10plus_metadata != !!old_con_state->hdr10plus_metadata ||
+ 	    to_dm_connector_state(new_con_state)->hdr10_deep_color !=
+ 	    to_dm_connector_state(old_con_state)->hdr10_deep_color) {
+ 		new_crtc_state = drm_atomic_get_crtc_state(state, crtc);
+@@ -9679,6 +9716,7 @@
+ 	if (connector_type == DRM_MODE_CONNECTOR_HDMIA) {
+ 		/* Content Type is currently only implemented for HDMI. */
+ 		drm_connector_attach_content_type_property(&aconnector->base);
++		drm_connector_attach_hdr10plus_metadata_property(&aconnector->base);
+ 	}
+ 
+ 	if (connector_type == DRM_MODE_CONNECTOR_HDMIA) {
+@@ -10610,6 +10648,7 @@
+ 		struct dc_scaling_info scaling_infos[MAX_SURFACES];
+ 		struct dc_flip_addrs flip_addrs[MAX_SURFACES];
+ 		struct dc_stream_update stream_update;
++		struct dc_info_packet hdr10plus;
+ 	} *bundle;
+ 
+ 	bundle = kzalloc_obj(*bundle);
+@@ -10870,6 +10909,20 @@
+ 			flush_workqueue(dm->vblank_control_workqueue);
+ 
+ 		bundle->stream_update.stream = acrtc_state->stream;
++		{
++			struct drm_connector *connector __maybe_unused;
++			struct drm_connector_state *conn;
++			int index;
++
++			for_each_new_connector_in_state(state, connector, conn, index) {
++				if (conn->crtc != pcrtc || !conn->hdr10plus_metadata)
++					continue;
++				if (!fill_hdr10plus_info_packet(conn->hdr10plus_metadata, &bundle->hdr10plus) &&
++				    memcmp(&bundle->hdr10plus, &acrtc_state->stream->vsp_infopacket,
++					   sizeof(bundle->hdr10plus)))
++					bundle->stream_update.vsp_infopacket = &bundle->hdr10plus;
++			}
++		}
+ 		if (new_pcrtc_state->mode_changed) {
+ 			bundle->stream_update.src = acrtc_state->stream->src;
+ 			bundle->stream_update.dst = acrtc_state->stream->dst;
+@@ -13931,6 +13984,30 @@
+ 	ret = amdgpu_dm_hdr10_atomic_check(state);
+ 	if (ret)
+ 		goto fail;
++	{
++		struct drm_connector *connector __maybe_unused;
++		struct drm_connector_state *conn;
++		int index;
++
++		for_each_new_connector_in_state(state, connector, conn, index) {
++			struct drm_crtc_state *crtc_state;
++			struct dc_stream_state *stream;
++
++			if (!conn->hdr10plus_metadata)
++				continue;
++			crtc_state = drm_atomic_get_new_crtc_state(state, conn->crtc);
++			stream = crtc_state ? to_dm_crtc_state(crtc_state)->stream : NULL;
++			if (drm_connector_check_hdr10plus(conn) || !stream ||
++			    !crtc_state->active || !hdr10plus_has_frame_update(state, conn->crtc) ||
++			    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
++			    convert_dc_color_depth_into_bpc(stream->timing.display_color_depth) < 10 ||
++			    crtc_state->async_flip ||
++			    (crtc_state->mode.flags & DRM_MODE_FLAG_3D_MASK)) {
++				ret = -EINVAL;
++				goto fail;
++			}
++		}
++	}
+ 
+ 	/* Must be success */
+ 	WARN_ON(ret);
+diff --git a/drivers/gpu/drm/drm_atomic_state_helper.c b/drivers/gpu/drm/drm_atomic_state_helper.c
+--- a/drivers/gpu/drm/drm_atomic_state_helper.c
++++ b/drivers/gpu/drm/drm_atomic_state_helper.c
+@@ -645,6 +645,8 @@
+ 
+ 	if (state->hdr_output_metadata)
+ 		drm_property_blob_get(state->hdr_output_metadata);
++	if (state->hdr10plus_metadata)
++		drm_property_blob_get(state->hdr10plus_metadata);
+ 
+ 	/* Don't copy over a writeback job, they are used only once */
+ 	state->writeback_job = NULL;
+@@ -695,6 +697,7 @@
+ 		drm_writeback_cleanup_job(state->writeback_job);
+ 
+ 	drm_property_blob_put(state->hdr_output_metadata);
++	drm_property_blob_put(state->hdr10plus_metadata);
+ }
+ EXPORT_SYMBOL(__drm_atomic_helper_connector_destroy_state);
+ 
+diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi.c
+--- a/drivers/gpu/drm/drm_atomic_uapi.c
++++ b/drivers/gpu/drm/drm_atomic_uapi.c
+@@ -28,6 +28,7 @@
+  */
+ 
+ #include <drm/drm_atomic.h>
++#include <drm/drm_hdr10plus.h>
+ #include <drm/drm_atomic_helper.h>
+ #include <drm/drm_atomic_uapi.h>
+ #include <drm/drm_framebuffer.h>
+@@ -917,6 +918,17 @@
+ 		 */
+ 		if (state->link_status != DRM_LINK_STATUS_GOOD)
+ 			state->link_status = val;
++	} else if (property == config->hdr10plus_metadata_property) {
++		ret = drm_property_replace_blob_from_id(dev,
++				&state->hdr10plus_metadata, val, -1,
++				DRM_HDR10PLUS_INFOFRAME_SIZE, -1, &replaced);
++		if (ret)
++			return ret;
++		if (state->hdr10plus_metadata &&
++		    !drm_hdr10plus_infoframe_valid(state->hdr10plus_metadata->data,
++					 state->hdr10plus_metadata->length))
++			return -EINVAL;
++		return 0;
+ 	} else if (property == config->hdr_output_metadata_property) {
+ 		ret = drm_property_replace_blob_from_id(dev,
+ 				&state->hdr_output_metadata,
+@@ -1030,6 +1042,8 @@
+ 	} else if (property == config->hdr_output_metadata_property) {
+ 		*val = state->hdr_output_metadata ?
+ 			state->hdr_output_metadata->base.id : 0;
++	} else if (property == config->hdr10plus_metadata_property) {
++		*val = state->hdr10plus_metadata ? state->hdr10plus_metadata->base.id : 0;
+ 	} else if (property == config->content_protection_property) {
+ 		*val = state->content_protection;
+ 	} else if (property == config->hdcp_content_type_property) {
+diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
+--- a/drivers/gpu/drm/drm_connector.c
++++ b/drivers/gpu/drm/drm_connector.c
+@@ -1876,6 +1876,11 @@
+ 	if (!prop)
+ 		return -ENOMEM;
+ 	dev->mode_config.hdr_output_metadata_property = prop;
++	prop = drm_property_create(dev, DRM_MODE_PROP_BLOB,
++				   "HDR10PLUS_METADATA", 0);
++	if (!prop)
++		return -ENOMEM;
++	dev->mode_config.hdr10plus_metadata_property = prop;
+ 
+ 	return 0;
+ }
+@@ -2883,6 +2888,53 @@
+ EXPORT_SYMBOL(drm_connector_attach_hdr_output_metadata_property);
+ 
+ /**
++ * drm_connector_attach_hdr10plus_metadata_property - opt in to dynamic metadata
++ * @connector: Native HDMI connector with a frame-synchronous packet backend.
++ *
++ * Payload is a complete 31-byte HDR10+ VSIF. Zero disables the packet. The
++ * backend must latch it with the framebuffer, never as a separate update.
++ */
++void drm_connector_attach_hdr10plus_metadata_property(struct drm_connector *connector)
++{
++	drm_object_attach_property(&connector->base,
++		connector->dev->mode_config.hdr10plus_metadata_property, 0);
++}
++EXPORT_SYMBOL(drm_connector_attach_hdr10plus_metadata_property);
++
++/**
++ * drm_connector_check_hdr10plus - validate the shared output contract
++ * @state: new connector state
++ *
++ * Drivers additionally check actual link depth, packet conflicts and latching.
++ * Return: zero when disabled or admissible, negative errno otherwise.
++ */
++int drm_connector_check_hdr10plus(const struct drm_connector_state *state)
++{
++	const struct drm_display_info *info = &state->connector->display_info;
++	const struct hdr_output_metadata *hdr;
++	const u8 *packet;
++
++	if (!state->hdr10plus_metadata)
++		return 0;
++	if (!state->crtc || state->connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
++	    !info->hdr10plus_supported || state->max_bpc < 10 ||
++	    !state->hdr_output_metadata ||
++	    state->hdr_output_metadata->length != sizeof(*hdr))
++		return -EINVAL;
++	packet = state->hdr10plus_metadata->data;
++	if ((packet[7] >> 6) > info->hdr10plus_version)
++		return -EINVAL;
++	hdr = state->hdr_output_metadata->data;
++	if (hdr->metadata_type || hdr->hdmi_metadata_type1.metadata_type ||
++	    hdr->hdmi_metadata_type1.eotf != HDMI_EOTF_SMPTE_ST2084 ||
++	    (state->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
++	     state->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC))
++		return -EINVAL;
++	return 0;
++}
++EXPORT_SYMBOL(drm_connector_check_hdr10plus);
++
++/**
+  * drm_connector_attach_broadcast_rgb_property - attach "Broadcast RGB" property
+  * @connector: connector to attach the property on.
+  *
+diff --git a/drivers/gpu/drm/drm_edid.c b/drivers/gpu/drm/drm_edid.c
+--- a/drivers/gpu/drm/drm_edid.c
++++ b/drivers/gpu/drm/drm_edid.c
+@@ -43,6 +43,7 @@
+ 
+ #include <drm/drm_drv.h>
+ #include <drm/drm_edid.h>
++#include <drm/drm_hdr10plus.h>
+ #include <drm/drm_eld.h>
+ #include <drm/drm_encoder.h>
+ #include <drm/drm_print.h>
+@@ -6514,6 +6515,12 @@
+ 	cea_db_iter_for_each(db, &iter) {
+ 		/* FIXME: convert parsers to use struct cea_db */
+ 		const u8 *data = (const u8 *)db;
++		int hdr10plus = drm_hdr10plus_vsvdb_version(data, 1 + cea_db_payload_len(db));
++
++		if (hdr10plus >= 0) {
++			info->hdr10plus_supported = true;
++			info->hdr10plus_version = hdr10plus;
++		}
+ 
+ 		if (cea_db_is_hdmi_vsdb(db))
+ 			drm_parse_hdmi_vsdb_video(connector, data);
+@@ -6697,6 +6704,8 @@
+ 	info->rgb_quant_range_selectable = false;
+ 	memset(&info->hdmi, 0, sizeof(info->hdmi));
+ 	memset(&info->hdr_sink_metadata, 0, sizeof(info->hdr_sink_metadata));
++	info->hdr10plus_supported = false;
++	info->hdr10plus_version = 0;
+ 
+ 	info->edid_hdmi_rgb444_dc_modes = 0;
+ 	info->edid_hdmi_ycbcr444_dc_modes = 0;
+diff --git a/drivers/gpu/drm/i915/display/intel_atomic.c b/drivers/gpu/drm/i915/display/intel_atomic.c
+--- a/drivers/gpu/drm/i915/display/intel_atomic.c
++++ b/drivers/gpu/drm/i915/display/intel_atomic.c
+@@ -153,6 +153,9 @@
+ 	struct drm_crtc_state *crtc_state;
+ 
+ 	intel_hdcp_atomic_check(conn, old_state, new_state);
++	if (drm_connector_check_hdr10plus(new_state) ||
++	    (new_state->hdr10plus_metadata && new_conn_state->dv_lab_standard))
++		return -EINVAL;
+ 
+ 	if (!new_state->crtc) {
+ 		new_conn_state->dv_lab_standard = false;
+@@ -169,6 +172,7 @@
+ 	 * up in a modeset.
+ 	 */
+ 	if (new_conn_state->dv_lab_standard != old_conn_state->dv_lab_standard ||
++	    !!new_state->hdr10plus_metadata != !!old_state->hdr10plus_metadata ||
+ 	    new_conn_state->dv_hdr10_deep_color != old_conn_state->dv_hdr10_deep_color ||
+ 	    new_conn_state->force_audio != old_conn_state->force_audio ||
+ 	    new_conn_state->broadcast_rgb != old_conn_state->broadcast_rgb ||
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -4404,6 +4404,9 @@
+ 	ret = intel_psr2_sel_fetch_update(state, crtc);
+ 	if (ret)
+ 		return ret;
++	ret = intel_hdmi_hdr10plus_check(state, crtc);
++	if (ret)
++		return ret;
+ 
+ 	return intel_dv_lab_scanout_check(state, crtc);
+ }
+@@ -6920,6 +6923,7 @@
+ 		commit_pipe_pre_planes(state, crtc);
+ 
+ 		intel_crtc_planes_update_arm(NULL, state, crtc);
++		intel_hdmi_hdr10plus_update(state, crtc);
+ 
+ 		commit_pipe_post_planes(state, crtc);
+ 
+@@ -7339,6 +7343,14 @@
+ 
+ 	if (state->base.legacy_cursor_update)
+ 		return;
++	/* Vendor packet writes must share the CPU plane commit's vblank window. */
++	if (intel_hdmi_hdr10plus_present(new_crtc_state) ||
++	    intel_hdmi_hdr10plus_present(intel_atomic_get_old_crtc_state(state, crtc))) {
++		new_crtc_state->use_flipq = false;
++		new_crtc_state->use_dsb = false;
++		intel_color_prepare_commit(state, crtc);
++		return;
++	}
+ 
+ 	/* FIXME deal with everything */
+ 	new_crtc_state->use_flipq =
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -771,6 +771,8 @@
+ 	}
+ 
+ 	drm_hdmi_avi_infoframe_content_type(frame, conn_state);
++	if (conn_state->hdr10plus_metadata)
++		frame->video_code = drm_match_cea_mode(adjusted_mode);
+ 
+ 	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
+ 		const struct drm_property_blob *edid = conn_state->connector->edid_blob_ptr;
+@@ -847,6 +849,10 @@
+ 
+ 	crtc_state->infoframes.enable |=
+ 		intel_hdmi_infoframe_enable(HDMI_INFOFRAME_TYPE_VENDOR);
++	if (conn_state->hdr10plus_metadata)
++		return hdmi_infoframe_unpack(&crtc_state->infoframes.hdmi,
++			conn_state->hdr10plus_metadata->data,
++			conn_state->hdr10plus_metadata->length) == 0;
+ 
+ 	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
+ 		struct hdmi_dolby_vendor_infoframe *dv =
+@@ -1271,6 +1277,51 @@
+ 	intel_write_infoframe(encoder, crtc_state,
+ 			      HDMI_INFOFRAME_TYPE_VENDOR,
+ 			      &crtc_state->infoframes.hdmi);
++}
++
++bool intel_hdmi_hdr10plus_present(const struct intel_crtc_state *state)
++{
++	return state->infoframes.hdmi.vendor.any.oui == HDMI_HDR10PLUS_IEEE_OUI;
++}
++
++int intel_hdmi_hdr10plus_check(struct intel_atomic_state *state, struct intel_crtc *crtc)
++{
++	struct intel_crtc_state *pipe = intel_atomic_get_new_crtc_state(state, crtc);
++	struct intel_digital_connector_state *conn;
++	struct intel_connector *connector __maybe_unused;
++	int i;
++
++	for_each_new_intel_connector_in_state(state, connector, conn, i) {
++		if (conn->base.crtc != &crtc->base || !conn->base.hdr10plus_metadata)
++			continue;
++		if (drm_connector_check_hdr10plus(&conn->base) || conn->dv_lab_standard ||
++		    !pipe->has_hdmi_sink || !pipe->has_infoframe || pipe->pipe_bpp < 30 ||
++		    pipe->uapi.async_flip ||
++		    (pipe->hw.adjusted_mode.flags & DRM_MODE_FLAG_3D_MASK))
++			return -EINVAL;
++		/* Per-picture changes do not require recomputing the link or a modeset. */
++		if (hdmi_infoframe_unpack(&pipe->infoframes.hdmi,
++			conn->base.hdr10plus_metadata->data,
++			conn->base.hdr10plus_metadata->length))
++			return -EINVAL;
++		pipe->infoframes.enable |= intel_hdmi_infoframe_enable(HDMI_INFOFRAME_TYPE_VENDOR);
++	}
++	return 0;
++}
++
++void intel_hdmi_hdr10plus_update(struct intel_atomic_state *state, struct intel_crtc *crtc)
++{
++	const struct intel_crtc_state *old = intel_atomic_get_old_crtc_state(state, crtc);
++	const struct intel_crtc_state *pipe = intel_atomic_get_new_crtc_state(state, crtc);
++	struct intel_encoder *encoder;
++
++	if ((!intel_hdmi_hdr10plus_present(old) && !intel_hdmi_hdr10plus_present(pipe)) ||
++	    !memcmp(&old->infoframes.hdmi, &pipe->infoframes.hdmi, sizeof(pipe->infoframes.hdmi)))
++		return;
++	/* Called in the plane commit's vblank-evasion section. */
++	for_each_intel_encoder_mask(state->base.dev, encoder, pipe->uapi.encoder_mask)
++		intel_write_infoframe(encoder, pipe, HDMI_INFOFRAME_TYPE_VENDOR,
++				      &pipe->infoframes.hdmi);
+ }
+ 
+ void intel_hdmi_fastset_infoframes(struct intel_encoder *encoder,
+@@ -2898,6 +2949,8 @@
+ 
+ 	if (DISPLAY_VER(display) >= 10)
+ 		drm_connector_attach_hdr_output_metadata_property(&connector->base);
++	if (DISPLAY_VER(display) >= 10)
++		drm_connector_attach_hdr10plus_metadata_property(&connector->base);
+ 
+ 	if (!HAS_GMCH(display))
+ 		drm_connector_attach_max_bpc_property(&connector->base, 8, 12);
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.h b/drivers/gpu/drm/i915/display/intel_hdmi.h
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.h
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.h
+@@ -15,6 +15,8 @@
+ struct drm_connector_state;
+ struct drm_encoder;
+ struct intel_connector;
++struct intel_atomic_state;
++struct intel_crtc;
+ struct intel_crtc_state;
+ struct intel_digital_port;
+ struct intel_encoder;
+@@ -30,6 +32,9 @@
+ 			      struct intel_crtc_state *pipe_config,
+ 			      struct drm_connector_state *conn_state);
+ void intel_hdmi_encoder_shutdown(struct intel_encoder *encoder);
++int intel_hdmi_hdr10plus_check(struct intel_atomic_state *state, struct intel_crtc *crtc);
++bool intel_hdmi_hdr10plus_present(const struct intel_crtc_state *state);
++void intel_hdmi_hdr10plus_update(struct intel_atomic_state *state, struct intel_crtc *crtc);
+ bool intel_hdmi_handle_sink_scrambling(struct intel_encoder *encoder,
+ 				       struct drm_connector *connector,
+ 				       bool high_tmds_clock_ratio,
+diff --git a/drivers/video/hdmi.c b/drivers/video/hdmi.c
+--- a/drivers/video/hdmi.c
++++ b/drivers/video/hdmi.c
+@@ -22,6 +22,7 @@
+  */
+ 
+ #include <drm/display/drm_dp.h>
++#include <drm/drm_hdr10plus.h>
+ #include <linux/bitops.h>
+ #include <linux/bug.h>
+ #include <linux/errno.h>
+@@ -814,6 +815,44 @@
+ 	return 0;
+ }
+ 
++ssize_t hdmi_hdr10plus_vendor_infoframe_pack(
++	const struct hdmi_hdr10plus_vendor_infoframe *frame, void *buffer, size_t size)
++{
++	u8 packet[DRM_HDR10PLUS_INFOFRAME_SIZE] = {
++		0x81, 1, 27, 0, 0x8b, 0x84, 0x90,
++	};
++
++	if (frame->type != HDMI_INFOFRAME_TYPE_VENDOR || frame->version != 1 ||
++	    frame->length != 27 || frame->oui != HDMI_HDR10PLUS_IEEE_OUI)
++		return -EINVAL;
++	memcpy(packet + 7, frame->data, sizeof(frame->data));
++	hdmi_infoframe_set_checksum(packet, sizeof(packet));
++	if (!drm_hdr10plus_infoframe_valid(packet, sizeof(packet)))
++		return -EINVAL;
++	if (size < sizeof(packet))
++		return -ENOSPC;
++	memcpy(buffer, packet, sizeof(packet));
++	return sizeof(packet);
++}
++EXPORT_SYMBOL(hdmi_hdr10plus_vendor_infoframe_pack);
++
++static int hdmi_hdr10plus_vendor_infoframe_unpack(
++	struct hdmi_hdr10plus_vendor_infoframe *frame, const void *buffer, size_t size)
++{
++	const u8 *packet = buffer;
++	struct hdmi_hdr10plus_vendor_infoframe tmp = {
++		.type = HDMI_INFOFRAME_TYPE_VENDOR, .version = 1,
++		.length = 27, .oui = HDMI_HDR10PLUS_IEEE_OUI,
++	};
++
++	if (size < DRM_HDR10PLUS_INFOFRAME_SIZE ||
++	    !drm_hdr10plus_infoframe_valid(buffer, DRM_HDR10PLUS_INFOFRAME_SIZE))
++		return -EINVAL;
++	memcpy(tmp.data, packet + 7, sizeof(tmp.data));
++	*frame = tmp;
++	return 0;
++}
++
+ static int
+ hdmi_vendor_any_infoframe_check_only(const union hdmi_vendor_any_infoframe *frame)
+ {
+@@ -982,6 +1021,12 @@
+ 
+ 	if (frame->any.oui == HDMI_DOLBY_IEEE_OUI)
+ 		return hdmi_dolby_vendor_infoframe_check(&frame->dolby);
++	if (frame->any.oui == HDMI_HDR10PLUS_IEEE_OUI) {
++		u8 packet[DRM_HDR10PLUS_INFOFRAME_SIZE];
++		int bytes = hdmi_hdr10plus_vendor_infoframe_pack(&frame->hdr10plus,
++							      packet, sizeof(packet));
++		return bytes < 0 ? bytes : 0;
++	}
+ 
+ 	/* Keep the legacy HDMI vendor path unchanged. */
+ 	if (frame->any.oui != HDMI_IEEE_OUI)
+@@ -1005,6 +1050,8 @@
+ 
+ 	if (frame->any.oui == HDMI_DOLBY_IEEE_OUI)
+ 		return hdmi_dolby_vendor_infoframe_pack(&frame->dolby, buffer, size);
++	if (frame->any.oui == HDMI_HDR10PLUS_IEEE_OUI)
++		return hdmi_hdr10plus_vendor_infoframe_pack(&frame->hdr10plus, buffer, size);
+ 
+ 	/* Keep the legacy HDMI vendor path unchanged. */
+ 	if (frame->any.oui != HDMI_IEEE_OUI)
+@@ -1644,6 +1691,10 @@
+ 	}
+ 
+ 	if (frame->any.oui != HDMI_IEEE_OUI) {
++		if (frame->any.oui == HDMI_HDR10PLUS_IEEE_OUI) {
++			hdmi_log("    HDR10+: version %u\n", frame->hdr10plus.data[0] >> 6);
++			return;
++		}
+ 		hdmi_log("    not a HDMI vendor infoframe\n");
+ 		return;
+ 	}
+@@ -1895,6 +1946,9 @@
+ 	if (size >= HDMI_INFOFRAME_HEADER_SIZE + 3 &&
+ 	    ptr[4] == 0x46 && ptr[5] == 0xd0 && ptr[6] == 0)
+ 		return hdmi_dolby_vendor_infoframe_unpack(&frame->dolby, buffer, size);
++	if (size >= HDMI_INFOFRAME_HEADER_SIZE + 3 &&
++	    ptr[4] == 0x8b && ptr[5] == 0x84 && ptr[6] == 0x90)
++		return hdmi_hdr10plus_vendor_infoframe_unpack(&frame->hdr10plus, buffer, size);
+ 
+ 	if (size < HDMI_INFOFRAME_HEADER_SIZE)
+ 		return -EINVAL;
+diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
+--- a/include/drm/drm_connector.h
++++ b/include/drm/drm_connector.h
+@@ -858,6 +858,10 @@
+ 	 * @hdr_sink_metadata: HDR Metadata Information read from sink
+ 	 */
+ 	struct hdr_sink_metadata hdr_sink_metadata;
++	/** @hdr10plus_supported: HDR10+ VSVDB present in the current EDID. */
++	bool hdr10plus_supported;
++	/** @hdr10plus_version: Highest advertised HDR10+ application version. */
++	u8 hdr10plus_version;
+ 
+ 	/**
+ 	 * @non_desktop: Non desktop display (HMD).
+@@ -1203,6 +1207,8 @@
+ 	 * DRM blob property for HDR output metadata
+ 	 */
+ 	struct drm_property_blob *hdr_output_metadata;
++	/** @hdr10plus_metadata: Validated VSIF associated with this atomic frame. */
++	struct drm_property_blob *hdr10plus_metadata;
+ 
+ 	/**
+ 	 * @hdmi: HDMI-related variable and properties. Filled by
+@@ -2557,6 +2563,8 @@
+ int drm_connector_attach_broadcast_rgb_property(struct drm_connector *connector);
+ int drm_connector_attach_colorspace_property(struct drm_connector *connector);
+ void drm_connector_attach_hdr_output_metadata_property(struct drm_connector *connector);
++void drm_connector_attach_hdr10plus_metadata_property(struct drm_connector *connector);
++int drm_connector_check_hdr10plus(const struct drm_connector_state *state);
+ bool drm_connector_atomic_hdr_metadata_equal(struct drm_connector_state *old_state,
+ 					     struct drm_connector_state *new_state);
+ int drm_mode_create_aspect_ratio_property(struct drm_device *dev);
+diff --git a/include/drm/drm_hdr10plus.h b/include/drm/drm_hdr10plus.h
+--- /dev/null
++++ b/include/drm/drm_hdr10plus.h
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#ifndef DRM_HDR10PLUS_H
++#define DRM_HDR10PLUS_H
++#include <linux/types.h>
++
++#define DRM_HDR10PLUS_INFOFRAME_SIZE 31
++
++static inline int drm_hdr10plus_vsvdb_version(const void *data, unsigned long size)
++{
++	const unsigned char *p = data;
++
++	if (!p || size < 6 || (p[0] >> 5) != 7 ||
++	    (p[0] & 31) < 5 || (p[0] & 31) + 1u > size ||
++	    p[1] != 1 || p[2] != 0x8b || p[3] != 0x84 || p[4] != 0x90)
++		return -1;
++	return p[5] & 3;
++}
++
++static inline bool drm_hdr10plus_infoframe_valid(const void *data, unsigned long size)
++{
++	const unsigned char *p = data;
++	unsigned int i, sum = 0, anchors;
++
++	if (!p || size != DRM_HDR10PLUS_INFOFRAME_SIZE ||
++	    p[0] != 0x81 || p[1] != 1 || p[2] != 27 ||
++	    p[4] != 0x8b || p[5] != 0x84 || p[6] != 0x90)
++		return false;
++	/* Version 0/1, reserved bits zero, packet latched with its framebuffer. */
++	if ((p[7] >> 6) > 1 || (p[7] & 1) ||
++	    (p[30] & 0x3f) || !(p[30] & 0x40))
++		return false;
++	if ((p[7] >> 6) == 1 && (p[10] != 0 || p[11] != 255))
++		return false;
++	anchors = p[18] >> 4;
++	if (anchors > 9)
++		return false;
++	for (i = 1; i < anchors; i++)
++		if (p[21 + i] < p[20 + i])
++			return false;
++	for (i = 21 + anchors; i < 30; i++)
++		if (p[i])
++			return false;
++	for (i = 0; i < size; i++)
++		sum += p[i];
++	return !(sum & 0xff);
++}
++#endif
+diff --git a/include/drm/drm_mode_config.h b/include/drm/drm_mode_config.h
+--- a/include/drm/drm_mode_config.h
++++ b/include/drm/drm_mode_config.h
+@@ -896,6 +896,8 @@
+ 	 * on HDR content
+ 	 */
+ 	struct drm_property *hdr_output_metadata_property;
++	/** @hdr10plus_metadata_property: Frame-synchronous HDR10+ VSIF blob. */
++	struct drm_property *hdr10plus_metadata_property;
+ 
+ 	/**
+ 	 * @content_protection_property: DRM ENUM property for content
+diff --git a/include/linux/hdmi.h b/include/linux/hdmi.h
+--- a/include/linux/hdmi.h
++++ b/include/linux/hdmi.h
+@@ -59,6 +59,7 @@
+ #define HDMI_IEEE_OUI 0x000c03
+ #define HDMI_FORUM_IEEE_OUI 0xc45dd8
+ #define HDMI_DOLBY_IEEE_OUI 0x00d046
++#define HDMI_HDR10PLUS_IEEE_OUI 0x90848b
+ #define HDMI_INFOFRAME_HEADER_SIZE  4
+ #define HDMI_AVI_INFOFRAME_SIZE    13
+ #define HDMI_SPD_INFOFRAME_SIZE    25
+@@ -447,6 +448,18 @@
+ ssize_t hdmi_dolby_vendor_infoframe_pack(const struct hdmi_dolby_vendor_infoframe *frame,
+ 				       void *buffer, size_t size);
+ 
++struct hdmi_hdr10plus_vendor_infoframe {
++	enum hdmi_infoframe_type type;
++	unsigned char version;
++	unsigned char length;
++	unsigned int oui;
++	/* HDMI representation after the OUI, not a raw ST 2094-40 payload. */
++	u8 data[24];
++};
++
++ssize_t hdmi_hdr10plus_vendor_infoframe_pack(
++	const struct hdmi_hdr10plus_vendor_infoframe *frame, void *buffer, size_t size);
++
+ union hdmi_vendor_any_infoframe {
+ 	struct {
+ 		enum hdmi_infoframe_type type;
+@@ -456,6 +469,7 @@
+ 	} any;
+ 	struct hdmi_vendor_infoframe hdmi;
+ 	struct hdmi_dolby_vendor_infoframe dolby;
++	struct hdmi_hdr10plus_vendor_infoframe hdr10plus;
+ };
+ 
+ /**

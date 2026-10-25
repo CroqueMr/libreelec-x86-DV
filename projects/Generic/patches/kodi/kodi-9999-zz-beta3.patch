@@ -9104,7 +9104,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,89 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9150,6 +9150,13 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/c
 +    return result;
 +  }
 +  auto policy = preferences.Policy();
++  if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !caps.hdr10plus)
++  {
++    if (!caps.hdr10 || !caps.processing[DVBRIDGE_MODE_HDR10_BASIC].usable)
++      return {OutputRoute::Vanilla, {}, OutputReason::NoHDR10PlusTransport};
++    policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
++    return {OutputRoute::HDR10, policy, OutputReason::NoHDR10PlusTransport};
++  }
 +  const auto admission = [&](dvbridge_mode mode) {
 +    if ((mode == DVBRIDGE_MODE_HDR10_EXPERT || mode == DVBRIDGE_MODE_ENHANCED_DV) &&
 +        !preferences.ProfileValid())

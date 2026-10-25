@@ -24,8 +24,8 @@ using OutputReason=VideoProcessingReason;
 const char* cb1_circuit_version(int id) {return id==1 ? "CB1-HDR10DV.0.1" : "CB1-DVHDR10.0.1";}
 const char* cb1_engine_version() {return "CB1 0.3";}
 enum {CB1_HDR10_DV_REFERENCE=1,CB1_HDR10_DV_ADAPTIVE,
-CB1_DV_DV_REFERENCE,CB1_DV_HDR10_BASIC,CB1_DV_HDR10_EXPERT,CB1_DV_DV_ADAPTIVE,CB1_DV_DV_MASTER_REFERENCE,CB1_DV_DV_ADAPTIVE_B,CB1_DV_DV_MASTER_IPT};
-struct CDVPlaybackInfo { enum {HDMI=1,FEL=2,CM4=4,HDR10=8}; };
+CB1_DV_DV_REFERENCE,CB1_DV_HDR10_BASIC,CB1_DV_HDR10_EXPERT,CB1_DV_DV_ADAPTIVE,CB1_DV_DV_MASTER_REFERENCE,CB1_DV_DV_ADAPTIVE_B,CB1_DV_DV_MASTER_IPT,CB1_DV_HDR10PLUS};
+struct CDVPlaybackInfo { enum {HDMI=1,FEL=2,CM4=4,HDR10=8,HDR10PLUS=16}; };
 namespace DVBRIDGE { using ::SourceBinding; using ::OutputCapabilities; using ::OutputReason; struct StreamSnapshot SNAPSHOT }
 #include "DVProcessingInfo.h"
 int main() {
@@ -42,6 +42,8 @@ int main() {
  s.transaction.capabilities.isDV=true;
  assert(!DVBRIDGE::NativeProcessingInfo(s).transaction.hdr10AI);
  assert(info.appliedBlocks[1] && info.transmittedBlocks.none());
+ s.output.flags|=CDVPlaybackInfo::HDR10PLUS; s.output.effective=7;
+ assert(DVBRIDGE::NativeProcessingInfo(s).outputType==VideoOutputType::HDR10Plus);
  s.profile=0; s.output.flags=CDVPlaybackInfo::HDMI; s.output.effective=1;
  s.output.hdr10AI=true; s.output.aiL1L3={1,2000,1000,2,3,4};
  info=DVBRIDGE::NativeProcessingInfo(s);

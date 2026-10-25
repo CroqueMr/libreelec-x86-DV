@@ -1,4 +1,12 @@
 add_executable(trim_contract trim_contract.c)
+foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis)
+  add_executable(${name} ${name}.c)
+  target_link_libraries(${name} PRIVATE dvbridge_core)
+  add_test(NAME ${name} COMMAND ${name})
+endforeach()
+target_link_options(hdr10plus_analysis PRIVATE "-Wl,--wrap=glClientWaitSync")
+set_tests_properties(hdr10plus_analysis PROPERTIES ENVIRONMENT
+  "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=halt_on_error=1")
 target_include_directories(trim_contract PRIVATE "${DVBRIDGE_SOURCE_DIR}")
 target_link_libraries(trim_contract PRIVATE m)
 add_test(NAME trim_contract COMMAND trim_contract)

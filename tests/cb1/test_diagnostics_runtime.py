@@ -157,8 +157,8 @@ namespace DVBRIDGE {enum class OutputReason {None,NoGPUProcessing};
 inline std::atomic<int> modeChangeResolution{-1};
 template<class... T> void DiagnosticLog(T...) {}}
 struct Admission {bool usable=false; DVBRIDGE::OutputReason reason{};};
-struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,processingKnown=false;
-  std::array<Admission,6> processing{},hdr10Processing{};};
+struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,hdr10plus=false,processingKnown=false;
+  std::array<Admission,7> processing{},hdr10Processing{};};
 inline int eglGetCurrentContext() {return 1;}
 inline bool pl_opengl_has_ext(int,const char*) {return true;}
 inline bool dvbridge_renderer_supports_mode(int*,dvbridge_mode) {return true;}
@@ -170,11 +170,13 @@ enum RESOLUTION {RES_DESKTOP};
 struct CDisplaySettings {static CDisplaySettings& GetInstance() {static CDisplaySettings value; return value;}
  RESOLUTION_INFO GetResolutionInfo(RESOLUTION) {return {};}};
 struct Connector {bool HasPropertyInventory() const {return true;}
+  bool SupportsProperty(const char*) const {return false;}
   std::optional<uint64_t> GetPropertyValue(const char*) const {return 0;}
   unsigned GetId() const {return 42;}};
 struct DRM {virtual ~DRM()=default; double rate=120; bool accept=true,receipt=true;
   Connector connector; Connector* GetConnector() {return &connector;}};
-struct Info {struct Sink {unsigned status=0,version=2;}; Sink GetDolbyVisionCaps() const {return {};}};
+struct Info {struct Sink {unsigned status=0,version=2;}; Sink GetDolbyVisionCaps() const {return {};}
+ int HDR10PlusVersion() const {return -1;}};
 inline const char* dvbridge_edid_reason(unsigned) {return "standard-dv";}
 struct CDRMAtomic:DRM {bool IsSelectedModeCommitted() const {return receipt;}};
 struct EGL {bool TrySwapBuffers() {return true;} int GetEGLContext() const {return 1;}};
