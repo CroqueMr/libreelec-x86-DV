@@ -29,6 +29,9 @@ static void render_target(struct reference_gpu *g,struct dvbridge_renderer *r,
         geometry.x=1;geometry.width=width-2;
         memcpy(geometry.crop,(float[4]){0,0,sw,sh},sizeof(geometry.crop));
     }
+    /* Native Kodi supplies an explicit destination, even when it fills the screen. */
+    memcpy(geometry.placement,(float[4]){geometry.x,geometry.y,
+        geometry.x+geometry.width,geometry.y+geometry.height},sizeof(geometry.placement));
     unsigned fbo;
     assert(pl_opengl_unwrap(g->gl->gpu,target,NULL,NULL,&fbo));
     struct dvbridge_policy policy=reference_policy();

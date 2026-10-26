@@ -895,6 +895,13 @@ static struct dvbridge_geometry carrier_geometry(struct dvbridge_geometry source
     return (struct dvbridge_geometry){width,height,0,0,width,height,width,height};
 }
 
+/* Source-grid work must not inherit the final display's crop or placement. */
+static struct dvbridge_geometry source_geometry(struct dvbridge_geometry source)
+{
+    int width=source.source_width,height=source.source_height;
+    return (struct dvbridge_geometry){width,height,0,0,width,height,width,height};
+}
+
 /* Allocate full-size RGB backing only for an actual consumer. */
 static bool ensure_rgb(struct dvbridge_renderer *r)
 {
@@ -2093,8 +2100,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     if(!fmt || !pl_tex_recreate(r->gpu,&r->native_picture,pl_tex_params(
         .w=geometry.source_width,.h=geometry.source_height,.format=fmt,
         .sampleable=true,.renderable=true)))return false;
-    struct dvbridge_geometry native={geometry.source_width,geometry.source_height,0,0,
-        geometry.source_width,geometry.source_height,geometry.source_width,geometry.source_height};
+    struct dvbridge_geometry native=source_geometry(geometry);
     if(!render_picture(r,source,metadata,bytes,pts,el_pts,native,NULL,false,
         session,policy,NULL,force_refresh,NULL,false,NULL,false,NULL,true))return false;
     struct pl_frame image={.num_planes=1,
@@ -3300,10 +3306,7 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
         geometry.source_width<=3840 && geometry.source_height<=2160 &&
         (r->spatial_fit || geometry.source_width<3840 || geometry.source_height<2160);
     if(native_grid){
-        reconstruction.x=reconstruction.y=0;
-        reconstruction.width=geometry.source_width;reconstruction.height=geometry.source_height;
-        reconstruction.target_width=geometry.source_width;reconstruction.target_height=geometry.source_height;
-        memset(reconstruction.crop,0,sizeof(reconstruction.crop));
+        reconstruction=source_geometry(geometry);
         if(!dvbridge_frame_area(r->enhanced_margins,metadata,bytes,reconstruction))return DVBRIDGE_DV_FAILED;
     }
     unsigned reconstruction_width=native_grid?geometry.source_width:3840;
@@ -4029,9 +4032,7 @@ static bool ai_render_pixels(struct dvbridge_renderer *r,
         pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
         if(!fmt || !pl_tex_recreate(r->gpu,&r->native_picture,pl_tex_params(
             .w=g.source_width,.h=g.source_height,.format=fmt,.sampleable=true,.renderable=true)))return false;
-        g.x=g.y=0;g.width=g.source_width;g.height=g.source_height;
-        g.target_width=g.source_width;g.target_height=g.source_height;
-        memset(g.crop,0,sizeof(g.crop));
+        g=source_geometry(g);
     }
     bool fused=r->dv.active && r->dv.ai_source &&
         r->dv.enhanced_plan.status==CB1_DVE_READY && r->ai_enhanced_fused;

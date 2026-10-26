@@ -56,6 +56,15 @@ int main(void)
     assert(configure_target(&fractional,geometry) && !fractional.target_identity);
 #endif
     struct dvbridge_renderer r={0};
+    /* Work surfaces use the decoded raster, never output placement/crop. */
+    for(int width=638;width<=3838;width+=800){
+        geometry.source_width=width;geometry.source_height=width/2+7;
+        struct dvbridge_geometry local=source_geometry(geometry);
+        assert(configure_target(&r,local) && r.target_identity);
+        assert(local.width==width && local.height==geometry.source_height);
+        for(unsigned i=0;i<4;i++)assert(!local.crop[i] && !local.placement[i]);
+        assert(geometry.placement[1]!=0 && geometry.crop[3]!=0);
+    }
     struct witness w={.outcome=1,.fitted=&fitted};
     dvbridge_renderer_set_spatial_fit(&r,fit,&w);
     bool applied=true;
