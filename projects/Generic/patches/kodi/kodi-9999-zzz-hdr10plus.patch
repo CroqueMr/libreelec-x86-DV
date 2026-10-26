@@ -738,7 +738,16 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (m_renderableType != EGL_OPENGL_ES3_BIT)
    {
      caps.processingKnown = true;
-@@ -1565,7 +1616,11 @@
+@@ -1349,6 +1400,8 @@
+     }
+     return !m_dvContext || m_dvContext->StopHDR10AI();
+   }
++  // The ordinary commit retires the prior renderer before AI can prime it again.
++  if (m_dvOrdinaryFrame || m_dvEndPending || m_dvStopPending) return false;
+   const auto binding = picture.doviSourceBinding;
+   if (queue.empty() || !(queue.front().binding == binding)) return false;
+   {
+@@ -1565,7 +1618,11 @@
    m_failedHDR10SetupRestore = false;
    if (DVBRIDGE::DiagnosticsEnabled())
    {
@@ -751,7 +760,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          session.target.hdr.max_luma, session.output.level6 ? "RPU-L6" : "RPU-source-PQ",
          GetOutputBitDepth(), UseLimitedColor() ? "limited" : "full");
      if (m_hdrDeepColorPrevious)
-@@ -1978,7 +2033,6 @@
+@@ -1978,7 +2035,6 @@
        !m_dvRecoveryPending && !m_dvRejectedSurface && !m_dvRollbackFailed &&
        !m_dvOutputRetiring && !m_dvShutdownFence && !m_dvStopPending && !HasPendingDVOutputSurface() &&
        m_dvSelection.route != DVBRIDGE::OutputRoute::Vanilla &&
@@ -759,7 +768,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (m_hdrConversion || m_dvState.Captured());
  }
  
-@@ -2152,7 +2206,8 @@
+@@ -2152,7 +2208,8 @@
    }
    else
  #endif
@@ -769,7 +778,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    {
      // Complete content analysis before Kodi advances this source picture.
      const auto deadline = preparationDeadline;
-@@ -2166,7 +2221,7 @@
+@@ -2166,7 +2223,7 @@
              deadline - std::chrono::steady_clock::now()).count();
          const uint64_t waitNs = prefetchFEL && remaining > 0 ?
              static_cast<uint64_t>(std::min<int64_t>(remaining,2000000)) : 0;
@@ -778,7 +787,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            status = m_dvBridge->PollStatus(waitNs);
          else if (m_dvBridge->PollReady())
            status = CDVBridgeGLES::FrameStatus::Ready;
-@@ -2243,7 +2298,8 @@
+@@ -2243,7 +2300,8 @@
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    const bool renderPending = status == CDVBridgeGLES::FrameStatus::Pending ||
        status == CDVBridgeGLES::FrameStatus::Busy;

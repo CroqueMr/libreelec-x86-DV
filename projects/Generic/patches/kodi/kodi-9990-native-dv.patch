@@ -2005,7 +2005,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
        (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
      return true;
-@@ -171,6 +214,189 @@
+@@ -171,6 +214,192 @@
    return false;
  }
  
@@ -2118,6 +2118,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 +  const auto index = queue.front();
 +  const auto binding = head->doviSourceBinding;
 +  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  // A mode switch can reuse the decoded pool without another Configure().
++  m_aiOutputPending |=
++      (preferences.hdr10Source != DVBRIDGE::HDR10SourceMode::Native) != m_dvRequested;
 +  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
 +  {
 +    // Preserve the original locked/native stop and readiness path.
@@ -2195,7 +2198,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
  bool CRendererVAAPIGLES::CreateTexture(int index)
  {
    if (!m_isVAAPIBuffer)
-@@ -237,6 +463,11 @@
+@@ -237,6 +466,11 @@
  
  bool CRendererVAAPIGLES::UploadTexture(int index)
  {
@@ -2207,7 +2210,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    if (!m_isVAAPIBuffer)
    {
      CPictureBuffer& buf = m_buffers[index];
-@@ -315,6 +546,18 @@
+@@ -315,6 +549,18 @@
    }
  
    CalculateTextureSourceRects(index, 3);

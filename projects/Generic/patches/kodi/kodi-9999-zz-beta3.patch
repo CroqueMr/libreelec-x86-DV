@@ -4395,7 +4395,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
        UpdateLatencyTweak();
        firstFrame = true;
        FrameWait(50ms);
-@@ -459,14 +549,19 @@
+@@ -459,14 +549,20 @@
      }
  #endif
  #ifdef CB1_HAS_HDR10_AI
@@ -4412,7 +4412,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
        m_aiGuiReady = true;
 +      m_presentevent.notifyAll();
 +    }
-+    if (m_aiStartPts == DVD_NOPTS_VALUE || m_pRenderer->HDR10AILookahead())
++    if (m_aiQueuePreparationStale || m_aiStartPts == DVD_NOPTS_VALUE ||
++        m_pRenderer->HDR10AILookahead())
 +    {
 +      PrepareHDR10AILookahead(lock2);
 +      if (m_aiQueuePreparationStale) return;
@@ -4420,7 +4421,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  #endif
  
      if (m_queued.empty()
-@@ -496,19 +591,32 @@
+@@ -496,19 +592,32 @@
      {
  #ifdef CB1_HAS_HDR10_AI
        // Prepare metadata for the native selection, not the queue head it skipped.
@@ -4454,7 +4455,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
          m_overlays.Release(*it);
          m_free.push_back(*it);
          it = m_discard.erase(it);
-@@ -516,6 +624,7 @@
+@@ -516,6 +625,7 @@
        else
          ++it;
      }
@@ -4462,7 +4463,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
      m_bRenderGUI = true;
-@@ -524,9 +633,14 @@
+@@ -524,9 +634,14 @@
    m_playerPort->UpdateGuiRender(IsGuiLayer() || !m_pRenderer->VideoBypassesFramebuffer() ||
                                  firstFrame);
  
@@ -4478,7 +4479,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    m_overlays.PrepareOverlays(m_presentsource);
  }
  
-@@ -572,12 +686,20 @@
+@@ -572,12 +687,20 @@
  {
    if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
    {
@@ -4499,7 +4500,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    }
  
    std::unique_lock lock(m_statelock);
-@@ -624,6 +746,7 @@
+@@ -624,6 +747,7 @@
  
        if (!m_pRenderer->Flush(saveBuffers))
        {
@@ -4507,7 +4508,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
          m_queued.clear();
          m_discard.clear();
          m_free.clear();
-@@ -691,6 +814,13 @@
+@@ -691,6 +815,13 @@
      delete m_pRenderer;
      m_pRenderer = NULL;
    }
@@ -4521,7 +4522,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  }
  
  void CRenderManager::ServiceVideoCaptures()
-@@ -801,6 +931,14 @@
+@@ -801,6 +932,14 @@
    if (!gui && m_pRenderer->IsGuiLayer())
      return;
  
@@ -4536,7 +4537,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    bool presented = false;
    if (!gui || m_pRenderer->IsGuiLayer())
    {
-@@ -822,7 +960,15 @@
+@@ -822,7 +961,15 @@
  
    // the just-presented region is video-only: OSD, GUI and subtitles come later
    if (presented)
@@ -4552,7 +4553,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    if (presented && !gui)
    {
-@@ -1007,6 +1153,15 @@
+@@ -1007,6 +1154,15 @@
                                                                                       isHDREnabled));
  }
  
@@ -4568,7 +4569,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  void CRenderManager::UpdateResolution()
  {
    if (m_bTriggerUpdateResolution)
-@@ -1021,7 +1176,12 @@
+@@ -1021,7 +1177,12 @@
  #ifdef HAVE_DVBRIDGE
          if (m_nativeDVRate)
            if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
@@ -4581,7 +4582,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  #endif
          UpdateLatencyTweak();
          if (m_pRenderer)
-@@ -1139,6 +1299,7 @@
+@@ -1139,6 +1300,7 @@
  
  
    SPresent& m = m_Queue[index];
@@ -4589,7 +4590,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    m.presentfield = displayField;
    m.presentmethod = presentmethod;
    m.pts = picture.pts;
-@@ -1242,6 +1403,11 @@
+@@ -1242,6 +1404,11 @@
    XbmcThreads::EndTime<> endtime{timeout};
    while(m_free.empty())
    {
@@ -4601,7 +4602,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      m_presentevent.wait(lock, std::min(50ms, timeout));
      if (endtime.IsTimePast() || bStop)
      {
-@@ -1306,11 +1472,13 @@
+@@ -1306,11 +1473,13 @@
        m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
  
    bool cb1Async = false;
@@ -4615,7 +4616,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
        completionAge = window->CB1PresentationAge();
    }
-@@ -1318,6 +1486,11 @@
+@@ -1318,6 +1487,11 @@
  
    const bool physicalPhase = cb1Async && m_clockSync.m_enabled && !isPaused &&
        m_dvdClock.GetClockSpeed() == 1.0;
@@ -4627,7 +4628,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    if (m_clockSync.m_cb1Phase != physicalPhase)
    {
      m_clockSync.m_error = 0;
-@@ -1353,12 +1526,27 @@
+@@ -1353,12 +1527,27 @@
        }
      }
      if (!isPaused)
@@ -4656,7 +4657,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    CLog::LogFC(LOGDEBUG, LOGAVTIMING,
                "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
-@@ -1366,11 +1554,6 @@
+@@ -1366,11 +1555,6 @@
                frameOnScreen, renderPts, nextFramePts, (renderPts - nextFramePts),
                renderPts >= nextFramePts, m_forceNext);
  
