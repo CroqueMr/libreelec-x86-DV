@@ -82,6 +82,39 @@ static void transaction_capability(struct reference_gpu *g)
     av_free(m);pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&final);
     puts("PASS unavailable FP32 LINEAR LUT rejects Expert transaction, preserves commit/borrowed textures and recovers");
 }
+static void fragment_quad_reuse(struct reference_gpu *g)
+{
+    GLint stages=0,features=0;
+    if(!g->gl->gpu->glsl.subgroup_size || !pl_opengl_has_ext(g->gl,"GL_KHR_shader_subgroup"))return;
+    glGetIntegerv(0x9533,&stages);glGetIntegerv(0x9534,&features);
+    if(!(stages&GL_FRAGMENT_SHADER_BIT) || (features&0x81)!=0x81)return;
+    pl_gpu gpu=g->gl->gpu;
+    float pixels[64];for(int i=0;i<64;i++)pixels[i]=i%4==3?1:(float)((i*17)%61)/61;
+    pl_tex input=reference_texture(gpu,4,4,pixels);
+    pl_dispatch dp=pl_dispatch_create(g->log,gpu);assert(dp);
+    for(int axis=0;axis<2;axis++)for(int components=3;components<=4;components++){
+        pl_tex target=reference_texture(gpu,axis?4:8,axis?8:4,NULL);
+        float baseline[128],actual[128];pl_shader_obj lut=NULL;
+        struct pl_sample_src source={.tex=input,.rect={0,0,4,4},
+            .new_w=target->params.w,.new_h=target->params.h,.components=components};
+        for(int shared=0;shared<2;shared++){
+            struct pl_sample_filter_params params={.filter=pl_filter_lanczos,.lut=&lut,
+                .cb1_quad_scaler=shared};
+            pl_shader sh=pl_dispatch_begin(dp);
+            assert(pl_shader_sample_ortho2(sh,&source,&params));
+            const struct pl_shader_res *res=pl_shader_finalize(sh);assert(res);
+            assert((strstr(res->glsl,"subgroupQuadSwap")!=NULL)==shared &&
+                "Opaque RGB must retain the available exact shared-tap scaler");
+            pl_dispatch_abort(dp,&sh);sh=pl_dispatch_begin(dp);
+            assert(pl_shader_sample_ortho2(sh,&source,&params));
+            assert(pl_dispatch_finish(dp,pl_dispatch_params(.shader=&sh,.target=target)));
+            reference_read(gpu,target,0,0,target->params.w,target->params.h,shared?actual:baseline);
+        }
+        assert(!memcmp(baseline,actual,sizeof(actual)));
+        pl_shader_obj_destroy(&lut);pl_tex_destroy(gpu,&target);
+    }
+    pl_dispatch_destroy(&dp);pl_tex_destroy(gpu,&input);
+}
 static void renderer_toggle(struct reference_gpu *g)
 {
     pl_gpu gpu=g->gl->gpu;float input[64];for(int i=0;i<64;i++)input[i]=i%4==3?1:(float)(i%11)/11;
@@ -118,7 +151,7 @@ int main(void)
         sampler_toggle(&g,&pl_filter_hermite,axis,false);
         sampler_toggle(&g,&pl_filter_hermite,axis,true);
     }
-    renderer_toggle(&g);transaction_capability(&g);
+    fragment_quad_reuse(&g);renderer_toggle(&g);transaction_capability(&g);
     reference_gpu_destroy(&g);
     puts("PASS exact FP32 linear scaler-LUT capability");
 }

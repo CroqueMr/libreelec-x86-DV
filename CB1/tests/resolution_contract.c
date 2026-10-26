@@ -3,7 +3,7 @@
 #include <libplacebo/dispatch.h>
 
 static bool tracing, reconstructed_source_domain;
-static bool quad_disabled;
+static bool scalar_control;
 static unsigned reconstruction_width, reconstruction_height;
 static unsigned final_draws;
 static unsigned rgb_materializations;
@@ -18,7 +18,6 @@ static float final_antiringing;
 static bool trace_render(pl_renderer renderer, const struct pl_frame *image,
     const struct pl_frame *target, const struct pl_render_params *params)
 {
-    assert((!quad_disabled || !params->cb1_quad_scaler) && "Other circuits must not enable Adaptive tap reuse");
     if(tracing){
         if(image->repr.dovi){
             reconstruction_width=lroundf(target->crop.x1-target->crop.x0);
@@ -34,6 +33,7 @@ static bool trace_render(pl_renderer renderer, const struct pl_frame *image,
         }
     }
     struct pl_render_params measured=*params;
+    if(scalar_control)measured.cb1_quad_scaler=false;
     if(tracing && target->planes[0].texture->params.w==3840 &&
        target->planes[0].texture->params.format->type==PL_FMT_UNORM &&
        image->planes[0].texture->params.w!=3840){
@@ -213,7 +213,6 @@ int main(int argc,char **argv)
     const bool flip=getenv("CB1_TEST_FLIP")!=NULL;
     const bool full1080=getenv("CB1_TEST_FULL1080")!=NULL;
     const unsigned w=full1080?1920:64,h=full1080?1080:getenv("CB1_TEST_CROPPED")?26:36;
-    quad_disabled=strcmp(name,"adaptive")!=0;
     struct reference_gpu gpu=reference_gpu_create();
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu.gl->gpu);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
@@ -240,7 +239,9 @@ int main(int argc,char **argv)
     *av_dovi_get_ext(metadata,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=2851,
         .trim_slope=2048,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,
         .trim_saturation_gain=2048,.ms_weight=-1}};
-    const struct dvbridge_geometry geometry={w,h,0,h==26?300:0,3840,h==26?1560:2160};
+    const struct dvbridge_geometry geometry=getenv("CB1_TEST_PLACED")?
+        (struct dvbridge_geometry){w,h,100,100,w,h}:
+        (struct dvbridge_geometry){w,h,0,h==26?300:0,3840,h==26?1560:2160};
     struct dvbridge_identity id={1,1,1};
     struct dvbridge_policy policy=reference_policy();
     policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;
@@ -248,6 +249,14 @@ int main(int argc,char **argv)
         .format=pl_find_named_fmt(r->gpu,"rgba8"),.renderable=true));assert(target);
     unsigned fbo;pl_opengl_unwrap(r->gpu,target,NULL,NULL,&fbo);
     native_width=w;native_height=h;
+    struct dvbridge_native_overlay gui={0};
+    if(getenv("CB1_TEST_OVERLAY_PQ")){
+        gui.texture=reference_texture(r->gpu,3840,2160,NULL);
+        pl_tex_clear(r->gpu,gui.texture,(float[4]){0,0,0,0});
+        gui.degamma=reference_texture(r->gpu,1,1,(float[4]){0,0,0,1});
+        gui.pq=reference_texture(r->gpu,1,1,(float[4]){0,0,0,1});gui.input_pq=true;
+        memcpy(gui.rect,(float[4]){0,0,3840,2160},sizeof(gui.rect));
+    }
     tracing=true;
     if(!strcmp(name,"hdr10")){
         struct dvbridge_hdr10_session session;
@@ -331,14 +340,43 @@ int main(int argc,char **argv)
         assert(dvbridge_dv_source_transport(metadata));
         dvbridge_renderer_set_optimized_dv(r,true);
         dvbridge_renderer_set_processing_optimizations(r,true);
-        assert(dvbridge_render_packed(r,&source,metadata,bytes,0,NAN,geometry,target,false));
-        assert(reconstructed_source_domain && "Scaling must not add a movie colour conversion");
-        assert(!r->processing.pq_texture[0] && !r->processing.pq_texture[1] &&
+        assert(dvbridge_render_packed_overlay(r,&source,metadata,bytes,0,NAN,geometry,target,flip,
+            gui.texture?&gui:NULL));
+        fprintf(stderr,"Standard processing target %ux%u, expected %ux%u\n",
+            reconstruction_width,reconstruction_height,w,h);
+        assert(reconstruction_width==w && reconstruction_height==h &&
+            "Standard must reconstruct on the decoded source grid before fitting output");
+        unsigned margins[4];assert(dvbridge_active_area(dvbridge_render_candidate(r),margins));
+        assert(margins[0]==geometry.x && margins[1]==3840-geometry.x-geometry.width &&
+            margins[2]==geometry.y && margins[3]==2160-geometry.y-geometry.height);
+        if(!geometry.x && !geometry.y)
+            assert(scaler_passes==2 && "Prepared source needs only the two Lanczos axes, not another copy");
+        assert(reconstructed_source_domain==!gui.texture &&
+            "Select the film/overlay colour domain before reconstructing the source");
+        assert((gui.texture || (!r->processing.pq_texture[0] && !r->processing.pq_texture[1])) &&
             "Source-domain transport must not allocate unused PQ conversions");
+        const size_t size=3840u*2160u*4;
+        unsigned char *actual=malloc(size),*control=malloc(size);assert(actual && control);
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+        scalar_control=true;
+        assert(dvbridge_render_packed_overlay(r,&source,metadata,bytes,0,NAN,geometry,target,flip,
+            gui.texture?&gui:NULL));
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,control);
+        assert(glGetError()==GL_NO_ERROR && !memcmp(actual,control,size) &&
+            "Shared sampler must preserve the stock scaler's complete transport");
+        scalar_control=false;free(actual);free(control);
+        assert(dvbridge_render_rgb(r,&source,metadata,bytes,0,NAN,geometry));
+        assert(reconstruction_width==w && reconstruction_height==h &&
+            "An RGB consumer must use the same source-grid processing boundary");
+        assert(dvbridge_render_texture(r)->params.w==3840 &&
+            dvbridge_render_texture(r)->params.h==2160);
     }else assert(!"Unknown resolution-contract case");
 cleanup:
     tracing=false;dvbridge_render_dv_policy_cancel(r);glFinish();
     assert(dvbridge_render_dv_policy_poll(r)==DVBRIDGE_DV_IDLE);
+    pl_tex_destroy(r->gpu,&gui.texture);pl_tex_destroy(r->gpu,&gui.degamma);pl_tex_destroy(r->gpu,&gui.pq);
     pl_tex_destroy(r->gpu,&target);pl_tex_destroy(r->gpu,&input);av_free(metadata);
     dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));reference_gpu_destroy(&gpu);
     puts("PASS source-resolution processing contract");

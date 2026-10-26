@@ -1,6 +1,6 @@
 # Preview F: native-resolution rendering
 
-Status: proposed design, awaiting approval. No rendering cleanup implemented yet.
+Status: approved 2026-10-26. Implementation in progress on the isolated Preview F branch.
 
 ## Intent
 
@@ -135,5 +135,5 @@ Exact internal helper boundaries, pass fusion and scratch ownership may be selec
 
 ## Approval boundary
 
-This document records the selected architecture and cleanup sequence. Product deletion/refactoring, hardware use and compilation have not started under this design. After user approval, produce the executable implementation plan with Superpowers, then execute the agreed circuit-by-circuit workflow without repeated approval requests for equivalent local changes. No public push, PR or release.
+This document records the approved architecture and cleanup sequence. Execute the implementation plan circuit by circuit without repeated approval requests for equivalent local changes. A new image-quality approximation requires a separate decision. No public push, PR or release.
 

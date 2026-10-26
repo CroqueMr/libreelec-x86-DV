@@ -468,7 +468,7 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
 +        (ratio[pass] == 2.0f || ratio[pass] == 4.0f);
 +    ident_t exact_lut = 0;
 +    bool quad_reuse = params->cb1_quad_scaler && centered && !use_linear &&
-+        N == 6 && comps == 0xF && sh_glsl(sh).subgroup_size &&
++        N == 6 && (comps == 0xF || comps == 0x7) && sh_glsl(sh).subgroup_size &&
 +        ratio[pass] == 2.0f && ratio[1-pass] == 1.0f &&
 +        src->rect.x0 == 0 && src->rect.y0 == 0 &&
 +        src->rect.x1 == src->tex->params.w && src->rect.y1 == src->tex->params.h;
@@ -538,8 +538,8 @@ diff --git a/src/shaders/sampling.c b/src/shaders/sampling.c
              off += ws[n % 4u + 1u];                                             \
 -        c = textureLod($src_tex, base + pt * off, 0.0).${swizzle: comps};       \
 +        @if (quad_reuse) {                                                     \
-+            c = (n & 1u) == 0u ? (n == 0u ? f0 : n == 2u ? f2 : f4) :        \
-+                n == 1u ? (odd ? p2 : p0) : n == 3u ? (odd ? p4 : p2) : last; \
++            c = ((n & 1u) == 0u ? (n == 0u ? f0 : n == 2u ? f2 : f4) :       \
++                n == 1u ? (odd ? p2 : p0) : n == 3u ? (odd ? p4 : p2) : last).${swizzle: comps}; \
 +        @} else {                                                              \
 +            c = textureLod($src_tex, base + pt * off, 0.0).${swizzle: comps};   \
 +        @}                                                                     \

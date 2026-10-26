@@ -36,7 +36,7 @@
   "src/dvbridge_placebo.h": "a0118cb14785daf2c05e47b9f56c92bbbf244759d0c3c36829d1417d78737e79",
   "src/dvbridge_policy.c": "30b06fd5065c9ea13759377444bb4be3964a1b85befaf5cdd7843f3279cd630a",
   "src/dvbridge_policy.h": "7647f9b35386c516057c1ad1cabccb6b3f5b131e321667eae830b98ed81af0ee",
-  "src/dvbridge_render.c": "46738242dad5d1cbbba705bac917e0157c5283edad5fcc8ade2baa34d8fd7fc0",
+  "src/dvbridge_render.c": "406f2d09812226926005bea2f798cf8c924c4bbf565248fe96cd899933034e20",
   "src/dvbridge_fel_seek.h": "6e5d35603554cae3e64dec654dbe270f0032bfc7b3e6bb3b620ec3d23d637def",
   "src/dvbridge_render.h": "622ed4d28ce7a9005e3aa6fa7b6cf58695e05d5a12d58468f4ff8c04419d9f79",
   "src/dvbridge_gl_frame.c": "e6076f3f5162ff58314a9baa7f73bfec77c69546eb22acf6614c30bd24461df6",

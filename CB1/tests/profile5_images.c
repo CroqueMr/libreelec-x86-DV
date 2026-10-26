@@ -103,8 +103,11 @@ int main(void)
     const size_t n=(size_t)3840*2160*4;
     uint8_t *a=malloc(n),*b=malloc(n);assert(a && b);
     const int sizes[][2]={{3840,2160},{1920,1080},{2560,1440},{1920,804},
-        {1920,1080},{3840,2160},{3840,2160},{3840,2160},{3840,2160}};
+        {1920,1080},{3840,2160},{3840,2160},{3840,2160},{3840,2160},
+        {1920,1080},{2560,1440}};
     for(unsigned test=0;test<sizeof(sizes)/sizeof(*sizes);test++){
+        const char *selected=getenv("CB1_TEST_P5_CASE");
+        if(selected && test!=(unsigned)atoi(selected))continue;
         int w=sizes[test][0],hh=sizes[test][1];
         for(int component=0;component<3;component++){
             AVDOVIReshapingCurve *curve=&av_dovi_get_mapping(m)->curves[component];
@@ -123,7 +126,7 @@ int main(void)
                     .sampleable=true,.renderable=true,.blit_dst=true,.host_writable=true))};
             assert(source.planes[p].texture);
             pl_tex_clear(g.gl->gpu,source.planes[p].texture,(float[4]){32768.f/65535,32768.f/65535,0,1});
-            if(test==7 && !p){
+            if((test==7 || test>=9) && !p){
                 uint16_t *pixels=malloc((size_t)w*hh*sizeof(*pixels));assert(pixels);
                 for(int y=0;y<hh;y++)for(int x=0;x<w;x++)pixels[(size_t)y*w+x]=((x*17+y*29)%1024)<<6;
                 assert(pl_tex_upload(g.gl->gpu,pl_tex_transfer_params(.tex=source.planes[p].texture,.ptr=pixels)));
@@ -174,6 +177,7 @@ int main(void)
                 for(unsigned yy=0;yy<2160;yy++)for(unsigned x=0;x<3840;x++){
                     unsigned y=flip?2159-yy:yy,index=y*3840+x;
                     bool border=x<margins[0] || x>=3840-margins[1] || y<margins[2] || y>=2160-margins[3];
+                    if(test>=9 && !border)continue;
                     unsigned ii=border?0:test==5?1024:test==7?4*((x*17+y*29)%1024):2048;
                     unsigned cc=border?2048:test==6?((x&1)?3072:1024):2048;
                     if(test==8 && x>=100 && x<104 && y>=100 && y<102)ii=1024;
@@ -188,6 +192,15 @@ int main(void)
                 }
                 if(!mode && !flip)memcpy(a,b,n);
                 if(mode && !flip)assert(!memcmp(a,b,n));
+                if(test>=9){
+                    for(unsigned row=0;row<2160;row++)
+                        assert(!memcmp(b+(size_t)row*3840*4,
+                            a+(size_t)(flip?2159-row:row)*3840*4,3840*4));
+                    uint64_t hash=14695981039346656037ULL;
+                    for(size_t i=0;i<n;i++)hash=(hash^b[i])*1099511628211ULL;
+                    fprintf(stderr,"P5_FRAME case%u mode%d flip%d hash=%016llx\n",
+                        test,mode,flip,(unsigned long long)hash);
+                }
                 glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&fbo);
                 assert(dvbridge_render_commit(r));
             }

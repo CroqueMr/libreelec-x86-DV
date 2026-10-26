@@ -990,16 +990,19 @@ static bool clamp_picture(pl_shader shader,float maximum)
         .description="Retain the HDR envelope after picture enlargement"});
 }
 
+static struct pl_hook_res reuse_source_picture(struct active_mask *mask,const struct pl_hook_params *p)
+{
+    pl_shader sh=p->sh;
+    pl_dispatch_abort(p->dispatch,&sh);
+    return (struct pl_hook_res){.output=PL_HOOK_SIG_TEX,.tex=mask->reference_source,
+        .repr=p->repr,.color=p->color,.components=p->components,.rect=p->rect};
+}
+
 /* Public libplacebo hook/resource adapter for the replacement fused kernels. */
 static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_params *p)
 {
     struct active_mask *mask = priv;
-    if(p->stage==PL_HOOK_RGB){
-        pl_shader sh=p->sh;
-        pl_dispatch_abort(p->dispatch,&sh);
-        return (struct pl_hook_res){.output=PL_HOOK_SIG_TEX,.tex=mask->reference_source,
-            .repr=p->repr,.color=p->color,.components=p->components,.rect=p->rect};
-    }
+    if(p->stage==PL_HOOK_RGB)return reuse_source_picture(mask,p);
     if (p->stage == PL_HOOK_NATIVE)
         return skip_inactive_area(mask, p);
     mask->called = true;
@@ -1130,6 +1133,7 @@ static struct pl_hook_res pack_placed_reference(void *priv,const struct pl_hook_
 static struct pl_hook_res mask_active_area(void *priv, const struct pl_hook_params *p)
 {
     struct active_mask *mask = priv;
+    if(p->stage==PL_HOOK_RGB)return reuse_source_picture(mask,p);
     if (p->stage == PL_HOOK_NATIVE)
         return skip_inactive_area(mask,p);
     mask->called = true;
@@ -1566,48 +1570,6 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         if(!packed || !cb1_master_reference_transport(metadata,bytes) ||
            (margins[0]&1) || (margins[1]&1))return false;
         source_transport=true;
-        if(!direct_reference){
-            /* Reconstruct on the original sampling grid before fitting the carrier. */
-            struct pl_frame native=target;
-            native.planes[0].flipped=false;
-            if(reuse_p5){
-                pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
-                    PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
-                if(!fmt)return false;
-                if(!pl_tex_recreate(r->gpu,&r->p5_native,pl_tex_params(
-                        .w=geometry.source_width,.h=geometry.source_height,
-                        .format=fmt,.sampleable=true,.renderable=true,.blit_src=true)))return false;
-                native.planes[0].texture=mask.reference_source=r->p5_native;
-            }else{
-                if(!ensure_rgb(r))return false;
-                native.planes[0].texture=r->rgb;
-            }
-            native.crop=(struct pl_rect2df){0,0,geometry.source_width,geometry.source_height};
-            struct pl_render_params reconstruction=params;
-            reconstruction.cb1_dovi_transport=true;reconstruction.disable_linear_scaling=true;
-            reconstruction.sigmoid_params=NULL;
-            if(!pl_render_image(r->renderer,&image,&native,&reconstruction))return false;
-            if(reuse_p5)r->p5_native_pending=true;
-            image=native;image.repr=pl_color_repr_rgb;
-            if(mask.profile5_transport){
-                image.repr.alpha=PL_ALPHA_NONE;
-                params.cb1_nearest_identity=true;
-            }
-            double sx=(double)geometry.source_width/geometry.width,sy=(double)geometry.source_height/geometry.height;
-            image.crop=(struct pl_rect2df){-geometry.x*sx,-geometry.y*sy,
-                (3840-geometry.x)*sx,(2160-geometry.y)*sy};
-            target.crop=(struct pl_rect2df){0,0,3840,2160};
-            params.cb1_dovi_reference=NULL;
-        }
-    }
-    if(packed_picture && !master &&
-       (geometry.x || geometry.y || geometry.width!=3840 || geometry.height!=2160)){
-        /* Fit the picture, then pack the complete carrier, including its borders. */
-        double sx=(double)geometry.source_width/geometry.width;
-        double sy=(double)geometry.source_height/geometry.height;
-        image.crop=(struct pl_rect2df){-geometry.x*sx,-geometry.y*sy,
-            (3840-geometry.x)*sx,(2160-geometry.y)*sy};
-        target.crop=(struct pl_rect2df){0,0,3840,2160};
     }
     mask.source_domain=source_transport || canonical_transport;
     if(overlay && mask.source_domain) {
@@ -1632,6 +1594,71 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
             source_transport=false;
             mask.source_domain=canonical_transport;
         }
+    }
+    bool native_standard=r->optimized_dv && !master && !session && !policy && !enhanced_reconstruction && !native_stage &&
+        !source->num_overlays && (!el || !el->num_overlays) &&
+        (geometry.source_width!=3840 || geometry.source_height!=2160 ||
+         geometry.width!=geometry.source_width || geometry.height!=geometry.source_height);
+    if((master && !direct_reference) || native_standard){
+        /* Reconstruct on the original sampling grid before fitting the carrier. */
+        struct pl_frame native=target;
+        native.planes[0].flipped=false;
+        if(native_standard){
+            pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+                PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
+            if(!fmt || !pl_tex_recreate(r->gpu,&r->native_picture,pl_tex_params(
+                    .w=geometry.source_width,.h=geometry.source_height,.format=fmt,
+                    .sampleable=true,.renderable=true)))return false;
+            native.planes[0].texture=r->native_picture;
+            if(!geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160)
+                mask.reference_source=r->native_picture;
+        }else if(reuse_p5){
+            pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+                PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);
+            if(!fmt)return false;
+            if(!pl_tex_recreate(r->gpu,&r->p5_native,pl_tex_params(
+                    .w=geometry.source_width,.h=geometry.source_height,
+                    .format=fmt,.sampleable=true,.renderable=true,.blit_src=true)))return false;
+            native.planes[0].texture=mask.reference_source=r->p5_native;
+        }else{
+            if(!ensure_rgb(r))return false;
+            native.planes[0].texture=r->rgb;
+        }
+        native.crop=(struct pl_rect2df){0,0,geometry.source_width,geometry.source_height};
+        struct pl_render_params reconstruction=params;
+        reconstruction.cb1_dovi_transport=source_transport || canonical_transport;
+        reconstruction.disable_linear_scaling=reconstruction.cb1_dovi_transport;
+        reconstruction.sigmoid_params=NULL;
+        if(native_standard){
+            if(reconstruction.cb1_dovi_transport)processing&=~CB1_PROCESSING_COLOUR;
+            if(processing && cb1_processing_prepare(&r->processing,r->gpu,
+                    source,metadata,bytes,paired,processing&~r->processing_failed_groups))
+                reconstruction.cb1_processing=&r->processing.view;
+            processing=0;
+        }
+        if(!pl_render_image(r->renderer,&image,&native,&reconstruction))return false;
+        if(reuse_p5)r->p5_native_pending=true;
+        image=native;image.repr=pl_color_repr_rgb;
+        if(mask.profile5_transport){
+            image.repr.alpha=PL_ALPHA_NONE;
+            params.cb1_nearest_identity=true;
+        }else if(native_standard)image.repr.alpha=PL_ALPHA_NONE;
+        params.cb1_quad_scaler=(native_standard || p5_standard) && r->fragment_quad &&
+            r->gpu->glsl.subgroup_size;
+        double sx=(double)geometry.source_width/geometry.width,sy=(double)geometry.source_height/geometry.height;
+        image.crop=(struct pl_rect2df){-geometry.x*sx,-geometry.y*sy,
+            (3840-geometry.x)*sx,(2160-geometry.y)*sy};
+        target.crop=(struct pl_rect2df){0,0,3840,2160};
+        params.cb1_dovi_reference=NULL;
+    }
+    if(packed_picture && !master && !native_standard &&
+       (geometry.x || geometry.y || geometry.width!=3840 || geometry.height!=2160)){
+        /* Fit the picture, then pack the complete carrier, including its borders. */
+        double sx=(double)geometry.source_width/geometry.width;
+        double sy=(double)geometry.source_height/geometry.height;
+        image.crop=(struct pl_rect2df){-geometry.x*sx,-geometry.y*sy,
+            (3840-geometry.x)*sx,(2160-geometry.y)*sy};
+        target.crop=(struct pl_rect2df){0,0,3840,2160};
     }
     params.cb1_dovi_transport=mask.source_domain;
     /* Source-domain transport reshapes without PQ decoding or encoding. */

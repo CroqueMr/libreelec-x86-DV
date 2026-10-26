@@ -50,6 +50,11 @@ foreach(mode standard hdr10 adaptive ai)
   set_tests_properties(resolution_${mode} resolution_${mode}_cropped resolution_${mode}_noquad
     PROPERTIES SKIP_RETURN_CODE 77)
 endforeach()
+foreach(placement PLACED FULL1080 FLIP OVERLAY_PQ)
+  add_test(NAME resolution_standard_${placement} COMMAND "${CMAKE_COMMAND}" -E env
+    CB1_TEST_${placement}=1 "$<TARGET_FILE:resolution_contract>" --case standard)
+  set_tests_properties(resolution_standard_${placement} PROPERTIES SKIP_RETURN_CODE 77)
+endforeach()
 foreach(mode adaptive ai)
   add_test(NAME resolution_${mode}_ceiling COMMAND "${CMAKE_COMMAND}" -E env
     CB1_TEST_CEILING=1 "$<TARGET_FILE:resolution_contract>" --case ${mode})
