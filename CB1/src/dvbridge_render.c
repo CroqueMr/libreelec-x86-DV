@@ -144,6 +144,7 @@ struct dvbridge_renderer {
     struct dvbridge_analysis_storage analysis_storage;
     bool reuse_authored_storage;
     bool authored_p5_analytic;
+    bool authored_fel_lookup;
     bool master_ipt_compact;
 #ifdef CB1_TEST_LEGACY_ANALYSIS
     GLuint dv_analysis_program;
@@ -1175,6 +1176,8 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
         r->authored_p5_analytic=intel;
         /* The existing encoder saves ALU work on radeonsi, not on Intel. */
         r->expert_warp_lookup=renderer && strstr(renderer,"radeonsi");
+        /* Authored FEL expansion reuses the measured radeonsi lookup recipe. */
+        r->authored_fel_lookup=renderer && strstr(renderer,"radeonsi");
         /* Scalar tables retain exact samples; use them only on radeonsi. */
         r->master_ipt_compact=renderer && strstr(renderer,"radeonsi");
         // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
@@ -3153,7 +3156,9 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     if(packed && !pixels && !r->fragment_quad)return DVBRIDGE_DV_UNSUPPORTED;
     bool fel=color.dovi.nlq_active && source->enhancement_layer && pts==el_pts;
     bool fast_pq=pixels && r->enhanced_linear && r->fast_chroma &&
-        (fel || (r->authored_p5_analytic && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
+        ((fel && !(r->authored_fel_lookup && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
+                   geometry.source_width==3840 && geometry.source_height==2160)) ||
+         (r->authored_p5_analytic && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
                  geometry.source_width==3840 && geometry.source_height==2160 &&
                  dvbridge_dv_profile5_transport(metadata)));
     if(!(pixels?dve_allocate(r,reconstruction_width,reconstruction_height,false,fast_pq):dv_allocate_transport(r)))return DVBRIDGE_DV_UNSUPPORTED;

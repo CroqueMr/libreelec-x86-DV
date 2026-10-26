@@ -93,6 +93,7 @@ foreach(name adaptive_variants enhanced_metadata enhanced_dv_lifecycle enhanced_
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
 add_executable(enhanced_dv_records enhanced_dv_records.c)
+add_test(NAME fel_adaptive_transfer COMMAND p5_adaptive_images --fel)
 add_test(NAME scaled_adaptive_domain COMMAND scaled_adaptive domain)
 add_test(NAME scaled_adaptive_fast COMMAND "${CMAKE_COMMAND}" -E env
   CB1_TEST_FAST=1 "$<TARGET_FILE:scaled_adaptive>")

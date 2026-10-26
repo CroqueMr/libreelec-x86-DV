@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Paired P5 Adaptive transfer: pixels, black and complete output metadata. */
+/* Paired Adaptive transfer: pixels, black and complete output metadata. */
 #include "reference_test.h"
 #include "../src/dvbridge_render.c"
 #include <time.h>
@@ -12,25 +12,44 @@ static enum dvbridge_dv_policy_status finish(struct dvbridge_renderer*r)
     }
     assert(!"GPU timeout");return DVBRIDGE_DV_FAILED;
 }
-int main(void)
+int main(int argc,char **argv)
 {
+    const bool fel=argc==2;
+    assert(argc==1 || (argc==2 && !strcmp(argv[1],"--fel")));
     struct reference_gpu g=reference_gpu_create();size_t bytes;
     AVDOVIMetadata*m=task3_fixture(&bytes);
     AVDOVIRpuDataHeader*h=av_dovi_get_header(m);
-    h->rpu_type=2;h->rpu_format=18;h->vdr_rpu_profile=0;h->bl_video_full_range_flag=1;
-    h->vdr_bit_depth=12;h->coef_log2_denom=23;
-    AVDOVIColorMetadata*c=av_dovi_get_color(m);c->signal_color_space=2;
-    c->signal_bit_depth=12;c->signal_full_range_flag=1;c->source_max_pq=3079;
-    const int ycc[9]={8192,799,1681,8192,-933,1091,8192,267,-5545};
-    for(unsigned i=0;i<9;i++){
-        c->ycc_to_rgb_matrix[i]=(AVRational){ycc[i],8192};
-        c->rgb_to_lms_matrix[i]=(AVRational){i%4==0?17081:-349,16384};
+    if(!fel){
+        h->rpu_type=2;h->rpu_format=18;h->vdr_rpu_profile=0;h->bl_video_full_range_flag=1;
+        h->vdr_bit_depth=12;h->coef_log2_denom=23;
+        AVDOVIColorMetadata*c=av_dovi_get_color(m);c->signal_color_space=2;
+        c->signal_bit_depth=12;c->signal_full_range_flag=1;c->source_max_pq=3079;
+        const int ycc[9]={8192,799,1681,8192,-933,1091,8192,267,-5545};
+        for(unsigned i=0;i<9;i++){
+            c->ycc_to_rgb_matrix[i]=(AVRational){ycc[i],8192};
+            c->rgb_to_lms_matrix[i]=(AVRational){i%4==0?17081:-349,16384};
+        }
+        for(unsigned i=0;i<3;i++){
+            c->ycc_to_rgb_offset[i]=(AVRational){i?1:0,i?2:1};
+            av_dovi_get_mapping(m)->curves[i].poly_coef[0][1]=1<<23;
+        }
+        assert(dvbridge_dv_profile5_transport(m));
+    }else{
+        h->disable_residual_flag=0;h->vdr_bit_depth=12;h->coef_log2_denom=23;
+        AVDOVIDataMapping*mapping=av_dovi_get_mapping(m);
+        mapping->nlq_method_idc=AV_DOVI_NLQ_LINEAR_DZ;
+        for(unsigned j=0;j<3;j++){
+            mapping->curves[j].poly_coef[0][1]=1<<23;
+            mapping->nlq[j]=(AVDOVINLQParams){.nlq_offset=512,.vdr_in_max=131072,
+                .linear_deadzone_slope=8192,.linear_deadzone_threshold=4096};
+        }
+        AVDOVIColorMetadata*c=av_dovi_get_color(m);c->source_max_pq=3079;c->signal_bit_depth=12;
+        for(unsigned j=0;j<9;j++){
+            c->ycc_to_rgb_matrix[j]=(AVRational){dvbridge_output_ycc[j],8192};
+            c->rgb_to_lms_matrix[j]=(AVRational){dvbridge_output_lms[j],16384};
+        }
+        for(unsigned j=0;j<3;j++)c->ycc_to_rgb_offset[j]=(AVRational){1,j?2:16};
     }
-    for(unsigned i=0;i<3;i++){
-        c->ycc_to_rgb_offset[i]=(AVRational){i?1:0,i?2:1};
-        av_dovi_get_mapping(m)->curves[i].poly_coef[0][1]=1<<23;
-    }
-    assert(dvbridge_dv_profile5_transport(m));
     m->num_ext_blocks=3;
     *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=3079,.avg_pq=1200}};
     *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=2851,
@@ -52,6 +71,16 @@ int main(void)
                 .host_writable=true,.initial_data=data))};
         free(data);assert(source.planes[p].texture);
     }
+    struct pl_frame enhancement=source;
+    if(fel){
+        source.enhancement_layer=&enhancement;
+        for(unsigned p=0;p<2;p++){
+            struct pl_tex_params params=source.planes[p].texture->params;
+            params.initial_data=NULL;params.blit_dst=true;
+            enhancement.planes[p].texture=pl_tex_create(g.gl->gpu,&params);assert(enhancement.planes[p].texture);
+            pl_tex_clear(g.gl->gpu,enhancement.planes[p].texture,(float[4]){32768.f/65535,32768.f/65535,0,1});
+        }
+    }
     pl_fmt f=pl_find_named_fmt(g.gl->gpu,"rgba8");
     pl_tex target=pl_tex_create(g.gl->gpu,pl_tex_params(.w=3840,.h=2160,.format=f,.renderable=true));assert(target);
     GLuint fbo;pl_opengl_unwrap(g.gl->gpu,target,NULL,NULL,&fbo);
@@ -63,9 +92,11 @@ int main(void)
         for(unsigned trial=0;trial<2;trial++){
             struct dvbridge_retirement_owner*owner=dvbridge_retirement_owner_create(g.gl->gpu);assert(owner);
             struct dvbridge_renderer*r=dvbridge_renderer_create_with_owner(owner);assert(r);
-            r->authored_p5_analytic=trial;dvbridge_renderer_set_fast_chroma(r,true);
+            r->authored_p5_analytic=trial;r->authored_fel_lookup=!trial;
+            dvbridge_renderer_set_fast_chroma(r,true);
             struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
                 .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
+            if(fel)policy.tv.peak_nits=5000;
             struct dvbridge_identity id={77,1,1};
             assert(dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,&source,m,bytes,0,0,
                 (struct dvbridge_geometry){3840,2160,0,0,3840,2160},target,false,NULL)==DVBRIDGE_DV_PENDING);
@@ -90,9 +121,9 @@ int main(void)
                     my=fmax(my,dy);mc=fmax(mc,dc);sy+=dy;sc+=dc;changed+=dy||dc;
                     if(ay==256){black=fmax(black,dy);black_samples++;}
                 }
-                printf("P5 analytic colour%u maxY=%u maxC=%u meanY=%.9g meanC=%.9g black=%u black_samples=%zu changed=%zu packet_pixels_excluded=%zu metadata=exact\n",
-                    colour,my,mc,sy/(n/4-first),sc/(n/4-first),black,black_samples,changed,first);
-                assert(my<=1&&mc<=2&&!black&&black_samples);
+                printf("%s analytic colour%u maxY=%u maxC=%u meanY=%.9g meanC=%.9g black=%u black_samples=%zu changed=%zu packet_pixels_excluded=%zu metadata=exact\n",
+                    fel?"FEL":"P5",colour,my,mc,sy/(n/4-first),sc/(n/4-first),black,black_samples,changed,first);
+                assert(my<=1&&mc<=2&&!black&&black_samples&&black_samples<(n/4-first)/2);
             }
             dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
             dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
@@ -101,5 +132,6 @@ int main(void)
     }
     free(a);free(b);pl_tex_destroy(g.gl->gpu,&target);
     for(unsigned p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&source.planes[p].texture);
-    av_free(m);reference_gpu_destroy(&g);puts("PASS P5 Adaptive analytic transfer");
+    if(fel)for(unsigned p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&enhancement.planes[p].texture);
+    av_free(m);reference_gpu_destroy(&g);puts("PASS Adaptive paired transfer");
 }
