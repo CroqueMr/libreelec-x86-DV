@@ -22,6 +22,12 @@ static bool counted_active_rows(pl_renderer renderer,const struct pl_frame *sour
 #undef pl_render_image
 #undef pl_render_image_cb1_active_rows
 
+static void table_layout(struct dvbridge_renderer *r,bool compact)
+{
+    r->master_ipt_compact=compact;
+    for(int i=0;i<2;i++)pl_tex_destroy(r->gpu,&r->ipt_pq[i]);
+}
+
 /* Independent long-double oracle, with Gauss-Jordan inversion of wire matrices. */
 static void solve(const int16_t matrix[9],long double scale,long double v[3])
 {
@@ -161,7 +167,7 @@ int main(int argc,char **argv)
     pl_tex target=pl_tex_create(g.gl->gpu,pl_tex_params(.w=3840,.h=2160,.format=fmt,.renderable=true,.sampleable=true));assert(target);
     pl_dispatch dp=pl_dispatch_create(NULL,g.gl->gpu);pl_shader sh=pl_dispatch_begin(dp);
     uint32_t empty[128]={0};
-    pl_tex pq[2]={0};assert(cb1_master_ipt_tables(g.gl->gpu,pq));
+    pl_tex pq[2]={0};assert(cb1_master_ipt_tables(g.gl->gpu,pq,false));
     for(int encode=0;encode<2;encode++) {
         const int indices[]={24576,255,65536};
         for(size_t sample=0;sample<sizeof(indices)/sizeof(indices[0]);sample++) {
@@ -216,6 +222,9 @@ int main(int argc,char **argv)
             dvbridge_render_master_reference(r,&frame,m,bytes,1,NAN,geo,target,false,NULL);
         assert(status==CB1_MASTER_READY);
         if(pass==1 && r->fragment_quad) {
+            const char *renderer=(const char *)glGetString(GL_RENDERER);
+            assert(r->ipt_pq[0]->params.format->num_components==
+                (renderer && strstr(renderer,"radeonsi")?1:2));
             fprintf(stderr,"full-frame IPT render submissions: %u\n",render_calls);
             assert(render_calls==1);
             unsigned (*paired_rows)(void)=dlsym(RTLD_DEFAULT,"pl_cb1_dovi_reference_paired_rows_abi");
@@ -258,8 +267,9 @@ int main(int argc,char **argv)
         uint8_t *control=malloc(frame_bytes),*fused=malloc(frame_bytes);assert(control&&fused);
         m->num_ext_blocks=2;
         *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=5,.l5={.left_offset=128,.right_offset=120,.top_offset=276,.bottom_offset=277}};
-        for(int flip=0;flip<2;flip++)for(int route=0;route<2;route++) {
-            r->fragment_quad=route?quad:false;
+        for(int flip=0;flip<2;flip++)for(int route=0;route<4;route++) {
+            r->fragment_quad=(route&1)?quad:false;
+            table_layout(r,(route&2)!=0);
             dvbridge_renderer_reset(r);
             assert(dvbridge_render_master_reference_ipt(r,&frame,m,bytes,2,NAN,geo,target,flip,NULL)==CB1_MASTER_READY);
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);
@@ -292,8 +302,8 @@ int main(int argc,char **argv)
                     curve->mmr_coef[0][order][axis]=(axis&1?-1:1)*(25+axis*7+order*13+revision*5);
                 curve->mmr_coef[0][0][component]+=3000;
             }
-            for(int flip=0;flip<2;flip++)for(int route=0;route<2;route++) {
-                r->fragment_quad=route?quad:false;dvbridge_renderer_reset(r);
+            for(int flip=0;flip<2;flip++)for(int route=0;route<4;route++) {
+                r->fragment_quad=(route&1)?quad:false;table_layout(r,(route&2)!=0);dvbridge_renderer_reset(r);
                 assert(dvbridge_render_master_reference_ipt(r,&frame,m,bytes,2,NAN,geo,target,flip,NULL)==CB1_MASTER_READY);
                 glBindFramebuffer(GL_FRAMEBUFFER,fbo);
                 glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,route?fused:control);
@@ -335,9 +345,9 @@ int main(int argc,char **argv)
         frame.enhancement_layer=&enhancement;
         size_t n=(size_t)3840*2160*4;
         uint8_t *control=malloc(n),*fused=malloc(n);assert(control&&fused);
-        for(int phase=0;phase<2;phase++)for(int flip=0;flip<2;flip++)for(int route=0;route<2;route++){
+        for(int phase=0;phase<2;phase++)for(int flip=0;flip<2;flip++)for(int route=0;route<4;route++){
             frame.planes[1].shift_y=enhancement.planes[1].shift_y=phase?-.5f:0;
-            r->fragment_quad=route?quad:false;dvbridge_renderer_reset(r);
+            r->fragment_quad=(route&1)?quad:false;table_layout(r,(route&2)!=0);dvbridge_renderer_reset(r);
             assert(dvbridge_render_master_reference_ipt(r,&frame,m,bytes,2,2,geo,target,flip,NULL)==CB1_MASTER_READY);
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);
             glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,

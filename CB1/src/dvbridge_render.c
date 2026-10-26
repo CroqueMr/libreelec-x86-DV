@@ -144,6 +144,7 @@ struct dvbridge_renderer {
     struct dvbridge_analysis_storage analysis_storage;
     bool reuse_authored_storage;
     bool authored_p5_analytic;
+    bool master_ipt_compact;
 #ifdef CB1_TEST_LEGACY_ANALYSIS
     GLuint dv_analysis_program;
 #endif
@@ -1050,7 +1051,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .desc={.name=i?"ipt_oetf":"ipt_eotf",.type=PL_DESC_SAMPLED_TEX},
             .binding={.object=mask->ipt_pq[i],.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL CB1_MASTER_IPT_GLSL CB1_IPT_CODES_GLSL)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
@@ -1062,6 +1063,7 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             "#define CB1_SOURCE_BLACK .0625\n",
         mask->scaled_quad || mask->ipt_quad ? "#define CB1_SCALED_QUAD 1\n" : "",
         mask->ipt_quad ? "#define CB1_IPT_QUAD 1\n" : "",
+        mask->ipt && mask->ipt_pq[0]->params.format->num_components==1 ? "#define CB1_IPT_COMPACT 1\n" : "",
         mask->ipt ? CB1_MASTER_IPT_GLSL : "",
         mask->ipt ? "#define CB1_SOURCE_NEUTRAL (ipt_offset*(4096.0/4095.0))\n" :
             "#define CB1_SOURCE_NEUTRAL vec3(CB1_SOURCE_BLACK,.5,.5)\n",
@@ -1173,6 +1175,8 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
         r->authored_p5_analytic=intel;
         /* The existing encoder saves ALU work on radeonsi, not on Intel. */
         r->expert_warp_lookup=renderer && strstr(renderer,"radeonsi");
+        /* Scalar tables retain exact samples; use them only on radeonsi. */
+        r->master_ipt_compact=renderer && strstr(renderer,"radeonsi");
         // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
         r->exact_scaler_cache = intel &&
                                 renderer && strstr(renderer, "(ADL-N)");
@@ -2128,7 +2132,7 @@ static enum cb1_master_status render_master_reference(struct dvbridge_renderer *
     ipt_output=ipt_output && !dvbridge_dv_profile5_transport(metadata);
     struct cb1_master_ipt ipt;
     if(ipt_output && !cb1_master_ipt_prepare(&ipt,metadata,bytes))return CB1_MASTER_UNSUPPORTED;
-    if(ipt_output && !cb1_master_ipt_tables(r->gpu,r->ipt_pq))return CB1_MASTER_GPU_UNAVAILABLE;
+    if(ipt_output && !cb1_master_ipt_tables(r->gpu,r->ipt_pq,r->master_ipt_compact))return CB1_MASTER_GPU_UNAVAILABLE;
     return render_packed_overlay(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,false,&raw,false,ipt_output?&ipt:NULL)?
         CB1_MASTER_READY:CB1_MASTER_FAILED;
 }

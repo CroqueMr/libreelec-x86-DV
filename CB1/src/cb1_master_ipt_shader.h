@@ -3,7 +3,13 @@
     "#define CB1_IPT_TRANSPORT 1\n" \
     "float cb1_pq_read(highp sampler2D table,float x){\n" \
     "float f=clamp(x,0.0,1.0)*65536.0; int i=int(f);\n" \
+    "#ifdef CB1_IPT_COMPACT\n" \
+    "int next_i=min(i+1,65536);\n" \
+    "vec2 samples=vec2(texelFetch(table,ivec2(i&255,i>>8),0).r,\n" \
+    "texelFetch(table,ivec2(next_i&255,next_i>>8),0).r);\n" \
+    "#else\n" \
     "vec2 samples=texelFetch(table,ivec2(i&255,i>>8),0).rg;\n" \
+    "#endif\n" \
     "return mix(samples.x,samples.y,f-float(i));}\n" \
     "vec3 cb1_ipt(vec3 ycc){\n" \
     "vec3 q=clamp(ipt_decode*(ycc*(4095.0/4096.0)-ipt_offset),0.0,1.0);\n" \

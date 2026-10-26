@@ -66,17 +66,18 @@ void cb1_master_ipt_convert(const struct cb1_master_ipt *p,const double in[3],do
     }
 }
 
-bool cb1_master_ipt_tables(pl_gpu gpu,pl_tex tables[2])
+bool cb1_master_ipt_tables(pl_gpu gpu,pl_tex tables[2],bool compact)
 {
     if(tables[0] && tables[1])return true;
-    pl_fmt fmt=pl_find_fmt(gpu,PL_FMT_FLOAT,2,32,32,PL_FMT_CAP_SAMPLEABLE);
+    const int components=compact?1:2;
+    pl_fmt fmt=pl_find_fmt(gpu,PL_FMT_FLOAT,components,32,32,PL_FMT_CAP_SAMPLEABLE);
     if(!fmt)return false;
-    float *data=malloc(2*256*257*sizeof(float));if(!data)return false;
+    float *data=malloc(components*256*257*sizeof(float));if(!data)return false;
     pl_tex next[2]={0};bool ok=true;
     for(int encode=0;encode<2 && ok;encode++) {
-        for(int i=0;i<256*257;i++)for(int side=0;side<2;side++) {
+        for(int i=0;i<256*257;i++)for(int side=0;side<components;side++) {
             double x=fmin(i+side,65536)/65536.;
-            data[2*i+side]=pq(encode?x*x*x*x:x,encode);
+            data[components*i+side]=pq(encode?x*x*x*x:x,encode);
         }
         next[encode]=pl_tex_create(gpu,pl_tex_params(.w=256,.h=257,.format=fmt,
             .sampleable=true,.initial_data=data));
