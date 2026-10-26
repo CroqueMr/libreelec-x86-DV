@@ -143,6 +143,7 @@ struct dvbridge_renderer {
     struct dvbridge_dv_slot dv, retired_packed;
     struct dvbridge_analysis_storage analysis_storage;
     bool reuse_authored_storage;
+    bool authored_p5_analytic;
 #ifdef CB1_TEST_LEGACY_ANALYSIS
     GLuint dv_analysis_program;
 #endif
@@ -1165,12 +1166,15 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
     if (gl) {
         const char *vendor = (const char *)glGetString(GL_VENDOR);
         const char *renderer = (const char *)glGetString(GL_RENDERER);
+        const bool intel=vendor && !strcmp(vendor,"Intel");
         /* Retain storage/overlap only on the driver with a measured gain. */
-        r->reuse_authored_storage=vendor && !strcmp(vendor,"Intel");
+        r->reuse_authored_storage=intel;
+        /* Analytic P5 expansion saves work on Intel; radeonsi retains its LUT. */
+        r->authored_p5_analytic=intel;
         /* The existing encoder saves ALU work on radeonsi, not on Intel. */
         r->expert_warp_lookup=renderer && strstr(renderer,"radeonsi");
         // ADL-N RGBA16F conversion/interpolation was verified by GPU readback.
-        r->exact_scaler_cache = vendor && !strcmp(vendor, "Intel") &&
+        r->exact_scaler_cache = intel &&
                                 renderer && strstr(renderer, "(ADL-N)");
     }
     if (gl && pl_opengl_has_ext(gl, "GL_KHR_shader_subgroup")) {
@@ -2805,14 +2809,14 @@ static bool dve_immutable(struct dvbridge_renderer *r,pl_tex *texture,GLuint *na
     }
     return *texture!=NULL;
 }
-static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned height,bool ai_fused,bool fast_fel)
+static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned height,bool ai_fused,bool fast_pq)
 {
     if(r->enhanced_authored){GLint shared;glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE,&shared);if(shared<3584)return false;}
     if(!width || !height || width>3840 || height>2160 || !dve_requirements(r->gpu))return false;
-    r->enhanced_fast_pq=fast_fel;
-    size_t scratch_bytes=fast_fel?1036800:((width*height+127)/128)*16;
+    r->enhanced_fast_pq=fast_pq;
+    size_t scratch_bytes=fast_pq?1036800:((width*height+127)/128)*16;
     if(!dv_allocate(r,scratch_bytes))return false;
-    bool pq_lookup=!fast_fel && cb1_processing_pq_encoder(&r->processing,r->gpu)!=NULL;
+    bool pq_lookup=!fast_pq && cb1_processing_pq_encoder(&r->processing,r->gpu)!=NULL;
     GLint images;glGetIntegerv(GL_MAX_COMPUTE_IMAGE_UNIFORMS,&images);
     GLint fragment_images;glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS,&fragment_images);
     r->ai_enhanced_fused=ai_fused && !r->ai_fusion_failed && fragment_images>=2;
@@ -3144,8 +3148,11 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     }else pl_tex_destroy(r->gpu,&r->enhanced_input);
     if(packed && !pixels && !r->fragment_quad)return DVBRIDGE_DV_UNSUPPORTED;
     bool fel=color.dovi.nlq_active && source->enhancement_layer && pts==el_pts;
-    bool fast_fel=pixels && r->enhanced_linear && r->fast_chroma && fel;
-    if(!(pixels?dve_allocate(r,reconstruction_width,reconstruction_height,false,fast_fel):dv_allocate_transport(r)))return DVBRIDGE_DV_UNSUPPORTED;
+    bool fast_pq=pixels && r->enhanced_linear && r->fast_chroma &&
+        (fel || (r->authored_p5_analytic && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
+                 geometry.source_width==3840 && geometry.source_height==2160 &&
+                 dvbridge_dv_profile5_transport(metadata)));
+    if(!(pixels?dve_allocate(r,reconstruction_width,reconstruction_height,false,fast_pq):dv_allocate_transport(r)))return DVBRIDGE_DV_UNSUPPORTED;
     struct dvbridge_dv_slot *s=&r->dv;
     s->output_metadata=av_memdup(metadata,bytes);s->output_bytes=bytes;
     if(!s->output_metadata){dv_release(r);return DVBRIDGE_DV_FAILED;}
