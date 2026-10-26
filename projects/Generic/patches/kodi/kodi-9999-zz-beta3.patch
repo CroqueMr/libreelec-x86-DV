@@ -15243,7 +15243,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +934,1572 @@
+@@ -397,13 +934,1571 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -15564,8 +15564,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    {
 +      pl_cb1_dovi_reference raw{};
 +      if(cb1_master_reference_map(&raw,metadata.Data(),metadata.Size(),paired)!=CB1_MASTER_READY ||
-+         !cb1_master_reference_transport(metadata.Data(),metadata.Size()) ||
-+         ((margins[0]|margins[1])&1))
++         !cb1_master_reference_transport(metadata.Data(),metadata.Size()))
 +        caps.processing[mode]={false,DVBRIDGE::OutputReason::SourceIneligible};
 +      const auto masterChroma = picture->chroma_position == AVCHROMA_LOC_UNSPECIFIED ?
 +          (picture->doviSourceInfo.profile == 7 ? AVCHROMA_LOC_TOPLEFT : AVCHROMA_LOC_LEFT) : picture->chroma_position;
@@ -16819,7 +16818,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2513,16 @@
+@@ -417,5 +2512,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }

@@ -7,6 +7,35 @@ from test_native_video_source import TREE, body
 
 
 class NativeSpatialContractTests(unittest.TestCase):
+    def test_master_admission_keeps_native_odd_pixel_placement(self):
+        text = (TREE / "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp").read_text()
+        function = body(text, "DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(\n"
+                              "    const VideoPicture* picture, const DVBRIDGE::OutputPreferences& preferences")
+        start = function.index("      if(cb1_master_reference_map(")
+        predicate = function[start:function.index("      const auto masterChroma", start)]
+        self.run_program(r'''
+#include <cassert>
+#include <cstddef>
+constexpr int CB1_MASTER_READY=0;
+struct pl_cb1_dovi_reference{};
+int mapping=0;bool transport=true;
+int cb1_master_reference_map(pl_cb1_dovi_reference*,const void*,size_t,bool){return mapping;}
+bool cb1_master_reference_transport(const void*,size_t){return transport;}
+namespace DVBRIDGE {enum class OutputReason{None,SourceIneligible};}
+bool admit(unsigned left,unsigned right){
+ struct {const void* Data(){return nullptr;}size_t Size(){return 0;}} metadata;
+ struct {struct {bool usable=true;DVBRIDGE::OutputReason reason{};}processing[1];}caps;
+ unsigned margins[4]={left,right,0,0};int mode=0;bool paired=false;pl_cb1_dovi_reference raw{};
+ PREDICATE
+ return caps.processing[mode].usable;
+}
+int main(){
+ assert(admit(0,0) && admit(1,1) && admit(17,24));
+ mapping=1;assert(!admit(1,1));mapping=0;
+ transport=false;assert(!admit(1,1));
+}
+'''.replace("PREDICATE", predicate))
+
     def test_native_zoom_and_fractional_placement_are_preserved(self):
         text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp").read_text()
         geometry = body(text, "dvbridge_geometry CRendererVAAPIGLES::DVBridgeGeometry()")

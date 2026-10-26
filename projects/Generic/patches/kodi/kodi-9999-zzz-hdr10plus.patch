@@ -1414,7 +1414,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (m_renderableType != EGL_OPENGL_ES3_BIT)
    {
      caps.processingKnown = true;
-@@ -1347,8 +1398,16 @@
+@@ -1346,8 +1397,16 @@
        std::lock_guard lock(m_dvCapabilityMutex);
        m_aiActive=false;
      }
@@ -1433,7 +1433,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    const auto binding = picture.doviSourceBinding;
    if (queue.empty() || !(queue.front().binding == binding)) return false;
    {
-@@ -1398,6 +1457,8 @@
+@@ -1397,6 +1456,8 @@
      m_aiReady |= decision == HDR10AISource::Decision::Prepare;
      m_aiFallback = decision == HDR10AISource::Decision::Native;
      m_aiActive = !m_aiFallback;
@@ -1442,7 +1442,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
    if (decision == HDR10AISource::Decision::Native)
    {
-@@ -1565,7 +1626,11 @@
+@@ -1564,7 +1625,11 @@
    m_failedHDR10SetupRestore = false;
    if (DVBRIDGE::DiagnosticsEnabled())
    {
@@ -1455,7 +1455,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          session.target.hdr.max_luma, session.output.level6 ? "RPU-L6" : "RPU-source-PQ",
          GetOutputBitDepth(), UseLimitedColor() ? "limited" : "full");
      if (m_hdrDeepColorPrevious)
-@@ -1626,7 +1691,9 @@
+@@ -1625,7 +1690,9 @@
    };
    const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10;
    if (!SupportsDVOutputMode()) return failure("output-format", "unsupported-current-mode");
@@ -1466,7 +1466,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
      return failure("output-format", "drawable-depth");
    if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
-@@ -1978,7 +2045,6 @@
+@@ -1977,7 +2044,6 @@
        !m_dvRecoveryPending && !m_dvRejectedSurface && !m_dvRollbackFailed &&
        !m_dvOutputRetiring && !m_dvShutdownFence && !m_dvStopPending && !HasPendingDVOutputSurface() &&
        m_dvSelection.route != DVBRIDGE::OutputRoute::Vanilla &&
@@ -1474,7 +1474,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (m_hdrConversion || m_dvState.Captured());
  }
  
-@@ -2031,12 +2097,12 @@
+@@ -2030,12 +2096,12 @@
    const bool overlayFree = (!capturing || masterCapture) &&
        (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
@@ -1491,7 +1491,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
        DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
    if(auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
-@@ -2045,7 +2111,7 @@
+@@ -2044,7 +2110,7 @@
      bool switched=false;
      {
        std::lock_guard lock(m_dvCapabilityMutex);
@@ -1500,7 +1500,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
      }
      if(switched)
-@@ -2056,10 +2122,10 @@
+@@ -2055,10 +2121,10 @@
      }
      drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
    }
@@ -1514,7 +1514,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
        (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
    const bool pqSubtitles = subtitlesOnly && m_dvPQSubtitleDraws;
-@@ -2074,12 +2140,12 @@
+@@ -2073,12 +2139,12 @@
    // Prime the subtitle shader once; empty frames retain the lean native shader.
    const bool nativeOverlay = !m_hdrConversion &&
        (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
@@ -1529,7 +1529,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        fullGUI && !enhancedSubtitles ? m_dvGUIContentGeneration : m_dvSubtitleContent, pqSubtitles);
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2121,8 +2187,8 @@
+@@ -2120,8 +2186,8 @@
    const auto preparedAt = std::chrono::steady_clock::now();
    const auto initialStatus = status;
    const bool prefetchFEL = successor && successor->frame && metadata.Data() &&
@@ -1540,7 +1540,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        overlayFree && geometry.source_width == 3840 && geometry.source_height == 2160 &&
        !geometry.x && !geometry.y && geometry.width == 3840 && geometry.height == 2160;
    if (!prefetchFEL)
-@@ -2152,7 +2218,8 @@
+@@ -2151,7 +2217,8 @@
    }
    else
  #endif
@@ -1550,7 +1550,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    {
      // Complete content analysis before Kodi advances this source picture.
      const auto deadline = preparationDeadline;
-@@ -2166,7 +2233,7 @@
+@@ -2165,7 +2232,7 @@
              deadline - std::chrono::steady_clock::now()).count();
          const uint64_t waitNs = prefetchFEL && remaining > 0 ?
              static_cast<uint64_t>(std::min<int64_t>(remaining,2000000)) : 0;
@@ -1559,7 +1559,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            status = m_dvBridge->PollStatus(waitNs);
          else if (m_dvBridge->PollReady())
            status = CDVBridgeGLES::FrameStatus::Ready;
-@@ -2243,7 +2310,8 @@
+@@ -2242,7 +2309,8 @@
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    const bool renderPending = status == CDVBridgeGLES::FrameStatus::Pending ||
        status == CDVBridgeGLES::FrameStatus::Busy;
@@ -1569,7 +1569,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (allowAsync && m_dvContext->AsyncPreparation(layer.binding.stream) && (m_dvFrame || renderPending));
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2352,9 +2420,9 @@
+@@ -2351,9 +2419,9 @@
      m_masterSafety={};
    }
    m_masterFramePeriodNs=0;
