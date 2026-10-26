@@ -16,6 +16,12 @@ class EnhancedCompletion(unittest.TestCase):
 #include <cstdint>
 #include <chrono>
 #include <thread>
+struct TestClock {
+ using duration=std::chrono::milliseconds;
+ using time_point=std::chrono::time_point<TestClock,duration>;
+ static time_point now(){static int tick=0;return time_point(duration(tick++));}
+};
+template<class T> void Sleep(T){}
 constexpr int DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
 struct CDVBridgeGLES { enum class FrameStatus {Ready,Pending,Busy,Failed}; };
 using Status=CDVBridgeGLES::FrameStatus;
@@ -30,8 +36,8 @@ Status run(bool authored,int mode,bool capturing,Status initial,int readyAfter,b
   auto prepare=[](){return Status::Pending;};
   polls=0;auto status=initial;
   bool prefetchFEL=false;const int *successor=nullptr;int preferences=0;
-  const auto preparationDeadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(expired?-1:8);
-'''+code[start:end]+r'''
+  const auto preparationDeadline=TestClock::now()+std::chrono::milliseconds(expired?-1:8);
+'''+code[start:end].replace('std::chrono::steady_clock', 'TestClock').replace('std::this_thread::sleep_for', 'Sleep')+r'''
   return status;
 }
 int main(){

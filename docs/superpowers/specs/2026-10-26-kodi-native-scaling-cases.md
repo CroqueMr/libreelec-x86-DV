@@ -19,9 +19,10 @@ use the same checked arithmetic, not individual resolution-specific recipes.
 - **Admission**: after selection settles, independently validate the actual
   route, transport and target. Pending is not Unsupported. A whitelist is not
   an HDR/DV capability certificate.
-- **Pixel promise**: exact Master regression compares the same source, source
-  crop, target mapping and backend. Different output dimensions or different
-  filters are not expected to have identical image samples.
+- **Pixel promise**: Master reconstruction and metadata are exact before final
+  fitting. Unscaled pixel-aligned output retains the frozen exact controls.
+  Resized output uses the selected original Kodi filter as its oracle, per the
+  user's explicit clarification. It need not match the old CB1 interpolator.
 - A "single fit" is one logical spatial operation; separable native filter
   passes can be legitimate. Do not do an extra full-image enlargement and then
   filter it again or shrink it back.
@@ -99,8 +100,8 @@ use the same checked arithmetic, not individual resolution-specific recipes.
 | D03 | DV P7 MEL or inactive residual | No unnecessary FEL enlargement or waiting for a nonexistent active residual |
 | D04 | BL1080 + EL540, final1080 | FEL alignment may run; final video enlargement must not run |
 | D05 | DV P5 Standard | Preserve direct IPT domain and its established processing; no extra YCbCr/RGB/LMS round trip for the scaler |
-| D06 | DV P5 Master | Preserve exact component domain/arithmetic; do not introduce mediump, RGB8 intermediate or native approximate filter |
-| D07 | DV Master YCC and existing Master IPT preference | Native geometry ownership but unchanged reference math/filters at identical mapping; no silent Standard switch |
+| D06 | DV P5 Master | Exact source-grid IPT reconstruction, then the same original Kodi filter; no RGB8 intermediate or added colour conversion |
+| D07 | DV Master YCC and existing Master IPT preference | Exact reference reconstruction before native final fitting; unscaled controls remain exact; no silent Standard switch |
 | D08 | DV with HLG-compatible base/P8.4 fixture | Preserve source tags and selected route; test where a real fixture exists, never infer from an HDR10 sample |
 | D09 | DV Adaptive HDR Mapping | Same algorithm/metadata guidance/black protection/anti-pumping; source stats exclude padding and GUI |
 | D10 | DV to HDR10 Basic | Native spatial ownership without re-running native tone mapping or changing the Basic policy |
@@ -123,7 +124,7 @@ use the same checked arithmetic, not individual resolution-specific recipes.
 | T01 | Non-UHD validated DV target | Use actual raster width/height/stride/flip in packing, not source width or constants |
 | T02 | Metadata packets cross a raster row boundary | Exact payload/parity/coverage at target stride; no first-pixel stripe or overwritten movie pixels |
 | T03 | Metadata capacity/alignment insufficient for a proposed target | Explicit safe admission failure; no truncation or fabricated dimensions |
-| T04 | Same source/output/geometry/backend in Master | Complete film carrier and metadata match frozen exact controls; no rounding allowance |
+| T04 | Master without spatial resampling | Complete film carrier and metadata match frozen exact controls; no rounding allowance |
 | T05 | Different output resolution | Validate against independent reference geometry/packing oracle, not a checksum from a different resolution |
 | T06 | Surface is RGB8 DV tunnel versus HDR10 RGB10/P010/etc | Apply the correct route-specific bit-depth/format contract; no interchange based on texture name |
 | T07 | Physical pixels differ from logical GUI grid | Output target and viewport use physical pixels; UI uses native mapping once |
@@ -168,7 +169,7 @@ use the same checked arithmetic, not individual resolution-specific recipes.
 
 | ID | Situation | Required result |
 |---|---|---|
-| V01 | Master same-mapping regressions on both GPUs | Zero changed film pixels/metadata; preserve known pre-existing alternate-path witness issues explicitly |
+| V01 | Master unscaled regressions on both GPUs | Zero changed film pixels/metadata; resized controls use exact source reconstruction followed by the actual Kodi filter |
 | V02 | Standard native-filter adoption | Qualify actual native kernel versus old output; do not call different filters bit-identical |
 | V03 | 1080p60 compared to the corresponding admitted UHD60 route | No lower cadence or extra unneeded output-size passes; compare effective route, source and target carefully |
 | V04 | 1440p/nonstandard dimensions | Same architecture; performance measured, not a separately tuned quality recipe |

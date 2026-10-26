@@ -44,6 +44,7 @@ namespace DVBRIDGE {enum class OutputMode{MasterReference};}
 struct CDVBridgeGLES {
  struct {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;}m_requested;
  int m_effectiveMode=5;bool m_prepared=true,m_direct=true;
+ struct Texture{struct{int w=3840,h=2160;}params;} texture;Texture* m_scanout=&texture;
  unsigned m_scanoutFramebuffer=42,m_pendingInfo=2;int pqCalls=0;
  struct {const void* Data(){return this;}size_t Size(){return 10;}}m_pendingMetadata;
  unsigned GetPQFramebuffer(){++pqCalls;return 77;}

@@ -4,9 +4,11 @@
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "dvbridge_gl_pack.h"
+#include "dvbridge_pack_sources.h"
 
 static bool fail_sampler;
 void tested_packer_destroy(struct dvbridge_gl_packer *p);
@@ -34,7 +36,7 @@ static void injected_samplers(GLsizei count, GLuint *samplers)
 #undef dvbridge_gl_patch
 #undef dvbridge_gl_patch_inplace
 
-enum { WIDTH = 3840, HEIGHT = 2160, OUTPUT_HEIGHT = 8 };
+static int WIDTH = 3840, HEIGHT = 2160, OUTPUT_HEIGHT = 8;
 
 static char *read_file(const char *path)
 {
@@ -76,7 +78,14 @@ static float luminance(const float *rgb)
 
 int main(int argc, char **argv)
 {
-    assert(argc == 3);
+    assert(argc == 3 || argc == 5);
+    if (argc == 5) {
+        WIDTH = atoi(argv[3]); HEIGHT = atoi(argv[4]);
+        assert(WIDTH > 0 && !(WIDTH & 1) && HEIGHT > 0);
+        OUTPUT_HEIGHT = (5 * 3072 + WIDTH - 1) / WIDTH + 1;
+        if (OUTPUT_HEIGHT < 8) OUTPUT_HEIGHT = 8;
+        assert(OUTPUT_HEIGHT <= HEIGHT);
+    }
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     assert(eglInitialize(display, NULL, NULL));
     assert(eglBindAPI(EGL_OPENGL_ES_API));
@@ -92,6 +101,9 @@ int main(int argc, char **argv)
     assert(context != EGL_NO_CONTEXT && surface != EGL_NO_SURFACE);
     assert(eglMakeCurrent(display, surface, surface, context));
     printf("Renderer: %s; %s\n", glGetString(GL_RENDERER), glGetString(GL_VERSION));
+    struct dvbridge_gl_packer *embedded = dvbridge_gl_packer_create(cb1_pack_vertex, cb1_pack_fragment);
+    assert(embedded && "The embedded engine shader must match the current packer");
+    dvbridge_gl_packer_destroy(embedded);
 
     GLuint program = glCreateProgram();
     GLuint vertex = shader(GL_VERTEX_SHADER, argv[1]), fragment = shader(GL_FRAGMENT_SHADER, argv[2]);
@@ -139,6 +151,15 @@ int main(int argc, char **argv)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WIDTH, HEIGHT, 0, GL_RGBA, GL_FLOAT, pixels);
+    GLuint packed_texture, packed_fbo;
+    glGenTextures(1, &packed_texture);
+    glBindTexture(GL_TEXTURE_2D, packed_texture);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, WIDTH, HEIGHT);
+    glGenFramebuffers(1, &packed_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, packed_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, packed_texture, 0);
+    assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glUniform1i(glGetUniformLocation(program, "pq_input"), 0);
     GLuint metadata[640];
     for (unsigned i = 0; i < 640; ++i) metadata[i] = (i * 37 + 19) & 255;
@@ -160,6 +181,10 @@ int main(int argc, char **argv)
         glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_TRUE);
         glViewport(3, 5, 13, 17);
         assert(!dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 6, flip));
+        assert(!dvbridge_gl_pack(packer, texture, 0, WIDTH - 1, HEIGHT, metadata, 5, flip));
+        assert(!dvbridge_gl_pack(packer, texture, 0, 0, HEIGHT, metadata, 5, flip));
+        assert(!dvbridge_gl_pack(packer, texture, 0, 2, 2, metadata, 5, flip));
+        assert(!dvbridge_gl_pack(packer, texture, 0, INT_MAX - 1, INT_MAX, metadata, 5, flip));
         assert(dvbridge_gl_pack(packer, texture, 0, WIDTH, HEIGHT, metadata, 5, flip));
         GLint originalFilter;
         glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &originalFilter);
@@ -171,6 +196,12 @@ int main(int argc, char **argv)
         GLboolean mask[4];
         glGetBooleanv(GL_COLOR_WRITEMASK, mask);
         assert(!mask[0] && mask[1] && !mask[2] && mask[3]);
+        for (unsigned patch = 0; patch < 2; ++patch) {
+        if (patch) {
+            assert(dvbridge_gl_pack(packer, texture, packed_fbo, WIDTH, HEIGHT, metadata, 5, false));
+            for (unsigned i = 0; i < 640; ++i) metadata[i] ^= 0x5a;
+            assert(dvbridge_gl_patch(packer, packed_texture, 0, WIDTH, HEIGHT, metadata, 5, flip));
+        }
         glReadPixels(0, 0, WIDTH, OUTPUT_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, result);
         assert(glGetError() == GL_NO_ERROR);
         for (unsigned row = 0; row < OUTPUT_HEIGHT; ++row)
@@ -198,11 +229,14 @@ int main(int argc, char **argv)
                         ++mismatches;
                     }
             }
+        }
     }
     printf("Compared %u pixels; mismatched bytes=%u\n", WIDTH * OUTPUT_HEIGHT * 2, mismatches);
     free(pixels);
     free(result);
     glDeleteTextures(1, &texture);
+    glDeleteTextures(1, &packed_texture);
+    glDeleteFramebuffers(1, &packed_fbo);
     dvbridge_gl_packer_destroy(packer);
     glDeleteProgram(program);
     glDeleteShader(vertex);

@@ -73,6 +73,10 @@ The prototype and source audit are in
   to bilinear; do not redefine all Auto inputs as bilinear or change the global
   vanilla default. Preserve saved explicit choices and distinguish actual
   Lanczos variants.
+- Execution clarification: use the actual native Kodi scaler, not a lighter
+  replacement, modified kernel or rewritten fused filter. Native shader
+  lifecycle/call sites remain authoritative. The private fused-interpolation
+  timing is comparative evidence only, not an integration candidate.
 - Only spatial settings enter this handoff. Do not reapply native SDR conversion,
   brightness/contrast, color management, range conversion, tone mapping or
   output quantization to already processed CB1 component data.
@@ -185,13 +189,15 @@ existing route/recovery policy instead of silently changing resolution or mode.
 
 ## Reference guarantees
 
-Master follows Kodi geometry but keeps its reference arithmetic, spatial
-filters and precision unless an alternative is proven exactly equivalent for
-the same input/output geometry and backend. Do not substitute the native
-mediump or optimized filter merely because it is called native. Preserve the
-existing UHD Master pixels and metadata exactly. New output dimensions require
-independent packing/parity/metadata and reference-image checks; they do not
-inherit certification from a whitelist entry.
+Master preserves exact reconstruction, chroma/FEL reference filters and metadata
+before final picture scaling. The user explicitly confirmed on 2026-10-26 that
+final enlargement/reduction uses the same unmodified native Kodi scaler as every
+other mode. Do not retain a second Master-only final-picture scaler. Preserve
+existing UHD Master pixels/metadata when no spatial resampling is required.
+After intentional resizing, the oracle is the exact reconstructed input followed
+by the actual selected native Kodi filter, not the previous CB1 interpolator.
+New output dimensions require independent packing/parity/metadata and native
+geometry checks; they do not inherit certification from a whitelist entry.
 
 Keep source/processed color tags, component range, bit depth and GPU leases
 explicit at the handoff. Avoid a generic RGB8 intermediate. Map source L5 and

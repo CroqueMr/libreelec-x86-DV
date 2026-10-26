@@ -85,8 +85,8 @@ int main(){EL el{AVCHROMA_LOC_LEFT};Picture p{AVCHROMA_LOC_LEFT,{7},&el};
 #include <cassert>
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
 struct CDVBridgeGLES {static bool CanComposeSDRGUI(bool enabled,bool hdr10,bool capture,int width,int height,unsigned pqDraws) @@COMPOSE@@;};
-bool gui(int mode,bool optimized,bool capturing=false) {
- bool m_guiWillRender=true,m_hdrConversion=false;int m_guiFboWidth=3840,m_guiFboHeight=2160;
+bool gui(int mode,bool optimized,bool capturing=false,int width=3840,int height=2160) {
+ bool m_guiWillRender=true,m_hdrConversion=false;int m_guiFboWidth=width,m_guiFboHeight=height;
  unsigned m_dvPQSubtitleDraws=0;auto GetGUIElementCount=[](){return 3;};
  struct {bool optimizedDV;} preferences{optimized};struct {struct {int mode;} policy;} m_dvSelection{{mode}};
  @@MASTER_CAPTURE@@
@@ -106,6 +106,8 @@ bool failure(int m_effectiveMode) {
 int main(){
  assert(gui(5,false) && gui(5,true));assert(!gui(1,false) && gui(1,true));assert(gui(5,false,true));
  assert(!gui(1,true,true));
+ assert(gui(5,false,false,1920,1080) && gui(1,true,false,2560,1440));
+ assert(!gui(5,true,false,0,0));
  assert(direct(5,false) && direct(5,true));assert(!direct(1,false) && direct(1,true));
  assert(failure(5));assert(!failure(1));
 }

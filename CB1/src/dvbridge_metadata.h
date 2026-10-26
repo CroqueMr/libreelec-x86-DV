@@ -38,6 +38,7 @@ struct dvbridge_dv {
     uint64_t frames,changes;
     double last_pts;
     int source_w,source_h,dest_x,dest_y,dest_w,dest_h;
+    int target_w,target_h;
     bool fel_verified,source_transport,profile5_transport,ipt_transport;
     unsigned compatibility_omissions;
 };
@@ -139,8 +140,9 @@ static inline bool dvbridge_dv_bounds(const AVDOVIMetadata *metadata,size_t byte
 
 static inline bool dvbridge_dv_geometry(struct dvbridge_dv *state,int w,int h,int x,int y,int dw,int dh)
 {
+    int ow=state->target_w?state->target_w:3840,oh=state->target_h?state->target_h:2160;
     if(w<=0 || h<=0 || w>3840 || h>2160 || dw<=0 || dh<=0 || x<0 || y<0 ||
-       dw>3840 || dh>2160 || x>3840-dw || y>2160-dh || (x&1) || (dw&1) ||
+       ow<=0 || oh<=0 || dw>ow || dh>oh || x>ow-dw || y>oh-dh || (x&1) || (dw&1) ||
        fabs((double)dw*h/w-dh)>1.01)return false;
     state->source_w=w;state->source_h=h;state->dest_x=x;state->dest_y=y;state->dest_w=dw;state->dest_h=dh;
     return true;
@@ -150,13 +152,14 @@ static inline bool dvbridge_dv_area(struct dvbridge_dv *state,unsigned left,unsi
                                    unsigned top,unsigned bottom,unsigned out[4])
 {
     unsigned w=state->source_w?state->source_w:3840,h=state->source_h?state->source_h:2160;
-    int dw=state->dest_w?state->dest_w:3840,dh=state->dest_h?state->dest_h:2160;
+    unsigned ow=state->target_w?state->target_w:3840,oh=state->target_h?state->target_h:2160;
+    int dw=state->dest_w?state->dest_w:ow,dh=state->dest_h?state->dest_h:oh;
     if(left>=w || right>=w-left || top>=h || bottom>=h-top)return false;
     out[0]=state->dest_x+lround((double)left*dw/w);
-    out[1]=3840-state->dest_x-dw+lround((double)right*dw/w);
+    out[1]=ow-state->dest_x-dw+lround((double)right*dw/w);
     out[2]=state->dest_y+lround((double)top*dh/h);
-    out[3]=2160-state->dest_y-dh+lround((double)bottom*dh/h);
-    return out[0]+out[1]<3840 && out[2]+out[3]<2160;
+    out[3]=oh-state->dest_y-dh+lround((double)bottom*dh/h);
+    return out[0]+out[1]<ow && out[2]+out[3]<oh;
 }
 
 static inline bool dvbridge_dv_is_mel(const AVDOVIMetadata *metadata)

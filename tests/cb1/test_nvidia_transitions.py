@@ -57,6 +57,7 @@ struct CWinSystemGbm {
   std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
   std::shared_ptr<GBM> m_GBM=std::make_shared<GBM>();
   bool CompleteDVBridgePage() {return true;}
+  bool SupportsDVOutputMode() const {return true;}
   unsigned requeues=0;
   bool RequeueOutputProperties() {++requeues;return true;}
   bool FlipDVBridgePage(CDVBridgeState&,bool,bool=false,bool=false);

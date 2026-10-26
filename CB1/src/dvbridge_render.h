@@ -10,6 +10,16 @@ struct dvbridge_renderer;
 struct dvbridge_native_overlay;
 
 struct cb1_ai_result;
+#define DVBRIDGE_SPATIAL_API 1
+/* Synchronous final fitting of an already processed, single-plane picture.
+ * The player owns its native filter and the returned texture. Keep both alive
+ * through the renderer's existing last-use fence; never pass packed DV bytes.
+ * Failure rejects this picture, without a second scaler or implicit retry. */
+typedef bool (*dvbridge_spatial_fit)(void *priv,const struct pl_frame *source,
+    const struct pl_frame *target,struct pl_frame *fitted);
+void dvbridge_renderer_set_spatial_fit(struct dvbridge_renderer *renderer,
+    dvbridge_spatial_fit fit,void *priv);
+
 enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_renderer *renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
@@ -144,7 +154,7 @@ bool dvbridge_render_packed(struct dvbridge_renderer *renderer, const struct pl_
                            struct dvbridge_geometry geometry, pl_tex target, bool flip_y);
 #define DVBRIDGE_NATIVE_OVERLAY_API 1
 /* Borrowed Kodi subtitle texture and sRGB transfer LUTs. Row zero is the logical bottom;
- * rect is a clipped, even-x screen rectangle in top-down 3840x2160 coordinates.
+ * rect is a clipped, even-x screen rectangle in top-down output coordinates.
  * An all-zero rectangle keeps the same shader ready without drawing a subtitle.
  * The caller retains textures until GPU completion. Video metadata is unchanged. */
 struct dvbridge_native_overlay {

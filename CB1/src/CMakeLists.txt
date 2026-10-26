@@ -46,6 +46,9 @@ add_library(dvbridge_core STATIC dvbridge_core.c dvbridge_placebo.c dvbridge_ren
                                 dvbridge_gl_frame.c dvbridge_gl_pack.c dvbridge_fel.c dvbridge_dmabuf.c dvbridge_fel_vpp.c
                                 dvbridge_policy.c cb1_circuit.c cb1_master_reference.c cb1_master_ipt.c dvbridge_creative.c cb1_dv_enhanced.c cb1_processing.c
                                 cb1_hdr10plus.c cb1_hdr10plus_analysis.c cb1_hdr10plus_curve.c cb1_dv_hdr10plus.c)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert"
+  "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.frag")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert" CB1_PACK_VERTEX)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.frag" CB1_PACK_FRAGMENT)
 foreach(variable CB1_PACK_VERTEX CB1_PACK_FRAGMENT)

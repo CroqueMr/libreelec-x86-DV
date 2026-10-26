@@ -74,15 +74,17 @@ struct Picture{StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;
  Binding doviSourceBinding;struct{int profile=0;}doviSourceInfo;
  int64_t doviSourcePts=1000000;double pts=1000000;};
 struct Metadata{const void* Data(){return this;}::Binding Binding(){return {};}};
-struct Layer{int width,height,layout;double pts;::Binding binding;};
+struct Layer{int width,height,layout,scalingMethod;double pts;::Binding binding;};
 struct Renderer{
  struct Slot{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture>();
   Metadata doviMetadata;double doviPts=1.25;}m_buffers[1];
  int m_vaapiFourcc=VA_FOURCC_P010,m_sourceWidth=3840,m_sourceHeight=2160;
+ int SelectScalingMethod()const{return 17;}
  bool Build(Layer&layer){int idx=0;SELECTION return true;}
 };
 int main(){
  Renderer r;Layer first{},replayed{};assert(r.Build(first));
+ assert(first.scalingMethod==17);
  r.m_buffers[0].doviSourcePicture->pts=1250000;
  assert(r.Build(replayed));assert(first.pts==1.0 && replayed.pts==1.25);
  assert(r.m_buffers[0].doviSourcePicture->doviSourcePts==1000000);

@@ -1,4 +1,4 @@
-"""Native DV cadence must escape a DCI desktop without changing ordinary playback."""
+"""CB1 uses the same Kodi mode selection as ordinary playback."""
 from pathlib import Path
 import re
 import subprocess
@@ -8,8 +8,7 @@ from test_native_video_source import TREE, body
 
 
 class DVUHDModeTests(unittest.TestCase):
-    def test_real_selector_and_render_manager_ignore_dci_for_native_output(self):
-        # Removing the native opt-in or its exact geometry filter must fail this test.
+    def test_real_selector_preserves_whitelist_override_and_adjustment_off(self):
         resolution = (TREE/'xbmc/windowing/Resolution.cpp').read_text()
         resolution = re.sub(r'^#include[^\n]*', '', resolution, flags=re.M)
         manager = body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text(),
@@ -117,13 +116,14 @@ int main() {
   RESOLUTION_INFO info(width,height);info.fRefreshRate=rate;info.dwFlags=flags;
   modes.push_back(info);return static_cast<RESOLUTION>(modes.size()-1);
  };
- add(4096,2160,30); // Desktop and all DCI rates precede UHD in the reported list.
+ add(3840,2160,60);
  const auto dci=add(4096,2160,film);
  add(3840,2160,film,D3DPRESENTFLAG_INTERLACED);
  add(3840,2160,film,D3DPRESENTFLAG_MODE3DSBS);
  add(3840,2160,film,D3DPRESENTFLAG_MODE3DTB);
  add(3840,2160,120);add(3840,2160,144);add(3840,1080,film);
  const auto uhd=add(3840,2160,film);
+ const auto fhd=add(1920,1080,film);
  add(3840,2160,24);
  const auto uhd25=add(3840,2160,25);
  const auto uhd30=add(3840,2160,30);
@@ -143,25 +143,23 @@ int main() {
  DVBRIDGE::playbackMode=DVBRIDGE::OutputMode::Standard;
  for(bool whitelist:{false,true}) {
   component.settings.whitelist.clear();
-  if(whitelist)component.settings.whitelist.emplace_back(std::to_string(dci));
-  manager.m_nativeDVRate=false;
-  assert(manager.GetResolution()==dci && "Ordinary playback keeps the DCI desktop/whitelist");
-  manager.m_nativeDVRate=DVBRIDGE::WantsNativeOutput(stream);
-  assert(manager.GetResolution()==uhd && "Native DV must choose progressive UHD, never DCI");
-  for(int width:{1920,3840,4096}) {
-   manager.m_picture.iWidth=width;
-   assert(manager.GetResolution()==uhd);
-  }
-  manager.m_picture.iWidth=3840;
+  if(whitelist)component.settings.whitelist.emplace_back(std::to_string(fhd));
+  for(float fps: {film,24.f,25.f,30.f,50.f,60000.f/1001,60.f})
+   for(int width: {1280,1920,3840}) {
+    manager.m_picture.iWidth=width;manager.m_picture.iHeight=width*9/16;manager.m_fps=fps;
+    manager.m_nativeDVRate=false;const auto native=manager.GetResolution();
+    manager.m_nativeDVRate=true;assert(manager.GetResolution()==native);
+   }
  }
+ manager.m_picture.iWidth=1920;manager.m_picture.iHeight=1080;manager.m_fps=film;
+ manager.m_nativeDVRate=true;assert(manager.GetResolution()==fhd);
  component.advanced.m_videoAdjustRefreshOverrides.push_back({false,23,24,23,24});
- assert(manager.GetResolution()==uhd && "A DCI refresh override cannot capture native DV");
+ manager.m_nativeDVRate=false;const auto override=manager.GetResolution();
+ manager.m_nativeDVRate=true;assert(manager.GetResolution()==override);
  component.settings.adjust=ADJUST_REFRESHRATE_OFF;
- assert(manager.GetResolution()==uhd && "Native transport still switches when ordinary adjustment is off");
- manager.m_fps=25;assert(manager.GetResolution()==uhd25);
- manager.m_fps=30;assert(manager.GetResolution()==uhd30);
+ assert(manager.GetResolution()==RES_DESKTOP && "CB1 must preserve native adjustment Off");
  manager.m_nativeDVRate=false;
- assert(manager.GetResolution()==RES_DESKTOP && "Vanilla with adjustment off leaves the desktop alone");
+ assert(manager.GetResolution()==RES_DESKTOP);
 }
 '''.replace('RESOLUTION_CODE', resolution).replace('MANAGER_CODE', manager).replace(
             'ELIGIBLE_CODE', eligible).replace('WANTS_CODE', wants)

@@ -3209,10 +3209,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/Vid
        break;
      case StreamType::TELETEXT:
        res = OpenTeletextStream(hint);
-@@ -4491,7 +4546,13 @@
+@@ -4490,8 +4545,14 @@
+                                                    (hint.fpsrate * (hint.interlaced ? 2 : 1)));
  
        const bool nativeDV = WantsNativePresentation(hint);
-       RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty(), nativeDV);
+-      RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty(), nativeDV);
++      RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
 +#ifdef HAVE_DVBRIDGE
 +      DVBRIDGE::modeChangeResolution.store(nativeDV ? static_cast<int>(res) : -1);
 +#endif
@@ -3982,7 +3984,136 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  #ifdef CB1_HAS_HDR10_AI
    m_aiFrameRendered = rendered;
  #endif
-@@ -1212,34 +1251,39 @@
+@@ -772,59 +811,19 @@
+   glEnable(GL_BLEND);
+ }
+ 
+-void CLinuxRendererGLES::UpdateVideoFilter()
+-{
+-  CRect srcRect;
+-  CRect dstRect;
+-  CRect viewRect;
+-  GetVideoRect(srcRect, dstRect, viewRect);
+-
+-  // TODO: ValidateRenderTarget runs before the display resolution is established
+-  // (the WHITELIST/resolution ADJUST happens ~500ms after the first RenderUpdate).
+-  // This causes UpdateVideoFilter to be called with a 0x0 viewport. The proper fix
+-  // is in CRenderManager to defer rendering until the resolution is ready.
+-  if (viewRect.Height() == 0 || viewRect.Width() == 0)
+-    return;
+-
+-  // TODO: GL also checks nonLinStretchChanged and cmsChanged in the early exit
+-  // and the reload check below. Add when non-linear stretch and CMS are ported to GLES.
+-  if (m_scalingMethodGui == m_videoSettings.m_ScalingMethod &&
+-      viewRect.Height() == m_lastViewRect.Height() && viewRect.Width() == m_lastViewRect.Width() &&
+-      srcRect.Height() == m_lastSourceRect.Height() && srcRect.Width() == m_lastSourceRect.Width())
+-  {
+-    return;
+-  }
+-
+-  // Viewport-only change doesn't need shader reload -- only method changes do
+-  if (m_scalingMethod != m_videoSettings.m_ScalingMethod)
+-    m_reloadShaders = true;
+-
+-  const ESCALINGMETHOD previousMethod = m_scalingMethod;
+-  m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
+-  m_scalingMethod = m_scalingMethodGui;
+-  m_lastViewRect = viewRect;
+-  m_lastSourceRect = srcRect;
+-
+-  if(!Supports(m_scalingMethod))
++ESCALINGMETHOD CLinuxRendererGLES::SelectScalingMethod() const
++{
++  auto method = m_videoSettings.m_ScalingMethod;
++  if(!Supports(method))
+   {
+     CLog::Log(LOGWARNING,
+               "CLinuxRendererGLES::UpdateVideoFilter - chosen scaling method {}, is not supported "
+               "by renderer",
+-              m_scalingMethod);
+-    m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+-  }
+-
+-  if (m_pVideoFilterShader)
+-  {
+-    delete m_pVideoFilterShader;
+-    m_pVideoFilterShader = nullptr;
+-  }
+-
+-  m_fbo.fbo.Cleanup();
+-
+-  VerifyGLState();
+-
+-  if (m_scalingMethod == VS_SCALINGMETHOD_AUTO)
++              method);
++    method = VS_SCALINGMETHOD_LINEAR;
++  }
++
++  if (method == VS_SCALINGMETHOD_AUTO)
+   {
+     bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
+     bool scaleUp =
+@@ -835,10 +834,56 @@
+             0.01f;
+ 
+     if (Supports(VS_SCALINGMETHOD_LANCZOS3_FAST) && scaleSD && scaleUp && scaleFps)
+-      m_scalingMethod = VS_SCALINGMETHOD_LANCZOS3_FAST;
++      method = VS_SCALINGMETHOD_LANCZOS3_FAST;
+     else
+-      m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+-  }
++      method = VS_SCALINGMETHOD_LINEAR;
++  }
++
++  return method;
++}
++
++void CLinuxRendererGLES::UpdateVideoFilter()
++{
++  CRect srcRect;
++  CRect dstRect;
++  CRect viewRect;
++  GetVideoRect(srcRect, dstRect, viewRect);
++
++  // TODO: ValidateRenderTarget runs before the display resolution is established
++  // (the WHITELIST/resolution ADJUST happens ~500ms after the first RenderUpdate).
++  // This causes UpdateVideoFilter to be called with a 0x0 viewport. The proper fix
++  // is in CRenderManager to defer rendering until the resolution is ready.
++  if (viewRect.Height() == 0 || viewRect.Width() == 0)
++    return;
++
++  // TODO: GL also checks nonLinStretchChanged and cmsChanged in the early exit
++  // and the reload check below. Add when non-linear stretch and CMS are ported to GLES.
++  if (m_scalingMethodGui == m_videoSettings.m_ScalingMethod &&
++      viewRect.Height() == m_lastViewRect.Height() && viewRect.Width() == m_lastViewRect.Width() &&
++      srcRect.Height() == m_lastSourceRect.Height() && srcRect.Width() == m_lastSourceRect.Width())
++  {
++    return;
++  }
++
++  // Viewport-only change doesn't need shader reload -- only method changes do
++  if (m_scalingMethod != m_videoSettings.m_ScalingMethod)
++    m_reloadShaders = true;
++
++  const ESCALINGMETHOD previousMethod = m_scalingMethod;
++  m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
++  m_scalingMethod = SelectScalingMethod();
++  m_lastViewRect = viewRect;
++  m_lastSourceRect = srcRect;
++
++  if (m_pVideoFilterShader)
++  {
++    delete m_pVideoFilterShader;
++    m_pVideoFilterShader = nullptr;
++  }
++
++  m_fbo.fbo.Cleanup();
++
++  VerifyGLState();
+ 
+   if (m_scalingMethod != previousMethod)
+     m_reloadShaders = true;
+@@ -1212,34 +1257,39 @@
      return false;
    }
  
@@ -4048,7 +4179,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    }
  
    return ret;
-@@ -1736,8 +1780,6 @@
+@@ -1736,8 +1786,6 @@
    }
  
    VerifyGLState();
@@ -4057,7 +4188,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  
    return true;
  }
-@@ -1942,8 +1984,6 @@
+@@ -1942,8 +1990,6 @@
  
    VerifyGLState();
  
@@ -4066,7 +4197,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    return true;
  }
  
-@@ -2098,8 +2138,6 @@
+@@ -2098,8 +2144,6 @@
              im->bpp, im->plane[0]);
  
    VerifyGLState();
@@ -4097,6 +4228,14 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h b/xbmc/co
    bool m_aiFrameRendered{true};
  #endif
    // Returns 0 if scaling is below hqscalers threshold.
+@@ -106,6 +110,7 @@
+   virtual void LoadShaders(int field=FIELD_FULL);
+   virtual void ReleaseShaders();
+   void SetTextureFilter(GLenum method);
++  ESCALINGMETHOD SelectScalingMethod() const;
+   void UpdateVideoFilter();
+   void CheckVideoParameters(int index);
+   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
@@ -4559,10 +4698,24 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  }
  
  void CRenderManager::ServiceVideoCaptures()
-@@ -801,6 +952,15 @@
+@@ -779,10 +930,10 @@
+   if (m_renderState == STATE_UNCONFIGURED)
+     return res;
+ 
+-  if (m_nativeDVRate || CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
++  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+   {
+     res = CResolutionUtils::ChooseBestResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
+-                                                 !m_picture.stereoMode.empty(), m_nativeDVRate);
++                                                 !m_picture.stereoMode.empty());
+   }
+ 
+   return res;
+@@ -800,6 +951,15 @@
+ 
    if (!gui && m_pRenderer->IsGuiLayer())
      return;
- 
++
 +#ifdef CB1_HAS_HDR10_AI
 +  {
 +    std::unique_lock lock(m_presentlock);
@@ -4571,10 +4724,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +        (m_aiStartPts == DVD_NOPTS_VALUE || m_presentstep != PRESENT_FRAME))) return;
 +  }
 +#endif
-+
+ 
    bool presented = false;
    if (!gui || m_pRenderer->IsGuiLayer())
-   {
 @@ -822,7 +982,15 @@
  
    // the just-presented region is video-only: OSD, GUI and subtitles come later
@@ -4591,7 +4743,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    if (presented && !gui)
    {
-@@ -1007,6 +1175,15 @@
+@@ -1007,21 +1175,35 @@
                                                                                       isHDREnabled));
  }
  
@@ -4607,7 +4759,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  void CRenderManager::UpdateResolution()
  {
    if (m_bTriggerUpdateResolution)
-@@ -1021,7 +1198,12 @@
+   {
+     if (CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() && CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot())
+     {
+-      if ((m_nativeDVRate || CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF) && m_fps > 0.0f)
++      if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
+       {
+         RESOLUTION res = CResolutionUtils::ChooseBestResolution(
+-            m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty(), m_nativeDVRate);
++            m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());
+         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
  #ifdef HAVE_DVBRIDGE
          if (m_nativeDVRate)
            if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
@@ -5526,7 +5687,7 @@ diff --git a/xbmc/guilib/StereoscopicsManager.cpp b/xbmc/guilib/StereoscopicsMan
 +
 +  return CResolutionUtils::ChooseBestResolution(static_cast<float>(info.fpsRate) /
 +                                                    static_cast<float>(info.fpsScale),
-+                                                info.width, info.height, is3D, false, mode);
++                                                info.width, info.height, is3D, mode);
 +}
 +
  void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool notify)
@@ -6460,27 +6621,49 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
  bool CResolutionUtils::IsCB1RefreshRate(double refresh)
  {
    for (double supported : {24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001,
-@@ -64,10 +389,17 @@
+@@ -64,58 +389,137 @@
  }
  
  RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int height, bool is3D,
 -                                                 bool allowNativeProgressiveRates)
 -{
-+                                                 bool allowNativeProgressiveRates,
 +                                                 RenderStereoMode outputMode)
 +{
 +  const RenderStereoMode stereoMode = OutputMode(outputMode);
    RESOLUTION res = CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution();
    float weight = 0.0f;
-+
+ 
+-  // CB1 transport requires progressive 2160p, independent of GUI/source size
+-  // and the ordinary playback whitelist or refresh override.
+-  if (allowNativeProgressiveRates && !is3D && fps > 0.0f)
+-  {
+-    std::vector<RESOLUTION> modes;
+-    CServiceBroker::GetWinSystem()->GetGfxContext().GetAllowedResolutions(modes);
+-    float bestWeight = std::numeric_limits<float>::max();
+-    float bestRefresh = std::numeric_limits<float>::max();
+-    for (const auto mode : modes)
+-    {
+-      const auto info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(mode);
+-      if (mode == RES_WINDOW || info.iScreenWidth != 3840 || info.iScreenHeight != 2160 ||
+-          (info.dwFlags & (D3DPRESENTFLAG_INTERLACED | D3DPRESENTFLAG_MODE3DSBS | D3DPRESENTFLAG_MODE3DTB)) ||
+-          !IsCB1RefreshRate(info.fRefreshRate))
+-        continue;
+-      const float candidate = RefreshWeight(info.fRefreshRate, fps);
+-      if (candidate < bestWeight ||
+-          (MathUtils::FloatEquals(candidate, bestWeight, 0.0001f) && info.fRefreshRate < bestRefresh))
+-      {
+-        res = mode;
+-        bestWeight = candidate;
+-        bestRefresh = info.fRefreshRate;
+-      }
+-    }
 +  if (StereoModePending(is3D, stereoMode))
-+    return res;
+     return res;
+-  }
 +  if (is3D)
 +    PerEyeSize(width, height);
  
-   // CB1 transport requires progressive 2160p, independent of GUI/source size
-   // and the ordinary playback whitelist or refresh override.
-@@ -100,22 +432,124 @@
+   if (!FindResolutionFromOverride(fps, width, is3D, res, weight, false)) //find a refreshrate from overrides
    {
      if (!FindResolutionFromOverride(fps, width, is3D, res, weight, true)) //if that fails find it from a fallback
      {
@@ -6490,8 +6673,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
 -
 -  CLog::Log(LOGINFO, "Display resolution ADJUST : {} ({}) (weight: {:.3f})",
 -            CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(res).strMode, res, weight);
-+      FindResolutionFromWhitelist(fps, width, height, is3D, res, allowNativeProgressiveRates,
-+                                  stereoMode);
++      FindResolutionFromWhitelist(fps, width, height, is3D, res, stereoMode);
 +    }
 +  }
 +
@@ -6554,8 +6736,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
 +
  void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int height, bool is3D,
 -                                                  RESOLUTION &resolution, bool allowNativeProgressiveRates)
-+                                                  RESOLUTION &resolution, bool allowNativeProgressiveRates,
-+                                                  RenderStereoMode outputMode)
++                                                  RESOLUTION &resolution, RenderStereoMode outputMode)
  {
    RESOLUTION_INFO curr = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
    CLog::Log(LOGINFO,
@@ -6612,7 +6793,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
  
    std::vector<CVariant> indexList = CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(CSettings::SETTING_VIDEOSCREEN_WHITELIST);
  
-@@ -132,7 +566,7 @@
+@@ -132,22 +536,55 @@
      {
        info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(c);
        if (info.iScreenHeight >= curr.iScreenHeight && info.iScreenWidth >= curr.iScreenWidth &&
@@ -6621,10 +6802,21 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
        {
          // do not add half refreshrates (25, 29.97 by default) as kodi cannot cope with
          // them on playback start. Especially interlaced content is not properly detected
-@@ -150,6 +584,44 @@
+         // and this causes ugly double switching.
+         // This won't allow 25p / 30p playback on native refreshrate by default
+-        // Only the native DV renderer opts in to exact progressive cadence.
+-        // Explicit user whitelists and all ordinary HDR/SDR calls stay unchanged.
+-        const bool nativeDVRate = allowNativeProgressiveRates && !is3D &&
+-            !(info.dwFlags & D3DPRESENTFLAG_INTERLACED) &&
+-            MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f);
+-        if (nativeDVRate || (info.fRefreshRate > 30) ||
++        if ((info.fRefreshRate > 30) ||
+             (MathUtils::FloatEquals(info.fRefreshRate, 24.0f, 0.1f)))
+           indexList.push_back(CDisplaySettings::GetInstance().GetStringFromRes(c));
+       }
      }
-   }
- 
++  }
++
 +  // A hardware 3D mode must never be used for 2D output. The MODEMASK filter above
 +  // and below cannot be relied on to exclude one, because GetResInfo() OR-s the
 +  // stereo mode still in effect onto every candidate.
@@ -6661,12 +6853,10 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
 +    }
 +
 +    CLog::Log(LOGDEBUG, "[WHITELIST] No native 3D mode matched, continuing the standard search");
-+  }
-+
-   CLog::Log(LOGDEBUG, "[WHITELIST] Searching for an exact resolution with an exact refresh rate");
+   }
  
-   unsigned int penalty = std::numeric_limits<unsigned int>::max();
-@@ -165,7 +637,7 @@
+   CLog::Log(LOGDEBUG, "[WHITELIST] Searching for an exact resolution with an exact refresh rate");
+@@ -165,7 +602,7 @@
      // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
      if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
           (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
@@ -6675,7 +6865,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
          MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
      {
        CLog::Log(LOGDEBUG,
-@@ -200,7 +672,7 @@
+@@ -200,7 +637,7 @@
        // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
        if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
             (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
@@ -6684,7 +6874,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
            MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
        {
          CLog::Log(LOGDEBUG,
-@@ -240,7 +712,7 @@
+@@ -240,7 +677,7 @@
        // note: height has greater tolerance due to 32/64px boundaries e.g. 1080→1088 or 2160→2176
        if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
             (width == info.iScreenWidth && height <= info.iScreenHeight + 32)) &&
@@ -6693,7 +6883,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
            MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
        {
          CLog::Log(
-@@ -274,7 +746,7 @@
+@@ -274,7 +711,7 @@
  
      // allow resolutions that are desktop resolution but have the correct refresh rate
      if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -6702,7 +6892,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
          MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
      {
        CLog::Log(LOGDEBUG,
-@@ -300,8 +772,7 @@
+@@ -300,8 +737,7 @@
  
        // allow resolutions that are desktop resolution but have double the refresh rate
        if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -6712,7 +6902,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
            MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
        {
          CLog::Log(LOGDEBUG,
-@@ -329,8 +800,7 @@
+@@ -329,8 +765,7 @@
  
        // allow resolutions that are desktop resolution but have 2.5 times the refresh rate
        if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -6755,25 +6945,23 @@ diff --git a/xbmc/windowing/Resolution.h b/xbmc/windowing/Resolution.h
  };
  
  class CResolutionUtils
-@@ -120,7 +136,10 @@
+@@ -120,7 +136,9 @@
  public:
    static bool IsCB1RefreshRate(double refresh);
    static RESOLUTION ChooseBestResolution(float fps, int width, int height, bool is3D,
 -                                        bool allowNativeProgressiveRates = false);
-+                                        bool allowNativeProgressiveRates = false,
 +                                        RenderStereoMode outputMode = RenderStereoMode::UNDEFINED);
 +  static RenderStereoMode ChooseStereoArrangement(RenderStereoMode wanted, float fps,
 +                                                 int width, int height);
    static bool HasWhitelist();
    static void PrintWhitelist();
  
-@@ -133,7 +152,8 @@
+@@ -133,7 +151,7 @@
  
  protected:
    static void FindResolutionFromWhitelist(float fps, int width, int height, bool is3D,
 -                                          RESOLUTION &resolution, bool allowNativeProgressiveRates);
-+                                          RESOLUTION &resolution, bool allowNativeProgressiveRates,
-+                                          RenderStereoMode outputMode);
++                                          RESOLUTION &resolution, RenderStereoMode outputMode);
    static bool FindResolutionFromOverride(float fps, int width, bool is3D, RESOLUTION &resolution, float& weight, bool fallback);
    static float RefreshWeight(float refresh, float fps);
  };
@@ -14055,7 +14243,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
    if (result && std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
      FlipPage(true, false, false);
  
-@@ -304,6 +313,123 @@
+@@ -304,6 +313,125 @@
    return result;
  }
  
@@ -14078,7 +14266,9 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
 +{
 +  if (!m_DRM) return false;
 +  const auto usable = [](const drmModeModeInfo* mode) {
-+    if (!mode || mode->hdisplay != 3840 || mode->vdisplay != 2160 ||
++    if (!mode || !mode->hdisplay || (mode->hdisplay & 1) || !mode->vdisplay ||
++        mode->hdisplay > 3840 || mode->vdisplay > 2160 ||
++        uint64_t(mode->hdisplay) * mode->vdisplay < 5 * 3072u ||
 +        (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN))) return false;
 +    const double rate = mode->htotal && mode->vtotal ?
 +        mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
@@ -14129,9 +14319,9 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
 +  {
 +    const auto mode = drm->GetSelectedMode();
 +    const auto format = gbm_bo_get_format(bo);
-+    valid = gbm_bo_get_width(bo) == 3840 && gbm_bo_get_height(bo) == 2160 &&
++    valid = mode && SupportsDVOutputMode() &&
++            gbm_bo_get_width(bo) == mode->hdisplay && gbm_bo_get_height(bo) == mode->vdisplay &&
 +            (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888) &&
-+            mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
 +            !(mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN));
 +    if (valid)
 +    {
@@ -14179,7 +14369,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
  void CWinSystemGbm::FlipPage(bool rendered, bool videoLayer, bool async)
  {
    if (m_videoLayerBridge && !videoLayer)
-@@ -374,6 +500,7 @@
+@@ -374,6 +502,7 @@
  
  void CWinSystemGbm::OnLostDevice()
  {
@@ -14187,7 +14377,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
    CLog::Log(LOGDEBUG, "{} - notify display change event", __FUNCTION__);
    m_dispReset = true;
  
-@@ -427,6 +554,7 @@
+@@ -427,6 +556,7 @@
  
  void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture)
  {
@@ -14195,7 +14385,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
    if (!drm)
      return;
-@@ -477,12 +605,16 @@
+@@ -477,12 +607,16 @@
                 KODI::UTILS::ColorimetryToString(scanoutColorimetry),
                 KODI::UTILS::ColorimetryToString(colorimetry));
      drm->AddProperty(connector, "Colorspace", colorspace.value());
@@ -14212,7 +14402,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
    auto settingsComponent = CServiceBroker::GetSettingsComponent();
    if (!settingsComponent)
      return false;
-@@ -510,10 +642,8 @@
+@@ -510,10 +644,8 @@
        drm->AddProperty(connector, "HDR_OUTPUT_METADATA", 0);
        drm->SetActive(true);
  
@@ -14225,7 +14415,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
      return false;
    }
  
-@@ -521,12 +651,10 @@
+@@ -521,12 +653,10 @@
    if (videoPicture->color_transfer != AVCOL_TRC_SMPTE2084 &&
        videoPicture->color_transfer != AVCOL_TRC_ARIB_STD_B67)
    {
@@ -14238,7 +14428,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
  
    if (connector->SupportsProperty("HDR_OUTPUT_METADATA") && m_info &&
        m_info->SupportsHDRStaticMetadataType1() && m_info->SupportsEOTF(eotf))
-@@ -536,8 +664,6 @@
+@@ -536,8 +666,6 @@
      hdr_metadata.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
      hdr_metadata.hdmi_metadata_type1.eotf = static_cast<uint8_t>(eotf);
      hdr_metadata.hdmi_metadata_type1.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
@@ -14247,7 +14437,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
  
      if (hdr_metadata.hdmi_metadata_type1.eotf)
      {
-@@ -602,12 +728,69 @@
+@@ -602,12 +730,69 @@
        m_hdrBlob = CDRMPropertyBlob(drm->GetFileDescriptor(), &hdr_metadata, sizeof(hdr_metadata));
      }
  
@@ -14318,7 +14508,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
  
  bool CWinSystemGbm::IsHDRDisplay()
  {
-@@ -636,5 +819,8 @@
+@@ -636,5 +821,8 @@
    if (m_info->SupportsEOTF(UTILS::Eotf::HLG))
      caps.SetHLG();
  

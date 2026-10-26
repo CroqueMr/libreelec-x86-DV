@@ -12,10 +12,18 @@ struct dvbridge_context;
 struct dvbridge_candidate;
 /* Render-thread confined. Destroy all candidates before their owning context. */
 
+#define DVBRIDGE_TARGET_API 2
 struct dvbridge_geometry {
     int source_width, source_height;
     int x, y, width, height;
+    int target_width, target_height;
+    float crop[4]; /* Native visible source rect; all zero keeps the full source. */
 };
+
+/* Zero/zero retains the legacy UHD C-call contract. Native adapters must supply
+ * the actual settled target. Failure leaves outputs untouched. */
+bool dvbridge_geometry_raster(struct dvbridge_geometry geometry, int *width, int *height);
+bool dvbridge_geometry_source(struct dvbridge_geometry geometry, float crop[4]);
 
 /* Common active-picture bounds. Failure leaves margins untouched. */
 bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes,
@@ -59,7 +67,7 @@ void dvbridge_set_overlay_visible(struct dvbridge_context *context, bool visible
 void dvbridge_candidate_destroy(struct dvbridge_candidate *candidate);
 bool dvbridge_commit(struct dvbridge_context *context, const struct dvbridge_candidate *candidate);
 const uint32_t *dvbridge_packets(const struct dvbridge_candidate *candidate, unsigned *count);
-/* Left, right, top, bottom blanking margins in the final 3840x2160 raster. */
+/* Left, right, top, bottom blanking margins in the final target raster. */
 bool dvbridge_active_area(const struct dvbridge_candidate *candidate, unsigned margins[4]);
 
 #ifdef __cplusplus

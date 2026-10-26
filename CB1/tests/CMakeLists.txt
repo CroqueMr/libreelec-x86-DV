@@ -24,6 +24,13 @@ foreach(name frame_geometry task3_native metadata_transport overlay_metadata cm4
   endif()
 endforeach()
 add_executable(fel_filter_images fel_filter_images.c)
+foreach(dimensions "1920;1080" "2560;1440" "1280;720")
+  list(GET dimensions 0 width)
+  list(GET dimensions 1 height)
+  add_test(NAME gles_pack_${width}_${height} COMMAND gles_pack
+    "${DVBRIDGE_SOURCE_DIR}/pack_gles300.vert" "${DVBRIDGE_SOURCE_DIR}/pack_gles300.frag"
+    ${width} ${height})
+endforeach()
 add_executable(native_fidelity native_fidelity.c)
 target_link_libraries(native_fidelity PRIVATE dvbridge_core)
 add_executable(master_reference master_reference.c)
@@ -95,6 +102,26 @@ foreach(name adaptive_variants enhanced_metadata enhanced_dv_lifecycle enhanced_
   target_link_libraries(${name} PRIVATE dvbridge_core)
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
+add_executable(native_spatial native_spatial.c)
+target_link_libraries(native_spatial PRIVATE dvbridge_core)
+add_test(NAME native_spatial COMMAND native_spatial)
+add_executable(target_render target_render.c)
+target_link_libraries(target_render PRIVATE dvbridge_core)
+add_test(NAME target_render COMMAND target_render)
+set_tests_properties(target_render PROPERTIES ENVIRONMENT
+  "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless")
+foreach(mode standard basic expert basic_rgb expert_rgb adaptive ai ai_adaptive)
+  add_test(NAME target_${mode} COMMAND target_render --case ${mode})
+  set_tests_properties(target_${mode} PROPERTIES SKIP_RETURN_CODE 77 ENVIRONMENT
+    "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless")
+endforeach()
+
+foreach(mode basic_rgb expert_rgb)
+  add_test(NAME target_${mode}_crop COMMAND target_render --case ${mode} --crop)
+  set_tests_properties(target_${mode}_crop PROPERTIES ENVIRONMENT
+    "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless")
+endforeach()
+
 add_executable(enhanced_dv_records enhanced_dv_records.c)
 add_test(NAME fel_adaptive_transfer COMMAND p5_adaptive_images --fel)
 add_test(NAME scaled_adaptive_domain COMMAND scaled_adaptive domain)

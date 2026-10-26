@@ -8,7 +8,7 @@
 
 struct dvbridge_gl_packer {
     GLuint program, vao, sampler;
-    GLint input, words, count, flip;
+    GLint input, words, count, flip, raster;
     struct dvbridge_gl_packer *patch;
     struct dvbridge_gl_packer *fetch;
 };
@@ -58,7 +58,8 @@ static struct dvbridge_gl_packer *create(const char *vertex,const char *fragment
     p->words = glGetUniformLocation(p->program, "metadata_words");
     p->count = glGetUniformLocation(p->program, "packet_count");
     p->flip = glGetUniformLocation(p->program, "flip_y");
-    if (!linked || (input && p->input < 0) || p->words < 0 || p->count < 0 || p->flip < 0) {
+    p->raster = glGetUniformLocation(p->program, "raster_size");
+    if (!linked || (input && p->input < 0) || p->words < 0 || p->count < 0 || p->flip < 0 || p->raster < 0) {
         dvbridge_gl_packer_destroy(p);
         return NULL;
     }
@@ -93,12 +94,17 @@ void dvbridge_gl_packer_destroy(struct dvbridge_gl_packer *p)
 static bool pack(struct dvbridge_gl_packer *p, unsigned texture, unsigned framebuffer,
                  int width, int height, const uint32_t packets[640], unsigned count, bool flip,bool header)
 {
-    if (!p || (!texture && p->input>=0) || !packets || !count || count > 5 || width != 3840 || height != 2160)
+    if (!p || (!texture && p->input>=0) || !packets || !count || count > 5 ||
+        width <= 0 || height <= 0 || (width & 1) || (uint64_t)width * height < count * 3072u)
         return false;
     for (unsigned i = 0; i < count * 128; ++i)
         if (packets[i] > 255)
             return false;
     if (glGetError() != GL_NO_ERROR)
+        return false;
+    GLint limits[2];
+    glGetIntegerv(GL_MAX_VIEWPORT_DIMS, limits);
+    if (width > limits[0] || height > limits[1] || glGetError() != GL_NO_ERROR)
         return false;
     GLint program, vao, draw, read, viewport[4], active, binding, sampler,scissor[4];
     GLboolean mask[4];
@@ -147,6 +153,7 @@ static bool pack(struct dvbridge_gl_packer *p, unsigned texture, unsigned frameb
     glUniform4uiv(p->words, count*32, packets);
     glUniform1ui(p->count, count);
     glUniform1ui(p->flip, flip);
+    glUniform2i(p->raster, width, height);
     if(header){
         int rows=(count*3072+width-1)/width;
         glEnable(GL_SCISSOR_TEST);glScissor(0,flip?height-rows:0,width,rows);
@@ -180,10 +187,10 @@ bool dvbridge_gl_patch(struct dvbridge_gl_packer *p,unsigned texture,unsigned fr
     if(!p->patch){
         const char *vertex="#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
         const char *fragment="#version 300 es\nprecision highp float;precision highp int;"
-            "uniform highp sampler2D pq_input;uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;out vec4 color;"
-            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=2159-pixel.y;"
+            "uniform highp sampler2D pq_input;uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;uniform ivec2 raster_size;out vec4 color;"
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=raster_size.y-1-pixel.y;"
             "uvec3 bytes=uvec3(floor(texelFetch(pq_input,pixel,0).rgb*255.0+.5));"
-            "uint raster=uint(pixel.y*3840+pixel.x),packet=raster/3072u;"
+            "uint raster=uint(pixel.y*raster_size.x+pixel.x),packet=raster/3072u;"
             "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
             "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
             "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
@@ -196,7 +203,7 @@ bool dvbridge_gl_patch(struct dvbridge_gl_packer *p,unsigned texture,unsigned fr
     return pack(p->patch,texture,framebuffer,width,height,packets,count,flip,true);
 }
 
-bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer,
+bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer,int width,int height,
     const uint32_t packets[640],unsigned count,bool flip)
 {
     void (*barrier)(void)=(void (*)(void))eglGetProcAddress("glFramebufferFetchBarrierEXT");
@@ -205,9 +212,9 @@ bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer
         const char *vertex="#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
         const char *fragment="#version 300 es\n#extension GL_EXT_shader_framebuffer_fetch_non_coherent:require\n"
             "precision highp float;precision highp int;layout(noncoherent,location=0)inout highp vec4 color;"
-            "uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;"
-            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=2159-pixel.y;"
-            "uvec3 bytes=uvec3(floor(color.rgb*255.0+.5));uint raster=uint(pixel.y*3840+pixel.x),packet=raster/3072u;"
+            "uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;uniform ivec2 raster_size;"
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=raster_size.y-1-pixel.y;"
+            "uvec3 bytes=uvec3(floor(color.rgb*255.0+.5));uint raster=uint(pixel.y*raster_size.x+pixel.x),packet=raster/3072u;"
             "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
             "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
             "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
@@ -216,5 +223,5 @@ bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer
         p->fetch=create(vertex,fragment,false);if(!p->fetch)return false;
     }
     barrier();
-    return pack(p->fetch,0,framebuffer,3840,2160,packets,count,flip,true);
+    return pack(p->fetch,0,framebuffer,width,height,packets,count,flip,true);
 }

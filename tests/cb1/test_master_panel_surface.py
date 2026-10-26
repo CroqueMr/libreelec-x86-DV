@@ -34,8 +34,9 @@ class MasterPanelSurface(unittest.TestCase):
 enum {DVBRIDGE_MODE_DISABLED=0,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_MASTER_REFERENCE=5};
 namespace DVBRIDGE { uint64_t NextRevisionAfter(uint64_t value){return value+1;} }
 struct Binding {uint64_t stream=1,picture=42,revision=7;bool operator==(const Binding&)const=default;};
-struct Layer {Binding binding;bool lease=true;};
-struct Geometry {int source_width=3840,source_height=2160,x=0,y=0,width=3840,height=2160;};
+struct Layer {Binding binding;bool lease=true;int scalingMethod=0;};
+struct Geometry {int source_width=3840,source_height=2160,x=0,y=0,width=3840,height=2160;
+ int target_width=3840,target_height=2160;float crop[4]{};};
 enum class FrameStatus {Failed,Ready,Pending};
 struct Admission {
  Layer base;Layer* enhancement=nullptr;Geometry geometry,m_sourceGeometry;
@@ -44,6 +45,7 @@ struct Admission {
  bool m_overlayVisible=true,m_pendingOverlayVisible=true;
  bool m_nativeOverlayEnabled=true;int m_nativeOverlay=0;
  int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;}policy;
+ int m_spatialMethod=0;
  struct {uint64_t revision=3;} preferences;
  Binding m_committedBinding,m_pendingBinding,m_failedIdentity{0,0,0},m_pendingIdentity;
  uint64_t m_committedRevision=7,m_geometryRevision=0;
@@ -73,6 +75,9 @@ int main(){
  standard.run();assert(!standard.result);
  Admission changed;changed.preferences.revision=20;changed.run();assert(!changed.result);
  Admission resized;resized.geometry.width=3000;resized.run();assert(!resized.result);
+ Admission target;target.geometry.target_width=1920;target.run();assert(!target.result);
+ Admission crop;crop.geometry.crop[0]=1;crop.run();assert(!crop.result);
+ Admission filter;filter.base.scalingMethod=1;filter.run();assert(!filter.result);
  Admission stream;stream.base.binding.stream=2;stream.run();assert(!stream.result);
  Admission lease;lease.base.lease=false;lease.run();assert(!lease.result);
  Admission mode;mode.m_committedMode=1;mode.run();assert(!mode.result);

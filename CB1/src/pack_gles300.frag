@@ -7,6 +7,7 @@ uniform highp sampler2D pq_input;
 uniform uvec4 metadata_words[160];
 uniform uint packet_count;
 uniform uint flip_y;
+uniform ivec2 raster_size;
 out vec4 color;
 
 uint embed(uint luma,uint chroma,uint raster)
@@ -27,7 +28,7 @@ uint embed(uint luma,uint chroma,uint raster)
 void main()
 {
     ivec2 pixel=ivec2(gl_FragCoord.xy);
-    if(flip_y!=0u)pixel.y=2159-pixel.y;
+    if(flip_y!=0u)pixel.y=raster_size.y-1-pixel.y;
     ivec2 first=ivec2(pixel.x&~1,pixel.y);
     vec3 rgb0=clamp(texelFetch(pq_input,first,0).rgb,0.0,1.0);
     vec3 rgb1=clamp(texelFetch(pq_input,first+ivec2(1,0),0).rgb,0.0,1.0);
@@ -37,7 +38,7 @@ void main()
     uint y=uint(floor(256.0+3504.0*(second?luma1:luma0)+.5));
     float cb=2048.0+3584.0*((rgb0.b-luma0)+(rgb1.b-luma1))/(2.0*1.8814);
     float cr=2048.0+3584.0*((rgb0.r-luma0)+(rgb1.r-luma1))/(2.0*1.4746);
-    uint c=embed(y,uint(floor((second?cr:cb)+.5)),uint(pixel.y*3840+pixel.x));
+    uint c=embed(y,uint(floor((second?cr:cb)+.5)),uint(pixel.y*raster_size.x+pixel.x));
     uvec3 bytes=uvec3(c>>4u,y>>4u,((c&15u)<<4u)|(y&15u));
     color=vec4(vec3(bytes),255.0)/255.0;
 }

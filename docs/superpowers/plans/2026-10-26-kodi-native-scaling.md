@@ -6,6 +6,12 @@
 
 **Architecture:** Kodi owns mode selection, rectangles and filter preference; CB1 owns source-grid processing, metadata and transport. Reuse native spatial shader/kernel code before packing, with a real 1:1 bypass. Select the minimum interop implementation from a measured native adapter trial; do not add an unconditional frame-sized copy merely to call a native function.
 
+**Execution clarification:** use the actual native Kodi scaler, with its existing
+filter lifecycle and kernels. No lighter substitute or rewritten fused scaling
+shader. Preserve current unscaled/identity optimizations, but do not call a
+custom interpolation implementation native. Measure necessary native passes
+honestly rather than concealing their cost with a different filter.
+
 **Tech Stack:** Existing C/C++/GLES shaders, pinned Kodi22RC1/libplacebo/FFmpeg, current CB1 lease/identity APIs, existing WSL cross build and Intel/AMD test harness.
 
 **Spec:** `docs/superpowers/specs/2026-10-26-kodi-native-scaling-design.md`.
@@ -18,7 +24,7 @@
 - Installed PreviewE images remain unchanged during framing; a manifest change is not a compiled/installed PreviewG image.
 - No publication, driver/kernel, demux/audio, AI-model/creative-curve changes, new quality tier, queue or forced clock.
 - Native Auto, whitelist, adjustment Off, overrides and per-video preferences retain native semantics. No second CB1 upscale preference.
-- Master: zero changed film pixels/metadata for identical input, mapping, target and backend; no precision relaxation.
+- Master: exact reconstruction/metadata before final scaling and exact unchanged no-resample output. Resized output follows the same unmodified Kodi filter as other modes, per explicit user clarification; no Master-only final scaler.
 - Native spatial sampling never receives already packed Dolby bytes. P5 retains its component domain.
 - FEL reconstruction scaling remains independent. Native/fallback and MVC/stereo routes remain native.
 - One route is finished, simplified and requalified before opening the next. Remove failed production trials before another candidate.
@@ -90,14 +96,14 @@ Expected: source-based native selection RED reproduced; chosen adapter controls 
 
 **Files:** Existing Master/P5 owners and adapter admission; `master_reference.c`, `profile5_images.c`, reference scaled-output tests and native selection/spatial tests.
 **Consumes:** Native selected output/rectangles and target-aware packing; unchanged reference reconstruction/filter contracts.
-**Produces:** Master honors native mode geometry without inheriting native approximate sampling, color/range conversion or different rounding. Existing IPT preference stays build-gated as before.
+**Produces:** Master retains exact reconstruction and metadata, then uses the single native Kodi final scaler. Existing IPT preference stays build-gated as before.
 
 Non-UHD target checks use the same isolated qualification mechanism as Task3.
 Production mode selection remains unchanged until Task7.
 
 - [ ] Preserve same-mapping frozen Master pixels/metadata on both GPUs before any change; do not weaken an existing failing witness to hide it.
 - [ ] Add G01/G05/G08/G10/G13/G16/G17 and T01-T10 Master controls with independent packing/reference oracles for genuinely new mappings.
-- [ ] Route geometry through native ownership while retaining exact spatial/reference arithmetic. If a native kernel is not exactly equivalent, keep the reference filter and report it accurately rather than relabeling it native.
+- [ ] Preserve exact source-grid reference reconstruction and chroma/FEL filters, then route final picture fitting through the same actual Kodi scaler used by the other modes. Resized-output controls use native Kodi interpolation as their oracle; do not retain a competing Master final scaler.
 - [ ] Test mode changes, failure with recovery Off/On, pending prepared frame with replaced target and P5 direct IPT. Expected: no false Master success, no silent Standard route, no source relabeling.
 - [ ] Run suites, exact full-carrier controls, then actual admitted HDMI target/perf controls. Clean and repeat after cleanup before committing Master.
 

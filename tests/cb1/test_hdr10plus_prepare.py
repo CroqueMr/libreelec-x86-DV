@@ -137,7 +137,7 @@ struct Ext {int level{};struct {int min_pq{},avg_pq{},max_pq{1000};}l1;};
 const Ext* av_dovi_find_level(const AVDOVIMetadata*,int){static Ext e;return &e;}
 const Ext* av_dovi_get_ext(const AVDOVIMetadata*,int){static Ext e;return &e;}
 struct CDVMetadataBuffer {AVDOVIMetadata value;const void* Data()const{return &value;}size_t Size()const{return sizeof(value);}};
-struct dvbridge_geometry {int x{},y{},width=3840,height=2160;};
+struct dvbridge_geometry {int x{},y{},width=3840,height=2160,target_width=3840,target_height=2160;};
 struct dvbridge_gl_frame {struct Frame {Frame* enhancement_layer{};}frame;};
 struct dvbridge_color {struct {bool nlq_active=true;}dovi;};
 struct GL {int gpu;};

@@ -124,6 +124,7 @@ int main(int argc,char **argv)
     check_quad_sampler(g.gl->gpu);
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(g.gl->gpu);assert(owner);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
+    if(g.log){pl_renderer_destroy(&r->renderer);r->renderer=pl_renderer_create(g.log,g.gl->gpu);assert(r->renderer);}
     /* This witness checks admission/metadata only, never executes a quad pack. */
     if(area_only)r->fragment_quad=true;
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
@@ -253,7 +254,10 @@ int main(int argc,char **argv)
                 else assert(out->bytes==expected_bytes && !memcmp(out->output_metadata,expected_metadata,expected_bytes));
                 if(!optimized && (geometry.source_width!=3840 || geometry.source_height!=2160))
                     assert(dvbridge_render_dv_policy_rgb(r));
-                assert(dvbridge_render_dv_policy_resolve(r,target,fbo,flip));
+                bool resolved=dvbridge_render_dv_policy_resolve(r,target,fbo,flip);
+                if(!resolved)fprintf(stderr,"resolve failed preset=%u geometry=%u flip=%u gui=%u optimized=%u\n",
+                    preset,c,flip,gui_state,optimized);
+                assert(resolved);
                 read_carrier(fbo,optimized?actual:control);
                 if(c==4 && !gui_state && !flip){
                     unsigned char *image=optimized?actual:control;

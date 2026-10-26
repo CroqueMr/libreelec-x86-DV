@@ -40,18 +40,46 @@ void dvbridge_set_overlay_visible(struct dvbridge_context *context, bool visible
     if (context) context->overlay_visible = visible;
 }
 
+bool dvbridge_geometry_raster(struct dvbridge_geometry geometry, int *width, int *height)
+{
+    int w=geometry.target_width,h=geometry.target_height;
+    if(!w && !h){w=3840;h=2160;}
+    if(!width || !height || w<=0 || h<=0 || (uint64_t)w*h>INT_MAX)return false;
+    *width=w;*height=h;
+    return true;
+}
+
+bool dvbridge_geometry_source(struct dvbridge_geometry geometry,float crop[4])
+{
+    if(!crop || geometry.source_width<=0 || geometry.source_width>3840 ||
+       geometry.source_height<=0 || geometry.source_height>2160)return false;
+    float rect[4]={0,0,geometry.source_width,geometry.source_height};
+    if(geometry.crop[0] || geometry.crop[1] || geometry.crop[2] || geometry.crop[3])
+        memcpy(rect,geometry.crop,sizeof(rect));
+    for(unsigned i=0;i<4;i++)if(!isfinite(rect[i]))return false;
+    if(rect[0]<0 || rect[1]<0 || rect[2]>geometry.source_width || rect[3]>geometry.source_height ||
+       rect[0]>=rect[2] || rect[1]>=rect[3])return false;
+    memcpy(crop,rect,sizeof(rect));
+    return true;
+}
+
 bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes,
                          struct dvbridge_geometry geometry)
 {
     if (!margins || !dvbridge_metadata_bounds(metadata, bytes)) return false;
+    int target_width,target_height;
+    if (!dvbridge_geometry_raster(geometry,&target_width,&target_height) || (target_width&1)) return false;
     if (geometry.source_width <= 0 || geometry.source_width > 3840 ||
         geometry.source_height <= 0 || geometry.source_height > 2160 ||
-        geometry.x < 0 || geometry.x > 3840 || geometry.y < 0 || geometry.y > 2160 ||
-        geometry.width <= 0 || geometry.width > 3840 ||
-        geometry.height <= 0 || geometry.height > 2160) return false;
+        geometry.x < 0 || geometry.x > target_width || geometry.y < 0 || geometry.y > target_height ||
+        geometry.width <= 0 || geometry.width > target_width-geometry.x ||
+        geometry.height <= 0 || geometry.height > target_height-geometry.y) return false;
+    float crop[4];
+    if(!dvbridge_geometry_source(geometry,crop))return false;
+    const bool native_crop=geometry.crop[2]!=0 || geometry.crop[3]!=0;
     const AVDOVIMetadata *m = metadata;
-    struct dvbridge_dv area = {0};
-    if (!dvbridge_dv_geometry(&area, geometry.source_width, geometry.source_height,
+    struct dvbridge_dv area = {.target_w=target_width,.target_h=target_height};
+    if (!native_crop && !dvbridge_dv_geometry(&area, geometry.source_width, geometry.source_height,
             geometry.x, geometry.y, geometry.width, geometry.height)) return false;
     unsigned offsets[4] = {0};
     unsigned levels = 0;
@@ -66,7 +94,20 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
         offsets[3] = e->l5.bottom_offset;
     }
     unsigned computed[4];
-    if (!dvbridge_dv_area(&area, offsets[0], offsets[1], offsets[2], offsets[3], computed))
+    if(native_crop){
+        if(offsets[0]>=(unsigned)geometry.source_width ||
+           offsets[1]>=(unsigned)geometry.source_width-offsets[0] ||
+           offsets[2]>=(unsigned)geometry.source_height ||
+           offsets[3]>=(unsigned)geometry.source_height-offsets[2])return false;
+        double left=fmax(crop[0],offsets[0]),right=fmin(crop[2],geometry.source_width-offsets[1]);
+        double top=fmax(crop[1],offsets[2]),bottom=fmin(crop[3],geometry.source_height-offsets[3]);
+        if(left>=right || top>=bottom)return false;
+        double sx=geometry.width/(double)(crop[2]-crop[0]),sy=geometry.height/(double)(crop[3]-crop[1]);
+        computed[0]=lround(geometry.x+(left-crop[0])*sx);
+        computed[1]=target_width-lround(geometry.x+(right-crop[0])*sx);
+        computed[2]=lround(geometry.y+(top-crop[1])*sy);
+        computed[3]=target_height-lround(geometry.y+(bottom-crop[1])*sy);
+    }else if (!dvbridge_dv_area(&area, offsets[0], offsets[1], offsets[2], offsets[3], computed))
         return false;
     memcpy(margins, computed, sizeof(computed));
     return true;
@@ -86,6 +127,9 @@ static struct dvbridge_candidate *prepare_output(
     struct dvbridge_candidate *candidate = calloc(1, sizeof(*candidate));
     if (!candidate) return NULL;
     candidate->state = context->state;
+    if(!dvbridge_geometry_raster(geometry,&candidate->state.target_w,&candidate->state.target_h)){
+        free(candidate);return NULL;
+    }
     candidate->owner = context;
     candidate->revision = context->revision;
     candidate->state.fel_verified = fel_reconstructed;
@@ -97,9 +141,10 @@ static struct dvbridge_candidate *prepare_output(
     static const unsigned full_raster[4];
     const bool overlay = context->overlay_visible;
     const bool edge = context->state.frames && overlay != context->overlay_presented;
-    if (!dvbridge_dv_geometry(&candidate->state, geometry.source_width, geometry.source_height,
-            geometry.x, geometry.y, geometry.width, geometry.height) ||
-        !dvbridge_dv_metadata_output(&candidate->state, metadata, pts,
+    candidate->state.source_w=geometry.source_width;candidate->state.source_h=geometry.source_height;
+    candidate->state.dest_x=geometry.x;candidate->state.dest_y=geometry.y;
+    candidate->state.dest_w=geometry.width;candidate->state.dest_h=geometry.height;
+    if (!dvbridge_dv_metadata_output(&candidate->state, metadata, pts,
             overlay ? full_raster : margins, force_refresh || edge)) {
         free(candidate);
         return NULL;

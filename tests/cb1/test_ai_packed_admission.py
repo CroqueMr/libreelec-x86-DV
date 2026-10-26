@@ -14,7 +14,7 @@ class PackedAdmission(unittest.TestCase):
         condition = re.search(r'if \(allowPacked && m_directUsable.*?\n\s*\{', added, re.S).group(0)
         program = '''#include <cassert>
 enum { DVBRIDGE_MODE_STANDARD=0, DVBRIDGE_MODE_ENHANCED_DV=1 };
-struct Geometry { int source_width,source_height,x,y,width,height; };
+struct Geometry { int source_width,source_height,x,y,width,height; int target_width=3840,target_height=2160; };
 bool admits(Geometry geometry,bool allowPacked=true,bool m_directUsable=true,bool m_scanout=true,int mode=0,bool optimized=true,bool m_overlayVisible=false) {
     struct {int mode;} policy{mode};
     struct {bool optimizedDV;} preferences{optimized};

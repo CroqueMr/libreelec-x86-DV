@@ -103,7 +103,7 @@ int main(int argc,char **argv)
         if(inplace){
             for(unsigned i=0;i<640;i++)metadata[i]=next()&255;
             assert(beta5_inplace(old,fbo[0],metadata,packets,flip));
-            assert(dvbridge_gl_patch_inplace(candidate,fbo[1],metadata,packets,flip));
+            assert(dvbridge_gl_patch_inplace(candidate,fbo[1],W,H,metadata,packets,flip));
             compare(fbo,bytes);
         }
     }
