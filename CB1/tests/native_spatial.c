@@ -45,6 +45,16 @@ int main(void)
         {480,0,1440,1080}};
     assert(picture_crop(&visible,geometry,&input));
     assert(visible.x0==0 && visible.y0==0 && visible.x1==1920 && visible.y1==1080);
+#if DVBRIDGE_TARGET_API < 3
+    assert(!"Native fractional placement must retain its sampling phase");
+#else
+    geometry=(struct dvbridge_geometry){1920,1080,0,186,2560,1068,2560,1440,
+        {0,0,1920,1080},{0,186.6666667f,2560,1253.3333333f}};
+    assert(picture_crop(&visible,geometry,&input));
+    assert(fabs(visible.y0+189.0f)<.001f && fabs(visible.y1-1269.0f)<.001f);
+    struct dvbridge_renderer fractional={0};
+    assert(configure_target(&fractional,geometry) && !fractional.target_identity);
+#endif
     struct dvbridge_renderer r={0};
     struct witness w={.outcome=1,.fitted=&fitted};
     dvbridge_renderer_set_spatial_fit(&r,fit,&w);

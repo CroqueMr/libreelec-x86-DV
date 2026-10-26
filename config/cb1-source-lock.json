@@ -17,7 +17,7 @@
     "projects/Generic/filesystem/usr/bin/dv-diagnostics": "ee77b1f0c9a93a1ebd8680229b6b94b7cfcdd07b651e7eed07d38c6a3df2bdaf",
     "projects/Generic/linux/7.2.6/linux.x86_64.conf": "d399a8320e2ec568f18e79a64718b4aea8613f425c750531d6397ca03045cf91",
     "projects/Generic/options": "f1bac33106c0d65c3b3f53f3fbb8a842efe978bec3d7a8775600ee23f423403c",
-    "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "0421c1136d7517bf52f8f8d3b2230d313d8ead834d48ed5501f2955bbd9b28f8",
+    "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "1133ec121e7faca9ef059daf731d63f910bd76ad8b5c0fbaedb46724e6732154",
     "projects/Generic/patches/kodi/kodi-9993-fel-presentation-pairing.patch": "e285499837a5df7208776d4f49d99b233bad6a1f1b9c35d042ea0efde0897a32",
     "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": "aa85bfe853c8fb6050a5a7d6ce7d00e08cff8b1dba4633cb1802174a33a717b8",
     "projects/Generic/patches/kodi/kodi-9995-diagnostics.patch": "61a025d14e247089ef30eef560da84a927c984686a13f4eaa119a492835c9f5c",
@@ -66,7 +66,7 @@
     "config/cb1-patch-index.json": "a2bc2572cd02e8b5c861262d2c1a405ed25d8f3ec4fd9d127e3c09b335d173ac",
     "config/cb1-versions.json": "8808280b560745bee91c6b0add1e065be9ffbc3ed286b9cfbe9cf6cde5e27418",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
-    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "2074e9980a9e92dccb5e117173314c609ec80f76aca213827bc24948d982304a",
+    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "9ab9a06b092217d5b173d727acf75d349ba7b65df5eb0944dc1cd9e36ec1e051",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f"
   },
   "staging": {
@@ -184,11 +184,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_core.c": {
       "source": "src/dvbridge_core.c",
-      "sha256": "d39b4c966e24b31fb152ad4e802a41a64378bcdb9fcbb08cda6e09acff9d38de"
+      "sha256": "80a7b68ac6a2d815667e8582b4c54d3525dd4b2263f2f4297ea783ba911ebf5a"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_core.h": {
       "source": "src/dvbridge_core.h",
-      "sha256": "85425766d9f627d22354b32095ac42e71fedd936da07b3134be6706b03f00b13"
+      "sha256": "c8e0bb1da9ed3c4ae5c085b21199f516fec99a78a7c18ad2275119e1d6bf226d"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_creative.c": {
       "source": "src/dvbridge_creative.c",
@@ -272,7 +272,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "1cc4f8650f553c1f3775a2313d8180782113522fc6231359e2284f9f01e264a9"
+      "sha256": "a30bcbd258f50fdaaf5f6a0426c4dfd2c8d56ec62cfaed8e67fc0498b243b140"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -308,7 +308,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "edee0f0efae44107d7144ad0b439c2110eef1086785dbe83568c73c060a78560"
+      "sha256": "af5cfd311fc99d4b017d64d18ff08b37180c99adc0bff16cb92e41b643e526de"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

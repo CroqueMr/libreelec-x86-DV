@@ -91,5 +91,30 @@ and complete accepted HDMI playback after integration and cleanup.
 - Basic/Expert crop witnesses additionally pass with the actual native adapter
   on both GPUs. Twelve private functional cases run per machine without changing
   installed image/settings hashes.
-  Complete image construction, full-frame fidelity oracle, physical target
-  admission, interaction and cadence/performance remain pending.
+  These controls do not establish arbitrary HDMI timing compatibility.
+
+## Final source review and installed-image screening
+
+- The first complete PreviewG image at `8d45f19bcd` passed delivered boot/runtime,
+  dependency ABI and source receipt verification and was installed privately on
+  both machines. All five DV-input modes and both AI modes have valid UHD movie
+  route screens; FEL30 and HDR10-AI30 qualification windows contain no excess
+  missed HDMI intervals on either host.
+- Independent review found fullscreen zoom, fractional destination rounding and
+  admitted-but-unapplied saved rotation. Targeted failing tests reproduced the
+  geometry errors. The fix clips visible source/destination consistently and
+  retains floating physical placement separately from integer carrier bounds.
+  Unsupported nonzero rotation follows existing route rejection/fallback rather
+  than presenting an incorrectly oriented CB1 picture.
+- The reviewed source passes 220 engine cases with 15 explicit hardware skips,
+  plus 194 native integration cases. Exact Master controls remain strict.
+- P5 Master1080-to-UHD is not a 60fps pass: the first installed native-scaler
+  screening measured about45fps on N100 and37fps on3200U, with missed intervals.
+  No lighter interpolation or modified native filter is substituted.
+- Actual1080p60 output currently rejects DV activation in both drivers while
+  HDR10 Basic/Expert/native work. The native enumerated60Hz mode has negative
+  sync polarity unlike the separate CTA mode. This is an observed transport
+  limitation under investigation, not a passed target or permission to force
+  UHD. Physical1440p60 is not advertised on the present TV connections.
+- The corrected complete image, post-review hardware/interaction checks and
+  final case-by-case status remain required before declaring PreviewG accepted.

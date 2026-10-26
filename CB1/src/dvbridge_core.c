@@ -63,6 +63,21 @@ bool dvbridge_geometry_source(struct dvbridge_geometry geometry,float crop[4])
     return true;
 }
 
+bool dvbridge_geometry_destination(struct dvbridge_geometry geometry,float rect[4])
+{
+    int width,height;
+    if(!rect || !dvbridge_geometry_raster(geometry,&width,&height))return false;
+    float value[4]={(float)geometry.x,(float)geometry.y,
+        (float)geometry.x+geometry.width,(float)geometry.y+geometry.height};
+    if(geometry.placement[2] || geometry.placement[3])
+        memcpy(value,geometry.placement,sizeof(value));
+    for(unsigned i=0;i<4;i++)if(!isfinite(value[i]))return false;
+    if(value[0]<0 || value[1]<0 || value[2]>width || value[3]>height ||
+       value[0]>=value[2] || value[1]>=value[3])return false;
+    memcpy(rect,value,sizeof(value));
+    return true;
+}
+
 bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes,
                          struct dvbridge_geometry geometry)
 {
@@ -74,9 +89,10 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
         geometry.x < 0 || geometry.x > target_width || geometry.y < 0 || geometry.y > target_height ||
         geometry.width <= 0 || geometry.width > target_width-geometry.x ||
         geometry.height <= 0 || geometry.height > target_height-geometry.y) return false;
-    float crop[4];
-    if(!dvbridge_geometry_source(geometry,crop))return false;
-    const bool native_crop=geometry.crop[2]!=0 || geometry.crop[3]!=0;
+    float crop[4],dest[4];
+    if(!dvbridge_geometry_source(geometry,crop) ||
+       !dvbridge_geometry_destination(geometry,dest))return false;
+    const bool native_crop=geometry.crop[2]!=0 || geometry.crop[3]!=0 || geometry.placement[2]!=0;
     const AVDOVIMetadata *m = metadata;
     struct dvbridge_dv area = {.target_w=target_width,.target_h=target_height};
     if (!native_crop && !dvbridge_dv_geometry(&area, geometry.source_width, geometry.source_height,
@@ -102,11 +118,12 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
         double left=fmax(crop[0],offsets[0]),right=fmin(crop[2],geometry.source_width-offsets[1]);
         double top=fmax(crop[1],offsets[2]),bottom=fmin(crop[3],geometry.source_height-offsets[3]);
         if(left>=right || top>=bottom)return false;
-        double sx=geometry.width/(double)(crop[2]-crop[0]),sy=geometry.height/(double)(crop[3]-crop[1]);
-        computed[0]=lround(geometry.x+(left-crop[0])*sx);
-        computed[1]=target_width-lround(geometry.x+(right-crop[0])*sx);
-        computed[2]=lround(geometry.y+(top-crop[1])*sy);
-        computed[3]=target_height-lround(geometry.y+(bottom-crop[1])*sy);
+        double sx=(dest[2]-dest[0])/(double)(crop[2]-crop[0]);
+        double sy=(dest[3]-dest[1])/(double)(crop[3]-crop[1]);
+        computed[0]=lround(dest[0]+(left-crop[0])*sx);
+        computed[1]=target_width-lround(dest[0]+(right-crop[0])*sx);
+        computed[2]=lround(dest[1]+(top-crop[1])*sy);
+        computed[3]=target_height-lround(dest[1]+(bottom-crop[1])*sy);
     }else if (!dvbridge_dv_area(&area, offsets[0], offsets[1], offsets[2], offsets[3], computed))
         return false;
     memcpy(margins, computed, sizeof(computed));

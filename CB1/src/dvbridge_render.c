@@ -861,26 +861,28 @@ static bool reference_area(float rect[4], const void *metadata,
 /* Native visible source mapped onto the complete output carrier. */
 static bool picture_crop(pl_rect2df *rect,struct dvbridge_geometry geometry,pl_tex input)
 {
-    float crop[4];int width,height;
+    float crop[4],dest[4];int width,height;
     if(!input || geometry.width<=0 || geometry.height<=0 ||
        !dvbridge_geometry_raster(geometry,&width,&height) ||
-       !dvbridge_geometry_source(geometry,crop))return false;
+       !dvbridge_geometry_source(geometry,crop) ||
+       !dvbridge_geometry_destination(geometry,dest))return false;
     double fx=(double)input->params.w/geometry.source_width;
     double fy=(double)input->params.h/geometry.source_height;
-    double sx=(crop[2]-crop[0])*fx/geometry.width;
-    double sy=(crop[3]-crop[1])*fy/geometry.height;
-    *rect=(pl_rect2df){crop[0]*fx-geometry.x*sx,crop[1]*fy-geometry.y*sy,
-        crop[0]*fx+(width-geometry.x)*sx,crop[1]*fy+(height-geometry.y)*sy};
+    double sx=(crop[2]-crop[0])*fx/(dest[2]-dest[0]);
+    double sy=(crop[3]-crop[1])*fy/(dest[3]-dest[1]);
+    *rect=(pl_rect2df){crop[0]*fx-dest[0]*sx,crop[1]*fy-dest[1]*sy,
+        crop[0]*fx+(width-dest[0])*sx,crop[1]*fy+(height-dest[1])*sy};
     return true;
 }
 
 static bool configure_target(struct dvbridge_renderer *r,struct dvbridge_geometry geometry)
 {
-    float crop[4];
+    float crop[4],dest[4];
     if(!r || !dvbridge_geometry_raster(geometry,&r->target_width,&r->target_height) ||
-       !dvbridge_geometry_source(geometry,crop))return false;
-    r->target_identity=!geometry.x && !geometry.y && geometry.width==r->target_width &&
-        geometry.height==r->target_height && geometry.source_width==r->target_width &&
+       !dvbridge_geometry_source(geometry,crop) ||
+       !dvbridge_geometry_destination(geometry,dest))return false;
+    r->target_identity=!dest[0] && !dest[1] && dest[2]==r->target_width &&
+        dest[3]==r->target_height && geometry.source_width==r->target_width &&
         geometry.source_height==r->target_height && !crop[0] && !crop[1] &&
         crop[2]==geometry.source_width && crop[3]==geometry.source_height;
     return true;
@@ -1475,10 +1477,13 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     int target_width,target_height;
     if(!dvbridge_geometry_raster(geometry,&target_width,&target_height) ||
        (packed && (packed->params.w!=target_width || packed->params.h!=target_height)))return false;
-    float visible_source[4];
-    if(!dvbridge_geometry_source(geometry,visible_source))return false;
+    float visible_source[4],destination[4];
+    if(!dvbridge_geometry_source(geometry,visible_source) ||
+       !dvbridge_geometry_destination(geometry,destination))return false;
     bool cropped_source=visible_source[0]!=0 || visible_source[1]!=0 ||
-        visible_source[2]!=geometry.source_width || visible_source[3]!=geometry.source_height;
+        visible_source[2]!=geometry.source_width || visible_source[3]!=geometry.source_height ||
+        destination[0]!=geometry.x || destination[1]!=geometry.y ||
+        destination[2]!=geometry.x+geometry.width || destination[3]!=geometry.y+geometry.height;
     if (!source || !isfinite(pts) || source->num_planes < 1 || source->num_planes > 4 || source->rotation ||
         source->crop.x0 != 0 || source->crop.y0 != 0 ||
         source->crop.x1 != geometry.source_width || source->crop.y1 != geometry.source_height)
@@ -1548,7 +1553,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
                     .components = 4, .component_mapping = {0, 1, 2, 3}}},
         .repr = pl_color_repr_rgb,
         .color = mapped.color,
-        .crop = {geometry.x, geometry.y, geometry.x + geometry.width, geometry.y + geometry.height},
+        .crop = {destination[0], destination[1], destination[2], destination[3]},
     };
     if(direct && !direct->custom_quantize) {
         target.repr.levels=direct->limited?PL_COLOR_LEVELS_LIMITED:PL_COLOR_LEVELS_FULL;
@@ -2058,13 +2063,18 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     const struct pl_cb1_dovi_reference *master,bool p5_standard,const struct cb1_master_ipt *ipt)
 {
     if(r && r->dv.active){dvbridge_render_dv_policy_cancel(r);return false;}
+    if(r)r->ready=r->direct_output=r->policy_ready=false;
     int target_width,target_height;
     if(!configure_target(r,geometry) ||
        !dvbridge_geometry_raster(geometry,&target_width,&target_height))return false;
     if(direct && (direct->texture->params.w!=target_width ||
         direct->texture->params.h!=target_height))return false;
     bool hdr10=session || (policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT);
-    bool scaled=geometry.width!=geometry.source_width || geometry.height!=geometry.source_height ||
+    float destination[4];
+    if(!dvbridge_geometry_destination(geometry,destination))return false;
+    bool scaled=destination[0]!=geometry.x || destination[1]!=geometry.y ||
+        destination[2]!=geometry.x+geometry.width || destination[3]!=geometry.y+geometry.height ||
+        geometry.width!=geometry.source_width || geometry.height!=geometry.source_height ||
         geometry.crop[0] || geometry.crop[1] ||
         (geometry.crop[2] && geometry.crop[2]!=geometry.source_width) ||
         (geometry.crop[3] && geometry.crop[3]!=geometry.source_height);
@@ -2399,9 +2409,10 @@ static bool direct_target_valid(struct dvbridge_renderer *r,pl_tex target,unsign
 
 static bool direct_geometry_valid(struct dvbridge_geometry geometry)
 {
-    int width,height;
-    return dvbridge_geometry_raster(geometry,&width,&height) && !geometry.x && !geometry.y &&
-        geometry.width==width && geometry.height==height;
+    int width,height;float dest[4];
+    return dvbridge_geometry_raster(geometry,&width,&height) &&
+        dvbridge_geometry_destination(geometry,dest) && !dest[0] && !dest[1] &&
+        dest[2]==width && dest[3]==height;
 }
 
 static void direct_target_init(struct direct_output *direct,pl_tex target,bool flip,

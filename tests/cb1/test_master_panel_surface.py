@@ -36,7 +36,7 @@ namespace DVBRIDGE { uint64_t NextRevisionAfter(uint64_t value){return value+1;}
 struct Binding {uint64_t stream=1,picture=42,revision=7;bool operator==(const Binding&)const=default;};
 struct Layer {Binding binding;bool lease=true;int scalingMethod=0;};
 struct Geometry {int source_width=3840,source_height=2160,x=0,y=0,width=3840,height=2160;
- int target_width=3840,target_height=2160;float crop[4]{};};
+ int target_width=3840,target_height=2160;float crop[4]{},placement[4]{};};
 enum class FrameStatus {Failed,Ready,Pending};
 struct Admission {
  Layer base;Layer* enhancement=nullptr;Geometry geometry,m_sourceGeometry;

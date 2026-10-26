@@ -7,6 +7,33 @@ from test_native_video_source import TREE, body
 
 
 class NativeSpatialContractTests(unittest.TestCase):
+    def test_native_zoom_and_fractional_placement_are_preserved(self):
+        text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp").read_text()
+        geometry = body(text, "dvbridge_geometry CRendererVAAPIGLES::DVBridgeGeometry()")
+        guard = body(text, "bool CRendererVAAPIGLES::DVBridgeOrientationSupported(")
+        self.run_program(r'''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+struct CRect {float x1,y1,x2,y2;float Width()const{return x2-x1;}float Height()const{return y2-y1;}
+ void Intersect(const CRect& r){x1=std::max(x1,r.x1);y1=std::max(y1,r.y1);x2=std::min(x2,r.x2);y2=std::min(y2,r.y2);} };
+struct Context {int GetWidth()const{return 1920;}int GetHeight()const{return 1080;}};
+struct Window {int w=3840,h=2160;Context c;int GetWidth()const{return w;}int GetHeight()const{return h;}const Context& GetGfxContext()const{return c;}} window;
+struct CServiceBroker {static Window* GetWinSystem(){return &window;}};
+struct dvbridge_geometry{int source_width,source_height,x,y,width,height,target_width,target_height;float crop[4],placement[4];};
+struct Test {int m_sourceWidth=1920,m_sourceHeight=800;struct {int m_Orientation=90;}m_videoSettings;
+ CRect dest{-336,0,2256,1080};
+ void GetVideoRect(CRect& s,CRect& d,CRect& v){s={0,0,float(m_sourceWidth),float(m_sourceHeight)};d=dest;v={0,0,1920,1080};}
+ dvbridge_geometry run() GEOMETRY
+ bool rotation(unsigned int orientation)const GUARD
+};
+int main(){Test t;auto g=t.run();assert(g.x==0 && g.width==3840);
+ assert(std::abs(g.crop[0]-248.88889f)<.001f && std::abs(g.crop[2]-1671.1111f)<.001f);
+ t.dest={0,140,1920,940};window.w=2560;window.h=1440;g=t.run();
+ assert(std::abs(g.placement[1]-186.66667f)<.001f && std::abs(g.placement[3]-1253.3333f)<.001f);
+ assert(t.rotation(0));assert(!t.rotation(90) && !t.rotation(180) && !t.rotation(270));}
+'''.replace("GEOMETRY", geometry).replace("GUARD", guard))
+
     def test_screenshot_readback_uses_current_surface_size(self):
         text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp").read_text()
         capture = body(text, "bool CDVBridgeGLES::ReadScreenshot(")

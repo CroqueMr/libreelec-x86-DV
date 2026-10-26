@@ -126,6 +126,16 @@ int main(void)
         rejected(m, bytes, invalid[i]);
     target_geometries(m,bytes);
     native_crop_geometries(m,bytes);
+#if DVBRIDGE_TARGET_API >= 3
+    m->num_ext_blocks=0;
+    geometry=(struct dvbridge_geometry){1920,800,0,186,2560,1068,2560,1440,
+        {0,0,1920,800},{0,186.6666667f,2560,1253.3333333f}};
+    assert(dvbridge_frame_area(margins,m,bytes,geometry));
+    assert(margins[0]==0 && margins[1]==0 && margins[2]==187 && margins[3]==187);
+    geometry.placement[0]=NAN;rejected(m,bytes,geometry);
+    geometry.placement[0]=-1;rejected(m,bytes,geometry);
+    geometry.placement[0]=0;geometry.placement[2]=2561;rejected(m,bytes,geometry);
+#endif
     av_free(m); dvbridge_destroy(context);
     puts("PASS: common geometry without transport, L5 and integer bounds, untouched failures");
 }
