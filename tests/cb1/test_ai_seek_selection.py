@@ -24,6 +24,7 @@ struct Renderer {
  bool HDR10AIQueueEligible(){return true;}
  bool HDR10AILookahead(){return true;}
  bool HDR10AIFramePending(){return pending;}
+ bool HDR10AIFrameCommitted(){return true;}
 };
 struct Clock {bool IsPaused(){return true;}};
 struct CRenderManager {

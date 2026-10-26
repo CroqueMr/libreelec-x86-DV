@@ -164,11 +164,53 @@ int main(){
  CDVBridgeGLES::Context native;preferences.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;
  assert(native.PrepareHDR10AIQueue(queue,preferences,"bundle",0,false,&result,false,0)==Decision::Native);
  assert(!native.source.active && native.source.analysed==0);
+ for(auto mode:{DVBRIDGE::HDR10SourceMode::ReferenceDV,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
+  CDVBridgeGLES::Context prepared;prepared.state.attached=true;
+  prepared.source.active=prepared.source.covered=true;prepared.source.last=10;
+  preferences.hdr10Source=mode;
+  assert(prepared.PrepareHDR10AIQueue(queue,preferences,"bundle",500,false,&result,false,0)==Decision::Prepare);
+  assert(prepared.source.analysed==0 && prepared.state.aiNext);
+  assert(prepared.state.aiNext->layer.binding.picture==11);
+ }
 }
 '''.replace('FUNCTION',code)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'test.cpp').write_text(program)
             built=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stderr)
+
+    def test_adaptive_anticipation_follows_the_current_render_fence(self):
+        code=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text(),
+                  'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(')
+        tail=code[code.rindex('  if (!rendered || !fenced)'):]
+        program=r'''
+#include <cassert>
+enum {DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_ENHANCED_DV};
+struct Probe {
+ enum class FrameStatus {Failed,Ready,Pending};
+ struct {int mode;} policy;
+ struct {int binding=11;} base;int preferences=7;
+ unsigned advanced=0;bool m_pending=false;
+ Probe* m_context=this;
+ bool PollReady(){return false;}
+ void AdvanceNextHDR10AI(int binding,int value){assert(binding==11 && value==7 && m_pending);advanced++;}
+ FrameStatus finish(bool rendered,bool fenced) BODY
+};
+int main(){
+ for(int mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_ENHANCED_DV}){
+  Probe p;p.policy.mode=mode;
+  assert(p.finish(false,true)==Probe::FrameStatus::Failed && !p.advanced);
+  assert(p.finish(true,false)==Probe::FrameStatus::Failed && !p.advanced);
+  assert(p.finish(true,true)==Probe::FrameStatus::Pending && p.m_pending);
+  assert(p.advanced==(mode==DVBRIDGE_MODE_ENHANCED_DV));
+ }
+}
+'''.replace('BODY','{\n'+tail)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-include','initializer_list',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
             ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(ran.returncode,0,ran.stderr)

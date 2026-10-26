@@ -3760,7 +3760,8 @@ static struct pl_hook_res ai_enhanced_output(void *priv,const struct pl_hook_par
         .desc={.name=names[i],.type=PL_DESC_SAMPLED_TEX},
         .binding={.object=r->processing.pq_texture[i],.sample_mode=PL_TEX_SAMPLE_LINEAR}};
     char header[sizeof(dve_math)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s#define color_guidance (guidance.x!=0)\n#define hue_guidance (guidance.y!=0)\n%s",
+    /* Clipped RGB, positive LMS coefficients and expansion keep LUT inputs nonnegative. */
+    snprintf(header,sizeof(header),"%s%s%s%s#define CB1_AI_NONNEGATIVE_PQ 1\n#define color_guidance (guidance.x!=0)\n#define hue_guidance (guidance.y!=0)\n%s",
         r->ai_enhanced_prepack?"#define CB1_AI_PREPACK 1\n":"",
         r->enhanced_pq_lookup?"#define CB1_DVE_PQ_LOOKUP 1\n":"",
         r->ai_enhanced_prepack && r->dv.ai_direct_lean?"#define CB1_AI_SKIP_AUX 1\n":"",

@@ -3898,7 +3898,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    m_srcPrimaries = picture.color_primaries;
    m_srcColorBits = picture.colorBits;
    m_srcFullRange = picture.color_range == 1;
-@@ -214,6 +218,34 @@
+@@ -214,6 +218,35 @@
    // frame is loaded after every call to Configure().
    m_bValidated = false;
  
@@ -3927,13 +3927,30 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
 +    m_dvRequested = true;
 +    m_passthroughHDR = false;
 +    m_hdrFboActive = window && window->BeginDVBridge();
++    m_bConfigured = m_hdrFboActive;
 +    return m_hdrFboActive;
 +  }
 +#endif
    if (!CServiceBroker::GetWinSystem()->SetVideoOutput(&picture))
    {
      CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: SetVideoOutput failed");
-@@ -636,6 +668,7 @@
+@@ -248,6 +281,7 @@
+       CLog::Log(LOGERROR, "DVBridge: native output initialization rejected");
+       return false;
+     }
++    m_bConfigured = true;
+     return true;
+   }
+ #endif
+@@ -262,6 +296,7 @@
+     CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: HDR passthrough active but GUI "
+                           "compositing not supported by windowing system");
+ 
++  m_bConfigured = true;
+   return true;
+ }
+ 
+@@ -636,6 +671,7 @@
  
  void CLinuxRendererGLES::RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha)
  {
@@ -3941,7 +3958,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  #ifdef CB1_HAS_HDR10_AI
    m_aiFrameRendered = false;
  #endif
-@@ -709,6 +742,7 @@
+@@ -709,6 +745,7 @@
    }
  
    const bool rendered = Render(flags, index);
@@ -3949,7 +3966,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  #ifdef CB1_HAS_HDR10_AI
    m_aiFrameRendered = rendered;
  #endif
-@@ -721,6 +755,7 @@
+@@ -721,6 +758,7 @@
  
  void CLinuxRendererGLES::RenderUpdateVideo(bool clear, unsigned int flags, unsigned int alpha)
  {
@@ -3957,7 +3974,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    if (!m_bConfigured)
      return;
  
-@@ -762,6 +797,7 @@
+@@ -762,6 +800,7 @@
    }
  
    const bool rendered = Render(flags, index);
@@ -3965,7 +3982,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  #ifdef CB1_HAS_HDR10_AI
    m_aiFrameRendered = rendered;
  #endif
-@@ -1212,34 +1248,39 @@
+@@ -1212,34 +1251,39 @@
      return false;
    }
  
@@ -4031,7 +4048,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    }
  
    return ret;
-@@ -1736,8 +1777,6 @@
+@@ -1736,8 +1780,6 @@
    }
  
    VerifyGLState();
@@ -4040,7 +4057,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
  
    return true;
  }
-@@ -1942,8 +1981,6 @@
+@@ -1942,8 +1984,6 @@
  
    VerifyGLState();
  
@@ -4049,7 +4066,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
    return true;
  }
  
-@@ -2098,8 +2135,6 @@
+@@ -2098,8 +2138,6 @@
              im->bpp, im->plane[0]);
  
    VerifyGLState();
@@ -4251,7 +4268,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  #ifdef CB1_HAS_HDR10_AI
      ResetHDR10AIQueue();
  #endif
-@@ -311,16 +315,31 @@
+@@ -311,16 +315,35 @@
  }
  
  #ifdef CB1_HAS_HDR10_AI
@@ -4265,7 +4282,11 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +  }
 +  // Let the video worker start its clock after the first committed AI image.
 +  if (m_aiGuiReady && !m_showVideo && m_pRenderer->HDR10AILookahead())
-+    return m_aiQueueReady;
++  {
++    if (m_pRenderer->HDR10AIFrameCommitted()) return m_aiQueueReady;
++    m_aiStartPts = DVD_NOPTS_VALUE;
++    m_aiGuiReady = false;
++  }
 +  // Reuse only existing slots whose renderer fence has already completed.
 +  if (m_pRenderer->HDR10AILookahead()) ReleaseDiscardedBuffers(true);
    auto queue = m_queued;
@@ -4286,7 +4307,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    if (queue.empty()) return false;
    uint64_t deadline = 0;
    if (m_pRenderer->HDR10AILookahead() && m_aiStartPts != DVD_NOPTS_VALUE)
-@@ -359,10 +378,76 @@
+@@ -359,10 +382,87 @@
          remaining / speed : 0;
      deadline = DVBRIDGE::DiagnosticNowMs() + static_cast<uint64_t>(std::ceil(delay / 1000.0));
    }
@@ -4299,6 +4320,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +    std::unique_lock<CCriticalSection>& lock)
 +{
 +  auto* renderer = m_pRenderer;
++  const bool lookahead = renderer->HDR10AILookahead();
 +  const auto generation = m_aiQueueGeneration;
 +  const double startPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
 +  auto preparation = renderer->CaptureHDR10AIQueue(queue,m_aiEnd,paused,deadline);
@@ -4328,6 +4350,11 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +      return m_aiQueueReady = false;
 +    }
 +    // After rejection, fresh pending analysis is not yet a new selected frame.
++    if (outcome.lookahead && !lookahead)
++    {
++      m_aiStartPts = DVD_NOPTS_VALUE;
++      m_aiGuiReady = false;
++    }
 +    if (outcome.ready) m_aiQueuePreparationStale = false;
 +    m_aiQueueReady = outcome.ready;
 +  }
@@ -4338,7 +4365,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +  }
    if (m_aiQueueReady && m_aiStartPts == DVD_NOPTS_VALUE)
 -    m_aiStartPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
++  {
 +    m_aiStartPts = startPts;
++    // A new AI epoch must select its primed head, not redraw the retained native frame.
++    if (m_pRenderer->HDR10AILookahead() && m_presentstep == PRESENT_FRAME)
++      m_presentstep = PRESENT_READY;
++  }
    return m_aiQueueReady;
 +}
 +
@@ -4365,7 +4397,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  }
  
  bool CRenderManager::HDR10AILookahead()
-@@ -375,8 +460,9 @@
+@@ -375,8 +475,9 @@
  {
    std::unique_lock lock(m_presentlock);
    if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible() ||
@@ -4377,7 +4409,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      return false;
    pts = m_aiStartPts;
    return true;
-@@ -411,6 +497,7 @@
+@@ -411,6 +512,7 @@
  
  void CRenderManager::ResetHDR10AIQueue()
  {
@@ -4385,7 +4417,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    if (m_clockSync.m_cb1Phase)
    {
      m_clockSync.Reset();
-@@ -438,6 +525,9 @@
+@@ -438,6 +540,9 @@
        lock.unlock();
        if (!Configure())
          return;
@@ -4395,7 +4427,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
        UpdateLatencyTweak();
        firstFrame = true;
        FrameWait(50ms);
-@@ -459,14 +549,20 @@
+@@ -459,14 +564,25 @@
      }
  #endif
  #ifdef CB1_HAS_HDR10_AI
@@ -4412,8 +4444,13 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
        m_aiGuiReady = true;
 +      m_presentevent.notifyAll();
 +    }
-+    if (m_aiQueuePreparationStale || m_aiStartPts == DVD_NOPTS_VALUE ||
-+        m_pRenderer->HDR10AILookahead())
++    bool aiReselection = false;
++    if (m_pRenderer->HDR10AIQueueEligible())
++      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++              CServiceBroker::GetWinSystem()))
++        aiReselection = window->HDR10AISelectionPending();
++    if (!m_aiQueueReady || m_aiQueuePreparationStale || m_aiStartPts == DVD_NOPTS_VALUE ||
++        m_pRenderer->HDR10AILookahead() || aiReselection)
 +    {
 +      PrepareHDR10AILookahead(lock2);
 +      if (m_aiQueuePreparationStale) return;
@@ -4421,7 +4458,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  #endif
  
      if (m_queued.empty()
-@@ -496,19 +592,32 @@
+@@ -496,19 +612,32 @@
      {
  #ifdef CB1_HAS_HDR10_AI
        // Prepare metadata for the native selection, not the queue head it skipped.
@@ -4455,7 +4492,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
          m_overlays.Release(*it);
          m_free.push_back(*it);
          it = m_discard.erase(it);
-@@ -516,6 +625,7 @@
+@@ -516,6 +645,7 @@
        else
          ++it;
      }
@@ -4463,7 +4500,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
      m_bRenderGUI = true;
-@@ -524,9 +634,14 @@
+@@ -524,9 +654,14 @@
    m_playerPort->UpdateGuiRender(IsGuiLayer() || !m_pRenderer->VideoBypassesFramebuffer() ||
                                  firstFrame);
  
@@ -4479,7 +4516,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    m_overlays.PrepareOverlays(m_presentsource);
  }
  
-@@ -572,12 +687,20 @@
+@@ -572,12 +707,20 @@
  {
    if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
    {
@@ -4500,7 +4537,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    }
  
    std::unique_lock lock(m_statelock);
-@@ -624,6 +747,7 @@
+@@ -624,6 +767,7 @@
  
        if (!m_pRenderer->Flush(saveBuffers))
        {
@@ -4508,7 +4545,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
          m_queued.clear();
          m_discard.clear();
          m_free.clear();
-@@ -691,6 +815,13 @@
+@@ -691,6 +835,13 @@
      delete m_pRenderer;
      m_pRenderer = NULL;
    }
@@ -4522,7 +4559,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  }
  
  void CRenderManager::ServiceVideoCaptures()
-@@ -801,6 +932,14 @@
+@@ -801,6 +952,15 @@
    if (!gui && m_pRenderer->IsGuiLayer())
      return;
  
@@ -4530,14 +4567,15 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +  {
 +    std::unique_lock lock(m_presentlock);
 +    // Pending readiness is normal; rejected ownership cannot render old RGB.
-+    if (m_aiQueuePreparationStale) return;
++    if (m_aiQueuePreparationStale || (m_pRenderer->HDR10AILookahead() && !m_aiGuiReady &&
++        (m_aiStartPts == DVD_NOPTS_VALUE || m_presentstep != PRESENT_FRAME))) return;
 +  }
 +#endif
 +
    bool presented = false;
    if (!gui || m_pRenderer->IsGuiLayer())
    {
-@@ -822,7 +961,15 @@
+@@ -822,7 +982,15 @@
  
    // the just-presented region is video-only: OSD, GUI and subtitles come later
    if (presented)
@@ -4553,7 +4591,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    if (presented && !gui)
    {
-@@ -1007,6 +1154,15 @@
+@@ -1007,6 +1175,15 @@
                                                                                       isHDREnabled));
  }
  
@@ -4569,7 +4607,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  void CRenderManager::UpdateResolution()
  {
    if (m_bTriggerUpdateResolution)
-@@ -1021,7 +1177,12 @@
+@@ -1021,7 +1198,12 @@
  #ifdef HAVE_DVBRIDGE
          if (m_nativeDVRate)
            if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
@@ -4582,7 +4620,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  #endif
          UpdateLatencyTweak();
          if (m_pRenderer)
-@@ -1139,6 +1300,7 @@
+@@ -1139,6 +1321,7 @@
  
  
    SPresent& m = m_Queue[index];
@@ -4590,7 +4628,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    m.presentfield = displayField;
    m.presentmethod = presentmethod;
    m.pts = picture.pts;
-@@ -1242,6 +1404,11 @@
+@@ -1242,6 +1425,11 @@
    XbmcThreads::EndTime<> endtime{timeout};
    while(m_free.empty())
    {
@@ -4602,7 +4640,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      m_presentevent.wait(lock, std::min(50ms, timeout));
      if (endtime.IsTimePast() || bStop)
      {
-@@ -1306,11 +1473,13 @@
+@@ -1306,11 +1494,13 @@
        m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
  
    bool cb1Async = false;
@@ -4616,7 +4654,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
        completionAge = window->CB1PresentationAge();
    }
-@@ -1318,6 +1487,11 @@
+@@ -1318,6 +1508,11 @@
  
    const bool physicalPhase = cb1Async && m_clockSync.m_enabled && !isPaused &&
        m_dvdClock.GetClockSpeed() == 1.0;
@@ -4628,7 +4666,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    if (m_clockSync.m_cb1Phase != physicalPhase)
    {
      m_clockSync.m_error = 0;
-@@ -1353,12 +1527,27 @@
+@@ -1353,12 +1548,27 @@
        }
      }
      if (!isPaused)
@@ -4657,7 +4695,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    CLog::LogFC(LOGDEBUG, LOGAVTIMING,
                "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
-@@ -1366,11 +1555,6 @@
+@@ -1366,11 +1576,6 @@
                frameOnScreen, renderPts, nextFramePts, (renderPts - nextFramePts),
                renderPts >= nextFramePts, m_forceNext);
  
@@ -16652,6 +16690,34 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
  #include <iterator>
  #include <map>
  #include <memory>
+@@ -721,10 +722,10 @@
+     CLog::Log(LOGDEBUG, "CVideoPlayerVideo - video decoder was flushed");
+     while (!m_packets.empty())
+     {
+-      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.front().message);
+-      m_packets.pop_front();
+-
+-      SendMessage(msg, 10);
++      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.back().message);
++      m_packets.pop_back();
++
++      SendMessageBack(msg);
+     }
+ 
+     m_pVideoCodec->SetVideoProcessingGeneration(
+@@ -740,9 +741,9 @@
+   {
+     while (!m_packets.empty())
+     {
+-      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.front().message);
+-      m_packets.pop_front();
+-      SendMessage(msg, 10);
++      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.back().message);
++      m_packets.pop_back();
++      SendMessageBack(msg);
+     }
+ 
+     m_pVideoCodec->SetVideoProcessingGeneration(
 @@ -1083,7 +1084,25 @@
      }
    }
