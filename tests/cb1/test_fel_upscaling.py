@@ -62,7 +62,7 @@ int main() {
 #include <string>
 #include <map>
 #include <cassert>
-#include "utils/DVBridgeFastRendering.h"
+#include "utils/DVBridgePresentation.h"
 struct Settings {
   std::map<std::string,int> ints;
   int GetInt(const char* key) { return ints[key]; }

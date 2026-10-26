@@ -11,10 +11,10 @@ See [hardware support](HARDWARE.md) for integrated and experimental dedicated GP
 Both modes reconstruct the Dolby Vision source, including the applicable matched
 FEL, and send TV-Led Dolby Vision with the source display-management metadata.
 
-| Mode | Reconstruction | Fast | TV profile |
-| --- | --- | --- | --- |
-| Dolby Vision Standard | Performance-oriented reconstruction and cheaper chroma interpolation | Always On | Not required |
-| Dolby Vision Master Reference | Source-domain reference arithmetic and dedicated FEL filters | Always Off | Not required |
+| Mode | Reconstruction | TV profile |
+| --- | --- | --- |
+| Dolby Vision Standard | Fixed performance-oriented reconstruction and input-chroma interpolation | Not required |
+| Dolby Vision Master Reference | Exact source-domain reference arithmetic and dedicated FEL filters | Not required |
 
 Standard accepts very small image differences for substantially higher rendering
 performance. Master Reference aims for bit-perfect playback within its admitted
@@ -198,8 +198,8 @@ same pixel treatment. No claim of equivalence to authored Dolby Vision is made.
 
 ## Performance controls and output
 
-Fast changes input-chroma interpolation where supported. Async prepares at most
-one future picture. Neither changes native Kodi/fallback playback scheduling.
+Each circuit owns its input-chroma recipe. Async prepares at most one future
+picture without changing native Kodi/fallback playback scheduling.
 Master uses dedicated FEL filters; other applicable modes retain VAAPI/Nearest
 selection. [Settings](PLAYBACK.md).
 

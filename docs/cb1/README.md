@@ -7,7 +7,7 @@
 | [Features and downloads](../../README.md) | Profiles, rendering modes, captures and installation |
 | [Hardware](HARDWARE.md) | Supported Intel/AMD iGPUs and experimental dedicated GPUs |
 | [AMD HDMI 3D](3D.md) | MVC, frame packing, SBS/TAB and native Kodi setup |
-| [Playback settings](PLAYBACK.md) | TV profile, Fast, FEL upscaling, async and O controls |
+| [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |
 | [Processing](PROCESSING.md) | Mode behavior, metadata use and output limits |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |
 | [Beta5 release notes](RELEASE.md) | Release changes and known limitations |
@@ -21,7 +21,7 @@
 | [Circuit versions](../../CB1/docs/CIRCUITS.md) | Current end-to-end identifiers |
 | [Master Reference](../../CB1/docs/MASTER-REFERENCE.md) | Representation, reconstruction and fidelity contract |
 | [FEL upscaling](../../CB1/docs/FEL-VAAPI.md) | VAAPI, GPU fallback and source lifetimes |
-| [Transport](../../CB1/docs/SOURCE-TRANSPORT.md) | Source-domain packing, Fast and shared optimizations |
+| [Transport](../../CB1/docs/SOURCE-TRANSPORT.md) | Source-domain packing and shared optimizations |
 | [Player API](../../CB1/docs/API.md) | Preparation, accepted output and resource ownership |
 | [Kodi information](KODI-INFORMATION.md) | Native source facts and accepted-output labels |
 | [AI model](../../CB1/models/l1l3/README.md) | Included LightGBM bundle and runtime contract |

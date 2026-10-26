@@ -17,27 +17,17 @@ For **HDR10 Expert**, disable the TV's dynamic tone mapping to avoid a second
 dynamic mapping stage. Dolby Vision output remains TV-Led: the TV still performs
 its Dolby Vision display mapping.
 
-## Fast rendering
+## Rendering and Master recovery
 
-**Dolby Vision fast rendering** is at Advanced level, with **Off**, **On** and
-**Auto**. Auto is the default and uses a 2.5 ms presentation-margin threshold.
-Player information shows the effective state. Transitions are recorded in
-`kodi.log`; the automatic state resets for each video.
+Each mode uses one fixed rendering recipe. Standard and conversions retain
+their qualified performance optimizations. Master Reference keeps its exact
+reconstruction and dedicated filters. There is no quality On/Off/Auto selector.
 
-| Mode | Fast behavior |
-| --- | --- |
-| Dolby Vision Standard | Always On, including when the saved preference is Off |
-| Dolby Vision Master Reference | Always Off, including when the saved preference is On |
-| Other eligible CB1 modes | Follow Off / On / Auto |
-| Native Kodi / fallback | Unchanged |
-
-In Auto, insufficient Master Reference presentation margin can switch the current
-playback to Standard. A notification confirms the accepted switch; the saved
-Master Reference selection is retained.
-
-Fast uses a cheaper input-chroma interpolation path. Image differences are
-usually very small and may be visible near fine colored edges or highlights.
-It is not the reference reconstruction path.
+**Allow Master Reference to switch to Standard** is off by default. When enabled,
+sustained presentation margin below2.5ms can switch the current playback to
+Standard. A notification confirms the accepted switch; the saved Master selection
+is retained. GUI, capture, pause and discontinuous pictures are excluded from
+the decision. Recovery state resets for a new video or manual mode change.
 
 ## FEL upscaling and frame preparation
 

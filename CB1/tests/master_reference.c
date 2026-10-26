@@ -513,7 +513,7 @@ static void transport(bool lifecycle,bool rows)
         assert(dvbridge_render_master_reference(renderer,&source,m,bytes,1,1,geometry,output,false,NULL)==CB1_MASTER_UNSUPPORTED);
         h->el_spatial_resampling_filter_flag=1;
     }
-    dvbridge_renderer_set_fast_chroma(renderer,true);
+
     dvbridge_renderer_set_fel_nearest(renderer,true);
     dvbridge_renderer_set_processing_optimizations(renderer,true);
     assert(dvbridge_render_master_reference(renderer,&source,m,bytes,1,lifecycle?NAN:1,geometry,output,false,NULL)==CB1_MASTER_READY);
@@ -698,7 +698,7 @@ static void transport(bool lifecycle,bool rows)
         puts("PASS 24 complete FEL/MMR/identity carriers: L5, flip, identity+GUI, both chroma phases, residual and pivot guards");
     }
     pl_gpu_finish(g.gl->gpu);
-    assert(renderer->fast_chroma && renderer->fel_nearest && renderer->processing_optimizations);
+    assert(renderer->fel_nearest && renderer->processing_optimizations);
     dvbridge_renderer_destroy(renderer);
     for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&source.planes[p].texture);
     if(!lifecycle)for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&enhancement.planes[p].texture);

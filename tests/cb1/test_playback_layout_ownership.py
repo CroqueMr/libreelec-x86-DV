@@ -35,7 +35,7 @@ class PlaybackLayoutOwnership(unittest.TestCase):
         self.assertEqual(output.findtext('default'),'0')
         self.assertEqual(output.findtext('level'),'3')
         self.assertEqual([o.text for o in output.findall('constraints/options/option')],['0','1'])
-        self.assertEqual(fallback.findtext('default'),'true')
+        self.assertEqual(fallback.findtext('default'),'false')
         for node in (output,fallback):
             self.assertEqual(node.findtext("dependencies/dependency[@setting='dvbridge.outputmode']"),'4')
 

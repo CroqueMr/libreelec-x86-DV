@@ -27,24 +27,15 @@ coefficient arrays are bit-identical. Original outer bounds and arithmetic are
 preserved. Distinct intervals retain the general shader. This specialization
 is shared GLSL code, without an Intel-specific backend or CPU image processing.
 
-The optional bilinear filter changes input chroma interpolation, not metadata or
-the luma enlargement filter, including FEL luma. Bilinear is not pixel-identical
-to Lanczos. It is selected per chroma plane in the shared libplacebo input stage;
-RGB composition and output-plane sampling remain unchanged. A matched private
-renderer header/library pair is required.
-Kodi exposes one Advanced setting, `Dolby Vision fast rendering`,
-with No, Yes and Auto choices. Fresh settings default to Auto; existing Yes/No
-preferences are preserved. Auto observes matched-cadence CB1 presentations through
-DRM fences. After eight seconds of startup, two valid margins below 2.5 ms within
-250 ms enable the filter for the remainder of the playback. GUI, capture, pause,
-seek discontinuities and unavailable timing are excluded from the decision.
-The deadline is the previous accepted presentation plus one source-frame period;
-readiness includes both the GPU fence and the host submission time. This is not a
-GPU execution-duration measurement or a guarantee against every future drop.
-Player information reports the filter applied to the accepted picture.
-It affects the next prepared picture and does not change
-VAAPI FEL admission, GUI composition or metadata. Native Kodi playback, SDR,
-3D and vanilla fallback do not enable it.
+Each circuit fixes its input-chroma filter at the libplacebo input stage.
+Standard and conversions retain their qualified performance recipe; Master
+retains its reference filter. Input-chroma filtering does not change metadata,
+the FEL luma enlargement filter or output-plane sampling. A matched renderer
+header/library pair is required.
+
+Master-to-Standard recovery is a separate opt-in playback policy, off by default.
+It observes accepted presentation readiness; it does not change a filter inside
+Master. Native Kodi, SDR,3D and vanilla fallback retain their normal scheduling.
 
 ## Verification boundary
 

@@ -124,7 +124,6 @@ int main(int argc,char **argv)
     check_quad_sampler(g.gl->gpu);
     struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(g.gl->gpu);assert(owner);
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
-    if(getenv("CB1_TEST_FAST"))dvbridge_renderer_set_fast_chroma(r,true);
     /* This witness checks admission/metadata only, never executes a quad pack. */
     if(area_only)r->fragment_quad=true;
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;

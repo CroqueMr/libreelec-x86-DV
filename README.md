@@ -61,7 +61,7 @@ Press **O** to cycle through **Player information**, **rendering selection** and
 ### Player information
 
 Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
-metadata, active rendering mode, Fast state and supported GPU render-engine usage.
+metadata, active rendering mode and supported GPU render-engine usage.
 HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
 ![Beta4 Player information on Avatar in Master Reference with its audio track](docs/cb1/images/beta4-player-information-master-reference.png)
@@ -80,8 +80,8 @@ Choose the matching version from [releases](https://github.com/CroqueMr/libreele
 | `sources.tar.zst` + `vendor-inputs.tar.zst` | Rebuild the release; not required for installation |
 
 Settings are in **Kodi > Settings > Player > Videos**.
-Standard Dolby Vision is the default. Fast rendering defaults to Auto for the
-other eligible CB1 modes. [Build instructions](docs/cb1/BUILD.md).
+Standard Dolby Vision is the default. Each mode has one fixed rendering recipe.
+Automatic Master-to-Standard recovery is off by default. [Build instructions](docs/cb1/BUILD.md).
 
 ## AMD HDMI 3D
 

@@ -10,33 +10,33 @@ from shipped_kodi import shipped_code
 ROOT = Path(__file__).resolve().parents[2]
 
 
-class FastRenderingTests(unittest.TestCase):
+class MasterFallbackTests(unittest.TestCase):
     def test_master_budget_uses_source_fps_even_when_a_picture_was_missed(self):
         root=os.environ.get('CB1_DRM_STATE_SOURCE')
         name='xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp'
         cpp=(Path(root)/name).read_text() if root else shipped_code(name)
         assignment=re.search(r'm_masterFramePeriodNs=.*?;',cpp,re.S).group()
         patch=(ROOT/'projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch').read_text()
-        section=patch.split('+++ b/xbmc/utils/DVBridgeFastRendering.h\n',1)[1].split('\ndiff --git ',1)[0]
+        section=patch.split('+++ b/xbmc/utils/DVBridgePresentation.h\n',1)[1].split('\ndiff --git ',1)[0]
         header='\n'.join(line[1:] for line in section.splitlines() if line.startswith('+'))+'\n'
         program=r'''
 #include <cassert>
-#include "DVBridgeFastRendering.h"
+#include "DVBridgePresentation.h"
 struct Cache {double fps=59.94;double GetVideoFps(){return fps;}};
 struct CServiceBroker {static Cache& GetDataCacheCore(){static Cache cache;return cache;}};
-int main(){bool m_fastRenderEligible=true;uint64_t m_masterFramePeriodNs=0;
+int main(){bool m_continuousFrameEligible=true;uint64_t m_masterFramePeriodNs=0;
  constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=4;
  struct {bool allowMasterFallback=true;}preferences;
  struct {struct {int mode=4;}policy;}m_dvSelection;
  (void)preferences;(void)m_dvSelection;(void)DVBRIDGE_MODE_MASTER_REFERENCE;
- double m_fastSourcePts=100000;struct {double pts=133367;}layer;
- (void)m_fastSourcePts;(void)layer;
+ double m_previousSourcePts=100000;struct {double pts=133367;}layer;
+ (void)m_previousSourcePts;(void)layer;
  ASSIGNMENT
  assert(m_masterFramePeriodNs==16683350);
- m_fastRenderEligible=false;
+ m_continuousFrameEligible=false;
  ASSIGNMENT
  assert(m_masterFramePeriodNs==0);
- m_fastRenderEligible=true;preferences.allowMasterFallback=false;
+ m_continuousFrameEligible=true;preferences.allowMasterFallback=false;
  ASSIGNMENT
  assert(m_masterFramePeriodNs==0);
  preferences.allowMasterFallback=true;m_dvSelection.policy.mode=0;
@@ -45,7 +45,7 @@ int main(){bool m_fastRenderEligible=true;uint64_t m_masterFramePeriodNs=0;
 }
 '''.replace('ASSIGNMENT',assignment)
         with tempfile.TemporaryDirectory() as directory:
-            (Path(directory)/'DVBridgeFastRendering.h').write_text(header)
+            (Path(directory)/'DVBridgePresentation.h').write_text(header)
             code=Path(directory)/'check.cpp';code.write_text(program);binary=Path(directory)/'check'
             built=subprocess.run(['c++','-std=c++20','-Wall','-Wextra','-Werror','-I',directory,str(code),'-o',str(binary)],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
@@ -97,7 +97,7 @@ int main(){CDRMAtomic d;int pipes[2];assert(pipe(pipes)==0);d.m_inFenceFd=pipes[
     def test_headroom_continuity_and_master_safety(self):
         program = r'''
 #include <cassert>
-#include "DVBridgeFastRendering.h"
+#include "DVBridgePresentation.h"
 int main()
 {
   assert(DVBRIDGE::PresentationHeadroom(100000000, 120000000, 125000000, 133000000, 33000000) == 8000000);
@@ -125,18 +125,18 @@ int main()
   for(int i=0;i<120;i++){safety.Begin(1,2,1,i*16666.0,false);assert(!safety.Observe(-1,true));}
   assert(!safety.Active()); // Strict Master.
   safety.Begin(2,2,2,0,true);assert(!safety.Active());
-  assert(DVBRIDGE::ContinuousFastRenderingPicture(11700000,11666666));
-  assert(!DVBRIDGE::ContinuousFastRenderingPicture(11700000,11700000));
-  assert(!DVBRIDGE::ContinuousFastRenderingPicture(1000000,2000000));
-  assert(!DVBRIDGE::ContinuousFastRenderingPicture(80000000,2000000));
+  assert(DVBRIDGE::ContinuousPresentationPicture(11700000,11666666));
+  assert(!DVBRIDGE::ContinuousPresentationPicture(11700000,11700000));
+  assert(!DVBRIDGE::ContinuousPresentationPicture(1000000,2000000));
+  assert(!DVBRIDGE::ContinuousPresentationPicture(80000000,2000000));
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:
             source, binary = Path(temporary) / 'check.cpp', Path(temporary) / 'check'
             patch = (ROOT / 'projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch').read_text()
-            section = patch.split('+++ b/xbmc/utils/DVBridgeFastRendering.h\n', 1)[1].split('\n--- ', 1)[0]
+            section = patch.split('+++ b/xbmc/utils/DVBridgePresentation.h\n', 1)[1].split('\n--- ', 1)[0]
             header = '\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')) + '\n'
-            (Path(temporary) / 'DVBridgeFastRendering.h').write_text(header)
+            (Path(temporary) / 'DVBridgePresentation.h').write_text(header)
             source.write_text(program)
             result = subprocess.run(['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror',
                                      '-I', temporary,

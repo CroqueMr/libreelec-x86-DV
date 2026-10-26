@@ -64,12 +64,11 @@ source representations or GUI composition use canonical RGB output.
 Admission is automatic; no separate player setting is required. HDR10
 conversion and AI output retain their existing routing.
 
-`dvbridge_renderer_set_fast_chroma` selects bilinear input chroma enlargement in
-every CB1 circuit, independently of optimized transport admission. This includes
-DV to HDR10 and HDR10 to DV AI. Off restores the reference chroma filter. Luma,
-including enlarged FEL luma, RGB/output scaling, reshaping, FEL VPP, metadata and
-intermediate precision remain unchanged. The default library preference is off;
-Kodi supplies its user preference. Native Kodi and vanilla fallback do not use it.
+Each circuit owns one fixed input-chroma recipe. Standard and conversion entry
+points use their qualified linear chroma filter; Master entry points retain the
+exact reference filter. There is no mutable Fast preference or renderer setter.
+FEL enlargement, metadata and luma retain their circuit-specific contracts.
+Native Kodi and vanilla fallback do not use these CB1 recipes.
 
 ## Overlay visibility
 

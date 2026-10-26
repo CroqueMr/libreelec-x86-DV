@@ -51,7 +51,7 @@ diff --git a/xbmc/GUIInfoManager.cpp b/xbmc/GUIInfoManager.cpp
      {"videodecoder",        PLAYER_PROCESS_VIDEODECODER},
      {"deintmethod",         PLAYER_PROCESS_DEINTMETHOD},
      {"pixformat",           PLAYER_PROCESS_PIXELFORMAT},
-@@ -1254,6 +1254,24 @@
+@@ -1254,6 +1254,23 @@
      {"videoqueuedatalevel", PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL},
      {"videoscantype",       PLAYER_PROCESS_VIDEOSCANTYPE},
      {"subtitledecoder",     PLAYER_PROCESS_SUBTITLEDECODER},
@@ -69,7 +69,6 @@ diff --git a/xbmc/GUIInfoManager.cpp b/xbmc/GUIInfoManager.cpp
 +    {"videodvlevel", PLAYER_PROCESS_VIDEODVLEVEL},
 +    {"videodvversion", PLAYER_PROCESS_VIDEODVVERSION},
 +    {"videodvlayers", PLAYER_PROCESS_VIDEODVLAYERS},
-+    {"videoprocessingfast", PLAYER_PROCESS_VIDEOPROCESSINGFAST},
 +    {"videooutputformat", PLAYER_PROCESS_VIDEOOUTPUTFORMAT},
 +    {"videooutputbits", PLAYER_PROCESS_VIDEOOUTPUTBITS},
 +    {"video.sidedata", PLAYER_PROCESS_VIDEOSIDEDATA},
@@ -2258,7 +2257,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.h b/xbmc/dialogs/GUIDialogSelect.h
 diff --git a/xbmc/guilib/guiinfo/GUIInfoLabels.h b/xbmc/guilib/guiinfo/GUIInfoLabels.h
 --- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
 +++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h
-@@ -818,6 +818,24 @@
+@@ -818,6 +818,23 @@
  constexpr uint32_t PLAYER_PROCESS_AUDIO_QUEUE_DATA_LEVEL = PLAYER_PROCESS_START + 17;
  constexpr uint32_t PLAYER_PROCESS_VIDEO_QUEUE_LEVEL  = PLAYER_PROCESS_START + 18;
  constexpr uint32_t PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL = PLAYER_PROCESS_START + 19;
@@ -2276,7 +2275,6 @@ diff --git a/xbmc/guilib/guiinfo/GUIInfoLabels.h b/xbmc/guilib/guiinfo/GUIInfoLa
 +constexpr uint32_t PLAYER_PROCESS_VIDEODVLEVEL = PLAYER_PROCESS_START + 31;
 +constexpr uint32_t PLAYER_PROCESS_VIDEODVVERSION = PLAYER_PROCESS_START + 32;
 +constexpr uint32_t PLAYER_PROCESS_VIDEODVLAYERS = PLAYER_PROCESS_START + 33;
-+constexpr uint32_t PLAYER_PROCESS_VIDEOPROCESSINGFAST = PLAYER_PROCESS_START + 34;
 +constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTFORMAT = PLAYER_PROCESS_START + 35;
 +constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTBITS = PLAYER_PROCESS_START + 36;
 +constexpr uint32_t PLAYER_PROCESS_VIDEOSIDEDATA = PLAYER_PROCESS_START + 37;

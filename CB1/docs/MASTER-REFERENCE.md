@@ -22,9 +22,8 @@ HLG, custom filters, invalid geometry, other chroma positions
 and unsafe arithmetic are not admitted. The existing output-selection fallback
 applies. A rejected Master frame never silently uses Standard reconstruction.
 
-Fast is effectively off. FEL uses `Reference GPU`, independently of the saved
-VAAPI/Nearest preference. Preferences are retained for other circuits. No display
-calibration is required.
+FEL uses `Reference GPU`, independently of the saved VAAPI/Nearest preference.
+The exact reconstruction has no quality toggle. No display calibration is required.
 
 Profile 5 retains its full-range IPT-PQ-C2 domain through integer RPU reshaping,
 chroma resampling and RGB8 tunnel packing. Its original colour matrices,
@@ -33,10 +32,10 @@ pixels do not undergo a YCbCr/RGB/LMS conversion or a PQ/linear round trip.
 The diagnostic Master Reference IPT mode uses this same Profile 5 path.
 GUI conversion is confined to the overlay footprint; the IPT black code is zero.
 
-Standard always uses Fast, even when the global preference is Off. Master never
-uses Fast, even when the preference is On. In Auto, sustained low presentation
-headroom switches Master to Standard for the current playback and announces the
-change only after successful Standard presentation. Preferences are not rewritten.
+Automatic Master-to-Standard recovery is off by default. When explicitly enabled,
+sustained low presentation margin can select Standard for the current playback.
+The notification appears only after successful Standard presentation. The saved
+Master selection is not rewritten.
 
 Canonical MEL has no active residual. Its unused EL filter flag does not require
 an EL image or an EL spatial filter. Non-trivial NLQ still requires a matched EL.
@@ -147,7 +146,7 @@ signed rounding is preserved by power-of-two division and floor.
 
 Profile 5 remains in its decoded IPT-PQ-C2 domain through reconstruction and
 transport. Master uses integer reconstruction and the exact chroma filter,
-independently of the Fast preference. Standard may use FP32 reconstruction and
+with no selectable quality variant. Standard may use FP32 reconstruction and
 a compact five-tap chroma filter on supported left-sited 10-bit inputs. Its
 mapped chroma grid uses RG UNORM16; metadata and tunnel packing are shared with
 Master. Unsupported Standard inputs retain the existing YCbCr path. Other

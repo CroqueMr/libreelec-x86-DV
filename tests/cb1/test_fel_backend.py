@@ -26,7 +26,7 @@ struct SourceBinding {
  bool operator==(const SourceBinding&) const = default;
 };
 struct OutputPreferences {int felUpscaling{}; uint64_t revision{1}; dvbridge_policy Policy() const {return {};}
- bool EffectiveFastChroma(int) const {return false;}};
+ };
 template<class... T> void DiagnosticLog(T&&...) {}
 }
 constexpr int LOGINFO=0;

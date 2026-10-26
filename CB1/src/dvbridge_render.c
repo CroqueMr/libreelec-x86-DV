@@ -121,10 +121,10 @@ struct dvbridge_renderer {
     struct dvbridge_candidate *pending;
     bool ready, direct_output, overlay_visible;
     bool p5_native_pending;
-    bool packed, fragment_quad, exact_scaler_cache, optimized_dv, fast_chroma;
+    bool packed, fragment_quad, exact_scaler_cache, optimized_dv;
     bool enhanced_linear;
     unsigned enhanced_margins[4];
-    bool enhanced_fast_pq, enhanced_authored, enhanced_skip_aux, enhanced_authored_curve;
+    bool enhanced_analytic_pq, enhanced_authored, enhanced_skip_aux, enhanced_authored_curve;
     bool enhanced_prepack, ai_enhanced_fused, ai_fusion_failed;
     unsigned enhanced_program_key;
     bool ai_enhanced_prepack;
@@ -1230,11 +1230,6 @@ void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *r, bool enable
     if (r) r->optimized_dv = enabled;
 }
 
-void dvbridge_renderer_set_fast_chroma(struct dvbridge_renderer *r, bool enabled)
-{
-    if (r) r->fast_chroma = enabled;
-}
-
 void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *r, bool enabled)
 {
     if (r) r->fel_nearest = enabled;
@@ -1354,7 +1349,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
                         const struct dvbridge_policy *policy,
                         const struct dvbridge_native_overlay *overlay,bool force_refresh,
                         struct direct_output *direct,bool enhanced_reconstruction,
-                        const struct pl_cb1_dovi_reference *master,bool p5_fast,
+                        const struct pl_cb1_dovi_reference *master,bool p5_standard,
                         const struct cb1_master_ipt *ipt,bool native_stage)
 {
     if (!r)
@@ -1447,12 +1442,12 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     }
     struct pl_render_params params = pl_render_default_params;
     params.cb1_dovi_reference=master;
-    params.cb1_fast_chroma = master ? p5_fast : r->fast_chroma;
+    params.cb1_fast_chroma = master ? p5_standard : true;
     params.cb1_fel_nearest = !master && r->fel_nearest && paired && mapped.dovi.nlq_active;
     uint32_t processing=master?0:r->processing_optimizations?CB1_PROCESSING_ALL:
         enhanced_reconstruction?CB1_PROCESSING_COLOUR:0;
-    /* Analytic PQ avoids decoder lookups in authored Fast FEL reconstruction. */
-    if (!master && enhanced_reconstruction && r->enhanced_linear && r->fast_chroma &&
+    /* Analytic PQ avoids decoder lookups in authored FEL reconstruction. */
+    if (!master && enhanced_reconstruction && r->enhanced_linear &&
         paired && mapped.dovi.nlq_active)
         processing &= ~CB1_PROCESSING_COLOUR;
     struct pl_color_map_params color_map = pl_color_map_default_params;
@@ -1512,7 +1507,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT && !creative.l1_present)
         color_map.metadata=PL_HDR_METADATA_HDR10;
     if(enhanced_reconstruction && r->enhanced_linear){
-        params.cb1_nearest_identity=r->fast_chroma && paired && mapped.dovi.nlq_active;
+        params.cb1_nearest_identity=paired && mapped.dovi.nlq_active;
         /* Explicit luminance prevents an intermediate linear surface from
          * being inferred as an SDR target. Storage is normalized to 10000 nits. */
         image.color.transfer=PL_COLOR_TRC_LINEAR;
@@ -1672,7 +1667,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     }
     mask.flip = flip;
     mask.packets = dvbridge_packets(r->pending, &mask.count);
-    bool authored_linear = enhanced_reconstruction && r->enhanced_linear && r->fast_chroma &&
+    bool authored_linear = enhanced_reconstruction && r->enhanced_linear &&
                            paired && mapped.dovi.nlq_active;
     mask.early_mask = (!ipt || mask.ipt_quad) && !(master && !full_transport) && (packed || authored_linear) && geometry.source_width == 3840 && geometry.source_height == 2160 &&
                       (margins[0] || margins[1] || margins[2] || margins[3]);
@@ -1918,13 +1913,13 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     const struct dvbridge_hdr10_session *session,const struct dvbridge_policy *policy,
     const struct dvbridge_native_overlay *overlay,bool force_refresh,
     struct direct_output *direct,bool enhanced_reconstruction,
-    const struct pl_cb1_dovi_reference *master,bool p5_fast,const struct cb1_master_ipt *ipt)
+    const struct pl_cb1_dovi_reference *master,bool p5_standard,const struct cb1_master_ipt *ipt)
 {
     bool hdr10=session || (policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT);
     bool scaled=geometry.width!=geometry.source_width || geometry.height!=geometry.source_height;
     if(!hdr10 || !scaled || master || enhanced_reconstruction || (r && r->dv.active))
         return render_picture(r,source,metadata,bytes,pts,el_pts,geometry,packed,flip,
-            session,policy,overlay,force_refresh,direct,enhanced_reconstruction,master,p5_fast,ipt,false);
+            session,policy,overlay,force_refresh,direct,enhanced_reconstruction,master,p5_standard,ipt,false);
     if(!r)return false;
     r->ready=r->direct_output=r->policy_ready=false;
     unsigned margins[4]={0};float area[4];
@@ -2033,7 +2028,7 @@ static bool overlay_valid(const struct dvbridge_native_overlay *overlay)
 static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay,bool force_refresh,
-    const struct pl_cb1_dovi_reference *master,bool p5_fast,const struct cb1_master_ipt *ipt)
+    const struct pl_cb1_dovi_reference *master,bool p5_standard,const struct cb1_master_ipt *ipt)
 {
     if (r && r->dv.active)
         dvbridge_render_dv_policy_cancel(r);
@@ -2058,7 +2053,7 @@ static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_fr
         glDisable(caps[i]);
     }
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,p5_fast,ipt);
+    bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,p5_standard,ipt);
     ok = glGetError() == GL_NO_ERROR && ok;
     glColorMask(mask[0], mask[1], mask[2], mask[3]);
     for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
@@ -2077,7 +2072,7 @@ bool dvbridge_render_packed_overlay(struct dvbridge_renderer *r,const struct pl_
 {
     struct pl_cb1_dovi_reference raw;
     unsigned margins[4];
-    /* Only Standard P5 admits the approximate IPT recipe. Master never inherits Fast. */
+    /* Only Standard P5 admits the approximate IPT recipe. Master keeps its exact recipe. */
     if(r && source && r->optimized_dv && master_chroma_phase(source)==0 &&
        pl_cb1_dovi_reference_frame_supported(source,10) &&
        cb1_master_reference_transport(metadata,bytes) && dvbridge_dv_profile5_transport(metadata) &&
@@ -2766,7 +2761,7 @@ static bool dve_program(struct dvbridge_renderer *r,bool pq_lookup)
 {
     bool quad=r->ai_enhanced_prepack;
     /* One cache identity for the exact preprocessor configuration below. */
-    unsigned key=(unsigned)pq_lookup | (unsigned)r->enhanced_fast_pq<<1 |
+    unsigned key=(unsigned)pq_lookup | (unsigned)r->enhanced_analytic_pq<<1 |
         (unsigned)r->enhanced_linear<<2 | (unsigned)r->enhanced_prepack<<3 |
         (unsigned)r->ai_enhanced_fused<<4 | (unsigned)quad<<5 |
         (unsigned)r->enhanced_authored<<6 | (unsigned)r->enhanced_skip_aux<<7 |
@@ -2777,7 +2772,7 @@ static bool dve_program(struct dvbridge_renderer *r,bool pq_lookup)
     if(!r->enhanced_program){
         GLuint shader=glCreateShader(GL_COMPUTE_SHADER);
         const char *text[]={"#version 310 es\n",pq_lookup?"#define CB1_DVE_PQ_LOOKUP 1\n":"",
-            r->enhanced_fast_pq?"#define CB1_DVE_FAST_PQ 1\n":"",
+            r->enhanced_analytic_pq?"#define CB1_DVE_ANALYTIC_PQ 1\n":"",
             r->enhanced_linear?"#define CB1_DVE_LINEAR_INPUT 1\n":"",
             r->enhanced_prepack?"#define CB1_DVE_PREPACK 1\n":"",
             r->ai_enhanced_fused?"#define CB1_DVE_STATS_ONLY 1\n":"",
@@ -2816,14 +2811,14 @@ static bool dve_immutable(struct dvbridge_renderer *r,pl_tex *texture,GLuint *na
     }
     return *texture!=NULL;
 }
-static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned height,bool ai_fused,bool fast_pq)
+static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned height,bool ai_fused,bool analytic_pq)
 {
     if(r->enhanced_authored){GLint shared;glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE,&shared);if(shared<3584)return false;}
     if(!width || !height || width>3840 || height>2160 || !dve_requirements(r->gpu))return false;
-    r->enhanced_fast_pq=fast_pq;
-    size_t scratch_bytes=fast_pq?1036800:((width*height+127)/128)*16;
+    r->enhanced_analytic_pq=analytic_pq;
+    size_t scratch_bytes=analytic_pq?1036800:((width*height+127)/128)*16;
     if(!dv_allocate(r,scratch_bytes))return false;
-    bool pq_lookup=!fast_pq && cb1_processing_pq_encoder(&r->processing,r->gpu)!=NULL;
+    bool pq_lookup=!analytic_pq && cb1_processing_pq_encoder(&r->processing,r->gpu)!=NULL;
     GLint images;glGetIntegerv(GL_MAX_COMPUTE_IMAGE_UNIFORMS,&images);
     GLint fragment_images;glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS,&fragment_images);
     r->ai_enhanced_fused=ai_fused && !r->ai_fusion_failed && fragment_images>=2;
@@ -2986,7 +2981,7 @@ static bool dve_run(struct dvbridge_renderer *r,const struct cb1_dv_enhanced_pla
     {
         unsigned count=w*(end-first),pass=0,input=1,output=0;
         while(count){
-            unsigned tile=pass?(r->enhanced_fast_pq?64:128):(r->enhanced_fast_pq?512:1024),dispatch=(count+tile-1)/tile;
+            unsigned tile=pass?(r->enhanced_analytic_pq?64:128):(r->enhanced_analytic_pq?512:1024),dispatch=(count+tile-1)/tile;
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,s->buffers[input]);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER,1,s->buffers[output]);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER,2,s->buffers[2]);
@@ -3155,13 +3150,13 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     }else pl_tex_destroy(r->gpu,&r->enhanced_input);
     if(packed && !pixels && !r->fragment_quad)return DVBRIDGE_DV_UNSUPPORTED;
     bool fel=color.dovi.nlq_active && source->enhancement_layer && pts==el_pts;
-    bool fast_pq=pixels && r->enhanced_linear && r->fast_chroma &&
+    bool analytic_pq=pixels && r->enhanced_linear &&
         ((fel && !(r->authored_fel_lookup && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
                    geometry.source_width==3840 && geometry.source_height==2160)) ||
          (r->authored_p5_analytic && policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16 &&
                  geometry.source_width==3840 && geometry.source_height==2160 &&
                  dvbridge_dv_profile5_transport(metadata)));
-    if(!(pixels?dve_allocate(r,reconstruction_width,reconstruction_height,false,fast_pq):dv_allocate_transport(r)))return DVBRIDGE_DV_UNSUPPORTED;
+    if(!(pixels?dve_allocate(r,reconstruction_width,reconstruction_height,false,analytic_pq):dv_allocate_transport(r)))return DVBRIDGE_DV_UNSUPPORTED;
     struct dvbridge_dv_slot *s=&r->dv;
     s->output_metadata=av_memdup(metadata,bytes);s->output_bytes=bytes;
     if(!s->output_metadata){dv_release(r);return DVBRIDGE_DV_FAILED;}
@@ -3328,8 +3323,8 @@ static bool dve_derive(struct dvbridge_renderer *r,const uint32_t *record)
     size_t output_bytes=s->output_bytes;
     AVDOVIMetadata *m;
     if(!s->ai_source){
-        /* Fast checks finite, non-darkening expansion for every source pixel. */
-        if(!r->enhanced_fast_pq){
+        /* The analytic path checks finite, non-darkening expansion for every source pixel. */
+        if(!r->enhanced_analytic_pq){
             float before[3];memcpy(before,record+12,sizeof(before));
             double input[3]={before[0],(double)before[1]/record[3],before[2]};
             double output[3]={raw[0],mean,raw[2]};
@@ -3358,7 +3353,7 @@ static bool dve_derive(struct dvbridge_renderer *r,const uint32_t *record)
         /* Declare the applied transform's fixed envelope, not a per-frame master. */
         c->source_max_pq=fmax(c->source_max_pq,dv_wire_code(dv_ideal_pq(s->enhanced_plan.envelope)));
         /* Guard statistics remain linear; only the wire maximum needs PQ. */
-        float measured_max_pq=r->enhanced_fast_pq?dv_ideal_pq(raw[2]*10000.0):raw[2];
+        float measured_max_pq=r->enhanced_analytic_pq?dv_ideal_pq(raw[2]*10000.0):raw[2];
         c->source_max_pq=fmax(c->source_max_pq,dv_wire_code(measured_max_pq));
         c->source_max_pq=fmax(c->source_max_pq,l1->l1.max_pq);
         AVDOVIDmData *l5=(AVDOVIDmData *)av_dovi_find_level(m,5);
@@ -3404,7 +3399,7 @@ static bool dve_derive(struct dvbridge_renderer *r,const uint32_t *record)
     s->output.candidate=candidate;s->output.intermediate=s->ai_direct_lean || r->enhanced_skip_aux?NULL:r->enhanced_rgb;
     v->output_generation=DVBRIDGE_RECONSTRUCTED_ENHANCED;
     v->analysis_model=s->ai_source?(s->enhanced_plan.policy.adaptive!=DVBRIDGE_ADAPTIVE_A?
-        "cb1-ai-scene-curve-v1":CB1_DVE_ANALYSIS):r->enhanced_fast_pq?
+        "cb1-ai-scene-curve-v1":CB1_DVE_ANALYSIS):r->enhanced_analytic_pq?
         "cb1-authored-scene-curve-linear-guard-v1":"cb1-authored-scene-curve-v1";v->measured=true;
     v->raw_statistics[0]=v->statistics[0]=raw[0];v->raw_statistics[1]=v->statistics[1]=mean;
     v->raw_statistics[2]=v->statistics[2]=raw[2];v->raw_sum=raw[1];v->sample_count=record[3];
@@ -3603,7 +3598,7 @@ static bool dve_copy_packed(struct dvbridge_renderer *r,unsigned framebuffer,boo
 {
     unsigned first=0,end=2160;
     const unsigned *margins=r->dv.output.value.margins;
-    if(r->enhanced_authored && r->fast_chroma && r->dv.output.value.fel_reconstructed &&
+    if(r->enhanced_authored && r->dv.output.value.fel_reconstructed &&
        !r->dv.enhanced_overlay && margins[2]<2160 && margins[3]<2160-margins[2]){
         first=margins[2];end=2160-margins[3];
         if(!dve_clear_rows(framebuffer,flip?2160-end:first,flip?2160-first:end))return false;
@@ -3707,7 +3702,7 @@ bool dvbridge_render_dv_policy_commit(struct dvbridge_renderer *r,
     }else r->enhanced_has_committed=false;
     bool handoff=r->dv.borrowed_storage && r->dv.enhanced_pixels && !r->dv.ai_source &&
         r->dv.enhanced_plan.status==CB1_DVE_READY && r->dv.prepacked && r->enhanced_skip_aux &&
-        r->fast_chroma && !r->overlay_visible && !r->dv.enhanced_overlay &&
+        !r->overlay_visible && !r->dv.enhanced_overlay &&
         out->value.policy.adaptive!=DVBRIDGE_ADAPTIVE_A &&
         out->value.geometry.source_width==3840 && out->value.geometry.source_height==2160 &&
         !out->value.geometry.x && !out->value.geometry.y &&
@@ -3866,14 +3861,14 @@ static bool ai_render_pixels(struct dvbridge_renderer *r,
     }
     bool raw=false;
 #ifdef CB1_HAS_HDR10_AI
-    raw=packed && !r->dv.active && !overlay && r->fast_chroma &&
+    raw=packed && !r->dv.active && !overlay &&
         g.source_width==3840 && g.source_height==2160 && !g.x && !g.y && g.width==3840 && g.height==2160 &&
         source->crop.x0==0 && source->crop.y0==0 &&
         cb1_hdr10_ingress_validate(source)==CB1_AI_READY &&
         source->planes[1].texture->params.w==1920 && source->planes[1].texture->params.h==1080;
 #endif
     struct pl_render_params params=pl_render_default_params;
-    params.cb1_fast_chroma=r->fast_chroma;
+    params.cb1_fast_chroma=true;
     if (r->processing_optimizations && cb1_processing_prepare(&r->processing,r->gpu,
             source,NULL,0,false,CB1_PROCESSING_ALL&~r->processing_failed_groups))
         params.cb1_processing=&r->processing.view;

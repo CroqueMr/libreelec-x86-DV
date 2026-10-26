@@ -98,13 +98,13 @@ static void adaptive_guidance_equivalence(pl_gpu gpu)
             curve->mmr_coef[0][0][c]=4096;curve->mmr_coef[0][0][0]=16;
         }
         void *reference=NULL;size_t reference_bytes=0;
-        for(unsigned fast=0;fast<2;fast++){
+        for(unsigned repeat=0;repeat<2;repeat++){
             struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
             struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
             const char *vendor=(const char *)glGetString(GL_VENDOR);
             assert(r->reuse_authored_storage==(vendor && !strcmp(vendor,"Intel")));
             r->reuse_authored_storage=true; /* Verify the optimized contract on both GPUs. */
-            dvbridge_renderer_set_fast_chroma(r,fast);
+
             compute_compilations=0;
             struct dvbridge_identity id={71,83,1};
             enum dvbridge_dv_policy_status prepared=dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,&frame,metadata,bytes,0,0,
@@ -120,14 +120,14 @@ static void adaptive_guidance_equivalence(pl_gpu gpu)
             const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);
             assert(out && out->value.output_generation==DVBRIDGE_RECONSTRUCTED_ENHANCED &&
                 out->value.expansion_reason==CB1_DVE_ACTIVE);
-            if(!fast){reference_bytes=out->bytes;reference=av_memdup(out->output_metadata,reference_bytes);assert(reference);}
+            if(!repeat){reference_bytes=out->bytes;reference=av_memdup(out->output_metadata,reference_bytes);assert(reference);}
             else assert(out->bytes==reference_bytes && !memcmp(reference,out->output_metadata,reference_bytes) &&
                 "Authored transport must preserve every output metadata byte");
             assert(dvbridge_render_dv_policy_resolve(r,target,fbo,false));
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);
-            glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,fast?actual:expected);
+            glReadPixels(0,0,W,H,GL_RGBA,GL_UNSIGNED_BYTE,repeat?actual:expected);
             glBindFramebuffer(GL_FRAMEBUFFER,0);assert(glGetError()==GL_NO_ERROR);
-            if(fast && memcmp(expected,actual,n)){
+            if(repeat && memcmp(expected,actual,n)){
                 unsigned max_y=0,max_c=0,max_black=0;size_t changed=0;double sum_y=0,sum_c=0;
                 for(size_t i=0;i<n;i+=4){
                     unsigned y0=16*expected[i+1]+(expected[i+2]&15),y1=16*actual[i+1]+(actual[i+2]&15);
@@ -142,15 +142,15 @@ static void adaptive_guidance_equivalence(pl_gpu gpu)
                     "Authored transport must preserve every movie byte");
             }
             uint64_t digest=UINT64_C(14695981039346656037);
-            const unsigned char *carrier=fast?actual:expected;
+            const unsigned char *carrier=repeat?actual:expected;
             for(size_t i=0;i<n;i++)digest=(digest^carrier[i])*UINT64_C(1099511628211);
-            fprintf(stderr,"CARRIER_HASH colour=%u fast=%u fnv1a=%016llx\n",color,fast,(unsigned long long)digest);
-            if(fast)memcpy(expected,actual,n);
+            fprintf(stderr,"CARRIER_HASH colour=%u repeat=%u fnv1a=%016llx\n",color,repeat,(unsigned long long)digest);
+            if(repeat)memcpy(expected,actual,n);
             dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
             for(unsigned k=0;k<3;k++)assert(glIsBuffer(storage[k]) &&
                 "Completed Adaptive storage must stay owned by the renderer");
             assert(glIsSampler(sampler));
-            if(fast){
+            if(repeat){
                 id.picture++;
                 assert(dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,&frame,metadata,bytes,0,0,
                     (struct dvbridge_geometry){W,H,0,0,W,H},target,false,NULL)==DVBRIDGE_DV_PENDING);
@@ -239,7 +239,7 @@ static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
         struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
         struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
         if(ordered)r->reuse_authored_storage=true; /* Exercise the ordered contract on both drivers. */
-        dvbridge_renderer_set_fast_chroma(r,true);
+
         struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
             .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
         for(unsigned i=0;i<2;i++){
@@ -327,7 +327,7 @@ int main(void)
         }
     }
     memcpy(m,original,bytes);
-    
+
     /* Under-conservative scene descriptors cannot hide a measured output peak. */
     av_dovi_get_color(m)->source_max_pq=2771;
     av_dovi_get_ext(m,0)->l1.max_pq=3080;
@@ -348,7 +348,7 @@ int main(void)
     pl_tex protected_input=reference_texture(g.gl->gpu,2,2,protected_pixels);
     struct pl_frame protected_frame=reference_frame(protected_input,2,2);
     for(unsigned preset=1;preset<2;preset++){
-        
+
         size_t supplied=preset?bytes:m->ext_block_offset+m->num_ext_blocks*m->ext_block_size;
         assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&protected_frame,m,supplied,0,0,geometry)==DVBRIDGE_DV_PENDING);
         assert(finish(r)==DVBRIDGE_DV_READY);
@@ -652,7 +652,7 @@ int main(void)
     free(cached);free(lean);
     dvbridge_render_dv_policy_cancel(r);assert(finish(r)==DVBRIDGE_DV_IDLE);
     m->num_ext_blocks=2;
-    
+
     av_dovi_get_color(m)->source_max_pq=2500;id.picture++;
     assert(dvbridge_render_dv_policy_prepare(r,&p,&id,&full_frame,m,bytes,2,2,full_geometry)==DVBRIDGE_DV_PENDING);
     assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);assert(out);
@@ -682,9 +682,9 @@ int main(void)
     }
     if(r->fragment_quad){
         /* B must retain the whole-frame guard without materializing a PQ cache. */
-        for(unsigned fast=0;fast<2;fast++){
-        p.adaptive=fast?DVBRIDGE_ADAPTIVE_B_FP16:DVBRIDGE_ADAPTIVE_B_FP32;
-        dvbridge_renderer_set_fast_chroma(r,fast);
+        for(unsigned precision=0;precision<2;precision++){
+        p.adaptive=precision?DVBRIDGE_ADAPTIVE_B_FP16:DVBRIDGE_ADAPTIVE_B_FP32;
+
         av_dovi_get_color(m)->source_max_pq=2500;id.picture++;
         assert(dvbridge_render_dv_policy_prepare_packed(r,&p,&id,&full_frame,m,bytes,5,5,full_geometry,target,false,NULL)==DVBRIDGE_DV_PENDING);
         assert(finish(r)==DVBRIDGE_DV_READY);out=dvbridge_render_dv_policy_output(r);

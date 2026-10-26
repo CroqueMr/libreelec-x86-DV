@@ -58,8 +58,6 @@ add_test(NAME resolution_adaptive_flipped COMMAND "${CMAKE_COMMAND}" -E env
   CB1_TEST_CROPPED=1 CB1_TEST_FLIP=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
 add_test(NAME resolution_adaptive_recovery_retirement COMMAND "${CMAKE_COMMAND}" -E env
   CB1_TEST_RECOVERY=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
-add_test(NAME resolution_adaptive_fast COMMAND "${CMAKE_COMMAND}" -E env
-  CB1_TEST_FAST=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
 add_test(NAME resolution_adaptive_no_clone COMMAND "${CMAKE_COMMAND}" -E env
   CB1_TEST_CLONE=1 "$<TARGET_FILE:resolution_contract>" --case adaptive)
 set_tests_properties(resolution_adaptive_no_clone PROPERTIES SKIP_RETURN_CODE 77)
@@ -95,8 +93,6 @@ endforeach()
 add_executable(enhanced_dv_records enhanced_dv_records.c)
 add_test(NAME fel_adaptive_transfer COMMAND p5_adaptive_images --fel)
 add_test(NAME scaled_adaptive_domain COMMAND scaled_adaptive domain)
-add_test(NAME scaled_adaptive_fast COMMAND "${CMAKE_COMMAND}" -E env
-  CB1_TEST_FAST=1 "$<TARGET_FILE:scaled_adaptive>")
 add_test(NAME scaled_adaptive_recovery_area COMMAND scaled_adaptive area)
 target_link_libraries(enhanced_dv_records PRIVATE dvbridge_core)
 foreach(witness 0 1 2 3)

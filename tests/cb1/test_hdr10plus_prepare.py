@@ -148,7 +148,6 @@ template<class... A>void dvbridge_gl_frame_set_chroma(A...){}
 template<class... A>auto dvbridge_map_chroma(A...){return PL_CHROMA_LEFT;}
 template<class... A>bool dvbridge_map_color(A...){return true;}
 template<class... A>void dvbridge_renderer_set_optimized_dv(A...){}
-template<class... A>void dvbridge_renderer_set_fast_chroma(A...){}
 template<class... A>void dvbridge_renderer_set_processing_optimizations(A...){}
 template<class... A>void dvbridge_renderer_set_overlay_visible(A...){}
 template<class... A>void dvbridge_renderer_reset(A...){}
@@ -172,7 +171,7 @@ struct CDVPlaybackInfo {enum {HDR10=1,HDMI=2,FEL=4,CM4=8};};
 struct CDVBridgeGLES {
  struct Layer {int layout{},width=32,height=32,planes[3]{},chromaLocation=AVCHROMA_LOC_UNSPECIFIED;
  double pts{};struct {int profile=7;}sourceInfo;};
- struct Pref {bool optimizedDV{},processingOptimizations{},masterIPT{};bool EffectiveFastChroma(dvbridge_mode)const{return false;}}m_requested;
+ struct Pref {bool optimizedDV{},processingOptimizations{},masterIPT{};}m_requested;
  bool m_prepared{},m_packed{},m_direct{},m_hdr10=true,m_overlayVisible{},m_directUsable=true,
  m_nativeOverlayEnabled{},m_nativeOverlayPrimed{},m_asyncEligible=true,m_live=true,m_firstFrame=true;
  int m_renderer=1,m_scanout=1,m_nativeOverlay{};GL gl{};GL* m_gl=&gl;

@@ -22,7 +22,7 @@ class AdaptiveNamesTests(unittest.TestCase):
 #include <bit>
 #include <cmath>
 #include <cstdint>
-#include "utils/DVBridgeFastRendering.h"
+#include "utils/DVBridgePresentation.h"
 enum class OutputMode ENUMS
 struct OutputPreferences PREFS
 int main() {
@@ -89,24 +89,12 @@ int main() {
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
         self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1, 1])
 
-    def test_active_pipelines_require_fast_except_exact_master(self):
-        tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
-        from test_native_video_source import body
-        header = (tree / 'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
-        header = '\n'.join(line for line in header.splitlines() if not line.startswith('#include'))
-        renderer = (tree / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
-        paths = [('bool CDVBridgeGLES::Prepare(', 'm_requested', 'm_effectiveMode'),
-                 ('CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(', 'preferences', 'policy.mode'),
-                 ('CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(', 'preferences', 'policy.mode')]
-        expressions = []
-        for signature, _, _ in paths:
-            expressions.append(re.search(r'dvbridge_renderer_set_fast_chroma\(m_renderer,(.*?)\);',
-                                         body(renderer, signature)).group(1))
-        telemetry = re.search(r'output.fastChroma = (.*?);', renderer).group(1)
-        fast_mode = re.search(r'output.fastRenderingMode = (.*?);', renderer).group(1)
-        program = r'''
+    def test_legacy_fast_values_cannot_change_output_policy(self):
+        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        header=(tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
+        header='\n'.join(line for line in header.splitlines() if not line.startswith('#include'))
+        program=r"""
 #include <atomic>
-#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -117,54 +105,43 @@ int main() {
 #include <cassert>
 #define HAVE_DVBRIDGE
 #include "dvbridge_policy.h"
-#include "utils/DVBridgeFastRendering.h"
-#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 struct Settings {
  std::map<std::string,int> ints;
- int GetInt(const char* key){return ints[key];} double GetNumber(const char*){return 2500;}
- bool GetBool(const char*){return false;}
+ int GetInt(const char* key){return ints[key];}
+ double GetNumber(const char*){return 2500;}
+ bool GetBool(const char* key){return ints[key];}
 };
 auto stored=std::make_shared<Settings>();
 struct Component{auto GetSettings(){return stored;}} component;
 struct CServiceBroker{static auto GetSettingsComponent(){return &component;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t id=1;return ++id;}}
-@@HEADER@@
-bool prepare(DVBRIDGE::OutputPreferences m_requested,dvbridge_mode m_effectiveMode){return @@PREPARE@@;}
-bool frame(DVBRIDGE::OutputPreferences preferences,dvbridge_mode mode){struct {dvbridge_mode mode;}policy{mode};return @@FRAME@@;}
-bool ai(DVBRIDGE::OutputPreferences preferences,dvbridge_mode mode){struct {dvbridge_mode mode;}policy{mode};return @@AI@@;}
-void telemetry(DVBRIDGE::OutputPreferences m_requested,dvbridge_mode m_effectiveMode,bool hdr10AI,bool expected,int expectedMode){
- struct {bool fastChroma{},hdr10AI{};int fastRenderingMode{};}output;output.hdr10AI=hdr10AI;
- output.fastChroma=@@TELEMETRY@@;output.fastRenderingMode=@@FASTMODE@@;
- assert(output.fastChroma==expected && output.fastRenderingMode==expectedMode);
-}
+@HEADER@
 int main(){using namespace DVBRIDGE;
- for(int global=0;global<3;++global){
-  stored->ints["dvbridge.fastchroma"]=global;
-  for(int saved:{0,1,2,3,4,5}){
-   stored->ints["dvbridge.outputmode"]=saved;FrameOutputSettings();
-   auto p=FrameOutputSettings();
-   assert(int(p.output)==(saved==3?5:saved));
-   for(auto mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_MASTER_REFERENCE,DVBRIDGE_MODE_HDR10_BASIC,DVBRIDGE_MODE_HDR10_EXPERT,DVBRIDGE_MODE_ENHANCED_DV}){
-    const bool expected=mode!=DVBRIDGE_MODE_MASTER_REFERENCE;
-    assert(prepare(p,mode)==expected);assert(frame(p,mode)==expected);
-    assert(ai(p,mode)==expected);
-    telemetry(p,mode,false,expected,expected?1:0);
-    telemetry(p,mode,true,expected,expected?1:0);
-   }
-   assert(!p.EffectiveFastChroma(DVBRIDGE_MODE_DISABLED));
+ assert(!OutputPreferences{}.allowMasterFallback);
+ for(int saved:{0,1,2,3,4,5})for(int ai:{0,1,2}){
+  stored->ints["dvbridge.outputmode"]=saved;stored->ints["dvbridge.hdr10source"]=ai;
+  auto initial=FrameOutputSettings();
+  for(int oldFast:{0,1,2}){
+   stored->ints["dvbridge.fastchroma"]=oldFast;
+   auto current=FrameOutputSettings();
+   assert(current.SameValues(initial) && current.revision==initial.revision);
+   assert(current.Policy().mode==initial.Policy().mode);
+   assert(current.HDR10Policy().mode==initial.HDR10Policy().mode);
   }
  }
+ stored->ints["dvbridge.masterfallback"]=1;
+ assert(FrameOutputSettings().allowMasterFallback);
+ stored->ints["dvbridge.masterfallback"]=0;
+ assert(!FrameOutputSettings().allowMasterFallback);
 }
-'''.replace('@@HEADER@@', header).replace('@@PREPARE@@', expressions[0]).replace('@@FRAME@@', expressions[1]).replace('@@AI@@', expressions[2]).replace('@@TELEMETRY@@', telemetry).replace('@@FASTMODE@@', fast_mode)
-        repo = Path(__file__).resolve().parents[2]
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / 'test.cpp').write_text(program)
-            built = subprocess.run(['c++', '-std=c++20', '-I'+str(tree/'xbmc'), '-I'+str(repo/'CB1/src'),
-                                    str(root/'test.cpp'), '-o', str(root/'test')], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stderr)
-            run = subprocess.run([str(root/'test')], capture_output=True, text=True)
-            self.assertEqual(run.returncode, 0, run.stderr)
+""".replace('@HEADER@',header)
+        repo=Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-I'+str(repo/'CB1/src'),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            run=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
 
     def test_requested_labels_compile_against_actual_cached_contract(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
@@ -173,22 +150,14 @@ int main(){using namespace DVBRIDGE;
         from test_native_video_source import body
         native = body((tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h').read_text(), 'struct Output')
         renderer = (tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
-        telemetry = re.search(r'output.fastChroma = (.*?);', renderer).group(1)
-        fast_mode = re.search(r'output.fastRenderingMode = (.*?);', renderer).group(1)
         # Native telemetry omits AI fields when the AI feature is not compiled.
         declarations = '''
 #include <array>
 #include "dvbridge_policy.h"
 enum class OutputReason { None };
 struct NativeOutput @@NATIVE@@;
-struct Preferences {
- bool EffectiveFastChroma(dvbridge_mode, bool ai)const{return ai;}
- int EffectiveFastRenderingMode(dvbridge_mode,bool ai)const{return ai?2:1;}
-};
-void nativeTelemetry(){NativeOutput output;Preferences m_requested;auto m_effectiveMode=DVBRIDGE_MODE_STANDARD;
- output.fastChroma=@@TELEMETRY@@;output.fastRenderingMode=@@FASTMODE@@;
- assert(!output.fastChroma && output.fastRenderingMode==1);}
-'''.replace('@@NATIVE@@', native).replace('@@TELEMETRY@@', telemetry).replace('@@FASTMODE@@', fast_mode)
+
+'''.replace('@@NATIVE@@', native)
         program = r'''
 #include "cores/VideoProcessingInfo.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
@@ -200,7 +169,7 @@ int main(){VideoProcessingInfo data;data.transaction.requested=1;
  data.transaction.hdr10AI=true;assert(label(data)=="Dolby Vision Reference (AI)");
  data.transaction.requested=4;assert(label(data)=="Dolby Vision Adaptive HDR Mapping (AI)");
  assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
- assert(CDVPlaybackInfo::IsHDR10AI(data.output));nativeTelemetry();}
+ assert(CDVPlaybackInfo::IsHDR10AI(data.output));}
 '''.replace('@@REQUESTED@@', requested.rstrip()[:-1]).replace('@@DECLARATIONS@@', declarations)
         repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
@@ -223,7 +192,7 @@ int main(){VideoProcessingInfo data;data.transaction.requested=1;
 #include <memory>
 #include <string>
 #include <vector>
-#include "utils/DVBridgeFastRendering.h"
+#include "utils/DVBridgePresentation.h"
 #define HAVE_DVBRIDGE
 struct TiXmlNode {virtual ~TiXmlNode()=default;};
 struct TiXmlText {std::string value;explicit TiXmlText(const char* text):value(text){}};

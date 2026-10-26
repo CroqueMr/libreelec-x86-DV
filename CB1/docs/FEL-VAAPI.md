@@ -12,7 +12,7 @@ The adapter requires VAAPI VideoProc, Y416 output allocation and EGL DMA-BUF imp
 
 ## Bounded FEL preparation
 
-Authored Dolby Vision Adaptive HDR Mapping with Fast and asynchronous preparation
+Authored Dolby Vision Adaptive HDR Mapping with asynchronous preparation
 can prepare one queued FEL layer ahead in the same two surfaces. Import waits for
 VPP completion; source-read fences still retain each lease. Stream, picture,
 timestamp, pool and processing revisions must match before reuse. Menus, pause,
@@ -30,7 +30,7 @@ and AI do not use this lookahead.
 | Nearest neighbour (GPU) | Explicit nearest sampling in the existing shader; VPP is bypassed |
 
 The setting affects the FEL enhancement layer only, before reconstruction. It
-does not change BL scaling, chroma Fast, decoding, layer pairing or source metadata.
+does not change BL scaling, the input-chroma recipe, decoding, layer pairing or source metadata.
 Non-FEL sources are unaffected. Native, HDR10 Basic/Expert and Adaptive HDR Mapping
 use the choice when they reconstruct FEL. A policy change invalidates the affected
 import and pending-frame identity. Switching back to VAAPI restores VPP selection.

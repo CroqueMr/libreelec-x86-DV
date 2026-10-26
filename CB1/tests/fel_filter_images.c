@@ -24,7 +24,7 @@ static pl_tex residual(pl_gpu gpu,int w,int h,int out_w,int out_h,int enlarged,b
         .sampleable=true,.initial_data=data));free(data);assert(tex);return tex;
 }
 
-static void qualify(struct reference_gpu *g,int ew,int eh,bool flip,bool fast)
+static void qualify(struct reference_gpu *g,int ew,int eh,bool flip)
 {
     const int w=64,h=48;
     float *base=malloc((size_t)w*h*16),*actual=malloc((size_t)w*h*16);
@@ -51,7 +51,7 @@ static void qualify(struct reference_gpu *g,int ew,int eh,bool flip,bool fast)
         mapping->nlq[c].vdr_in_max=1023*4096;
     }
     struct dvbridge_renderer *r=dvbridge_renderer_create(g->gl->gpu);assert(r);
-    dvbridge_renderer_set_fast_chroma(r,fast);
+
     struct dvbridge_geometry geometry={w,h,0,0,w & ~1,h};
     assert(dvbridge_render_rgb(r,&source,m,bytes,1,1,geometry));
     reference_read(g->gl->gpu,dvbridge_render_texture(r),0,0,w,h,before);
@@ -78,8 +78,8 @@ static void qualify(struct reference_gpu *g,int ew,int eh,bool flip,bool fast)
         /* At an exact half-way coordinate either equidistant texel is nearest.
          * Both independent oracles coincide at every non-tied coordinate. */
         if(!upper_match && !lower_match){
-            fprintf(stderr,"nearest mismatch EL=%dx%d flip=%d fast=%d at=%d actual=%.8g lower=%.8g upper=%.8g\n",
-                ew,eh,flip,fast,p,actual[p*4],lower[p*4],expected[p*4]);
+            fprintf(stderr,"nearest mismatch EL=%dx%d flip=%d at=%d actual=%.8g lower=%.8g upper=%.8g\n",
+                ew,eh,flip,p,actual[p*4],lower[p*4],expected[p*4]);
             assert(!"Nearest EL phase or residual changed");
         }
     }
@@ -124,7 +124,7 @@ static pl_tex render_mode(struct dvbridge_renderer *r,const struct pl_frame *sou
         assert(dvbridge_render_hdr10_policy_rgb(r,&p,&id,source,metadata,bytes,1,1,geometry));
         return dvbridge_render_texture(r);
     }
-    
+
     enum dvbridge_dv_policy_status status=dvbridge_render_dv_policy_prepare(r,&p,&id,
         source,metadata,bytes,1,1,geometry);
     for(int i=0;i<100 && status==DVBRIDGE_DV_PENDING;i++){
@@ -165,12 +165,12 @@ static void qualify_modes(struct reference_gpu *g)
         mapping->nlq[c].vdr_in_max=1023*4096;
     }
     struct dvbridge_geometry geometry={w,h,0,0,w,h};
-    for(int fast=0;fast<2;fast++)for(int mode=0;mode<5;mode++){
+    for(int mode=0;mode<5;mode++){
         struct dvbridge_retirement_owner *a=dvbridge_retirement_owner_create(g->gl->gpu);
         struct dvbridge_retirement_owner *b=dvbridge_retirement_owner_create(g->gl->gpu);assert(a && b);
         struct dvbridge_renderer *nearest=dvbridge_renderer_create_with_owner(a);
         struct dvbridge_renderer *oracle=dvbridge_renderer_create_with_owner(b);assert(nearest && oracle);
-        dvbridge_renderer_set_fast_chroma(nearest,fast);dvbridge_renderer_set_fast_chroma(oracle,fast);
+
         dvbridge_renderer_set_fel_nearest(nearest,true);
         dvbridge_renderer_set_fel_nearest(oracle,true);
         el.planes[0].texture=small;
@@ -179,7 +179,7 @@ static void qualify_modes(struct reference_gpu *g)
         el.repr.bits=(struct pl_bit_encoding){.sample_depth=16,.color_depth=10,.bit_shift=6};
         reference_read(g->gl->gpu,render_mode(oracle,&source,m,bytes,geometry,mode),0,0,w,h,expected);
         for(int i=0;i<w*h*4;i++)if(!isfinite(actual[i]) || fabsf(actual[i]-expected[i])>=3e-5f){
-            fprintf(stderr,"mode=%d fast=%d at=%d actual=%.9g oracle=%.9g\n",mode,fast,i,actual[i],expected[i]);
+            fprintf(stderr,"mode=%d at=%d actual=%.9g oracle=%.9g\n",mode,i,actual[i],expected[i]);
             assert(!"FEL filter circuit comparison failed");
         }
         dvbridge_renderer_destroy(nearest);dvbridge_renderer_destroy(oracle);
@@ -196,7 +196,7 @@ static unsigned residual_code(int x,int y,int c)
     return 384+((x*3+y*2+c)%5)*64;
 }
 
-static void qualify_planes(struct reference_gpu *g,bool planar,bool flip,bool fast)
+static void qualify_planes(struct reference_gpu *g,bool planar,bool flip)
 {
     const int w=16,h=16,ew=8,eh=8;
     float base[w*h*4],actual[w*h*4],before[w*h*4],expected[8][w*h*4];
@@ -227,7 +227,7 @@ static void qualify_planes(struct reference_gpu *g,bool planar,bool flip,bool fa
     }
     struct dvbridge_geometry geometry={w,h,0,0,w,h};
     struct dvbridge_renderer *r=dvbridge_renderer_create(g->gl->gpu);assert(r);
-    dvbridge_renderer_set_fast_chroma(r,fast);
+
     assert(dvbridge_render_rgb(r,&source,m,bytes,0,0,geometry));
     reference_read(g->gl->gpu,dvbridge_render_texture(r),0,0,w,h,before);
     dvbridge_renderer_set_fel_nearest(r,true);
@@ -262,7 +262,7 @@ static void qualify_planes(struct reference_gpu *g,bool planar,bool flip,bool fa
             for(int c=0;c<4;c++)same &= isfinite(actual[p*4+c]) && fabsf(actual[p*4+c]-expected[tie][p*4+c])<2e-5f;
             matches |= same;
         }
-        if(!matches){fprintf(stderr,"EL planes=%d flip=%d fast=%d pixel=%d\n",planar?3:2,flip,fast,p);assert(matches);}
+        if(!matches){fprintf(stderr,"EL planes=%d flip=%d pixel=%d\n",planar?3:2,flip,p);assert(matches);}
     }
     source.enhancement_layer=&imported.frame;dvbridge_renderer_set_fel_nearest(r,false);
     assert(dvbridge_render_rgb(r,&source,m,bytes,10,10,geometry));
@@ -277,12 +277,12 @@ int main(void)
 {
     assert(dvbridge_renderer_set_fel_nearest && "Explicit FEL filter API missing");
     struct reference_gpu g=reference_gpu_create();
-    for(int fast=0;fast<2;fast++)for(int flip=0;flip<2;flip++){
-        qualify(&g,32,24,flip,fast);qualify(&g,33,25,flip,fast);
+    for(int flip=0;flip<2;flip++){
+        qualify(&g,32,24,flip);qualify(&g,33,25,flip);
     }
     qualify_modes(&g);
-    for(int planar=0;planar<2;planar++)for(int flip=0;flip<2;flip++)for(int fast=0;fast<2;fast++)
-        qualify_planes(&g,planar,flip,fast);
+    for(int planar=0;planar<2;planar++)for(int flip=0;flip<2;flip++)
+        qualify_planes(&g,planar,flip);
     reference_gpu_destroy(&g);
-    puts("PASS FEL nearest phase, borders, residual, Fast, policy reset and non-FEL identity");
+    puts("PASS FEL nearest phase, borders, residual, policy reset and non-FEL identity");
 }

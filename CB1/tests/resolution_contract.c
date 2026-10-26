@@ -211,7 +211,6 @@ int main(int argc,char **argv)
     assert(argc==3 && !strcmp(argv[1],"--case"));
     const char *name=argv[2];
     const bool flip=getenv("CB1_TEST_FLIP")!=NULL;
-    const bool fast=getenv("CB1_TEST_FAST")!=NULL;
     const bool full1080=getenv("CB1_TEST_FULL1080")!=NULL;
     const unsigned w=full1080?1920:64,h=full1080?1080:getenv("CB1_TEST_CROPPED")?26:36;
     quad_disabled=strcmp(name,"adaptive")!=0;
@@ -220,7 +219,6 @@ int main(int argc,char **argv)
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
     assert(!dvbridge_render_dv_policy_rgb(r));
     if(getenv("CB1_TEST_NO_QUAD"))r->fragment_quad=false;
-    if(fast)dvbridge_renderer_set_fast_chroma(r,true);
     if((!strcmp(name,"standard") || getenv("CB1_TEST_CLONE")) && !r->fragment_quad){
         fputs("SKIP Standard fused transport requires fragment subgroup quad support\n",stderr);
         dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));reference_gpu_destroy(&gpu);
@@ -331,7 +329,7 @@ int main(int argc,char **argv)
         av_dovi_get_header(metadata)->vdr_bit_depth=12;c->signal_bit_depth=12;c->signal_full_range_flag=1;
         for(unsigned i=0;i<3;i++)c->ycc_to_rgb_offset[i]=(AVRational){1,i?2:16};
         assert(dvbridge_dv_source_transport(metadata));
-        dvbridge_renderer_set_optimized_dv(r,true);dvbridge_renderer_set_fast_chroma(r,true);
+        dvbridge_renderer_set_optimized_dv(r,true);
         dvbridge_renderer_set_processing_optimizations(r,true);
         assert(dvbridge_render_packed(r,&source,metadata,bytes,0,NAN,geometry,target,false));
         assert(reconstructed_source_domain && "Scaling must not add a movie colour conversion");

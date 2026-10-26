@@ -50,10 +50,10 @@ int main(void)
     assert(!pl_cb1_dovi_reference_frame_supported(&unsupported,10));
     unsupported=source;unsupported.field=PL_FIELD_TOP;
     assert(!pl_cb1_dovi_reference_frame_supported(&unsupported,10));
-    /* Standard P5 has its own Fast recipe, independent of the global preference. */
-    for(int fast=0;fast<2;fast++){
-        dvbridge_renderer_set_fast_chroma(r,fast);
-        assert(dvbridge_render_packed(r,&source,m,bytes,fast,NAN,geo,out,false));
+    /* Repeated Standard pictures keep their fixed IPT recipe and source metadata. */
+    for(int picture=0;picture<2;picture++){
+
+        assert(dvbridge_render_packed(r,&source,m,bytes,picture,NAN,geo,out,false));
         const struct dvbridge_candidate *candidate=dvbridge_render_candidate(r);assert(candidate);
         unsigned count;const uint32_t *packets=dvbridge_packets(candidate,&count);
         assert(count && packets[5+61]==2);

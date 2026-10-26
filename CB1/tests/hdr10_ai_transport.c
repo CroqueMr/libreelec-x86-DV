@@ -43,7 +43,7 @@ static void ordered_pair(pl_gpu gpu,const struct pl_frame *source,struct dvbridg
     for(unsigned ordered=0;ordered<2;ordered++){
         struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
         struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
-        dvbridge_renderer_set_optimized_dv(r,true);dvbridge_renderer_set_fast_chroma(r,true);
+        dvbridge_renderer_set_optimized_dv(r,true);
         const struct dvbridge_policy policy={.mode=DVBRIDGE_MODE_STANDARD,.revision=1};
         for(unsigned i=0;i<2;i++){
             struct cb1_ai_result prediction={.id={7,1+i,1},.pts=i/60.,
@@ -104,7 +104,7 @@ static void rgb_scanout(struct dvbridge_renderer *r,pl_gpu gpu,const struct pl_f
 /* Native HDR10 codes must survive Reference AI without a clipped RGB roundtrip. */
 static void native_signal(struct dvbridge_renderer *r,pl_gpu gpu,pl_tex target,unsigned fbo)
 {
-    bool previous=r->fast_chroma;dvbridge_renderer_set_fast_chroma(r,true);
+
     const size_t bytes=3840u*2160u*4;
     uint8_t *pixels=malloc(bytes),*control=malloc(bytes);assert(pixels && control);
     float lut[4]={0,0,0,1};
@@ -170,7 +170,7 @@ static void native_signal(struct dvbridge_renderer *r,pl_gpu gpu,pl_tex target,u
         for(unsigned p=0;p<source.num_planes;p++)pl_tex_destroy(gpu,&source.planes[p].texture);
     }
     pl_tex_destroy(gpu,&degamma);pl_tex_destroy(gpu,&pq);
-    free(pixels);free(control);dvbridge_renderer_set_fast_chroma(r,previous);
+    free(pixels);free(control);
 }
 int main(void)
 {

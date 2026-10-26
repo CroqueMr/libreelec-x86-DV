@@ -109,10 +109,6 @@ void dvbridge_renderer_reset(struct dvbridge_renderer *renderer);
 #define CB1_OPTIMIZED_DV_API 1
 /* Select the next picture's DV composition. Default false; HDR10 is unchanged. */
 void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *renderer, bool enabled);
-#define CB1_FAST_CHROMA_API 1
-/* Next-picture input chroma filter for every CB1 circuit. Default false; luma is unchanged. */
-void dvbridge_renderer_set_fast_chroma(struct dvbridge_renderer *renderer, bool enabled);
-
 #define CB1_FEL_FILTER_API 1
 /* Next-picture EL enlargement only. Default false retains the existing filter. */
 void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *renderer, bool enabled);

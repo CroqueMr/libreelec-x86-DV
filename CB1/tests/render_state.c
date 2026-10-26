@@ -36,7 +36,7 @@ int main(void)
     check_program(r,true,"#version 310 es\n#define CB1_DVE_PQ_LOOKUP 1\nprecision",128);
     check_program(r,false,base,128);
     struct {bool *value;const char *prefix;unsigned lanes;} cases[]={
-        {&r->enhanced_fast_pq,"#define CB1_DVE_FAST_PQ 1\n",64},
+        {&r->enhanced_analytic_pq,"#define CB1_DVE_ANALYTIC_PQ 1\n",64},
         {&r->enhanced_linear,"#define CB1_DVE_LINEAR_INPUT 1\n",128},
         {&r->enhanced_prepack,"#define CB1_DVE_PREPACK 1\n",128},
         {&r->ai_enhanced_fused,"#define CB1_DVE_STATS_ONLY 1\n",128},

@@ -634,7 +634,7 @@
       "xbmc/settings/SettingConditions.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/settings/Settings.cpp": "Register and remove the playback settings callbacks.",
       "xbmc/utils/DVBridgeDiagnosticLog.h": "Keep playback diagnostics within the shared log budget.",
-      "xbmc/utils/DVBridgeFastRendering.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/utils/DVBridgePresentation.h": "Measure accepted presentation readiness and apply optional Master-to-Standard recovery.",
       "xbmc/windowing/GraphicContext.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/GraphicContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/Resolution.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",

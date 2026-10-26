@@ -20,7 +20,6 @@ enum class OutputMode {Standard,HDR10,Disabled};
 enum class HDR10SourceMode {Native,ReferenceDV};
 enum class OutputRoute {Vanilla,NativeDV,HDR10};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
-std::atomic<bool> automaticFastRendering{};
 struct OutputPreferences {
  OutputMode output=OutputMode::HDR10;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
  bool allowMasterFallback=true;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;

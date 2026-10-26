@@ -42,7 +42,6 @@ Labels are registered in Kodi's existing `Player.Process(...)` provider.
 | `videodvtransmittedblocks` | Metadata blocks transmitted by accepted output |
 | `videodvprofile`, `videodvlevel`, `videodvversion`, `videodvlayers` | Original Dolby Vision stream facts |
 | `videosourcebits` | Original decoded source precision |
-| `videoprocessingfast` | Accepted fast-rendering state |
 | `videooutputformat`, `videooutputbits` | Accepted output format and precision |
 | `video.sidedata` | Lazy JSON/base64 snapshot of original source metadata on the accepted video frame |
 

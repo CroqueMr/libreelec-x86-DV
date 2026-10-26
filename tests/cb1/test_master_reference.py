@@ -138,11 +138,11 @@ int main(){
 extern "C" {
 #include "dvbridge_policy.h"
 }
-#include "utils/DVBridgeFastRendering.h"
+#include "utils/DVBridgePresentation.h"
 struct Settings {
  std::map<std::string,int> ints;
  int GetInt(const char* k){return ints[k];} double GetNumber(const char*){return 0;}
- bool GetBool(const char*){return true;}
+ bool GetBool(const char* k){return ints[k];}
 };
 auto stored=std::make_shared<Settings>();
 struct Component{auto GetSettings(){return stored;}} component;
@@ -158,7 +158,7 @@ int main(){
  stored->ints["dvbridge.felupscaling"]=1;
  auto p=FrameOutputSettings();assert(p.output==OutputMode::MasterReference);
  assert(p.Policy().mode==DVBRIDGE_MODE_MASTER_REFERENCE && p.Policy().tv.peak_nits==0);
- assert(p.felUpscaling==1 && !p.EffectiveFastChroma(DVBRIDGE_MODE_MASTER_REFERENCE));
+ assert(p.felUpscaling==1);
  OutputCapabilities caps{};caps.sourceKnown=caps.isDV=caps.nativeDV=caps.processingKnown=caps.hdr10=true;
  for(auto& mode:caps.processing)mode={true,OutputReason::None};
  auto out=SelectOutput(p,caps);assert(out.route==OutputRoute::NativeDV && out.policy.mode==5);
@@ -169,7 +169,7 @@ int main(){
   assert(SelectOutput(p,caps).policy.mode==5);
  }
  assert(p.output==OutputMode::MasterReference && p.Policy().mode==5);
- assert(!p.masterIPT && p.allowMasterFallback);
+ assert(!p.masterIPT && !p.allowMasterFallback);
  stored->ints["dvbridge.masteroutput"]=1;p=FrameOutputSettings();
  assert(p.masterIPT && p.Policy().master_ipt && p.revision!=revision);
  const auto iptRevision=p.revision;
@@ -177,10 +177,9 @@ int main(){
  assert(!p.HDR10Policy().master_ipt);
  stored->ints["dvbridge.masteroutput"]=0;p=FrameOutputSettings();
  assert(!p.masterIPT && !p.Policy().master_ipt && p.revision!=iptRevision);
- assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_STANDARD)==1);
- assert(p.EffectiveFastRenderingMode(DVBRIDGE_MODE_MASTER_REFERENCE)==0);
  assert(SelectOutput(p,caps).policy.mode==5);
  caps.processing[5]={false,OutputReason::SourceIneligible};
+ p.allowMasterFallback=true;
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::HDR10 && out.policy.mode==2);
  assert(out.reason==OutputReason::SourceIneligible);
  p.allowMasterFallback=false;out=SelectOutput(p,caps);

@@ -5909,9 +5909,9 @@ diff --git a/xbmc/settings/DisplaySettings.h b/xbmc/settings/DisplaySettings.h
  
  private:
    // holds the real gui resolution
-diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRendering.h
+diff --git a/xbmc/utils/DVBridgePresentation.h b/xbmc/utils/DVBridgePresentation.h
 --- /dev/null
-+++ b/xbmc/utils/DVBridgeFastRendering.h
++++ b/xbmc/utils/DVBridgePresentation.h
 @@ -0,0 +1,67 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
@@ -5922,7 +5922,7 @@ diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRenderi
 +
 +namespace DVBRIDGE
 +{
-+inline bool ContinuousFastRenderingPicture(double currentUs, double previousUs)
++inline bool ContinuousPresentationPicture(double currentUs, double previousUs)
 +{
 +  // Kodi picture timestamps use microseconds; seeks and repeats are excluded.
 +  return std::isfinite(currentUs) && std::isfinite(previousUs) &&
@@ -5936,7 +5936,7 @@ diff --git a/xbmc/utils/DVBridgeFastRendering.h b/xbmc/utils/DVBridgeFastRenderi
 +  void Begin(uint64_t stream,uint64_t policy,uint64_t source,double pts,bool enabled)
 +  {
 +    const bool reset=!enabled || stream!=m_stream || policy!=m_policy || source!=m_source ||
-+        !std::isfinite(pts) || (pts!=m_pts && !ContinuousFastRenderingPicture(pts,m_pts));
++        !std::isfinite(pts) || (pts!=m_pts && !ContinuousPresentationPicture(pts,m_pts));
 +    if(reset){m_warm=m_samples=m_low=0;m_active=false;}
 +    m_stream=stream;m_policy=policy;m_source=source;m_pts=pts;m_enabled=enabled;
 +  }

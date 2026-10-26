@@ -93,7 +93,7 @@ int main(int argc,char **argv)
             struct dvbridge_retirement_owner*owner=dvbridge_retirement_owner_create(g.gl->gpu);assert(owner);
             struct dvbridge_renderer*r=dvbridge_renderer_create_with_owner(owner);assert(r);
             r->authored_p5_analytic=trial;r->authored_fel_lookup=!trial;
-            dvbridge_renderer_set_fast_chroma(r,true);
+
             struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
                 .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
             if(fel)policy.tv.peak_nits=5000;
@@ -102,7 +102,7 @@ int main(int argc,char **argv)
                 (struct dvbridge_geometry){3840,2160,0,0,3840,2160},target,false,NULL)==DVBRIDGE_DV_PENDING);
             assert(finish(r)==DVBRIDGE_DV_READY);const struct dvbridge_dv_policy_output*out=dvbridge_render_dv_policy_output(r);
             assert(out&&out->value.expansion_reason==CB1_DVE_ACTIVE);
-            assert(r->enhanced_fast_pq==(bool)trial&&r->enhanced_pq_lookup==!trial);
+            assert(r->enhanced_analytic_pq==(bool)trial&&r->enhanced_pq_lookup==!trial);
             unsigned packets;assert(dvbridge_packets(out->candidate,&packets));
             if(!trial)packet_reference=packets;else assert(packets==packet_reference);
             if(!trial){size=out->bytes;meta=av_memdup(out->output_metadata,size);assert(meta);}
