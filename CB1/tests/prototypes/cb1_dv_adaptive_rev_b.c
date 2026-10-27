@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_dv_adaptive_rev_b.h"
 #include <math.h>
-#include <string.h>
 
 static double smooth(double lo,double hi,double x)
 {x=fmax(0,fmin(1,(x-lo)/(hi-lo)));return x*x*(3-2*x);}

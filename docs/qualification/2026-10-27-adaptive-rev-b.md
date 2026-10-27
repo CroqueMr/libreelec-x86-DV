@@ -1,5 +1,9 @@
 # RC1 V2: Dolby Vision Adaptive HDR Mapping rev B
 
+Historical qualification at `44904a8c5b`. This first prototype was replaced
+by the [signed-guide rev B](2026-10-27-adaptive-rev-b-signed.md). Its numbers
+and reproduction commands refer to that pinned historical implementation.
+
 Status: offline prototype, not enabled in Kodi or a release image. Existing Adaptive remains unchanged.
 
 ## Scope

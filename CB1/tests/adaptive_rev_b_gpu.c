@@ -174,9 +174,10 @@ static void pipeline(struct reference_gpu *g,struct pl_frame *frame,AVDOVIMetada
         const AVDOVIDmData *l1=av_dovi_find_level(wire_m,1);assert(l1);
         assert(l1->l1.min_pq==projected[0] && l1->l1.max_pq==projected[1] && l1->l1.avg_pq==projected[2]);
         assert(dvbridge_identity_equal(&out->value.identity,&id) && !memcmp(original,m,bytes));
-        printf("{\"kind\":\"pipeline\",\"mode\":%u,\"picture\":%u,\"pts\":%.6f,\"reason\":%d,\"L1\":[%u,%u,%u],\"source_max_pq\":%u,\"measured_proxy\":[%.9g,%.9g,%.9g],\"analysis_model\":\"%s\",\"same_picture\":true,\"source_immutable\":true,\"trims_preserved\":true}\n",
+        printf("{\"kind\":\"pipeline\",\"mode\":%u,\"picture\":%u,\"pts\":%.6f,\"reason\":%d,\"L1\":[%u,%u,%u],\"source_max_pq\":%u,\"measured_proxy\":[%.9g,%.9g,%.9g],\"analysis_model\":\"%s\",\"trim_family\":%u,\"trim_anchors\":%u,\"same_picture\":true,\"source_immutable\":true,\"trims_preserved\":true}\n",
             mode,number,pts,out->value.expansion_reason,projected[0],projected[1],projected[2],av_dovi_get_color(wire_m)->source_max_pq,
-            out->value.statistics[0],out->value.statistics[1],out->value.statistics[2],out->value.analysis_model);
+            out->value.statistics[0],out->value.statistics[1],out->value.statistics[2],out->value.analysis_model,
+            r->dv.enhanced_plan.family,r->dv.enhanced_plan.count);
         pl_tex picture=out->intermediate;
         assert(picture && r->enhanced_linear && r->enhanced_input);
         unsigned w=picture->params.w,h=picture->params.h;

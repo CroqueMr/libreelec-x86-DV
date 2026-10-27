@@ -128,6 +128,31 @@ static void report(void)
             cb1_dv_enhanced_build(&plans[mode],&source,&policy))==CB1_DVE_READY);
         printf("{\"kind\":\"cpu_plan\",\"mode\":%u,\"mean_us\":%.9g}\n",mode,(seconds()-start)*1000);
     }
+    source.count=1;source.weights[0]=1;
+    source.anchors[0]=(struct dvbridge_cm4_anchor){.present=true,
+        .target={.max_pq=wire(2500),.primaries=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
+                 .transfer=PL_COLOR_TRC_PQ}};
+    for(unsigned family=2;family<=8;family+=6){
+        source.family=family;
+        for(unsigned field=0;field<5;field++)for(unsigned step=0;step<3;step++){
+            source.anchors[0].controls=(struct dvbridge_cm4_controls){
+                .primary={2048,2048,2048,2048,2048,2048},.mid_contrast=2048,.clip_trim=2048,
+                .present_fields=DVBRIDGE_CM4_PRIMARY|DVBRIDGE_CM4_MID_CONTRAST|DVBRIDGE_CM4_CLIP_TRIM};
+            uint16_t code=1536+512*step;
+            if(field<3)source.anchors[0].controls.primary[field]=code;
+            else if(field==3)source.anchors[0].controls.mid_contrast=code;
+            else source.anchors[0].controls.clip_trim=code;
+            assert(cb1_dv_enhanced_build_rev_b(&plans[1],&source,&policy)==CB1_DVE_READY);
+            printf("{\"kind\":\"trim_response\",\"family\":%u,\"field\":%u,\"code\":%u,\"at100\":%.9g,\"at200\":%.9g,\"at800\":%.9g}\n",
+                family,field,code,mapped(&plans[1],100),mapped(&plans[1],200),mapped(&plans[1],800));
+        }
+        for(unsigned mode=0;mode<2;mode++)for(unsigned repeat=0;repeat<9;repeat++){
+            double start=seconds();
+            for(unsigned i=0;i<100;i++)assert((mode?cb1_dv_enhanced_build_rev_b(&plans[mode],&source,&policy):
+                cb1_dv_enhanced_build(&plans[mode],&source,&policy))==CB1_DVE_READY);
+            printf("{\"kind\":\"cpu_trim_plan\",\"family\":%u,\"mode\":%u,\"mean_us\":%.9g}\n",family,mode,(seconds()-start)*10000);
+        }
+    }
 }
 
 int main(int argc,char **argv)

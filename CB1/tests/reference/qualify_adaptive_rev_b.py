@@ -70,6 +70,11 @@ def summarize(root):
     result['temporal'] = [r for r in scalar if r['kind'] == 'temporal']
     result['cpu_plan_median_us'] = [median(r['mean_us'] for r in scalar
         if r['kind'] == 'cpu_plan' and r['mode'] == m) for m in (0, 1)]
+    result['trim_responses'] = [r for r in scalar if r['kind'] == 'trim_response']
+    result['cpu_trim_plan_median_us'] = {
+        str(f): [median(r['mean_us'] for r in scalar if r['kind'] == 'cpu_trim_plan'
+                       and r['family'] == f and r['mode'] == m) for m in (0, 1)]
+        for f in (2, 8) if any(r['kind'] == 'cpu_trim_plan' and r['family'] == f for r in scalar)}
     assert len(result['temporal']) == 2 and all(r['frames'] == 240 for r in result['temporal'])
     return result
 
