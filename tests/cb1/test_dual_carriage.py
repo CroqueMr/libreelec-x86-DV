@@ -19,15 +19,17 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
     packets = [b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc']
     if packet_pair is not None:
         packets = packet_pair
+    if kind in ('ambiguous-reference', 'reversed-reference', 'split-reference'):
+        packets = [*packets, packets[0]]
     matrix = struct.pack('>9I', 65536, 0, 0, 0, 65536, 0, 0, 0, 0x40000000)
     ftyp = atom(b'ftyp', b'isom\0\0\0\0isomiso6')
     mvhd = bytearray(100)
     struct.pack_into('>IIIH', mvhd, 12, 1000, 2000, 65536, 256)
     mvhd[36:72] = matrix
-    struct.pack_into('>I', mvhd, 96, 3)
+    struct.pack_into('>I', mvhd, 96, len(packets)+1)
 
     def track(i, offset):
-        width, height = (3840, 2160) if i == 0 else (1920, 1080)
+        width, height = (3840, 2160) if i != 1 else (1920, 1080)
         tkhd = bytearray(84)
         struct.pack_into('>I', tkhd, 0, 3)
         struct.pack_into('>I', tkhd, 12, i+1)
@@ -46,7 +48,8 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
         hvcc = configuration if configuration is not None else bytes([1])+bytes(20)+bytes([3, 0])
         codec = sample_entry if i == 1 else b'hvc1'
         extra = atom(b'hvcC', hvcc)
-        if i == 1 and kind in ('paired', 'missing-reference'):
+        if i == 1 and kind in ('paired', 'missing-reference', 'ambiguous-reference',
+                               'reversed-reference', 'split-reference'):
             flags = (7<<9)|(9<<3)|6  # P7.9, RPU + EL, no BL in this track.
             extra += atom(b'dvcC', bytes([1, 0, flags>>8, flags&255, 0x60])+bytes(19))
         stsd = atom(b'stsd', bytes(4)+struct.pack('>I', 1)+atom(codec, visual+extra))
@@ -59,13 +62,22 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
         mdia = atom(b'mdia', atom(b'mdhd', mdhd)+atom(b'hdlr', hdlr)+atom(b'minf', stbl))
         tref = b''
         if i == 1 and kind != 'independent':
-            tref = atom(b'tref', atom(b'vdep', struct.pack('>I', 99 if kind == 'missing-reference' else 1)))
+            refs = [1, 3] if kind in ('ambiguous-reference', 'split-reference') else (
+                [3, 1] if kind == 'reversed-reference' else [99 if kind == 'missing-reference' else 1])
+            dependencies = (b''.join(atom(b'vdep', struct.pack('>I', ref)) for ref in refs)
+                            if kind == 'split-reference' else atom(b'vdep', b''.join(
+                                struct.pack('>I', ref) for ref in refs)))
+            tref = atom(b'tref', dependencies)
         return atom(b'trak', atom(b'tkhd', tkhd)+tref+mdia)
 
-    moov = atom(b'moov', atom(b'mvhd', mvhd)+track(0, 0)+track(1, 0))
+    moov = atom(b'moov', atom(b'mvhd', mvhd)+b''.join(track(i, 0) for i in range(len(packets))))
     offset = len(ftyp)+len(moov)+8
-    moov = atom(b'moov', atom(b'mvhd', mvhd)+track(0, offset)+track(1, offset+2*len(packets[0])))
-    return ftyp+moov+atom(b'mdat', packets[0]*2+packets[1]*2)
+    tracks = []
+    for i, packet in enumerate(packets):
+        tracks.append(track(i, offset))
+        offset += 2*len(packet)
+    moov = atom(b'moov', atom(b'mvhd', mvhd)+b''.join(tracks))
+    return ftyp+moov+atom(b'mdat', b''.join(packet*2 for packet in packets))
 
 
 def transport(kind, m2ts=False, hevc_el=False):
@@ -132,6 +144,11 @@ class DualCarriage(unittest.TestCase):
                            for tag in (b'hvc1', b'hev1')
                            for kind, want in (('paired', True), ('independent', False),
                                               ('unrelated-vdep', False), ('missing-reference', False))])
+
+    def test_mp4_ambiguous_layer_references_are_not_paired(self):
+        self.run_carriage([(tag.decode()+'-'+kind+'.mp4', mp4(kind, sample_entry=tag), False)
+                           for tag in (b'dvh1', b'dvhe', b'hvc1', b'hev1')
+                           for kind in ('ambiguous-reference', 'reversed-reference', 'split-reference')])
 
     def test_ts_group_admission_and_unrelated_pid_rejection(self):
         self.run_carriage([('hdmv.ts', transport('hdmv'), True),

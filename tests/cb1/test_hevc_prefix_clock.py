@@ -26,9 +26,9 @@ class HEVCPrefixClock(unittest.TestCase):
 #include <assert.h>
 #include <string.h>
 #include <libavcodec/avcodec.h>
-enum {header_size=HEADER_SIZE,picture_size=PICTURE_SIZE};
+enum {header_bytes=HEADER_SIZE,picture_bytes=PICTURE_SIZE};
 static const unsigned char header[HEADER_SIZE+AV_INPUT_BUFFER_PADDING_SIZE]={HEADER};
-static const unsigned char picture[PICTURE_SIZE+AV_INPUT_BUFFER_PADDING_SIZE]={PICTURE};
+static const unsigned char encoded_picture[PICTURE_SIZE+AV_INPUT_BUFFER_PADDING_SIZE]={PICTURE};
 int main(void){
  const int64_t cases[][6]={
   {AV_NOPTS_VALUE,AV_NOPTS_VALUE,9000,8000,9000,8000},
@@ -39,7 +39,13 @@ int main(void){
   {AV_NOPTS_VALUE,AV_NOPTS_VALUE,9000,AV_NOPTS_VALUE,9000,AV_NOPTS_VALUE},
   {AV_NOPTS_VALUE,AV_NOPTS_VALUE,AV_NOPTS_VALUE,8000,AV_NOPTS_VALUE,8000},
   {AV_NOPTS_VALUE,AV_NOPTS_VALUE,0,0,0,0}};
- for(unsigned c=0;c<sizeof(cases)/sizeof(*cases);++c)for(int split=0;split<2;++split){
+ for(int short_prefix=0;short_prefix<2;++short_prefix)
+ for(unsigned c=0;c<sizeof(cases)/sizeof(*cases);++c)for(int shape=0;shape<5;++shape){
+  // Three-byte prefix follows a zero from the preceding untimed PES.
+  const int header_size=header_bytes+short_prefix,picture_size=picture_bytes-short_prefix;
+  const unsigned char* picture=encoded_picture+short_prefix;
+  const int cuts[][3]={{picture_size,picture_size,0},{6,picture_size,0},
+                      {4,5,1},{2,5,1},{5,6,1}};
   const int64_t* clock=cases[c];
   AVCodecParserContext* parser=av_parser_init(AV_CODEC_ID_HEVC);
   AVCodecContext* codec=avcodec_alloc_context3(NULL);
@@ -48,16 +54,19 @@ int main(void){
   assert(av_parser_parse2(parser,codec,&output,&size,header,header_size,
       clock[0],clock[1],0)==header_size);
   assert(size==0);
-  const int first=split?6:picture_size;
-  unsigned char first_chunk[PICTURE_SIZE+AV_INPUT_BUFFER_PADDING_SIZE]={0};
-  memcpy(first_chunk,picture,first);
-  assert(av_parser_parse2(parser,codec,&output,&size,first_chunk,first,
-      clock[2],clock[3],header_size)==first);
-  assert(size==0);
-  if(split){
-   assert(av_parser_parse2(parser,codec,&output,&size,picture+first,picture_size-first,
-       AV_NOPTS_VALUE,AV_NOPTS_VALUE,header_size+first)==picture_size-first);
+  int begin=0;
+  for(int part=0;part<3;++part){
+   const int end=part<2?cuts[shape][part]:picture_size;
+   const int length=end-begin;
+   if(!length)continue;
+   unsigned char fragment[PICTURE_SIZE+AV_INPUT_BUFFER_PADDING_SIZE]={0};
+   memcpy(fragment,picture+begin,length);
+   const int timed=part==cuts[shape][2];
+   assert(av_parser_parse2(parser,codec,&output,&size,fragment,length,
+       timed?clock[2]:AV_NOPTS_VALUE,timed?clock[3]:AV_NOPTS_VALUE,
+       header_size+begin)==length);
    assert(size==0);
+   begin=end;
   }
   // A large PES is split across enough chunks to overwrite timestamp history.
   const unsigned char filler[8+AV_INPUT_BUFFER_PADDING_SIZE]={0,0,0,1,0x4c,1,0xff,0x80};

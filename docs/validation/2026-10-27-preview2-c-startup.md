@@ -7,8 +7,8 @@ Branch: `candidate/rc1-preview2-c-startup`. Local source candidate only.
 
 | Boundary | Reproduced failure | Correction | Verification |
 |---|---|---|---|
-| HEVC framing, disc/TS startup | Untimed parameter PES hides the first picture's real PTS/DTS; a large split picture overwrites timestamp history before late recovery. | Capture its existing clock at the first slice's NAL start. Preserve already valid clocks and genuinely missing clocks. | Eight clock cases, including partial and zero timestamps, split slice headers and unchanged following-picture clocks. Real 4K FEL transport emits 48 pairs, zero missing clocks and zero rejected packets. VCL, EL and RPU bytes match the source. |
-| MOV dual-track association | Explicit Profile 7 EL configuration and `vdep` reference are ignored when the EL uses `hvc1` or `hev1`. | Accept these HEVC sample entries alongside `dvhe`/`dvh1`, retaining configuration and relationship checks. | Actual FFmpeg MOV demux and Kodi assembly pass both entries. Missing config, independent tracks, missing base references and ambiguous groups stay rejected. Assembled payload and clocks are checked. |
+| HEVC framing, disc/TS startup | Untimed parameter PES hides the first picture's real PTS/DTS; a large split picture overwrites timestamp history before late recovery. | Capture its existing clock across the first slice's prefix/header, at most seven byte positions. Preserve already valid clocks and genuinely missing clocks. | Eight clock cases across ten packetizations, including partial/zero clocks, three-byte prefixes after a trailing zero, timed middle fragments and unchanged following-picture clocks. Real 4K FEL transport emits 48 pairs, zero missing clocks and zero rejected packets. VCL, EL and RPU bytes match the source. |
+| MOV dual-track association | Explicit Profile 7 EL configuration and `vdep` reference are ignored when the EL uses `hvc1` or `hev1`. | Accept these HEVC sample entries alongside `dvhe`/`dvh1`, requiring exactly one distinct declared base. Retain at most two distinct references to detect ambiguity before group construction. | Actual FFmpeg MOV demux and Kodi assembly pass both entries. Missing config, independent tracks, missing base references, reversed/multiple dependency targets, repeated dependency atoms and ambiguous groups stay rejected. Assembled payload and clocks are checked. |
 
 Both regressions failed before the corresponding correction. The failed late
 timestamp-recovery prototype was removed. No frame clocks are fabricated, and
@@ -31,7 +31,7 @@ scanout qualification or a reproduction of the MKV decoder-startup report.
 
 ## Qualification
 
-- Full integration suite result is recorded in the local execution ledger.
+- Full integration suite after the review corrections: **208/208 pass**, 193.010 s.
 - Changed FFmpeg HEVC-parser and MOV translation units compile with the real
   LibreELEC toolchain.
 - Both owners replay from pinned FFmpeg 9.0 with `--fuzz=0` and match the tested
@@ -42,6 +42,31 @@ scanout qualification or a reproduction of the MKV decoder-startup report.
 
 GPU workload, processing shaders, metadata transformation, creative algorithms,
 drivers and settings choices remain unchanged. ht2tweak awaits a new RC1 report.
+
+## Independent review
+
+Astra's review of `3783b8b` found two important boundary failures: clocks on a
+middle NAL-header descriptor, and multiple declared MOV base targets hidden by
+group construction. Both were reproduced as failing owner tests and corrected.
+No minor findings were deferred.
+
+The review does not certify unavailable reporter media, all possible seek/EL/RPU
+packetizations, physical HDMI playback, sustained hardware performance, a full
+image, archive bytes, excluded drivers/GPU behavior or the pending ht2tweak case.
+Those remain explicit qualification limits, not resolved reports.
+
+## Scope decisions
+
+- Keep Preview2-A frozen; do not revive the rejected Preview2-B GUI prototype.
+  Bringing it back would change the baseline without a valid reproduction.
+- Keep ht2tweak pending and GPU/driver/BT/display-policy work excluded. This
+  iteration therefore does not resolve those separate behaviors.
+- Fix the native HEVC framing owner, not joiner validation. Recover only an
+  existing descriptor clock; genuinely untimed pictures remain rejected.
+- Do not change decoder pools, delays or capability resets without reproducing
+  the failing MKV/BDMV/HDR-first sequence. Those reports may remain unresolved.
+- Treat the MOV sample-entry result as a proven mechanism, not proof about the
+  unavailable reporter MP4. A different file defect would need its own evidence.
 
 ## Regression commands
 
