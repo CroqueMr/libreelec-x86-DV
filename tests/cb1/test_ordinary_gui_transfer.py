@@ -17,13 +17,15 @@ class OrdinaryGUITransferTests(unittest.TestCase):
 enum {AVCOL_TRC_BT709=1, AVCOL_TRC_UNSPECIFIED=2,
       AVCOL_TRC_SMPTE2084=16, AVCOL_TRC_ARIB_STD_B67=18};
 struct VideoPicture {int color_transfer;};
+struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
+struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 struct DRM {virtual ~DRM()=default;};
 struct CDRMAtomic : DRM {int GetConnector(){return 0;}
  bool AddProperty(int,const char*,int){return true;}};
 struct State {bool Captured(){return false;} bool Stage(CDRMAtomic&,bool){return true;}};
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>(); State m_dvState;
- std::optional<int> m_hdrDeepColorPrevious; bool m_dvOrdinaryFrame=false;
+ std::optional<int> m_hdrDeepColorPrevious; bool m_dvOrdinaryFrame=false,m_dvStopPending=false;
  int gui=-1; bool hdrAvailable=true; const VideoPicture* color{}; const VideoPicture* hdr{};
  void SetColorimetry(const VideoPicture* p){color=p;}
  bool SetHDR(const VideoPicture* p){hdr=p; return hdrAvailable && p &&

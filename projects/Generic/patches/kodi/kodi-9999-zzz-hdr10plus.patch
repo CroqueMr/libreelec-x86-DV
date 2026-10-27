@@ -1291,7 +1291,35 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  #include "rendering/capture/CaptureService.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
-@@ -452,11 +455,13 @@
+@@ -387,6 +390,9 @@
+ 
+ void CWinSystemGbmGLESContext::PresentFrame(bool rendered, bool videoLayer)
+ {
++  if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++      drm && drm->IsSDRRestorePending())
++    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
+ #ifdef HAVE_DVBRIDGE
+   // Yield to the pending scanout instead of repeatedly redrawing the GUI.
+   if (!CompleteDVBridgePage(8)) return;
+@@ -405,6 +411,7 @@
+   if (m_dvOrdinaryFrame)
+   {
+     if (!rendered || !m_eglContext.TrySwapBuffers()) return;
++    if (m_dvStopPending && !StageOrdinaryDVOutput(nullptr)) return;
+     auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+     auto& surface = m_GBM->GetDevice().GetSurface();
+     auto* bo = surface.LockTransactionalBuffer();
+@@ -417,7 +424,8 @@
+     if (!submitted)
+     {
+       DVBRIDGE::PlaybackNotification::OrdinaryOutputAccepted(false);
+-      RejectDVOutputSurface(); return;
++      if (!m_dvStopPending) RejectDVOutputSurface();
++      return;
+     }
+     if (!CompleteDVOutputSurface(true)) return;
+     PublishVideoSource(true, m_videoSourceSideData);
+@@ -452,11 +460,13 @@
              (drm->GetConnector()->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR") ?
               drm->AddProperty(drm->GetConnector(), "DVBRIDGE_HDR10_DEEP_COLOR", 1) :
               FloatOutputUsable());
@@ -1305,7 +1333,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          if (!drm || !drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(presented);
        }
        else if (asynchronous)
-@@ -465,8 +470,8 @@
+@@ -465,8 +475,8 @@
      if (m_dvBridge && m_dvBridge->Presented(presented,submitted))
      {
        PublishVideoSource(true, submitted.sourceSideData);
@@ -1316,7 +1344,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        DVBRIDGE::PlaybackNotification::NativeOutputAccepted(DVBRIDGE::StreamTelemetry::Read().output);
        const auto* plane=m_DRM->GetGuiPlane() ? m_DRM->GetGuiPlane() : m_DRM->GetVideoPlane();
        DVBRIDGE::StreamTelemetry::NativeFormat(
-@@ -539,8 +544,8 @@
+@@ -539,8 +549,8 @@
      if (m_dvBridge && m_dvBridge->Presented(presented,submitted))
      {
        PublishVideoSource(true, submitted.sourceSideData);
@@ -1327,7 +1355,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        DVBRIDGE::PlaybackNotification::NativeOutputAccepted(DVBRIDGE::StreamTelemetry::Read().output);
        const auto* plane=m_DRM->GetGuiPlane() ? m_DRM->GetGuiPlane() : m_DRM->GetVideoPlane();
        DVBRIDGE::StreamTelemetry::NativeFormat(
-@@ -599,6 +604,8 @@
+@@ -599,6 +609,8 @@
  
  #ifdef HAVE_DVBRIDGE
      AnnounceCB1Mode(false);
@@ -1336,7 +1364,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  #endif
      CWinSystemGbm::FlipPage(rendered, videoLayer, async);
  #ifdef HAVE_DVBRIDGE
-@@ -622,10 +629,13 @@
+@@ -622,10 +634,13 @@
          static std::chrono::steady_clock::time_point next;
          const auto generation=cache.GetVideoProcessingGeneration();
          const auto now=std::chrono::steady_clock::now();
@@ -1351,7 +1379,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            if (cache.SetVideoProcessingInfo(info.informationGeneration,info))
            {
              previousGeneration=generation;
-@@ -643,6 +653,43 @@
+@@ -643,6 +658,43 @@
  
  
  }
@@ -1395,7 +1423,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
  bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
  {
-@@ -884,7 +931,7 @@
+@@ -886,7 +938,7 @@
      glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
      glGetIntegerv(GL_VIEWPORT, previousViewport);
      glBindFramebuffer(GL_FRAMEBUFFER, target);
@@ -1404,7 +1432,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
  #endif
  
-@@ -1065,6 +1112,10 @@
+@@ -1071,6 +1123,10 @@
    auto caps = GetDVOutputCapabilities(nullptr);
    caps.nativeDV = SupportsNativeDVOutput();
    caps.hdr10 = SupportsHDR10Conversion();
@@ -1415,7 +1443,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (m_renderableType != EGL_OPENGL_ES3_BIT)
    {
      caps.processingKnown = true;
-@@ -1346,8 +1397,16 @@
+@@ -1352,8 +1408,16 @@
        std::lock_guard lock(m_dvCapabilityMutex);
        m_aiActive=false;
      }
@@ -1434,7 +1462,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    const auto binding = picture.doviSourceBinding;
    if (queue.empty() || !(queue.front().binding == binding)) return false;
    {
-@@ -1397,6 +1456,8 @@
+@@ -1403,6 +1467,8 @@
      m_aiReady |= decision == HDR10AISource::Decision::Prepare;
      m_aiFallback = decision == HDR10AISource::Decision::Native;
      m_aiActive = !m_aiFallback;
@@ -1443,7 +1471,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
    if (decision == HDR10AISource::Decision::Native)
    {
-@@ -1564,7 +1625,11 @@
+@@ -1570,7 +1636,11 @@
    m_failedHDR10SetupRestore = false;
    if (DVBRIDGE::DiagnosticsEnabled())
    {
@@ -1456,7 +1484,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          session.target.hdr.max_luma, session.output.level6 ? "RPU-L6" : "RPU-source-PQ",
          GetOutputBitDepth(), UseLimitedColor() ? "limited" : "full");
      if (m_hdrDeepColorPrevious)
-@@ -1625,7 +1690,9 @@
+@@ -1631,7 +1701,9 @@
    };
    const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10;
    if (!SupportsDVOutputMode()) return failure("output-format", "unsupported-current-mode");
@@ -1467,7 +1495,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
      return failure("output-format", "drawable-depth");
    if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
-@@ -1837,8 +1904,8 @@
+@@ -1843,8 +1915,8 @@
        source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
    const bool strictMaster=preferences.output==DVBRIDGE::OutputMode::MasterReference &&
        !preferences.allowMasterFallback;
@@ -1478,7 +1506,26 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        preferences.output != DVBRIDGE::OutputMode::Disabled &&
        !(source.el && !picture.doviEnhancement))
    {
-@@ -1977,7 +2044,6 @@
+@@ -1890,11 +1962,17 @@
+ 
+ bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)
+ {
++  if (m_dvStopPending)
++  {
++    m_dvOrdinaryFrame = true;
++    SetGuiCompositing(0);
++    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++  }
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   if (!drm || (m_dvState.Captured() && !m_dvState.Stage(*drm,true)) ||
+       (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
+           "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
+-  { RejectDVOutputSurface(); return false; }
++  { if (!m_dvStopPending) RejectDVOutputSurface(); return false; }
+   SetColorimetry(picture);
+   const bool hdr = SetHDR(picture);
+   SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
+@@ -1984,7 +2062,6 @@
        !m_dvRecoveryPending && !m_dvRejectedSurface && !m_dvRollbackFailed &&
        !m_dvOutputRetiring && !m_dvShutdownFence && !m_dvStopPending && !HasPendingDVOutputSurface() &&
        m_dvSelection.route != DVBRIDGE::OutputRoute::Vanilla &&
@@ -1486,7 +1533,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (m_hdrConversion || m_dvState.Captured());
  }
  
-@@ -2030,12 +2096,12 @@
+@@ -2037,12 +2114,12 @@
    const bool overlayFree = (!capturing || masterCapture) &&
        (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
@@ -1503,7 +1550,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
        DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
    if(auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
-@@ -2044,7 +2110,7 @@
+@@ -2051,7 +2128,7 @@
      bool switched=false;
      {
        std::lock_guard lock(m_dvCapabilityMutex);
@@ -1512,7 +1559,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
      }
      if(switched)
-@@ -2055,11 +2121,11 @@
+@@ -2062,11 +2139,11 @@
      }
      drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
    }
@@ -1527,7 +1574,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
        (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
    const bool pqSubtitles = (subtitlesOnly || mergedPQGUI) && m_dvPQSubtitleDraws;
-@@ -2073,12 +2139,12 @@
+@@ -2081,12 +2158,12 @@
    // Prime the subtitle shader once; empty frames retain the lean native shader.
    const bool nativeOverlay = !m_hdrConversion &&
        (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
@@ -1542,7 +1589,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        fullGUI && !enhancedSubtitles ? m_dvGUIContentGeneration : m_dvSubtitleContent, pqSubtitles);
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2120,8 +2186,8 @@
+@@ -2128,8 +2205,8 @@
    const auto preparedAt = std::chrono::steady_clock::now();
    const auto initialStatus = status;
    const bool prefetchFEL = successor && successor->frame && metadata.Data() &&
@@ -1553,7 +1600,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        overlayFree && geometry.source_width == 3840 && geometry.source_height == 2160 &&
        !geometry.x && !geometry.y && geometry.width == 3840 && geometry.height == 2160;
    if (!prefetchFEL)
-@@ -2151,7 +2217,8 @@
+@@ -2159,7 +2236,8 @@
    }
    else
  #endif
@@ -1563,7 +1610,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    {
      // Complete content analysis before Kodi advances this source picture.
      const auto deadline = preparationDeadline;
-@@ -2165,7 +2232,7 @@
+@@ -2173,7 +2251,7 @@
              deadline - std::chrono::steady_clock::now()).count();
          const uint64_t waitNs = prefetchFEL && remaining > 0 ?
              static_cast<uint64_t>(std::min<int64_t>(remaining,2000000)) : 0;
@@ -1572,7 +1619,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            status = m_dvBridge->PollStatus(waitNs);
          else if (m_dvBridge->PollReady())
            status = CDVBridgeGLES::FrameStatus::Ready;
-@@ -2242,7 +2309,8 @@
+@@ -2250,7 +2328,8 @@
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    const bool renderPending = status == CDVBridgeGLES::FrameStatus::Pending ||
        status == CDVBridgeGLES::FrameStatus::Busy;
@@ -1582,7 +1629,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (allowAsync && m_dvContext->AsyncPreparation(layer.binding.stream) && (m_dvFrame || renderPending));
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2351,9 +2419,9 @@
+@@ -2479,9 +2558,9 @@
      m_masterSafety={};
    }
    m_masterFramePeriodNs=0;
@@ -1674,7 +1721,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  #ifdef HAVE_DVBRIDGE
  #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
  #endif
-@@ -136,6 +136,55 @@
+@@ -136,10 +136,84 @@
  }
  catch (...) {}
  
@@ -1727,13 +1774,45 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
 +  return ret;
 +}
 +
++bool CDRMAtomic::PrepareSDRRestore(int& flags)
++{
++  if (!m_sdrRestorePending) return true;
++  if (!m_connector) return false;
++  if (!m_connector->SupportsProperty("HDR_OUTPUT_METADATA"))
++  {
++    SetSDRRestorePending(false);
++    return true;
++  }
++  m_req->sdrRestore = true;
++  flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
++  if (!AddProperty(m_connector, "HDR_OUTPUT_METADATA", 0)) return false;
++  if (m_connector->SupportsProperty("Colorspace"))
++  {
++    const auto value = m_connector->GetPropertyEnumValue("Colorspace", "Default");
++    if (!value || !AddProperty(m_connector, "Colorspace", *value)) return false;
++  }
++  return true;
++}
++
  bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
  {
    CDRMCrtc* oldCrtc = m_old_crtc;
-@@ -154,6 +203,10 @@
+   const auto reject = [&](const char* stage, int error) {
++    if (m_sdrRestorePending && !m_sdrRestoreFailed)
++    {
++      CLog::Log(LOGWARNING, "SDR output restoration pending: stage={} error={}", stage, error);
++      m_sdrRestoreFailed = true;
++    }
+     if (strict)
+     {
+       if (m_dvActivating && !m_dvRestoring) m_dvRetry.Failed(error);
+@@ -154,6 +228,13 @@
    // destroying it before the commit returns leaves the atomic request
    // referencing an invalid id and the kernel rejects with EINVAL.
    CDRMPropertyBlob modeBlob;
++
++  if (!PrepareSDRRestore(flags))
++    return reject("sdr-properties", EINVAL);
 +
 +  bool frameMetadata = false;
 +  if (!PrepareHDR10Plus(flags, frameMetadata))
@@ -1741,7 +1820,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  
    if (m_old_crtc != nullptr)
    {
-@@ -191,12 +244,17 @@
+@@ -191,12 +272,17 @@
      m_old_crtc = nullptr;
    }
  
@@ -1760,7 +1839,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
      if (!modeBlob.IsValid())
        return reject("mode-blob", 0);
  
-@@ -204,7 +262,7 @@
+@@ -204,7 +290,7 @@
        return reject("mode-property", EINVAL);
      // Follow the request actually accepted, including ordinary old-mode fallback.
      // Transport admission consumes this receipt even when diagnostics are disabled.
@@ -1769,7 +1848,15 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  
      if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
        return reject("active-property", EINVAL);
-@@ -268,11 +326,11 @@
+@@ -261,18 +347,18 @@
+   if (CServiceBroker::GetLogging().CanLogComponent(LOGWINDOWING))
+     m_req->LogAtomicRequest();
+ 
+-  if (strict && m_propertyFailure)
++  if ((strict || m_req->sdrRestore) && m_propertyFailure)
+   {
+     return reject("properties", EINVAL);
+   }
  
    const bool auditCommit = strict && DVBRIDGE::DiagnosticsEnabled() &&
        (!m_dvCommitReported || m_dvLastCommitRestore != m_dvRestoring);
@@ -1779,19 +1866,25 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    {
      const int testError = errno;
 -    if (strict || (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
-+    if (strict || frameMetadata || (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
++    if (strict || m_req->sdrRestore || frameMetadata || (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
      {
        return reject("atomic-test", testError);
      }
-@@ -332,6 +390,7 @@
+@@ -332,6 +418,13 @@
      // after Disable()). Without this, stale cached values cause
      // incorrect plane cleanup on subsequent video playback.
      m_req->CacheProperties();
++    if (m_req->sdrRestore)
++    {
++      if (m_sdrRestoreFailed)
++        CLog::Log(LOGINFO, "SDR output restoration accepted after retry");
++      SetSDRRestorePending(false);
++    }
 +    if (m_req->hdr10plus) m_hdr10plusActive = *m_req->hdr10plus;
      if (m_req->signalMode)
        m_committedMode = *m_req->signalMode;
      if (m_signalDirty && DVBRIDGE::DiagnosticsEnabled())
-@@ -357,16 +416,19 @@
+@@ -357,16 +450,19 @@
  
  bool CDRMAtomic::IsSelectedModeCommitted() const
  {
@@ -1821,7 +1914,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  }
  
  CDRMAtomic::~CDRMAtomic()
-@@ -546,6 +608,7 @@
+@@ -546,6 +642,7 @@
      drm_fb = CDRMUtils::DrmFbGetFromBo(bo);
      if (!drm_fb)
      {
@@ -1829,9 +1922,11 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
        CLog::LogF(LOGERROR, "Failed to get a new FBO");
        return;
      }
-@@ -613,6 +676,11 @@
+@@ -612,7 +709,13 @@
+ 
  void CDRMAtomic::DestroyDrm()
  {
++  SetSDRRestorePending(false);
    ResetCB1PresentationTime();
 +  m_hdr10plusPacket.reset();
 +  m_hdr10plusActive = false;
@@ -1844,19 +1939,31 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
 diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
 --- a/xbmc/windowing/gbm/drm/DRMAtomic.h
 +++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
-@@ -33,6 +33,8 @@
+@@ -33,6 +33,18 @@
    ~CDRMAtomic() override;
    void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
    bool LastPageAccepted() const { return m_lastPageAccepted; }
++  bool IsSDRRestorePending() const { return m_sdrRestorePending; }
++  void SetSDRRestorePending(bool pending)
++  {
++    m_sdrRestorePending = pending;
++    if (!pending)
++    {
++      m_sdrRestoreFailed = false;
++      if (m_req) m_req->sdrRestore = false;
++    }
++  }
 +  void StageHDR10Plus(std::optional<std::array<uint8_t, 31>> packet, uint64_t generation);
 +  bool HDR10PlusActive() const { return m_hdr10plusActive; }
    bool TestFramebuffer(struct gbm_bo* bo);
    bool IsSelectedModeCommitted() const;
    bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
-@@ -70,6 +72,12 @@
+@@ -70,6 +82,14 @@
    static bool SupportsAtomicModesetting();
  
  private:
++  bool PrepareSDRRestore(int& flags);
++  bool m_sdrRestorePending{}, m_sdrRestoreFailed{};
 +  bool PrepareHDR10Plus(int& flags, bool& frameMetadata);
 +  bool RemoveRejectedHDR10Plus(int& flags);
 +  int TestAtomicFrame(int& flags, bool frameMetadata);
@@ -1866,19 +1973,38 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
    bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
                         bool strict = false);
    void FinishRequest(bool accepted);
-@@ -119,6 +127,8 @@
+@@ -119,6 +139,9 @@
      void CacheProperties();
      std::optional<drmModeModeInfo> signalMode;
      std::optional<uint64_t> requestedDV;
 +    CDRMPropertyBlob hdr10plusBlob;
 +    std::optional<bool> hdr10plus;
++    bool sdrRestore{};
      void LogAtomicRequest();
      void LogDVProperties();
  
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -824,5 +824,8 @@
+@@ -614,6 +614,9 @@
+ 
+ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
+ {
++  if (!videoPicture)
++    if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
++      drm->SetSDRRestorePending(true);
+   m_queuedHdrMetadata = 0;
+   m_eotf = KODI::UTILS::Eotf::TRADITIONAL_SDR;
+   m_hdrBlob.Reset();
+@@ -739,6 +742,7 @@
+     }
+     m_eotf = eotf;
+     m_queuedHdrMetadata = m_hdrBlob.Get();
++    drm->SetSDRRestorePending(false);
+     drm->SetActive(true);
+   }
+   else
+@@ -824,5 +828,8 @@
    if (m_info->SupportsDolbyVision())
      caps.SetDolbyVision();
  

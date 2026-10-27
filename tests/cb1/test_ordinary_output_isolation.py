@@ -23,6 +23,8 @@ class OrdinaryOutputIsolationTests(unittest.TestCase):
 #include <iostream>
 #include <mutex>
 constexpr int DVBRIDGE_DV_IDLE=0;
+struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
+struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_DOLBYVISION};
 struct Binding {unsigned stream=0,picture=0,revision=0; bool Valid() const {return stream!=0;}};
 struct VideoPicture {

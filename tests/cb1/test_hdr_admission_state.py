@@ -54,7 +54,8 @@ struct CDRMPropertyBlob {
 struct Connector {bool metadata=true;bool SupportsProperty(const char*) {return metadata;}};
 struct DRM {virtual ~DRM()=default;};
 struct CDRMAtomic : DRM {
- Connector connector;bool connected=true,accept=true;unsigned queued=999;int active=0;
+ Connector connector;bool connected=true,accept=true,pending=false;unsigned queued=999;int active=0;
+ void SetSDRRestorePending(bool value){pending=value;}
  Connector* GetConnector() {return connected?&connector:nullptr;}
  int GetFileDescriptor() {return 3;}
  bool AddProperty(Connector*,const char*,unsigned id) {if(!accept)return false;queued=id;return true;}
@@ -125,6 +126,20 @@ int main(int argc,char** argv) {
  } else if(scenario==7) {
    assert(window.SetHDR(&picture));picture.color_transfer=AVCOL_TRC_BT709;
    assert(!window.SetHDR(&picture) && window.m_eotf==Eotf::TRADITIONAL_SDR);
+ } else if(scenario==8) {
+   assert(window.SetHDR(&picture));CServiceBroker::component->settings->enabled=false;
+   assert(!window.SetHDR(nullptr) && drm->pending);
+ } else if(scenario==9) {
+   assert(!window.SetHDR(nullptr) && drm->pending);
+   drm->accept=false;assert(!window.SetHDR(&picture) && drm->pending);
+   drm->accept=true;assert(window.SetHDR(&picture) && !drm->pending && drm->queued==17);
+ } else if(scenario==10) {
+   assert(!window.SetHDR(nullptr) && drm->pending);
+   picture.color_transfer=AVCOL_TRC_BT709;
+   assert(!window.SetHDR(&picture) && drm->pending);
+ } else if(scenario==11) {
+   drm->connected=false;
+   assert(!window.SetHDR(nullptr) && drm->pending);
  }
 }
 '''.replace('BODY', code)
@@ -134,7 +149,7 @@ int main(int argc,char** argv) {
             built = subprocess.run(['c++', '-std=c++20', str(root / 'test.cpp'),
                                     '-o', str(root / 'test')], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(8):
+            for scenario in range(12):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(root / 'test'), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stderr)

@@ -22,6 +22,7 @@ struct gbm_bo{};struct drm_fb{int fb_id=42;};
 struct CDRMUtils {static drm_fb* DrmFbGetFromBo(gbm_bo*){return nullptr;}static void DestroyDrm(){}};
 struct CDRMAtomic {
  bool m_lastPageAccepted=true,m_need_modeset=false,m_hdr10plusActive=true;
+ bool pending=true;void SetSDRRestorePending(bool value){pending=value;}
  uint64_t m_hdr10plusGeneration=3,m_hdr10plusRejectedGeneration=3,m_hdr10plusRejectedEdid=1;
  std::optional<std::array<uint8_t,31>> m_hdr10plusPacket=std::array<uint8_t,31>{};
  void ResetCB1PresentationTime(){};
@@ -34,6 +35,7 @@ int main(){
  assert(!d.m_lastPageAccepted && !d.m_hdr10plusPacket);
  d.m_hdr10plusPacket=std::array<uint8_t,31>{};d.DestroyDrm();
  assert(!d.m_hdr10plusPacket && !d.m_hdr10plusActive);
+ assert(!d.pending);
  assert(!d.m_hdr10plusGeneration && !d.m_hdr10plusRejectedGeneration && !d.m_hdr10plusRejectedEdid);
 }
 '''.replace('FLIP',flip).replace('DESTROY',destroy)
