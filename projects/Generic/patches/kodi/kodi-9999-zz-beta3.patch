@@ -7843,7 +7843,63 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
 diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUtils.cpp
 --- a/xbmc/windowing/gbm/drm/DRMUtils.cpp
 +++ b/xbmc/windowing/gbm/drm/DRMUtils.cpp
-@@ -159,9 +159,12 @@
+@@ -23,10 +23,55 @@
+ 
+ #include "PlatformDefs.h"
+ 
++extern "C"
++{
++#include <libdisplay-info/cta-vic.h>
++}
++
+ using namespace KODI::WINDOWING::GBM;
+ 
+ namespace
+ {
++bool IsCTATiming(const drmModeModeInfo& mode)
++{
++  if (mode.flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN |
++                    DRM_MODE_FLAG_DBLCLK | DRM_MODE_FLAG_3D_MASK))
++    return false;
++  const uint32_t syncMask = DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_NHSYNC |
++      DRM_MODE_FLAG_PVSYNC | DRM_MODE_FLAG_NVSYNC;
++  for (unsigned code = 1; code <= UINT8_MAX; ++code)
++  {
++    const auto* timing = di_cta_vic_video_format_from_vic({static_cast<uint8_t>(code)});
++    if (!timing || timing->interlaced) continue;
++    const uint32_t sync =
++        (timing->h_sync_polarity == DI_CTA_VIC_VIDEO_FORMAT_SYNC_POSITIVE ? DRM_MODE_FLAG_PHSYNC : DRM_MODE_FLAG_NHSYNC) |
++        (timing->v_sync_polarity == DI_CTA_VIC_VIDEO_FORMAT_SYNC_POSITIVE ? DRM_MODE_FLAG_PVSYNC : DRM_MODE_FLAG_NVSYNC);
++    if (timing->h_active == mode.hdisplay && timing->v_active == mode.vdisplay &&
++        timing->h_front == mode.hsync_start - mode.hdisplay &&
++        timing->h_sync == mode.hsync_end - mode.hsync_start &&
++        timing->h_back == mode.htotal - mode.hsync_end &&
++        timing->v_front == mode.vsync_start - mode.vdisplay &&
++        timing->v_sync == mode.vsync_end - mode.vsync_start &&
++        timing->v_back == mode.vtotal - mode.vsync_end && (mode.flags & syncMask) == sync &&
++        (mode.clock == (timing->pixel_clock_hz + 500) / 1000 ||
++         mode.clock == (timing->pixel_clock_hz * 1000 / 1001 + 500) / 1000))
++      return true;
++  }
++  return false;
++}
++
++bool SameTimingExceptSync(const drmModeModeInfo& a, const drmModeModeInfo& b)
++{
++  const uint32_t syncMask = DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_NHSYNC |
++      DRM_MODE_FLAG_PVSYNC | DRM_MODE_FLAG_NVSYNC;
++  return a.clock == b.clock && a.hdisplay == b.hdisplay &&
++      a.hsync_start == b.hsync_start && a.hsync_end == b.hsync_end &&
++      a.htotal == b.htotal && a.hskew == b.hskew && a.vdisplay == b.vdisplay &&
++      a.vsync_start == b.vsync_start && a.vsync_end == b.vsync_end &&
++      a.vtotal == b.vtotal && a.vscan == b.vscan &&
++      (a.flags & ~syncMask) == (b.flags & ~syncMask);
++}
++
+ const std::string SETTING_VIDEOSCREEN_LIMITGUISIZE = "videoscreen.limitguisize";
+ 
+ #ifdef HAVE_DVBRIDGE
+@@ -159,9 +204,12 @@
    auto* fb = DrmFbGetFromBo(bo);
    if (!fb)
      return 0;
@@ -7858,7 +7914,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
      return 0;
    if (fb->opaque_fb_id)
      return fb->opaque_fb_id;
-@@ -169,8 +172,8 @@
+@@ -169,8 +217,8 @@
    // A separate opaque view preserves the ordinary GUI framebuffer and owns no
    // extra pixel storage. Packed DV and reconstructed HDR10 are final images;
    // neither must be blended again by the scanout plane.
@@ -7869,7 +7925,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
    uint32_t handles[4]{}, strides[4]{}, offsets[4]{};
    uint64_t modifiers[4]{};
  #if defined(HAS_GBM_MODIFIERS)
-@@ -566,7 +569,7 @@
+@@ -566,7 +614,7 @@
              version->version_major,version->version_minor,version->version_patchlevel);
  #endif
        if (strcmp(version->name, "amdgpu") == 0)
@@ -7878,7 +7934,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
        drmFreeVersion(version);
      }
  
-@@ -868,6 +871,12 @@
+@@ -868,6 +916,12 @@
    RESOLUTION_INFO res;
    res.iScreenWidth = mode->hdisplay;
    res.iScreenHeight = mode->vdisplay;
@@ -7891,7 +7947,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
    res.iWidth = res.iScreenWidth;
    res.iHeight = res.iScreenHeight;
  
-@@ -922,17 +931,33 @@
+@@ -922,17 +976,33 @@
    res.fPixelRatio = 1.0f;
    res.bFullScreen = true;
  
@@ -7936,7 +7992,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
  
    res.strMode =
        StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
-@@ -952,7 +977,31 @@
+@@ -952,8 +1022,44 @@
  
    for (auto i = 0; i < m_connector->GetModesCount(); i++)
    {
@@ -7967,8 +8023,21 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
 +
 +    RESOLUTION_INFO res = GetResolutionInfo(mode);
      res.strId = std::to_string(i);
++    // Kodi's mode key omits sync polarity. Keep the advertised HDMI CTA
++    // timing when an otherwise identical PC alias would hide its AVI VIC.
++    if (m_connector->GetType() == "HDMI-A")
++    {
++      const bool cta = IsCTATiming(*mode);
++      const auto alias = [&](const RESOLUTION_INFO& previous) {
++        const auto* other = m_connector->GetModeForIndex(std::stoi(previous.strId));
++        return SameTimingExceptSync(*mode, *other) && IsCTATiming(*other) != cta;
++      };
++      if (cta) std::erase_if(resolutions, alias);
++      else if (std::ranges::any_of(resolutions, alias)) continue;
++    }
      resolutions.push_back(res);
    }
+ 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
