@@ -87,6 +87,9 @@ static void kernel(struct reference_gpu *g,bool bench)
         r->enhanced_linear=r->enhanced_authored=r->enhanced_authored_curve=true;
         r->reuse_authored_storage=false;
         assert(dve_allocate(r,w,h,false,analytic));
+        if(bench)assert(r->enhanced_prepack && !r->enhanced_skip_aux &&
+            texture->params.format->component_depth[0]==32 &&
+            r->enhanced_rgb->params.format->component_depth[0]==32);
         r->dv.output.value.identity=(struct dvbridge_identity){77,13,1};
         GLuint query=0;if(timer)gen(1,&query);
         for(unsigned trial=0;trial<(bench?28:1);trial++)for(unsigned order=0;order<2;order++){
@@ -98,8 +101,9 @@ static void kernel(struct reference_gpu *g,bool bench)
             if(timer){result(query,GL_QUERY_RESULT_EXT,&elapsed);glGetIntegerv(GL_GPU_DISJOINT_EXT,&disjoint);}
             assert(glGetError()==GL_NO_ERROR && r->dv.mapped[3]==n && r->dv.mapped[10]==1 && !r->dv.mapped[11]);
             if(bench){
-                if(trial>=4)printf("{\"kind\":\"timing\",\"mode\":%u,\"analytic\":%u,\"trial\":%u,\"gpu_timer\":%s,\"disjoint\":%d,\"gpu_ms\":%.9g,\"wall_ms\":%.9g}\n",
-                    mode,analytic,trial,timer?"true":"false",disjoint,elapsed/1e6,wall_ms);
+                if(trial>=4)printf("{\"kind\":\"timing\",\"mode\":%u,\"analytic\":%u,\"trial\":%u,\"gpu_timer\":%s,\"disjoint\":%d,\"gpu_ms\":%.9g,\"wall_ms\":%.9g,\"prepack\":%s,\"auxiliary_write\":%s,\"input_bits\":%d}\n",
+                    mode,analytic,trial,timer?"true":"false",disjoint,elapsed/1e6,wall_ms,
+                    r->enhanced_prepack?"true":"false",r->enhanced_skip_aux?"false":"true",texture->params.format->component_depth[0]);
                 continue;
             }
             reference_read(g->gl->gpu,r->enhanced_rgb,0,0,w,h,output);

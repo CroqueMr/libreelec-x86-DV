@@ -88,12 +88,12 @@ The existing per-knot slew bound passed. These sequences qualify bounded respons
 
 Backend: local Windows PC through WSL Mesa 25.2.8 D3D12, reported renderer `AMD Radeon(TM) Graphics`. This is **not** the LibreELEC AMD mini-PC or N100. GPU elapsed queries were available and disjoint=0. Software-renderer results are used for correctness only.
 
-4K synthetic expansion + fused statistics kernel, excluding reconstruction, decoding, HDMI presentation and later packing. Three idle runs, 24 post-warmup samples per variant/path/run; variants alternate order. No pixel downloads inside timing. Absolute times are specific to this backend and workload.
+4K synthetic expansion, fused statistics, carrier prepack and auxiliary PQ write. Input and auxiliary storage are RGBA32F, with a fused RGBA8 transport write; these effective flags are asserted and recorded for every sample. Reconstruction, decoding, final resolve/copy and HDMI presentation are excluded. Three idle runs, 24 post-warmup samples per variant/path/run; variants alternate order. No pixel downloads inside timing. Absolute times are specific to this backend and workload, not a production FP16 end-to-end playback benchmark.
 
 | PQ path | Adaptive median | rev B median | Adaptive p95 | rev B p95 | Paired delta median / p95 |
 |---|---:|---:|---:|---:|---:|
-| Tables | 29.37 ms | 28.17 ms | 30.17 ms | 28.97 ms | -1.21 / -0.67 ms |
-| Analytical | 20.85 ms | 22.73 ms | 21.88 ms | 24.12 ms | +1.88 / +2.51 ms |
+| Tables | 29.29 ms | 28.13 ms | 29.91 ms | 28.65 ms | -1.20 / -0.69 ms |
+| Analytical | 20.89 ms | 22.78 ms | 22.18 ms | 23.97 ms | +1.87 / +2.34 ms |
 
 The analytical path misses the +0.5 ms p95 additional-cost objective. No claim of zero drops, HDMI headroom or mini-PC speed follows from these measurements. No extra pass does not imply equal execution time: changed uniform data and branches can change shader cost. This observation is not yet a demonstrated instruction-level cause.
 
@@ -103,8 +103,22 @@ Rejected experiment: retaining 1/64 of the attenuated gain below the selector di
 
 ## Integration decision
 
-Verification: full engine suite, 242 registered checks, zero failures and 15 unsupported/skipped; native Kodi integration suite, 212/212 passed. No rev B symbol is linked into the runtime engine archive. Source/image freeze receipt passed. Existing dependency deprecation warnings are unchanged; no new prototype compiler warning was observed.
+Verification after review fixes: full engine suite, 242 registered checks, zero failures and 15 unsupported/skipped, 120.51 seconds; native Kodi integration suite, 212/212 passed on the unchanged player/runtime sources. No rev B symbol is linked into the runtime engine archive. Source/image freeze receipt passed. Existing dependency deprecation warnings are unchanged; no new prototype compiler warning was observed.
 
 Keep rev B as an offline alternative. Do not replace current Adaptive yet. Remaining gates are the analytical-path overhead, the neutral-axis L1 approximation and real-time/TV perceptual qualification under later explicit device authorization.
+
+Independent Astra xhigh challenge accepted the architecture as an offline prototype, conditional on two corrections: suppress SDR secondaries also on valid IDENTITY/DARK_SCENE plans before temporal interpolation; record the actual prepack/auxiliary-write timing scope. Both findings were reproduced by failing checks, then corrected with passing checks. No production activation was approved.
+
+Evidence directory on the local development PC: `/home/dvbuild/adaptive-revb-20261027` in WSL `DVBuild`. `review-dark-red.log` and `review-timing-red.log` retain the failing review checks. `timing-idle-{1,2,3}.jsonl` contain the corrected, explicit timing flags; `timing-before-review-{1,2,3}.jsonl` preserve the earlier records. Build configuration and matched dependency paths are in `build/CMakeCache.txt`.
+
+Reproduce locally after configuring with the same matched dependencies:
+
+```sh
+CB1_REVB_BUILD=/home/dvbuild/adaptive-revb-20261027/build
+ctest --test-dir "$CB1_REVB_BUILD" -R '^adaptive_rev_b' --output-on-failure
+GALLIUM_DRIVER=d3d12 LIBGL_ALWAYS_SOFTWARE=0 EGL_PLATFORM=x11 \
+  "$CB1_REVB_BUILD/tests/adaptive_rev_b_gpu" --bench
+python3 CB1/tests/reference/qualify_adaptive_rev_b.py /home/dvbuild/adaptive-revb-20261027
+```
 
 Raw summary: [adaptive-rev-b-20261027.json](adaptive-rev-b-20261027.json). Test and benchmark source is under `CB1/tests/`; the production engine is unchanged.

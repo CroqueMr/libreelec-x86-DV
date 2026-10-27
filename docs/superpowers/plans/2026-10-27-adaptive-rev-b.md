@@ -51,7 +51,7 @@
 - [x] Measure CPU plan time and available GPU elapsed time after warmup, paired/interleaved baseline/rev B. Identify backend and timer limitations.
 - [x] Run full offline engine suite and available native integration suite; identify unsupported checks.
 - [x] Prove source diff scope and unchanged baseline shader/build image.
-- [ ] Give Astra the spec, diff and measured report; resolve important issues with tests and retain any limits explicitly.
+- [x] Give Astra the spec, diff and measured report; reproduce and fix both important issues with tests and retain limits explicitly.
 
 ## Execution record
 

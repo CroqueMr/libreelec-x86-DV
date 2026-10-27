@@ -97,6 +97,19 @@ int main(int argc,char **argv)
     source.anchors[0].controls.saturation[0]=16;source.anchors[0].controls.hue[4]=8;
     assert(cb1_dv_enhanced_build_rev_b(&other,&source,&policy)==CB1_DVE_READY);
     assert(!memcmp(other.extra,b.extra,sizeof(b.extra)) && !memcmp(other.color,b.color,sizeof(b.color)));
+    /* A dark destination still participates in the previous curve's fade-out. */
+    source=saved;source.analysis[1]=wire(80);source.analysis[2]=wire(10);
+    struct cb1_dv_enhanced_plan dark[2];
+    assert(cb1_dv_enhanced_build_rev_b(&dark[0],&source,&policy)==CB1_DVE_IDENTITY);
+    source.anchors[0].controls.saturation[0]=16;source.anchors[0].controls.hue[4]=8;
+    assert(cb1_dv_enhanced_build_rev_b(&dark[1],&source,&policy)==CB1_DVE_IDENTITY);
+    for(unsigned i=0;i<2;i++)cb1_dv_enhanced_transition(&dark[i],&b,1.0/60,false);
+    assert(!memcmp(dark[0].color,dark[1].color,sizeof(b.color)) &&
+        "SDR secondary trims must not reappear during READY to DARK_SCENE");
+    assert(!memcmp(dark[0].extra,dark[1].extra,sizeof(b.extra)));
+    double fade[2][3];
+    for(unsigned i=0;i<2;i++)assert(cb1_dv_enhanced_pixel(&dark[i],(double[3]){80,60,20},fade[i]));
+    assert(!memcmp(fade[0],fade[1],sizeof(fade[0])));
     source=saved;source.anchors[0].controls.primary[2]=2304;
     assert(cb1_dv_enhanced_build_rev_b(&other,&source,&policy)==CB1_DVE_READY);
     assert(memcmp(other.extra,b.extra,sizeof(b.extra)) && "HDR trims must still guide expansion");

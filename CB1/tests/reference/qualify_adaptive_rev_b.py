@@ -24,12 +24,15 @@ def summarize(root):
     identity = next(row for row in timing if row['kind'] == 'identity')
     assert identity['title'].endswith('rev B')
     assert 'llvmpipe' not in identity['renderer'].lower(), 'Not a hardware GPU benchmark'
-    result = {'renderer': identity['renderer'], 'timing_scope': 'expansion/statistics kernel only',
+    result = {'renderer': identity['renderer'],
+              'timing_scope': 'expansion, statistics, fused carrier prepack and auxiliary PQ write; no final resolve',
               'mini_pc_or_hdmi_tested': False, 'timings': [], 'pixels': [], 'clips': {}, 'curves': []}
     for analytic in (0, 1):
         samples = [r for r in timing if r['kind'] == 'timing' and r['analytic'] == analytic]
         assert len(samples) >= 48 and len(samples) % 48 == 0
         assert all(r['gpu_timer'] and not r['disjoint'] for r in samples)
+        assert all(r.get('prepack') is True and r.get('auxiliary_write') is True
+                   and r.get('input_bits') == 32 for r in samples), 'Effective timed configuration must be recorded'
         sets = [[r['gpu_ms'] for r in samples if r['mode'] == m] for m in (0, 1)]
         pairs = {(r['run'], r['trial']): {} for r in samples}
         for row in samples:

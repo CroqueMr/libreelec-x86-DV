@@ -1,35 +1,35 @@
 {
   "renderer": "D3D12 (AMD Radeon(TM) Graphics)",
-  "timing_scope": "expansion/statistics kernel only",
+  "timing_scope": "expansion, statistics, fused carrier prepack and auxiliary PQ write; no final resolve",
   "mini_pc_or_hdmi_tested": false,
   "timings": [
     {
       "analytic": 0,
       "samples_per_mode": 72,
       "median_ms": [
-        29.36854,
-        28.17362
+        29.285339999999998,
+        28.1316
       ],
       "p95_ms": [
-        30.16844,
-        28.96708
+        29.90868,
+        28.64736
       ],
-      "paired_delta_median_ms": -1.21068,
-      "paired_delta_p95_ms": -0.6675199999999997
+      "paired_delta_median_ms": -1.2011199999999977,
+      "paired_delta_p95_ms": -0.6922800000000002
     },
     {
       "analytic": 1,
       "samples_per_mode": 72,
       "median_ms": [
-        20.85376,
-        22.73364
+        20.89348,
+        22.7766
       ],
       "p95_ms": [
-        21.88388,
-        24.1232
+        22.17952,
+        23.97376
       ],
-      "paired_delta_median_ms": 1.881140000000002,
-      "paired_delta_p95_ms": 2.511560000000003
+      "paired_delta_median_ms": 1.8657000000000004,
+      "paired_delta_p95_ms": 2.3418399999999977
     }
   ],
   "pixels": [
