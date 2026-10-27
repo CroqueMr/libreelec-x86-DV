@@ -1,4 +1,18 @@
 {
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": {
+    "summary": "Recognize explicitly associated Dolby Vision layers in HEVC MOV sample entries",
+    "component": "ffmpeg",
+    "files": {
+      "libavformat/mov.c": "Accept hvc1/hev1 only with an explicit Profile 7 EL configuration and vdep base-layer reference."
+    }
+  },
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hevc-picture-clock.patch": {
+    "summary": "Preserve real HEVC picture timestamps following untimestamped parameter packets",
+    "component": "ffmpeg",
+    "files": {
+      "libavcodec/hevc/parser.c": "Capture the first slice's actual PES clock before large access units overwrite parser timestamp history."
+    }
+  },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
     "summary": "Recognize declared HEVC Dolby Vision enhancement layers in private MPEG-TS PES",
     "component": "ffmpeg",

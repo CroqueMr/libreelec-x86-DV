@@ -14,7 +14,7 @@ def atom(tag, data):
     return struct.pack('>I4s', len(data)+8, tag)+data
 
 
-def mp4(kind, packet_pair=None, configuration=None):
+def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
     """Synthetic framing only, not decodable audiovisual content."""
     packets = [b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc']
     if packet_pair is not None:
@@ -44,10 +44,9 @@ def mp4(kind, packet_pair=None, configuration=None):
         struct.pack_into('>H', visual, 40, 1)
         struct.pack_into('>HH', visual, 74, 24, 65535)
         hvcc = configuration if configuration is not None else bytes([1])+bytes(20)+bytes([3, 0])
-        codec = b'hvc1'
+        codec = sample_entry if i == 1 else b'hvc1'
         extra = atom(b'hvcC', hvcc)
         if i == 1 and kind in ('paired', 'missing-reference'):
-            codec = b'dvh1'
             flags = (7<<9)|(9<<3)|6  # P7.9, RPU + EL, no BL in this track.
             extra += atom(b'dvcC', bytes([1, 0, flags>>8, flags&255, 0x60])+bytes(19))
         stsd = atom(b'stsd', bytes(4)+struct.pack('>I', 1)+atom(codec, visual+extra))
@@ -127,6 +126,12 @@ class DualCarriage(unittest.TestCase):
                            ('independent.mp4', mp4('independent'), False),
                            ('unrelated-vdep.mp4', mp4('unrelated-vdep'), False),
                            ('missing-reference.mp4', mp4('missing-reference'), False)])
+
+    def test_mp4_declared_layer_reference_accepts_hevc_sample_entries(self):
+        self.run_carriage([(tag.decode()+'-'+kind+'.mp4', mp4(kind, sample_entry=tag), want)
+                           for tag in (b'hvc1', b'hev1')
+                           for kind, want in (('paired', True), ('independent', False),
+                                              ('unrelated-vdep', False), ('missing-reference', False))])
 
     def test_ts_group_admission_and_unrelated_pid_rejection(self):
         self.run_carriage([('hdmv.ts', transport('hdmv'), True),

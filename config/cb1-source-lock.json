@@ -9,6 +9,8 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hevc-picture-clock.patch": "132b72042520f3cd27af21a5d10fd7f995b3c849075ea89660760363963d69fb",
+    "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": "fb2ef416a12f6ceaa1d7720b373ed658d20f48fdf8bf013813e58d1e001d4695",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk": "f2b21be998262f1cc667741eb1ae31be306da7afeb401b42a5e07a7d438f1e0d",
     "packages/mediacenter/kodi/package.mk": "35822e20f72205a5add9af9b0de25a9cdc30812511787b2b8e250d122a7de95e",
@@ -16,7 +18,7 @@
     "packages/multimedia/lightgbm/package.mk": "5a9edbeca727e3b4b40c5bf7c214a5512a2f967a689837eeccce92e9074ca644",
     "projects/Generic/filesystem/usr/bin/dv-diagnostics": "ee77b1f0c9a93a1ebd8680229b6b94b7cfcdd07b651e7eed07d38c6a3df2bdaf",
     "projects/Generic/linux/7.2.6/linux.x86_64.conf": "d399a8320e2ec568f18e79a64718b4aea8613f425c750531d6397ca03045cf91",
-    "projects/Generic/options": "0345dc5fe0b4709503b686a6541cb20cbada87bf413e8881a4ec34d4e47e94a2",
+    "projects/Generic/options": "18e7a26bc8e814ba44585001d7817a7714b85dc245fc63289058bf490703835a",
     "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "7d149eb080527911dc2ed0921be04774de8ad0047b2673ba38d87fc28204e7d7",
     "projects/Generic/patches/kodi/kodi-9993-fel-presentation-pairing.patch": "e285499837a5df7208776d4f49d99b233bad6a1f1b9c35d042ea0efde0897a32",
     "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": "aa85bfe853c8fb6050a5a7d6ce7d00e08cff8b1dba4633cb1802174a33a717b8",
@@ -63,8 +65,8 @@
     "scripts/image": "9e3a399d7423e163a5dca09a75e9887062d7686ca29e9752e61ffde8c04a742e",
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
-    "config/cb1-patch-index.json": "a2bc2572cd02e8b5c861262d2c1a405ed25d8f3ec4fd9d127e3c09b335d173ac",
-    "config/cb1-versions.json": "4449249f0e1e946f3fa077a83c130792bda319cd55053e1aa570f961d47cfeaa",
+    "config/cb1-patch-index.json": "a1f5eb8e92d480a5c477a77a595267f7690e0fbd38cc051b15ff826a580ec4a4",
+    "config/cb1-versions.json": "17a7e4028f8746cec5118970c8d8235238539b31829fb0bd65ae52f950a8391d",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
     "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "5179dc050650f5375b219c6730cfcd6491fe6194331359b6d7aca7136b79d211",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f"
