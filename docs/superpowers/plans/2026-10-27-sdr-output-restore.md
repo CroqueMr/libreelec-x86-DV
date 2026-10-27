@@ -43,4 +43,19 @@ accepted. The native GUI loop drives retries; CB1 stop retains its successor.
 - [x] Update the existing owning patch, verify it applies and matches overlay.
 - [x] Run the complete CB1 suite and compile touched native translation units.
 - [x] Verify production diff excludes movie-processing changes and frozen hashes match.
-- [ ] Commit locally; perform independent final review; no merge/push/release.
+- [x] Commit locally; perform independent final review; no merge/push/release.
+
+## Verification
+
+- Frozen RC1: new regression harness compiles and reports five behavioral failures.
+- Final candidate: 212/212 tests pass in 197.045 s after the review fixes.
+- Targeted cases include property/test/real commit rejection, idle GUI retry,
+  repeated stop, immediate HDR replay, SDR BT.2020 replay and 64 failure cycles.
+- Both Important independent-review findings were reproduced RED and fixed GREEN:
+  successor SDR colorimetry and recovery-to-unowned explicit stop.
+- Repeated SDR commit refusal emits a bounded warning, not a per-frame error.
+- Three native translation units compile with the actual LibreELEC cross compiler.
+- The existing last output patch applies and reproduces the four native files.
+- Movie shaders, processing algorithms and RPU payload generation are unchanged.
+- RC1 ref and image hash unchanged; no image installation, hardware tests or publication.
+- Physical confirmation of the reporter's exact S95F failure remains outstanding.

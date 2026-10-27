@@ -6,14 +6,16 @@ frozen at `f5002ad86080082a4eb989729419dba389c682df`. No publication or installa
 ## Approach
 
 Retain SDR intent at the existing DRM atomic boundary until a real commit accepts
-the clear. Re-stage static HDR metadata and default colorimetry on retry. Do not
+the clear. Re-stage static HDR metadata and the intended colorimetry on retry:
+Default for the GUI, or the new SDR movie's primaries if playback restarted. Do not
 fall back to the preceding HDR request and report that as a successful SDR reset.
 A new admitted HDR picture supersedes this intent; a new SDR picture does not.
 Use Kodi's existing dirty-GUI/presentation loop, not timers or display resets.
 
 The CB1 stop transaction retains its ordinary successor after a rejected commit
-and re-stages the restoration on the next GUI frame. Other transition policies
-remain unchanged.
+and re-stages the restoration on the next GUI frame. If recovery has already
+relinquished CB1 ownership, stop explicitly requests the native SDR GUI state.
+Other transition policies remain unchanged.
 
 Alternatives rejected: retaining all failed atomic properties would replay stale
 framebuffers/fences; restarting the display or adding sleeps would mask the

@@ -14,16 +14,21 @@ class SDRRestoreTests(unittest.TestCase):
         ordinary = present[present.index('  if (m_dvOrdinaryFrame)'):
                            present.index('  if (m_hdrConversion)')]
         stage = body(source, 'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(')
+        stop = body(source, 'bool CWinSystemGbmGLESContext::StopDVBridgePlayback()')
         program = r'''
 #include <cassert>
 #include <memory>
 #include <optional>
 #include <cstdint>
+#include <mutex>
+struct CModeChangeHold {enum class Kind{NONE,STOP};Kind Holding(){return Kind::NONE;}
+ bool Commits(uint64_t){return true;}};
 struct VideoPicture{int color_transfer=16;};
 struct Services {unsigned dirty=0;Services& GetWindowManager(){return *this;}
  void MarkDirty(){++dirty;}};
 struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 namespace DVBRIDGE {
+ uint64_t DiagnosticNowMs(){return 0;}
  struct PlaybackNotification{static void OrdinaryOutputAccepted(bool){}};
  struct StreamTelemetry{static void ClearOutput(){}};
 }
@@ -31,6 +36,7 @@ struct DRM{virtual ~DRM()=default;};
 struct CDRMAtomic:DRM{
  bool pending=true,stageOK=true;int reject=0,commits=0;
  bool IsSDRRestorePending(){return pending;}
+ void SetCB1TimingPeriod(uint64_t){}
  void* GetConnector(){return this;}
  bool AddProperty(void*,const char*,uint64_t){return true;}
  bool FlipPageTransactional(void*,bool){++commits;if(reject){--reject;return false;}pending=false;return true;}
@@ -47,6 +53,10 @@ struct Surface{
 struct CWinSystemGbmGLESContext{
  bool m_dvOrdinaryFrame=true,m_dvStopPending=true,rollback=false;
  unsigned rejects=0,gui=0,swaps=0;
+ unsigned colorClears=0,hdrClears=0;
+ std::mutex m_dvCapabilityMutex;int m_masterSafety=0;
+ unsigned m_masterFramePeriodNs=0,m_previousSourceStream=0,m_previousSourcePts=0;
+ bool m_continuousFrameEligible=false;CModeChangeHold m_modeHold;
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
  struct EGL{unsigned* count;bool TrySwapBuffers(){++*count;return true;}}m_eglContext{&swaps};
@@ -58,11 +68,15 @@ struct CWinSystemGbmGLESContext{
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  bool CompleteDVOutputSurface(bool){return true;}void PublishVideoSource(bool,int){}
  bool FlipDVBridgePage(CDVBridgeState&,bool,bool,bool){return false;}
- void SetColorimetry(const VideoPicture*){}
- bool SetHDR(const VideoPicture* picture){return picture!=nullptr;}
+ void SetColorimetry(const VideoPicture* picture){if(!picture)++colorClears;}
+ bool SetHDR(const VideoPicture* picture){if(!picture){++hdrClears;
+   std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)->pending=true;}return picture!=nullptr;}
  void SetGuiCompositing(int value){gui=value;}
  bool RejectDVOutputSurface(){++rejects;rollback=true;return false;}
  bool StageOrdinaryDVOutput(const VideoPicture* picture) STAGE
+ bool HoldCB1Stop(){return false;}bool HasPendingDVOutputSurface(){return false;}
+ bool SetVideoOutput(const VideoPicture*){m_dvState.captured=false;return true;}
+ bool StopDVBridgePlayback() @STOP_BODY@
  void Present(bool rendered){WAKE ORDINARY}
 };
 int main(){
@@ -86,8 +100,14 @@ int main(){
  CWinSystemGbmGLESContext transition;transition.m_dvStopPending=false;
  auto td=std::dynamic_pointer_cast<CDRMAtomic>(transition.m_DRM);td->reject=1;
  transition.Present(true);assert(transition.rejects==1 && transition.rollback);
+ CWinSystemGbmGLESContext recovered;
+ recovered.m_dvStopPending=recovered.m_dvOrdinaryFrame=false;recovered.gui=16;
+ auto rd=std::dynamic_pointer_cast<CDRMAtomic>(recovered.m_DRM);rd->pending=false;
+ assert(recovered.StopDVBridgePlayback());
+ assert(!recovered.m_dvState.Captured() && !recovered.m_dvStopPending);
+ assert(rd->pending && recovered.gui==0 && recovered.colorClears==1 && recovered.hdrClears==1);
 }
-'''.replace('STAGE', stage).replace('WAKE', wake).replace('ORDINARY', ordinary)
+'''.replace('STAGE', stage).replace('WAKE', wake).replace('ORDINARY', ordinary).replace('@STOP_BODY@', stop)
         with tempfile.TemporaryDirectory(prefix='sdr-stop-') as temporary:
             root = Path(temporary)
             code, binary = root / 'check.cpp', root / 'check'
@@ -111,6 +131,7 @@ int main(){
                    else body(source, 'bool CDRMAtomic::PrepareSDRRestore('))
         pending = ('{}' if 'void SetSDRRestorePending(' not in header
                    else body(header, 'void SetSDRRestorePending('))
+        add = body(source, 'bool CDRMAtomic::AddProperty(')
         program = r'''
 #include <cassert>
 #include <cerrno>
@@ -126,7 +147,13 @@ int main(){
 #include <unistd.h>
 #include <xf86drmMode.h>
 constexpr int LOGERROR=1,LOGINFO=2,LOGWARNING=3,LOGWINDOWING=4,QUIRK_NEEDSPRIMARY=8;
-struct CLog {template<class... T>static void Log(T...){} template<class... T>static void LogF(T...){}};
+struct CLog {
+ static inline unsigned nativeErrors=0;
+ template<class... T>static void Log(T...){}
+ template<class... T>static void LogF(int,const char* message,T...){
+  if(std::strstr(message,"atomic commit failed"))++nativeErrors;
+ }
+};
 namespace DVBRIDGE {
  bool DiagnosticsEnabled(){return false;}
  template<class... T>void DiagnosticLog(T...){}
@@ -155,7 +182,8 @@ struct Object {
   assert(std::string(name)=="Default");return 0;
  }
 };
-using CDRMCrtc=Object;using CDRMPlane=Object;
+using CDRMCrtc=Object;using CDRMPlane=Object;using CDRMObject=Object;
+bool rejectProperty=false;
 struct CDRMPropertyBlob {
  unsigned id=0;CDRMPropertyBlob()=default;
  CDRMPropertyBlob(int,const void*,size_t):id(100){}
@@ -166,6 +194,10 @@ struct Request {
  std::optional<drmModeModeInfo> signalMode;std::optional<bool> hdr10plus;
  std::optional<uint64_t> requestedDV;bool sdrRestore=false;
  Request* Get(){return this;}
+ bool AddProperty(Object* object,const char* name,uint64_t value){
+  if(rejectProperty && std::string(name)=="HDR_OUTPUT_METADATA")return false;
+  values[object][name]=value;return true;
+ }
  void CacheProperties(){for(auto& [object,props]:values)for(auto& [key,value]:props)object->cache[key]=value;}
  void LogAtomicRequest(){} static void LogAtomicDiff(Request*,Request*){}
 };
@@ -189,7 +221,8 @@ struct CDRMAtomic {
  unsigned m_width=3840,m_height=2160;int m_fd=1,m_inFenceFd=-1,m_outFenceFd=-1;
  bool m_dvRestoring=false,m_dvActivating=false,m_active=true,m_propertyFailure=false;
  bool m_dvCommitReported=false,m_dvLastCommitRestore=false,m_signalDirty=false,m_hdr10plusActive=false;
- bool m_sdrRestorePending=false,m_sdrRestoreFailed=false;bool rejectProperty=false;
+ bool m_sdrRestorePending=false,m_sdrRestoreFailed=false;
+ std::optional<uint64_t> m_sdrRestoreColorspace;
  int m_cb1TimingInput=-1;uint64_t m_cb1SubmittedNs=0;
  struct Failures {
   void Failed(int){} template<class... T>bool Record(T...){return false;}
@@ -197,10 +230,7 @@ struct CDRMAtomic {
  }m_dvRetry,m_dvFailures;
  std::deque<std::unique_ptr<Request>> m_atomicRequestQueue;Request* m_req=nullptr;
  CDRMAtomic(){m_atomicRequestQueue.emplace_back(std::make_unique<Request>());m_req=m_atomicRequestQueue.back().get();}
- bool AddProperty(Object* object,const char* name,uint64_t value){
-  if(rejectProperty && std::string(name)=="HDR_OUTPUT_METADATA"){m_propertyFailure=true;return false;}
-  m_req->values[object][name]=value;return true;
- }
+ bool AddProperty(Object* object,const char* name,uint64_t value) @ADD_BODY@
  bool HasQuirk(int)const{return false;}const drmModeModeInfo* GetDVTransportMode(){return m_mode;}
  void ReportDVFailure(const char*,int){}void ReportDVCommit(const char*){}void ReportSignalState(){}
  bool PrepareHDR10Plus(int&,bool& bound){bound=false;return true;}
@@ -225,11 +255,11 @@ int main(int argc,char** argv){
  drm.AddProperty(drm.m_connector,"Colorspace",0);
  if(scenario==0)rejectTest=true;
  if(scenario==1)rejectCommit=true;
- if(scenario==2)drm.rejectProperty=true;
+ if(scenario==2)rejectProperty=true;
  if(scenario<=2){
   assert(!drm.DrmAtomicCommit(42,0,true,false) && "A refused SDR transition must not reuse the HDR request");
   assert(signal==movie && drm.m_sdrRestorePending);
-  rejectTest=rejectCommit=drm.rejectProperty=false;
+  rejectTest=rejectCommit=rejectProperty=false;
   // No new SetHDR/stop call: the next native presentation must retry by itself.
   assert(drm.DrmAtomicCommit(42,0,true,false));
   assert(signal["HDR_OUTPUT_METADATA"]==0 && signal["Colorspace"]==0);
@@ -276,9 +306,23 @@ int main(int argc,char** argv){
   drm.AddProperty(drm.m_connector,"Colorspace",9);
   assert(drm.DrmAtomicCommit(42,0,true,false));
   assert(signal["HDR_OUTPUT_METADATA"]==29 && signal["Colorspace"]==9);
+ }else if(scenario==8){
+  rejectCommit=true;assert(!drm.DrmAtomicCommit(42,0,true,false));
+  // The successor is SDR transfer with BT.2020 primaries, not an SDR GUI.
+  drm.AddProperty(drm.m_connector,"Colorspace",9);
+  assert(!drm.DrmAtomicCommit(42,0,true,false));
+  rejectCommit=false;
+  assert(drm.DrmAtomicCommit(42,0,true,false));
+  assert(signal["HDR_OUTPUT_METADATA"]==0 && signal["Colorspace"]==9);
+ }else if(scenario==9){
+  rejectCommit=true;
+  for(int i=0;i<3;++i)assert(!drm.DrmAtomicCommit(42,0,true,false));
+  assert(CLog::nativeErrors==0 && "SDR retries use the single pending warning, not a per-frame native error");
+  rejectCommit=false;assert(drm.DrmAtomicCommit(42,0,true,false));
+  assert(signal["HDR_OUTPUT_METADATA"]==0);
  }
 }
-'''.replace('PENDING', pending).replace('PREPARE', prepare).replace('METHODS', methods)
+'''.replace('PENDING', pending).replace('PREPARE', prepare).replace('METHODS', methods).replace('@ADD_BODY@', add)
         with tempfile.TemporaryDirectory(prefix='sdr-restore-') as temporary:
             root = Path(temporary)
             code, binary = root / 'check.cpp', root / 'check'
@@ -287,7 +331,7 @@ int main(int argc,char** argv){
                                     '-fsanitize=address,undefined', str(code), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(8):
+            for scenario in range(10):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(binary), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stdout + run.stderr)

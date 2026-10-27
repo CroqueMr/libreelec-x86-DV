@@ -1642,6 +1642,21 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)) drm->SetCB1TimingPeriod(0);
    // The window outlives the renderer when a pending scanout defers teardown.
    m_dvStopPending = true;
+@@ -2489,7 +2568,13 @@
+   if (HasPendingDVOutputSurface() && !m_dvOrdinaryFrame && !RejectDVOutputSurface())
+     return false;
+   if (!SetVideoOutput(nullptr)) return false;
+-  if (!m_dvOrdinaryFrame) m_dvStopPending = false;
++  if (!m_dvOrdinaryFrame)
++  {
++    SetGuiCompositing(0);
++    SetColorimetry(nullptr);
++    SetHDR(nullptr);
++    m_dvStopPending = false;
++  }
+   return true;
+ }
+ 
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
@@ -1721,7 +1736,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  #ifdef HAVE_DVBRIDGE
  #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
  #endif
-@@ -136,10 +136,84 @@
+@@ -136,10 +136,85 @@
  }
  catch (...) {}
  
@@ -1788,7 +1803,8 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
 +  if (!AddProperty(m_connector, "HDR_OUTPUT_METADATA", 0)) return false;
 +  if (m_connector->SupportsProperty("Colorspace"))
 +  {
-+    const auto value = m_connector->GetPropertyEnumValue("Colorspace", "Default");
++    const auto value = m_sdrRestoreColorspace ? m_sdrRestoreColorspace :
++        m_connector->GetPropertyEnumValue("Colorspace", "Default");
 +    if (!value || !AddProperty(m_connector, "Colorspace", *value)) return false;
 +  }
 +  return true;
@@ -1806,7 +1822,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
      if (strict)
      {
        if (m_dvActivating && !m_dvRestoring) m_dvRetry.Failed(error);
-@@ -154,6 +228,13 @@
+@@ -154,6 +229,13 @@
    // destroying it before the commit returns leaves the atomic request
    // referencing an invalid id and the kernel rejects with EINVAL.
    CDRMPropertyBlob modeBlob;
@@ -1820,7 +1836,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  
    if (m_old_crtc != nullptr)
    {
-@@ -191,12 +272,17 @@
+@@ -191,12 +273,17 @@
      m_old_crtc = nullptr;
    }
  
@@ -1839,7 +1855,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
      if (!modeBlob.IsValid())
        return reject("mode-blob", 0);
  
-@@ -204,7 +290,7 @@
+@@ -204,7 +291,7 @@
        return reject("mode-property", EINVAL);
      // Follow the request actually accepted, including ordinary old-mode fallback.
      // Transport admission consumes this receipt even when diagnostics are disabled.
@@ -1848,7 +1864,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  
      if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
        return reject("active-property", EINVAL);
-@@ -261,18 +347,18 @@
+@@ -261,18 +348,18 @@
    if (CServiceBroker::GetLogging().CanLogComponent(LOGWINDOWING))
      m_req->LogAtomicRequest();
  
@@ -1870,7 +1886,16 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
      {
        return reject("atomic-test", testError);
      }
-@@ -332,6 +418,13 @@
+@@ -299,7 +386,7 @@
+   if (ret < 0)
+   {
+     const int error = errno;
+-    if (!strict)
++    if (!strict && !m_req->sdrRestore)
+       CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
+     if (!strict && DVBRIDGE::DiagnosticsEnabled() &&
+         m_dvFailures.Record(DVNowMs(), "native-atomic-commit", error))
+@@ -332,6 +419,13 @@
      // after Disable()). Without this, stale cached values cause
      // incorrect plane cleanup on subsequent video playback.
      m_req->CacheProperties();
@@ -1884,7 +1909,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
      if (m_req->signalMode)
        m_committedMode = *m_req->signalMode;
      if (m_signalDirty && DVBRIDGE::DiagnosticsEnabled())
-@@ -357,16 +450,19 @@
+@@ -357,16 +451,19 @@
  
  bool CDRMAtomic::IsSelectedModeCommitted() const
  {
@@ -1914,7 +1939,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  }
  
  CDRMAtomic::~CDRMAtomic()
-@@ -546,6 +642,7 @@
+@@ -546,6 +643,7 @@
      drm_fb = CDRMUtils::DrmFbGetFromBo(bo);
      if (!drm_fb)
      {
@@ -1922,7 +1947,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
        CLog::LogF(LOGERROR, "Failed to get a new FBO");
        return;
      }
-@@ -612,7 +709,13 @@
+@@ -612,7 +710,13 @@
  
  void CDRMAtomic::DestroyDrm()
  {
@@ -1936,10 +1961,20 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    CDRMUtils::DestroyDrm();
  }
  
+@@ -670,6 +774,9 @@
+ 
+ bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t value)
+ {
++  // A successor SDR movie can use different primaries from the GUI.
++  if (m_sdrRestorePending && object && object == m_connector && strcmp(name, "Colorspace") == 0)
++    m_sdrRestoreColorspace = value;
+   const bool added = object && m_req && m_req->AddProperty(object, name, value);
+   if (added && DVBRIDGE::DiagnosticsEnabled() &&
+       (strcmp(name, "MODE_ID") == 0 || strcmp(name, "ACTIVE") == 0 ||
 diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
 --- a/xbmc/windowing/gbm/drm/DRMAtomic.h
 +++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
-@@ -33,6 +33,18 @@
+@@ -33,6 +33,19 @@
    ~CDRMAtomic() override;
    void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
    bool LastPageAccepted() const { return m_lastPageAccepted; }
@@ -1950,6 +1985,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
 +    if (!pending)
 +    {
 +      m_sdrRestoreFailed = false;
++      m_sdrRestoreColorspace.reset();
 +      if (m_req) m_req->sdrRestore = false;
 +    }
 +  }
@@ -1958,12 +1994,13 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
    bool TestFramebuffer(struct gbm_bo* bo);
    bool IsSelectedModeCommitted() const;
    bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
-@@ -70,6 +82,14 @@
+@@ -70,6 +83,15 @@
    static bool SupportsAtomicModesetting();
  
  private:
 +  bool PrepareSDRRestore(int& flags);
 +  bool m_sdrRestorePending{}, m_sdrRestoreFailed{};
++  std::optional<uint64_t> m_sdrRestoreColorspace;
 +  bool PrepareHDR10Plus(int& flags, bool& frameMetadata);
 +  bool RemoveRejectedHDR10Plus(int& flags);
 +  int TestAtomicFrame(int& flags, bool frameMetadata);
@@ -1973,7 +2010,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
    bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
                         bool strict = false);
    void FinishRequest(bool accepted);
-@@ -119,6 +139,9 @@
+@@ -119,6 +141,9 @@
      void CacheProperties();
      std::optional<drmModeModeInfo> signalMode;
      std::optional<uint64_t> requestedDV;
