@@ -3835,15 +3835,16 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils
  };
  
  struct outputformat
-@@ -68,6 +71,7 @@
+@@ -68,6 +71,8 @@
    CDRMPlane* GetGuiPlane() const { return m_gui_plane; }
    CDRMCrtc* GetCrtc() const { return m_crtc; }
    CDRMConnector* GetConnector() const { return m_connector; }
 +  const drmModeModeInfo* GetSelectedMode() const { return m_mode; }
++  const drmModeModeInfo* GetDVTransportMode() const;
    std::vector<outputformat>& GetOutputFormats() { return m_output_formats; }
    bool FindGuiPlane(uint32_t format, uint64_t modifier);
    bool FindVideoPlane(uint32_t format, uint64_t modifier);
-@@ -93,6 +97,7 @@
+@@ -93,6 +98,7 @@
  protected:
    bool OpenDrm(bool needConnector);
    drm_fb* DrmFbGetFromBo(struct gbm_bo* bo);
@@ -3851,7 +3852,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils
  
    int m_fd{-1};
    CDRMConnector* m_connector{nullptr};
-@@ -133,7 +138,10 @@
+@@ -133,7 +139,10 @@
    std::vector<outputformat> m_output_formats = {{DRM_FORMAT_ARGB8888, 8, 8, false, {}},
                                                  {DRM_FORMAT_XRGB8888, 8, 0, false, {}},
                                                  {DRM_FORMAT_ARGB2101010, 10, 2, false, {}},

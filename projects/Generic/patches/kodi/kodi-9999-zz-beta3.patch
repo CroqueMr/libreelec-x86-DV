@@ -7992,7 +7992,28 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
  
    res.strMode =
        StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
-@@ -952,8 +1022,44 @@
+@@ -945,6 +1015,20 @@
+   return GetResolutionInfo(m_mode);
+ }
+ 
++const drmModeModeInfo* CDRMUtils::GetDVTransportMode() const
++{
++  if (!m_mode || !m_connector || m_connector->GetType() != "HDMI-A" || IsCTATiming(*m_mode))
++    return m_mode;
++  // Only the DV transaction needs a CTA AVI VIC; native selection is untouched.
++  for (int i = 0; i < m_connector->GetModesCount(); ++i)
++  {
++    const auto* mode = m_connector->GetModeForIndex(i);
++    if (SameTimingExceptSync(*m_mode, *mode) && IsCTATiming(*mode))
++      return mode;
++  }
++  return m_mode;
++}
++
+ std::vector<RESOLUTION_INFO> CDRMUtils::GetModes()
+ {
+   std::vector<RESOLUTION_INFO> resolutions;
+@@ -952,7 +1036,31 @@
  
    for (auto i = 0; i < m_connector->GetModesCount(); i++)
    {
@@ -8023,21 +8044,8 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
 +
 +    RESOLUTION_INFO res = GetResolutionInfo(mode);
      res.strId = std::to_string(i);
-+    // Kodi's mode key omits sync polarity. Keep the advertised HDMI CTA
-+    // timing when an otherwise identical PC alias would hide its AVI VIC.
-+    if (m_connector->GetType() == "HDMI-A")
-+    {
-+      const bool cta = IsCTATiming(*mode);
-+      const auto alias = [&](const RESOLUTION_INFO& previous) {
-+        const auto* other = m_connector->GetModeForIndex(std::stoi(previous.strId));
-+        return SameTimingExceptSync(*mode, *other) && IsCTATiming(*other) != cta;
-+      };
-+      if (cta) std::erase_if(resolutions, alias);
-+      else if (std::ranges::any_of(resolutions, alias)) continue;
-+    }
      resolutions.push_back(res);
    }
- 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
