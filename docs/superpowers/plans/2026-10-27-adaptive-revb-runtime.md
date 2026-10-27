@@ -39,7 +39,7 @@
 **Files:** existing complete-image build workspace, local qualification receipt and native updater payload.
 **Interfaces:** validated source commit -> DV-R1.0.0-RC1-V2.tar -> N100 updater.
 
-- [ ] Build complete image without overwriting V1; inspect version, binary/resources and hashes.
-- [ ] Verify N100 identity and snapshot configuration; stage rollback and update through native updater.
-- [ ] Verify reboot/version/Kodi, rev B choice, short DV smoke test and stop/return behavior; leave ready for visual tests.
-- [ ] Record limitations and receipts; do not publish.
+- [x] Build complete image without overwriting V1; inspect version, binary/resources and hashes.
+- [x] Verify N100 identity and snapshot configuration; stage rollback and update through native updater.
+- [x] Verify reboot/version/Kodi, rev B choice, short DV smoke test and stop/return behavior; leave ready for visual tests.
+- [x] Record limitations and receipts; do not publish.
