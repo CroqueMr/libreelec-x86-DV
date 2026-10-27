@@ -9442,9 +9442,10 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
    std::unique_ptr<IDVDVideoPP> m_postProc;
  
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,90 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9529,6 +9530,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/c
 +  policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
 +  policy.master_ipt = false;
 +  policy.adaptive = DVBRIDGE_ADAPTIVE_A;
++  policy.adaptive_rev_b = false;
 +  policy.tv = {};
 +  return {OutputRoute::HDR10, policy, result.reason};
 +}
