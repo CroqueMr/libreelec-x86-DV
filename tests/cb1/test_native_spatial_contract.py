@@ -7,6 +7,36 @@ from test_native_video_source import TREE, body
 
 
 class NativeSpatialContractTests(unittest.TestCase):
+    def test_native_supported_hdr_types_include_advertised_hdr10plus(self):
+        text = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
+        implementation = body(text, "CHDRCapabilities CWinSystemGbm::GetDisplayHDRCapabilities() const")
+        self.run_program(r'''
+#include <cassert>
+#include <memory>
+namespace UTILS {enum class Eotf{PQ,HLG};}
+struct CHDRCapabilities {
+ unsigned flags=0;
+ void SetHDR10(){flags|=1;}void SetHLG(){flags|=2;}
+ void SetDolbyVision(){flags|=4;}void SetHDR10Plus(){flags|=8;}
+};
+struct Display {
+ int version=-1;bool pq=true,hlg=true,dv=true;
+ bool SupportsEOTF(UTILS::Eotf e)const{return e==UTILS::Eotf::PQ?pq:hlg;}
+ bool SupportsDolbyVision()const{return dv;}
+ int HDR10PlusVersion()const{return version;}
+};
+struct CWinSystemGbm {
+ std::shared_ptr<Display> m_info=std::make_shared<Display>();
+ CHDRCapabilities GetDisplayHDRCapabilities()const IMPLEMENTATION
+};
+int main(){CWinSystemGbm w;assert(w.GetDisplayHDRCapabilities().flags==7);
+ for(int version:{0,1}){w.m_info->version=version;assert(w.GetDisplayHDRCapabilities().flags==15);}
+ w.m_info->pq=w.m_info->hlg=w.m_info->dv=false;
+ assert(w.GetDisplayHDRCapabilities().flags==8);
+ w.m_info.reset();assert(!w.GetDisplayHDRCapabilities().flags);
+}
+'''.replace("IMPLEMENTATION", implementation))
+
     def test_master_admission_keeps_native_odd_pixel_placement(self):
         text = (TREE / "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp").read_text()
         function = body(text, "DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(\n"

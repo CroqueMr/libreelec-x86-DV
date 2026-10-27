@@ -1804,3 +1804,15 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtom
      void LogAtomicRequest();
      void LogDVProperties();
  
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -824,5 +824,8 @@
+   if (m_info->SupportsDolbyVision())
+     caps.SetDolbyVision();
+ 
++  if (m_info->HDR10PlusVersion() >= 0)
++    caps.SetHDR10Plus();
++
+   return caps;
+ }

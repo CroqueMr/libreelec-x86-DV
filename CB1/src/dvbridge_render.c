@@ -835,8 +835,9 @@ error:
 static bool reference_area(float rect[4], const void *metadata,
                            struct dvbridge_geometry g)
 {
-    int width,height;float crop[4];
+    int width,height;float crop[4],dest[4];
     if(!dvbridge_geometry_raster(g,&width,&height) || !dvbridge_geometry_source(g,crop) ||
+       !dvbridge_geometry_destination(g,dest) ||
        g.x<0 || g.x>width || g.y<0 || g.y>height || g.width<=0 || g.width>width-g.x ||
        g.height<=0 || g.height>height-g.y)return false;
     unsigned l=0,r=0,t=0,b=0,count=0;
@@ -849,11 +850,11 @@ static bool reference_area(float rect[4], const void *metadata,
     }
     if (l>=(unsigned)g.source_width || r>=(unsigned)g.source_width-l ||
         t>=(unsigned)g.source_height || b>=(unsigned)g.source_height-t) return false;
-    double sx=g.width/(double)(crop[2]-crop[0]),sy=g.height/(double)(crop[3]-crop[1]);
-    rect[0]=g.x+(fmax(l,crop[0])-crop[0])*sx;
-    rect[1]=g.y+(fmax(t,crop[1])-crop[1])*sy;
-    rect[2]=g.x+(fmin(g.source_width-r,crop[2])-crop[0])*sx;
-    rect[3]=g.y+(fmin(g.source_height-b,crop[3])-crop[1])*sy;
+    double sx=(dest[2]-dest[0])/(double)(crop[2]-crop[0]),sy=(dest[3]-dest[1])/(double)(crop[3]-crop[1]);
+    rect[0]=dest[0]+(fmax(l,crop[0])-crop[0])*sx;
+    rect[1]=dest[1]+(fmax(t,crop[1])-crop[1])*sy;
+    rect[2]=dest[0]+(fmin(g.source_width-r,crop[2])-crop[0])*sx;
+    rect[3]=dest[1]+(fmin(g.source_height-b,crop[3])-crop[1])*sy;
     if(rect[0]>=rect[2] || rect[1]>=rect[3])return false;
     return true;
 }

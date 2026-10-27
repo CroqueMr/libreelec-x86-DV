@@ -54,6 +54,11 @@ int main(void)
     assert(fabs(visible.y0+189.0f)<.001f && fabs(visible.y1-1269.0f)<.001f);
     struct dvbridge_renderer fractional={0};
     assert(configure_target(&fractional,geometry) && !fractional.target_identity);
+    AVDOVIMetadata metadata={0};float aperture[4];
+    assert(reference_area(aperture,&metadata,geometry));
+    for(unsigned i=0;i<4;i++)assert(fabsf(aperture[i]-geometry.placement[i])<.001f);
+    struct dvbridge_geometry invalid=geometry;invalid.placement[1]=NAN;
+    assert(!reference_area(aperture,&metadata,invalid));
 #endif
     struct dvbridge_renderer r={0};
     /* Work surfaces use the decoded raster, never output placement/crop. */
