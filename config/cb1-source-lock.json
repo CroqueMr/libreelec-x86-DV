@@ -18,7 +18,7 @@
     "packages/multimedia/lightgbm/package.mk": "5a9edbeca727e3b4b40c5bf7c214a5512a2f967a689837eeccce92e9074ca644",
     "projects/Generic/filesystem/usr/bin/dv-diagnostics": "ee77b1f0c9a93a1ebd8680229b6b94b7cfcdd07b651e7eed07d38c6a3df2bdaf",
     "projects/Generic/linux/7.2.6/linux.x86_64.conf": "d399a8320e2ec568f18e79a64718b4aea8613f425c750531d6397ca03045cf91",
-    "projects/Generic/options": "ed067c9e63c4ecbadef3919ec7f5d97938d7b6ab89e0c725bb4299745b1d6346",
+    "projects/Generic/options": "fef3356c50ea82aef6d99aa83d1621b8e9ee585ccee3bd915996b1c24ed42f56",
     "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "f1b0292ee84259a357721a5d0833f3b8784452f8b7dbee5862ce660ccc28b808",
     "projects/Generic/patches/kodi/kodi-9993-fel-presentation-pairing.patch": "e285499837a5df7208776d4f49d99b233bad6a1f1b9c35d042ea0efde0897a32",
     "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": "aa85bfe853c8fb6050a5a7d6ce7d00e08cff8b1dba4633cb1802174a33a717b8",
@@ -29,7 +29,7 @@
     "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "4b25da9fe3dd08a633500bc624e9f8f14599f904bbed8349cfa27ce1a3f381f3",
     "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": "93a7543fbd6d0d3e85978fff15c3d171d6b91b0f42fdf4007d73fae7f36811ff",
     "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": "7e912dfb3c6d52db94759244e305f985380629aa7fa372e5a410ecbd38c3476f",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "194d9c8e5be875568aa3cbc2a7223ae19e8fd645c3e6a583e32d7530fb4a4882",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "39678cbe0e4a8b55475558cf0f404d382859480e014015b19fd0de321065f651",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
     "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
     "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
@@ -66,9 +66,9 @@
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
     "config/cb1-patch-index.json": "7d09a5e91394f46ca32d150f510d6e382c4f4eb746fd7199c96fa022926ac7df",
-    "config/cb1-versions.json": "0d0dbc5144ec5310cc5efab7a3ec72b64d9d32536d7e01612798ffda37c9bcec",
+    "config/cb1-versions.json": "cf70dca7d68dcf687ce1d711e78e516cab09fa59ff178d9a61a424f39785ff7e",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
-    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "5179dc050650f5375b219c6730cfcd6491fe6194331359b6d7aca7136b79d211",
+    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "3e48168092a2271cfaf6c75d923f3a3e60f558da0303f001be73b7aac6eb8362",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f"
   },
   "staging": {
@@ -78,7 +78,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/CMakeLists.txt": {
       "source": "src/CMakeLists.txt",
-      "sha256": "710e70cadfeaa4cad5261b27e66bfe256c0e228565882c775b15a1037b284616"
+      "sha256": "5cbe72a1fa7e090507e8f922886ad3d01fe7d7ca514831ed27dd7bd3c27d3265"
     },
     "packages/mediacenter/kodi/cb1/src/PROVENANCE.json": {
       "source": "src/PROVENANCE.json",
@@ -86,11 +86,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": {
       "source": "src/cb1_circuit.c",
-      "sha256": "73f38049f03587d1f36794fe4336524ef3e22364e663f4f31a81e5d37c68fed4"
+      "sha256": "bd88b21b44db4a9c905fe23d9d7071c7f645f34c820d2401bc3eb019aa56dd50"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": {
       "source": "src/cb1_circuit.h",
-      "sha256": "be9807311bcc001397b0678283cf34f8a3ca8995aaa423b8707c9f9b910741df"
+      "sha256": "2269002bd5c12c646f8491024b29b2de3eb8308a70ab945c233c321d8f9d1440"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": {
       "source": "src/cb1_hdr10_ai.c",
@@ -266,15 +266,15 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": {
       "source": "src/dvbridge_policy.c",
-      "sha256": "30b06fd5065c9ea13759377444bb4be3964a1b85befaf5cdd7843f3279cd630a"
+      "sha256": "55625936d4aab09cd48cd4613a47ba9b3d85bb46ece9afc6851cf8404574e5b8"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": {
       "source": "src/dvbridge_policy.h",
-      "sha256": "7647f9b35386c516057c1ad1cabccb6b3f5b131e321667eae830b98ed81af0ee"
+      "sha256": "057c86aeb1912ab1cc0a480f4a40609930847461aa0def6b0c09918c51d19037"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "9e030e78f624b053154f6d94fd1c9a9a7eb9ff2cc3884115b896f1874d753385"
+      "sha256": "1e9f69ace894016c203abc0e79c13720ffca9cbf56cf83cf0e4886afe400bd8a"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -310,7 +310,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "52aba4b35dd856ec96846967d73c7195c9f27b70396c5c22f4ea7d16cbbdff62"
+      "sha256": "927ab61e62d74ec6851e9e71109c52bead595269437a9c70241e2a98f7ae2a78"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -442,7 +442,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_dv_enhanced.c": {
       "source": "src/cb1_dv_enhanced.c",
-      "sha256": "465742fd573acc47b7a276b06d0df79b75ff6bcf026006e94b02d54701912432"
+      "sha256": "5a9e8cf23e2417e47c7d42cfb6f0f510d209052653b8cd92460a6854715d59c5"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_dv_enhanced.h": {
       "source": "src/cb1_dv_enhanced.h",
@@ -547,6 +547,14 @@
     "packages/mediacenter/kodi/cb1/src/cb1_dv_hdr10plus.c": {
       "source": "src/cb1_dv_hdr10plus.c",
       "sha256": "ad0dcad6b677b61c03ee9b20661a31bd47304fb26432f5b27341b3024532e57c"
+    },
+    "packages/mediacenter/kodi/cb1/src/cb1_dv_adaptive_rev_b.c": {
+      "source": "src/cb1_dv_adaptive_rev_b.c",
+      "sha256": "0f7736a5ee1797fc43cf8a14a30a23021e105efc6a1c94f584f391a0e1bf2fd7"
+    },
+    "packages/mediacenter/kodi/cb1/src/cb1_dv_adaptive_rev_b.h": {
+      "source": "src/cb1_dv_adaptive_rev_b.h",
+      "sha256": "57b62bb66232314c0775c6866901f01acf269ca84c067ea76213d1d97c21b3ee"
     }
   }
 }

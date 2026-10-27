@@ -57,9 +57,12 @@ enum cb1_dv_enhanced_status cb1_dv_enhanced_build_rev_b(struct cb1_dv_enhanced_p
     if(!p)return CB1_DVE_INVALID;
     *p=(struct cb1_dv_enhanced_plan){0};
     if(!s || s->count>2 || (s->count && s->family!=2 && s->family!=8) ||
-       !policy || policy->adaptive==DVBRIDGE_ADAPTIVE_A)return p->status;
+       !policy || policy->adaptive==DVBRIDGE_ADAPTIVE_A ||
+       dvbridge_policy_validate(policy)!=DVBRIDGE_POLICY_VALID)return p->status;
     struct cb1_dv_enhanced_source base=*s;base.count=base.family=0;
-    if(cb1_dv_enhanced_build(p,&base,policy)==CB1_DVE_INVALID)return p->status;
+    struct dvbridge_policy base_policy=*policy;base_policy.adaptive_rev_b=false;
+    if(cb1_dv_enhanced_build(p,&base,&base_policy)==CB1_DVE_INVALID)return p->status;
+    p->policy=*policy;
     p->count=s->count;p->family=s->family;
     double guide[257]={0},color=0;
     if(!signed_guide(guide,&color,s,p))return p->status=CB1_DVE_INVALID;

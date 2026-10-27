@@ -89,6 +89,35 @@ static void signed_guides(void)
     }
 }
 
+static void runtime_route(void)
+{
+#ifdef CB1_DVE_REV_B_RUNTIME_API
+    struct dvbridge_policy p={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+        .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.adaptive_rev_b=true,
+        .tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
+    struct cb1_dv_enhanced_source s={.master=1000,.l1_present=true,
+        .analysis={0,wire(800),wire(30)}};
+    struct cb1_dv_enhanced_plan routed,reference,old;
+    assert(dvbridge_policy_validate(&p)==DVBRIDGE_POLICY_VALID);
+    assert(cb1_dv_enhanced_build(&routed,&s,&p)==CB1_DVE_READY);
+    assert(cb1_dv_enhanced_build_rev_b(&reference,&s,&p)==CB1_DVE_READY);
+    assert(!memcmp(&routed,&reference,sizeof(routed)));
+    assert(cb1_dv_enhanced_build_ai(&reference,&s,&p)==CB1_DVE_INVALID);
+    p.adaptive_rev_b=false;
+    assert(cb1_dv_enhanced_build(&old,&s,&p)==CB1_DVE_READY);
+    reference=routed;
+    cb1_dv_enhanced_transition(&routed,&old,1.0/60,false);
+    assert(!memcmp(&routed,&reference,sizeof(routed)) && "Do not blend A/B histories");
+    p.adaptive_rev_b=true;p.mode=DVBRIDGE_MODE_STANDARD;
+    assert(dvbridge_policy_validate(&p)==DVBRIDGE_POLICY_INVALID_VALUE);
+    p.mode=DVBRIDGE_MODE_ENHANCED_DV;p.adaptive=DVBRIDGE_ADAPTIVE_B_FP32;
+    assert(dvbridge_policy_validate(&p)==DVBRIDGE_POLICY_INVALID_VALUE);
+    assert(cb1_dv_enhanced_build(&routed,&s,&p)==CB1_DVE_INVALID);
+#else
+    assert(!"rev B is not reachable through the runtime policy");
+#endif
+}
+
 static void report(void)
 {
     struct cb1_dv_enhanced_source source={.master=1000,.l1_present=true,
@@ -165,6 +194,7 @@ int main(int argc,char **argv)
     if(argc==2 && !strcmp(argv[1],"--report")){report();return 0;}
     assert(cb1_dv_enhanced_build_rev_b && "Separate authored-DV rev B builder required");
     signed_guides();
+    runtime_route();
     struct dvbridge_policy policy={.revision=3,.mode=DVBRIDGE_MODE_ENHANCED_DV,
         .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,
         .tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};

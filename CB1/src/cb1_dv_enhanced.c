@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_dv_enhanced.h"
+#include "cb1_dv_adaptive_rev_b.h"
 #include <math.h>
 #include <string.h>
 
@@ -28,7 +29,7 @@ static enum cb1_dv_enhanced_status build(struct cb1_dv_enhanced_plan *p,
     *p=(struct cb1_dv_enhanced_plan){0};
     if(!s || dvbridge_policy_validate(policy)!=DVBRIDGE_POLICY_VALID ||
        policy->mode!=DVBRIDGE_MODE_ENHANCED_DV || !isfinite(s->master) ||
-       s->master<=10 || s->master>10000 || s->count>2 || (ai && (s->count || s->family)) ||
+       s->master<=10 || s->master>10000 || s->count>2 || (ai && (s->count || s->family || policy->adaptive_rev_b)) ||
        policy->tv.peak_nits<=10)return p->status;
     p->policy=*policy;p->master=s->master;p->target=policy->tv.peak_nits;
     p->envelope=fmax(p->master,p->target);p->family=s->family;p->count=s->count;
@@ -103,7 +104,7 @@ static enum cb1_dv_enhanced_status build(struct cb1_dv_enhanced_plan *p,
 
 enum cb1_dv_enhanced_status cb1_dv_enhanced_build(struct cb1_dv_enhanced_plan *p,
     const struct cb1_dv_enhanced_source *s,const struct dvbridge_policy *policy)
-{return build(p,s,policy,false);}
+{return policy && policy->adaptive_rev_b?cb1_dv_enhanced_build_rev_b(p,s,policy):build(p,s,policy,false);}
 
 enum cb1_dv_enhanced_status cb1_dv_enhanced_build_ai(struct cb1_dv_enhanced_plan *p,
     const struct cb1_dv_enhanced_source *s,const struct dvbridge_policy *policy)
@@ -157,6 +158,7 @@ void cb1_dv_enhanced_transition(struct cb1_dv_enhanced_plan *p,
     const struct cb1_dv_enhanced_plan *old,double dt,bool reset)
 {
     if(!p || !old || reset || !isfinite(dt) || dt<0 || dt>1 ||
+       p->policy.adaptive_rev_b!=old->policy.adaptive_rev_b ||
        (p->policy.adaptive==DVBRIDGE_ADAPTIVE_A)!=(old->policy.adaptive==DVBRIDGE_ADAPTIVE_A) ||
        p->status==CB1_DVE_INVALID || old->status==CB1_DVE_INVALID ||
        (!p->count && p->policy.revision!=old->policy.revision) ||

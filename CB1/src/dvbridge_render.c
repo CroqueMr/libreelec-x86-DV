@@ -12,6 +12,7 @@
 #include "cb1_hdr10_ai.h"
 #include "cb1_hdr10_ingress.h"
 #include "cb1_dv_enhanced.h"
+#include "cb1_dv_adaptive_rev_b.h"
 #include "cb1_trim_math.h"
 #include "cb1_trim_glsl.h"
 #include "cb1_transport_glsl.h"
@@ -3360,7 +3361,7 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
         .output_generation=DVBRIDGE_SOURCE_METADATA,.nominal_target=nominal,.container=r->reconstructed_color,
         .geometry=geometry,.nominal_max_nits=pixels?plan.envelope:policy->tv.peak_nits,.fel_reconstructed=fel,.creative=creative,
         .creative_edit={.status=DVBRIDGE_CREATIVE_NEUTRAL,.reason=DVBRIDGE_CREATIVE_NO_ANCHOR},
-        .pixel_algorithm=guided?(policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16?
+        .pixel_algorithm=policy->adaptive_rev_b?CB1_DVE_REV_B_ALGORITHM:guided?(policy->adaptive==DVBRIDGE_ADAPTIVE_B_FP16?
             "cb1-dve-guided-fp16-v1":"cb1-dve-guided-v1"):CB1_DVE_ALGORITHM,
         .expansion_reason=plan.reason,.guidance_family=guidance.family,
         .source_reference_nits=plan.master,.display_reference_nits=plan.target,

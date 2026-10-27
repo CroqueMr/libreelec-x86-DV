@@ -44,7 +44,7 @@ pkg_check_modules(DVDrm REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(DVVa REQUIRED IMPORTED_TARGET libva)
 add_library(dvbridge_core STATIC dvbridge_core.c dvbridge_placebo.c dvbridge_render.c dvbridge_cache.c
                                 dvbridge_gl_frame.c dvbridge_gl_pack.c dvbridge_fel.c dvbridge_dmabuf.c dvbridge_fel_vpp.c
-                                dvbridge_policy.c cb1_circuit.c cb1_master_reference.c cb1_master_ipt.c dvbridge_creative.c cb1_dv_enhanced.c cb1_processing.c
+                                dvbridge_policy.c cb1_circuit.c cb1_master_reference.c cb1_master_ipt.c dvbridge_creative.c cb1_dv_enhanced.c cb1_dv_adaptive_rev_b.c cb1_processing.c
                                 cb1_hdr10plus.c cb1_hdr10plus_analysis.c cb1_hdr10plus_curve.c cb1_dv_hdr10plus.c)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert"

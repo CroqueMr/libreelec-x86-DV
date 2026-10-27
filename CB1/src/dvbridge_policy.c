@@ -10,6 +10,8 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
     if(policy->adaptive<DVBRIDGE_ADAPTIVE_A || policy->adaptive>DVBRIDGE_ADAPTIVE_B_FP16 ||
        (policy->adaptive!=DVBRIDGE_ADAPTIVE_A && policy->mode!=DVBRIDGE_MODE_ENHANCED_DV))
         return DVBRIDGE_POLICY_INVALID_VALUE;
+    if(policy->adaptive_rev_b && (policy->mode!=DVBRIDGE_MODE_ENHANCED_DV ||
+        policy->adaptive!=DVBRIDGE_ADAPTIVE_B_FP16))return DVBRIDGE_POLICY_INVALID_VALUE;
     const struct dvbridge_tv_profile *tv = &policy->tv;
     if (tv->panel < DVBRIDGE_PANEL_UNSET || tv->panel > DVBRIDGE_PANEL_LCD ||
         tv->gamut < DVBRIDGE_GAMUT_UNSET || tv->gamut > DVBRIDGE_GAMUT_BT2020 ||

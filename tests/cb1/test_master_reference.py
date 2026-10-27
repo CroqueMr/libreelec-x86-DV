@@ -192,6 +192,14 @@ int main(){
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::Vanilla);
  p.hdr10Source=HDR10SourceMode::ReferenceDV;
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::NativeDV && out.policy.mode==1);
+ caps.isHDR10=false;caps.isDV=true;caps.nativeDV=false;
+ p.output=static_cast<OutputMode>(6);p.peak=2500;p.gamut=2;
+ out=SelectOutput(p,caps);
+ assert(out.route==OutputRoute::HDR10 && out.policy.mode==DVBRIDGE_MODE_HDR10_BASIC);
+ assert(!out.policy.adaptive_rev_b && PolicyCode(out.policy)==2);
+ caps.nativeDV=true;p.peak=0;
+ out=SelectOutput(p,caps);
+ assert(out.route==OutputRoute::HDR10 && !out.policy.adaptive_rev_b && PolicyCode(out.policy)==2);
  caps.isHDR10=false;caps.stereoSource=true;
  assert(SelectOutput(p,caps).route==OutputRoute::Vanilla);
 }
