@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+#ifndef CB1_DV_ADAPTIVE_REV_B_H
+#define CB1_DV_ADAPTIVE_REV_B_H
+#include "cb1_dv_enhanced.h"
+#define CB1_DVE_REV_B_TITLE "Dolby Vision Adaptive HDR Mapping rev B"
+#define CB1_DVE_REV_B_ALGORITHM "cb1-dve-selective-revb-v1"
+/* Offline authored-DV alternative; not linked into the runtime engine. */
+enum cb1_dv_enhanced_status cb1_dv_enhanced_build_rev_b(struct cb1_dv_enhanced_plan *,
+    const struct cb1_dv_enhanced_source *, const struct dvbridge_policy *);
+#endif
