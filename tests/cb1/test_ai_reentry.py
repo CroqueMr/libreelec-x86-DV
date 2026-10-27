@@ -16,6 +16,52 @@ def execute(program):
 
 
 class AIReentryTests(unittest.TestCase):
+    def test_strict_dv_failure_does_not_abort_a_native_hdr10_transition(self):
+        source=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
+                    'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(')
+        selection=source[source.index('  const auto& source = picture.doviSourceInfo;'):
+                         source.index('  if (!PollRejectedDVSurface())')]
+        execute(r'''
+#include <cassert>
+#include <mutex>
+namespace DVBRIDGE {
+enum class OutputMode{Disabled,Standard,MasterReference};
+enum class OutputRoute{Vanilla,DV};enum class OutputReason{None,SourceIneligible};
+}
+struct Window {
+ struct Preferences{DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;
+  bool allowMasterFallback=false;}preferences;
+ struct Caps{bool isDV=false,processingKnown=true;}capabilities;
+ struct Picture{struct{int profile=0,compatibility=1;bool el=false;}doviSourceInfo;
+  bool doviEnhancement=false;}picture;
+ struct{DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
+  DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::SourceIneligible;}m_dvSelection;
+ std::mutex m_dvCapabilityMutex;bool m_dvFatalConsumed=false;
+ DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None;
+ bool Prepare(){SELECTION return true;}
+};
+int main(){
+ // Native HDR10, AI priming and SDR are not strict-DV source failures.
+ for(bool fallback:{false,true}){
+  Window hdr;hdr.preferences.allowMasterFallback=fallback;
+  assert(hdr.Prepare());assert(hdr.m_dvFatalReason==DVBRIDGE::OutputReason::None);
+ }
+ Window dv;dv.capabilities.isDV=true;dv.picture.doviSourceInfo.profile=7;
+ assert(!dv.Prepare());assert(dv.m_dvFatalReason==DVBRIDGE::OutputReason::SourceIneligible);
+ Window standard;standard.capabilities.isDV=true;standard.picture.doviSourceInfo.profile=7;
+ standard.preferences.output=DVBRIDGE::OutputMode::Standard;assert(standard.Prepare());
+ Window p5;p5.capabilities.isDV=true;p5.picture.doviSourceInfo.profile=5;
+ p5.picture.doviSourceInfo.compatibility=0;p5.preferences.output=DVBRIDGE::OutputMode::Standard;
+ assert(!p5.Prepare());
+ Window pending;pending.capabilities.isDV=true;pending.capabilities.processingKnown=false;
+ assert(pending.Prepare());
+ Window disabled;disabled.capabilities.isDV=true;disabled.preferences.output=DVBRIDGE::OutputMode::Disabled;
+ assert(disabled.Prepare());
+ Window paired;paired.capabilities.isDV=true;paired.picture.doviSourceInfo.el=true;
+ assert(paired.Prepare());
+}
+'''.replace('SELECTION',selection))
+
     def test_output_reset_cancels_pending_transaction_but_retains_retirement_guard(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         reset=body(source,'void CDVBridgeGLES::Reset()')

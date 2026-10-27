@@ -1467,6 +1467,17 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
      return failure("output-format", "drawable-depth");
    if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
+@@ -1837,8 +1904,8 @@
+       source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
+   const bool strictMaster=preferences.output==DVBRIDGE::OutputMode::MasterReference &&
+       !preferences.allowMasterFallback;
+-  if (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla && capabilities.processingKnown &&
+-      (!ordinaryBL || strictMaster) &&
++  if (capabilities.isDV && m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla &&
++      capabilities.processingKnown && (!ordinaryBL || strictMaster) &&
+       preferences.output != DVBRIDGE::OutputMode::Disabled &&
+       !(source.el && !picture.doviEnhancement))
+   {
 @@ -1977,7 +2044,6 @@
        !m_dvRecoveryPending && !m_dvRejectedSurface && !m_dvRollbackFailed &&
        !m_dvOutputRetiring && !m_dvShutdownFence && !m_dvStopPending && !HasPendingDVOutputSurface() &&

@@ -38,4 +38,16 @@ Fresh control reproduction: HDR10 AI Reference, pause/zoom/resume/pause, then
 native/AI toggles. Ryzen3200U completes six switches without restart and remains
 paused. N100 aborts playback after the first native/AI cycle; Kodi itself stays
 up. A fatal output status is consumed by VideoPlayer before the later native
-switch can complete. Investigation and targeted regression are in progress.
+switch can complete.
+
+Cause: the strict Master no-fallback guard was also applied to a plain HDR10
+source during AI/native preparation. A transient ineligible import therefore
+became a fatal DV-source failure. The guard now requires an actual DV source;
+P5/strict Master failures remain fatal, and AI keeps its existing readiness
+and fallback lifecycle. No model, queue, delay, pixels or metadata changes.
+
+Executable lifecycle regression RED then GREEN; all14 AI re-entry tests and
+the full202-test integration suite pass. Kodi link and source/staging receipt
+checks pass. Runtime candidate: six paused/zoomed native/AI switches pass on
+both machines, without restart or unpause, followed by exact settings and
+binary restoration. Complete-image qualification remains pending.
