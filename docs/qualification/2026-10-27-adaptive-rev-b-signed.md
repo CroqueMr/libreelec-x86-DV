@@ -21,8 +21,12 @@ TV or published image changed. RC1 V1 remains frozen.
   expansion command. No image histogram, occupancy estimate or local mask.
 
 The signed guide is clamped to +/-1 stop. Shape derivative multiplier is
-`2^(0.75 * guide)`; amplitude is `clamp(0.85 + 0.30 * signed_mean, 0.55, 1)`.
-The mean samples the uniform tonal domain, not the film's pixel distribution.
+`2^(0.75 * guide)`. Mean = `sum(guide[1..192])/192`: the lower 75% of the
+uniform tonal domain above 10 nits, excluding the upper quarter most affected
+by the local trim operator's endpoint clipping. Shape still uses all 257 knots.
+This is not the film's pixel distribution. Color =
+`sum(authority * clamp(log2(chroma_base) + log2(saturation_gain), -1, 1))`.
+Amplitude = `clamp(0.85 + 0.30 * clamp(mean - 0.25 * color, -1, 1), 0.55, 1)`.
 Each anchor has authority `weight * min(authored_peak / TV_peak,
 TV_peak / authored_peak)`. These are explicit prototype policy choices.
 The existing upper-range selector, <=10-nit protection, RGB component ceiling
@@ -136,11 +140,27 @@ CPU plan-only medians, excluding metadata resolution and submission:
 ## Verification and disposition
 
 Full engine suite: 242 registered checks, zero failures, 15 unsupported skips,
-117.37 s. Native integration suite: 212/212 passed, 205.49 s. Prototype-local
+final post-review run 116.22 s. Native integration suite: 212/212 passed, 205.49 s. Prototype-local
 checks include opposite signs, constant-gain retention, target attenuation,
 missing controls, invalid weights, L1-only operation, protected lows, neutral
 ramp monotonicity, color ratios, ceiling, source immutability and temporal slew.
 Existing dependency deprecation warnings persist in the test harness.
+
+The normalized-shape regression was independently checked with a negative
+control: removing only the signed derivative weight makes it fail, while
+restoring the original weight passes. No production calculation changed.
+
+Independent Astra xhigh review accepts this as an offline prototype, with
+no blocking correctness finding. The amplitude equation and sample domain
+were clarified after review. One inherited minor remains: the summarizer
+checks only the first backend identity and overwrites duplicate timing keys.
+The reviewer verified this dataset's consistent identities and regenerated
+the committed summary exactly; the present observations are unaffected.
+
+Review dispositions: keep all TV/perceptual/whole-film pumping/HDMI/mini-PC
+judgments open because no such devices or sequences were tested; do not
+claim Dolby-equivalent trim interpretation or optimality of preserved trims
+after pixel expansion without an authoritative mapper/TV comparison.
 
 No runtime diff under `CB1/src`, `packages` or `projects` against the V1
 checkpoint. The prototype is linked only into test executables. No image built

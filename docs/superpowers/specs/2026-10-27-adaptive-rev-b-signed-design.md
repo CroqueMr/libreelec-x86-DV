@@ -11,11 +11,15 @@ This attenuation is CB1 extrapolation policy, not an authored upmapping trim.
 
 Build a positive cumulative highlight shape with derivative multiplier
 2^(0.75 * signed guide). Normalize shape at the scene reference separately
-from amplitude. Amplitude is clamp(0.85 + 0.30 * signed mean, 0.55, 1), where
-the mean is a uniform sample-domain mean above the protected range, not
-pixel occupancy. A constant signed response must survive normalization.
-Signed HDR chroma/saturation controls may constrain amplitude but are not
-executed as a second color grade. Six-vector SDR controls and spatial detail
+from amplitude. Mean = sum(guide[1..192])/192, uniformly sampling the lower
+75% of the tonal domain above 10 nits, not pixel occupancy. Excluding the
+upper quarter reduces endpoint-clipping influence on amplitude; shape still
+uses all 257 knots. Color = sum(authority * clamp(log2(chroma_base) +
+log2(saturation_gain), -1, 1)). Amplitude = clamp(0.85 + 0.30 *
+clamp(mean - 0.25 * color, -1, 1), 0.55, 1).
+A constant signed response must survive normalization. Signed HDR
+chroma/saturation controls constrain amplitude but are not executed as a
+second color grade. Six-vector SDR controls and spatial detail
 are excluded. L1/L3-derived tonal balance still delays expansion of mids.
 
 Reuse existing pixel shader, black protection at <=10 nits, RGB-ray ceiling,

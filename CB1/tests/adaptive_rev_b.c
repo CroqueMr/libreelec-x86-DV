@@ -65,6 +65,11 @@ static void signed_guides(void)
     s.weights[0]=0;
     assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_INVALID);
     s.weights[0]=1;
+    s.anchors[0].controls=(struct dvbridge_cm4_controls){.present_fields=DVBRIDGE_CM4_PRIMARY,
+        .primary={2048,2048,2560,2048,2048,2048}};
+    assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_READY);
+    assert(high.extra[64]/high.extra[192]<neutral.extra[64]/neutral.extra[192]-1e-6 &&
+           "Signed power must change normalized shape, not only amplitude");
     for(unsigned field=0;field<5;field++)for(unsigned sign=0;sign<2;sign++){
         s.anchors[0].controls=(struct dvbridge_cm4_controls){
             .present_fields=DVBRIDGE_CM4_PRIMARY|DVBRIDGE_CM4_MID_CONTRAST|DVBRIDGE_CM4_CLIP_TRIM,

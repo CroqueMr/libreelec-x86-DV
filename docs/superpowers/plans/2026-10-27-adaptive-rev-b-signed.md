@@ -40,7 +40,7 @@
 
 **Interfaces:** Same renderer substitution and JSON observations as the earlier prototype; separate raw evidence directory.
 
-- [ ] Generate scalar, pixel, film, temporal and three idle GPU timing runs; check effective backend and timing scope.
-- [ ] Run native regressions; verify runtime diff from V1 is empty.
-- [ ] Document measured gain/cost and limitations; fresh final Astra review, fix important findings with failing tests first.
-- [ ] Revalidate, commit locally, leave unpublished.
+- [x] Generate scalar, pixel, film, temporal and three idle GPU timing runs; check effective backend and timing scope.
+- [x] Run native regressions; verify runtime diff from V1 is empty.
+- [x] Document measured gain/cost and limitations; fresh final Astra review, fix important findings with failing tests first.
+- [x] Revalidate, commit locally, leave unpublished.
