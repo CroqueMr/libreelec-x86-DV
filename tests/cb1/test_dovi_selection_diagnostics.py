@@ -56,6 +56,7 @@ void streams(CDVDDemuxFFmpeg& d,int count){
   auto* s=avformat_new_stream(d.m_pFormatContext,nullptr);assert(s);
   s->id=0x1011+i*4;s->time_base={1,90000};
   s->codecpar->codec_type=AVMEDIA_TYPE_VIDEO;s->codecpar->codec_id=AV_CODEC_ID_HEVC;
+  s->codecpar->codec_tag=MKTAG('h','v','c','1');
  }
 }
 void group(CDVDDemuxFFmpeg& d){
@@ -75,6 +76,7 @@ void check(CDVDDemuxFFmpeg& d,const char* reason,int inventory,bool joined=false
   }
   if(line.starts_with("DV input stream:")){
    rows++;
+   assert(line.find("codec_tag=0x31637668")!=std::string::npos);
    if(inventoryConfig && line.find("pid=4117 ")!=std::string::npos){
     configurations++;assert(line.find(inventoryConfig)!=std::string::npos);
    }

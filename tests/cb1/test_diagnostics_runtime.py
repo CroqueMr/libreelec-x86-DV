@@ -25,6 +25,48 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_first_presentation_logs_once_only_for_the_current_live_stream(self):
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+int main(){
+ using namespace DVBRIDGE;
+ DiagnosticOpen();const auto previous=DiagnosticGeneration();DiagnosticPresented(0);
+ assert(!diagnosticSession.FirstPresented() && CLog::lines.empty());
+ ObserveDiagnostic(7,1,1,1,"prepare",true,false);
+ DiagnosticPresented(6);assert(!diagnosticSession.FirstPresented() && CLog::lines.empty());
+ DiagnosticPresented(7);assert(diagnosticSession.FirstPresented() && CLog::lines.size()==1);
+ assert(CLog::lines.back().find("stage=first-presented")!=std::string::npos);
+ for(int n=0;n<1000;++n)DiagnosticPresented(7);
+ assert(CLog::lines.size()==1);
+ DiagnosticFinal("stop");auto count=CLog::lines.size();
+ DiagnosticPresented(7);assert(CLog::lines.size()==count);
+ DiagnosticOpen();DiagnosticCandidate();const auto current=DiagnosticGeneration();
+ DiagnosticStartup(previous,"late-decoder",true,1);
+ assert(CLog::lines.size()==count);
+ DiagnosticStartup(current,"base-decoded",false,0);
+ assert(CLog::lines.size()==count+1);
+ assert(std::string_view(diagnosticSession.Stage())=="base-decoded");
+ DiagnosticFinal("before-picture");auto closed=CLog::lines.size();
+ DiagnosticStartup(current,"late-after-stop",false,0);assert(CLog::lines.size()==closed);
+ DiagnosticOpen();ObserveDiagnostic(8,1,1,1,"prepare",true,false);
+ DiagnosticPresented(7);assert(!diagnosticSession.FirstPresented());
+ DiagnosticPresented(8);assert(CLog::lines.size()==closed+1);
+}
+''', {'utils/log.h':r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog{
+ inline static std::vector<std::string> lines;
+ template<class...T>static void Log(int,fmt::format_string<T...> f,T&&...a){
+  lines.push_back(fmt::format(f,std::forward<T>(a)...));
+ }
+};
+'''})
+
     def test_diagnostic_details_keep_the_shared_line_budget(self):
         for _ in range(1):
             self.run_cpp(r'''

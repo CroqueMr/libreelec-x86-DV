@@ -306,9 +306,10 @@ diff --git a/xbmc/cores/VideoSourceSideData.h b/xbmc/cores/VideoSourceSideData.h
 +  mutable std::string m_json;
 +};
 diff --git a/xbmc/utils/DVBridgeDiagnosticState.h b/xbmc/utils/DVBridgeDiagnosticState.h
+new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticState.h
-@@ -0,0 +1,211 @@
+@@ -0,0 +1,217 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <chrono>
@@ -413,7 +414,12 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticState.h b/xbmc/utils/DVBridgeDiagnosti
 +        (m_waited && (now < m_lastWait || now - m_lastWait < 30000))) return false;
 +    m_waited = true; m_lastWait = now; return true;
 +  }
-+  void Presented(uint64_t stream) { if (stream == m_stream) m_presented = true; }
++  bool Presented(uint64_t stream)
++  {
++    if (!stream || stream != m_stream || m_presented || m_ended) return false;
++    m_presented = true;
++    return true;
++  }
 +  void Paused(uint64_t now, bool paused)
 +  {
 +    if (m_paused != paused) { m_waitStart = now; m_waited = false; }
@@ -432,6 +438,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticState.h b/xbmc/utils/DVBridgeDiagnosti
 +  uint64_t Suppressed() const { return m_suppressed; }
 +  uint64_t Truncations() const { return m_truncated; }
 +  bool FirstPresented() const { return m_presented; }
++  bool Ended() const { return m_ended; }
 +  const char* Stage() const { return m_stage ? m_stage : "unavailable"; }
 +  const char* FirstFailure() const { return m_failure ? m_failure : "none"; }
 +private:

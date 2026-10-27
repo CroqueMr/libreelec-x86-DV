@@ -8642,7 +8642,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        (avctx->codec_id == AV_CODEC_ID_VC1 && avctx->profile == AV_PROFILE_UNKNOWN))
    {
      AVPixelFormat defaultFmt = avcodec_default_get_format(avctx, fmt);
-@@ -334,7 +355,15 @@
+@@ -334,7 +355,17 @@
    }
  
    m_hints = hints;
@@ -8652,13 +8652,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +#ifdef HAVE_DVBRIDGE
 +  m_dvNativeOutput = DVBRIDGE::RetainsDVSource(hints);
 +  m_dvSourceOwner.BeginStream();
++  m_dvStartupReported = 0;
++  m_dvDiagnosticGeneration = DVBRIDGE::DiagnosticGeneration();
 +  m_dvHasStreamDisplayMetadata = false;
 +  m_dvHasStreamLightMetadata = false;
 +#endif
  
    const AVCodec* pCodec = nullptr;
  
-@@ -434,6 +463,44 @@
+@@ -434,6 +465,44 @@
      av_opt_set(m_pCodecContext, it->m_name.c_str(), it->m_value.c_str(), 0);
    }
  
@@ -8703,7 +8705,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
    {
      CLog::Log(LOGDEBUG,"CDVDVideoCodecFFmpeg::Open() Unable to open codec");
-@@ -472,11 +539,40 @@
+@@ -472,11 +541,40 @@
  
    m_dropCtrl.Reset(true);
    m_eof = false;
@@ -8744,22 +8746,39 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    av_frame_free(&m_pFrame);
    av_frame_free(&m_pDecodedFrame);
    av_frame_free(&m_pFilterFrame);
-@@ -619,6 +715,11 @@
+@@ -619,6 +717,16 @@
    avpkt->side_data_elems = packet.iSideDataElems;
  
    int ret = avcodec_send_packet(m_pCodecContext, avpkt);
 +#ifdef HAVE_DVBRIDGE
 +  // Submit once, only after BL accepted the packet (Kodi retries EAGAIN).
-+  if (ret == 0 && m_dvFel && !dvbridge_fel_submit(m_dvFel.get(), avpkt))
-+    m_dvFailed = true;
++  if (ret == 0 && m_dvFel)
++  {
++    if (!dvbridge_fel_submit(m_dvFel.get(), avpkt))
++      m_dvFailed = true;
++    else
++      ReportDVStartup(2, "el-submitted");
++  }
 +#endif
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -657,6 +758,79 @@
+@@ -655,7 +763,100 @@
+   return true;
+ }
  
++#ifdef HAVE_DVBRIDGE
++void CDVDVideoCodecFFmpeg::ReportDVStartup(unsigned fact, const char* stage) noexcept
++{
++  if (!DVBRIDGE::DiagnosticsEnabled() || (m_dvStartupReported & fact)) return;
++  m_dvStartupReported |= fact;
++  DVBRIDGE::DiagnosticStartup(m_dvDiagnosticGeneration, stage, bool(m_dvFel),
++                             m_dvPending.size());
++}
++#endif
++
  CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPicture)
- {
++{
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvFel)
 +  {
@@ -8794,11 +8813,13 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +      }
 +      if (!result)
 +        return VC_NONE;
++      ReportDVStartup(4, "el-decoded");
 +      base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
 +      // The pairing owner consumed the exact EL from this stream/reset epoch.
 +      base->doviEnhancementBinding = base->doviMetadata.Binding();
 +      pVideoPicture->CopyRef(*base);
 +      m_dvPending.pop_front();
++      ReportDVStartup(8, "fel-paired");
 +      return VC_PICTURE;
 +    };
 +    VCReturn paired = emit();
@@ -8816,7 +8837,10 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +        return VC_ERROR;
 +    }
 +    if (result == VC_PICTURE)
++    {
++      ReportDVStartup(1, "base-decoded");
 +      m_dvPending.push_back(std::move(base));
++    }
 +    if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
 +      if (!dvbridge_fel_drain(m_dvFel.get()))
 +        return VC_ERROR;
@@ -8828,15 +8852,19 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +    return result == VC_PICTURE ? VC_BUFFER : result;
 +  }
 +#endif
-+  return GetBasePicture(pVideoPicture);
++  const auto result = GetBasePicture(pVideoPicture);
++#ifdef HAVE_DVBRIDGE
++  if (result == VC_PICTURE && m_dvNativeOutput)
++    ReportDVStartup(1, "base-decoded");
++#endif
++  return result;
 +}
 +
 +CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(VideoPicture* pVideoPicture)
-+{
+ {
    if (!m_startedInput)
    {
-     return VC_BUFFER;
-@@ -671,6 +845,9 @@
+@@ -671,6 +872,9 @@
    {
      int flags = m_codecControlFlags;
      flags &= ~DVD_CODEC_CTRL_DRAIN;
@@ -8846,7 +8874,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      m_pHardware->SetCodecControl(flags);
      CDVDVideoCodec::VCReturn ret = m_pHardware->Decode(m_pCodecContext, nullptr);
      if (ret == VC_PICTURE)
-@@ -739,6 +916,9 @@
+@@ -739,6 +943,9 @@
      {
        int flags = m_codecControlFlags;
        flags |= DVD_CODEC_CTRL_DRAIN;
@@ -8856,7 +8884,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        m_pHardware->SetCodecControl(flags);
        int ret = m_pHardware->Decode(m_pCodecContext, nullptr);
        if (ret == VC_PICTURE)
-@@ -793,21 +973,8 @@
+@@ -793,21 +1000,8 @@
    }
  
    // here we got a frame
@@ -8880,7 +8908,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +1002,9 @@
+@@ -835,6 +1029,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -8890,7 +8918,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1066,13 @@
+@@ -896,8 +1093,13 @@
          need_reopen = true;
      }
  
@@ -8905,7 +8933,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1101,22 @@
+@@ -926,6 +1128,22 @@
    return VC_NONE;
  }
  
@@ -8928,7 +8956,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1145,14 @@
+@@ -954,6 +1172,14 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -8943,7 +8971,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1168,7 @@
+@@ -969,6 +1195,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -8951,7 +8979,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1192,48 @@
+@@ -992,8 +1219,48 @@
    return VC_REOPEN;
  }
  
@@ -9000,7 +9028,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1285,10 @@
+@@ -1045,6 +1312,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -9011,7 +9039,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1342,9 @@
+@@ -1098,6 +1369,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
@@ -9021,7 +9049,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1381,23 @@
+@@ -1134,7 +1408,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
@@ -9046,7 +9074,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,35 +1408,89 @@
+@@ -1145,35 +1435,89 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
@@ -9151,7 +9179,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
            }
          }
        }
-@@ -1193,6 +1510,9 @@
+@@ -1193,6 +1537,9 @@
      }
    }
  
@@ -9161,7 +9189,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1564,7 @@
+@@ -1244,7 +1591,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -9170,7 +9198,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1622,20 @@
+@@ -1302,7 +1649,20 @@
      return result;
    }
  
@@ -9192,7 +9220,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1650,22 @@
+@@ -1317,7 +1677,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -9216,7 +9244,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1701,8 @@
+@@ -1353,6 +1728,8 @@
      return result;
    }
  
@@ -9225,7 +9253,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1719,8 @@
+@@ -1369,6 +1746,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -9234,7 +9262,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1728,7 @@
+@@ -1376,6 +1755,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -9242,7 +9270,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1739,14 @@
+@@ -1386,7 +1766,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -9258,7 +9286,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1771,18 @@
+@@ -1411,6 +1798,18 @@
      return VC_ERROR;
    }
  
@@ -9277,7 +9305,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1421,6 +1793,31 @@
+@@ -1421,6 +1820,31 @@
  {
    return m_iLastKeyframe;
  }
@@ -9309,7 +9337,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-@@ -1455,6 +1852,11 @@
+@@ -1455,6 +1879,11 @@
  void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)
  {
    m_codecControlFlags = flags;
@@ -9321,7 +9349,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  
    if (m_pCodecContext)
    {
-@@ -1497,4 +1899,3 @@
+@@ -1497,4 +1926,3 @@
  {
    return m_pHardware;
  }
@@ -9348,7 +9376,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
  
  extern "C"
  {
-@@ -46,8 +52,36 @@
+@@ -46,8 +52,39 @@
  
    IHardwareDecoder* GetHWAccel() override;
    bool GetPictureCommon(VideoPicture* pVideoPicture) override;
@@ -9374,6 +9402,9 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
 +  std::shared_ptr<dvbridge_fel> m_dvFel;
 +  std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
 +  bool m_dvFailed{false};
++  unsigned m_dvStartupReported{};
++  uint64_t m_dvDiagnosticGeneration{};
++  void ReportDVStartup(unsigned fact, const char* stage) noexcept;
 +  bool m_dvNativeOutput{false};
 +  DVBRIDGE::SourceOwner m_dvSourceOwner;
 +  // Last in-band HDR10 static metadata of this stream (see GetPictureCommon).
@@ -9385,7 +9416,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
    void Dispose();
    CDVDVideoCodec::VCReturn HandleHwFatal();
    static enum AVPixelFormat GetFormat(struct AVCodecContext * avctx, const AVPixelFormat * fmt);
-@@ -58,6 +92,7 @@
+@@ -58,6 +95,7 @@
    void SetFilters();
    void UpdateName();
    bool SetPictureParams(VideoPicture* pVideoPicture);
@@ -9393,7 +9424,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
  
    bool HasHardware() { return m_pHardware != nullptr; }
    void SetHardware(IHardwareDecoder *hardware);
-@@ -71,10 +106,16 @@
+@@ -71,10 +109,16 @@
    std::string m_filters_next;
    AVFilterGraph* m_pFilterGraph = nullptr;
    AVFilterContext* m_pFilterIn = nullptr;
@@ -10874,9 +10905,9 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 +          stream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
 +      const auto* dv = sideData && sideData->size >= sizeof(AVDOVIDecoderConfigurationRecord) ?
 +          reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data) : nullptr;
-+      CLog::Log(LOGINFO, "DV input stream: index={} pid={} codec={} type={} "
++      CLog::Log(LOGINFO, "DV input stream: index={} pid={} codec={} codec_tag=0x{:08x} type={} "
 +          "dv_profile={} dv_bl={} dv_el={} dv_rpu={} extradata={}",
-+          stream->index, stream->id, static_cast<int>(stream->codecpar->codec_id),
++          stream->index, stream->id, static_cast<int>(stream->codecpar->codec_id), stream->codecpar->codec_tag,
 +          static_cast<int>(stream->codecpar->codec_type), dv ? dv->dv_profile : 0,
 +          dv ? dv->bl_present_flag : 0, dv ? dv->el_present_flag : 0,
 +          dv ? dv->rpu_present_flag : 0, stream->codecpar->extradata_size);
@@ -11098,7 +11129,6 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
  {
    StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
-
 diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
 --- a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
@@ -14094,7 +14124,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticLog.h b/xbmc/utils/DVBridgeDiagnosticL
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticLog.h
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,191 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeDiagnosticState.h"
@@ -14107,11 +14137,24 @@ new file mode 100644
 +inline std::mutex diagnosticMutex;
 +inline DiagnosticSession diagnosticSession;
 +inline bool diagnosticPaused{};
++inline uint64_t diagnosticGeneration{};
 +
 +inline void DiagnosticOpen() noexcept
 +{
-+  try { std::lock_guard lock(diagnosticMutex); diagnosticSession.Open(); diagnosticPaused = false; }
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    ++diagnosticGeneration;
++    diagnosticSession.Open();
++    diagnosticPaused = false;
++  }
 +  catch (...) {}
++}
++
++inline uint64_t DiagnosticGeneration() noexcept
++{
++  try { std::lock_guard lock(diagnosticMutex); return diagnosticGeneration; }
++  catch (...) { return 0; }
 +}
 +
 +inline void DiagnosticCandidate() noexcept
@@ -14177,6 +14220,21 @@ new file mode 100644
 +  catch (...) {}
 +}
 +
++inline void DiagnosticStartup(uint64_t generation, const char* stage, bool fel,
++                              size_t pending) noexcept
++{
++  if (!DiagnosticsEnabled()) return;
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    if (!generation || generation != diagnosticGeneration || diagnosticSession.Ended()) return;
++    diagnosticSession.Stage(stage);
++    WriteDiagnosticLocked(DiagnosticEvent::Normal, LOGINFO,
++                          "DV decode startup: stage={} fel={} pending={}", stage, fel, pending);
++  }
++  catch (...) {}
++}
++
 +inline void ObserveDiagnostic(uint64_t stream, uint64_t picture, uint64_t revision,
 +                              uint64_t policy, const char* stage, bool requested, bool paused) noexcept
 +{
@@ -14200,7 +14258,13 @@ new file mode 100644
 +inline void DiagnosticPresented(uint64_t stream) noexcept
 +{
 +  if (!DiagnosticsEnabled()) return;
-+  try { std::lock_guard lock(diagnosticMutex); diagnosticSession.Presented(stream); }
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    if (diagnosticSession.Presented(stream))
++      WriteDiagnosticLocked(DiagnosticEvent::Normal, LOGINFO,
++                            "DV decode startup: stage=first-presented");
++  }
 +  catch (...) {}
 +}
 +

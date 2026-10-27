@@ -3,7 +3,7 @@
     "summary": "Recognize explicitly associated Dolby Vision layers in HEVC MOV sample entries",
     "component": "ffmpeg",
     "files": {
-      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references."
+      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references. Log bounded numeric association facts and rejection reasons."
     }
   },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hevc-picture-clock.patch": {

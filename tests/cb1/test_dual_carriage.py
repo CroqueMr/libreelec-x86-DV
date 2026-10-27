@@ -48,7 +48,7 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
         hvcc = configuration if configuration is not None else bytes([1])+bytes(20)+bytes([3, 0])
         codec = sample_entry if i == 1 else b'hvc1'
         extra = atom(b'hvcC', hvcc)
-        if i == 1 and kind in ('paired', 'missing-reference', 'ambiguous-reference',
+        if i == 1 and kind in ('paired', 'declared-no-reference', 'missing-reference', 'ambiguous-reference',
                                'reversed-reference', 'split-reference'):
             flags = (7<<9)|(9<<3)|6  # P7.9, RPU + EL, no BL in this track.
             extra += atom(b'dvcC', bytes([1, 0, flags>>8, flags&255, 0x60])+bytes(19))
@@ -61,7 +61,7 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
         stbl = atom(b'stbl', stsd+stts+stsc+stsz+stco+stss)
         mdia = atom(b'mdia', atom(b'mdhd', mdhd)+atom(b'hdlr', hdlr)+atom(b'minf', stbl))
         tref = b''
-        if i == 1 and kind != 'independent':
+        if i == 1 and kind not in ('independent', 'declared-no-reference'):
             refs = [1, 3] if kind in ('ambiguous-reference', 'split-reference') else (
                 [3, 1] if kind == 'reversed-reference' else [99 if kind == 'missing-reference' else 1])
             dependencies = (b''.join(atom(b'vdep', struct.pack('>I', ref)) for ref in refs)
@@ -143,7 +143,8 @@ class DualCarriage(unittest.TestCase):
         self.run_carriage([(tag.decode()+'-'+kind+'.mp4', mp4(kind, sample_entry=tag), want)
                            for tag in (b'hvc1', b'hev1')
                            for kind, want in (('paired', True), ('independent', False),
-                                              ('unrelated-vdep', False), ('missing-reference', False))])
+                                              ('unrelated-vdep', False), ('missing-reference', False),
+                                              ('declared-no-reference', False))])
 
     def test_mp4_ambiguous_layer_references_are_not_paired(self):
         self.run_carriage([(tag.decode()+'-'+kind+'.mp4', mp4(kind, sample_entry=tag), False)
@@ -190,14 +191,22 @@ class DualCarriage(unittest.TestCase):
 #include <cassert>
 #include <climits>
 #include <cstdio>
+#include <cstdarg>
 #include <mutex>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/dovi_meta.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/log.h>
 #include "dvbridge_fel_seek.h"
 }
 std::deque<AVPacket*> scripted;
+std::vector<std::string> associationLogs;
+void associationLog(void*,int,const char* pattern,va_list args){
+ if(!strncmp(pattern,"DV MOV association",18)){
+  char line[512];vsnprintf(line,sizeof(line),pattern,args);associationLogs.emplace_back(line);
+ }
+}
 extern "C" int __real_av_read_frame(AVFormatContext*,AVPacket*);
 extern "C" int __wrap_av_read_frame(AVFormatContext* f,AVPacket* p){
  if(scripted.empty())return __real_av_read_frame(f,p);
@@ -230,10 +239,31 @@ struct CDVDDemuxFFmpeg {
  return new CDemuxStream{streamIdx}; // Unchanged stream-construction boundary.
 }
 int main(int argc,char**argv) {
- setvbuf(stdout,nullptr,_IONBF,0);av_log_set_level(AV_LOG_QUIET);
+ setvbuf(stdout,nullptr,_IONBF,0);av_log_set_level(AV_LOG_INFO);av_log_set_callback(associationLog);
  assert(av_find_input_format("mov") && av_find_input_format("mpegts"));
  for(int i=1;i<argc;i+=2)for(int disabled : {0,2}){
+  associationLogs.clear();
   CDVDDemuxFFmpeg d;assert(avformat_open_input(&d.m_pFormatContext,argv[i],nullptr,nullptr)==0);
+  if(strstr(d.m_pFormatContext->iformat->name,"mov")){
+   bool declared=false;
+   for(unsigned n=0;n<d.m_pFormatContext->nb_streams;n++){
+    const auto* cp=d.m_pFormatContext->streams[n]->codecpar;
+    const auto* sd=av_packet_side_data_get(cp->coded_side_data,cp->nb_coded_side_data,AV_PKT_DATA_DOVI_CONF);
+    if(sd && sd->size>=sizeof(AVDOVIDecoderConfigurationRecord)){
+     const auto* config=(const AVDOVIDecoderConfigurationRecord*)sd->data;
+     declared|=config->dv_profile==7 && config->el_present_flag && !config->bl_present_flag && config->rpu_present_flag;
+    }
+   }
+   assert(associationLogs.size()==(declared?(strstr(argv[i],"missing-reference")?2:1):0));
+   if(declared){
+    const auto& line=associationLogs.front();
+    assert(line.find("el_track=2 ")!=std::string::npos && line.find("codec_tag=0x")!=std::string::npos);
+    const bool ambiguous=strstr(argv[i],"ambiguous-reference") || strstr(argv[i],"reversed-reference") || strstr(argv[i],"split-reference");
+    assert(line.find(ambiguous?"vdep_count=2":"vdep_count=")!=std::string::npos);
+    assert(line.find(strstr(argv[i],"declared-no-reference")?"reason=no-vdep":ambiguous?"reason=ambiguous-vdep":"reason=declared")!=std::string::npos);
+    if(strstr(argv[i],"missing-reference"))assert(associationLogs.back().find("reason=missing-base")!=std::string::npos);
+   }
+  }
   bool want=atoi(argv[i+1]);mode=disabled;
   if(strstr(argv[i],"late-start")){
    d.InitBlurayDovi(UINT_MAX);assert(!d.m_blurayDovi);

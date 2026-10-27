@@ -1,8 +1,8 @@
-Recognize explicitly declared dual-track Dolby Vision with HEVC sample entries.
+Recognize and diagnose explicitly declared dual-track Dolby Vision.
 
 --- a/libavformat/mov.c
 +++ b/libavformat/mov.c
-@@ -2678,9 +2678,15 @@
+@@ -2675,9 +2675,15 @@
      if (!tag)
          return AVERROR(ENOMEM);
  
@@ -21,7 +21,16 @@ Recognize explicitly declared dual-track Dolby Vision with HEVC sample entries.
  
      return 0;
  }
-@@ -11259,8 +11259,7 @@
+@@ -11131,6 +11137,7 @@
+ static int mov_parse_dovi_streams(AVFormatContext *s)
+ {
+     int err;
++    unsigned reported = 0;
+ 
+     if (s->nb_streams <= 1)
+         return 0;
+@@ -11138,9 +11145,8 @@
+     /* Identify legacy dual-track Dolby Vision profile 7 carriage per Annex
       * C of "Dolby Vision Streams Within the ISO Base Media File Format",
       * v2.7.1. The 'vdep' track reference type is shared with depth video
 -     * and multi-view dependencies. The spec-mandated DV-specific sample
@@ -32,18 +41,57 @@ Recognize explicitly declared dual-track Dolby Vision with HEVC sample entries.
      for (int i = 0; i < s->nb_streams; i++) {
          AVStreamGroup *stg;
          AVStream *st = s->streams[i];
-@@ -11277,10 +11282,12 @@
+@@ -11150,16 +11156,38 @@
+         const AVPacketSideData *sd;
          const AVDOVIDecoderConfigurationRecord *dovi;
  
 -        if (st->codecpar->codec_id != AV_CODEC_ID_HEVC || !tag)
-+        if (st->codecpar->codec_id != AV_CODEC_ID_HEVC || !tag || tag->nb_id != 1)
-             continue;
- 
-         if (st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
+-            continue;
+-
+-        if (st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
 -            st->codecpar->codec_tag != MKTAG('d','v','h','1'))
-+            st->codecpar->codec_tag != MKTAG('d','v','h','1') &&
-+            st->codecpar->codec_tag != MKTAG('h','v','c','1') &&
-+            st->codecpar->codec_tag != MKTAG('h','e','v','1'))
++        if (st->codecpar->codec_id != AV_CODEC_ID_HEVC)
              continue;
  
          sd = av_packet_side_data_get(st->codecpar->coded_side_data,
+                                      st->codecpar->nb_coded_side_data,
+                                      AV_PKT_DATA_DOVI_CONF);
++        if (sd && sd->size >= sizeof(*dovi)) {
++            const AVDOVIDecoderConfigurationRecord *config = (const void *)sd->data;
++            if (config->dv_profile == 7 && config->rpu_present_flag &&
++                config->el_present_flag && !config->bl_present_flag && reported++ < 16) {
++                const char *reason = !tag ? "no-vdep" : tag->nb_id != 1 ? "ambiguous-vdep" :
++                    st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
++                    st->codecpar->codec_tag != MKTAG('d','v','h','1') &&
++                    st->codecpar->codec_tag != MKTAG('h','v','c','1') &&
++                    st->codecpar->codec_tag != MKTAG('h','e','v','1') ?
++                    "unsupported-sample-entry" : "declared";
++                av_log(s, AV_LOG_INFO, "DV MOV association: el_index=%d el_track=%d codec_tag=0x%08x "
++                       "vdep_count=%d target0=%u target1=%u reason=%s\n", st->index, st->id,
++                       st->codecpar->codec_tag, tag ? tag->nb_id : 0,
++                       tag && tag->nb_id ? tag->id[0] : 0,
++                       tag && tag->nb_id > 1 ? tag->id[1] : 0, reason);
++            }
++        }
++        if (!tag || tag->nb_id != 1)
++            continue;
++
++        if (st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
++            st->codecpar->codec_tag != MKTAG('d','v','h','1') &&
++            st->codecpar->codec_tag != MKTAG('h','v','c','1') &&
++            st->codecpar->codec_tag != MKTAG('h','e','v','1'))
++            continue;
++
+         if (!sd)
+             continue;
+         dovi = (const AVDOVIDecoderConfigurationRecord *)sd->data;
+@@ -11173,7 +11201,8 @@
+         st_base = mov_find_reference_track(s, st, tag->id, tag->nb_id, 0);
+         if (!st_base) {
+             int loglevel = (s->error_recognition & AV_EF_EXPLODE) ? AV_LOG_ERROR : AV_LOG_WARNING;
+-            av_log(s, loglevel, "Failed to find base layer for Dolby Vision EL stream\n");
++            av_log(s, loglevel, "DV MOV association rejected: el_track=%d target=%u reason=missing-base\n",
++                   st->id, tag->id[0]);
+             if (s->error_recognition & AV_EF_EXPLODE)
+                 return AVERROR_INVALIDDATA;
+             continue;
