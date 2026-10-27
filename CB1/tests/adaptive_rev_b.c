@@ -15,6 +15,75 @@ static uint16_t wire(double n)
 static double seconds(void)
 {struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec/1e9;}
 
+static double mapped(const struct cb1_dv_enhanced_plan *p,double x)
+{double out[3];assert(cb1_dv_enhanced_pixel(p,(double[3]){x,x,x},out));return out[0];}
+
+static void signed_guides(void)
+{
+    struct dvbridge_policy p={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+        .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,
+        .tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
+    struct cb1_dv_enhanced_source s={.master=1000,.l1_present=true,
+        .analysis={0,wire(800),wire(30)},.family=8,.count=1,.weights={1}};
+    s.anchors[0]=(struct dvbridge_cm4_anchor){.present=true,
+        .target={.max_pq=wire(2500),.primaries=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
+                 .transfer=PL_COLOR_TRC_PQ},
+        .controls={.present_fields=DVBRIDGE_CM4_PRIMARY,
+                   .primary={2048,2048,2048,2048,2048,2048}}};
+    for(unsigned family=2;family<=8;family+=6){
+        s.family=family;struct cb1_dv_enhanced_plan neutral,low,high,far,absent;
+        assert(cb1_dv_enhanced_build_rev_b(&neutral,&s,&p)==CB1_DVE_READY);
+        s.anchors[0].controls.primary[0]=1536;
+        assert(cb1_dv_enhanced_build_rev_b(&low,&s,&p)==CB1_DVE_READY);
+        s.anchors[0].controls.primary[0]=2560;
+        assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_READY);
+        assert(mapped(&low,800)<mapped(&neutral,800)-5 &&
+               mapped(&high,800)>mapped(&neutral,800)+5 &&
+               "Signed constant tonal gain must survive shape normalization");
+        s.anchors[0].target.max_pq=wire(600);
+        assert(cb1_dv_enhanced_build_rev_b(&far,&s,&p)==CB1_DVE_READY);
+        assert(mapped(&far,800)>mapped(&neutral,800) && mapped(&far,800)<mapped(&high,800));
+        s.anchors[0].target.max_pq=wire(2500);
+        s.anchors[0].controls.primary[0]=2048;
+        s.count=0;s.family=0;
+        assert(cb1_dv_enhanced_build_rev_b(&absent,&s,&p)==CB1_DVE_READY);
+        assert(!memcmp(absent.extra,neutral.extra,sizeof(neutral.extra)));
+        s.count=1;s.family=family;
+    }
+    struct cb1_dv_enhanced_plan neutral,low,high;
+    assert(cb1_dv_enhanced_build_rev_b(&neutral,&s,&p)==CB1_DVE_READY);
+    s.anchors[0].controls.primary[4]=2560;
+    assert(cb1_dv_enhanced_build_rev_b(&low,&s,&p)==CB1_DVE_READY);
+    s.anchors[0].controls.primary[4]=1536;
+    assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_READY);
+    assert(mapped(&low,800)<mapped(&neutral,800) && mapped(&high,800)>mapped(&neutral,800));
+    s.anchors[0].controls.present_fields=0;
+    assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_READY);
+    assert(!memcmp(high.extra,neutral.extra,sizeof(neutral.extra)));
+    s.weights[0]=NAN;
+    assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_INVALID);
+    s.weights[0]=0;
+    assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_INVALID);
+    s.weights[0]=1;
+    for(unsigned field=0;field<5;field++)for(unsigned sign=0;sign<2;sign++){
+        s.anchors[0].controls=(struct dvbridge_cm4_controls){
+            .present_fields=DVBRIDGE_CM4_PRIMARY|DVBRIDGE_CM4_MID_CONTRAST|DVBRIDGE_CM4_CLIP_TRIM,
+            .primary={2048,2048,2048,2048,2048,2048},.mid_contrast=2048,.clip_trim=2048};
+        uint16_t code=sign?3072:1024;
+        if(field<3)s.anchors[0].controls.primary[field]=code;
+        else if(field==3)s.anchors[0].controls.mid_contrast=code;
+        else s.anchors[0].controls.clip_trim=code;
+        assert(cb1_dv_enhanced_build_rev_b(&high,&s,&p)==CB1_DVE_READY);
+        double previous=0;
+        for(unsigned x=0;x<=1000;x++){
+            double y=mapped(&high,x);
+            assert(isfinite(y) && y>=x && y>=previous && y<=2500);
+            if(x<=10)assert(y==x);
+            previous=y;
+        }
+    }
+}
+
 static void report(void)
 {
     struct cb1_dv_enhanced_source source={.master=1000,.l1_present=true,
@@ -65,6 +134,7 @@ int main(int argc,char **argv)
 {
     if(argc==2 && !strcmp(argv[1],"--report")){report();return 0;}
     assert(cb1_dv_enhanced_build_rev_b && "Separate authored-DV rev B builder required");
+    signed_guides();
     struct dvbridge_policy policy={.revision=3,.mode=DVBRIDGE_MODE_ENHANCED_DV,
         .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,
         .tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
@@ -91,7 +161,7 @@ int main(int argc,char **argv)
         assert(out[0]>=i && out[0]>=previous && out[0]<=2500);
         if(i<=10)assert(!memcmp(input,out,sizeof(input)));
         if(i==100)assert(out[0]<a[0] && out[0]-i<(a[0]-i)*.5);
-        if(i==800)assert(fabs(out[0]-a[0])<1e-9 && out[0]>2000);
+        if(i==800)assert(out[0]<a[0] && out[0]>2000);
         previous=out[0];
     }
     source.anchors[0].controls.saturation[0]=16;source.anchors[0].controls.hue[4]=8;
