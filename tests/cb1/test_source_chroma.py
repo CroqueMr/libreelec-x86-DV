@@ -6,6 +6,32 @@ from test_native_video_source import TREE, body
 
 
 class SourceChromaTests(unittest.TestCase):
+    def test_ai_ingress_keeps_unshifted_coded_planes(self):
+        text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        for signature in ('cb1_ai_status CDVBridgeGLES::Context::AnalyseHDR10AI(',
+                          'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame('):
+            implementation = body(text, signature)
+            start = implementation.index('  dvbridge_gl_frame imported{};')
+            imported = implementation[start:implementation.index('  HDR10Color(imported.frame,base);', start)]
+            program = r'''
+#include <cassert>
+struct Layer {int layout=0,width=8,height=8,planes[3]{};};
+struct dvbridge_gl_frame {struct{float x=0,y=0;}frame;};
+bool dvbridge_gl_frame_import(dvbridge_gl_frame*,int,int,int,int,const int*){return true;}
+bool ImportLayer(dvbridge_gl_frame* frame,int,const Layer&){frame->frame.x=-.5f;return true;}
+bool ImportDVLayer(dvbridge_gl_frame* frame,int,const Layer& layer){return ImportLayer(frame,0,layer);}
+enum FrameStatus {Unsupported};constexpr int CB1_AI_INCOMPATIBLE=3;
+struct AI {int RecordStatus(const char*,int){return -1;}};
+AI HDR10AI(){return {};}
+int run(){struct GL{int gpu=0;}gl,*m_gl=&gl;struct{GL*gl;}state{&gl},*m_state=&state;Layer base;
+ PREFIX
+ assert(imported.frame.x==0 && imported.frame.y==0);return 0;
+}
+int main(){assert(run()==0);}
+'''.replace('PREFIX', imported)
+            with self.subTest(entry=signature):
+                spatial.NativeSpatialContractTests.run_program(self, program)
+
     def test_hardware_fel_and_prefetch_use_the_declared_input_siting(self):
         text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         signature = 'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame('
@@ -43,8 +69,8 @@ int main(){for(int c:{0,1,2,3}){Frame f{c};int expected=c?c+10:PL_CHROMA_TOP_LEF
         start = policy.index('  dvbridge_gl_frame bl{}, el{};')
         policy = policy[start:policy.index('  const double elPts', start)]
         helper = ''
-        if 'bool ImportLayer(' in text:
-            helper = 'bool ImportLayer(dvbridge_gl_frame* frame, int gpu, const Layer& layer) ' + body(text, 'bool ImportLayer(')
+        if 'bool ImportDVLayer(' in text:
+            helper = 'bool ImportDVLayer(dvbridge_gl_frame* frame, int gpu, const Layer& layer) ' + body(text, 'bool ImportDVLayer(')
         if 'SourceChroma(' in text:
             helper = 'int SourceChroma(int source,unsigned profile) ' + body(text, 'SourceChroma(') + helper
         program = r'''
@@ -77,7 +103,7 @@ struct Test {bool m_hdr10=false;struct{int gpu=0;}gl,*m_gl=&gl;
  }
 };
 int main(){Test t;Layer b,e;e.chromaLocation=AVCHROMA_LOC_TOPLEFT;
- for(bool advanced:{false,true})for(bool hdr:{false,true})for(int p:{AVCHROMA_LOC_LEFT,AVCHROMA_LOC_CENTER,AVCHROMA_LOC_TOPLEFT,AVCHROMA_LOC_UNSPECIFIED}){
+ for(bool advanced:{false,true})for(bool hdr:{false,true})for(int p:{AVCHROMA_LOC_LEFT,AVCHROMA_LOC_CENTER,AVCHROMA_LOC_TOPLEFT,AVCHROMA_LOC_UNSPECIFIED,999}){
  t.m_hdr10=hdr;b.chromaLocation=p;b.sourceInfo.profile=8;assert(t.run(b,&e,advanced));
  b.sourceInfo.profile=7;assert(t.run(b,&e,advanced));
  assert(t.run(b,nullptr,advanced));
