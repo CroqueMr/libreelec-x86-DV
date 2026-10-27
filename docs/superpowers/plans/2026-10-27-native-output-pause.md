@@ -35,12 +35,12 @@ decoded-frame ownership, not a parallel scaler or transport path.
 
 **Interface:** Existing `SetFullScreen`, `CreateNewWindow`, `SetVideoOutput`, `SetMode` and atomic presentation contracts. No new public selector.
 
-- [ ] Capture an exact native 1080p failure with Kodi windowing diagnostics and kernel/plane state; contrast native UHD and vanilla.
-- [ ] Trace all callers and the unmodified native reference; identify the first inconsistent input before proposing code.
-- [ ] Add an executable boundary regression test with independently expected geometry/state; observe RED on the base.
-- [ ] Apply the smallest owner-level fix, observe GREEN, run the full software suite and link Kodi.
-- [ ] Test native 1080p/UHD Standard, Master and Adaptive on both hosts; preserve view/whitelist and exact Master controls.
-- [ ] Remove failed trials, stage the existing patch owner and commit the functional fix with evidence.
+- [x] Capture an exact native 1080p failure with Kodi windowing diagnostics and kernel/plane state; contrast native UHD and vanilla.
+- [x] Trace all callers and the unmodified native reference; identify the first inconsistent input before proposing code.
+- [x] Add an executable boundary regression test with independently expected geometry/state; observe RED on the base.
+- [x] Apply the smallest owner-level fix, observe GREEN, run the full software suite and link Kodi.
+- [x] Test native 1080p/UHD Standard, Master and Adaptive on both hosts; preserve view/whitelist and exact Master controls.
+- [x] Remove failed trials, stage the existing patch owner and commit the functional fix with evidence.
 
 ## Task 2: Paused native HDR10 and AI Reference switching
 
@@ -48,15 +48,15 @@ decoded-frame ownership, not a parallel scaler or transport path.
 
 **Interface:** Existing decoded-picture lease, preparation outcome and surface transaction. Consume Task1's unchanged native output contract.
 
-- [ ] Capture the N100 paused native/AI timeout and contrast AMD and unpaused switching.
-- [ ] Trace source binding, preparation and output commit; add a targeted executable RED test for the missing state transition.
-- [ ] Fix the existing owner without new queues, model changes or arbitrary delays; observe GREEN and run the full suite.
-- [ ] Repeat switches in pause and while zoomed, resume/seek/Home/stop and file replacement on both hosts; verify no restart or unexpected fallback.
-- [ ] Recheck Master exactness and representative UHD cadence, clean unused trials and commit.
+- [x] Capture the N100 paused native/AI timeout and contrast AMD and unpaused switching.
+- [x] Trace source binding, preparation and output commit; add a targeted executable RED test for the missing state transition.
+- [x] Fix the existing owner without new queues, model changes or arbitrary delays; observe GREEN and run the full suite.
+- [x] Repeat switches in pause and while zoomed, resume/seek/Home/stop and file replacement on both hosts; verify no restart or unexpected fallback.
+- [x] Recheck Master exactness and representative UHD cadence, clean unused trials and commit.
 
 ## Final qualification
 
-- [ ] Fresh source receipts, zero-fuzz patch replay, complete image inspection and native updater delivery to both hosts.
-- [ ] Re-run both physical reproductions and regression journeys on the exact delivered image.
-- [ ] One fresh Astra xhigh review of the combined diff; fix demonstrated Important findings by RED/GREEN and full-suite checks.
-- [ ] Restore both hosts, remove owned temporary artifacts, retain control/final image and record results without publishing.
+- [x] Fresh source receipts, zero-fuzz patch replay, complete image inspection and native updater delivery to both hosts.
+- [x] Re-run both physical reproductions and regression journeys on the exact delivered image.
+- [x] One fresh Astra xhigh review of the combined diff; fix demonstrated Important findings by RED/GREEN and full-suite checks.
+- [x] Restore both hosts, remove owned temporary artifacts, retain control/final image and record results without publishing.
