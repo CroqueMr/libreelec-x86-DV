@@ -11124,7 +11124,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2062 @@
+@@ -0,0 +1,2060 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11175,6 +11175,17 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +        std::string_view(message ? message : "unavailable").substr(0, 768));
 +  }
 +  catch (...) {} // libplacebo invokes this as a C callback.
++}
++
++bool ImportLayer(dvbridge_gl_frame* frame, pl_gpu gpu, const CDVBridgeGLES::Layer& layer)
++{
++  if (!dvbridge_gl_frame_import(frame,gpu,layer.layout,layer.width,layer.height,layer.planes))
++    return false;
++  auto location = dvbridge_map_chroma(layer.chromaLocation);
++  if (location == PL_CHROMA_UNKNOWN)
++    location = layer.sourceInfo.profile == 7 ? PL_CHROMA_TOP_LEFT : PL_CHROMA_LEFT;
++  dvbridge_gl_frame_set_chroma(frame,location);
++  return true;
 +}
 +}
 +
@@ -11485,7 +11496,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  if (!FenceHDR10AIUse()) return HDR10AI().RecordStatus("analysis-fence",CB1_AI_INVALID);
 +  if (collected != CB1_AI_READY) return collected;
 +  dvbridge_gl_frame imported{};
-+  if (!dvbridge_gl_frame_import(&imported,m_state->gl->gpu,base.layout,base.width,base.height,base.planes))
++  if (!ImportLayer(&imported,m_state->gl->gpu,base))
 +    return HDR10AI().RecordStatus("analysis-import",CB1_AI_INCOMPATIBLE);
 +  HDR10Color(imported.frame,base);
 +  const auto status = HDR10AI().Submit(&imported.frame,base.binding,base.pts,headPts,base.lease);
@@ -11718,7 +11729,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  if (retired != DVBRIDGE_DV_IDLE)
 +    return retired == DVBRIDGE_DV_FAILED ? FrameStatus::Failed : FrameStatus::Busy;
 +  dvbridge_gl_frame imported{};
-+  if (!dvbridge_gl_frame_import(&imported,m_gl->gpu,base.layout,base.width,base.height,base.planes))
++  if (!ImportLayer(&imported,m_gl->gpu,base))
 +    return FrameStatus::Unsupported;
 +  HDR10Color(imported.frame,base);
 +  m_context->Retain(base.lease);
@@ -12124,30 +12135,18 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  dvbridge_renderer_set_processing_optimizations(m_renderer,m_requested.processingOptimizations);
 +  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
 +  dvbridge_gl_frame bl{}, el{};
-+  if (!dvbridge_gl_frame_import(&bl, m_gl->gpu, base.layout, base.width, base.height, base.planes))
++  if (!ImportLayer(&bl,m_gl->gpu,base))
 +    return Failure("base-import");
 +  double elPts = std::numeric_limits<double>::quiet_NaN();
 +  if (enhancement)
 +  {
-+    if (!dvbridge_gl_frame_import(&el, m_gl->gpu, enhancement->layout,
-+                                 enhancement->width, enhancement->height, enhancement->planes))
++    if (!ImportLayer(&el,m_gl->gpu,*enhancement))
 +    {
 +      dvbridge_gl_frame_release(&bl);
 +      return Failure("enhancement-import");
 +    }
 +    bl.frame.enhancement_layer = &el.frame;
 +    elPts = enhancement->pts;
-+  }
-+  if (!m_hdr10)
-+  {
-+    const auto location = [](const Layer& layer) {
-+      if (layer.chromaLocation == AVCHROMA_LOC_UNSPECIFIED && layer.sourceInfo.profile == 7)
-+        return PL_CHROMA_TOP_LEFT;
-+      const auto position = dvbridge_map_chroma(layer.chromaLocation);
-+      return position == PL_CHROMA_UNKNOWN ? PL_CHROMA_LEFT : position;
-+    };
-+    dvbridge_gl_frame_set_chroma(&bl,location(base));
-+    if (enhancement) dvbridge_gl_frame_set_chroma(&el,location(*enhancement));
 +  }
 +  // Subtitle-only frames compose before packing. Other GUI retains 32F composition.
 +  if (m_hdr10 && allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
@@ -12430,12 +12429,11 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  if (!base.lease || (enhancement && !enhancement->lease))
 +  { Failure("policy-source-lease"); return FrameStatus::Failed; }
 +  dvbridge_gl_frame bl{}, el{};
-+  if (!dvbridge_gl_frame_import(&bl,m_gl->gpu,base.layout,base.width,base.height,base.planes))
++  if (!ImportLayer(&bl,m_gl->gpu,base))
 +  { Failure("policy-base-import"); return FrameStatus::Failed; }
 +  if (enhancement)
 +  {
-+    if (!dvbridge_gl_frame_import(&el,m_gl->gpu,enhancement->layout,
-+          enhancement->width,enhancement->height,enhancement->planes))
++    if (!ImportLayer(&el,m_gl->gpu,*enhancement))
 +    {
 +      dvbridge_gl_frame_release(&bl);
 +      Failure("policy-enhancement-import");

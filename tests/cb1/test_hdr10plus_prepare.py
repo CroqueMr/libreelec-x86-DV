@@ -143,6 +143,7 @@ struct dvbridge_color {struct {bool nlq_active=true;}dovi;};
 struct GL {int gpu;};
 static int rawCalls,basicCalls,directCalls,standardCalls,masterCalls;
 template<class... A>bool dvbridge_gl_frame_import(A...){return true;}
+template<class... A>bool ImportLayer(A... a){return dvbridge_gl_frame_import(a...);}
 template<class... A>void dvbridge_gl_frame_release(A...){}
 template<class... A>void dvbridge_gl_frame_set_chroma(A...){}
 template<class... A>auto dvbridge_map_chroma(A...){return PL_CHROMA_LEFT;}

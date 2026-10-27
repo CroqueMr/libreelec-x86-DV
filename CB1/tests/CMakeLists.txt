@@ -11,7 +11,7 @@ target_include_directories(trim_contract PRIVATE "${DVBRIDGE_SOURCE_DIR}")
 target_link_libraries(trim_contract PRIVATE m)
 add_test(NAME trim_contract COMMAND trim_contract)
 
-foreach(name frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
+foreach(name source_chroma frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
              placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue dmabuf_layout metadata_bounds
              policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 dvbridge_cache_key shader_cache dmabuf_identity profile5_direct master_ipt)
   add_executable(${name} ${name}.c)

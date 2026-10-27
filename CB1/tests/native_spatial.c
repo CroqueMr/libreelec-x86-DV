@@ -26,6 +26,7 @@ int main(void)
     assert(!"Final fitting needs one borrowed-frame native spatial boundary");
 #else
     struct pl_fmt_t fp32={.type=PL_FMT_FLOAT,.num_components=4,.component_depth={32,32,32,32}};
+    struct pl_fmt_t fp16={.type=PL_FMT_FLOAT,.num_components=4,.component_depth={16,16,16,16}};
     struct pl_fmt_t rgb8={.type=PL_FMT_UNORM,.num_components=4,.component_depth={8,8,8,8}};
     struct pl_tex_t input={.params={.w=1920,.h=1080,.format=&fp32}};
     struct pl_tex_t fitted={.params={.w=3840,.h=2160,.format=&fp32}};
@@ -73,26 +74,29 @@ int main(void)
     struct witness w={.outcome=1,.fitted=&fitted};
     dvbridge_renderer_set_spatial_fit(&r,fit,&w);
     bool applied=true;
-    assert(fit_picture(&r,&source,&source,&out,&applied) && !applied && !w.calls);
-    assert(fit_picture(&r,&source,&target,&out,&applied) && applied && w.calls==1);
+    assert(fit_picture(&r,&source,&source,&out,&applied,32) && !applied && !w.calls);
+    assert(fit_picture(&r,&source,&target,&out,&applied,32) && applied && w.calls==1);
     assert(w.input.planes[0].texture==&input && out.planes[0].texture==&fitted);
     assert(out.repr.sys==source.repr.sys && out.color.transfer==PL_COLOR_TRC_PQ);
     w.outcome=0;
-    assert(!fit_picture(&r,&source,&target,&out,&applied) && w.calls==2);
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32) && w.calls==2);
     w.outcome=2;
-    assert(!fit_picture(&r,&source,&target,&out,&applied));
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
     w.outcome=3;
-    assert(!fit_picture(&r,&source,&target,&out,&applied));
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
     w.outcome=1;fitted.params.w=1920;
-    assert(!fit_picture(&r,&source,&target,&out,&applied));
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
     fitted.params.w=3840;
     fitted.params.format=&rgb8;
-    assert(!fit_picture(&r,&source,&target,&out,&applied));
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
+    fitted.params.format=&fp16;
+    assert(fit_picture(&r,&source,&target,&out,&applied,16) && applied);
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
     fitted.params.format=&fp32;
     source.num_planes=2;
-    assert(!fit_picture(&r,&source,&target,&out,&applied));
+    assert(!fit_picture(&r,&source,&target,&out,&applied,32));
     dvbridge_renderer_set_spatial_fit(&r,NULL,NULL);
-    assert(fit_picture(&r,&source,&target,&out,&applied) && !applied);
+    assert(fit_picture(&r,&source,&target,&out,&applied,32) && !applied);
     struct pl_tex_t gui={.params={.w=1920,.h=1080,.sampleable=true}};
     struct pl_tex_t degamma={.params={.w=256,.h=1,.sampleable=true}},pq=degamma;
     struct dvbridge_native_overlay overlay={.texture=&gui,.degamma=&degamma,.pq=&pq,

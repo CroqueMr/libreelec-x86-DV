@@ -1369,7 +1369,7 @@ void dvbridge_renderer_set_spatial_fit(struct dvbridge_renderer *r,
 }
 
 static bool fit_picture(struct dvbridge_renderer *r,const struct pl_frame *image,
-    const struct pl_frame *target,struct pl_frame *fitted,bool *applied)
+    const struct pl_frame *target,struct pl_frame *fitted,bool *applied,unsigned required_bits)
 {
     *applied=false;
     if(!r->spatial_fit)return true;
@@ -1390,8 +1390,8 @@ static bool fit_picture(struct dvbridge_renderer *r,const struct pl_frame *image
        !pl_color_space_equal(&fitted->color,&image->color))return false;
     pl_fmt format=fitted->planes[0].texture->params.format;
     if(!format || format->type!=PL_FMT_FLOAT || format->num_components<4 ||
-       format->component_depth[0]<32 || format->component_depth[1]<32 ||
-       format->component_depth[2]<32)return false;
+       format->component_depth[0]<required_bits || format->component_depth[1]<required_bits ||
+       format->component_depth[2]<required_bits)return false;
     *applied=true;
     return true;
 }
@@ -1404,7 +1404,9 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
         mask->raster[1]=target->planes[0].texture->params.h;}
     struct pl_frame fitted;
     bool spatial=false;
-    if(!fit_picture(r,image,target,&fitted,&spatial))return false;
+    /* P5 Standard shares the reference transport, not its exact storage contract. */
+    unsigned required_bits=params->cb1_dovi_reference && !params->cb1_fast_chroma?32:16;
+    if(!fit_picture(r,image,target,&fitted,&spatial,required_bits))return false;
     struct pl_hook spatial_hooks[8];
     const struct pl_hook *spatial_hook_ptrs[8];
     struct pl_render_params spatial_params;

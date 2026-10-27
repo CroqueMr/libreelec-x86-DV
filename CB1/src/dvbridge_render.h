@@ -14,6 +14,7 @@ struct cb1_ai_result;
 /* Synchronous final fitting of an already processed, single-plane picture.
  * The player owns its native filter and the returned texture. Keep both alive
  * through the renderer's existing last-use fence; never pass packed DV bytes.
+ * Floating storage requires 32 bits/channel in Master, at least 16 elsewhere.
  * Failure rejects this picture, without a second scaler or implicit retry. */
 typedef bool (*dvbridge_spatial_fit)(void *priv,const struct pl_frame *source,
     const struct pl_frame *target,struct pl_frame *fitted);

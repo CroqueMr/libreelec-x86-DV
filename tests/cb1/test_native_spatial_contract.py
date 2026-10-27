@@ -7,6 +7,25 @@ from test_native_video_source import TREE, body
 
 
 class NativeSpatialContractTests(unittest.TestCase):
+    def test_master_native_fit_retains_exact_storage(self):
+        text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp").read_text()
+        signatures = ("CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(",
+                      "CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(")
+        calls = []
+        for signature in signatures:
+            implementation = body(text, signature)
+            calls.append(next(line.strip() for line in implementation.splitlines()
+                              if 'm_context->SetSpatialMethod(' in line))
+        self.run_program(r'''
+#include <cassert>
+#include <initializer_list>
+constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
+struct Context { bool exact=false; void SetSpatialMethod(int,bool value){exact=value;} };
+bool run(int mode){Context context;auto* m_context=&context;int m_spatialMethod=1;
+ struct{int mode;}policy{mode}; CALL return context.exact;}
+int main(){for(int mode:{0,1,2,3,5})assert(run(mode)==(mode==5));}
+'''.replace('CALL', '\n'.join(calls)))
+
     def test_native_supported_hdr_types_include_advertised_hdr10plus(self):
         text = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
         implementation = body(text, "CHDRCapabilities CWinSystemGbm::GetDisplayHDRCapabilities() const")
