@@ -1,7 +1,7 @@
 diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,358 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -182,6 +182,42 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h b/xbmc/cores/VideoP
 +    ResyncPreroll();
 +    if (m_base.empty() || m_enhancement.empty())
 +      return AVERROR(EAGAIN);
++    if (m_resync && m_base.front()->dts != AV_NOPTS_VALUE &&
++        m_enhancement.front()->dts != AV_NOPTS_VALUE &&
++        m_enhancement.front()->dts < m_base.front()->dts)
++    {
++      // An earlier EL decode prefix is not the layer for the first BL picture.
++      // Retire it only at a proven common IRAP; preserve non-IRAP references.
++      const auto& first = m_base.front();
++      if (!IsIrap(*first, false))
++        return AVERROR(EAGAIN);
++      const auto anchor = std::find_if(m_enhancement.begin(), m_enhancement.end(),
++          [&first](const Packet& el) {
++            return el->pts == first->pts && el->dts == first->dts && IsIrap(*el, true);
++          });
++      if (anchor == m_enhancement.end() ||
++          !std::all_of(m_enhancement.begin(), anchor, [this, &first](const Packet& el) {
++            return el->dts != AV_NOPTS_VALUE && el->dts < first->dts &&
++                el->pts < first->pts && std::none_of(m_base.begin(), m_base.end(),
++                    [&el](const Packet& bl) { return bl->pts == el->pts; });
++          }))
++        return AVERROR(EAGAIN);
++      const auto count = static_cast<size_t>(std::distance(m_enhancement.begin(), anchor));
++      if (m_preroll > MAX_PACKETS || count > MAX_PACKETS - m_preroll)
++        return AVERROR(EAGAIN);
++      for (size_t i = 0; i < count; ++i)
++      {
++        const auto rpu = m_rpu.find(m_enhancement.front()->pts);
++        m_bytes -= m_enhancement.front()->size;
++        if (rpu != m_rpu.end())
++        {
++          m_bytes -= rpu->second.size();
++          m_rpu.erase(rpu);
++        }
++        m_enhancement.pop_front();
++        ++m_preroll;
++      }
++    }
 +    auto rpu = m_rpu.find(m_base.front()->pts);
 +    if (rpu == m_rpu.end())
 +      return AVERROR(EAGAIN);
@@ -265,6 +301,38 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h b/xbmc/cores/VideoP
 +  struct ReleaseFilter { void operator()(AVBSFContext* p) const { av_bsf_free(&p); } };
 +  using Filter = std::unique_ptr<AVBSFContext, ReleaseFilter>;
 +  std::array<Filter, 2> m_filters;
++
++  static bool IsIrap(const AVPacket& packet, bool wrapped)
++  {
++    bool irap = false;
++    auto begin = Start(packet.data, packet.size, 0);
++    if (begin[0] != 0)
++      return false;
++    while (begin[0] < packet.size)
++    {
++      const auto next = Start(packet.data, packet.size, begin[1]);
++      int payload = begin[1];
++      int size = next[0] - payload;
++      if (wrapped)
++      {
++        if (size < 4 || ((packet.data[payload] >> 1) & 63) != 63)
++          return false;
++        payload += 2;
++        size -= 2;
++      }
++      if (size < 2 || (packet.data[payload] & 0x80) || !(packet.data[payload+1] & 7))
++        return false;
++      const int type = (packet.data[payload] >> 1) & 63;
++      if (type < 32)
++      {
++        if (type < 16 || type > 23)
++          return false;
++        irap = true;
++      }
++      begin = next;
++    }
++    return irap;
++  }
 +
 +  // Return the prefix and payload positions of the next Annex-B NAL.
 +  static std::array<int, 2> Start(const uint8_t* data, int size, int from)

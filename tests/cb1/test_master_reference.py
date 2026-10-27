@@ -86,7 +86,7 @@ int main(){EL el{AVCHROMA_LOC_LEFT};Picture p{AVCHROMA_LOC_LEFT,{7},&el};
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
 struct CDVBridgeGLES {static bool CanComposeSDRGUI(bool enabled,bool hdr10,bool capture,int width,int height,unsigned pqDraws) @@COMPOSE@@;};
 bool gui(int mode,bool optimized,bool capturing=false,int width=3840,int height=2160) {
- bool m_guiWillRender=true,m_hdrConversion=false;int m_guiFboWidth=width,m_guiFboHeight=height;
+ bool m_guiWillRender=true,m_hdrConversion=false,mergedPQGUI=false;int m_guiFboWidth=width,m_guiFboHeight=height;
  unsigned m_dvPQSubtitleDraws=0;auto GetGUIElementCount=[](){return 3;};
  struct {bool optimizedDV;} preferences{optimized};struct {struct {int mode;} policy;} m_dvSelection{{mode}};
  @@MASTER_CAPTURE@@

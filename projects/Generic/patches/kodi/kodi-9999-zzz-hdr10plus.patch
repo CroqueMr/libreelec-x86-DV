@@ -1512,7 +1512,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
      }
      if(switched)
-@@ -2055,10 +2121,10 @@
+@@ -2055,11 +2121,11 @@
      }
      drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
    }
@@ -1520,12 +1520,13 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 -  m_fastPreparedPts = layer.pts;
 +  m_preparedSourceStream = layer.binding.stream;
 +  m_preparedSourcePts = layer.pts;
+   const bool mergedPQGUI = ComposeDVPQGUI();
    const bool subtitlesOnly = !capturing && m_guiWillRender && m_guiFbo.IsValid() &&
 -      m_guiFboWidth == 3840 && m_guiFboHeight == 2160 && m_compositeShader &&
 +      m_guiFboWidth == m_nWidth && m_guiFboHeight == m_nHeight && m_compositeShader &&
        m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
        (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
-   const bool pqSubtitles = subtitlesOnly && m_dvPQSubtitleDraws;
+   const bool pqSubtitles = (subtitlesOnly || mergedPQGUI) && m_dvPQSubtitleDraws;
 @@ -2073,12 +2139,12 @@
    // Prime the subtitle shader once; empty frames retain the lean native shader.
    const bool nativeOverlay = !m_hdrConversion &&

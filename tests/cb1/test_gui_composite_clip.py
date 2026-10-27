@@ -51,6 +51,7 @@ struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   DVState m_dvState;
   bool m_hdrConversion=false,m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
   bool m_dvPQSubtitleCleared=false;
+  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false;
   unsigned m_dvGUIContentGeneration=0,m_dvSubtitleDraws=0,m_dvSubtitleContent=0,m_dvPQSubtitleDraws=0;
   int m_dvPQSubtitleWidth=3840,m_dvPQSubtitleHeight=2160;
   CRect m_dvSubtitleBounds;
