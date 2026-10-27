@@ -947,9 +947,10 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h b/xbmc/cores
 +#endif
 +};
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h
+new file mode 100644
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,93 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1001,6 +1002,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h b/xbmc/co
 +{
 +public:
 +  void BeginStream() { m_stream = NextRevision(); m_revision = m_stream; m_picture = 0; }
++  uint64_t Stream() const { return m_stream; }
 +  void Seek() { m_revision = NextRevision(); }
 +  SourceBinding NextPicture() { return {m_stream,++m_picture,m_revision}; }
 +private:

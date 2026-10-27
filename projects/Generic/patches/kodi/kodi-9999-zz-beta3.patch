@@ -8757,7 +8757,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +    if (!dvbridge_fel_submit(m_dvFel.get(), avpkt))
 +      m_dvFailed = true;
 +    else
-+      ReportDVStartup(2, "el-submitted");
++      ReportDVStartup(2, "fel-input-accepted");
 +  }
 +#endif
  
@@ -8772,7 +8772,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +{
 +  if (!DVBRIDGE::DiagnosticsEnabled() || (m_dvStartupReported & fact)) return;
 +  m_dvStartupReported |= fact;
-+  DVBRIDGE::DiagnosticStartup(m_dvDiagnosticGeneration, stage, bool(m_dvFel),
++  DVBRIDGE::DiagnosticStartup(m_dvDiagnosticGeneration, m_dvSourceOwner.Stream(), stage, bool(m_dvFel),
 +                             m_dvPending.size());
 +}
 +#endif
@@ -14124,7 +14124,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticLog.h b/xbmc/utils/DVBridgeDiagnosticL
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticLog.h
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,195 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeDiagnosticState.h"
@@ -14220,17 +14220,21 @@ new file mode 100644
 +  catch (...) {}
 +}
 +
-+inline void DiagnosticStartup(uint64_t generation, const char* stage, bool fel,
++inline void DiagnosticStartup(uint64_t generation, uint64_t stream, const char* stage, bool fel,
 +                              size_t pending) noexcept
 +{
 +  if (!DiagnosticsEnabled()) return;
 +  try
 +  {
 +    std::lock_guard lock(diagnosticMutex);
-+    if (!generation || generation != diagnosticGeneration || diagnosticSession.Ended()) return;
-+    diagnosticSession.Stage(stage);
++    if (!generation || generation != diagnosticGeneration || !stream ||
++        stream < diagnosticSession.Stream() || diagnosticSession.Ended()) return;
++    // A decoder can reopen before the renderer adopts its first new picture.
++    if (!diagnosticSession.Stream() || stream == diagnosticSession.Stream())
++      diagnosticSession.Stage(stage);
 +    WriteDiagnosticLocked(DiagnosticEvent::Normal, LOGINFO,
-+                          "DV decode startup: stage={} fel={} pending={}", stage, fel, pending);
++                          "DV decode startup: decoder_stream={} stage={} fel={} pending={}",
++                          stream, stage, fel, pending);
 +  }
 +  catch (...) {}
 +}

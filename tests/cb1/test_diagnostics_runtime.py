@@ -42,16 +42,25 @@ int main(){
  DiagnosticFinal("stop");auto count=CLog::lines.size();
  DiagnosticPresented(7);assert(CLog::lines.size()==count);
  DiagnosticOpen();DiagnosticCandidate();const auto current=DiagnosticGeneration();
- DiagnosticStartup(previous,"late-decoder",true,1);
+ DiagnosticStartup(previous,7,"late-decoder",true,1);
  assert(CLog::lines.size()==count);
- DiagnosticStartup(current,"base-decoded",false,0);
+ DiagnosticStartup(current,8,"base-decoded",false,0);
  assert(CLog::lines.size()==count+1);
  assert(std::string_view(diagnosticSession.Stage())=="base-decoded");
  DiagnosticFinal("before-picture");auto closed=CLog::lines.size();
- DiagnosticStartup(current,"late-after-stop",false,0);assert(CLog::lines.size()==closed);
+ DiagnosticStartup(current,8,"late-after-stop",false,0);assert(CLog::lines.size()==closed);
  DiagnosticOpen();ObserveDiagnostic(8,1,1,1,"prepare",true,false);
  DiagnosticPresented(7);assert(!diagnosticSession.FirstPresented());
  DiagnosticPresented(8);assert(CLog::lines.size()==closed+1);
+ const auto open=DiagnosticGeneration();
+ DiagnosticStartup(open,9,"reopened-decoder",true,1);
+ assert(CLog::lines.back().find("decoder_stream=9")!=std::string::npos);
+ assert(std::string_view(diagnosticSession.Stage())=="prepare");
+ ObserveDiagnostic(9,1,1,1,"new-render",true,false);
+ auto latest=CLog::lines.size();
+ DiagnosticStartup(open,8,"old-codec-late",true,0);
+ assert(CLog::lines.size()==latest);
+ assert(std::string_view(diagnosticSession.Stage())=="new-render");
 }
 ''', {'utils/log.h':r'''
 #pragma once

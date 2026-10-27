@@ -29,7 +29,7 @@ struct CLog{template<class...T>static void Log(T...) {}};
 namespace DVBRIDGE{
  std::vector<std::string> events;bool enabled=true;
  bool DiagnosticsEnabled(){return enabled;}
- void DiagnosticStartup(uint64_t,const char* stage,bool,size_t){events.emplace_back(stage);}
+ void DiagnosticStartup(uint64_t,uint64_t,const char* stage,bool,size_t){events.emplace_back(stage);}
 }
 struct AVFrame{int pixels=123;};
 void av_frame_free(AVFrame** p){delete *p;*p=nullptr;}
@@ -56,6 +56,7 @@ struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  std::shared_ptr<Fel> m_dvFel;std::deque<std::shared_ptr<VideoPicture>>m_dvPending;
  unsigned m_dvStartupReported{};uint64_t m_dvDiagnosticGeneration=1;
+ struct SourceOwner{uint64_t Stream()const{return 7;}}m_dvSourceOwner;
  bool m_dvFailed=false,m_dvNativeOutput=true;
  int m_codecControlFlags{},baseDecoded{};AVCodecContext context;AVCodecContext* m_pCodecContext=&context;
  static constexpr unsigned DVEnhancementPendingPictures=16;
@@ -68,7 +69,7 @@ int main(){
  using namespace DVBRIDGE;
  CDVDVideoCodecFFmpeg c;c.m_dvFel=std::make_shared<Fel>();
  c.Submitted(-11);assert(events.empty());
- c.Submitted(0);c.Submitted(0);assert(events==std::vector<std::string>{"el-submitted"});
+ c.Submitted(0);c.Submitted(0);assert(events==std::vector<std::string>{"fel-input-accepted"});
  VideoPicture output;
  assert(c.GetPicture(&output)==CDVDVideoCodec::VC_BUFFER && c.m_dvPending.size()==1);
  assert(events.back()=="base-decoded");
@@ -76,7 +77,7 @@ int main(){
  assert(c.GetPicture(&output)==CDVDVideoCodec::VC_PICTURE && c.m_dvPending.empty());
  assert(output.doviSourcePts==1 && output.pixels==123 && output.doviEnhancement->pixels==123);
  assert(output.doviEnhancementBinding==17);
- assert((events==std::vector<std::string>{"el-submitted","base-decoded","el-decoded","fel-paired"}));
+ assert((events==std::vector<std::string>{"fel-input-accepted","base-decoded","el-decoded","fel-paired"}));
  for(int n=0;n<1000;++n){c.Submitted(0);assert(c.GetPicture(&output)==CDVDVideoCodec::VC_PICTURE);}
  assert(events.size()==4 && c.m_dvFel->takes==1001 && c.baseDecoded==1001);
  CDVDVideoCodecFFmpeg next;assert(next.GetPicture(&output)==CDVDVideoCodec::VC_PICTURE);
