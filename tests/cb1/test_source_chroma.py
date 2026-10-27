@@ -1,10 +1,40 @@
 """Execute the real Kodi import prefixes for all DV conversion policies."""
 import unittest
+import re
 import test_native_spatial_contract as spatial
 from test_native_video_source import TREE, body
 
 
 class SourceChromaTests(unittest.TestCase):
+    def test_hardware_fel_and_prefetch_use_the_declared_input_siting(self):
+        text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        signature = 'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame('
+        hardware = body(text, signature)
+        key = '  const auto sourceChroma =' if '  const auto sourceChroma =' in hardware else '  const auto chroma ='
+        sync = hardware[hardware.index(key):hardware.index('  if (m_hardwareBinding')]
+        prefetch = re.search(r'dvbridge_fel_vpp_prefetch_chroma\(pending->vpp.get\(\),frame.get\(\),(.*?),\n', text)[1]
+        helper = ''
+        if 'SourceChroma(' in text:
+            helper = 'int SourceChroma(int source,unsigned profile) ' + body(text, 'SourceChroma(')
+        program = r'''
+#include <cassert>
+#include <initializer_list>
+constexpr int AVCHROMA_LOC_UNSPECIFIED=0,AVCHROMA_LOC_LEFT=1,AVCHROMA_LOC_CENTER=2,AVCHROMA_LOC_TOPLEFT=3,
+ PL_CHROMA_UNKNOWN=10,PL_CHROMA_LEFT=11,PL_CHROMA_CENTER=12,PL_CHROMA_TOP_LEFT=13;
+int dvbridge_map_chroma(int c){return c==0?PL_CHROMA_UNKNOWN:c+10;}
+HELPER
+struct Frame {int chroma_location; Frame* get(){return this;}};
+int sync(Frame* enhancement,bool native){SYNC return chroma;}
+int prefetched(Frame* frame){return PREFETCH;}
+int main(){for(int c:{0,1,2,3}){Frame f{c};int expected=c?c+10:PL_CHROMA_TOP_LEFT;
+ CHECK
+}}
+'''.replace('HELPER', helper).replace('SYNC', sync).replace('PREFETCH', prefetch)
+        for check in ('assert(sync(&f,false)==expected && sync(&f,true)==expected);',
+                      'assert(prefetched(&f)==expected);'):
+            with self.subTest(path=check):
+                spatial.NativeSpatialContractTests.run_program(self, program.replace('CHECK', check))
+
     def test_all_conversion_imports_preserve_declared_chroma_phase(self):
         text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         prepare = body(text, 'bool CDVBridgeGLES::Prepare(')
@@ -15,6 +45,8 @@ class SourceChromaTests(unittest.TestCase):
         helper = ''
         if 'bool ImportLayer(' in text:
             helper = 'bool ImportLayer(dvbridge_gl_frame* frame, int gpu, const Layer& layer) ' + body(text, 'bool ImportLayer(')
+        if 'SourceChroma(' in text:
+            helper = 'int SourceChroma(int source,unsigned profile) ' + body(text, 'SourceChroma(') + helper
         program = r'''
 #include <cassert>
 #include <limits>

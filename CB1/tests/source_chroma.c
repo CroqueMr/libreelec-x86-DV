@@ -19,16 +19,19 @@ int main(void)
     assert(eglMakeCurrent(d,surface,surface,context));
     pl_opengl gl=pl_opengl_create(NULL,pl_opengl_params(.egl_display=d,.egl_context=context,
         .get_proc_addr=(pl_voidfunc_t (*)(const char *))eglGetProcAddress,.allow_software=true));assert(gl);
-    const enum dvbridge_gl_layout layouts[]={DVBRIDGE_NV12,DVBRIDGE_YUV420P10,DVBRIDGE_YUV444P10,DVBRIDGE_Y416};
+    const enum dvbridge_gl_layout layouts[]={DVBRIDGE_NV12,DVBRIDGE_P010,DVBRIDGE_YUV420P10,DVBRIDGE_YUV444P10,DVBRIDGE_Y416};
     const enum pl_chroma_location locations[]={PL_CHROMA_LEFT,PL_CHROMA_CENTER,PL_CHROMA_TOP_LEFT};
-    for(unsigned layout=0;layout<4;layout++){
+    for(unsigned layout=0;layout<5;layout++){
         GLuint textures[3];glGenTextures(3,textures);
-        bool packed=layout==3,subsampled=layout<2;
-        unsigned planes=packed?1:layout?3:2;
+        bool packed=layouts[layout]==DVBRIDGE_Y416;
+        bool semiplanar=layouts[layout]==DVBRIDGE_NV12 || layouts[layout]==DVBRIDGE_P010;
+        bool subsampled=semiplanar || layouts[layout]==DVBRIDGE_YUV420P10;
+        unsigned planes=packed?1:semiplanar?2:3;
         struct dvbridge_gl_plane input[3]={0};
         for(unsigned p=0;p<planes;p++){
             int size=p && subsampled?4:8;
-            GLenum format=packed?0x805B:layout?0x822A:p?GL_RG8:GL_R8;
+            GLenum format=packed?0x805B:layouts[layout]==DVBRIDGE_NV12?(p?GL_RG8:GL_R8):
+                semiplanar && p?0x822C:0x822A;
             glBindTexture(GL_TEXTURE_2D,textures[p]);glTexStorage2D(GL_TEXTURE_2D,1,format,size,size);
             assert(glGetError()==GL_NO_ERROR);
             input[p]=(struct dvbridge_gl_plane){textures[p],size,size};

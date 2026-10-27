@@ -935,7 +935,7 @@ struct active_mask {
     uint32_t count, flip;
     pl_shader native_shader;
     bool early_mask, source_domain, source_overlay, straight_overlay, linear_output;
-    bool reference_transport, profile5_transport, scaled_quad;
+    bool reference_transport, exact_reference, profile5_transport, scaled_quad;
     bool ipt_quad;
     const struct cb1_master_ipt *ipt;
     const pl_tex *ipt_pq;
@@ -1405,7 +1405,7 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
     struct pl_frame fitted;
     bool spatial=false;
     /* P5 Standard shares the reference transport, not its exact storage contract. */
-    unsigned required_bits=params->cb1_dovi_reference && !params->cb1_fast_chroma?32:16;
+    unsigned required_bits=mask && mask->exact_reference?32:16;
     if(!fit_picture(r,image,target,&fitted,&spatial,required_bits))return false;
     struct pl_hook spatial_hooks[8];
     const struct pl_hook *spatial_hook_ptrs[8];
@@ -1663,6 +1663,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     }
     mask.overlay=overlay;
     mask.reference_transport=master!=NULL;
+    mask.exact_reference=master && !p5_standard;
     mask.profile5_transport=master && dvbridge_dv_profile5_transport(metadata);
     mask.ipt=ipt;
     mask.ipt_pq=r->ipt_pq;

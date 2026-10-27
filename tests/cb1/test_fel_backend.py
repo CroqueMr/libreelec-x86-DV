@@ -34,6 +34,7 @@ enum dvbridge_gl_layout {DVBRIDGE_P010,DVBRIDGE_Y416};
 enum pl_chroma_location {PL_CHROMA_UNKNOWN,PL_CHROMA_LEFT,PL_CHROMA_TOP_LEFT};
 enum AVChromaLocation {AVCHROMA_LOC_UNSPECIFIED,AVCHROMA_LOC_TOPLEFT};
 pl_chroma_location dvbridge_map_chroma(AVChromaLocation p) {return p==AVCHROMA_LOC_TOPLEFT?PL_CHROMA_TOP_LEFT:PL_CHROMA_UNKNOWN;}
+pl_chroma_location SourceChroma(AVChromaLocation source,unsigned profile) SOURCECHROMA
 constexpr int DVBRIDGE_MODE_STANDARD=0, DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_ENHANCED_DV=4;
 struct dvbridge_gl_plane {unsigned texture{};};
 struct AVBufferRef {unsigned char* data{};};
@@ -156,7 +157,7 @@ int main() {
   auto first=r.submitted.lease;
   assert(run()==Status::Ready && r.submitted.lease==first); // Same policy/frame reuses its import.
   r.submitted.lease.reset();first.reset();selected.mode=1;
-  assert(run()==Status::Ready && lastChroma==PL_CHROMA_LEFT);
+  assert(run()==Status::Ready && lastChroma==PL_CHROMA_TOP_LEFT);
   r.submitted.lease.reset();selected.mode=0;
   assert(run()==Status::Ready && lastChroma==PL_CHROMA_TOP_LEFT);
   first=r.submitted.lease;
@@ -256,7 +257,7 @@ int main() {
  }
  assert(importedImages==0 && scaledImages==0);
 }
-'''.replace('METHOD', method)
+'''.replace('METHOD', method).replace('SOURCECHROMA', body(source, 'pl_chroma_location SourceChroma('))
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test.cpp').write_text(program)
