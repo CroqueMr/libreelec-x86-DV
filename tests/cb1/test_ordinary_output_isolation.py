@@ -35,7 +35,7 @@ struct VideoPicture {
 };
 namespace DVBRIDGE {
  enum class OutputMode {Disabled,Standard,HDR10,MasterReference}; enum class OutputRoute {Vanilla,NativeDV,HDR10};
- enum class OutputReason {None,RestoreFailed,SourceIneligible};
+ enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired};
  struct Policy {int mode=0;};
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
    ::DVBRIDGE::Policy Policy()const{return {};}};
@@ -168,6 +168,15 @@ int main(){
           !window.m_dvOrdinaryFrame && window.m_GBM->lifetime==0,
           std::string(name)+" ordinary history="+std::to_string(history)+" no DV surface transaction");
   }
+ }
+ {
+  CWinSystemGbmGLESContext window;VideoPicture picture;
+  window.capabilities.isDV=true;picture.doviSourceInfo.profile=7;picture.doviEnhancement=true;
+  window.m_dvSelection.reason=DVBRIDGE::OutputReason::TVProfileRequired;
+  DVBRIDGE::lastStage.clear();
+  expect(window.PrepareDVOutputFrame(picture) && window.native==1 && window.stages==0 &&
+         !window.m_dvOrdinaryFrame && DVBRIDGE::lastStage=="output-tv-profile-required",
+         "missing TV profile stays ordinary and identifies its prerequisite");
  }
  for(int kind=0;kind<3;++kind){
   CWinSystemGbmGLESContext window;VideoPicture picture;

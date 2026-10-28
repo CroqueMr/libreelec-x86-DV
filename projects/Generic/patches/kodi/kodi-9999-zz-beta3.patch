@@ -9378,7 +9378,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,93 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -9418,12 +9418,16 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/c
 +  }
 +  if (!caps.sourceKnown || !caps.isDV || preferences.output == OutputMode::Disabled)
 +    return result;
++  auto policy = preferences.Policy();
++  // Display configuration is known before the first GPU import.
++  if (preferences.output == OutputMode::HDR10 && policy.mode == DVBRIDGE_MODE_HDR10_EXPERT &&
++      !preferences.ProfileValid())
++    return {OutputRoute::Vanilla, {}, OutputReason::TVProfileRequired};
 +  if (!caps.processingKnown)
 +  {
 +    result.reason = OutputReason::NoGPUProcessing;
 +    return result;
 +  }
-+  auto policy = preferences.Policy();
 +  if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !caps.hdr10plus)
 +  {
 +    if (!caps.hdr10 || !caps.processing[DVBRIDGE_MODE_HDR10_BASIC].usable)
@@ -15351,7 +15355,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +936,1715 @@
+@@ -397,13 +936,1717 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16299,6 +16303,8 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  if (m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 && m_hdr10Session &&
 +      m_hdr10SessionStream != picture.doviMetadata.Binding().stream)
 +    return ConfigureHDR10Conversion(picture);
++  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)
++    DVBRIDGE::DiagnosticStage("output-tv-profile-required");
 +  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring &&
 +      (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla || m_dvState.Captured() || m_hdrConversion))
 +    return true;

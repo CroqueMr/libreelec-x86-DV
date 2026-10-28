@@ -45,7 +45,7 @@
     "projects/Generic/patches/linux/linux-9900-06-drivers__gpu__drm__i915__display__intel_dvbridge_hdr_policy.h.patch": "255ed576924b3abfbd82cd2533336e3b0fa3f423dd601cf28498b625334fe2fd",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9003-hdr10plus-commit-transport.patch": "70331fa663ac4dca6f54c9720b848af57f0271f9ab7ecbe2cb2642340d093b70",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "80639f5257f0d6d7ed3d8d570cfe751854ea1de48a720a086c60538398e6d110",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "11cf892b5801807ffb9dca4ac97ace9aa896265c0b02b4d4adc2339d9cc1529a",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
     "projects/Generic/patches/linux/linux-9903-diagnostics.patch": "5c21813bdc2db60a0d7117487b220900825b37da605a8c8ac9e8f39b13d4147b",
     "projects/Generic/options": "ed067c9e63c4ecbadef3919ec7f5d97938d7b6ab89e0c725bb4299745b1d6346",
