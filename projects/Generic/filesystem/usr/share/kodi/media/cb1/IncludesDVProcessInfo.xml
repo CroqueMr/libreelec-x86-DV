@@ -170,4 +170,59 @@
       <include content="DVProcessLayout"><param name="height" value="620"/><param name="background" value="660"/><param name="panel" value="9601"/><param name="surface" value="9611"/><param name="col1" value="9630"/><param name="col2" value="9631"/><param name="col3" value="9632"/><param name="dv" value="false"/><param name="gauge" value="9401"/></include>
     </control>
   </include>
+  <variable name="CB1PlaybackModeTextColor">
+    <value condition="ListItem.Property(disabled)">FFBFC8CC</value>
+    <value>FFF4F6F6</value>
+  </variable>
+  <include name="CB1PlaybackModeLayout">
+    <control type="group" id="9100">
+      <right>40</right><bottom>40</bottom><width>660</width><height>456</height>
+      <control type="image" id="9101">
+        <left>0</left><top>0</top><width>660</width><height>456</height>
+        <texture border="60">special://xbmc/media/cb1-panel.png</texture><colordiffuse>FF1E2428</colordiffuse>
+      </control>
+      <control type="label" id="1">
+        <left>32</left><top>20</top><width>596</width><height>40</height>
+        <font>CB1.MenuBody</font><textcolor>FFF4F6F6</textcolor><scroll>true</scroll>
+      </control>
+      <control type="label" id="2"><visible>false</visible></control>
+      <control type="list" id="3">
+        <left>24</left><top>72</top><width>612</width><height>300</height>
+        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
+        <include>CB1PlaybackModeRows</include>
+      </control>
+      <control type="list" id="6">
+        <left>24</left><top>72</top><width>612</width><height>300</height>
+        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
+        <include>CB1PlaybackModeRows</include>
+      </control>
+      <control type="textbox" id="9102">
+        <left>32</left><top>384</top><width>596</width><height>48</height>
+        <font>CB1.MenuHelp</font><textcolor>FFBFC8CC</textcolor>
+        <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
+      </control>
+    </control>
+  </include>
+  <include name="CB1PlaybackModeRows">
+    <itemlayout width="612" height="50">
+      <control type="label">
+        <left>16</left><top>5</top><width>580</width><height>40</height>
+        <font>CB1.MenuBody</font><label>$INFO[ListItem.Label]</label>
+        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      </control>
+    </itemlayout>
+    <focusedlayout width="612" height="50">
+      <control type="image">
+        <left>0</left><top>1</top><width>612</width><height>48</height>
+        <texture>special://xbmc/media/cb1-white.png</texture><colordiffuse>FF237CA4</colordiffuse>
+      </control>
+      <control type="label">
+        <left>16</left><top>5</top><width>580</width><height>40</height>
+        <font>CB1.MenuBody</font><label>$INFO[ListItem.Label]</label>
+        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      </control>
+    </focusedlayout>
+  </include>
 </includes>

@@ -1,5 +1,7 @@
 """The active skin owns rendering-selection layout and descriptions."""
 import os
+import subprocess
+import tempfile
 from pathlib import Path
 import tarfile
 import unittest
@@ -8,6 +10,57 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class PlaybackLayoutOwnership(unittest.TestCase):
+    def test_compact_selector_keeps_help_inside_and_native_lists_unmodified(self):
+        tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        from test_native_video_source import body
+        source = (tree/'xbmc/dialogs/GUIDialogSelect.cpp').read_text()
+        init = body(source, 'void CGUIDialogSelect::OnInitWindow()')
+        marker = 'if (GetProperty("CB1.PlaybackModes").asBoolean())'
+        self.assertIn(marker, init, 'compact playback geometry is missing')
+        geometry = marker + body(init, marker)
+        program = r'''
+#include <algorithm>
+#include <cassert>
+struct Control {
+ float x=1220,y=2,h=9;
+ float GetXPosition()const{return x;} float GetYPosition()const{return y;}
+ void SetPosition(float a,float b){x=a;y=b;} void SetHeight(float v){h=v;}
+};
+struct Property {bool value;bool asBoolean()const{return value;}};
+struct List {int count;int Size()const{return count;}};
+constexpr int CONTROL_SIMPLE_LIST=3,CONTROL_DETAILED_LIST=6;
+struct Dialog {
+ bool playback;List rows;List* m_vecList=&rows;Control group,image,list,help;
+ Property GetProperty(const char*)const{return {playback};}
+ Control* GetControl(int id){return id==9100?&group:id==9101?&image:id==9102?&help:&list;}
+ struct Resolution{int iHeight=1080;};Resolution GetCoordsRes()const{return {};}
+ void apply(){GEOMETRY}
+};
+int main(){
+ for(int count:{0,1,3,6,7,20}){
+  Dialog native{false,{count}};native.apply();assert(native.group.h==9 && native.list.h==9);
+  Dialog d{true,{count}};d.apply();
+  const float expected=50*std::clamp(count,1,6);
+  assert(d.list.h==expected && d.group.x==1220 && d.group.y+d.group.h==1040);
+  assert(d.image.h==d.group.h && d.help.y==84+expected);
+  assert(d.help.y+48<=d.group.h-24);
+ }
+}
+'''.replace('GEOMETRY', geometry)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+        repo=Path(__file__).resolve().parents[2]
+        layout=ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
+        group=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9100']")
+        self.assertIsNotNone(group)
+        self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
+        help=group.find("control[@id='9102']")
+        self.assertEqual((help.findtext('left'),help.findtext('width'),help.findtext('height')),('32','596','48'))
+
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         archive = Path(os.environ.get('KODI_UPSTREAM_ARCHIVE',
