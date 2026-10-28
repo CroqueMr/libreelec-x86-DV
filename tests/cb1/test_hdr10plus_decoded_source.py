@@ -3,7 +3,7 @@ import base64
 from pathlib import Path
 import re
 import unittest
-from test_native_video_sidedata import SideDataTests as SnapshotChecks
+import test_native_video_sidedata as snapshot
 
 
 # One synthetic 16x16, lossless Main10 black IDR, generated with libx265.
@@ -59,7 +59,7 @@ class DecodedHDR10PlusTests(unittest.TestCase):
                 ('v1', access_unit(hdr_sei(1))),
                 ('foreign', access_unit(hdr_sei(1, country=0))),
                 ('truncated', access_unit(hdr_sei(1, truncated=True)))))
-        SnapshotChecks().compile_run(r'''
+        snapshot.SideDataTests().compile_run(r'''
 #include "cores/VideoSourceSideData.h"
 #include <cassert>
 #include <cstring>
@@ -105,13 +105,15 @@ int main() {
   assert(packet[7]==(version?0x60:0x20) && packet[8]==4 && packet[9]==1);
   assert(packet[10]==(version?0:2) && packet[11]==(version?255:3));
   unsigned sum=0;for(auto byte:packet)sum+=byte;assert(!(sum&255));
+  AVDynamicHDRPlus invalid=*source->HDR10Plus();invalid.itu_t_t35_country_code=0;
+  uint8_t saved[31];std::memcpy(saved,packet,sizeof(saved));
+  assert(cb1_hdr10plus_vsif(packet,&invalid,false,true)==CB1_HDR10PLUS_INVALID);
+  assert(!std::memcmp(saved,packet,sizeof(saved)));
  }
  for(const auto pair:{std::pair{foreign,sizeof(foreign)},std::pair{truncated,sizeof(truncated)}}) {
   AVFrame* frame=decode(pair.first,pair.second);assert(pixels(frame)==expected);
   assert(!av_frame_get_side_data(frame,AV_FRAME_DATA_DYNAMIC_HDR_PLUS));av_frame_free(&frame);
  }
- AVDynamicHDRPlus invalid{};uint8_t packet[31];
- assert(cb1_hdr10plus_vsif(packet,&invalid,false,true)==CB1_HDR10PLUS_INVALID);
 }
 '''.replace('SERIALIZER', str(serializer)).replace('ARRAYS', arrays), libraries=('avcodec',))
 
