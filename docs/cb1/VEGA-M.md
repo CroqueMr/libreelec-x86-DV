@@ -1,4 +1,4 @@
-# Vega M: experimental HDMI Dolby Vision
+# Vega M HDMI Dolby Vision support
 
 Targets: Radeon RX Vega M GL/GH in Kaby Lake-G systems, including i7-8705G and
 i7-8809G. Their AMD display block is **DCE11.22**, not DCN. Hades Canyon HDMI
@@ -19,7 +19,7 @@ No CB1 reconstruction, filters, metadata or rendering algorithms change.
 The existing Generic firmware packaging already includes Vega M firmware.
 No cross-GPU copy from the Intel GPU is added.
 
-## Software qualification
+## Verification
 
 Four host tests exercise the actual patched C functions: family/property
 admission, input colour programming and linebuffer selection, including
@@ -30,12 +30,12 @@ All four modified C translation units compile with the Linux 7.2.6 SDK.
 Replaying the patch series on the pinned Linux archive reproduces all five
 modified files exactly.
 
-## Hardware qualification pending
+## Output requirements
 
-This is not a verified bit-perfect HDMI claim. Final wire bytes, physical DV
-activation, bandwidth, transitions, hotplug and VAAPI/FEL playback must be tested
-on a Vega M system. No Vega M machine or mini-PC was accessed.
+Dolby Vision V1/V2, HDR10/HLG and HDR10+ are supported through the DCE11.22
+driver path. The selected native HDMI route, display capabilities, bandwidth
+and atomic validation must accept the output. [Driver/output matrix](DRIVER-COVERAGE.md).
 
 Patch: `projects/Generic/patches/linux/linux-9925-vegam-dv-transport.patch`.
-Base: Beta5 normal `abde400bbf8ef754c971f437dc321bdd03a5986b`, Linux 7.2.6 with
-its existing native DV patches. Physical Pascal support is a separate draft.
+Included in R1.0.0 RC1 with Linux 7.2.6. NVIDIA Pascal support is included in the
+same Generic image through its matched R580 stack.

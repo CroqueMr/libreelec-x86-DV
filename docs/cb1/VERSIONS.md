@@ -2,7 +2,7 @@
 
 | Component | RC1 version |
 | --- | --- |
-| Release | R1.0.0 RC1, tag identity `R1.0.0-RC1` (draft) |
+| Release | R1.0.0 RC1, tag identity `R1.0.0-RC1` |
 | LibreELEC | 13.0-devel |
 | Kodi | 22 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
 | CB1 | 0.3 |
@@ -12,7 +12,8 @@
 | Mesa | 26.2.3 |
 | Intel Media Driver | 26.3.5 |
 | libva | 2.24.1 |
-| NVIDIA | 615.78.08 |
+| NVIDIA, Turing and newer | 615.78.08 |
+| NVIDIA, Pascal | 580.178.04; automatically selected in the same image |
 
 CB1 circuit versions are defined in the engine and shown in Player information.
 The corresponding-source archives record the exact component inventories and

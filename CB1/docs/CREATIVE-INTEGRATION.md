@@ -28,7 +28,7 @@ No kernel, driver, display query, player UI, audio or scheduling patch is includ
   Never report L8 controls as applied from these fields alone.
 - Check `min_pq_present` before using a target black level. Preset and manual
   targets have no qualified black-level value; zero is not a measurement.
-- Generation 3 reports the experimental dense LMS/PQ model and newly generated
+- Generation 3 records the historical dense LMS/PQ model and newly generated
   L1/L5. Identity retains generation 2 and zero measured-statistics fields.
   Read `pixel_algorithm`, `analysis_model` and `expansion_reason` from the
   matching committed snapshot. These are not physical display measurements.

@@ -24,7 +24,7 @@ their qualified performance optimizations. Master Reference keeps its exact
 reconstruction and dedicated filters. There is no quality On/Off/Auto selector.
 
 **Allow Master Reference to switch to Standard** is off by default. When enabled,
-sustained presentation margin below2.5ms can switch the current playback to
+sustained presentation margin below 2.5 ms can switch the current playback to
 Standard. A notification confirms the accepted switch; the saved Master selection
 is retained. GUI, capture, pause and discontinuous pictures are excluded from
 the decision. Recovery state resets for a new video or manual mode change.
@@ -41,6 +41,9 @@ At Expert level:
 
 Master Reference uses its own reference FEL filters, independently of the saved
 VAAPI/Nearest preference.
+
+**Master Reference output**, at Expert level, selects YCbCr or IPT-PQc2 transport.
+YCbCr is the default. Profile 5 keeps its direct IPT path in either Master output.
 
 **Disable L2 trims** is an Expert option, off by default, for Standard and Master
 Reference only. It removes outgoing L2 blocks without changing movie pixels or
@@ -62,7 +65,7 @@ The quick selector uses Kodi controls in a compact bottom-right panel. Its heigh
 follows the available modes; longer lists use native scrolling. Other selectors
 keep the active skin's layout.
 
-![Dolby Vision rendering selection](images/beta4-quick-rendering-menu.png)
+![RC1 Dolby Vision rendering selection](images/rc1-quick-rendering-menu.png)
 
 ![HDR10 rendering selection](images/quick-display-hdr10.png)
 

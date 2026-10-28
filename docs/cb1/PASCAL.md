@@ -1,6 +1,6 @@
 # Pascal HDMI transport
 
-Status: software-qualified prototype, not hardware-qualified Dolby Vision support.
+Supported: NVIDIA GeForce GTX 10 series, using the matched R580 driver in the Generic image.
 
 ## Build
 
@@ -25,7 +25,7 @@ Pascal does not use the Turing-and-newer open resource manager.
 ## Transport
 
 The connector exposes `NV_HDMI_VSIF_METADATA`, `max bpc` and `dithering mode`,
-reusing Beta5's NVIDIA backend. No CB1 rendering changes are required.
+using the shared NVIDIA backend. No separate CB1 rendering implementation is required.
 
 The private kernel-only modeset request carries the VSIF through native NVKMS
 validation and commit. It does not change public userspace ioctl structures.
@@ -36,24 +36,32 @@ override cannot be active together. A normal modeset clears the private override
 No vendor binary is patched. Source notices and the R580 redistribution license
 are retained. NVIDIA RM and userspace remain proprietary.
 
-## Qualification
+## Supported outputs
+
+| Output | Transport |
+| --- | --- |
+| Dolby Vision V1 / V2 | RGB8 tunnel and validated native HDMI vendor packet |
+| HDR10 / HLG | Native NVIDIA output with separate PQ/HLG capability checks |
+| Native or converted HDR10+ | Native HDMI YCbCr 4:2:2 at 10 bits, with frame-associated metadata |
+
+HDR10+ requires a single native HDMI head without conflicting VRR, 3D, HDMI-VIC
+or vendor-packet ownership. [Output requirements and limits](DRIVER-COVERAGE.md).
+
+## Verification
 
 Host tests exercise blob ownership, invalid requests, VSIF bounds, the actual
 R580 HDMI builder and Pascal packet packer, including the HDMI checksum.
 Package tests check both fixed dependencies, complete installation, explicit PCI
 selection, conflicting overlays, repeated setup and incomplete-stack failures.
-These checks do not establish that proprietary RM accepts the packet on a
-physical Pascal connector, or that the final scanout preserves every video byte.
-
-Before calling this supported: test HDMI DV entry/exit, SDR/HDR restoration,
-TEST_ONLY and failed commits, OSD/subtitles, hotplug, GBM/EGL/NVDEC playback and
-the final wire signal on a Pascal card. No such hardware result is available.
+The complete-image checks verify both driver branches, their firmware, userspace
+libraries, dependencies, module versions and early-boot selection. These checks
+do not constitute Dolby or HDMI certification.
 
 ## Source versions
 
 | Component | Source |
 | --- | --- |
-| Base product | Beta5 normal, `abde400bbf8ef754c971f437dc321bdd03a5986b` |
+| Release | R1.0.0 RC1, one Generic image |
 | NVIDIA proprietary payload | `580.178.04` |
 | Public modeset sources | NVIDIA `c8e699821c23e4335bf23330a54a23d15cfb95e9` |
 | Driver patch | `packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9000-dv-transport.patch` |

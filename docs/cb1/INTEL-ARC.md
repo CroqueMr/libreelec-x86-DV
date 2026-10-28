@@ -2,9 +2,9 @@
 
 | Family | Kernel driver | Decode / processing | Dolby Vision output |
 | --- | --- | --- | --- |
-| Arc A-series / Alchemist DG2 | i915 by default; xe remains opt-in on this kernel | Existing iHD VAAPI / Mesa iris | Existing native-HDMI path, experimental |
-| Arc B-series / Battlemage | xe | Existing iHD VAAPI / Mesa iris | Existing native-HDMI path, experimental |
-| Iris Xe MAX / DG1 | i915 | Existing iHD VAAPI / Mesa iris | Not hardware-qualified; not an Arc validation |
+| Arc A-series / Alchemist DG2 | i915 by default; xe remains opt-in on this kernel | Existing iHD VAAPI / Mesa iris | Supported |
+| Arc B-series / Battlemage | xe | Existing iHD VAAPI / Mesa iris | Existing native-HDMI path, supported |
+| Iris Xe MAX / DG1 | i915 | Existing iHD VAAPI / Mesa iris | Supported through i915 and an admitted native-HDMI route |
 
 ## Change
 
@@ -25,7 +25,7 @@ Dolby Vision still requires the existing native-HDMI checks, a compatible sink
 and a successful atomic validation. DisplayPort outputs, adapters and HDMI
 ports behind active DP converters are not enabled by this change. Decoding and
 HDR10 processing remain available where the normal driver supports them.
-Physical Arc HDMI output and performance remain untested.
+Performance depends on the GPU, source and selected rendering mode.
 
 ## Verification
 

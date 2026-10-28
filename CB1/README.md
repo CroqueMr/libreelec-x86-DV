@@ -1,6 +1,6 @@
 # CB1
 
-CB1 is an open-source Dolby Vision processing engine with HDR10 conversion.
+CB1 is an open-source Dolby Vision processing engine with HDR10 and HDR10+ output.
 **CB1 0.3** is a C11 static library linked into the player's render path, without
 a separate service or external player.
 
@@ -31,7 +31,8 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
 | Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
 | Dolby Vision | HDR10 Reference Expert | HDR10 | Match HDR10 conversion to the display's peak and gamut, using available creative controls |
-| HDR10 | DV Reference (AI) | Dolby Vision, TV-Led | Enable TV-Led Dolby Vision from HDR10 while preserving the source image |
+| Dolby Vision | HDR10+ | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
+| HDR10 | Dolby Vision Reference (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
 | HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
@@ -39,6 +40,12 @@ For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 Expert and Adaptive HDR Mapping require a manual display profile. AI conversion uses the
 included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
 Native HDR10, HLG and SDR remain the player's responsibility.
+Native HDR10+ preserves the source picture and its authored dynamic metadata
+through the player's supported output path. [HDR10+ processing](docs/HDR10PLUS.md).
+
+Master Reference offers YCbCr or IPT-PQc2 output, with YCbCr selected by default.
+Profile 5 keeps the shared direct IPT path in both Master variants. Standard uses
+the dedicated, performance-oriented P5 IPT path.
 
 ## Documentation
 
@@ -66,16 +73,19 @@ The player owns decoding, timing, audio, subtitles, UI and presentation. CB1
 owns reconstruction, processing and output metadata. Its native C API shares
 FFmpeg metadata and libplacebo/GLES resources, not a network API.
 
-The LibreELEC integration supports Intel and AMD iGPUs; dedicated AMD and NVIDIA GPUs are experimental.
+The LibreELEC integration supports the listed Intel and AMD integrated/dedicated
+GPUs and NVIDIA GeForce GPUs. [Hardware and output support](../docs/cb1/HARDWARE.md).
 Performance may vary by hardware. Report playback problems to the integration
 repository with the exact CPU/GPU, display, connection chain and build version.
 
-## Known issues
+## Integration limits
 
-- On lower-powered GPUs such as Intel N100, displaying the GUI over Dolby Vision playback can cause stuttering.
-- Some 59.94 FPS Dolby Vision sources still drop frames on N100.
-- Adaptive HDR Mapping requires further visual qualification.
-- Profile 5 black-screen reports on some AMD and Intel Xe configurations remain under investigation.
+- Visible menus and heavy conversions can exceed the capacity of lower-powered GPUs.
+- Adaptive HDR Mapping remains subject to visual refinement.
+- Master Reference screenshots are unavailable on the current Dolby Vision path.
+
+See the integration [release notes](../docs/cb1/RELEASE.md) and
+[issues](https://github.com/CroqueMr/libreelec-x86-DV/issues) for current playback reports.
 
 Test media and training datasets are excluded. No affiliation with or certification
 by Dolby, Intel or AMD.

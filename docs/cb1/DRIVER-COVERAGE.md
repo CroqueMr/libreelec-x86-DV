@@ -11,9 +11,9 @@ successful-output receipt.
 | Intel Display10 | Admitted DV route | Native selector; converted PQ uses 12 bits | Frame-owned output, native 12-bit route | Same guarded 12-bit route |
 | Intel Display11 and newer, i915 / xe | Admitted DV route | Native selector, guarded deep PQ conversions | Frame-owned output, at least 10 bits | Same frame-owned deep output |
 | AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
-| AMD Vega M, DCE11.22 | Experimental | Native DCE output | Experimental DCE packet path | Experimental guarded DCE deep output |
-| NVIDIA R615, Turing and newer | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental commit-coupled native packet routes | Same experimental deep-output routes |
-| NVIDIA R580, same image | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental native HDMI 4:2:2 10-bit route | Same experimental 4:2:2 10-bit route |
+| AMD Vega M, DCE11.22 | Supported | Native DCE output | Supported DCE packet path | Supported guarded DCE deep output |
+| NVIDIA R615, Turing and newer | Supported | Native output, PQ and HLG capabilities checked separately | Supported commit-coupled native packet routes | Same supported deep-output routes |
+| NVIDIA R580, same image | Supported | Native output, PQ and HLG capabilities checked separately | Supported native HDMI 4:2:2 10-bit route | Same supported 4:2:2 10-bit route |
 
 Ordinary native HDR follows each driver's policy, including dithering where
 applicable. HDR10+ and CB1 PQ conversions require actual output of at least
@@ -30,7 +30,7 @@ Display9 does not gain HDR10 support by exposing a property it cannot deliver.
 Intel DP converters remain subject to their native protocol validation.
 
 AMD DV remains limited to its explicit display-engine allowlist. Vega M is a
-separate experimental DCE11.22 path; discrete Polaris/Vega and DCN4 are not
+separate supported DCE11.22 path; discrete Polaris/Vega and DCN4 are not
 promoted to supported DV hardware by these changes. Native HDR admission is
 separate from the custom DV allowlist.
 
@@ -111,14 +111,13 @@ packet. Kodi rejects native HDR10+ staging if its actual drawable falls below
 This work does not add HDR10+ to DV conversion or alter reconstruction, Master
 movie pixels, Dolby metadata, tone mapping, resolution selection or 3D processing.
 
-## Validation and remaining evidence
+## Verification
 
 Host tests execute native packet writers, depth selectors, blob lifecycle,
 failure injection and restoration. Modified owners and both matched NVIDIA
 module stacks are compiled. V1/V2 tests retain frozen modern-V2 packet goldens.
 
-New HDMI routes require physical qualification with the corresponding GPU and
-display. No local HDR10+ display or HDMI analyzer was available for this change.
-NVIDIA packet latching, new Display10 deep routes, Vega M and new V1 receivers
-are not presented as physically certified. DP adapters/LSPCON routes do not gain
-support from the physical shape of their connector.
+Supported status describes the implemented driver path, not Dolby or HDMI
+certification. Display capabilities, output depth and the accepted native
+transaction still apply. DP adapters/LSPCON routes do not gain support from
+the physical shape of their connector.

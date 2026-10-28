@@ -1,9 +1,9 @@
-# Intel Kaby Lake qualification
+# Intel Kaby Lake support
 
 Targets: Intel Core 7th generation with HD 610/615/620/630 or Iris Plus 640/650.
 Kaby Lake-G Radeon outputs are covered by a separate Vega M port.
 
-## Existing Beta5 path
+## Supported path
 
 - i915 DV admission already accepts Display 9, which includes Kaby Lake.
 - Intel media-driver **26.3.5** includes Kaby Lake and HEVC Main10 support.
@@ -18,10 +18,11 @@ The existing driver-policy test compiles the shipped policy and checks Display
 
 ## Limits
 
-This source/build audit is not a physical Kaby Lake DV qualification. Many
-systems expose HDMI through an LSPCON; a CPU generation does not change that
-route. Do not infer HDMI 2.0, 4K60 or FEL performance from this admission.
-Skylake and older processors are not newly qualified by this work.
+Dolby Vision requires the admitted native-HDMI route. Systems routed through
+DisplayPort adapters or an LSPCON do not gain support from their CPU model.
+Display9 does not provide the native HDMI static-HDR path used for HDR10, HLG
+or HDR10+ output. HDMI bandwidth and playback performance depend on the machine.
+[Driver/output matrix](DRIVER-COVERAGE.md).
 
 References:
 

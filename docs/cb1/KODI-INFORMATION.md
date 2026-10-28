@@ -32,7 +32,7 @@ Labels are registered in Kodi's existing `Player.Process(...)` provider.
 
 | Key | Meaning |
 | --- | --- |
-| `videooutputhdrtype` | Accepted CB1 output: `dolbyvision` or `hdr10`; empty when unknown |
+| `videooutputhdrtype` | Accepted output: `sdr`, `hdr10`, `hdr10plus`, `hlg` or `dolbyvision`; empty when unknown |
 | `videoprocessingmode` | Accepted processing mode |
 | `videoprocessingengine`, `videoprocessingcircuit` | Accepted engine and circuit versions |
 | `videoprocessingfallback` | Processing failure/fallback reason |

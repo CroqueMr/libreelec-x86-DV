@@ -230,8 +230,8 @@ as two creative passes.
 
 `cb1-dve-pixel-v1` processes reconstructed linear BT.2020 pixels, then updates
 scene L1/L5. Kodi and the engine expose one Adaptive HDR Mapping mode.
-The equations here describe the exposed profile. This is an experimental
-expansion model, not the licensed Dolby mapper. Native and HDR10 conversion
+The equations here describe the supported metadata-guided expansion model,
+not the licensed Dolby mapper. Native and HDR10 conversion
 retain their separate contracts; AI Adaptive reuses the executor with the
 different guidance and curve specified below.
 

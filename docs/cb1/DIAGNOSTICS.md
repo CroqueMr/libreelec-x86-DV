@@ -31,7 +31,8 @@ NVIDIA signal diagnostics include the accepted vendor InfoFrame blob and
 dithering state. These are cached accepted properties, not HDMI measurements.
 The framebuffer format can be RGB8 for the DV tunnel or half-float for HDR10;
 framebuffer precision does not establish wire depth. NVIDIA wire depth remains
-driver-selected unless independently measured. No total-GPU or NVDEC percentage
+queried from the accepted per-head driver state where available, not measured
+on the HDMI cable. No total-GPU or NVDEC percentage
 is substituted for an unavailable per-client rendering counter.
 
 The kernel collector reports open/read errors, overruns, relevant-message counts

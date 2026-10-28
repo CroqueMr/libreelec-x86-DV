@@ -4,7 +4,7 @@ CB1 reconstructs source images, applies the selected processing mode and prepare
 output metadata. Kodi retains decoding, audio, subtitles and playback timing.
 
 Native HDR10/HLG/SDR and [stereoscopic 3D](3D.md) remain outside CB1 conversion.
-See [hardware support](HARDWARE.md) for integrated and experimental dedicated GPUs.
+See [hardware support](HARDWARE.md) for supported integrated and dedicated GPUs.
 
 ## Standard and Master Reference
 
@@ -27,6 +27,9 @@ the existing output-selection fallback; they are not silently reconstructed by
 the reference algorithm.
 
 The source-tree focus is [Master Reference](../../CB1/docs/MASTER-REFERENCE.md).
+Expert settings select YCbCr or IPT-PQc2 Master output. This changes the payload
+inside the RGB8 Dolby Vision tunnel, not the HDMI container. Profile 5 uses the
+shared direct IPT path in both Master variants.
 
 ## Metadata use
 

@@ -31,7 +31,7 @@ qualified performance filters; Master retains its exact reconstruction. Optional
 Master-to-Standard recovery is off by default. Transport, GUI and supported FEL
 upscaling optimizations are automatic.
 
-HDR10 Adaptive uses the same scene expansion and temporal slew limit as Adaptive B.
+HDR10 Adaptive uses the shared expansion executor and temporal slew limit.
 Predicted L1, adjusted by predicted L3, guides the curve without invented creative
 trims. Output L1 follows that curve rather than instantaneous frame extrema.
 The inference model and HDR10 Reference AI circuit are unchanged.

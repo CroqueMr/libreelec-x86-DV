@@ -1,12 +1,13 @@
-# LibreELEC with Dolby Vision and AMD 3D support
+# LibreELEC with Dolby Vision, HDR10+ and AMD 3D support
 
-Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
-open-source Dolby Vision processing engine. Intel and AMD integrated graphics
-are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
+Dolby Vision playback and HDR10/HDR10+ output in Kodi, powered by **CB1**, an
+open-source Dolby Vision processing engine. Supported Intel, AMD and NVIDIA
+GPU families are listed below. One Generic image includes both NVIDIA driver branches.
 
 **R1.0.0 RC1** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
 
-RC1 draft candidate. Existing published downloads remain available below.
+[R1.0.0 RC1](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-RC1)
+is available as an installation image and a LibreELEC update archive.
 
 [Downloads](https://github.com/CroqueMr/libreelec-x86-DV/releases)
 · [Release notes](docs/cb1/RELEASE.md)
@@ -49,13 +50,15 @@ Adaptive HDR Mapping and HDR10 Expert require a TV profile. Standard, Master
 Reference, Basic and Reference AI do not.
 
 For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
+The [Master Reference / Standard comparison](docs/reports/master-reference-vs-standard-2026-10-21.md)
+contains the retained Beta5 image and GPU measurements.
 
 ### Quick rendering selection
 
 Change rendering mode during playback. The bottom-right menu shows the choices
 for the current source and explains unavailable modes.
 
-![Beta4 quick rendering menu on Avatar with Master Reference active](docs/cb1/images/beta4-quick-rendering-menu.png)
+![RC1 compact rendering menu on Avatar with all seven Dolby Vision source choices](docs/cb1/images/rc1-quick-rendering-menu.png)
 
 Press **O** to cycle through **Player information**, **rendering selection** and
 **video only**. Play/pause and seek remain available with either panel open.
@@ -66,10 +69,22 @@ Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
 metadata, active rendering mode and supported GPU render-engine usage.
 HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
-![Beta4 Player information on Avatar in Master Reference with its audio track](docs/cb1/images/beta4-player-information-master-reference.png)
+![Player information example on Avatar in Master Reference with its audio track](docs/cb1/images/beta4-player-information-master-reference.png)
 
 GPU usage is Kodi's render-engine load, including visible menus. It is not total
 GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
+
+## HDR10+
+
+| Source | Output | Processing |
+| --- | --- | --- |
+| HDR10+ | HDR10+ | Preserve the original picture and its frame-associated dynamic metadata |
+| Dolby Vision | HDR10+ | Reconstruct the source, including FEL, and generate HDR10+ statistics and compatible luminance guidance |
+
+Supported on the listed Intel, AMD and NVIDIA driver routes, with a compatible
+HDR10+ display and at least 10-bit output. Kodi reports HDR10+ display capability,
+source format and accepted output separately. HDR10+ to Dolby Vision is not included.
+[HDR10+ processing](CB1/docs/HDR10PLUS.md) · [Driver/output support](docs/cb1/DRIVER-COVERAGE.md).
 
 ## Install or update
 
@@ -101,12 +116,12 @@ A 3D-capable display and suitable glasses are required.
 
 | Hardware | Dolby Vision support |
 | --- | --- |
-| Intel iGPU: Core 8th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
+| Intel iGPU: Core 7th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
 | AMD iGPU: Ryzen 2000G / 3000G and corresponding mobile APUs, 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
-| AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Experimental |
-| AMD Radeon Vega M; Intel Arc A / B | Experimental |
-| NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Experimental |
-| NVIDIA GeForce GTX 10, Pascal | Matched R580 driver, same image; physical validation pending |
+| AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Supported |
+| AMD Radeon Vega M; Intel Arc A / B | Supported |
+| NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Supported |
+| NVIDIA GeForce GTX 10, Pascal | Supported; matched R580 driver selected automatically |
 | Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
 Performance depends on hardware, content and rendering mode. Prior N100 tests
@@ -116,16 +131,15 @@ Heavier conversions require more GPU performance.
 For problems, open an issue with the exact CPU/GPU, display, connection chain,
 build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 The [driver/output matrix](docs/cb1/DRIVER-COVERAGE.md) distinguishes DV V1/V2,
-HDR10/HLG, native HDR10+ and converted HDR10+ from physical qualification.
+HDR10/HLG, native HDR10+ and converted HDR10+, including route-specific limits.
 
-## Known issues or limitation
+## Known limitations
 
 - Screenshots are unavailable in Dolby Vision Master Reference.
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
-- Dedicated AMD and NVIDIA GPU support is experimental.
-- Native HDMI HDR is not admitted on Intel Display9; the new Display10 deep-output route needs physical qualification.
-- New HDR10+ driver routes require physical display qualification; NVIDIA output is experimental and commit-coupled.
+- Intel Display9, including Kaby Lake and Coffee Lake: native HDMI HDR10/HLG/HDR10+ is not supported. Dolby Vision uses its separate tunnel path.
+- NVIDIA GTX 10/16 and RTX 20/30: some HDMI-VIC, stereoscopic or vendor-packet combinations prevent native HDR signaling. See the driver/output matrix.
 
 ## Components and documentation
 

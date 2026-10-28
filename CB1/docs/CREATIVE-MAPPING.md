@@ -68,7 +68,7 @@ inherited files retain their original terms. The local scalar replacement and
 original project portions are tracked in [the migration record](GPL2-MIGRATION.md).
 The CM2.9 GPU and fused colour/composition kernels are replaced and tracked
 separately. The Python reference is separate from runtime C.
-These references are experimental open implementations, not proof of Dolby
+These references are open numerical implementations, not proof of Dolby
 equivalence. Their different transfer domains must not be mixed silently.
 
 The trim-only reference applies SOP to normalized absolute linear nits, then

@@ -1,6 +1,6 @@
 # HDR10+ output
 
-Experimental. No HDR10+ display or HDMI analyzer is available for validation.
+Supported: native HDR10+ playback and Dolby Vision-to-HDR10+ conversion.
 
 | Source | Output | Processing |
 | --- | --- | --- |
@@ -8,9 +8,10 @@ Experimental. No HDR10+ display or HDMI analyzer is available for validation.
 | Dolby Vision | HDR10+ | BL/EL/RPU reconstruction, image statistics and representable luminous trims. |
 | Unsupported transport | HDR10 | Dynamic metadata cleared; fallback reported. |
 
-Intel and AMD require native HDMI, an admitted dynamic-metadata transaction and
-at least 10-bit output. NVIDIA HDR10+ transport is not implemented. HDR10+ to
-Dolby Vision is not included.
+Intel, AMD and NVIDIA use their supported native-HDMI driver routes, an accepted
+dynamic-metadata transaction and at least 10-bit output. Native and converted
+HDR10+ share the output contract. HDR10+ to Dolby Vision is not included.
+[Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
 ## Metadata conversion
 
@@ -36,13 +37,14 @@ Native and generated metadata support receiver versions 0 and 1. Generated V0
 uses measured 5th/10th percentiles, not V1's reserved distribution values.
 Changing receiver version cancels pending conversion metadata before reuse.
 
-## Qualification
+## Verification
 
 Software tests cover byte layout, rational units, curve quantization, invalid
 inputs, L1/L3/L2/L8 coverage, frame ownership and HDR10 fallback. Intel N100 and
 AMD 3200U GPU witnesses cover active-area statistics, BL/FEL/P5 reconstruction,
-cancel/retry and unchanged analyzed pixels. Physical HDR10+ packet latching,
-appearance and full playback cadence remain unqualified.
+cancel/retry and unchanged analyzed pixels. Driver tests cover packet ownership,
+accepted depth, failed commits and restoration. These checks are not Dolby or
+HDMI certification.
 
 ## References
 
