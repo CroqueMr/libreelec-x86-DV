@@ -65,7 +65,7 @@
     "scripts/image": "9e3a399d7423e163a5dca09a75e9887062d7686ca29e9752e61ffde8c04a742e",
     "scripts/mkimage": "48d677edad73ac4262de113f001ebda8e36b4fb72ea0e0c4cf6af849040c624f",
     "scripts/unpack": "4c36b7518c60dfef93cb6834bf39e3620acc1c07874343bbf96e4accc0bb1e45",
-    "config/cb1-patch-index.json": "7d09a5e91394f46ca32d150f510d6e382c4f4eb746fd7199c96fa022926ac7df",
+    "config/cb1-patch-index.json": "b9b9d0b13f53265d2d6e48ece53f7b75a331137300f911894496b17e2e790411",
     "config/cb1-versions.json": "0d0dbc5144ec5310cc5efab7a3ec72b64d9d32536d7e01612798ffda37c9bcec",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
     "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "04e6fc8568849ac01d7f0581b534384d6856d075d9f448ef2f415aa281fe97f3",
