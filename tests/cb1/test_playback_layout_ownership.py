@@ -38,11 +38,11 @@ struct Dialog {
  void apply(){GEOMETRY}
 };
 int main(){
- for(int count:{0,1,3,6,7,20}){
+ for(auto [count,expected]:{std::pair{0,50}, {1,50}, {3,150}, {6,300}, {7,350}, {20,850}}){
   Dialog native{false,{count}};native.apply();assert(native.group.h==9 && native.list.h==9);
   Dialog d{true,{count}};d.apply();
-  const float expected=50*std::clamp(count,1,6);
   assert(d.list.h==expected && d.group.x==1220 && d.group.y+d.group.h==1040);
+  assert(d.group.y>=40);
   assert(d.image.h==d.group.h && d.help.y==70+expected);
   assert(d.help.y+38<=d.group.h-4);
  }
