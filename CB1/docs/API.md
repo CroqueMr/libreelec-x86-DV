@@ -30,7 +30,7 @@ target or unqualified colour-converted route is unsupported, not Standard.
 The raw descriptor is copied into dispatch variables before this call returns.
 See [Master Reference](MASTER-REFERENCE.md) for admission and output contracts.
 
-Direct-DV Adaptive uses policy API 7. Both preparation entries may
+Direct-DV Adaptive uses policy API 9. Both preparation entries may
 return Pending. Poll before resolving; commit only the matching presented
 identity and resolve serial. Generation 3 denotes reconstructed Adaptive HDR Mapping output
 with measured LMS/PQ statistics. Authored-Dolby Vision Adaptive HDR Mapping updates its authored

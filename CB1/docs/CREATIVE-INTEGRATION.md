@@ -5,7 +5,7 @@ No kernel, driver, display query, player UI, audio or scheduling patch is includ
 
 ## Caller contract
 
-- Rebuild adapters: `DVBRIDGE_HDR10_POLICY_API` is 4 and `DVBRIDGE_DV_POLICY_API` is 7.
+- Rebuild adapters: `DVBRIDGE_HDR10_POLICY_API` is 4 and `DVBRIDGE_DV_POLICY_API` is 9.
 - DV READY may retain a source-sized intermediate. Resolve scales and packs it directly. RGB consumers call `dvbridge_render_dv_policy_rgb` to materialize and cache output-sized PQ without changing the metadata or presentation state.
   The embedded creative snapshot now includes CM4 targets and field-presence
   masks. These layouts are not binary compatible with earlier adapters.
@@ -28,8 +28,8 @@ No kernel, driver, display query, player UI, audio or scheduling patch is includ
   Never report L8 controls as applied from these fields alone.
 - Check `min_pq_present` before using a target black level. Preset and manual
   targets have no qualified black-level value; zero is not a measurement.
-- Generation 3 records the historical dense LMS/PQ model and newly generated
-  L1/L5. Identity retains generation 2 and zero measured-statistics fields.
+- Generation 3 identifies reconstructed Adaptive output with generated L1/L5.
+  Identity retains generation 2 and zero measured-statistics fields.
   Read `pixel_algorithm`, `analysis_model` and `expansion_reason` from the
   matching committed snapshot. These are not physical display measurements.
 
