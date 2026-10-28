@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <window>
   <defaultcontrol always="true">3</defaultcontrol>
-  <depth>0.5</depth>
-  <animation effect="fade" start="0" end="100" time="120">WindowOpen</animation>
-  <animation effect="fade" start="100" end="0" time="80">WindowClose</animation>
+  <include>Animation_DialogPopupOpenClose</include>
+  <depth>DepthOSD</depth>
   <controls>
     <include file="special://xbmc/media/cb1/IncludesDVProcessInfo.xml">CB1PlaybackModeLayout</include>
   </controls>

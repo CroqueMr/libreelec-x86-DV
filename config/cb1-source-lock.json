@@ -29,7 +29,7 @@
     "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": "4b25da9fe3dd08a633500bc624e9f8f14599f904bbed8349cfa27ce1a3f381f3",
     "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": "93a7543fbd6d0d3e85978fff15c3d171d6b91b0f42fdf4007d73fae7f36811ff",
     "projects/Generic/patches/kodi/kodi-9999-z-frame-preparation.patch": "7e912dfb3c6d52db94759244e305f985380629aa7fa372e5a410ecbd38c3476f",
-    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "e163edd823308b70bd5dda22cb11d215cd0d8cc72da2ba959adaae1f69d09a50",
+    "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "2eb4e1035e4b23aa94ed3f5b95cb98fbd42bdf79949bdd89fd86c2c9c55e13b0",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "a0f9d977651920c743b9ce4dcc826f260edf22d6663912da33c9dbcd4cebd5eb",
     "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": "de5749ed197ddb6eb192392daf3cfad6a0c0a5a5b7d50ed90a0b04fb32b90f98",
     "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": "687342587646cfff52b26f217cbcc80c8cad40725324e192de67a578d6fdcd0b",
@@ -56,7 +56,7 @@
     "licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt": "c692fb14ad4f499c6aee1b9e144e6905148c420e6225b17cb2937366c1e507ad",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-white.png": "72ed1d13473ec391e897b602bcc7d9473e70d5ca8aa3c7c81f99ea87d7dbb4e5",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-panel.png": "36480b14914c7b2a0a5f6db253132142b041496a9e59a9392884b7f27aca61a3",
-    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "8756196a5359a3f49768d0aad49553c692cea30a7d3ae38aaf277bd28a85fed3",
+    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "556c27b34db565cd3f86c5b62a7363a35d026b51c41c7dd95e5d503fc7abed15",
     "packages/sysutils/busybox/config/busybox-init.conf": "747ef97a8bc053add17961092bab59d27f6528f165694cd098a5bd51a5f701c8",
     "packages/linux/package.mk": "9430d047802cd56edbbb3d112f4b7c58611e73ee9a091748d0ddd405888a588f",
     "packages/tools/installer/scripts/installer": "a7353e217a6096d41cf7b9719541a9a71fe950f4a6f518d75f58ac1817ee2f66",
@@ -68,9 +68,9 @@
     "config/cb1-patch-index.json": "b9b9d0b13f53265d2d6e48ece53f7b75a331137300f911894496b17e2e790411",
     "config/cb1-versions.json": "0d0dbc5144ec5310cc5efab7a3ec72b64d9d32536d7e01612798ffda37c9bcec",
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
-    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "c399ffc5991154af965d1e9a1b9ed1065a4dd5f8aa918c763f4b266878606581",
+    "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "e8db628070ba54f9578faf74cef5523f9c8904552dd9a2e197b34b2d95e64b50",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f",
-    "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlaybackModes.xml": "cc48be94fd3303e90c4e4f1df72f862f9006ce077ab6bf2380e3f1068c37ca37"
+    "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlaybackModes.xml": "0449506089446ca376621f611f4c9de711e5c6cd381573acb2187411ad78fdd5"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

@@ -1,5 +1,6 @@
 """The active skin owns rendering-selection layout and descriptions."""
 import os
+import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
@@ -10,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class PlaybackLayoutOwnership(unittest.TestCase):
-    def test_compact_selector_keeps_help_inside_and_native_lists_unmodified(self):
+    def test_beta4_selector_keeps_its_layout_and_native_lists_unmodified(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         from test_native_video_source import body
         source = (tree/'xbmc/dialogs/GUIDialogSelect.cpp').read_text()
@@ -42,8 +43,8 @@ int main(){
   Dialog d{true,{count}};d.apply();
   const float expected=50*std::clamp(count,1,6);
   assert(d.list.h==expected && d.group.x==1220 && d.group.y+d.group.h==1040);
-  assert(d.image.h==d.group.h && d.help.y==84+expected);
-  assert(d.help.y+48<=d.group.h-24);
+  assert(d.image.h==d.group.h && d.help.y==70+expected);
+  assert(d.help.y+38<=d.group.h-4);
  }
 }
 '''.replace('GEOMETRY', geometry)
@@ -58,14 +59,13 @@ int main(){
         group=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9100']")
         self.assertIsNotNone(group)
         self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
-        help=group.find("control[@id='9102']")
-        self.assertEqual((help.findtext('left'),help.findtext('width'),help.findtext('height')),('48','564','48'))
-        heading=group.find("control[@id='1']")
-        self.assertEqual((heading.findtext('left'),heading.findtext('top')),('48','32'))
-        divider=group.find("control[@id='9103']")
-        self.assertIsNotNone(divider, 'heading must be visually separated from selectable rows')
-        self.assertLess(int(heading.findtext('top'))+int(heading.findtext('height')),int(divider.findtext('top')))
-        self.assertLess(int(divider.findtext('top'))+int(divider.findtext('height')),72)
+        # Published Beta4 build 45b07c9: canonical XML of the two app-owned includes.
+        for name,expected in (
+            ('CB1PlaybackModeLayout','19376914c906de94b827e883e99fe2a29df717113b03a9b084713b08cc309beb'),
+            ('CB1PlaybackModeRows','bd2f02179872d443a0fdfccfcaba3bf45b915174549ce02cb2c3e6181f3d307b')):
+            node=layout.find(".//include[@name='"+name+"']")
+            canonical=ET.canonicalize(ET.tostring(node,encoding='unicode'),strip_text=True)
+            self.assertEqual(hashlib.sha256(canonical.encode()).hexdigest(),expected,name)
 
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

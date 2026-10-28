@@ -13780,7 +13780,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.h b/xbmc/dialogs/GUIDialogP
 diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 --- a/xbmc/dialogs/GUIDialogSelect.cpp
 +++ b/xbmc/dialogs/GUIDialogSelect.cpp
-@@ -12,11 +12,17 @@
+@@ -12,11 +12,16 @@
  #include "FileItemList.h"
  #include "ServiceBroker.h"
  #include "guilib/GUIMessage.h"
@@ -13791,7 +13791,6 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  #include "utils/StringUtils.h"
 -
 +#ifdef HAVE_DVBRIDGE
-+#include "guilib/GUIFontManager.h"
 +#include "windowing/GraphicContext.h"
 +#endif
 +
@@ -13799,7 +13798,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  #include <memory>
  
  #define CONTROL_HEADING         1
-@@ -45,6 +51,23 @@
+@@ -45,6 +50,23 @@
  
  CGUIDialogSelect::~CGUIDialogSelect(void) = default;
  
@@ -13823,7 +13822,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
  {
    switch (message.GetMessage())
-@@ -78,6 +101,25 @@
+@@ -78,6 +100,17 @@
  
    case GUI_MSG_WINDOW_INIT:
      {
@@ -13836,20 +13835,12 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 +        FreeResources(true);
 +        SetProperty("xmlfile", file);
 +      }
-+      if (playback)
-+      {
-+        const RESOLUTION_INFO resolution(1920, 1080);
-+        SetCoordsRes(resolution);
-+        g_fontManager.LoadTTF("CB1.MenuBody", "special://xbmc/media/Fonts/arial.ttf",
-+                             0xfff4f6f6, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
-+        g_fontManager.LoadTTF("CB1.MenuHelp", "special://xbmc/media/Fonts/arial.ttf",
-+                             0xffbfc8cc, 0, 20, 0, false, 1.0f, 1.0f, &resolution);
-+      }
++      if (playback) SetCoordsRes(RESOLUTION_INFO(1920, 1080));
 +#endif
        m_bButtonPressed = false;
        m_bButton2Pressed = false;
        m_bConfirmed = false;
-@@ -99,6 +141,8 @@
+@@ -99,6 +132,8 @@
            if (iSelected >= 0 && iSelected < m_vecList->Size())
            {
              CFileItemPtr item(m_vecList->Get(iSelected));
@@ -13858,7 +13849,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
              if (m_multiSelection)
                item->Select(!item->IsSelected());
              else
-@@ -342,6 +386,23 @@
+@@ -342,6 +377,23 @@
  
  void CGUIDialogSelect::OnInitWindow()
  {
@@ -13866,7 +13857,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 +  if (GetProperty("CB1.PlaybackModes").asBoolean())
 +  {
 +    const float rowsHeight = 50.0f * std::clamp(m_vecList->Size(), 1, 6);
-+    const float height = 156.0f + rowsHeight;
++    const float height = 112.0f + rowsHeight;
 +    if (auto* group = GetControl(9100))
 +    {
 +      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
@@ -13876,7 +13867,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 +    for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
 +      if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
 +    if (auto* help = GetControl(9102))
-+      help->SetPosition(help->GetXPosition(), 84.0f + rowsHeight);
++      help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
 +  }
 +#endif
    m_viewControl.SetItems(*m_vecList);

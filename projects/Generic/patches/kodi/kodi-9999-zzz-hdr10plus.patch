@@ -1218,15 +1218,6 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
    const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
    if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
    const bool hdr10Source=source.isHDR10 && !source.isDV;
-@@ -116,7 +116,7 @@
-     }
-     CSettingConditions::DVOutputOptions(choiceSetting,options);
-     dialog->Reset();
--    dialog->SetHeading(StringUtils::Format(strings.Get(40876), hdr10Source ? "HDR10" : "Dolby Vision"));
-+    dialog->SetHeading("[B]" + StringUtils::Format(strings.Get(40876), hdr10Source ? "HDR10" : "Dolby Vision") + "[/B]");
-     dialog->SetUseDetails(true);
-     for(const auto& option : options)
-     {
 diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 --- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
