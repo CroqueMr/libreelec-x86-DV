@@ -16,13 +16,12 @@ class AsyncOutputAdmissionTests(unittest.TestCase):
 constexpr int DVBRIDGE_MODE_STANDARD=0,DVBRIDGE_MODE_HDR10_BASIC=2,
  DVBRIDGE_MODE_HDR10_EXPERT=3,DVBRIDGE_MODE_ENHANCED_DV=5,DVBRIDGE_ADAPTIVE_A=0;
 namespace DVBRIDGE {enum class OutputMode {Standard,HDR10,MasterReference};}
-struct TestPolicy {int mode=6,tv=1,adaptive=1;bool adaptive_rev_b=true;};
+struct TestPolicy {int mode=6,tv=1,adaptive=1;};
 struct Preferences {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::HDR10;
  bool allowMasterFallback=false,valid=true;TestPolicy requested;
  TestPolicy Policy()const{return requested;}bool ProfileValid()const{return valid;}};
 bool internalFallback(const Preferences& preferences,const TestPolicy* selected){
  BODY
- if(fallback)assert(!policy.adaptive_rev_b);
  return fallback;
 }
 int main(){

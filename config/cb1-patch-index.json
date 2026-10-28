@@ -257,8 +257,6 @@
     "component": "kodi",
     "summary": "Add source-aware conversion, native playback information and bounded live mode controls",
     "files": {
-      "addons/skin.estuary/xml/DialogSelect.xml": "Select a compact bottom layout only for the playback-mode dialog.",
-      "addons/skin.estuary/xml/Variables.xml": "Use native disabled text colors in the playback-mode selector.",
       "system/keymaps/keyboard.xml": "Route O to close the native playback-mode selector; remove its separate keyboard shortcut.",
       "xbmc/GUIInfoManager.cpp": "Register native processing, metadata and accepted-output labels.",
       "xbmc/cores/DataCacheCore.cpp": "Publish coherent native processing facts and reject obsolete stream generations.",
@@ -290,7 +288,6 @@
       "xbmc/cores/VideoProcessingInfo.h": "Define source and accepted-output facts without renderer or CB1 dependencies.",
       "xbmc/dialogs/CMakeLists.txt": "Link the native policy-header consumer to the shared engine only when enabled.",
       "xbmc/dialogs/DVPixelFormat.h": "Describe source chroma subsampling separately from hardware surfaces and HDMI transport.",
-      "xbmc/dialogs/DVPlaybackMenuLayout.h": "Add source-aware conversion, native playback information and bounded live mode controls.",
       "xbmc/dialogs/GUIDialogSelect.h": "Declare the targeted native selector action handler.",
       "xbmc/guilib/guiinfo/GUIInfoLabels.h": "Reserve native source and processing information labels.",
       "xbmc/guilib/guiinfo/PlayerGUIInfo.cpp": "Read processing labels from the native Kodi cache.",
@@ -564,7 +561,6 @@
     "files": {
       "CMakeLists.txt": "Build the shared CB1 engine and matched HDR10 AI support.",
       "addons/resource.language.en_gb/resources/strings.po": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Reuse native list navigation, textures and focus states for source-specific playback choices.",
       "system/settings/settings.xml": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/addons/Skin.cpp": "Resolve only CB1 shared include resources independently of the active skin.",
       "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",

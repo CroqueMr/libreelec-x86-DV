@@ -15,6 +15,8 @@ class AdaptiveNamesTests(unittest.TestCase):
         source = (tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         enums = source.split('enum class OutputMode',1)[1].split('// Decoder ingress',1)[0]
         preferences = source.split('struct OutputPreferences',1)[1].split('inline std::mutex&',1)[0]
+        window = (tree/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        probe = re.search(r'auto policy = preferences.Policy\(\);.*?(?=\s*policy.tv =)', window, re.S).group(0)
         program = '''
 #define HAVE_DVBRIDGE
 #include "dvbridge_policy.h"
@@ -24,7 +26,6 @@ class AdaptiveNamesTests(unittest.TestCase):
 #include <cstdint>
 #include "utils/DVBridgePresentation.h"
 enum class OutputMode ENUMS
-inline int PolicyCode POLICY_CODE
 struct OutputPreferences PREFS
 int main() {
   OutputPreferences a; a.output=OutputMode::AdaptiveB; a.peak=2500; a.gamut=2;
@@ -35,13 +36,12 @@ int main() {
   assert(a.Policy().adaptive==DVBRIDGE_ADAPTIVE_B_FP16);
   a.hdr10Source=HDR10SourceMode::EnhancedDV;
   assert(a.HDR10Policy().adaptive==DVBRIDGE_ADAPTIVE_A && a.HDR10Policy().mode==DVBRIDGE_MODE_ENHANCED_DV);
-  a.output=static_cast<OutputMode>(6);
-  assert(a.Policy().mode==DVBRIDGE_MODE_ENHANCED_DV && a.Policy().adaptive_rev_b);
-  assert(a.Policy().adaptive==DVBRIDGE_ADAPTIVE_B_FP16 && PolicyCode(a.Policy())==8);
-  assert(!a.HDR10Policy().adaptive_rev_b);
+  const auto& preferences=a;
+  auto probe=[&](int mode){@@PROBE@@ return policy;};
+  assert(probe(DVBRIDGE_MODE_HDR10_EXPERT).adaptive==DVBRIDGE_ADAPTIVE_A);
+  assert(probe(DVBRIDGE_MODE_ENHANCED_DV).adaptive==DVBRIDGE_ADAPTIVE_B_FP16);
 }
-'''.replace('ENUMS',enums).replace('PREFS',preferences).replace('POLICY_CODE',
-            source.split('inline int PolicyCode',1)[1].split('#endif',1)[0])
+'''.replace('ENUMS',enums).replace('PREFS',preferences).replace('@@PROBE@@',probe)
         core = Path(__file__).resolve().parents[2]/'CB1/src'
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); (root/'test.cpp').write_text(program)
@@ -73,9 +73,6 @@ int main() {
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision Standard");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision Reference (AI)");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(4, true)) == "Dolby Vision Adaptive HDR Mapping (AI)");
-  saved={8,CDVPlaybackInfo::HDMI,false};
-  assert(CDVPlaybackInfo::Mode(saved)=="Dolby Vision Adaptive HDR Mapping rev B");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(8))=="Dolby Vision Adaptive HDR Mapping rev B");
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:
@@ -92,11 +89,11 @@ int main() {
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings = ET.parse(tree / 'system/settings/settings.xml')
         options = settings.findall(".//setting[@id='dvbridge.outputmode']/constraints/options/option")
-        self.assertEqual([int(option.text) for option in options], [0, 4, 5, 6, 2, 1])
+        self.assertEqual([int(option.text) for option in options], [0, 4, 5, 2, 1])
         self.assertIsNone(settings.find(".//setting[@id='dvbridge.adaptivefp16']"))
         menu = (tree / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
-        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 6, 2, 1, 1, 1])
+        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1, 1])
 
     def test_legacy_fast_values_cannot_change_output_policy(self):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
@@ -231,13 +228,13 @@ struct CSettings:CSettingsBase {
  bool Load(const TiXmlNode*){return true;}
  bool Load(const TiXmlElement* root,bool& updated) @@LOAD@@
 };
-int main(){for(bool reverse:{false,true})for(int saved:{0,1,2,3,4,5}){
+int main(){for(bool reverse:{false,true})for(int saved:{0,1,2,3,4,5,6}){
  TiXmlElement root;
  if(reverse)root.Add("dvbridge.fastchroma","true");
  root.Add("dvbridge.outputmode",std::to_string(saved));
  if(!reverse)root.Add("dvbridge.fastchroma","true");
  CSettings settings;bool updated=false;assert(settings.Load(&root,updated));
- assert(settings.loaded["dvbridge.outputmode"]==std::to_string(saved==3?5:saved));
+ assert(settings.loaded["dvbridge.outputmode"]==std::to_string(saved==3||saved==6?5:saved));
  assert(settings.loaded["dvbridge.fastchroma"]=="true"); // Retired, never read or migrated.
  assert(root.children[reverse?1:0]->text==std::to_string(saved));
 }}

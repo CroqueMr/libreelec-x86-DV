@@ -62,13 +62,9 @@ int main() {
  frame.identity.valid=true;frame.capabilities=window.available;
  frame.capabilities.sourceKnown=true;frame.capabilities.isDV=true;
  std::vector<IntegerSettingOption> choices;
- for(int value:{0,4,5,6,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
+ for(int value:{0,4,5,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
  CSettingConditions::DVOutputOptions(std::make_shared<CSetting>(),choices);
- assert(choices.size()==6 && !choices[3].properties.back().second);
- frame.capabilities.processing[4]={false,OutputReason::SourceIneligible};
- assert(disabled(5) && disabled(6));
- frame.capabilities.processing[4]={true,OutputReason::None};
- assert(!disabled(5) && !disabled(6));
+ assert(choices.size()==5 && std::none_of(choices.begin(),choices.end(),[](auto& x){return x.value==6;}));
  assert(!disabled());
  // A prior failed atomic commit does not remove physically available transports.
  frame.capabilities.nativeDV=false;frame.capabilities.hdr10=false;

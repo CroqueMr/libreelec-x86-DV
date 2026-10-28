@@ -32,7 +32,6 @@ struct dvbridge_policy {
     struct dvbridge_tv_profile tv;
     enum dvbridge_adaptive_variant adaptive;
     bool master_ipt;
-    bool adaptive_rev_b;
 };
 struct dvbridge_identity { uint64_t stream, picture, revision; };
 enum dvbridge_policy_status {

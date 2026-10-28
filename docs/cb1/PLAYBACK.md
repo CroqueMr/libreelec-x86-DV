@@ -54,6 +54,9 @@ Play/pause and seek remain available. Quick rendering selection is always
 enabled. Disable **Enhanced Player information** to use Kodi's original panel
 without removing the quick selector.
 
+The quick selector uses Kodi's native detailed selection dialog. The active skin
+owns its background, spacing, fonts, descriptions and scrolling.
+
 ![Dolby Vision rendering selection](images/beta4-quick-rendering-menu.png)
 
 ![HDR10 rendering selection](images/quick-display-hdr10.png)

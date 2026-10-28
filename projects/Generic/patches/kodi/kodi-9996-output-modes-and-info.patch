@@ -1,29 +1,3 @@
-diff --git a/addons/skin.estuary/xml/DialogSelect.xml b/addons/skin.estuary/xml/DialogSelect.xml
---- a/addons/skin.estuary/xml/DialogSelect.xml
-+++ b/addons/skin.estuary/xml/DialogSelect.xml
-@@ -4,7 +4,8 @@
- 	<include>Animation_DialogPopupOpenClose</include>
- 	<depth>DepthOSD</depth>
- 	<controls>
--		<include condition="![Window.IsActive(dialogselectvideo) | Window.IsActive(dialogselectaudio) | Window.IsActive(dialogselectsubtitle) | Window.IsActive(gamesaves) | Window.IsActive(gamestretchmode) | Window.IsActive(gamevideofilter) | Window.IsActive(gamevideorotation) | Window.IsActive(ingamesaves)]">DefaultDialogSelectLayout</include>
-+		<include condition="!String.IsEqual(Window(12000).Property(CB1.PlaybackModes),true) + ![Window.IsActive(dialogselectvideo) | Window.IsActive(dialogselectaudio) | Window.IsActive(dialogselectsubtitle) | Window.IsActive(gamesaves) | Window.IsActive(gamestretchmode) | Window.IsActive(gamevideofilter) | Window.IsActive(gamevideorotation) | Window.IsActive(ingamesaves)]">DefaultDialogSelectLayout</include>
-+		<include condition="String.IsEqual(Window(12000).Property(CB1.PlaybackModes),true)">CB1PlaybackModeLayout</include>
- 		<include condition="Window.IsActive(dialogselectvideo)">VideoDialogSelectVideoLayout</include>
- 		<include condition="Window.IsActive(dialogselectaudio)">VideoDialogSelectAudioLayout</include>
- 		<include condition="Window.IsActive(dialogselectsubtitle)">VideoDialogSelectSubtitleLayout</include>
-diff --git a/addons/skin.estuary/xml/Variables.xml b/addons/skin.estuary/xml/Variables.xml
---- a/addons/skin.estuary/xml/Variables.xml
-+++ b/addons/skin.estuary/xml/Variables.xml
-@@ -1,5 +1,9 @@
- <?xml version="1.0" encoding="UTF-8"?>
- <includes>
-+  <variable name="CB1PlaybackModeTextColor">
-+    <value condition="ListItem.Property(disabled)">grey</value>
-+    <value>white</value>
-+  </variable>
- 	<variable name="PVRStatusImageVar">
- 		<value condition="ListItem.IsRecording">windows/pvr/record.png</value>
- 		<value condition="ListItem.HasTimer | ListItem.HasTimerSchedule">windows/pvr/timer.png</value>
 diff --git a/system/keymaps/keyboard.xml b/system/keymaps/keyboard.xml
 --- a/system/keymaps/keyboard.xml
 +++ b/system/keymaps/keyboard.xml
@@ -2224,23 +2198,6 @@ diff --git a/xbmc/dialogs/DVPixelFormat.h b/xbmc/dialogs/DVPixelFormat.h
 +  if (desc->log2_chroma_w == 0 && desc->log2_chroma_h == 0)
 +    return "YUV 4:4:4";
 +  return desc->name ? desc->name : "";
-+}
-+}
-diff --git a/xbmc/dialogs/DVPlaybackMenuLayout.h b/xbmc/dialogs/DVPlaybackMenuLayout.h
---- /dev/null
-+++ b/xbmc/dialogs/DVPlaybackMenuLayout.h
-@@ -0,0 +1,13 @@
-+/* SPDX-License-Identifier: GPL-2.0-or-later */
-+#pragma once
-+
-+#include <algorithm>
-+
-+namespace DVBRIDGE
-+{
-+// Cap the visible list at six rows; longer lists retain native scrolling.
-+constexpr int PlaybackMenuRowsHeight(int count)
-+{
-+  return 50 * std::clamp(count, 1, 6);
 +}
 +}
 diff --git a/xbmc/dialogs/GUIDialogSelect.h b/xbmc/dialogs/GUIDialogSelect.h

@@ -10,7 +10,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  #: system/settings/settings.xml
-@@ -25851,7 +25851,19 @@
+@@ -25851,7 +25851,15 @@
  msgstr ""
  
  msgctxt "#40821"
@@ -19,19 +19,15 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40922"
-+msgid "HDR10+ conversion (experimental)"
++msgid "HDR10+ conversion"
 +msgstr ""
 +
 +msgctxt "#40923"
 +msgid "HDR10+ output requires a supported HDMI driver and display."
-+msgstr ""
-+
-+msgctxt "#40924"
-+msgid "Dolby Vision Adaptive HDR Mapping rev B"
  msgstr ""
  
  msgctxt "#40822"
-@@ -25979,18 +25991,6 @@
+@@ -25979,18 +25987,6 @@
  msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
  msgstr ""
  
@@ -53,15 +49,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -20,6 +20,7 @@
-               <option label="40812">0</option>
-               <option label="40913">4</option>
-               <option label="40914">5</option>
-+              <option label="40924">6</option>
-               <option label="40814">2</option>
-               <option label="40813">1</option>
-             </options>
-@@ -31,7 +32,7 @@
+@@ -31,7 +31,7 @@
            <level>2</level><default>0</default>
            <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">1</dependency></dependencies>
            <constraints><options>
@@ -70,31 +58,7 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
            </options></constraints>
            <control type="list" format="string"><usedetails>true</usedetails></control>
          </setting>
-@@ -41,6 +42,7 @@
-           <dependencies><dependency type="visible"><or>
-             <condition setting="dvbridge.outputmode" operator="is">3</condition>
-             <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">6</condition>
-             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-           </or></dependency></dependencies>
-@@ -60,6 +62,7 @@
-           <dependencies><dependency type="visible"><or>
-             <condition setting="dvbridge.outputmode" operator="is">3</condition>
-             <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">6</condition>
-             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-           </or></dependency></dependencies>
-@@ -77,6 +80,7 @@
-           <dependencies><dependency type="visible"><or>
-             <condition setting="dvbridge.outputmode" operator="is">3</condition>
-             <condition setting="dvbridge.outputmode" operator="is">5</condition>
-+            <condition setting="dvbridge.outputmode" operator="is">6</condition>
-             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
-             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-           </or></dependency></dependencies>
-@@ -97,7 +101,7 @@
+@@ -97,7 +97,7 @@
            <control type="list" format="string" />
          </setting>
          <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
@@ -114,25 +78,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
  #include <atomic>
  #include <bit>
  #include <cmath>
-@@ -17,7 +16,7 @@
- 
- namespace DVBRIDGE
- {
--enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5 };
-+enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5, AdaptiveRevB = 6 };
- enum class HDR10SourceMode : int { Native = 0, ReferenceDV = 1, EnhancedDV = 2 };
- 
- // Decoder ingress sees the last complete frame-boundary preference snapshot.
-@@ -27,6 +26,8 @@
+@@ -27,6 +26,7 @@
  #ifdef HAVE_DVBRIDGE
  inline int PolicyCode(const dvbridge_policy& policy)
  {
 +  if (policy.mode==DVBRIDGE_MODE_HDR10PLUS) return 7;
-+  if (policy.adaptive_rev_b) return 8;
    return policy.mode==DVBRIDGE_MODE_ENHANCED_DV && policy.adaptive!=DVBRIDGE_ADAPTIVE_A ? 6 : int(policy.mode);
  }
  #endif
-@@ -38,7 +39,7 @@
+@@ -38,7 +38,7 @@
    int method{0}, panel{0}, gamut{0};
    double peak{0};
    bool optimizedDV{true};
@@ -141,7 +95,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
    int felUpscaling{0};
    bool processingOptimizations{false};
    uint64_t revision{1};
-@@ -60,14 +61,6 @@
+@@ -60,14 +60,6 @@
    }
  
  #ifdef HAVE_DVBRIDGE
@@ -156,15 +110,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
    dvbridge_policy Policy() const
    {
      dvbridge_policy result{};
-@@ -78,13 +71,16 @@
-       case OutputMode::Standard: result.mode = DVBRIDGE_MODE_STANDARD; break;
-       case OutputMode::EnhancedDV:
-       case OutputMode::AdaptiveB:
-+      case OutputMode::AdaptiveRevB:
-         result.mode=DVBRIDGE_MODE_ENHANCED_DV;
-         result.adaptive=DVBRIDGE_ADAPTIVE_B_FP16;
-+        result.adaptive_rev_b=output==OutputMode::AdaptiveRevB;
-         break;
+@@ -84,7 +76,8 @@
        case OutputMode::MasterReference:
          result.mode = DVBRIDGE_MODE_MASTER_REFERENCE; result.master_ipt = masterIPT; break;
        case OutputMode::HDR10:
@@ -174,24 +120,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
          break;
      }
      // Basic/native paths never consume calibration. Keep invalid user values
-@@ -98,6 +94,7 @@
-   {
-     auto result = Policy();
-     result.adaptive=DVBRIDGE_ADAPTIVE_A;
-+    result.adaptive_rev_b=false;
-     result.master_ipt=false;
-     result.mode = hdr10Source == HDR10SourceMode::ReferenceDV ? DVBRIDGE_MODE_STANDARD :
-         hdr10Source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
-@@ -131,7 +128,7 @@
-   const int mode = settings ? settings->GetInt("dvbridge.outputmode") : 0;
-   OutputPreferences next;
-   next.output = mode == 3 ? OutputMode::AdaptiveB :
--      mode >= 0 && mode <= 5 ? static_cast<OutputMode>(mode) : OutputMode::Standard;
-+      mode >= 0 && mode <= 6 ? static_cast<OutputMode>(mode) : OutputMode::Standard;
-   if (settings)
-   {
-     const int hdr10 = settings->GetInt("dvbridge.hdr10source");
-@@ -145,7 +142,7 @@
+@@ -145,7 +138,7 @@
      next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
      next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
    }
@@ -247,32 +176,22 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/core
        default: return "none";
      }
    }
-@@ -71,6 +75,8 @@
+@@ -71,6 +75,7 @@
        case 4: return "Dolby Vision Adaptive HDR Mapping";
        case 5: return "Dolby Vision Master Reference";
        case 6: return "Dolby Vision Adaptive HDR Mapping";
-+      case 8: return "Dolby Vision Adaptive HDR Mapping rev B";
 +      case 7: return output.flags & HDR10PLUS ? "HDR10+ conversion" : "HDR10 conversion";
        default: return output.flags & HDR10 ? "HDR10 Reference Basic" : "Dolby Vision Standard";
      }
    }
-@@ -87,6 +93,8 @@
+@@ -87,6 +92,7 @@
        case 4:return "Dolby Vision Adaptive HDR Mapping";
        case 5:return "Dolby Vision Master Reference";
        case 6:return "Dolby Vision Adaptive HDR Mapping";
-+      case 8:return "Dolby Vision Adaptive HDR Mapping rev B";
 +      case 7:return "HDR10+ conversion";
        default:return "";
      }
    }
-@@ -95,6 +103,7 @@
-   {
-     if (!output.flags) return "Kodi default";
-     std::string mode = output.flags & HDR10 ? Policy(output) :
-+        output.effective == 8 ? "Dolby Vision Adaptive HDR Mapping rev B" :
-         output.effective == 6 ? "Dolby Vision Adaptive HDR Mapping" :
-         output.effective == 5 ? "Dolby Vision Master Reference" :
-         output.effective == 4 ? "Dolby Vision Adaptive HDR Mapping" : "Dolby Vision Standard";
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
@@ -307,16 +226,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
      int felUpscaling{-1};
  #ifdef CB1_HAS_HDR10_AI
      bool hdr10AI{};
-@@ -88,6 +86,8 @@
+@@ -88,6 +86,7 @@
          if (effective==4) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE);
          if (effective==5) return cb1_circuit_version(iptTransport ? CB1_DV_DV_MASTER_IPT : CB1_DV_DV_MASTER_REFERENCE);
          if (effective==6) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE_B);
-+        if (effective==8) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE_REVB);
 +        if (effective==7) return cb1_circuit_version(CB1_DV_HDR10PLUS);
        }
        return "";
      }
-@@ -115,7 +115,7 @@
+@@ -115,7 +114,7 @@
      result[5]=blocks[5]; // Active-picture geometry, not a creative trim.
      for(unsigned level=0;level<32;++level)
        if (output.creativeApplied & (1u<<level)) result[level]=blocks[level];
@@ -325,7 +243,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
      {
        result[1]=blocks[1] && pq[0]<=pq[2] && pq[2]<=pq[1] && pq[1]>0 && pq[1]<=4095;
        result[6]=blocks[6] && (output.effective>=3 || output.level6);
-@@ -248,7 +248,9 @@
+@@ -248,7 +247,9 @@
      m_snapshot.output = output;
      if (m_snapshot.transaction.identity==SourceBinding{output.stream,output.picture,output.revision})
      {
@@ -336,7 +254,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
        m_snapshot.output.requested=m_snapshot.transaction.requested;
        m_snapshot.output.minimumLinkBits=(output.flags & CDVPlaybackInfo::HDR10) ? 10 : 0;
      }
-@@ -387,13 +389,13 @@
+@@ -387,13 +388,13 @@
  inline void DVBRIDGE::StreamTelemetry::PublishNativeInfo(uint64_t generation)
  {
    // Bounded summaries refresh at 2 Hz; accepted mode/format changes publish immediately.
@@ -786,7 +704,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        const auto* l1 = av_dovi_find_level(parsed, 1);
        const bool usable = l1 && l1->l1.min_pq <= l1->l1.avg_pq &&
-@@ -1160,16 +1351,16 @@
+@@ -1160,11 +1351,10 @@
    { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
    const bool asyncSetting = m_context->AsyncPreparation(base.binding.stream);
    auto policy = selected ? *selected : preferences.Policy();
@@ -801,13 +719,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    {
      policy.mode = preferences.output == DVBRIDGE::OutputMode::HDR10 ?
          DVBRIDGE_MODE_HDR10_BASIC : DVBRIDGE_MODE_STANDARD;
-     policy.tv = {};
-     policy.adaptive = DVBRIDGE_ADAPTIVE_A;
-+    policy.adaptive_rev_b = false;
-   }
-   // Capture the proven observation key before geometry or refresh rekeys work.
-   const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
-@@ -1177,7 +1368,12 @@
+@@ -1177,7 +1367,12 @@
    const bool sameGeometry = geometry.source_width == m_sourceGeometry.source_width &&
        geometry.source_height == m_sourceGeometry.source_height &&
        geometry.x == m_sourceGeometry.x && geometry.y == m_sourceGeometry.y &&
@@ -821,7 +733,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (m_geometryKnown && !sameGeometry)
      m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max(preferences.revision,base.binding.revision));
    m_sourceGeometry = geometry;
-@@ -1249,9 +1445,10 @@
+@@ -1249,9 +1444,10 @@
    m_pendingOverlayRevision = m_nativeOverlayRevision;
    m_pendingOverlayVisible = m_overlayVisible;
    m_requested = preferences;
@@ -833,7 +745,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    dvbridge_renderer_set_fel_nearest(m_renderer,preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416));
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
    dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
-@@ -1259,6 +1456,8 @@
+@@ -1259,6 +1455,8 @@
    m_asyncEligible = eligible;
    const auto previousMode=m_effectiveMode;
    m_effectiveMode = policy.mode;
@@ -842,7 +754,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (policy.mode == DVBRIDGE_MODE_DISABLED) return FrameStatus::Unsupported;
    m_pendingBinding = base.binding;
    m_pendingSourceInfo = base.sourceInfo;
-@@ -1299,10 +1498,14 @@
+@@ -1299,10 +1497,14 @@
    if (!m_advanced)
    {
      const bool prepared = Prepare(base,enhancement,metadata,geometry,allowPacked);
@@ -860,7 +772,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    }
    if (!base.lease || (enhancement && !enhancement->lease))
    { Failure("policy-source-lease"); return FrameStatus::Failed; }
-@@ -1326,7 +1529,7 @@
+@@ -1326,7 +1528,7 @@
    {
      auto status = DVBRIDGE_DV_UNSUPPORTED;
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
@@ -869,7 +781,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        status = dvbridge_render_dv_policy_prepare_packed(m_renderer,&policy,&m_pendingIdentity,
            &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,true,
-@@ -1368,7 +1571,7 @@
+@@ -1368,7 +1570,7 @@
    else
    {
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
@@ -878,7 +790,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        m_direct = dvbridge_render_hdr10_policy_direct(m_renderer,&policy,&m_pendingIdentity,
            &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,
-@@ -1403,6 +1606,8 @@
+@@ -1403,6 +1605,8 @@
  
  void CDVBridgeGLES::Cancel()
  {
@@ -887,7 +799,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    ClearFELPrefetch();
  #ifdef CB1_HAS_HDR10_AI
    if (m_context) m_context->ClearNextHDR10AI();
-@@ -1425,6 +1630,8 @@
+@@ -1425,6 +1629,8 @@
    if (!m_pending) return FrameStatus::Failed;
    DVBRIDGE::ObserveDiagnostic(m_pendingBinding.stream,m_pendingBinding.picture,
        m_pendingBinding.revision,m_requested.revision,"gpu-pending",true,false);
@@ -896,7 +808,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (!m_dvPolicyActive) return m_prepared ? FrameStatus::Ready : FrameStatus::Pending;
    const auto status = dvbridge_render_dv_policy_wait(m_renderer,timeoutNs);
    if (status == DVBRIDGE_DV_READY)
-@@ -1442,6 +1649,49 @@
+@@ -1442,6 +1648,49 @@
      return FrameStatus::Failed;
    }
    return FrameStatus::Pending;
@@ -946,7 +858,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  }
  
  const dvbridge_hdr10_policy_output* CDVBridgeGLES::HDR10Output() const
-@@ -1475,14 +1725,14 @@
+@@ -1475,14 +1724,14 @@
  {
    using namespace KODI::RENDERING::CAPTURE;
    const bool master=m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE;
@@ -963,7 +875,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    glBindFramebuffer(GL_READ_FRAMEBUFFER,previous);
    if (!read) return false;
    if (master)
-@@ -1579,7 +1829,7 @@
+@@ -1579,7 +1828,7 @@
    const bool master = mode == DVBRIDGE_MODE_MASTER_REFERENCE;
    const bool prefetchEnabled = allowAsync && allowPacked && m_context &&
        m_context->AsyncPreparation(base.binding.stream) &&
@@ -972,7 +884,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        preferences.felUpscaling == 0;
    if (!prefetchEnabled) ClearFELPrefetch();
    const int effectiveFilter = master ? 2 : preferences.felUpscaling;
-@@ -1732,7 +1982,8 @@
+@@ -1732,7 +1981,8 @@
      return Failure("pack-without-prepared-frame");
    if (m_advanced && m_dvPolicyActive)
    {
@@ -982,7 +894,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        return Failure("enhanced-pack-target");
      m_packed = dvbridge_render_dv_policy_resolve(m_renderer,m_scanout,m_scanoutFramebuffer,flipY);
      if (m_packed)
-@@ -1745,7 +1996,8 @@
+@@ -1745,7 +1995,8 @@
    }
    if (m_direct)
    {
@@ -992,7 +904,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      if (m_packed && m_live)
        m_submission = {m_pendingIdentity,m_scanout,0,++m_submissionSequence,
            m_asyncEligible && (m_directUsable || m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE)};
-@@ -1870,7 +2122,8 @@
+@@ -1870,7 +2121,8 @@
        submission.identity.revision != m_pendingIdentity.revision)
      return false;
    const auto* hdrOutput = HDR10Output();
@@ -1002,7 +914,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        m_advanced && m_effectiveMode == DVBRIDGE_MODE_ENHANCED_DV ? static_cast<float>(m_requested.peak) :
        m_hdr10 && m_hdr10Session ? m_hdr10Session->target.hdr.max_luma : 0.0f;
    const bool committed = success && m_prepared && m_packed &&
-@@ -1940,18 +2193,42 @@
+@@ -1940,9 +2192,8 @@
  #endif
    output.iptTransport = (output.flags & CDVPlaybackInfo::HDMI) &&
        (m_pendingSourceInfo.profile==5 || (m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE && m_requested.masterIPT));
@@ -1013,12 +925,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if(m_effectiveMode==DVBRIDGE_MODE_ENHANCED_DV &&
  #ifdef CB1_HAS_HDR10_AI
        !output.hdr10AI &&
- #endif
--      m_requested.output==DVBRIDGE::OutputMode::AdaptiveB)output.effective=6;
-+      (m_requested.output==DVBRIDGE::OutputMode::AdaptiveB ||
-+       m_requested.output==DVBRIDGE::OutputMode::AdaptiveRevB))
-+    output.effective=DVBRIDGE::PolicyCode(m_requested.Policy());
-   output.method = m_requested.method;
+@@ -1952,6 +2203,29 @@
    output.panel = m_requested.panel; output.gamut = m_requested.gamut;
    output.manualPeak = m_requested.peak; output.revision = m_pendingIdentity.revision;
    output.fallback = m_fallback;
@@ -1048,7 +955,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    output.stream=m_pendingIdentity.stream; output.picture=m_pendingIdentity.picture;
    const char* pixelAlgorithm=nullptr;
    const char* analysisModel=nullptr;
-@@ -2048,6 +2325,7 @@
+@@ -2048,6 +2322,7 @@
            CDVPlaybackInfo::RequestedPolicy(acceptedOutput.effective,CDVPlaybackInfo::IsHDR10AI(acceptedOutput)),
            CDVPlaybackInfo::Reason(acceptedOutput.reason),acceptedOutput.minimumLinkBits,
            m_pendingSourceInfo.profile,m_pendingSourceInfo.bl,m_pendingSourceInfo.el,m_pendingSourceInfo.rpu,
@@ -1220,12 +1127,11 @@ diff --git a/xbmc/cores/VideoSourceSideData.h b/xbmc/cores/VideoSourceSideData.h
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- a/xbmc/dialogs/DVPlaybackModes.cpp
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -89,7 +89,8 @@
+@@ -89,7 +89,7 @@
    struct Choice { int output,method,label; };
    constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
        {5,0,40914},
 -      {2,0,40814},{1,0,40822},{1,1,40823}};
-+      {6,0,40924},
 +      {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922}};
    const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
    if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
@@ -1251,15 +1157,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
          hdr10 ? "PQ / BT.2020" : "");
      SetProperty("DV.Committed", active && data.output.stream ? StringUtils::Format("{} / {} / {}",
          data.output.stream,data.output.picture,data.output.revision) : "");
-@@ -210,14 +208,14 @@
-     SetProperty("DV.OutputStage", transaction ?
-         std::string(data.transaction.stage)+" (not committed)" : "");
-     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
--    SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
-+    SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6 || data.output.effective==8) ?
-         StringUtils::Format("{} / {:g} nits",
-             data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
-             data.output.manualPeak) : "");
+@@ -217,7 +215,7 @@
      SetProperty("DV.HDR10Policy", hdr10 ? CDVPlaybackInfo::Policy(data.output) : "");
      SetProperty("DV.HDR10Target", hdr10 ? StringUtils::Format("{:g} nits", data.output.target) : "");
      SetProperty("DV.HDR10TargetLabel", hdr10 ? (data.output.effective==2 ? "Source reference" :
@@ -1317,21 +1215,20 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
    const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
    constexpr int menuModes[]{1,5,
 -      4,0,2,3};
-+      4,4,0,2,3,6};
++      4,0,2,3,6};
  #ifdef CB1_HAS_HDR10_AI
    constexpr int hdr10MenuModes[]{1,4,0};
  #else
-@@ -540,14 +541,15 @@
+@@ -540,7 +541,7 @@
      const int mode=hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
          hdr10Source ? (option.value==1 ? 1 : option.value==2 ? 4 : 0) :
          menu ? (option.value>=0 && option.value<int(std::size(menuModes)) ? menuModes[option.value] : 0) :
 -        method ? (option.value==0 ? 2 : option.value==1 ? 3 : 0) :
--        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
 +        method ? (option.value==0 ? 2 : option.value==1 ? 3 : option.value==2 ? 6 : 0) :
-+        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 || option.value==6 ? 4 : option.value==4 ? 5 : 0);
+         (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
      auto reason=DVBRIDGE::OutputReason::None;
      if (mode)
-     {
+@@ -548,6 +549,7 @@
        const bool dv=mode==1 || mode==4 || mode==5;
        if (!(dv ? caps.nativeDV : caps.hdr10))
          reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
@@ -1546,19 +1443,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (m_renderableType != EGL_OPENGL_ES3_BIT)
    {
      caps.processingKnown = true;
-@@ -1270,6 +1326,11 @@
-     {
-       auto policy = preferences.Policy();
-       policy.mode = static_cast<dvbridge_mode>(mode);
-+      if (mode!=DVBRIDGE_MODE_ENHANCED_DV)
-+      {
-+        policy.adaptive=DVBRIDGE_ADAPTIVE_A;
-+        policy.adaptive_rev_b=false;
-+      }
-       policy.tv = {preferences.peak, static_cast<dvbridge_panel>(preferences.panel),
-           static_cast<dvbridge_gamut>(preferences.gamut)};
-       pl_color_space nominal{};
-@@ -1352,8 +1413,16 @@
+@@ -1352,8 +1408,16 @@
        std::lock_guard lock(m_dvCapabilityMutex);
        m_aiActive=false;
      }
@@ -1577,7 +1462,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    const auto binding = picture.doviSourceBinding;
    if (queue.empty() || !(queue.front().binding == binding)) return false;
    {
-@@ -1403,6 +1472,8 @@
+@@ -1403,6 +1467,8 @@
      m_aiReady |= decision == HDR10AISource::Decision::Prepare;
      m_aiFallback = decision == HDR10AISource::Decision::Native;
      m_aiActive = !m_aiFallback;
@@ -1586,7 +1471,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
    if (decision == HDR10AISource::Decision::Native)
    {
-@@ -1570,7 +1641,11 @@
+@@ -1570,7 +1636,11 @@
    m_failedHDR10SetupRestore = false;
    if (DVBRIDGE::DiagnosticsEnabled())
    {
@@ -1599,7 +1484,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          session.target.hdr.max_luma, session.output.level6 ? "RPU-L6" : "RPU-source-PQ",
          GetOutputBitDepth(), UseLimitedColor() ? "limited" : "full");
      if (m_hdrDeepColorPrevious)
-@@ -1631,7 +1706,9 @@
+@@ -1631,7 +1701,9 @@
    };
    const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10;
    if (!SupportsDVOutputMode()) return failure("output-format", "unsupported-current-mode");
@@ -1610,7 +1495,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
      return failure("output-format", "drawable-depth");
    if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
-@@ -1843,8 +1920,8 @@
+@@ -1843,8 +1915,8 @@
        source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
    const bool strictMaster=preferences.output==DVBRIDGE::OutputMode::MasterReference &&
        !preferences.allowMasterFallback;
@@ -1621,7 +1506,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        preferences.output != DVBRIDGE::OutputMode::Disabled &&
        !(source.el && !picture.doviEnhancement))
    {
-@@ -1890,11 +1967,17 @@
+@@ -1890,11 +1962,17 @@
  
  bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)
  {
@@ -1640,7 +1525,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    SetColorimetry(picture);
    const bool hdr = SetHDR(picture);
    SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
-@@ -1984,7 +2067,6 @@
+@@ -1984,7 +2062,6 @@
        !m_dvRecoveryPending && !m_dvRejectedSurface && !m_dvRollbackFailed &&
        !m_dvOutputRetiring && !m_dvShutdownFence && !m_dvStopPending && !HasPendingDVOutputSurface() &&
        m_dvSelection.route != DVBRIDGE::OutputRoute::Vanilla &&
@@ -1648,7 +1533,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (m_hdrConversion || m_dvState.Captured());
  }
  
-@@ -2037,12 +2119,12 @@
+@@ -2037,12 +2114,12 @@
    const bool overlayFree = (!capturing || masterCapture) &&
        (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
    const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
@@ -1665,7 +1550,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
        DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
    if(auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
-@@ -2051,7 +2133,7 @@
+@@ -2051,7 +2128,7 @@
      bool switched=false;
      {
        std::lock_guard lock(m_dvCapabilityMutex);
@@ -1674,7 +1559,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
      }
      if(switched)
-@@ -2062,11 +2144,11 @@
+@@ -2062,11 +2139,11 @@
      }
      drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
    }
@@ -1689,7 +1574,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
        (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
    const bool pqSubtitles = (subtitlesOnly || mergedPQGUI) && m_dvPQSubtitleDraws;
-@@ -2081,12 +2163,12 @@
+@@ -2081,12 +2158,12 @@
    // Prime the subtitle shader once; empty frames retain the lean native shader.
    const bool nativeOverlay = !m_hdrConversion &&
        (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
@@ -1704,7 +1589,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        fullGUI && !enhancedSubtitles ? m_dvGUIContentGeneration : m_dvSubtitleContent, pqSubtitles);
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2128,8 +2210,8 @@
+@@ -2128,8 +2205,8 @@
    const auto preparedAt = std::chrono::steady_clock::now();
    const auto initialStatus = status;
    const bool prefetchFEL = successor && successor->frame && metadata.Data() &&
@@ -1715,7 +1600,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        overlayFree && geometry.source_width == 3840 && geometry.source_height == 2160 &&
        !geometry.x && !geometry.y && geometry.width == 3840 && geometry.height == 2160;
    if (!prefetchFEL)
-@@ -2159,7 +2241,8 @@
+@@ -2159,7 +2236,8 @@
    }
    else
  #endif
@@ -1725,7 +1610,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    {
      // Complete content analysis before Kodi advances this source picture.
      const auto deadline = preparationDeadline;
-@@ -2173,7 +2256,7 @@
+@@ -2173,7 +2251,7 @@
              deadline - std::chrono::steady_clock::now()).count();
          const uint64_t waitNs = prefetchFEL && remaining > 0 ?
              static_cast<uint64_t>(std::min<int64_t>(remaining,2000000)) : 0;
@@ -1734,7 +1619,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            status = m_dvBridge->PollStatus(waitNs);
          else if (m_dvBridge->PollReady())
            status = CDVBridgeGLES::FrameStatus::Ready;
-@@ -2250,7 +2333,8 @@
+@@ -2250,7 +2328,8 @@
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    const bool renderPending = status == CDVBridgeGLES::FrameStatus::Pending ||
        status == CDVBridgeGLES::FrameStatus::Busy;
@@ -1744,7 +1629,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
        (allowAsync && m_dvContext->AsyncPreparation(layer.binding.stream) && (m_dvFrame || renderPending));
    if (std::getenv("CB1_PRESENTATION_AUDIT"))
    {
-@@ -2479,9 +2563,9 @@
+@@ -2479,9 +2558,9 @@
      m_masterSafety={};
    }
    m_masterFramePeriodNs=0;
@@ -1757,7 +1642,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)) drm->SetCB1TimingPeriod(0);
    // The window outlives the renderer when a pending scanout defers teardown.
    m_dvStopPending = true;
-@@ -2489,7 +2573,13 @@
+@@ -2489,7 +2568,13 @@
    if (HasPendingDVOutputSurface() && !m_dvOrdinaryFrame && !RejectDVOutputSurface())
      return false;
    if (!SetVideoOutput(nullptr)) return false;
