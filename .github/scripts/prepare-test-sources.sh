@@ -51,7 +51,7 @@ python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \
     --disable-doc --disable-network --disable-autodetect --disable-x86asm \
     --enable-gpl --enable-version3 --enable-shared --disable-static \
-    --enable-filter=buffer,buffersink,hstack,settb \
+    --enable-filter=buffer,buffersink,hstack,settb --enable-decoder=hevc \
     --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc --enable-protocol=file \
     --enable-bsf=hevc_mp4toannexb
   make -j2

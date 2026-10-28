@@ -312,7 +312,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "3f55c0cf0008815e5f147ce2af35364e9dd225a95cada95d0eaaa235355d6c49"
+      "sha256": "0b91f825dd82463ca3c9cde8d91c938d924062350a83f470a571f0a761e485a5"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -521,6 +521,10 @@
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch",
       "sha256": "5c463382da9b54a4786bb3f4ad087ec7cc1e6a3f948240433ebf87c243e9cb52"
+    },
+    "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": {
+      "source": "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch",
+      "sha256": "28ae21bd76915b873bdc3235b7ae78b651bf6d0ad4760c213be19763f9eec058"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_master_ipt.c": {
       "source": "src/cb1_master_ipt.c",
