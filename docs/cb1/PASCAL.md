@@ -8,7 +8,8 @@ The Generic image contains NVIDIA **580.178.04** and **615.78.08** in isolated
 payloads. LibreELEC selects one matching module, firmware and userspace stack
 before systemd/udev. No separate Pascal image or build flag is required.
 
-Selection uses the pinned NVIDIA PCI-device lists. A known NVIDIA boot VGA GPU
+Selection uses the intersection of the pinned NVIDIA PCI-device lists for R580,
+not retirement hints alone. A known NVIDIA boot VGA GPU
 takes priority; otherwise a sole known family is selected. On mixed-family
 machines without a unique known boot GPU, R615 is selected with a boot diagnostic;
 the other family is unavailable. This does not select the connected monitor.

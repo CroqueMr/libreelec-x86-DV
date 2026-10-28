@@ -28,8 +28,11 @@ def table(current, legacy):
             result[device] = 'r615'
         elif branch == '580.xx':
             if device not in legacy or legacy[device] is not None:
-                raise ValueError('R580 input does not support '+device)
+                # Retirement hints are not a support list for the pinned R580 payload.
+                continue
             result[device] = 'r580'
+    if not any(branch == 'r580' for branch in result.values()):
+        raise ValueError('No matching R580 devices in the pinned inputs')
     return ''.join(f'{device} {branch}\n' for device, branch in sorted(result.items()))
 
 

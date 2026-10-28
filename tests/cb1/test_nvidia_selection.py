@@ -16,6 +16,8 @@ class NvidiaSelection(unittest.TestCase):
         current = {'chips': [{'devid': '0x1b80', 'legacybranch': '580.xx'}, {'devid': '0x1e04'}]}
         legacy = {'chips': [{'devid': '0x1b80'}]}
         self.assertEqual(generator.table(current, legacy), '1b80 r580\n1e04 r615\n')
+        current['chips'].append({'devid': '0x137d', 'legacybranch': '580.xx'})
+        self.assertEqual(generator.table(current, legacy), '1b80 r580\n1e04 r615\n')
         with self.assertRaises(ValueError):
             generator.table(current, {'chips': []})
         current['chips'].append({'devid': '0x1B80'})
