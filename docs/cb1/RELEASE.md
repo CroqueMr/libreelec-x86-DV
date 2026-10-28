@@ -14,6 +14,7 @@ Changes since Beta5.
 
 - Extended **TV-Led V1 compatibility** across Intel, AMD and NVIDIA.
 - Improved Standard and Master Reference resource management and presentation timing.
+- Added **Master Reference IPT-PQc2** output, selectable in Expert settings; YCbCr remains the default.
 - Removed the Fast On/Off/Auto selector. Each rendering mode now uses its own fixed processing path.
 - Added optional automatic **Master Reference → Standard** recovery, disabled by default.
 - Added **Disable L2 trims**, disabled by default and limited to Standard and Master Reference.
