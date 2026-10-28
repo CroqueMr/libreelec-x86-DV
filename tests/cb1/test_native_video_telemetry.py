@@ -18,6 +18,10 @@ class TelemetryLifecycleTests(unittest.TestCase):
         if os.environ.get('TEST_OLD_RESTORE_PATH'):
             win=(Path(__file__).parent/'before/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         restore=body(win,'if (m_dvRollbackFailed || !RecoverDVActivation())')
+        deferred=''
+        if 'const auto deferred =' in win:
+            start=win.index('const auto deferred =')
+            deferred=win[start:win.index('{',start)]+body(win,'const auto deferred =')+';'
         methods=(TREE/'xbmc/cores/DataCacheCore.cpp').read_text()
         implementations='\n'.join(signature+body(methods,signature) for signature in (
             'uint64_t CDataCacheCore::ResetVideoProcessingInfo()',
@@ -62,6 +66,8 @@ DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None;
 std::mutex m_dvCapabilityMutex;
 bool RecoverDVActivation() {return false;}
 struct VideoPicture {DVBRIDGE::SourceInfo doviSourceInfo;};
+namespace DVBRIDGE {void DiagnosticStage(const char*){}}
+DEFERRED
 bool failedRestore(const VideoPicture& picture) { RESTORE return true; }
 int main() {
  auto& cache=CServiceBroker::GetDataCacheCore();
@@ -114,7 +120,7 @@ int main() {
  compatibility=DVBRIDGE::StreamTelemetry::Read();
  assert(!compatibility.output.fallback && compatibility.output.reason==DVBRIDGE::OutputReason::None);
 }
-'''.replace('IMPLEMENTATIONS',implementations).replace('FAILED',failed).replace('RESTORE',restore)
+'''.replace('IMPLEMENTATIONS',implementations).replace('FAILED',failed).replace('RESTORE',restore).replace('DEFERRED',deferred)
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
             self.skipTest('Set FFMPEG_TEST_PREFIX to the sanitizer-built FFmpeg prefix')
         prefix=Path(os.environ['FFMPEG_TEST_PREFIX'])
