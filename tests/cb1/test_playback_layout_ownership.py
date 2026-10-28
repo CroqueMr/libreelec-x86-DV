@@ -36,6 +36,15 @@ class PlaybackLayoutOwnership(unittest.TestCase):
         for node in (output, fallback):
             self.assertEqual(node.findtext("dependencies/dependency[@setting='dvbridge.outputmode']"), '4')
 
+    def test_l2_trim_override_is_expert_opt_in_for_standard_and_master(self):
+        tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        settings = ET.parse(tree / 'system/settings/settings.xml')
+        option = settings.find(".//setting[@id='dvbridge.disablel2']")
+        self.assertIsNotNone(option)
+        self.assertEqual(option.findtext('default'), 'false')
+        self.assertEqual(option.findtext('level'), '3')
+        self.assertEqual([item.text for item in option.findall('dependencies/dependency/or/condition')], ['0', '4'])
+
 
 if __name__ == '__main__':
     unittest.main()

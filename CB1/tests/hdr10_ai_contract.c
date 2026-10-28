@@ -12,10 +12,10 @@
 int main(void)
 {
     const char *expected[] = {
-        "CB1-DVDVR.0.5", "CB1-DVHDR10B.0.4", "CB1-DVHDR10X.0.10",
+        "CB1-DVDVR.0.6", "CB1-DVHDR10B.0.4", "CB1-DVHDR10X.0.10",
         "CB1-DVDVA.0.9", NULL,
         NULL, NULL,
-        "CB1-HDR10DVR.0.1.3", "CB1-HDR10DVA.0.7", "CB1-DVDVMR.0.5", "CB1-DVDVA.0.11", "CB1-DVDVMRI.0.1",
+        "CB1-HDR10DVR.0.1.3", "CB1-HDR10DVA.0.7", "CB1-DVDVMR.0.6", "CB1-DVDVA.0.11", "CB1-DVDVMRI.0.2",
         "CB1-DVHDR10P.0.1",
     };
     assert(strcmp(cb1_engine_version(), "CB1 0.3") == 0);

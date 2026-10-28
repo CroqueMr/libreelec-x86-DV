@@ -124,6 +124,7 @@ struct dvbridge_renderer {
     struct dvbridge_context *context;
     struct dvbridge_candidate *pending;
     bool ready, direct_output, overlay_visible;
+    bool l2_trims_disabled;
     bool p5_native_pending;
     bool packed, fragment_quad, exact_scaler_cache, optimized_dv;
     bool enhanced_linear;
@@ -1292,6 +1293,11 @@ void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *r, bool enable
     if (r) r->optimized_dv = enabled;
 }
 
+void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *r,bool disabled)
+{
+    if(r)r->l2_trims_disabled=disabled;
+}
+
 void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *r, bool enabled)
 {
     if (r) r->fel_nearest = enabled;
@@ -1462,6 +1468,36 @@ static bool cm29_tail_gain_eligible(double gain_code)
     return gain_code >= 2048.0;
 }
 
+static struct dvbridge_candidate *prepare_picture_candidate(struct dvbridge_renderer *r,
+    const void *metadata,size_t bytes,double pts,struct dvbridge_geometry geometry,
+    bool paired,bool force_refresh,bool master,bool source_transport,bool ipt,bool disable_l2)
+{
+    struct dvbridge_candidate *(*prepare)(const struct dvbridge_context *,const void *,size_t,
+        double,struct dvbridge_geometry,bool,bool)=ipt?dvbridge_prepare_ipt_output:
+        master?dvbridge_prepare_master_source_output:
+        source_transport?dvbridge_prepare_source_output:dvbridge_prepare_output;
+    /* Validate the original through the exact existing transport path first:
+     * filtering must not turn malformed or duplicate L2 into eligible input. */
+    struct dvbridge_candidate *candidate=prepare(r->context,metadata,bytes,pts,geometry,paired,force_refresh);
+    if(!candidate || !disable_l2)return candidate;
+    const AVDOVIMetadata *m=metadata;
+    bool has_l2=false;
+    for(int i=0;i<m->num_ext_blocks;i++)
+        if(av_dovi_get_ext(m,i)->level==2){has_l2=true;break;}
+    if(!has_l2)return candidate;
+    dvbridge_candidate_destroy(candidate);
+    AVDOVIMetadata *output=av_memdup(metadata,bytes);
+    if(!output)return NULL;
+    output->num_ext_blocks=0;
+    for(int i=0;i<m->num_ext_blocks;i++){
+        if(av_dovi_get_ext(m,i)->level==2)continue;
+        memcpy(av_dovi_get_ext(output,output->num_ext_blocks++),av_dovi_get_ext(m,i),m->ext_block_size);
+    }
+    candidate=prepare(r->context,output,bytes,pts,geometry,paired,force_refresh);
+    av_free(output);
+    return candidate;
+}
+
 static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *source,
                         const void *metadata, size_t bytes, double pts, double el_pts,
                         struct dvbridge_geometry geometry, pl_tex packed, bool flip,
@@ -1474,6 +1510,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
 {
     if (!r)
         return false;
+    if(session || policy || enhanced_reconstruction)r->l2_trims_disabled=false;
     if (r->dv.active) {
         dvbridge_render_dv_policy_cancel(r);
         return false;
@@ -1805,18 +1842,9 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         params.min_fbo_precision=r->enhanced_input->params.format->component_depth[0];
     params.cb1_exact_scaler_cache=mask.source_domain && r->exact_scaler_cache;
     if(!session && !policy) {
-        r->pending=
-            ipt ?
-            dvbridge_prepare_ipt_output(r->context,metadata,bytes,pts,geometry,
-                paired && mapped.dovi.nlq_active,force_refresh) :
-            master ?
-            dvbridge_prepare_master_source_output(r->context,metadata,bytes,pts,geometry,
-                paired && mapped.dovi.nlq_active,force_refresh) :
-            source_transport ?
-            dvbridge_prepare_source_output(r->context,metadata,bytes,pts,geometry,
-                paired && mapped.dovi.nlq_active,force_refresh) :
-            dvbridge_prepare_output(r->context,metadata,bytes,pts,geometry,
-                paired && mapped.dovi.nlq_active,force_refresh);
+        r->pending=prepare_picture_candidate(r,metadata,bytes,pts,geometry,
+            paired && mapped.dovi.nlq_active,force_refresh,master!=NULL,source_transport,ipt!=NULL,
+            !enhanced_reconstruction && r->l2_trims_disabled);
         if(!r->pending)return false;
     }
     if(mask.source_domain) {
@@ -3275,6 +3303,7 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
     pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
     if(!r)return DVBRIDGE_DV_FAILED;
+    r->l2_trims_disabled=false;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return r->dv.quarantined?DVBRIDGE_DV_FAILED:DVBRIDGE_DV_BUSY;}
     dvbridge_render_policy_cancel(r);
     if(!r->owner)return DVBRIDGE_DV_UNSUPPORTED;
@@ -4254,6 +4283,7 @@ static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_
     const struct cb1_ai_result *prediction,const struct pl_frame *source,const struct dvbridge_geometry *geometry,
     pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
+    if(r)r->l2_trims_disabled=false;
     if(!r || !geometry)return NULL;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return NULL;}
     if(!configure_target(r,*geometry))return NULL;

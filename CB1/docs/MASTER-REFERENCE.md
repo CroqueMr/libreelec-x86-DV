@@ -1,6 +1,6 @@
 # Dolby Vision Master Reference
 
-Circuit: `CB1-DVDVMR.0.5`. Engine: `CB1 0.3`.
+Circuit: `CB1-DVDVMR.0.6`. Engine: `CB1 0.3`.
 
 Opt-in integer reconstruction for source-domain Dolby Vision output.
 Standard playback and the existing conversion circuits are unchanged.

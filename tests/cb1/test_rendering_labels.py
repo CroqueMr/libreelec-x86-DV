@@ -24,7 +24,7 @@ class RenderingLabelsTests(unittest.TestCase):
         method=settings.find(".//setting[@id='dvbridge.hdr10method']")
         dynamic=next(option for option in method.findall('./constraints/options/option')
                      if option.text=='2')
-        self.assertEqual(labels[dynamic.get('label')],'HDR10+ conversion (experimental)')
+        self.assertEqual(labels[dynamic.get('label')],'HDR10+ conversion')
         panel=ET.parse(Path(__file__).resolve().parents[2]/
             'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
         for node in panel.iter('param'):

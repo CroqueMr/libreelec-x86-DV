@@ -42,6 +42,10 @@ At Expert level:
 Master Reference uses its own reference FEL filters, independently of the saved
 VAAPI/Nearest preference.
 
+**Disable L2 trims** is an Expert option, off by default, for Standard and Master
+Reference only. It removes outgoing L2 blocks without changing movie pixels or
+source metadata. L8 remains active. Adaptive, AI and HDR conversions ignore it.
+
 ## Playback panels
 
 Press **O**:

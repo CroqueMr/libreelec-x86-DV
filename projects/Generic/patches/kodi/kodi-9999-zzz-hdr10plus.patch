@@ -10,7 +10,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  #: system/settings/settings.xml
-@@ -25851,7 +25851,15 @@
+@@ -25851,7 +25851,23 @@
  msgstr ""
  
  msgctxt "#40821"
@@ -24,10 +24,18 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +
 +msgctxt "#40923"
 +msgid "HDR10+ output requires a supported HDMI driver and display."
++msgstr ""
++
++msgctxt "#40925"
++msgid "Disable L2 trims"
++msgstr ""
++
++msgctxt "#40926"
++msgid "Standard and Master Reference only. L8 trims remain active."
  msgstr ""
  
  msgctxt "#40822"
-@@ -25979,18 +25987,6 @@
+@@ -25979,18 +25995,6 @@
  msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
  msgstr ""
  
@@ -58,15 +66,24 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
            </options></constraints>
            <control type="list" format="string"><usedetails>true</usedetails></control>
          </setting>
-@@ -97,7 +97,7 @@
+@@ -97,8 +97,16 @@
            <control type="list" format="string" />
          </setting>
          <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
 -          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>true</default>
 +          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
            <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition>
++          </or></dependency></dependencies>
            <control type="toggle" />
          </setting>
+         <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
@@ -86,31 +103,41 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
    return policy.mode==DVBRIDGE_MODE_ENHANCED_DV && policy.adaptive!=DVBRIDGE_ADAPTIVE_A ? 6 : int(policy.mode);
  }
  #endif
-@@ -38,7 +38,7 @@
+@@ -38,7 +38,8 @@
    int method{0}, panel{0}, gamut{0};
    double peak{0};
    bool optimizedDV{true};
 -  bool masterIPT{false}, allowMasterFallback{true};
 +  bool masterIPT{false}, allowMasterFallback{false};
++  bool disableL2Trims{false};
    int felUpscaling{0};
    bool processingOptimizations{false};
    uint64_t revision{1};
-@@ -60,14 +60,6 @@
+@@ -54,19 +55,17 @@
+     return output == other.output && hdr10Source == other.hdr10Source && method == other.method &&
+         panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
+         masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
++        disableL2Trims == other.disableL2Trims &&
+         felUpscaling == other.felUpscaling &&
+         processingOptimizations == other.processingOptimizations &&
+         std::bit_cast<uint64_t>(peak) == std::bit_cast<uint64_t>(other.peak);
    }
  
  #ifdef HAVE_DVBRIDGE
 -  int EffectiveFastRenderingMode(dvbridge_mode mode, bool /*hdr10AI*/ = false) const
--  {
++  bool L2TrimsDisabled(dvbridge_mode mode, bool hdr10AI = false) const
+   {
 -    return mode == DVBRIDGE_MODE_DISABLED || mode == DVBRIDGE_MODE_MASTER_REFERENCE ? 0 : 1;
 -  }
 -  bool EffectiveFastChroma(dvbridge_mode mode, bool hdr10AI = false) const
 -  {
 -    return EffectiveFastRenderingMode(mode, hdr10AI) == 1;
--  }
++    return disableL2Trims && !hdr10AI &&
++        (mode == DVBRIDGE_MODE_STANDARD || mode == DVBRIDGE_MODE_MASTER_REFERENCE);
+   }
    dvbridge_policy Policy() const
    {
-     dvbridge_policy result{};
-@@ -84,7 +76,8 @@
+@@ -84,7 +83,8 @@
        case OutputMode::MasterReference:
          result.mode = DVBRIDGE_MODE_MASTER_REFERENCE; result.master_ipt = masterIPT; break;
        case OutputMode::HDR10:
@@ -120,9 +147,11 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
          break;
      }
      // Basic/native paths never consume calibration. Keep invalid user values
-@@ -145,7 +138,7 @@
+@@ -144,8 +144,9 @@
+     next.felUpscaling = settings->GetInt("dvbridge.felupscaling");
      next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
      next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
++    next.disableL2Trims = settings->GetBool("dvbridge.disablel2");
    }
 -  if (next.method < 0 || next.method > 1) next.method = 0;
 +  if (next.method < 0 || next.method > 2) next.method = 0;
@@ -216,17 +245,18 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/co
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-@@ -63,9 +63,7 @@
+@@ -63,9 +63,8 @@
      bool creativeKnown{};
      uint32_t creativeApplied{}, creativeEdited{};
      int creativeStatus{}, creativeReason{};
 -    bool fastChroma{};
      bool iptTransport{};
 -    int fastRenderingMode{};
++    bool l2TrimsDisabled{};
      int felUpscaling{-1};
  #ifdef CB1_HAS_HDR10_AI
      bool hdr10AI{};
-@@ -88,6 +86,7 @@
+@@ -88,6 +87,7 @@
          if (effective==4) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE);
          if (effective==5) return cb1_circuit_version(iptTransport ? CB1_DV_DV_MASTER_IPT : CB1_DV_DV_MASTER_REFERENCE);
          if (effective==6) return cb1_circuit_version(CB1_DV_DV_ADAPTIVE_B);
@@ -234,7 +264,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
        }
        return "";
      }
-@@ -115,7 +114,7 @@
+@@ -115,7 +115,7 @@
      result[5]=blocks[5]; // Active-picture geometry, not a creative trim.
      for(unsigned level=0;level<32;++level)
        if (output.creativeApplied & (1u<<level)) result[level]=blocks[level];
@@ -243,7 +273,15 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
      {
        result[1]=blocks[1] && pq[0]<=pq[2] && pq[2]<=pq[1] && pq[1]>0 && pq[1]<=4095;
        result[6]=blocks[6] && (output.effective>=3 || output.level6);
-@@ -248,7 +247,9 @@
+@@ -128,6 +128,7 @@
+     if (!(output.flags & CDVPlaybackInfo::HDMI) || !metadata) return result;
+     if (output.authoredLegacy) { result[1]=result[5]=true; return result; }
+     result=blocks;
++    if (output.l2TrimsDisabled) result[2]=false;
+     result[6]=false; // L6 is static HDR metadata, not dynamic DV wire data.
+     result[5]=true; // Native serializer always supplies final-raster margins.
+     return result;
+@@ -248,7 +249,9 @@
      m_snapshot.output = output;
      if (m_snapshot.transaction.identity==SourceBinding{output.stream,output.picture,output.revision})
      {
@@ -254,7 +292,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/c
        m_snapshot.output.requested=m_snapshot.transaction.requested;
        m_snapshot.output.minimumLinkBits=(output.flags & CDVPlaybackInfo::HDR10) ? 10 : 0;
      }
-@@ -387,13 +388,13 @@
+@@ -387,13 +390,13 @@
  inline void DVBRIDGE::StreamTelemetry::PublishNativeInfo(uint64_t generation)
  {
    // Bounded summaries refresh at 2 Hz; accepted mode/format changes publish immediately.
@@ -280,7 +318,18 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  #include "utils/DVBridgeDiagnosticLog.h"
  #include "DVBridgeShaders.h"
  #include "DVBridgeScreenshot.h"
-@@ -66,9 +67,179 @@
+@@ -32,6 +33,10 @@
+ #include <thread>
+ #include <vector>
+ 
++#if !defined(DVBRIDGE_L2_TRIMS_API) || DVBRIDGE_L2_TRIMS_API < 1
++#error "Matching CB1 L2 output-trim API required"
++#endif
++
+ namespace
+ {
+ void BackendLog(void*, pl_log_level level, const char* message)
+@@ -66,9 +71,179 @@
  }
  }
  
@@ -460,7 +509,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    pl_log log{};
    dvbridge_shader_cache* shaderCache{};
    dvbridge_retirement_owner* owner{};
-@@ -165,7 +336,12 @@
+@@ -165,7 +340,12 @@
  {
    if (m_state->quarantined || !m_state->inFlight.empty()) return nullptr;
    auto* renderer = dvbridge_renderer_create_with_owner(m_state->owner);
@@ -474,7 +523,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    return renderer;
  }
  
-@@ -234,6 +410,7 @@
+@@ -234,6 +414,7 @@
    m_state->ai.reset();
  #endif
    if (m_state->shaderCache) dvbridge_shader_cache_save(m_state->shaderCache);
@@ -482,7 +531,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    pl_opengl_destroy(&m_state->gl);
    dvbridge_shader_cache_close(m_state->shaderCache); m_state->shaderCache = nullptr;
    pl_log_destroy(&m_state->log);
-@@ -261,6 +438,10 @@
+@@ -261,6 +442,10 @@
      m_state->felVppEnabled = DVBRIDGE::FELHardwareUpscalingEnabled();
    }
    return stream && m_state->felVppEnabled;
@@ -493,7 +542,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  }
  pl_opengl CDVBridgeGLES::Context::GL() const { return m_state->gl; }
  pl_log CDVBridgeGLES::Context::Log() const { return m_state->log; }
-@@ -516,20 +697,13 @@
+@@ -516,20 +701,13 @@
          std::chrono::steady_clock::now() - started).count();
      const bool required = drain && now + elapsed >= presentationDeadline;
      const auto decision=source.Prediction(head.binding,preferences,now+elapsed,result,required);
@@ -516,7 +565,15 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      }
      // Collect may dispatch follow-up reductions after the initial import fence.
      if (!FenceHDR10AIUse())
-@@ -560,7 +734,12 @@
+@@ -552,6 +730,7 @@
+       !base.lease || prediction.id.stream != base.binding.stream ||
+       prediction.id.picture != base.binding.picture || !std::isfinite(base.pts))
+   { m_asyncEligible = false; return FrameStatus::Failed; }
++  dvbridge_renderer_set_l2_trims_disabled(m_renderer, false);
+   // Quarantined policy work cannot be bypassed by historical frame reuse.
+   if (m_dvPolicyActive && dvbridge_render_dv_policy_poll(m_renderer) == DVBRIDGE_DV_FAILED)
+     return FrameStatus::Failed;
+@@ -560,7 +739,12 @@
        geometry.source_width == m_sourceGeometry.source_width &&
        geometry.source_height == m_sourceGeometry.source_height &&
        geometry.x == m_sourceGeometry.x && geometry.y == m_sourceGeometry.y &&
@@ -530,7 +587,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (m_aiFrame && m_aiOutputAccepted && !m_pending && m_hasCommitted && base.binding == m_committedBinding &&
        m_pendingBinding == m_committedBinding &&
        prediction.id.revision == m_committedRevision && policy.mode == m_committedMode &&
-@@ -610,6 +789,8 @@
+@@ -610,6 +794,8 @@
    if (!dvbridge_gl_frame_import(&imported,m_gl->gpu,base.layout,base.width,base.height,base.planes))
      return FrameStatus::Unsupported;
    HDR10Color(imported.frame,base);
@@ -539,7 +596,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    m_context->Retain(base.lease);
    policy.revision = prediction.id.revision;
    m_live = m_advanced = m_aiFrame = true;
-@@ -621,7 +802,6 @@
+@@ -621,7 +807,6 @@
    m_effectiveMode = policy.mode;
    m_requested = preferences;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
@@ -547,7 +604,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
    dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
    m_pendingOverlayRevision = m_nativeOverlayRevision;
-@@ -640,7 +820,8 @@
+@@ -640,7 +825,8 @@
        (policy.mode == DVBRIDGE_MODE_STANDARD ||
         (policy.mode == DVBRIDGE_MODE_ENHANCED_DV && !m_overlayVisible)) &&
        (policy.mode == DVBRIDGE_MODE_ENHANCED_DV ||
@@ -557,7 +614,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
         (preferences.optimizedDV && geometry.width == geometry.source_width && geometry.height == geometry.source_height)))
    {
      rendered = dvbridge_render_hdr10_ai_packed_overlay(m_renderer,&policy,&prediction,&imported.frame,
-@@ -681,6 +862,8 @@
+@@ -681,6 +867,8 @@
    dvbridge_gl_frame_release(&imported);
    if (!rendered || !fenced) return FrameStatus::Failed;
    m_pending = true;
@@ -566,7 +623,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    return PollReady() ? FrameStatus::Ready : FrameStatus::Pending;
  }
  #endif
-@@ -783,7 +966,7 @@
+@@ -783,7 +971,7 @@
    dvbridge_color color{};
    if (!m_pending || !m_dvPolicyActive || !m_asyncEligible ||
        m_effectiveMode != DVBRIDGE_MODE_ENHANCED_DV ||
@@ -575,7 +632,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        preferences.revision != m_requested.revision || !preferences.SameValues(m_requested) ||
        !m_hardwareFELVpp || !m_felVppEnabled || !m_felVpp || !current || !frame ||
        !(m_hardwareBinding == m_pendingBinding) || !successor.binding.Valid() ||
-@@ -836,6 +1019,7 @@
+@@ -836,6 +1024,7 @@
  
  CDVBridgeGLES::~CDVBridgeGLES()
  {
@@ -583,7 +640,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    ClearFELPrefetch();
    Summary("closed");
    if (!m_live) DVBRIDGE::StreamTelemetry::ClearOutput();
-@@ -862,20 +1046,24 @@
+@@ -862,20 +1051,24 @@
  bool CDVBridgeGLES::SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
                                      const CRect& bounds, uint64_t content, bool inputPQ)
  {
@@ -614,7 +671,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
         !std::equal(std::begin(nextRect),std::end(nextRect),std::begin(m_nativeOverlay.rect))));
    if (layoutChanged || (enabled && content != m_nativeOverlayContent))
      ++m_nativeOverlayRevision;
-@@ -889,12 +1077,12 @@
+@@ -889,12 +1082,12 @@
    pl_tex* wrapped[]{&m_nativeOverlay.texture, &m_nativeOverlay.degamma, &m_nativeOverlay.pq};
    for (unsigned i = 0; i < 3; ++i)
    {
@@ -630,7 +687,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      params.iformat = i ? GL_R16F : inputPQ ? GL_RGBA16F : GL_RGBA8;
      *wrapped[i] = pl_opengl_wrap(m_gl->gpu, &params);
      m_nativeOverlayTextures[i] = ids[i];
-@@ -926,8 +1114,13 @@
+@@ -926,8 +1119,13 @@
  {
    if (!m_gl || m_pending || m_prepared) return false;
    pl_opengl_wrap_params output{};
@@ -646,7 +703,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    GLint draw, read, red, green, blue, samples, encoding;
    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
-@@ -981,17 +1174,15 @@
+@@ -981,17 +1179,15 @@
  
  void CDVBridgeGLES::Reset()
  {
@@ -666,7 +723,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  #endif
    m_pendingHDR10Fallback = 0;
    dvbridge_renderer_reset(m_renderer);
-@@ -1009,7 +1200,6 @@
+@@ -1009,7 +1205,6 @@
    if (!metadata.Data())
      return Failure("metadata-unavailable");
    dvbridge_renderer_set_optimized_dv(m_renderer,m_requested.optimizedDV);
@@ -674,7 +731,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    dvbridge_renderer_set_processing_optimizations(m_renderer,m_requested.processingOptimizations);
    dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
    dvbridge_gl_frame bl{}, el{};
-@@ -1027,8 +1217,9 @@
+@@ -1027,8 +1222,9 @@
      elPts = enhancement->pts;
    }
    // Subtitle-only frames compose before packing. Other GUI retains 32F composition.
@@ -686,7 +743,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    {
      m_direct = dvbridge_render_hdr10_direct(m_renderer, &*m_hdr10Session, &bl.frame,
          metadata.Data(), metadata.Size(), base.pts, elPts, geometry, m_scanout,
-@@ -1072,7 +1263,7 @@
+@@ -1072,7 +1268,7 @@
        dvbridge_renderer_reset(m_renderer);
      }
    }
@@ -695,7 +752,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        dvbridge_render_hdr10_rgb(m_renderer, &*m_hdr10Session, &bl.frame,
            metadata.Data(), metadata.Size(), base.pts, elPts, geometry) :
        dvbridge_render_rgb(m_renderer, &bl.frame, metadata.Data(), metadata.Size(),
-@@ -1082,7 +1273,7 @@
+@@ -1082,7 +1278,7 @@
    {
      // The renderer has validated all metadata offsets and extension bounds.
      const auto* parsed = reinterpret_cast<const AVDOVIMetadata*>(metadata.Data());
@@ -704,7 +761,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        const auto* l1 = av_dovi_find_level(parsed, 1);
        const bool usable = l1 && l1->l1.min_pq <= l1->l1.avg_pq &&
-@@ -1160,11 +1351,10 @@
+@@ -1160,11 +1356,10 @@
    { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
    const bool asyncSetting = m_context->AsyncPreparation(base.binding.stream);
    auto policy = selected ? *selected : preferences.Policy();
@@ -719,7 +776,13 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    {
      policy.mode = preferences.output == DVBRIDGE::OutputMode::HDR10 ?
          DVBRIDGE_MODE_HDR10_BASIC : DVBRIDGE_MODE_STANDARD;
-@@ -1177,7 +1367,12 @@
+@@ -1172,12 +1367,18 @@
+     policy.adaptive = DVBRIDGE_ADAPTIVE_A;
+   }
+   // Capture the proven observation key before geometry or refresh rekeys work.
++  dvbridge_renderer_set_l2_trims_disabled(m_renderer, preferences.L2TrimsDisabled(policy.mode));
+   const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
+       policy.mode);
    const bool sameGeometry = geometry.source_width == m_sourceGeometry.source_width &&
        geometry.source_height == m_sourceGeometry.source_height &&
        geometry.x == m_sourceGeometry.x && geometry.y == m_sourceGeometry.y &&
@@ -733,7 +796,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (m_geometryKnown && !sameGeometry)
      m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max(preferences.revision,base.binding.revision));
    m_sourceGeometry = geometry;
-@@ -1249,9 +1444,10 @@
+@@ -1249,9 +1450,10 @@
    m_pendingOverlayRevision = m_nativeOverlayRevision;
    m_pendingOverlayVisible = m_overlayVisible;
    m_requested = preferences;
@@ -745,7 +808,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    dvbridge_renderer_set_fel_nearest(m_renderer,preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416));
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
    dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
-@@ -1259,6 +1455,8 @@
+@@ -1259,6 +1461,8 @@
    m_asyncEligible = eligible;
    const auto previousMode=m_effectiveMode;
    m_effectiveMode = policy.mode;
@@ -754,7 +817,19 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (policy.mode == DVBRIDGE_MODE_DISABLED) return FrameStatus::Unsupported;
    m_pendingBinding = base.binding;
    m_pendingSourceInfo = base.sourceInfo;
-@@ -1299,10 +1497,14 @@
+@@ -1284,9 +1488,9 @@
+       m_auditRequested.Record(DVBRIDGE::DiagnosticNowMs(),"requested",m_auditSerial))
+   {
+     m_auditRequestedSerial=m_auditSerial;
+-    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge policy requested: source={}/{}/{} policy={} requested={} effective={} eligible={} fallback={}",
++    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge policy requested: source={}/{}/{} policy={} requested={} effective={} eligible={} fallback={} l2_trims_disabled={}",
+         base.binding.stream,base.binding.picture,base.binding.revision,revision,
+-        int(preferences.Policy().mode),int(policy.mode),!m_fallback,m_fallback);
++        int(preferences.Policy().mode),int(policy.mode),!m_fallback,m_fallback,preferences.L2TrimsDisabled(policy.mode));
+     const auto admission=DVBRIDGE::StreamTelemetry::Read().transaction;
+     DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge output admission: generation={} source_known={} gpu_known={} native_dv={} hdr10={} requested={} effective={} reason={}",
+         admission.capabilities.generation,admission.capabilities.sourceKnown,admission.capabilities.processingKnown,
+@@ -1299,10 +1503,14 @@
    if (!m_advanced)
    {
      const bool prepared = Prepare(base,enhancement,metadata,geometry,allowPacked);
@@ -772,7 +847,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    }
    if (!base.lease || (enhancement && !enhancement->lease))
    { Failure("policy-source-lease"); return FrameStatus::Failed; }
-@@ -1326,7 +1528,7 @@
+@@ -1326,7 +1534,7 @@
    {
      auto status = DVBRIDGE_DV_UNSUPPORTED;
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
@@ -781,7 +856,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        status = dvbridge_render_dv_policy_prepare_packed(m_renderer,&policy,&m_pendingIdentity,
            &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,true,
-@@ -1368,7 +1570,7 @@
+@@ -1368,7 +1576,7 @@
    else
    {
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
@@ -790,7 +865,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        m_direct = dvbridge_render_hdr10_policy_direct(m_renderer,&policy,&m_pendingIdentity,
            &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,
-@@ -1403,6 +1605,8 @@
+@@ -1403,6 +1611,8 @@
  
  void CDVBridgeGLES::Cancel()
  {
@@ -799,7 +874,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    ClearFELPrefetch();
  #ifdef CB1_HAS_HDR10_AI
    if (m_context) m_context->ClearNextHDR10AI();
-@@ -1425,6 +1629,8 @@
+@@ -1425,6 +1635,8 @@
    if (!m_pending) return FrameStatus::Failed;
    DVBRIDGE::ObserveDiagnostic(m_pendingBinding.stream,m_pendingBinding.picture,
        m_pendingBinding.revision,m_requested.revision,"gpu-pending",true,false);
@@ -808,7 +883,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (!m_dvPolicyActive) return m_prepared ? FrameStatus::Ready : FrameStatus::Pending;
    const auto status = dvbridge_render_dv_policy_wait(m_renderer,timeoutNs);
    if (status == DVBRIDGE_DV_READY)
-@@ -1442,6 +1648,49 @@
+@@ -1442,6 +1654,49 @@
      return FrameStatus::Failed;
    }
    return FrameStatus::Pending;
@@ -858,7 +933,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  }
  
  const dvbridge_hdr10_policy_output* CDVBridgeGLES::HDR10Output() const
-@@ -1475,14 +1724,14 @@
+@@ -1475,14 +1730,14 @@
  {
    using namespace KODI::RENDERING::CAPTURE;
    const bool master=m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE;
@@ -875,7 +950,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    glBindFramebuffer(GL_READ_FRAMEBUFFER,previous);
    if (!read) return false;
    if (master)
-@@ -1579,7 +1828,7 @@
+@@ -1579,7 +1834,7 @@
    const bool master = mode == DVBRIDGE_MODE_MASTER_REFERENCE;
    const bool prefetchEnabled = allowAsync && allowPacked && m_context &&
        m_context->AsyncPreparation(base.binding.stream) &&
@@ -884,7 +959,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        preferences.felUpscaling == 0;
    if (!prefetchEnabled) ClearFELPrefetch();
    const int effectiveFilter = master ? 2 : preferences.felUpscaling;
-@@ -1732,7 +1981,8 @@
+@@ -1732,7 +1987,8 @@
      return Failure("pack-without-prepared-frame");
    if (m_advanced && m_dvPolicyActive)
    {
@@ -894,7 +969,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        return Failure("enhanced-pack-target");
      m_packed = dvbridge_render_dv_policy_resolve(m_renderer,m_scanout,m_scanoutFramebuffer,flipY);
      if (m_packed)
-@@ -1745,7 +1995,8 @@
+@@ -1745,7 +2001,8 @@
    }
    if (m_direct)
    {
@@ -904,7 +979,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      if (m_packed && m_live)
        m_submission = {m_pendingIdentity,m_scanout,0,++m_submissionSequence,
            m_asyncEligible && (m_directUsable || m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE)};
-@@ -1870,7 +2121,8 @@
+@@ -1870,7 +2127,8 @@
        submission.identity.revision != m_pendingIdentity.revision)
      return false;
    const auto* hdrOutput = HDR10Output();
@@ -914,7 +989,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
        m_advanced && m_effectiveMode == DVBRIDGE_MODE_ENHANCED_DV ? static_cast<float>(m_requested.peak) :
        m_hdr10 && m_hdr10Session ? m_hdr10Session->target.hdr.max_luma : 0.0f;
    const bool committed = success && m_prepared && m_packed &&
-@@ -1940,9 +2192,8 @@
+@@ -1940,18 +2198,45 @@
  #endif
    output.iptTransport = (output.flags & CDVPlaybackInfo::HDMI) &&
        (m_pendingSourceInfo.profile==5 || (m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE && m_requested.masterIPT));
@@ -925,7 +1000,14 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if(m_effectiveMode==DVBRIDGE_MODE_ENHANCED_DV &&
  #ifdef CB1_HAS_HDR10_AI
        !output.hdr10AI &&
-@@ -1952,6 +2203,29 @@
+ #endif
+       m_requested.output==DVBRIDGE::OutputMode::AdaptiveB)output.effective=6;
+   output.method = m_requested.method;
++  output.l2TrimsDisabled = m_requested.L2TrimsDisabled(m_effectiveMode
++#ifdef CB1_HAS_HDR10_AI
++      , m_aiFrame
++#endif
++  );
    output.panel = m_requested.panel; output.gamut = m_requested.gamut;
    output.manualPeak = m_requested.peak; output.revision = m_pendingIdentity.revision;
    output.fallback = m_fallback;
@@ -955,7 +1037,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    output.stream=m_pendingIdentity.stream; output.picture=m_pendingIdentity.picture;
    const char* pixelAlgorithm=nullptr;
    const char* analysisModel=nullptr;
-@@ -2048,6 +2322,7 @@
+@@ -2048,6 +2333,7 @@
            CDVPlaybackInfo::RequestedPolicy(acceptedOutput.effective,CDVPlaybackInfo::IsHDR10AI(acceptedOutput)),
            CDVPlaybackInfo::Reason(acceptedOutput.reason),acceptedOutput.minimumLinkBits,
            m_pendingSourceInfo.profile,m_pendingSourceInfo.bl,m_pendingSourceInfo.el,m_pendingSourceInfo.rpu,

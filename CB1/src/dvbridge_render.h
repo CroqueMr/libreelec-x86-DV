@@ -10,6 +10,10 @@ struct dvbridge_renderer;
 struct dvbridge_native_overlay;
 
 struct cb1_ai_result;
+#define DVBRIDGE_L2_TRIMS_API 1
+/* Next-picture authored Standard/Master output only (default false).
+ * Reconstruction still consumes the original metadata. Adaptive/AI clears it. */
+void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *renderer,bool disabled);
 #define DVBRIDGE_SPATIAL_API 1
 /* Synchronous final fitting of an already processed, single-plane picture.
  * The player owns its native filter and the returned texture. Keep both alive

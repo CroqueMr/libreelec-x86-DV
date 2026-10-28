@@ -54,6 +54,14 @@ int main() {
  s={}; info=DVBRIDGE::NativeProcessingInfo(s);
  assert(!info.outputType.has_value() && info.output.engine.empty());
  assert(info.output.felUpscaling==-1);
+ s.profile=7;s.metadata=true;s.blocks[2]=true;s.blocks[8]=true;
+ s.output.flags=CDVPlaybackInfo::HDMI;
+ assert(DVBRIDGE::NativeProcessingInfo(s).transmittedBlocks[2]);
+ s.output.l2TrimsDisabled=true;
+ info=DVBRIDGE::NativeProcessingInfo(s);
+ assert(info.blocks[2] && !info.transmittedBlocks[2] && info.transmittedBlocks[8]);
+ s.output.l2TrimsDisabled=false;
+ assert(DVBRIDGE::NativeProcessingInfo(s).transmittedBlocks[2]);
  s.output.flags=CDVPlaybackInfo::HDMI;s.output.effective=5;s.output.iptTransport=true;
  assert(DVBRIDGE::NativeProcessingInfo(s).output.iptTransport);
 }

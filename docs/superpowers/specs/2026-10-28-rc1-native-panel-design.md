@@ -25,3 +25,10 @@ Validation: failing native-layout/removal tests, full engine/integration suites,
 patch replay and source receipts, complete image inspection, actual selector
 capture with Expert help and video behind it. Do not claim new performance or
 zero-drop certification from a UI capture.
+
+Additional user request: an Expert-level Disable L2 trims option, default false,
+limited to authored Dolby Vision Standard and Master (YCbCr/IPT/P5). Remove only
+outgoing L2 blocks, preserve original source metadata and every pixel calculation.
+Adaptive, AI and HDR conversions retain their metadata. Use the existing frame
+revision lifecycle when changing this option. The name HDR10+ conversion has no
+experimental suffix in the UI; physical qualification limits remain documented.

@@ -40,6 +40,14 @@ int main() {
   auto probe=[&](int mode){@@PROBE@@ return policy;};
   assert(probe(DVBRIDGE_MODE_HDR10_EXPERT).adaptive==DVBRIDGE_ADAPTIVE_A);
   assert(probe(DVBRIDGE_MODE_ENHANCED_DV).adaptive==DVBRIDGE_ADAPTIVE_B_FP16);
+  assert(!a.disableL2Trims && !a.L2TrimsDisabled(DVBRIDGE_MODE_STANDARD));
+  a.disableL2Trims=true;
+  for(int mode=0;mode<DVBRIDGE_MODE_COUNT;++mode){
+    assert(a.L2TrimsDisabled(static_cast<dvbridge_mode>(mode))==
+        (mode==DVBRIDGE_MODE_STANDARD || mode==DVBRIDGE_MODE_MASTER_REFERENCE));
+    assert(!a.L2TrimsDisabled(static_cast<dvbridge_mode>(mode),true));
+  }
+  auto b=a;b.disableL2Trims=false;assert(!a.SameValues(b));
 }
 '''.replace('ENUMS',enums).replace('PREFS',preferences).replace('@@PROBE@@',probe)
         core = Path(__file__).resolve().parents[2]/'CB1/src'
@@ -139,6 +147,14 @@ int main(){using namespace DVBRIDGE;
  assert(FrameOutputSettings().allowMasterFallback);
  stored->ints["dvbridge.masterfallback"]=0;
  assert(!FrameOutputSettings().allowMasterFallback);
+ auto original=FrameOutputSettings();
+ stored->ints["dvbridge.disablel2"]=1;
+ auto stripped=FrameOutputSettings();
+ assert(stripped.disableL2Trims && stripped.revision!=original.revision);
+ assert(!stripped.L2TrimsDisabled(DVBRIDGE_MODE_STANDARD,true));
+ stored->ints["dvbridge.disablel2"]=0;
+ auto restored=FrameOutputSettings();
+ assert(!restored.disableL2Trims && restored.revision!=stripped.revision);
 }
 """.replace('@HEADER@',header)
         repo=Path(__file__).resolve().parents[2]
