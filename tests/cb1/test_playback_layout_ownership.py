@@ -59,7 +59,9 @@ int main(){
         self.assertIsNotNone(group)
         self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
         help=group.find("control[@id='9102']")
-        self.assertEqual((help.findtext('left'),help.findtext('width'),help.findtext('height')),('32','596','48'))
+        self.assertEqual((help.findtext('left'),help.findtext('width'),help.findtext('height')),('48','564','48'))
+        heading=group.find("control[@id='1']")
+        self.assertEqual((heading.findtext('left'),heading.findtext('top')),('48','32'))
 
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

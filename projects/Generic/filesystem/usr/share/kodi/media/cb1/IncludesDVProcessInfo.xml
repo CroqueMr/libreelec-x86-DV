@@ -182,7 +182,7 @@
         <texture border="60">special://xbmc/media/cb1-panel.png</texture><colordiffuse>FF1E2428</colordiffuse>
       </control>
       <control type="label" id="1">
-        <left>32</left><top>20</top><width>596</width><height>40</height>
+        <left>48</left><top>32</top><width>564</width><height>40</height>
         <font>CB1.MenuBody</font><textcolor>FFF4F6F6</textcolor><scroll>true</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
@@ -199,7 +199,7 @@
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="textbox" id="9102">
-        <left>32</left><top>384</top><width>596</width><height>48</height>
+        <left>48</left><top>384</top><width>564</width><height>48</height>
         <font>CB1.MenuHelp</font><textcolor>FFBFC8CC</textcolor>
         <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
       </control>
@@ -208,7 +208,7 @@
   <include name="CB1PlaybackModeRows">
     <itemlayout width="612" height="50">
       <control type="label">
-        <left>16</left><top>5</top><width>580</width><height>40</height>
+        <left>24</left><top>5</top><width>564</width><height>40</height>
         <font>CB1.MenuBody</font><label>$INFO[ListItem.Label]</label>
         <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
       </control>
@@ -219,7 +219,7 @@
         <texture>special://xbmc/media/cb1-white.png</texture><colordiffuse>FF237CA4</colordiffuse>
       </control>
       <control type="label">
-        <left>16</left><top>5</top><width>580</width><height>40</height>
+        <left>24</left><top>5</top><width>564</width><height>40</height>
         <font>CB1.MenuBody</font><label>$INFO[ListItem.Label]</label>
         <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
       </control>
