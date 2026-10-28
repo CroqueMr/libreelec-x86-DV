@@ -88,6 +88,24 @@ int main(void)
     assert(r.coverage==CB1_DV_HDR10PLUS_L8 && out.params[0].tone_mapping_flag);
     AVDynamicHDRPlus old=out;s.histogram[0]++;
     assert(!cb1_dv_hdr10plus_metadata(&out,&r,m,bytes,&s));assert(!memcmp(&out,&old,sizeof(out)));
+    /* Descriptive metadata keeps its target even when no curve is available. */
+    m->num_ext_blocks=0;
+    s=(struct cb1_hdr10plus_statistics){.count=10000,.histogram={[0]=10000}};
+    assert(cb1_dv_hdr10plus_metadata(&out,&r,m,bytes,&s));
+    assert(out.targeted_system_display_maximum_luminance.num==992);
+    assert(!out.params[0].tone_mapping_flag && r.reason==CB1_DV_HDR10PLUS_NO_ANALYSIS);
+    assert(cb1_hdr10plus_vsif(packet,&out,false,true)==CB1_HDR10PLUS_OK);
+    assert(packet[7]==126 && packet[8]==0 && packet[10]==0 && packet[11]==255);
+    uint8_t black[31];memcpy(black,packet,sizeof(black));
+    assert(cb1_dv_hdr10plus_metadata(&out,&r,m,bytes,&s));
+    assert(cb1_hdr10plus_vsif(packet,&out,false,true)==CB1_HDR10PLUS_OK);
+    assert(!memcmp(black,packet,sizeof(black)));
+    s=(struct cb1_hdr10plus_statistics){.maxscl={160,160,160},.average_maxrgb=160,
+        .count=10000,.histogram={[10]=10000}};
+    assert(cb1_dv_hdr10plus_metadata(&out,&r,m,bytes,&s));
+    assert(cb1_hdr10plus_vsif(packet,&out,false,true)==CB1_HDR10PLUS_OK);
+    assert(packet[8]==10 && packet[9]==10 && packet[17]==10);
+    assert(memcmp(black,packet,sizeof(black)));
     av_free(source);av_free(m);
     puts("DV to HDR10+: linear statistics, L1/L3 ownership and trim coverage passed");
 }

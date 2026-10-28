@@ -137,18 +137,21 @@ static pl_tex render_mode(struct dvbridge_renderer *r,const struct pl_frame *sou
     return out->intermediate;
 }
 
-static void qualify_modes(struct reference_gpu *g)
+static void qualify_modes(struct reference_gpu *g,bool base_rows)
 {
     const int w=64,h=48;
     float base[w*h*4],actual[w*h*4],expected[w*h*4];
-    for(int i=0;i<w*h;i++)for(int c=0;c<4;c++)base[4*i+c]=c==3?1.f:.25f+c*.01f;
+    for(int y=0;y<h;y++)for(int x=0;x<w;x++)for(int c=0;c<4;c++)
+        base[4*(y*w+x)+c]=c==3?1.f:.25f+c*.01f+(base_rows && (y&1)?.05f:0.f);
     pl_tex bl=reference_texture(g->gl->gpu,w,h,base);
     /* Vertical variation avoids half-texel tie ambiguity in this path comparison. */
-    pl_tex small=residual(g->gl->gpu,w,h/2,w,h/2,0,false);
     uint16_t data[w*h*4];
     for(int y=0;y<h;y++)for(int x=0;x<w;x++)for(int c=0;c<4;c++)
-        data[(y*w+x)*4+c]=c==3?65535:(384+((x*3+(y/2)*5+c)%5)*64)<<6;
+        data[(y*w+x)*4+c]=c==3?65535:(base_rows?512:384+((x*3+(y/2)*5+c)%5)*64)<<6;
     pl_fmt fmt=pl_find_fmt(g->gl->gpu,PL_FMT_UNORM,4,16,16,PL_FMT_CAP_SAMPLEABLE);assert(fmt);
+    pl_tex small=base_rows?pl_tex_create(g->gl->gpu,pl_tex_params(.w=w,.h=h/2,
+        .format=fmt,.sampleable=true,.initial_data=data)):residual(g->gl->gpu,w,h/2,w,h/2,0,false);
+    assert(small);
     pl_tex full=pl_tex_create(g->gl->gpu,pl_tex_params(.w=w,.h=h,.format=fmt,
         .sampleable=true,.initial_data=data));assert(full);
     struct pl_frame source=reference_frame(bl,w,h),el=reference_frame(small,w,h/2);
@@ -181,6 +184,10 @@ static void qualify_modes(struct reference_gpu *g)
         for(int i=0;i<w*h*4;i++)if(!isfinite(actual[i]) || fabsf(actual[i]-expected[i])>=3e-5f){
             fprintf(stderr,"mode=%d at=%d actual=%.9g oracle=%.9g\n",mode,i,actual[i],expected[i]);
             assert(!"FEL filter circuit comparison failed");
+        }
+        if(base_rows)for(int y=8;y<h-8;y+=2){
+            /* The EL repeats on each row pair; independent BL detail must not. */
+            assert(fabsf(actual[4*(y*w+w/2)]-actual[4*((y+1)*w+w/2)])>1e-4f);
         }
         dvbridge_renderer_destroy(nearest);dvbridge_renderer_destroy(oracle);
         glFinish();dvbridge_retirement_owner_poll(a);dvbridge_retirement_owner_poll(b);
@@ -280,7 +287,7 @@ int main(void)
     for(int flip=0;flip<2;flip++){
         qualify(&g,32,24,flip);qualify(&g,33,25,flip);
     }
-    qualify_modes(&g);
+    qualify_modes(&g,false);qualify_modes(&g,true);
     for(int planar=0;planar<2;planar++)for(int flip=0;flip<2;flip++)
         qualify_planes(&g,planar,flip);
     reference_gpu_destroy(&g);
