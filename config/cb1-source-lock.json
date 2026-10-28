@@ -48,7 +48,7 @@
     "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "f00d3d6190bcb1fc2cbda425661cb4b3babb850c59ce23eee702a36de7c68dc5",
     "projects/Generic/patches/linux/linux-9930-amd-3d.patch": "47fc2be4e35fd51e5ec8769f3b57145e4f6df2eb0e3e6354afe7d31192ec7663",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "b9169706f78483e53b6a802989d5cc6ac290ef2732d6466c7689da71877a086a",
-    "packages/graphics/nvidia/package.mk": "067a4fc6aa24f8f4faa0f9a5369a854b925eb65bfde09464bbe70f114fac3fdf",
+    "packages/graphics/nvidia/package.mk": "fe2bb767124edb14b92b1c2f44d6671e62919021ada7b5fc3998c7c978c5ce79",
     "packages/graphics/nvidia-open-kernel-modules/package.mk": "ef55d66947b6dcbf1140589c366ce012c880e2ded94f9c86c7e11ddb36895f70",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9002-nvkms-integer-rate-twins-of-1000-1001-timings.patch": "34c33c83d1cf0b3613aa722654e30f8d0adefa16316a0eb73d306c28d824e62d",
@@ -58,7 +58,7 @@
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-panel.png": "36480b14914c7b2a0a5f6db253132142b041496a9e59a9392884b7f27aca61a3",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "556c27b34db565cd3f86c5b62a7363a35d026b51c41c7dd95e5d503fc7abed15",
     "packages/sysutils/busybox/config/busybox-init.conf": "747ef97a8bc053add17961092bab59d27f6528f165694cd098a5bd51a5f701c8",
-    "packages/linux/package.mk": "9430d047802cd56edbbb3d112f4b7c58611e73ee9a091748d0ddd405888a588f",
+    "packages/linux/package.mk": "26196f0d3a742766e94851fd14ac8d688a8a70bef51ec1589ece758f2db71e9d",
     "packages/tools/installer/scripts/installer": "a7353e217a6096d41cf7b9719541a9a71fe950f4a6f518d75f58ac1817ee2f66",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlayerProcessInfo.xml": "95d8997b81e0e9cfd74beeca70c008071aada0a5cfeabc393d3cfddbbc9ef380",
     "packages/sysutils/busybox/scripts/init": "956a56f1ad6349ec9db4c7488557ac20b9bdae24878a15dc26b874b618719b69",
@@ -70,7 +70,10 @@
     "tests/cb1/test_ai_transport_admission.py": "b1a610057bee7b3364d105e88017f81f08ffd72befec3173abfa1aa894c303c1",
     "projects/Generic/patches/kodi/kodi-9999-zzz-hdr10plus.patch": "e8db628070ba54f9578faf74cef5523f9c8904552dd9a2e197b34b2d95e64b50",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "78643d9040812a2533eabe4ed05fa23d797cd9dbe128fd4ae605b5f209f4124f",
-    "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlaybackModes.xml": "0449506089446ca376621f611f4c9de711e5c6cd381573acb2187411ad78fdd5"
+    "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlaybackModes.xml": "0449506089446ca376621f611f4c9de711e5c6cd381573acb2187411ad78fdd5",
+    "projects/Generic/patches/linux/linux-9925-vegam-dv-transport.patch": "1bdfafb9fae094cc71615350aaadd23c89d909f021dc9bd0c6051e86994b49cf",
+    "packages/graphics/nvidia-pascal-modeset/package.mk": "73e102f7d812dcd080373b92640ba9c593d14874279acf285a7897006e6397e2",
+    "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9000-dv-transport.patch": "1f93960ac31fcb0634e35ed8e3edc6c177e3eea7237a7273eb9049a43505c5cb"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

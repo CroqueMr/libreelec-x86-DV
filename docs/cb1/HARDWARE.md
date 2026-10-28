@@ -5,6 +5,7 @@
 | Family | Dolby Vision support |
 | --- | --- |
 | Intel Core 8th generation and newer | Supported |
+| Intel Core 7th generation, Kaby Lake | Experimental, [HDMI qualification](INTEL-KABY-LAKE.md) |
 | Intel Core Ultra Series 1 / 2, including 200V | Supported |
 | Intel N-series, including N100 / N150 | Supported |
 | AMD Ryzen 2000G / 3000G and corresponding mobile APUs | Supported |
@@ -20,6 +21,9 @@ sharing the same Ryzen generation number.
 | AMD Radeon RX 5000, RDNA 1 | RX 5500 XT, 5600 XT, 5700 / 5700 XT | Experimental |
 | AMD Radeon RX 6000, RDNA 2 | RX 6400, 6600, 6700 XT, 6800, 6900 XT | Experimental |
 | AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Experimental |
+| AMD Radeon RX Vega M, DCE 11.22 | Vega M GL / GH | Experimental, [transport](VEGA-M.md) |
+| Intel Arc A / B | A750, A770, B570, B580 | Experimental, [firmware and HDMI](INTEL-ARC.md) |
+| NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Experimental, separate [R580 build](PASCAL.md) |
 | NVIDIA GeForce GTX 16, Turing | GTX 1650, 1660 | Experimental |
 | NVIDIA GeForce RTX 20, Turing | RTX 2060, 2070, 2080 | Experimental |
 | NVIDIA GeForce RTX 30, Ampere | RTX 3060, 3070, 3080, 3090 | Experimental |
@@ -31,8 +35,8 @@ RX 9000 / DCN 4, Polaris RX 400 / 500 and discrete Vega cards are outside its
 current allowlist. Vega-based Ryzen APUs listed above use a different display path.
 
 NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
-and a VAAPI-to-NVDEC bridge. Pascal / GTX 10 and earlier are not supported by this
-driver branch. The open modules require Turing or newer.
+and a VAAPI-to-NVDEC bridge. The default open-module stack requires Turing or
+newer. Pascal uses the opt-in matched R580 build, not the R615 modules.
 [NVIDIA driver requirements](https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus)
 and [licensing](LICENSING.md).
 
