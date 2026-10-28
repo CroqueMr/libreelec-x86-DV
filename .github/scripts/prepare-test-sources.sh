@@ -59,6 +59,7 @@ python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
 )
 printf '%s\n' \
   "KODI_NATIVE_SOURCE_TREE=$test_root/kodi" \
+  "KODI_UPSTREAM_ARCHIVE=$test_root/kodi.tar.gz" \
   "CB1_DRM_STATE_SOURCE=$test_root/kodi" \
   "FFMPEG_TEST_PREFIX=$test_root/prefix" \
   "FFMPEG_MATCHED_SOURCE=$test_root/ffmpeg" \

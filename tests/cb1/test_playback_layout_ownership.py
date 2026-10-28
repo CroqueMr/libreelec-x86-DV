@@ -69,9 +69,7 @@ int main(){
 
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
-        archive = Path(os.environ.get('KODI_UPSTREAM_ARCHIVE',
-            '/home/dvbuild/beta5-gpl2-image-20261022/sources/kodi/'
-            'kodi-28ea2eac1eb7af8fdcbd2672d933ce87f594be79.tar.gz'))
+        archive = Path(os.environ['KODI_UPSTREAM_ARCHIVE'])
         names = ('DialogSelect.xml', 'Includes_DialogSelect.xml', 'Variables.xml')
         with tarfile.open(archive) as source:
             for name in names:
