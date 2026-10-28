@@ -41,6 +41,8 @@ namespace DVBRIDGE {
    ::DVBRIDGE::Policy Policy()const{return {};}};
  Preferences FrameOutputSettings(){return {};}
  bool DiagnosticsEnabled(){return false;}
+ std::string lastStage;
+ void DiagnosticStage(const char* stage){lastStage=stage;}
  template<class... T> void ObserveDiagnostic(T...){}
  using SourceBinding=::Binding;
  int PolicyCode(Policy){return 0;}
@@ -91,7 +93,8 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
  bool m_failedHDR10SetupRestore=false,m_dvShutdownFence=false;
- bool completeOK=true,pollOK=true,restoreOK=true;
+ bool completeOK=true,pollOK=true,restoreOK=true,modeOK=true,recoveryOK=true;
+ Capabilities capabilities;
  bool m_dvRollbackFailed=false,m_dvFatalConsumed=false,m_dvNativeFailed=false,m_dvFallbackActive=false;
  DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None,m_dvActivationReason=DVBRIDGE::OutputReason::None;
  std::mutex m_dvCapabilityMutex;
@@ -110,13 +113,13 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<GBM> m_GBM=std::make_shared<GBM>();
  bool StopDVBridgePlayback(){return true;}
- bool SupportsDVOutputMode(){return true;}
+ bool SupportsDVOutputMode(){return modeOK;}
  bool DVBridgeRequested(const VideoPicture*){return requested;}
  bool CompleteDVBridgePage(){return completeOK;}
- bool RecoverDVActivation(){return true;}
+ bool RecoverDVActivation(){return recoveryOK;}
  void ResetDVActivation(const VideoPicture*){}
- Capabilities GetDVOutputCapabilities(const VideoPicture*){return {};}
- Capabilities GetDVOutputCapabilities(const VideoPicture*,DVBRIDGE::Preferences){return {};}
+ Capabilities GetDVOutputCapabilities(const VideoPicture*){return capabilities;}
+ Capabilities GetDVOutputCapabilities(const VideoPicture*,DVBRIDGE::Preferences){return capabilities;}
  Selection SelectedDVOutput(const VideoPicture*){return m_dvSelection;}
  Selection SelectedDVOutput(const VideoPicture*,DVBRIDGE::Preferences,Capabilities){return m_dvSelection;}
  bool PollRejectedDVSurface(){return pollOK;}
@@ -136,6 +139,23 @@ METHODS
 int main(){
  int failures=0,cases=0;
  auto expect=[&](bool value,const std::string& name){++cases;std::cout<<(value?"PASS ":"FAIL ")<<name<<'\n';failures+=!value;};
+ for(int gate=0;gate<7;++gate){
+  CWinSystemGbmGLESContext window;VideoPicture picture;
+  const char* stages[]={"output-stop-pending","output-mode-unavailable",
+    "output-restore-pending","output-await-previous-scanout",
+    "output-await-source-import","output-await-fel","output-await-rejected-scanout"};
+  if(gate==0)window.m_dvStopPending=true;
+  if(gate==1){window.modeOK=false;window.requested=true;}
+  if(gate==2)window.recoveryOK=false;
+  if(gate==3){window.m_dvOrdinaryFrame=true;window.pending=true;}
+  if(gate==4){window.capabilities.isDV=true;window.capabilities.processingKnown=false;}
+  if(gate==5){window.capabilities.isDV=true;picture.strDVELType="FEL";}
+  if(gate==6)window.pollOK=false;
+  DVBRIDGE::lastStage.clear();
+  expect(!window.PrepareDVOutputFrame(picture) && DVBRIDGE::lastStage==stages[gate],
+         std::string("preparation identifies deferred gate ")+stages[gate]);
+  expect(window.native==0 && window.stages==0,"deferred gate does not activate output");
+ }
  for(auto hdr : {StreamHdrType::HDR_TYPE_NONE,StreamHdrType::HDR_TYPE_HDR10,StreamHdrType::HDR_TYPE_HLG}) {
   VideoPicture picture;picture.hdrType=hdr;picture.color_transfer=hdr==StreamHdrType::HDR_TYPE_NONE?0:18;
   const auto name=hdr==StreamHdrType::HDR_TYPE_NONE?"SDR":hdr==StreamHdrType::HDR_TYPE_HDR10?"HDR10":"HLG/PVR";

@@ -23,7 +23,8 @@ struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReaso
 struct OutputPreferences {
  OutputMode output=OutputMode::HDR10;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
  bool allowMasterFallback=true;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;
- bool ProfileValid()const{return true;}
+ bool profileValid=true;
+ bool ProfileValid()const{return profileValid;}
  dvbridge_policy Policy()const{return {.revision=1,.mode=mode};}
  dvbridge_policy HDR10Policy()const{return Policy();}
 };
@@ -41,6 +42,14 @@ int main(){
  c.hdr10=false;r=select(p,c);assert(r.route==OutputRoute::Vanilla);
  c.hdr10=true;p.mode=DVBRIDGE_MODE_HDR10_EXPERT;c.hdr10plus=false;
  r=select(p,c);assert(r.policy.mode==DVBRIDGE_MODE_HDR10_EXPERT && r.reason==OutputReason::None);
+ p.profileValid=false;r=select(p,c);
+ assert(r.route==OutputRoute::Vanilla && r.reason==OutputReason::TVProfileRequired);
+ p.mode=DVBRIDGE_MODE_HDR10_BASIC;r=select(p,c);
+ assert(r.route==OutputRoute::HDR10 && r.reason==OutputReason::None);
+ p.mode=DVBRIDGE_MODE_HDR10_EXPERT;r=select(p,c);
+ assert(r.route==OutputRoute::Vanilla && r.reason==OutputReason::TVProfileRequired);
+ p.profileValid=true;r=select(p,c);
+ assert(r.route==OutputRoute::HDR10 && r.policy.mode==DVBRIDGE_MODE_HDR10_EXPERT);
  p.output=OutputMode::Standard;p.mode=DVBRIDGE_MODE_MASTER_REFERENCE;
  r=select(p,c);assert(r.route==OutputRoute::NativeDV && r.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
  c.stereoSource=true;assert(select(p,c).route==OutputRoute::Vanilla);
