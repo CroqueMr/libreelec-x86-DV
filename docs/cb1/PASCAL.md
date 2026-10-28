@@ -1,13 +1,20 @@
-# Experimental Pascal HDMI transport
+# Pascal HDMI transport
 
 Status: software-qualified prototype, not hardware-qualified Dolby Vision support.
 
 ## Build
 
-Set `CB1_NVIDIA_PASCAL=yes` in a separate Generic OpenGLES build environment.
-This selects NVIDIA **580.178.04** instead of **615.78.08**. Do not reuse an
-existing image's staged modules or userspace libraries across these variants.
-The default build is unchanged. This prototype does not select drivers at boot.
+The Generic image contains NVIDIA **580.178.04** and **615.78.08** in isolated
+payloads. LibreELEC selects one matching module, firmware and userspace stack
+before systemd/udev. No separate Pascal image or build flag is required.
+
+Selection uses the pinned NVIDIA PCI-device lists. A known NVIDIA boot VGA GPU
+takes priority; otherwise a sole known family is selected. On mixed-family
+machines without a unique known boot GPU, R615 is selected with a boot diagnostic;
+the other family is unavailable. This does not select the connected monitor.
+An unknown NVIDIA boot GPU gets no automatic NVIDIA module overlay. Intel/AMD-only
+machines retain Mesa and do not load an NVIDIA overlay. Cross-family NVIDIA
+hotplug requires a reboot. User module overlays cannot replace the matched stack.
 
 The proprietary R580 resource manager and userspace libraries are retained.
 The matching public R580 modeset core is rebuilt from source, with its private
@@ -32,7 +39,8 @@ are retained. NVIDIA RM and userspace remain proprietary.
 
 Host tests exercise blob ownership, invalid requests, VSIF bounds, the actual
 R580 HDMI builder and Pascal packet packer, including the HDMI checksum.
-Package tests check default/opt-in dependency selection and installation.
+Package tests check both fixed dependencies, complete installation, explicit PCI
+selection, conflicting overlays, repeated setup and incomplete-stack failures.
 These checks do not establish that proprietary RM accepts the packet on a
 physical Pascal connector, or that the final scanout preserves every video byte.
 

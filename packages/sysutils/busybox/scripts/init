@@ -1040,7 +1040,10 @@ done
 /usr/bin/busybox rm -fr /tmp
 
 # setup kernel overlays
-/usr/bin/busybox chroot /sysroot /usr/sbin/kernel-overlays-setup
+if ! /usr/bin/busybox chroot /sysroot /usr/sbin/kernel-overlays-setup; then
+  echo "*** Kernel-overlay setup failed; refusing an incomplete driver stack ***" >&2
+  exec /usr/bin/busybox chroot /sysroot /bin/sh
+fi
 
 # tell OE settings addon to disable updates
 if [ "$UPDATE_DISABLED" = "yes" ]; then

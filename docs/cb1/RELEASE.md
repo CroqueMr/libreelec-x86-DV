@@ -22,7 +22,7 @@ Changes since Beta5.
 ## HDR10+
 
 - Added **native HDR10+ playback** and **Dolby Vision-to-HDR10+ conversion**.
-- Added output paths for Intel, AMD and NVIDIA, including the separate Pascal image.
+- Added output paths for Intel, AMD and NVIDIA, including Pascal.
 - Added receiver V0/V1 handling and frame-associated dynamic metadata.
 - Improved output-depth validation, packet synchronization and HDR10+/HDR10/Dolby Vision/SDR transitions.
 - Added HDR10+ capability reporting in Kodi.
@@ -45,7 +45,7 @@ Changes since Beta5.
 
 ## Hardware
 
-- Added a separate matched **NVIDIA GTX 10 / Pascal R580 image**.
+- Added **NVIDIA GTX 10 / Pascal R580** support in the same image, with automatic matching of kernel drivers and libraries at boot.
 - Added **AMD Radeon Vega M** output support.
 - Improved Intel compatibility and **Arc A/B firmware coverage**.
 - Corrected NVIDIA PQ/HLG capability handling and deep-colour output validation.

@@ -13,7 +13,7 @@ successful-output receipt.
 | AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
 | AMD Vega M, DCE11.22 | Experimental | Native DCE output | Experimental DCE packet path | Experimental guarded DCE deep output |
 | NVIDIA R615, Turing and newer | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental commit-coupled native packet routes | Same experimental deep-output routes |
-| NVIDIA R580, separate Pascal image | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental native HDMI 4:2:2 10-bit route | Same experimental 4:2:2 10-bit route |
+| NVIDIA R580, same image | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental native HDMI 4:2:2 10-bit route | Same experimental 4:2:2 10-bit route |
 
 Ordinary native HDR follows each driver's policy, including dithering where
 applicable. HDR10+ and CB1 PQ conversions require actual output of at least

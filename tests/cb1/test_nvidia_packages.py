@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class NvidiaPackages(unittest.TestCase):
     def recipe(self, relative, commands):
-        return subprocess.run(['bash', '-c', 'VULKAN_SUPPORT=no; source "$1"; ' + commands,
+        return subprocess.run(['bash', '-ec', 'VULKAN_SUPPORT=no; PKG_DIR="$(dirname "$1")"; source "$1"; ' + commands,
                                'recipe', str(ROOT / relative)], text=True, capture_output=True)
 
     def test_matched_driver_and_open_modules(self):
@@ -57,17 +57,19 @@ class NvidiaPackages(unittest.TestCase):
             (payload / 'LICENSE').write_bytes(b'test-license')
             (base / 'licenses').mkdir()
             (base / 'licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt').write_bytes(b'test-license')
-            env = dict(os.environ, INSTALL=str(installed), ROOT=str(base))
+            env = dict(os.environ, INSTALL=str(installed), ROOT=str(base), PKG_DIR=str(recipe.parent))
             result = subprocess.run(['bash', '-ec',
                 'VULKAN_SUPPORT=no; source "$1"; '
-                'get_full_firmware_dir() { echo usr/lib/firmware; }; '
+                'get_full_firmware_dir() { echo usr/lib/kernel-overlays/$1/lib/firmware; }; '
                 'get_full_module_dir() { echo usr/lib/modules/test; }; '
                 'die() { echo "$*" >&2; exit 1; }; cd "$2"; makeinstall_target',
                 'install', str(recipe), str(payload)], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((installed / 'usr/share/licenses/nvidia/LICENSE').read_bytes(), b'test-license')
-            self.assertTrue((installed / 'usr/lib/firmware/nvidia/615.78.08/ucodes_test.bin').is_file())
+            self.assertEqual((installed / 'usr/lib/nvidia-drivers/r615/usr/share/licenses/nvidia/LICENSE').read_bytes(), b'test-license')
+            self.assertTrue((installed / 'usr/lib/kernel-overlays/nvidia-r615/lib/firmware/nvidia/615.78.08/ucodes_test.bin').is_file())
             self.assertTrue((installed / 'usr/lib/libnvcuvid.so.1').is_symlink())
+            self.assertEqual(os.readlink(installed/'usr/lib/libnvcuvid.so.1'),
+                             '/run/nvidia-driver/usr/lib/libnvcuvid.so.1')
 
 
 if __name__ == '__main__':

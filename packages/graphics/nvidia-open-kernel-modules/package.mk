@@ -43,9 +43,9 @@ make_target() {
 }
 
 makeinstall_target() {
-  mkdir -p ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel-open/nvidia.ko         ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel-open/nvidia-drm.ko     ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel-open/nvidia-uvm.ko     ${INSTALL}/$(get_full_module_dir)/nvidia
-    cp -P kernel-open/nvidia-modeset.ko ${INSTALL}/$(get_full_module_dir)/nvidia
+  mkdir -p ${INSTALL}/$(get_full_module_dir nvidia-r615)/nvidia
+    cp -P kernel-open/nvidia.ko         ${INSTALL}/$(get_full_module_dir nvidia-r615)/nvidia
+    cp -P kernel-open/nvidia-drm.ko     ${INSTALL}/$(get_full_module_dir nvidia-r615)/nvidia
+    cp -P kernel-open/nvidia-uvm.ko     ${INSTALL}/$(get_full_module_dir nvidia-r615)/nvidia
+    cp -P kernel-open/nvidia-modeset.ko ${INSTALL}/$(get_full_module_dir nvidia-r615)/nvidia
 }

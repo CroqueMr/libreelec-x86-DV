@@ -10,6 +10,9 @@ RUNTIME_DIR="/run/kernel-overlays"
 MODULES_DIR="${RUNTIME_DIR}/modules/${KVER}"
 FIRMWARE_DIR="${RUNTIME_DIR}/firmware"
 USER_FIRMWARE_DIR="/storage/.config/firmware"
+NVIDIA_SELECTOR=/usr/lib/nvidia-drivers/select-driver
+
+[ ! -f "${NVIDIA_SELECTOR}" ] || . "${NVIDIA_SELECTOR}"
 
 mkdir -p "${MODULES_DIR}"
 mkdir -p "${FIRMWARE_DIR}"
@@ -37,6 +40,7 @@ apply_overlay() {
       log "added modules from $modules_overlay_dir"
     else
       log "failed to add modules from $modules_overlay_dir"
+      return 1
     fi
   fi
 
@@ -45,14 +49,17 @@ apply_overlay() {
       log "added firmware from $firmware_overlay_dir"
     else
       log "failed to add firmware from $firmware_overlay_dir"
+      return 1
     fi
   fi
+  return 0
 }
 
 # setup system base modules
 
 log "setup base modules"
-apply_overlay base
+apply_overlay base || exit 1
+GOT_MODULE_OVERLAY="no"
 
 # apply user-configured module overlays
 
@@ -64,22 +71,41 @@ if [ -d "${OVERLAY_CONFIG_DIR}" ]; then
     if [ -e "$conf" ]; then
       log "processing conf $conf"
       overlay=$(cat "$conf")
-      [ -n "$overlay" ] && apply_overlay "$overlay"
+      if [ -n "$overlay" ]; then
+        case "$overlay" in /*) path="$overlay" ;; *) path="${SYSTEM_OVERLAYS_DIR}/$overlay" ;; esac
+        if [ -f "${NVIDIA_SELECTOR}" ] && nvidia_overlay_conflicts "$path"; then
+          log "rejected NVIDIA module override from $path; using the matched system driver"
+        else
+          apply_overlay "$overlay" || exit 1
+        fi
+      fi
     fi
   done
 
-  if [ "yes" = "$GOT_MODULE_OVERLAY" ]; then
-    log "running depmod"
-    /usr/sbin/depmod -a >/dev/kmsg 2>&1
+fi
+
+if [ -f "${NVIDIA_SELECTOR}" ]; then
+  select_nvidia_driver /sys /usr/lib /run || exit 1
+  if [ -n "${NVIDIA_OVERLAY}" ]; then
+    apply_overlay "${NVIDIA_OVERLAY}" || exit 1
   fi
 fi
 
+if [ "yes" = "$GOT_MODULE_OVERLAY" ]; then
+  log "running depmod"
+  /usr/sbin/depmod -a >/dev/kmsg 2>&1 || exit 1
+fi
+
 if [ -d "${USER_FIRMWARE_DIR}" ] && [ -n "$(ls ${USER_FIRMWARE_DIR})" ]; then
-  if cp -rfs "${USER_FIRMWARE_DIR}"/* "${FIRMWARE_DIR}"; then
-    log "added firmware from ${USER_FIRMWARE_DIR}"
-  else
-    log "failed to add firmware from ${USER_FIRMWARE_DIR}"
-  fi
+  for firmware in "${USER_FIRMWARE_DIR}"/*; do
+    if [ -f "${NVIDIA_SELECTOR}" ] && [ "${firmware##*/}" = nvidia ]; then
+      log "ignored NVIDIA firmware override; using matched system firmware"
+    elif cp -rfs "${firmware}" "${FIRMWARE_DIR}"; then
+      log "added firmware from ${firmware}"
+    else
+      log "failed to add firmware from ${firmware}"
+    fi
+  done
 fi
 
 log "done"

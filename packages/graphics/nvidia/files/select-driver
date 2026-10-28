@@ -1,0 +1,83 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Called before systemd/udev from LibreELEC's native kernel-overlay setup.
+
+nvidia_overlay_conflicts() {
+  local modules
+  [ -d "$1/lib/modules" ] || return 1
+  modules=$(find -L "$1/lib/modules" \( -name 'nvidia.ko*' -o -name 'nvidia-modeset.ko*' \
+    -o -name 'nvidia-drm.ko*' -o -name 'nvidia-uvm.ko*' \) -print -quit) || return 0
+  [ -n "${modules}" ]
+}
+
+select_nvidia_driver() {
+  local sys="$1" lib="$2" run="$3" pci vendor class device branch
+  local seen615=no seen580=no boot_branch= selected=r615 present=no module payload
+  local boot_count=0 unknown_primary=no
+  NVIDIA_OVERLAY=
+  mkdir -p "${run}/modprobe.d" || return 1
+  rm -f "${run}/nvidia-driver" "${run}/modprobe.d/nvidia-hdr-depth.conf"
+
+  for pci in "${sys}/bus/pci/devices/"*; do
+    [ -r "${pci}/vendor" ] && [ -r "${pci}/class" ] && [ -r "${pci}/device" ] || continue
+    vendor=$(cat "${pci}/vendor"); class=$(cat "${pci}/class")
+    [ "${vendor}" = 0x10de ] || continue
+    case "${class}" in 0x03????) ;; *) continue ;; esac
+    device=$(tr 'A-F' 'a-f' <"${pci}/device")
+    branch=$(awk -v id="${device#0x}" '$1 == id { print $2; exit }' "${lib}/nvidia-drivers/pci-branches")
+    case "${branch}" in
+      r615) seen615=yes ;;
+      r580) seen580=yes ;;
+      *)
+        log "NVIDIA ${pci##*/} ${device}: unsupported PCI ID"
+        if [ -r "${pci}/boot_vga" ] && [ "$(cat "${pci}/boot_vga")" = 1 ]; then
+          unknown_primary=yes
+        fi
+        continue ;;
+    esac
+    present=yes
+    if [ -r "${pci}/boot_vga" ] && [ "$(cat "${pci}/boot_vga")" = 1 ]; then
+      boot_branch="${branch}"
+      boot_count=$((boot_count + 1))
+    fi
+  done
+  if [ "${unknown_primary}" = yes ]; then
+    present=no
+    log "NVIDIA unknown boot GPU: no automatic NVIDIA overlay"
+  elif [ "${boot_count}" = 1 ]; then
+    selected="${boot_branch}"
+  elif [ "${seen580}" = yes ] && [ "${seen615}" = no ]; then
+    selected=r580
+  fi
+  if [ "${seen615}" = yes ] && [ "${seen580}" = yes ]; then
+    log "NVIDIA mixed driver families: selected ${selected}; other family unavailable this boot"
+  fi
+
+  payload="${lib}/nvidia-drivers/${selected}"
+  [ -s "${payload}/driver-version" ] || { log "NVIDIA ${selected}: missing payload"; return 1; }
+  [ -s "${payload}/required-userspace" ] && [ -s "${payload}/required-firmware" ] || {
+    log "NVIDIA ${selected}: missing runtime manifest"; return 1;
+  }
+  while IFS= read -r module; do
+    [ -r "${payload}/${module}" ] || { log "NVIDIA ${selected}: missing ${module}"; return 1; }
+  done <"${payload}/required-userspace"
+  while IFS= read -r module; do
+    [ -r "${lib}/kernel-overlays/nvidia-${selected}/lib/firmware/${module}" ] || {
+      log "NVIDIA ${selected}: missing firmware ${module}"; return 1;
+    }
+  done <"${payload}/required-firmware"
+  if [ "${present}" = yes ]; then
+    for module in nvidia nvidia-modeset nvidia-drm nvidia-uvm; do
+      [ -r "${lib}/kernel-overlays/nvidia-${selected}/lib/modules/${KVER}/nvidia/${module}.ko" ] || {
+        log "NVIDIA ${selected}: missing ${module}.ko"; return 1;
+      }
+    done
+    if [ "${selected}" = r615 ]; then
+      [ -r "${payload}/hdr-depth.conf" ] || return 1
+      cp "${payload}/hdr-depth.conf" "${run}/modprobe.d/nvidia-hdr-depth.conf" || return 1
+    fi
+    NVIDIA_OVERLAY="nvidia-${selected}"
+  fi
+  ln -s "${payload}" "${run}/nvidia-driver" || return 1
+  log "NVIDIA selected ${selected} ($(cat "${payload}/driver-version")); overlay=${NVIDIA_OVERLAY:-none}"
+}

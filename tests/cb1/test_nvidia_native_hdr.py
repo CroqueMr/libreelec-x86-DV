@@ -43,7 +43,7 @@ int main(void){
 
     def test_matched_r615_native_ceiling_still_requires_edid_and_deepcolor(self):
         root = self.sources()[0]
-        config = Path(__file__).resolve().parents[2]/'packages/graphics/nvidia-open-kernel-modules/modprobe.d/nvidia-hdr-depth.conf'
+        config = Path(__file__).resolve().parents[2]/'packages/graphics/nvidia/files/hdr-depth.conf'
         self.assertTrue(config.is_file(), 'matched R615 native ceiling configuration is absent')
         ceiling = int(re.search(r'max_output_color_depth=(\d+)', config.read_text()).group(1))
         hdmi = (root/'src/nvidia-modeset/src/nvkms-hdmi.c').read_text()

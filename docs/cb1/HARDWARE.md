@@ -23,7 +23,7 @@ sharing the same Ryzen generation number.
 | AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Experimental |
 | AMD Radeon RX Vega M, DCE 11.22 | Vega M GL / GH | Experimental, [transport](VEGA-M.md) |
 | Intel Arc A / B | A750, A770, B570, B580 | Experimental, [firmware and HDMI](INTEL-ARC.md) |
-| NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Experimental, separate [R580 build](PASCAL.md) |
+| NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Matched [R580 driver](PASCAL.md), same image; physical validation pending |
 | NVIDIA GeForce GTX 16, Turing | GTX 1650, 1660 | Experimental |
 | NVIDIA GeForce RTX 20, Turing | RTX 2060, 2070, 2080 | Experimental |
 | NVIDIA GeForce RTX 30, Ampere | RTX 3060, 3070, 3080, 3090 | Experimental |
@@ -36,7 +36,7 @@ current allowlist. Vega-based Ryzen APUs listed above use a different display pa
 
 NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
 and a VAAPI-to-NVDEC bridge. The default open-module stack requires Turing or
-newer. Pascal uses the opt-in matched R580 build, not the R615 modules.
+newer. Pascal automatically selects the matched R580 stack in the same image.
 [NVIDIA driver requirements](https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus)
 and [licensing](LICENSING.md).
 

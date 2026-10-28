@@ -1,4 +1,4 @@
-"""Keep the opt-in Pascal build on one coherent proprietary R580 stack."""
+"""Keep both fixed native NVIDIA package identities coherent."""
 from pathlib import Path
 import os
 import subprocess
@@ -22,8 +22,8 @@ class PascalPackages(unittest.TestCase):
         for name in ('connector.c', 'connector.h', 'drv.c', 'priv.h', 'modeset.c'):
             owner = 'nvidia-drm/nvidia-drm-' + name
             artifacts['kernel-open/' + owner] = owner
-        for enabled in ('yes', 'no'):
-            with self.subTest(pascal=enabled), tempfile.TemporaryDirectory() as tmp:
+        for enabled, recipe in [('yes', 'nvidia-pascal'), ('no', 'nvidia')]:
+            with self.subTest(recipe=recipe), tempfile.TemporaryDirectory() as tmp:
                 base = Path(tmp)
                 public, payload = base/'public', base/'payload'
                 kernel = payload/'kernel'
@@ -36,12 +36,12 @@ class PascalPackages(unittest.TestCase):
                 rm.parent.mkdir()
                 rm.write_bytes(b'unchanged-matched-proprietary-RM')
                 result = subprocess.run(['bash', '-ec',
-                    'VULKAN_SUPPORT=no; source "$1"; '
+                    'VULKAN_SUPPORT=no; ROOT="$REPO"; PKG_DIR="$REPO/packages/graphics/$RECIPE"; source "$1"; '
                     'get_build_dir(){ printf "%s" "$PUBLIC_SOURCE"; }; '
                     'kernel_path(){ printf "%s" /matched/kernel; }; '
                     'make(){ printf "%s\\n" "$@" >"$BUILD_CALL"; }; make_target',
-                    'stage', str(ROOT/'packages/graphics/nvidia/package.mk')],
-                    env=dict(os.environ, CB1_NVIDIA_PASCAL=enabled,
+                    'stage', str(ROOT/'packages/graphics'/recipe/'package.mk')],
+                    env=dict(os.environ, REPO=str(ROOT), RECIPE=recipe,
                         PKG_BUILD=str(payload), PUBLIC_SOURCE=str(public),
                         BUILD_CALL=str(base/'build-call'), CC='matched-cc', LD='matched-ld'),
                     capture_output=True, text=True)
@@ -57,22 +57,22 @@ class PascalPackages(unittest.TestCase):
                 self.assertEqual((base/'build-call').exists(), enabled == 'yes')
 
     def test_recipe_selects_one_matched_module_stack(self):
-        for enabled, version, dependency in (
-            ('no', '615.78.08', 'nvidia-open-kernel-modules'),
-            ('yes', '580.178.04', 'nvidia-pascal-modeset'),
+        for recipe, version, dependency in (
+            ('nvidia', '615.78.08', 'nvidia-open-kernel-modules'),
+            ('nvidia-pascal', '580.178.04', 'nvidia-pascal-modeset'),
         ):
-            with self.subTest(pascal=enabled):
+            with self.subTest(recipe=recipe):
                 result = subprocess.run(['bash', '-ec',
-                    'VULKAN_SUPPORT=no; source "$1"; '
+                    'VULKAN_SUPPORT=no; ROOT="$REPO"; PKG_DIR="$REPO/packages/graphics/$RECIPE"; source "$1"; '
                     'printf "%s\\n%s\\n%s\\n" "$PKG_VERSION" "$PKG_DEPENDS_TARGET" "$PKG_URL"',
-                    'recipe', str(ROOT/'packages/graphics/nvidia/package.mk')],
-                    env=dict(os.environ, CB1_NVIDIA_PASCAL=enabled),
+                    'recipe', str(ROOT/'packages/graphics'/recipe/'package.mk')],
+                    env=dict(os.environ, REPO=str(ROOT), RECIPE=recipe, CB1_NVIDIA_PASCAL='yes'),
                     capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 actual, dependencies, url = result.stdout.splitlines()
                 self.assertEqual(actual, version)
                 self.assertIn(dependency, dependencies.split())
-                excluded = ('nvidia-pascal-modeset' if enabled == 'no'
+                excluded = ('nvidia-pascal-modeset' if recipe == 'nvidia'
                             else 'nvidia-open-kernel-modules')
                 self.assertNotIn(excluded, dependencies.split())
                 self.assertTrue(url.endswith('/'+version+'/NVIDIA-Linux-x86_64-'+version+'-no-compat32.run'))
@@ -96,16 +96,16 @@ class PascalPackages(unittest.TestCase):
             (payload/'LICENSE').write_bytes(b'fixture-license')
             (base/'licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt').write_bytes(b'fixture-license')
             result=subprocess.run(['bash','-ec',
-                'VULKAN_SUPPORT=no; source "$1"; '
-                'get_full_firmware_dir(){ echo usr/lib/firmware; }; '
-                'get_full_module_dir(){ echo usr/lib/modules/test; }; '
+                'VULKAN_SUPPORT=no; ROOT="$REPO"; PKG_DIR="$REPO/packages/graphics/nvidia-pascal"; source "$1"; ROOT="$FIXTURE"; '
+                'get_full_firmware_dir(){ echo usr/lib/kernel-overlays/$1/lib/firmware; }; '
+                'get_full_module_dir(){ echo usr/lib/kernel-overlays/$1/lib/modules/test; }; '
                 'die(){ echo "$*" >&2; exit 1; }; cd "$2"; makeinstall_target',
-                'install',str(ROOT/'packages/graphics/nvidia/package.mk'),str(payload)],
-                env=dict(os.environ,CB1_NVIDIA_PASCAL='yes',ROOT=str(base),INSTALL=str(base/'install')),
+                'install',str(ROOT/'packages/graphics/nvidia-pascal/package.mk'),str(payload)],
+                env=dict(os.environ,REPO=str(ROOT),FIXTURE=str(base),INSTALL=str(base/'install')),
                 text=True,capture_output=True)
             self.assertEqual(result.returncode,0,result.stderr)
             for module in modules:
-                self.assertEqual((base/'install/usr/lib/modules/test/nvidia'/ (module+'.ko')).read_bytes(),
+                self.assertEqual((base/'install/usr/lib/kernel-overlays/nvidia-r580/lib/modules/test/nvidia'/ (module+'.ko')).read_bytes(),
                                  (payload/'kernel'/ (module+'.ko')).read_bytes())
             self.assertTrue((base/'install/usr/lib/libnvcuvid.so.1').is_symlink())
             self.assertTrue((base/'install/usr/lib/libEGL_nvidia.so.0').is_symlink())
