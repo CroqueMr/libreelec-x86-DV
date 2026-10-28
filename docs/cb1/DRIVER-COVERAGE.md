@@ -1,19 +1,67 @@
 # Driver transport coverage
 
-These entries describe code admission, not physical HDMI certification.
-All output remains subject to sink, topology, format and atomic validation.
+This matrix describes implemented output admission, not HDMI certification.
+The selected connector, display capabilities, actual link depth, bandwidth and
+native atomic checks decide whether a mode is available. EDID alone is not a
+successful-output receipt.
 
-| Driver / display block | DV V1 and V2 | Native HDR10+ | DV to HDR10+ |
-| --- | --- | --- | --- |
-| Intel Display9, including Kaby Lake | Yes | No native static-HDR interface | No |
-| Intel Display10 | Yes | Frame-owned transport | No admitted conversion deep-output path |
-| Intel Display11 and newer, i915 / xe | Yes | Frame-owned transport | Guarded output, actual depth at least 10 bits |
-| AMD admitted DCN families | Yes | Frame-owned transport | Guarded output, actual depth at least 10 bits |
-| AMD Vega M, DCE11.22 | Experimental | Native DCE packet path, physical qualification pending | Guarded DCE deep-output path, physical qualification pending |
-| NVIDIA R615, Turing and newer | Yes | Not implemented | Not implemented |
-| NVIDIA R580, Pascal image | Experimental | Not implemented | Not implemented |
+| Driver / display block | Dolby Vision V1 / V2 | HDR10 / HLG | Native HDR10+ | Dolby Vision to HDR10+ |
+| --- | --- | --- | --- | --- |
+| Intel Display9, including Kaby Lake | Admitted DV route | No demonstrated native HDMI static-HDR bank | Not admitted | Not admitted |
+| Intel Display10 | Admitted DV route | Native selector; converted PQ uses 12 bits | Frame-owned output, native 12-bit route | Same guarded 12-bit route |
+| Intel Display11 and newer, i915 / xe | Admitted DV route | Native selector, guarded deep PQ conversions | Frame-owned output, at least 10 bits | Same frame-owned deep output |
+| AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
+| AMD Vega M, DCE11.22 | Experimental | Native DCE output | Experimental DCE packet path | Experimental guarded DCE deep output |
+| NVIDIA R615, Turing and newer | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental commit-coupled native packet routes | Same experimental deep-output routes |
+| NVIDIA R580, separate Pascal image | Experimental | Native output, PQ and HLG capabilities checked separately | Experimental native HDMI 4:2:2 10-bit route | Same experimental 4:2:2 10-bit route |
 
-## Dolby Vision V1
+Ordinary native HDR follows each driver's policy, including dithering where
+applicable. HDR10+ and CB1 PQ conversions require actual output of at least
+10 bits. An 8-bit Dolby Vision tunnel is not used as a deep-colour HDR10 path.
+Unlisted hardware or routes are not implicitly admitted.
+The private strict-depth flag is a CB1 PQ-conversion contract, not a new HLG
+conversion mode. Ordinary HLG uses native driver admission without this flag.
+
+## Depth and topology
+
+Display10 uses its native RGB12 or YCbCr42012 selector, including EDID DC36,
+format and bandwidth checks. An 8/10-bit user ceiling is not overridden.
+Display9 does not gain HDR10 support by exposing a property it cannot deliver.
+Intel DP converters remain subject to their native protocol validation.
+
+AMD DV remains limited to its explicit display-engine allowlist. Vega M is a
+separate experimental DCE11.22 path; discrete Polaris/Vega and DCN4 are not
+promoted to supported DV hardware by these changes. Native HDR admission is
+separate from the custom DV allowlist.
+
+R615 retains matched 615.78.08 modules, firmware and userspace. Its native depth
+ceiling is 12 bits; EDID and bandwidth still gate selection. This can also raise
+automatic SDR/DP/4:2:2 depth. The existing ordinary max-bpc property uses native
+automatic selection from 10 upward, not a newly guaranteed hard ceiling.
+Strict HDR requests instead honor their requested ceiling: below 10 is refused,
+10/11 requests 10, and 12 or more tries validated native 12 then 10.
+DV remains explicitly 8-bit. Actual accepted depth is queried, not inferred from
+the framebuffer.
+
+NVIDIA HDR10+ uses native packet slots: unreserved legacy slots on Turing/Ampere,
+the second shared slot on Ada and advanced slot 9 on Blackwell, outside the
+native paired slots 1 through 8.
+Conflicting reservations are rejected. Pascal uses one matched R580 stack and
+native 4:2:2 10-bit output, not an invented RGB10/12 path. Its HDR10+ route is
+limited to a single native HDMI head/display without VRR, stereoscopic, HDMI-VIC,
+custom VSIF or converter conflicts. No boot-time mixing of driver stacks is used.
+
+Native NVIDIA HDR10/HLG also requires an available static-HDR packet slot.
+Timings that retain an HDMI-VIC vendor packet, active 3D or another VSIF owner
+can prevent that packet from being emitted; these combinations are not counted
+as working HDR output. This is an unsupported native combination, not a promise
+that ordinary HDR fails cleanly before commit. The native mode pool uses the
+HDMI Forum UHD_VIC flag to prefer CTA timing; otherwise an HDMI-VIC match can
+remain selected. No forced CTA translation or VSIF removal is introduced here.
+Strict CB1/HDR10+ output rejects these
+conflicts before commit; ordinary HDR retains its native policy and this limit.
+
+## Dolby Vision versions
 
 Intel, AMD and both NVIDIA stacks distinguish modern and legacy V1 signaling.
 Legacy V1 uses the 24-byte HDMI vendor payload. CTA timings 93/94/95 use HDMI
@@ -22,27 +70,55 @@ Modern V1 and V2 retain the existing 27-byte Dolby payload unchanged.
 AMD continues to reject V0. Invalid and LLDV-only sink blocks remain refused.
 V1 receivers without 2160p60 capability are not admitted at that timing.
 
-## HDR10+ limits
+## HDR10+ frame and failure contract
 
-Receiver V0 output is generated with actual percentile semantics, not by
-relabelling V1 metadata. V1 output is unchanged. A valid receiver block does
-not substitute for a frame-owned metadata transaction or deep-colour output.
+Receiver V0 packets use the correct percentile semantics; V1 is not relabelled
+as V0. The complete 31-byte packet must accompany an enabled primary image.
+Metadata-only, TEST_ONLY, DV/3D conflicts and asynchronous flips cannot advance
+the packet independently. Native and converted HDR10+ share this contract.
 
-Display10 lacks the native 10-bpc HDMI selection used by the current converted
-output. Its 12-bpc route needs separate qualification; no forced depth or
-bandwidth override is added.
+NVIDIA waits for the preceding presentation and the current render fence before
+its irreversible native transaction. This is commit-coupled output, not a
+verified hardware-FID latch. Kodi uses the blocking native transaction for these
+packet updates only; Intel/AMD and non-HDR10+ presentation flags are unchanged.
+Live per-head status and actual depth must confirm acceptance. A writer or
+late-apply fault suppresses the accepted HDR10+ state and requires an explicit
+successful clear. Uncertain occupied slots are not silently reused. Stop and
+DV/HDR/SDR transitions restore the output contract.
 
-The NVIDIA desktop HALs studied do not provide the required synchronized FID
-callback. Several also conflict when static HDR and custom VSIF share a slot.
-R580's DV path uses modesets, not per-frame HDR10+ updates. These gaps remain
-explicitly unsupported; the candidate does not advertise or silently accept them.
+R615 refuses native VRR reuse of an owned or uncertain legacy slot until a
+separate clear succeeds. R580 preserves a slot already taken by a native EMP
+owner and retains the HDR10+ fault instead of disabling that owner's packet.
+An unresolved native presentation can require driver recovery; no synthetic
+flip completion or successful clear is reported.
 
-Separate Pascal images use one matched R580 stack. Default images retain R615.
-No boot-time driver-stack mixing is provided.
+Intel/AMD capture primary-plane membership before native helpers add inherited
+planes. AMD carries CTA timing in AVI when the HDR10+ VSIF replaces an HDMI-VIC
+packet. Kodi rejects native HDR10+ staging if its actual drawable falls below
+10 bits, while retaining native HDR10 fallback.
 
-## Validation
+## Circuit mapping
 
-Host checks execute the native packet writers, depth selectors, blob lifecycle,
-invalid-request and restoration paths. Tests compare modern V2 packet bytes
-against frozen goldens. New hardware and physical HDR10+ latching require
-the corresponding GPU/display or HDMI analyzer.
+| Source / circuit | Required transport |
+| --- | --- |
+| DV Standard / Master Reference / Adaptive | Admitted DV V1/V2 TV-Led link |
+| HDR10 to DV Reference AI / Adaptive AI | Same admitted DV link |
+| DV to HDR10 Basic / Expert | Native PQ output, actual depth at least 10 bits |
+| DV to HDR10+ | PQ deep output plus frame-owned HDR10+ metadata |
+| Native HDR10+ | Same HDR10+ transport, original authored metadata |
+| Native SDR / HDR10 / HLG, DV disabled and 3D | Native Kodi and driver path |
+
+This work does not add HDR10+ to DV conversion or alter reconstruction, Master
+movie pixels, Dolby metadata, tone mapping, resolution selection or 3D processing.
+
+## Validation and remaining evidence
+
+Host tests execute native packet writers, depth selectors, blob lifecycle,
+failure injection and restoration. Modified owners and both matched NVIDIA
+module stacks are compiled. V1/V2 tests retain frozen modern-V2 packet goldens.
+
+New HDMI routes require physical qualification with the corresponding GPU and
+display. No local HDR10+ display or HDMI analyzer was available for this change.
+NVIDIA packet latching, new Display10 deep routes, Vega M and new V1 receivers
+are not presented as physically certified. DP adapters/LSPCON routes do not gain
+support from the physical shape of their connector.

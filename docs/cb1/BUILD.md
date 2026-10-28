@@ -1,9 +1,9 @@
-# R1.0.0 RC1 Preview1 build
+# R1.0.0 RC1 build
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
-Default image identity: `DV-R1.0.0-RC1-Preview1`. GitHub tag/title identity:
-`R1.0.0-RC1-Preview1`. This candidate has not been published.
+Default image identity: `DV-R1.0.0-RC1`. GitHub tag/title identity:
+`R1.0.0-RC1`. This release is a draft.
 
 ```sh
 python3 CB1/tools/verify.py

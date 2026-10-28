@@ -53,7 +53,7 @@ enum {DRM_MODE_CONNECTOR_WRITEBACK, SIGNAL_TYPE_HDMI_TYPE_A, SIGNAL_TYPE_HDMI_FR
  DISPLAY_DONGLE_DP_HDMI_CONVERTER,PIXEL_ENCODING_RGB,PIXEL_ENCODING_YCBCR422,PIXEL_ENCODING_YCBCR420};
 struct drm_display_info {bool mode420;};
 struct drm_connector {void *dev;int connector_type;struct drm_display_info display_info;};
-struct drm_connector_state {int max_requested_bpc;};
+struct drm_connector_state {int max_requested_bpc;void *hdr10plus_metadata;};
 struct dm_connector_state {struct drm_connector_state base;bool hdr10_deep_color,invalid;};
 struct drm_display_mode {int hdisplay,vdisplay,clock;};
 struct dc_stream_state {int signal;struct {int pixel_encoding,display_color_depth;}timing;};
@@ -77,7 +77,7 @@ static struct dc_stream_state *create_stream_for_sink(struct drm_connector *con,
  struct amdgpu_dm_connector *a=to_amdgpu_dm_connector(con);
  s->signal=SIGNAL_TYPE_HDMI_TYPE_A;
  s->timing.pixel_encoding=a->force_yuv420_output?PIXEL_ENCODING_YCBCR420:
-   state->hdr10_deep_color && requested>=10?PIXEL_ENCODING_YCBCR422:PIXEL_ENCODING_RGB;
+   (state->hdr10_deep_color || state->base.hdr10plus_metadata) && requested>=10?PIXEL_ENCODING_YCBCR422:PIXEL_ENCODING_RGB;
  s->timing.display_color_depth=s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR420 && !shallow420?10:
    s->timing.pixel_encoding==PIXEL_ENCODING_YCBCR422?10:8;
  return s;
@@ -148,7 +148,7 @@ struct drm_display_info { unsigned color_formats; int max_tmds_clock,bpc; struct
 struct drm_connector { int connector_type; struct drm_display_info display_info; };
 struct amdgpu_dm_connector { struct drm_connector base; void *hdr10_deep_color_property; };
 struct drm_connector_state { struct drm_connector *connector; void *crtc; unsigned max_requested_bpc;
- int colorspace; struct drm_property_blob *hdr_output_metadata; };
+ int colorspace; struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata; };
 struct dm_connector_state { struct drm_connector_state base; bool hdr10_deep_color,dv_standard; };
 struct dc_link { enum signal_type connector_signal; };
 struct dc_crtc_timing { int pixel_encoding; enum dc_color_depth display_color_depth; unsigned pix_clk_100hz; };
@@ -189,7 +189,7 @@ int main(void) {
   .base={.connector=&connector.base,.crtc=&state,.max_requested_bpc=10,
          .colorspace=DRM_MODE_COLORIMETRY_BT2020_RGB,.hdr_output_metadata=&blob}};
  struct dc_link link={SIGNAL_TYPE_HDMI_TYPE_A}; struct drm_display_mode mode={0};
- for (int scenario=0;scenario<29;++scenario) {
+ for (int scenario=0;scenario<35;++scenario) {
   struct amdgpu_dm_connector saved_connector=connector;
   struct dm_connector_state saved_state=state;
   struct dc_stream_state stream={.signal=SIGNAL_TYPE_HDMI_TYPE_A,.link=&link,
@@ -224,6 +224,12 @@ int main(void) {
   if(scenario==26) {stream.timing.pixel_encoding=PIXEL_ENCODING_YCBCR420;stream.timing.display_color_depth=COLOR_DEPTH_888;connector.base.display_info.max_tmds_clock=400000;want_format=PIXEL_ENCODING_YCBCR420;}
   if(scenario==27) {stream.timing.pixel_encoding=PIXEL_ENCODING_YCBCR420;connector.base.display_info.mode420=false;connector.base.display_info.max_tmds_clock=400000;want_format=PIXEL_ENCODING_YCBCR420;want_depth=COLOR_DEPTH_888;}
   if(scenario==28) {connector.base.display_info.max_tmds_clock=0;want_format=PIXEL_ENCODING_YCBCR420;want_depth=COLOR_DEPTH_888;}
+  if(scenario>=29) {state.hdr10_deep_color=false;state.base.hdr10plus_metadata=&state;}
+  if(scenario==30) {connector.base.display_info.color_formats=0;want_format=PIXEL_ENCODING_YCBCR420;}
+  if(scenario==31) {state.base.max_requested_bpc=8;want_format=PIXEL_ENCODING_RGB;want_depth=COLOR_DEPTH_888;}
+  if(scenario==32) {hdr.hdmi_metadata_type1.eotf=1;want_format=PIXEL_ENCODING_RGB;want_depth=COLOR_DEPTH_888;}
+  if(scenario==33) {state.dv_standard=true;want_format=PIXEL_ENCODING_RGB;want_depth=COLOR_DEPTH_888;}
+  if(scenario==34) {connector.base.display_info.only420=true;connector.base.display_info.mode420=false;want_format=PIXEL_ENCODING_YCBCR420;}
   unsigned clock=stream.timing.pix_clk_100hz;
   native_format(&stream,&state.base,&mode,requested);
   if(stream.timing.pixel_encoding!=want_format || stream.timing.display_color_depth!=want_depth)
@@ -316,7 +322,7 @@ struct drm_display_info {struct drm_hdmi_info hdmi;unsigned edid_hdmi_rgb444_dc_
 struct drm_connector {struct drm_display_info display_info;bool ycbcr_420_allowed;};
 struct intel_connector {struct drm_connector base;int dv_log_limit;};
 struct drm_connector_state {struct drm_connector *connector;unsigned max_requested_bpc;int colorspace;
- struct drm_property_blob *hdr_output_metadata;};
+ struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata;};
 struct intel_digital_connector_state {struct drm_connector_state base;bool dv_hdr10_deep_color,dv_lab_standard;};
 struct drm_display_mode {int crtc_clock,flags;};
 struct intel_display {int version;void *drm;};
@@ -359,7 +365,7 @@ int main(void) {
  struct intel_digital_connector_state state={.base={&connector.base,10,DRM_MODE_COLORIMETRY_BT2020_RGB,&blob},
    .dv_hdr10_deep_color=true};
  struct intel_encoder encoder={600000,&connector};
- for(int scenario=0;scenario<19;++scenario) {
+ for(int scenario=0;scenario<26;++scenario) {
   struct intel_connector saved_connector=connector;
   struct intel_digital_connector_state saved_state=state;
   struct intel_crtc_state stream={.hw={.adjusted_mode={594000,0}},.pipe_bpp=30,
@@ -384,6 +390,19 @@ int main(void) {
   if(scenario==16) {hdr.hdmi_metadata_type1.eotf=1;want_result=-EINVAL;}
   if(scenario==17) {display_state.version=10;want_result=-EINVAL;}
   if(scenario==18) {display_state.version=9;want_result=-EINVAL;}
+  if(scenario>=19 && scenario<=23) {
+   display_state.version=10;state.base.max_requested_bpc=12;stream.pipe_bpp=36;
+   connector.base.display_info.edid_hdmi_rgb444_dc_modes=DRM_EDID_HDMI_DC_36;
+   connector.base.display_info.hdmi.y420_dc_modes=DRM_EDID_YCBCR420_DC_36;
+   want_bpp=36;
+  }
+  if(scenario==20) {stream.hw.adjusted_mode.crtc_clock=297000;want_format=INTEL_OUTPUT_FORMAT_RGB;}
+  if(scenario==21) {connector.base.display_info.hdmi.y420_dc_modes=0;want_result=-EINVAL;}
+  if(scenario==22) {connector.base.display_info.max_tmds_clock=400000;want_result=-EINVAL;}
+  if(scenario==23) {display_state.version=9;want_result=-EINVAL;}
+  if(scenario>=24) {state.dv_hdr10_deep_color=false;state.base.hdr10plus_metadata=&state;}
+  if(scenario==25) {display_state.version=10;state.base.max_requested_bpc=12;stream.pipe_bpp=36;
+   connector.base.display_info.hdmi.y420_dc_modes=DRM_EDID_YCBCR420_DC_36;want_bpp=36;}
   int clock=stream.hw.adjusted_mode.crtc_clock;
   int result=native_config(&encoder,&stream,&state.base);
   if(result!=want_result) return 20+scenario;

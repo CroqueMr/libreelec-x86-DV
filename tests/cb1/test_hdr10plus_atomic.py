@@ -21,7 +21,7 @@ struct CLog {template<class... A>static void LogF(A...) {}};
 struct gbm_bo{};struct drm_fb{int fb_id=42;};
 struct CDRMUtils {static drm_fb* DrmFbGetFromBo(gbm_bo*){return nullptr;}static void DestroyDrm(){}};
 struct CDRMAtomic {
- bool m_lastPageAccepted=true,m_need_modeset=false,m_hdr10plusActive=true;
+ bool m_lastPageAccepted=true,m_need_modeset=false,m_hdr10plusActive=true,m_hdr10plusClearRequired=true;
  bool pending=true;void SetSDRRestorePending(bool value){pending=value;}
  uint64_t m_hdr10plusGeneration=3,m_hdr10plusRejectedGeneration=3,m_hdr10plusRejectedEdid=1;
  std::optional<std::array<uint8_t,31>> m_hdr10plusPacket=std::array<uint8_t,31>{};
@@ -35,6 +35,7 @@ int main(){
  assert(!d.m_lastPageAccepted && !d.m_hdr10plusPacket);
  d.m_hdr10plusPacket=std::array<uint8_t,31>{};d.DestroyDrm();
  assert(!d.m_hdr10plusPacket && !d.m_hdr10plusActive);
+ assert(!d.m_hdr10plusClearRequired);
  assert(!d.pending);
  assert(!d.m_hdr10plusGeneration && !d.m_hdr10plusRejectedGeneration && !d.m_hdr10plusRejectedEdid);
 }
@@ -68,12 +69,13 @@ int main(){
 #include <cstdint>
 #include <optional>
 #include <utility>
-constexpr int DRM_MODE_ATOMIC_ALLOW_MODESET=4,DRM_MODE_ATOMIC_TEST_ONLY=8,LOGWARNING=1;
+#include <string_view>
+constexpr int DRM_MODE_ATOMIC_ALLOW_MODESET=4,DRM_MODE_ATOMIC_TEST_ONLY=8,DRM_MODE_ATOMIC_NONBLOCK=16,LOGWARNING=1;
 struct CLog {template<class... A>static void Log(A...) {}};
 struct Connector {
- bool supported=true;
- bool SupportsProperty(const char*)const{return supported;}
- std::optional<uint64_t> GetPropertyValue(const char*)const{return 3;}
+ bool supported=true,receipts=false;uint64_t packet{};
+ bool SupportsProperty(std::string_view name)const{return name=="CB1_HDR10PLUS_STATUS"?receipts:supported;}
+ std::optional<uint64_t> GetPropertyValue(std::string_view name)const{return name=="EDID"?3:packet;}
 };
 struct CDRMPropertyBlob {
  static inline unsigned alive=0,next=7;
@@ -98,7 +100,7 @@ int drmModeAtomicCommit(int,Request* req,int flags,void*) {
 }
 struct CDRMAtomic {
  Connector connector,*m_connector=&connector;int m_fd=1;Request request,*m_req=&request;
- bool m_hdr10plusActive=false;
+ bool m_hdr10plusActive=false,m_hdr10plusClearRequired=false;
  uint64_t m_hdr10plusGeneration{},m_hdr10plusRejectedGeneration{},m_hdr10plusRejectedEdid{};
  std::optional<std::array<uint8_t,31>> m_hdr10plusPacket;
  unsigned queued=0;bool accept=true;
@@ -124,6 +126,16 @@ int main(){
  d.m_hdr10plusActive=true;d.request.hdr10plusBlob.Reset();
  d.StageHDR10Plus(std::nullopt,10);flags=0;assert(d.PrepareHDR10Plus(flags,bound));
  assert(bound && d.queued==0 && (flags&4));
+ d.m_hdr10plusActive=false;d.m_hdr10plusClearRequired=true;
+ flags=0;bound=false;assert(d.PrepareHDR10Plus(flags,bound));
+ assert(bound && d.queued==0 && (flags&4));d.m_hdr10plusClearRequired=false;
+ d.connector.packet=27;flags=0;bound=false;
+ assert(d.PrepareHDR10Plus(flags,bound) && bound && d.queued==0 && (flags&4));
+ d.connector.packet=0;
+ d.connector.receipts=true;d.StageHDR10Plus(p,12);flags=DRM_MODE_ATOMIC_NONBLOCK;
+ assert(d.PrepareHDR10Plus(flags,bound) && !(flags&DRM_MODE_ATOMIC_NONBLOCK));
+ d.connector.receipts=false;d.StageHDR10Plus(p,13);flags=DRM_MODE_ATOMIC_NONBLOCK;
+ assert(d.PrepareHDR10Plus(flags,bound) && (flags&DRM_MODE_ATOMIC_NONBLOCK));
  d.m_hdr10plusActive=false;d.connector.supported=false;d.StageHDR10Plus(p,11);
  bound=true;assert(d.PrepareHDR10Plus(flags,bound));assert(!bound);
 }

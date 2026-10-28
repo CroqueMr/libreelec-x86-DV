@@ -1060,5 +1060,103 @@
       "src/common/inc/nvkms-dv-vsif.h": "Native transport integration.",
       "src/nvidia-modeset/src/nvkms-hdmi.c": "Native transport integration."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzz-hdr-output-receipts.patch": {
+    "summary": "Verify native HDR delivery and restore output contracts",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/drm/DRMObject.cpp": "Native output state and metadata ownership.",
+      "xbmc/windowing/gbm/drm/DRMObject.h": "Native output state and metadata ownership.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Native output state and metadata ownership.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Native output state and metadata ownership.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Native output state and metadata ownership.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Native output state and metadata ownership."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9004-native-static-hdr-depth.patch": {
+    "summary": "Validate requested static HDR EOTF and expose accepted output depth",
+    "component": "nvidia-open-kernel-modules",
+    "files": {
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-dpy.c": "Native output state and metadata ownership.",
+      "kernel-open/common/inc/nvkms-kapi.h": "Native output state and metadata ownership."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9002-native-static-hdr-depth.patch": {
+    "summary": "Validate requested static HDR EOTF and expose accepted output depth",
+    "component": "nvidia-pascal-modeset",
+    "files": {
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Native output state and metadata ownership."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": {
+    "summary": "Bind typed HDR10+ intents to native accepted presentations",
+    "component": "nvidia-open-kernel-modules",
+    "files": {
+      "src/common/inc/nvkms-cb1-hdr.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-private.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-types.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-flip-workarea.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-modeset-types.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-hdmi.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-flip.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-modeset.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-crtc.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-crtc.c": "Native output state and metadata ownership."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9003-hdr10plus-commit-transport.patch": {
+    "summary": "R580 Pascal commit-coupled HDR10+ and strict native 422-10",
+    "component": "nvidia-pascal-modeset",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-modeset.c": "Native output state and metadata ownership.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-hdmi.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/include/nvkms-types.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-dpy.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-flip.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native output state and metadata ownership.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Native output state and metadata ownership.",
+      "src/common/inc/nvkms-cb1-hdr10plus.h": "Native output state and metadata ownership."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9941-hdr10plus-presentation-contract.patch": {
+    "summary": "Preserve HDR10+ request ownership and native AVI timings",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Native output state and metadata ownership.",
+      "drivers/gpu/drm/drm_connector.c": "Native output state and metadata ownership.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Native output state and metadata ownership.",
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Native output state and metadata ownership.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Native output state and metadata ownership.",
+      "include/drm/drm_connector.h": "Native output state and metadata ownership."
+    }
   }
 }

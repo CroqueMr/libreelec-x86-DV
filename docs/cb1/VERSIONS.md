@@ -1,8 +1,8 @@
 # Versions
 
-| Component | RC1 Preview1 version |
+| Component | RC1 version |
 | --- | --- |
-| Release | R1.0.0 RC1 Preview1, tag identity `R1.0.0-RC1-Preview1` (unpublished) |
+| Release | R1.0.0 RC1, tag identity `R1.0.0-RC1` (draft) |
 | LibreELEC | 13.0-devel |
 | Kodi | 22 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
 | CB1 | 0.3 |

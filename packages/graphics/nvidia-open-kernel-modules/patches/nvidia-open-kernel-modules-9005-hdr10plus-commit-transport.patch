@@ -1,0 +1,1220 @@
+From: CB1 native transport work
+Subject: [PATCH] Bind typed HDR10+ intents to native accepted presentations
+
+Independent implementation against matched R615 NVIDIA MIT/GPL-2.0 source
+and the existing candidate 31-byte DRM HDR10+ contract. No Hades source,
+helper body, patch, comment or test is imported. The packet is commit-coupled,
+experimental transport, not a hardware-FID or wire certification claim.
+
+diff --git a/src/common/inc/nvkms-cb1-hdr.h b/src/common/inc/nvkms-cb1-hdr.h
+--- /dev/null
++++ b/src/common/inc/nvkms-cb1-hdr.h
+@@ -0,0 +1,75 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef NVKMS_CB1_HDR_H
++#define NVKMS_CB1_HDR_H
++#include "nvtypes.h"
++
++/* These are private kernel-client intents, not public NVKMS ioctl fields. */
++struct NvKmsCb1Hdr {
++    NvBool specified, enabled, deepColor;
++    NvU8 packet[31];
++};
++enum {
++    NV_CB1_HDR_SLOT_NONE,
++    NV_CB1_HDR_SLOT_GENERIC,
++    NV_CB1_HDR_SLOT_SHARED2,
++    NV_CB1_HDR_SLOT_ADVANCED9
++};
++struct NvKmsCb1HdrRoute {
++    NvBool hdmi, pq, bt2020, primary, receiver;
++    NvBool async, threeD, customVsif, vendor, shared, ada, vrr, swAcr;
++    NvU32 bpc, version;
++};
++struct NvKmsCb1HdrLedger {
++    NvU32 status; /* 0 disabled, 1 commit-coupled active, 2 sticky fault */
++    NvU32 slot, owner, uncertainSlot, uncertainOwner;
++};
++static inline NvBool nvCb1HdrPacketValid(const NvU8 *p)
++{
++    NvU32 sum = 0, anchors;
++    if (!p || p[0] != 0x81 || p[1] != 1 || p[2] != 27 ||
++        p[4] != 0x8b || p[5] != 0x84 || p[6] != 0x90 ||
++        (p[7] >> 6) > 1 || (p[7] & 1) || (p[30] & 0x3f) ||
++        !(p[30] & 0x40) ||
++        ((p[7] >> 6) == 1 && (p[10] != 0 || p[11] != 255))) return NV_FALSE;
++    anchors = p[18] >> 4;
++    if (anchors > 9) return NV_FALSE;
++    for (NvU32 i = 1; i < anchors; i++)
++        if (p[21+i] < p[20+i]) return NV_FALSE;
++    for (NvU32 i = 21+anchors; i < 30; i++)
++        if (p[i]) return NV_FALSE;
++    for (NvU32 i = 0; i < 31; i++) sum += p[i];
++    return (sum & 255) == 0;
++}
++static inline NvU32 nvCb1HdrSlot(const struct NvKmsCb1HdrRoute *r)
++{
++    if (r->shared) return NV_CB1_HDR_SLOT_ADVANCED9;
++    if (r->ada) return NV_CB1_HDR_SLOT_SHARED2;
++    return !r->vrr && !r->swAcr ? NV_CB1_HDR_SLOT_GENERIC : NV_CB1_HDR_SLOT_NONE;
++}
++static inline NvBool nvCb1HdrRouteValid(const struct NvKmsCb1HdrRoute *r,
++                                       const NvU8 *packet)
++{
++    return r->hdmi && r->pq && r->bt2020 && r->primary && r->receiver &&
++        r->bpc >= 10 && !r->async && !r->threeD && !r->customVsif &&
++        (r->shared || !r->vendor) && nvCb1HdrSlot(r) &&
++        nvCb1HdrPacketValid(packet) && (packet[7] >> 6) <= r->version;
++}
++static inline void nvCb1HdrResult(struct NvKmsCb1HdrLedger *l,
++                                 NvU32 slot, NvU32 owner, NvBool success)
++{
++    if (!success) {
++        l->status = 2;
++        if (slot) {
++            l->uncertainSlot = slot;
++            l->uncertainOwner = owner;
++        }
++    } else if (slot == 0) {
++        l->status = l->slot = l->owner = 0;
++        l->uncertainSlot = l->uncertainOwner = 0;
++    } else if (l->status != 2) {
++        l->slot = slot;
++        l->owner = owner;
++        l->status = 1;
++    }
++}
++#endif
+diff --git a/src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h b/src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h
+--- /dev/null
++++ b/src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h
+@@ -0,0 +1,29 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef NVKMS_KAPI_CB1_H
++#define NVKMS_KAPI_CB1_H
++#include "nvkms-api.h"
++#include "nvkms-cb1-hdr.h"
++#define NVKMS_IOCTL_KAPI_CB1_HDR 0x10000U
++#define NVKMS_IOCTL_KAPI_CB1_HDR_FAULT 0x10001U
++struct NvKmsCb1FaultParams {
++    NvKmsDeviceHandle device;
++    NvKmsDispHandle disp;
++    NVDpyId dpy;
++    NvU32 head;
++};
++enum {NV_CB1_SET_MODE, NV_CB1_FLIP, NV_CB1_QUERY};
++struct NvKmsCb1KapiParams {
++    union {
++        struct NvKmsSetModeParams mode;
++        struct NvKmsFlipParams flip;
++    } u;
++    NvU32 operation;
++    struct NvKmsCb1Hdr hdr[NVKMS_MAX_SUBDEVICES][NVKMS_MAX_HEADS_PER_DISP];
++    struct {
++        NvKmsDeviceHandle device;
++        NvKmsDispHandle disp;
++        NVDpyId dpy;
++        NvU32 head, status, potential;
++    } query;
++};
++#endif
+diff --git a/src/nvidia-modeset/include/nvkms-private.h b/src/nvidia-modeset/include/nvkms-private.h
+--- a/src/nvidia-modeset/include/nvkms-private.h
++++ b/src/nvidia-modeset/include/nvkms-private.h
+@@ -33,6 +33,9 @@
+ struct NvKmsPerOpenDev *nvAllocPerOpenDev(struct NvKmsPerOpen *pOpen,
+                                           NVDevEvoPtr pDevEvo, NvBool isPrivileged);
+ 
++const struct NvKmsCb1Hdr *nvGetCb1HdrIntent(
++    const struct NvKmsPerOpenDev *pOpenDev, NvU32 sd, NvU32 head);
++
+ void nvRevokeDevice(NVDevEvoPtr pDevEvo);
+ 
+ void nvFreePerOpenDev(struct NvKmsPerOpen *pOpen,
+diff --git a/src/nvidia-modeset/include/nvkms-types.h b/src/nvidia-modeset/include/nvkms-types.h
+--- a/src/nvidia-modeset/include/nvkms-types.h
++++ b/src/nvidia-modeset/include/nvkms-types.h
+@@ -43,6 +43,7 @@
+ #include <ctrl/ctrl0073/ctrl0073dfp.h>
+ 
+ #include "nvkms-api.h"
++#include "nvkms-cb1-hdr.h"
+ #include "nvkms-prealloc-types.h"
+ 
+ #include "nvos.h"
+@@ -1869,6 +1870,7 @@
+  * This structure stores information about the active per-head display state.
+  */
+ typedef struct _NVDispHeadStateEvoRec {
++    struct NvKmsCb1HdrLedger cb1HdrLedger;
+ 
+     NvU32 displayRate;
+ 
+diff --git a/src/nvidia-modeset/include/nvkms-flip-workarea.h b/src/nvidia-modeset/include/nvkms-flip-workarea.h
+--- a/src/nvidia-modeset/include/nvkms-flip-workarea.h
++++ b/src/nvidia-modeset/include/nvkms-flip-workarea.h
+@@ -27,6 +27,8 @@
+ #include "nvkms-types.h"
+ 
+ typedef struct {
++    struct NvKmsCb1Hdr cb1Hdr;
++    NvU32 cb1Slot;
+     struct {
+         enum NvKmsOutputTf tf;
+         NVDpyAttributeColor dpyColor;
+diff --git a/src/nvidia-modeset/include/nvkms-modeset-types.h b/src/nvidia-modeset/include/nvkms-modeset-types.h
+--- a/src/nvidia-modeset/include/nvkms-modeset-types.h
++++ b/src/nvidia-modeset/include/nvkms-modeset-types.h
+@@ -29,6 +29,9 @@
+ #include "nvkms-types.h"
+ 
+ typedef struct {
++    struct NvKmsCb1Hdr cb1Hdr;
++    NvU32 cb1Slot;
++    NvBool cb1Primary;
+     NvU32 hwHeadsMask;
+     struct NvKmsModeValidationParams modeValidationParams;
+     NVHwModeTimingsEvo timings;
+diff --git a/src/nvidia-modeset/include/nvkms-hdmi.h b/src/nvidia-modeset/include/nvkms-hdmi.h
+--- a/src/nvidia-modeset/include/nvkms-hdmi.h
++++ b/src/nvidia-modeset/include/nvkms-hdmi.h
+@@ -30,6 +30,16 @@
+ 
+ #include "nvkms-types.h"
+ 
++NvBool nvCb1HdrPotential(const NVDevEvoRec *dev);
++NvBool nvCb1HdrVrrTransitionValid(const NVDispEvoRec *disp, NvU32 head,
++    const NVHwModeTimingsEvo *timing, NvBool hdmi);
++NvBool nvCb1HdrValidate(const NVDpyEvoRec *dpy, const NVDpyAttributeColor *color,
++    const NVHwModeTimingsEvo *timing, const NVDispHeadInfoFrameStateEvoRec *info,
++    const NVFlipEvoHwState *flip, const struct NvKmsCb1Hdr *config,
++    NvBool primary, NvU32 *slot);
++void nvCb1HdrApply(NVDispEvoRec *disp, NvU32 head,
++    const struct NvKmsCb1Hdr *config, NvU32 slot);
++
+ void nvUpdateHdmiInfoFrames(const NVDispEvoRec *pDispEvo,
+                             const NvU32 head,
+                             const NVDpyAttributeColor *pDpyColor,
+diff --git a/src/nvidia-modeset/src/nvkms.c b/src/nvidia-modeset/src/nvkms.c
+--- a/src/nvidia-modeset/src/nvkms.c
++++ b/src/nvidia-modeset/src/nvkms.c
+@@ -24,6 +24,8 @@
+ #include "nvkms.h"
+ #include "nvkms-private.h"
+ #include "nvkms-api.h"
++#include "nvkms-kapi-cb1.h"
++#include "nvkms-hdmi.h"
+ 
+ #include "nvkms-types.h"
+ #include "nvkms-utils.h"
+@@ -158,6 +160,7 @@
+ };
+ 
+ struct NvKmsPerOpenDev {
++    const struct NvKmsCb1Hdr (*cb1Hdr)[NVKMS_MAX_HEADS_PER_DISP];
+     NVDevEvoPtr                  pDevEvo;
+     NvKmsDeviceHandle            nvKmsApiHandle;
+     NVEvoApiHandlesRec           dispHandles;
+@@ -171,6 +174,14 @@
+     NvU32                        openedGpuId;
+ };
+ 
++const struct NvKmsCb1Hdr *nvGetCb1HdrIntent(
++    const struct NvKmsPerOpenDev *open, NvU32 sd, NvU32 head)
++{
++    if (!open || !open->cb1Hdr || sd >= NVKMS_MAX_SUBDEVICES ||
++        head >= NVKMS_MAX_HEADS_PER_DISP) return NULL;
++    return &open->cb1Hdr[sd][head];
++}
++
+ struct NvKmsPerOpenEventListEntry {
+     NVListRec                    eventListEntry;
+     struct NvKmsEvent            event;
+@@ -5171,6 +5182,62 @@
+         return FALSE;
+     }
+ 
++    /* No userspace layout changes: the typed intent exists only under this lock. */
++    if (cmdOpaque == NVKMS_IOCTL_KAPI_CB1_HDR_FAULT) {
++        struct NvKmsCb1FaultParams *p = (void *)(NvUPtr)paramsAddress;
++        NVDpyEvoRec *dpy;
++        if (pOpen->clientType != NVKMS_CLIENT_KERNEL_SPACE ||
++            paramSize != sizeof(*p) || !p) return FALSE;
++        dpy = GetPerOpenDpy(pOpen, p->device, p->disp, p->dpy);
++        if (!dpy || p->head >= NVKMS_MAX_HEADS_PER_DISP ||
++            dpy->apiHead != p->head || !nvApiHeadIsActive(dpy->pDispEvo, p->head)) return FALSE;
++        dpy->pDispEvo->headState[nvGetPrimaryHwHead(dpy->pDispEvo, p->head)].cb1HdrLedger.status = 2;
++        return TRUE;
++    }
++    if (cmdOpaque == NVKMS_IOCTL_KAPI_CB1_HDR) {
++        struct NvKmsCb1KapiParams *p = (void *)(NvUPtr)paramsAddress;
++        struct NvKmsPerOpenDev *open;
++        NvKmsDeviceHandle device;
++        if (pOpen->clientType != NVKMS_CLIENT_KERNEL_SPACE ||
++            paramSize != sizeof(*p) || !p || p->operation > NV_CB1_QUERY) return FALSE;
++        device = p->operation == NV_CB1_SET_MODE ? p->u.mode.request.deviceHandle :
++                 p->operation == NV_CB1_FLIP ? p->u.flip.request.deviceHandle : p->query.device;
++        open = GetPerOpenDev(pOpen, device);
++        if (!open || open->cb1Hdr) return FALSE;
++        if (p->operation == NV_CB1_QUERY) {
++            NVDpyEvoRec *dpy = GetPerOpenDpy(pOpen, device, p->query.disp, p->query.dpy);
++            p->query.potential = open->pDevEvo->numSubDevices == 1 &&
++                                 nvCb1HdrPotential(open->pDevEvo);
++            p->query.status = 0;
++            if (dpy && nvDpyIsHdmiEvo(dpy) && dpy->apiHead == p->query.head &&
++                nvApiHeadIsActive(dpy->pDispEvo, dpy->apiHead)) {
++                NvU32 head = nvGetPrimaryHwHead(dpy->pDispEvo, dpy->apiHead);
++                const struct NvKmsCb1HdrLedger *l = &dpy->pDispEvo->headState[head].cb1HdrLedger;
++                p->query.status = l->status == 1 && l->owner !=
++                    dpy->pDispEvo->headState[head].activeRmId ? 2 : l->status;
++            }
++            return TRUE;
++        }
++        if (open->pDevEvo->numSubDevices != 1) {
++            for (NvU32 sd = 0; sd < NVKMS_MAX_SUBDEVICES; sd++) {
++                for (NvU32 head = 0; head < NVKMS_MAX_HEADS_PER_DISP; head++) {
++                    if (p->hdr[sd][head].enabled || p->hdr[sd][head].deepColor) return FALSE;
++                }
++            }
++        }
++        if (p->operation == NV_CB1_FLIP) {
++            const struct NvKmsFlipRequestOneHead *heads = nvKmsNvU64ToPointer(p->u.flip.request.pFlipHead);
++            if (!ValidateFlipHeads(open->pDevEvo, heads, p->u.flip.request.numFlipHeads)) return FALSE;
++            for (NvU32 i = 0; i < p->u.flip.request.numFlipHeads; i++) {
++                if (open->pDevEvo->pDispEvo[heads[i].sd]->pHsChannel[heads[i].head]) return FALSE;
++            }
++        }
++        open->cb1Hdr = p->hdr;
++        ret = p->operation == NV_CB1_SET_MODE ? SetMode(pOpen, &p->u.mode) : Flip(pOpen, &p->u.flip);
++        open->cb1Hdr = NULL;
++        return ret;
++    }
++
+     if (cmd >= ARRAY_LEN(dispatch)) {
+         return FALSE;
+     }
+diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-hdmi.c
+--- a/src/nvidia-modeset/src/nvkms-hdmi.c
++++ b/src/nvidia-modeset/src/nvkms-hdmi.c
+@@ -54,6 +54,145 @@
+ #include <ctrl/ctrl2080/ctrl2080unix.h> // NV2080_CTRL_OS_UNIX_AUDIO_DYNAMIC_POWER
+ 
+ #include <hdmipacket/nvhdmipkt.h>
++#include <class/clc770.h>
++#include <ctrl/ctrl0073/ctrl0073system.h>
++
++static NvBool nvCb1HdrWrite(const NVDispEvoRec *pDispEvo, NvU32 head,
++                            NvU32 slot, NvU32 owner, const NvU8 *packet)
++{
++    NVDevEvoRec *dev = pDispEvo->pDevEvo;
++    NVHDMIPKT_TYPE type = slot == NV_CB1_HDR_SLOT_GENERIC ?
++        NVHDMIPKT_TYPE_GENERIC : slot == NV_CB1_HDR_SLOT_ADVANCED9 ?
++        NVHDMIPKT_TYPE_SHARED_GENERIC9 : NVHDMIPKT_TYPE_SHARED_GENERIC2;
++    NvU8 expanded[36] = {0};
++    if (packet && slot != NV_CB1_HDR_SLOT_GENERIC) {
++        nvkms_memcpy(expanded, packet, 3);
++        nvkms_memcpy(expanded + 4, packet + 3, 28);
++    }
++    /* C8 owns paired slots 1/2 AVI, 3/4 EMP, 5/6 VSIF and 7/8 static HDR. */
++    if (slot == NV_CB1_HDR_SLOT_ADVANCED9) {
++        if (packet) {
++            ADVANCED_INFOFRAME info = {0};
++            info.location = INFOFRAME_CTRL_LOC_VSYNC;
++            info.runMode = INFOFRAME_CTRL_RUN_MODE_ALWAYS;
++            info.packetLen = sizeof(expanded);
++            info.pPacket = expanded;
++            return NvHdmiPkt_SetupAdvancedInfoframe(dev->hdmiLib.handle,
++                pDispEvo->displayOwner, head, type, &info) == NVHDMIPKT_SUCCESS;
++        } else {
++            ADVANCED_INFOFRAME_CTRL ctrl = {0};
++            return NvHdmiPkt_AdvancedPacketCtrl(dev->hdmiLib.handle,
++                pDispEvo->displayOwner, head, type, &ctrl) == NVHDMIPKT_SUCCESS;
++        }
++    }
++    if (!packet) {
++        return NvHdmiPkt_PacketCtrl(dev->hdmiLib.handle, pDispEvo->displayOwner,
++            owner, head, type, NVHDMIPKT_TRANSMIT_CONTROL_DISABLE) == NVHDMIPKT_SUCCESS;
++    }
++    return NvHdmiPkt_PacketWrite(dev->hdmiLib.handle, pDispEvo->displayOwner,
++        owner, head, type,
++        NVHDMIPKT_TRANSMIT_CONTROL_ENABLE_EVERY_FRAME &
++            ~DRF_DEF(_HDMI_PKT, _TRANSMIT_CTRL, _CHKSUM_HW, _EN),
++        slot == NV_CB1_HDR_SLOT_GENERIC ? 31 : 32,
++        slot == NV_CB1_HDR_SLOT_GENERIC ? packet : expanded) == NVHDMIPKT_SUCCESS;
++}
++
++void nvCb1HdrApply(NVDispEvoRec *disp, NvU32 head,
++                   const struct NvKmsCb1Hdr *config, NvU32 slot)
++{
++    struct NvKmsCb1HdrLedger *l = &disp->headState[head].cb1HdrLedger;
++    NvU32 owner = disp->headState[head].activeRmId;
++    if (!config->specified) return;
++    if (!config->enabled || (l->slot && (l->slot != slot || l->owner != owner))) {
++        NvBool ok = NV_TRUE;
++        if (l->slot) ok = nvCb1HdrWrite(disp, head, l->slot, l->owner, NULL);
++        if (l->uncertainSlot &&
++            (l->uncertainSlot != l->slot || l->uncertainOwner != l->owner)) {
++            ok = nvCb1HdrWrite(disp, head, l->uncertainSlot,
++                               l->uncertainOwner, NULL) && ok;
++        }
++        nvCb1HdrResult(l, 0, 0, ok);
++        if (!ok || !config->enabled) return;
++    }
++    if (l->status == 2) return;
++    nvCb1HdrResult(l, slot, owner,
++        nvCb1HdrWrite(disp, head, slot, owner, config->packet));
++}
++
++NvBool nvCb1HdrVrrTransitionValid(const NVDispEvoRec *disp, NvU32 head,
++                                 const NVHwModeTimingsEvo *timing, NvBool hdmi)
++{
++    const struct NvKmsCb1HdrLedger *l = &disp->headState[head].cb1HdrLedger;
++    if (!hdmi || disp->pDevEvo->caps.supportsGenericSharedInfoFrames ||
++        timing->vrr.type == NVKMS_DPY_VRR_TYPE_NONE) return NV_TRUE;
++    /* Clear in a separate accepted transaction before native EMP reuses GENERIC. */
++    return l->slot != NV_CB1_HDR_SLOT_GENERIC && l->uncertainSlot != NV_CB1_HDR_SLOT_GENERIC;
++}
++
++static void nvCb1HdrCaps(const NVDevEvoRec *dev, struct NvKmsCb1HdrRoute *r)
++{
++    r->shared = dev->caps.supportsGenericSharedInfoFrames;
++    r->ada = dev->dispClass == NVC770_DISPLAY;
++    if (!r->shared && !r->ada) {
++        NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS caps = {0};
++        r->swAcr = NV_TRUE;
++        if (nvRmApiControl(nvEvoGlobal.clientHandle, dev->displayCommonHandle,
++                NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2, &caps, sizeof(caps)) == NVOS_STATUS_SUCCESS) {
++            r->swAcr = NV0073_CTRL_SYSTEM_GET_CAP(caps.capsTbl,
++                NV0073_CTRL_SYSTEM_CAPS_HDMI21_SW_ACR_BUG_3275257);
++        }
++    }
++}
++
++NvBool nvCb1HdrPotential(const NVDevEvoRec *dev)
++{
++    struct NvKmsCb1HdrRoute r = {0};
++    nvCb1HdrCaps(dev, &r);
++    return nvCb1HdrSlot(&r) != 0;
++}
++
++NvBool nvCb1HdrValidate(const NVDpyEvoRec *dpy,
++                        const NVDpyAttributeColor *color,
++                        const NVHwModeTimingsEvo *timing,
++                        const NVDispHeadInfoFrameStateEvoRec *info,
++                        const NVFlipEvoHwState *flip,
++                        const struct NvKmsCb1Hdr *config,
++                        NvBool primary, NvU32 *slot)
++{
++    struct NvKmsCb1HdrRoute r = {0};
++    const NVDevEvoRec *dev;
++    if (!config->deepColor && !config->enabled) { *slot = 0; return NV_TRUE; }
++    if (!dpy) return NV_FALSE;
++    dev = dpy->pDispEvo->pDevEvo;
++    if ((config->deepColor || config->enabled) && color->bpc < 10) return NV_FALSE;
++    if (config->deepColor && (!flip->hdrInfoFrame.enabled ||
++        (flip->hdrInfoFrame.eotf != NVKMS_INFOFRAME_EOTF_ST2084 &&
++         flip->hdrInfoFrame.eotf != NVKMS_INFOFRAME_EOTF_HLG) ||
++        color->colorimetry != NVKMS_OUTPUT_COLORIMETRY_BT2100 ||
++        flip->hdmiVsifMetadata.payloadSize != 0)) return NV_FALSE;
++    if (config->deepColor && nvDpyIsHdmiEvo(dpy) &&
++        (timing->hdmi3D || (!dev->caps.supportsGenericSharedInfoFrames &&
++                           info->vendorSpecificCtrl.Enable))) return NV_FALSE;
++    if (!config->enabled) { *slot = 0; return NV_TRUE; }
++    nvCb1HdrCaps(dev, &r);
++    r.hdmi = nvDpyIsHdmiEvo(dpy) && dpy->parsedEdid.valid;
++    r.pq = flip->hdrInfoFrame.enabled &&
++           flip->hdrInfoFrame.eotf == NVKMS_INFOFRAME_EOTF_ST2084;
++    r.bt2020 = color->colorimetry == NVKMS_OUTPUT_COLORIMETRY_BT2100;
++    r.bpc = color->bpc;
++    r.primary = primary && flip->layer[NVKMS_MAIN_LAYER].pSurfaceEvo[0] != NULL;
++    r.async = flip->layer[NVKMS_MAIN_LAYER].tearing;
++    r.threeD = timing->hdmi3D;
++    r.customVsif = flip->hdmiVsifMetadata.payloadSize != 0;
++    r.vendor = info->vendorSpecificCtrl.Enable;
++    r.vrr = info->empCtrl.EnableVRR || timing->vrr.type != NVKMS_DPY_VRR_TYPE_NONE;
++    r.receiver = dpy->parsedEdid.info.ext861.valid.hdr10Plus &&
++        dpy->parsedEdid.info.hdr_static_metadata_info.static_metadata_type == 1 &&
++        dpy->parsedEdid.info.hdr_static_metadata_info.supported_eotf.smpte_st_2084_eotf;
++    r.version = dpy->parsedEdid.info.hdr10PlusInfo.application_version;
++    *slot = nvCb1HdrSlot(&r);
++    return nvCb1HdrRouteValid(&r, config->packet);
++}
+ 
+ #define CAP_HDMI_SUPPORT_GPU             0x00000001
+ #define CAP_HDMI_SUPPORT_MONITOR         0x00000002
+diff --git a/src/nvidia-modeset/src/nvkms-flip.c b/src/nvidia-modeset/src/nvkms-flip.c
+--- a/src/nvidia-modeset/src/nvkms-flip.c
++++ b/src/nvidia-modeset/src/nvkms-flip.c
+@@ -32,6 +32,7 @@
+ #include "nvkms-vrr.h"
+ #include "nvkms-dpy.h"
+ #include "nvkms-rm.h"
++#include "nvkms-hdmi.h"
+ 
+ /*!
+  * Check whether the permissions for pOpenDev allow changing the
+@@ -475,6 +476,9 @@
+                               pUpdateState);
+         }
+     }
++    FOR_EACH_EVO_HW_HEAD_IN_MASK(pApiHeadState->hwHeadsMask, head) {
++        nvCb1HdrApply(pDispEvo, head, &pProposedApiHead->cb1Hdr, pProposedApiHead->cb1Slot);
++    }
+ }
+ 
+ static NvU32 FlipEvo2Head1OrOneDisp(NVDispEvoRec *pDispEvo,
+@@ -616,6 +620,26 @@
+                                           &pWorkArea->sd[sd].head[head].newState)) {
+                 goto done;
+             }
++            {
++                NVProposedFlipStateOneApiHead *proposed =
++                    &pWorkArea->disp[sd].apiHead[apiHead].proposedFlipState;
++                const struct NvKmsCb1Hdr *intent = nvGetCb1HdrIntent(pOpenDev, sd, apiHead);
++                const NVDpyEvoRec *dpy = nvGetOneArbitraryDpyEvo(pApiHeadState->activeDpys, pDispEvo);
++                if (intent) proposed->cb1Hdr = *intent;
++                proposed->cb1Hdr.specified = NV_TRUE;
++                if (!nvCb1HdrVrrTransitionValid(pDispEvo, head,
++                        &pDispEvo->headState[head].timings, dpy && nvDpyIsHdmiEvo(dpy))) goto done;
++                if ((proposed->cb1Hdr.enabled &&
++                     (nvPopCount32(pApiHeadState->hwHeadsMask) != 1 ||
++                      nvCountDpyIdsInDpyIdList(pApiHeadState->activeDpys) != 1 ||
++                      pDispEvo->headState[head].cb1HdrLedger.status == 2)) ||
++                    !nvCb1HdrValidate(dpy, &proposed->hdr.dpyColor,
++                        &pDispEvo->headState[head].timings, &pApiHeadState->infoFrame,
++                        &pWorkArea->sd[sd].head[head].newState, &proposed->cb1Hdr,
++                        pFlipHead[i].flip.layer[NVKMS_MAIN_LAYER].surface.specified &&
++                        pFlipHead[i].flip.layer[NVKMS_MAIN_LAYER].surface.handle[0] != 0,
++                        &proposed->cb1Slot)) goto done;
++            }
+         }
+         if (dirtyMainLayer) {
+             applyAllowVrrApiHeadMask |= (1 << apiHead);
+diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvkms-modeset.c
+--- a/src/nvidia-modeset/src/nvkms-modeset.c
++++ b/src/nvidia-modeset/src/nvkms-modeset.c
+@@ -1059,6 +1059,14 @@
+ 
+             pProposedApiHead->changed = TRUE;
+             pProposedApiHead->dpyIdList = pRequestHead->dpyIdList;
++            {
++                const struct NvKmsCb1Hdr *intent = nvGetCb1HdrIntent(pOpenDev, sd, apiHead);
++                nvkms_memset(&pProposedApiHead->cb1Hdr, 0, sizeof(pProposedApiHead->cb1Hdr));
++                if (intent) pProposedApiHead->cb1Hdr = *intent;
++                pProposedApiHead->cb1Hdr.specified = NV_TRUE;
++                pProposedApiHead->cb1Primary = pRequestHead->flip.layer[NVKMS_MAIN_LAYER].surface.specified &&
++                    pRequestHead->flip.layer[NVKMS_MAIN_LAYER].surface.handle[0] != 0;
++            }
+             pProposedApiHead->activeRmId =
+                 nvRmAllocDisplayId(pDispEvo, pProposedApiHead->dpyIdList);
+             if (pProposedApiHead->activeRmId == 0x0) {
+@@ -2138,13 +2146,13 @@
+ static NvBool
+ ValidateProposedFlipHwStateOneSubDev(
+     const NVDevEvoRec *pDevEvo,
+-    const NVProposedModeSetHwStateOneDisp *pProposedDisp,
++    NVProposedModeSetHwStateOneDisp *pProposedDisp,
+     NVProposedModeSetHwStateOneSubDev *pProposedSd,
+     struct NvKmsSetModeOneDispReply *pReplyDisp)
+ {
+     for (NvU32 apiHead = 0; apiHead < pDevEvo->numApiHeads; apiHead++) {
+         NvU32 head;
+-        const NVProposedModeSetStateOneApiHead *pProposedApiHead =
++        NVProposedModeSetStateOneApiHead *pProposedApiHead =
+             &pProposedDisp->apiHead[apiHead];
+ 
+         if (!pProposedApiHead->changed ||
+@@ -2168,6 +2176,29 @@
+                     NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_FLIP;
+                 return FALSE;
+             }
++            {
++                const NVDispEvoRec *disp = pDevEvo->pDispEvo[0];
++                const NVDpyEvoRec *dpy = nvGetOneArbitraryDpyEvo(pProposedApiHead->dpyIdList, disp);
++                NvU32 slot;
++                if (!nvCb1HdrVrrTransitionValid(disp, head,
++                        &pProposedDisp->head[head].timings, dpy && nvDpyIsHdmiEvo(dpy))) {
++                    pReplyDisp->head[apiHead].status = NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_FLIP;
++                    return FALSE;
++                }
++                if ((pProposedApiHead->cb1Hdr.enabled &&
++                     (nvPopCount32(pProposedApiHead->hwHeadsMask) != 1 ||
++                      nvCountDpyIdsInDpyIdList(pProposedApiHead->dpyIdList) != 1 ||
++                      disp->headState[head].cb1HdrLedger.status == 2)) ||
++                    !nvCb1HdrValidate(dpy, &pProposedApiHead->attributes.color,
++                        &pProposedDisp->head[head].timings, &pProposedApiHead->infoFrame,
++                        &pProposedSd->head[head].flip, &pProposedApiHead->cb1Hdr,
++                        pProposedApiHead->cb1Primary, &slot)) {
++                    pReplyDisp->head[apiHead].status = NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_FLIP;
++                    return FALSE;
++                }
++                /* Only the selected slot is retained; TEST_ONLY never programs it. */
++                pProposedApiHead->cb1Slot = slot;
++            }
+         }
+     }
+ 
+@@ -2583,6 +2614,11 @@
+     const NvU32 sd = pDispEvo->displayOwner;
+     NVDispHeadStateEvoPtr pHeadState = &pDispEvo->headState[head];
+ 
++    {
++        const struct NvKmsCb1Hdr clear = {.specified = NV_TRUE};
++        nvCb1HdrApply(pDispEvo, head, &clear, 0);
++    }
++
+     nvHdmiDpEnableDisableAudio(pDispEvo, head, FALSE /* enable */);
+ 
+     nvEvoDetachConnector(pHeadState->pConnectorEvo, head,
+@@ -3320,6 +3356,10 @@
+ 
+     nvUpdateInfoFrames(pDpyEvo, flipSynchronizeInfoframes);
+ 
++    FOR_EACH_EVO_HW_HEAD_IN_MASK(pApiHeadState->hwHeadsMask, head) {
++        nvCb1HdrApply(pDispEvo, head, &pProposedApiHead->cb1Hdr, pProposedApiHead->cb1Slot);
++    }
++
+     /* Perform 3D vision authentication */
+     nv3DVisionAuthenticationEvo(pDispEvo, apiHead);
+ 
+diff --git a/src/nvidia-modeset/kapi/src/nvkms-kapi.c b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+--- a/src/nvidia-modeset/kapi/src/nvkms-kapi.c
++++ b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+@@ -34,6 +34,7 @@
+ #include "nv-float.h"
+ 
+ #include "nvkms-kapi.h"
++#include "nvkms-kapi-cb1.h"
+ #include "nvkms-kapi-private.h"
+ #include "nvkms-kapi-internal.h"
+ #include "nvkms-kapi-notifiers.h"
+@@ -2567,6 +2568,43 @@
+     return 0;
+ }
+ 
++static NvBool GetHdr10PlusState(struct NvKmsKapiDevice *device,
++                                NvKmsKapiDisplay display, NvU32 head,
++                                NvU32 *state)
++{
++    struct NvKmsCb1KapiParams *params;
++    NvBool potential = NV_FALSE;
++    if (state) *state = 2;
++    if (!device) return NV_FALSE;
++    params = nvKmsKapiCalloc(1, sizeof(*params));
++    if (!params) return NV_FALSE;
++    params->operation = NV_CB1_QUERY;
++    params->query.device = device->hKmsDevice;
++    params->query.disp = device->hKmsDisp;
++    params->query.dpy = nvNvU32ToDpyId(display);
++    params->query.head = head;
++    if (nvkms_ioctl_from_kapi(device->pKmsOpen, NVKMS_IOCTL_KAPI_CB1_HDR,
++                             params, sizeof(*params))) {
++        if (state) *state = params->query.status;
++        potential = params->query.potential;
++    }
++    nvKmsKapiFree(params);
++    return potential;
++}
++
++static NvBool MarkHdr10PlusFault(struct NvKmsKapiDevice *device,
++                                 NvKmsKapiDisplay display, NvU32 head)
++{
++    struct NvKmsCb1FaultParams p = {0};
++    if (!device) return NV_FALSE;
++    p.device = device->hKmsDevice;
++    p.disp = device->hKmsDisp;
++    p.dpy = nvNvU32ToDpyId(display);
++    p.head = head;
++    return nvkms_ioctl_from_kapi(device->pKmsOpen, NVKMS_IOCTL_KAPI_CB1_HDR_FAULT,
++                                 &p, sizeof(p));
++}
++
+ static int GetDisplayMode
+ (
+     struct NvKmsKapiDevice *device,
+@@ -3511,6 +3549,37 @@
+ }
+ 
+ 
++static void InitCb1HdrParams(struct NvKmsCb1KapiParams *params,
++    const struct NvKmsKapiRequestedModeSetConfig *config, NvU32 sd)
++{
++    for (NvU32 head = 0; head < NVKMS_KAPI_MAX_HEADS; head++) {
++        params->hdr[sd][head] = config->headRequestedConfig[head].modeSetConfig.cb1Hdr;
++        params->hdr[sd][head].specified = NV_TRUE;
++    }
++}
++
++static NvBool nvCb1HdrSetMode(struct NvKmsKapiDevice *device,
++                             struct NvKmsCb1KapiParams *params)
++{
++    NvBool status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
++        NVKMS_IOCTL_KAPI_CB1_HDR, params, sizeof(*params));
++    NvBool retry = NV_FALSE;
++    if (status && params->u.mode.reply.status == NVKMS_SET_MODE_STATUS_SUCCESS) return NV_TRUE;
++    /* A rejected native modeset has no hardware effects; preserve its validation. */
++    for (NvU32 sd = 0; sd < NVKMS_MAX_SUBDEVICES; sd++) {
++        for (NvU32 head = 0; head < NVKMS_MAX_HEADS_PER_DISP; head++) {
++            if ((params->hdr[sd][head].enabled || params->hdr[sd][head].deepColor) &&
++                params->u.mode.request.disp[sd].head[head].colorBpc == 12) {
++                params->u.mode.request.disp[sd].head[head].colorBpc = 10;
++                retry = NV_TRUE;
++            }
++        }
++    }
++    if (!retry) return NV_FALSE;
++    return nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
++        NVKMS_IOCTL_KAPI_CB1_HDR, params, sizeof(*params));
++}
++
+ static NvBool KmsSetMode(
+     struct NvKmsKapiDevice *device,
+     const struct NvKmsKapiRequestedModeSetConfig *requestedConfig,
+@@ -3520,7 +3589,7 @@
+     struct NvKmsSetModeParams *params = NULL;
+     NvBool status = NV_FALSE;
+ 
+-    params = nvKmsKapiCalloc(1, sizeof(*params));
++    params = nvKmsKapiCalloc(1, sizeof(struct NvKmsCb1KapiParams));
+ 
+     if (params == NULL) {
+         goto done;
+@@ -3533,9 +3602,12 @@
+         goto done;
+     }
+ 
+-    status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
+-                                              NVKMS_IOCTL_SET_MODE,
+-                                              params, sizeof(*params));
++    {
++        struct NvKmsCb1KapiParams *extended = (void *)params;
++        extended->operation = NV_CB1_SET_MODE;
++        InitCb1HdrParams(extended, requestedConfig, device->dispIdx);
++        status = nvCb1HdrSetMode(device, extended);
++    }
+ 
+     replyConfig->flipResult =
+         (params->reply.status == NVKMS_SET_MODE_STATUS_SUCCESS) ?
+@@ -3619,14 +3691,14 @@
+     /* Allocate space for the params structure, plus space for each possible
+      * head. */
+     params = nvKmsKapiCalloc(1,
+-            sizeof(*params) + sizeof(pFlipHead[0]) * NVKMS_KAPI_MAX_HEADS);
++            sizeof(struct NvKmsCb1KapiParams) + sizeof(pFlipHead[0]) * NVKMS_KAPI_MAX_HEADS);
+ 
+     if (params == NULL) {
+         return NV_FALSE;
+     }
+ 
+     /* The flipHead array was allocated in the same block above. */
+-    pFlipHead = (struct NvKmsFlipRequestOneHead *)(params + 1);
++    pFlipHead = (void *)((struct NvKmsCb1KapiParams *)(void *)params + 1);
+ 
+     params->request.deviceHandle = device->hKmsDevice;
+     params->request.commit = commit;
+@@ -3761,9 +3833,13 @@
+         goto done;
+     }
+ 
+-    status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
+-                                              NVKMS_IOCTL_FLIP,
+-                                              params, sizeof(*params));
++    {
++        struct NvKmsCb1KapiParams *extended = (void *)params;
++        extended->operation = NV_CB1_FLIP;
++        InitCb1HdrParams(extended, requestedConfig, device->dispIdx);
++        status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
++            NVKMS_IOCTL_KAPI_CB1_HDR, extended, sizeof(*extended));
++    }
+ 
+     replyConfig->flipResult = params->reply.flipResult;
+ 
+@@ -4232,6 +4308,8 @@
+ 
+     funcsTable->getDisplayMode      = GetDisplayMode;
+     funcsTable->getCurrentOutputBpc = GetCurrentOutputBpc;
++    funcsTable->getHdr10PlusState = GetHdr10PlusState;
++    funcsTable->markHdr10PlusFault = MarkHdr10PlusFault;
+     funcsTable->validateDisplayMode = ValidateDisplayMode;
+ 
+     funcsTable->applyModeSetConfig   = ApplyModeSetConfig;
+diff --git a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+--- a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
++++ b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+@@ -27,6 +27,7 @@
+ #include "nv_mig_types.h"
+ 
+ #include "nv-gpu-info.h"
++#include "nvkms-cb1-hdr.h"
+ #include "nv_dpy_id.h"
+ #include "nvkms-api-types.h"
+ #include "nvkms-format.h"
+@@ -369,6 +370,7 @@
+ };
+ 
+ struct NvKmsKapiHeadModeSetConfig {
++    struct NvKmsCb1Hdr cb1Hdr;
+     /*
+      * DRM distinguishes between the head state "enabled" (the specified
+      * configuration for the head is valid, its resources are allocated,
+@@ -1683,6 +1685,11 @@
+     /* Kernel-client-only diagnostic; appended to preserve preceding offsets. */
+     NvU32 (*getCurrentOutputBpc)(struct NvKmsKapiDevice *device,
+                                 NvKmsKapiDisplay display, NvU32 head);
++    NvBool (*getHdr10PlusState)(struct NvKmsKapiDevice *device,
++                               NvKmsKapiDisplay display, NvU32 head,
++                               NvU32 *status);
++    NvBool (*markHdr10PlusFault)(struct NvKmsKapiDevice *device,
++                                NvKmsKapiDisplay display, NvU32 head);
+ };
+ 
+ /** @} */
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.h b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+@@ -81,6 +81,7 @@
+ #define NV_DRM_MAX_BPC_DEFAULT 12
+ 
+ struct nv_drm_connector_state {
++       bool cb1_deep_color;
+        struct drm_connector_state base;
+        enum nv_drm_dithering_mode dithering_mode;
+        struct drm_property_blob *hdcp_topology_blob;
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+@@ -46,6 +46,7 @@
+ #include <drm/drm_atomic_helper.h>
+ #include <drm/drm_edid.h>
+ #include <drm/drm_sysfs.h>
++#include <drm/drm_hdr10plus.h>
+ 
+ /*
+  * Dithering support requires connector atomic_check, which we only enable on
+@@ -337,6 +338,7 @@
+     __drm_atomic_helper_connector_duplicate_state(connector, &nv_drm_new_connector_state->base);
+ 
+     nv_drm_new_connector_state->dithering_mode = nv_drm_old_connector_state->dithering_mode;
++    nv_drm_new_connector_state->cb1_deep_color = nv_drm_old_connector_state->cb1_deep_color;
+     nv_drm_new_connector_state->hdcp_topology_blob = nv_drm_old_connector_state->hdcp_topology_blob;
+     if (nv_drm_new_connector_state->hdcp_topology_blob) {
+         drm_property_blob_get(nv_drm_new_connector_state->hdcp_topology_blob);
+@@ -387,7 +389,13 @@
+     struct nv_drm_connector_state *nv_connector_state =
+         to_nv_drm_connector_state(state);
+ 
+-    if (property == nv_dev->cb1_output_bpc_property) {
++    if (property == nv_dev->cb1_deep_color_property) {
++        if (val > 1) return -EINVAL;
++        nv_connector_state->cb1_deep_color = val;
++        return 0;
++    }
++    if (property == nv_dev->cb1_output_bpc_property ||
++        property == nv_dev->cb1_hdr10plus_status_property) {
+         return -EINVAL;
+     }
+     if (property == nv_dev->nv_connector_dithering_mode_property) {
+@@ -440,6 +448,26 @@
+     const struct nv_drm_connector_state *nv_connector_state =
+         to_nv_drm_connector_state_const(state);
+ 
++    if (property == nv_dev->cb1_deep_color_property) {
++        *val = nv_connector_state->cb1_deep_color;
++        return 0;
++    }
++    if (property == nv_dev->cb1_hdr10plus_status_property) {
++        NvU32 status = 0;
++        if (state->crtc && to_nv_crtc_state(state->crtc->state)->cb1_commit_fault) {
++            *val = 2;
++            return 0;
++        }
++        if (connector->status == connector_status_connected && state->crtc &&
++            state->best_encoder && state->crtc->state->active) {
++            nvKms->getHdr10PlusState(nv_dev->pDevice,
++                to_nv_encoder(state->best_encoder)->hDisplay,
++                to_nv_crtc(state->crtc)->head, &status);
++        }
++        *val = status;
++        return 0;
++    }
++
+     if (property == nv_dev->cb1_output_bpc_property) {
+         *val = nv_drm_connector_current_output_bpc(connector, state);
+         return 0;
+@@ -642,6 +670,36 @@
+     nv_crtc_state = to_nv_crtc_state(crtc_state);
+     req_config = &nv_crtc_state->req_config;
+ 
++    {
++        const bool active = new_connector_state->hdr10plus_metadata != NULL;
++        const bool deep = nv_new_connector_state->cb1_deep_color;
++        struct NvKmsCb1Hdr *hdr = &req_config->modeSetConfig.cb1Hdr;
++        if (active) {
++            struct drm_plane_state *primary =
++                drm_atomic_get_new_plane_state(state, crtc->primary);
++            if (drm_connector_check_hdr10plus(new_connector_state) ||
++                !drm_hdr10plus_infoframe_valid(new_connector_state->hdr10plus_metadata->data,
++                    new_connector_state->hdr10plus_metadata->length) ||
++                !crtc_state->active || !primary || !primary->fb || primary->crtc != crtc ||
++                !nv_crtc_state->cb1_primary_submitted ||
++                to_nv_crtc_state(crtc->state)->cb1_commit_fault ||
++                state->async_update || crtc_state->async_flip ||
++                nv_new_connector_state->hdmi_vsif_metadata ||
++                (crtc_state->adjusted_mode.flags & DRM_MODE_FLAG_3D_MASK)) return -EINVAL;
++            memcpy(hdr->packet, new_connector_state->hdr10plus_metadata->data, 31);
++        }
++        if (deep || active) {
++            if (!new_connector_state->hdr_output_metadata ||
++                new_connector_state->hdr_output_metadata->length != sizeof(struct hdr_output_metadata) ||
++                new_connector_state->max_requested_bpc < 10 ||
++                (new_connector_state->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
++                 new_connector_state->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC)) return -EINVAL;
++        }
++        hdr->specified = NV_TRUE;
++        hdr->enabled = active;
++        hdr->deepColor = deep;
++    }
++
+     /* Handle dithering changes */
+     req_config->flags.ditheringChanged =
+         nv_old_connector_state->dithering_mode !=
+@@ -664,9 +722,14 @@
+      * this head; a change needs a modeset.
+      */
+     {
+-        const NvU32 bpc = nv_drm_connector_requested_bpc(new_connector_state);
+-
+-        if (req_config->modeSetConfig.colorBpc != bpc) {
++        const NvU32 bpc = (req_config->modeSetConfig.cb1Hdr.enabled ||
++            req_config->modeSetConfig.cb1Hdr.deepColor) ?
++            (new_connector_state->max_requested_bpc >= 12 ? 12 : 10) :
++            nv_drm_connector_requested_bpc(new_connector_state);
++
++        if (req_config->modeSetConfig.colorBpc != bpc ||
++            nv_new_connector_state->cb1_deep_color != nv_old_connector_state->cb1_deep_color ||
++            (!!new_connector_state->hdr10plus_metadata != !!old_connector_state->hdr10plus_metadata)) {
+             req_config->modeSetConfig.colorBpc = bpc;
+             req_config->flags.colorBpcChanged = NV_TRUE;
+         }
+@@ -876,6 +939,13 @@
+     if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
+         drm_object_attach_property(&nv_connector->base.base,
+                                    nv_dev->cb1_output_bpc_property, 0);
++        drm_object_attach_property(&nv_connector->base.base,
++                                   nv_dev->cb1_deep_color_property, 0);
++        if (nvKms->getHdr10PlusState(nv_dev->pDevice, 0, 0, NULL)) {
++            drm_connector_attach_hdr10plus_metadata_property(&nv_connector->base);
++            drm_object_attach_property(&nv_connector->base.base,
++                                       nv_dev->cb1_hdr10plus_status_property, 0);
++        }
+ #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
+         if (drm_mode_create_hdmi_colorspace_property(
+                 &nv_connector->base,
+@@ -895,6 +965,8 @@
+     } else if (nv_connector->type == NVKMS_CONNECTOR_TYPE_DP) {
+         drm_object_attach_property(&nv_connector->base.base,
+                                    nv_dev->cb1_output_bpc_property, 0);
++        drm_object_attach_property(&nv_connector->base.base,
++                                   nv_dev->cb1_deep_color_property, 0);
+ #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
+         if (drm_mode_create_dp_colorspace_property(
+                 &nv_connector->base,
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+@@ -721,6 +721,16 @@
+     if (!nv_dev->cb1_output_bpc_property) {
+         return -ENOMEM;
+     }
++    {
++        static const struct drm_prop_enum_list states[] = {
++            {0, "disabled"}, {1, "commit-coupled active"}, {2, "fault"}};
++        nv_dev->cb1_hdr10plus_status_property = drm_property_create_enum(nv_dev->dev,
++            0, "CB1_HDR10PLUS_STATUS", states, ARRAY_SIZE(states));
++        nv_dev->cb1_deep_color_property = drm_property_create_bool(nv_dev->dev,
++            0, "DVBRIDGE_HDR10_DEEP_COLOR");
++        if (!nv_dev->cb1_hdr10plus_status_property || !nv_dev->cb1_deep_color_property)
++            return -ENOMEM;
++    }
+ 
+     return 0;
+ }
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+--- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+@@ -100,6 +100,8 @@
+ 
+ struct nv_drm_device {
+     struct drm_property *cb1_output_bpc_property;
++    struct drm_property *cb1_hdr10plus_status_property;
++    struct drm_property *cb1_deep_color_property;
+     nv_gpu_info_t gpu_info;
+     MIGDeviceId gpu_mig_device;
+ 
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-modeset.c b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-modeset.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+@@ -50,6 +50,7 @@
+ #include <linux/dma-fence.h>
+ 
+ struct nv_drm_atomic_state {
++    bool cb1_planes_prepared;
+     struct NvKmsKapiRequestedModeSetConfig config;
+     nv_drm_atomic_state_base_t base;
+ };
+@@ -415,7 +416,7 @@
+         return -EINVAL;
+     }
+ 
+-    if (commit) {
++    if (commit && !to_nv_atomic_state(state)->cb1_planes_prepared) {
+         /*
+          * This function does what is necessary to prepare the framebuffers
+          * attached to each new plane in the state for scan out, mostly by
+@@ -541,6 +542,17 @@
+     return 0;
+ }
+ 
++/* Check before helpers add inherited planes for unrelated color changes. */
++static int nv_drm_cb1_check_frame(nv_drm_atomic_state_base_t *state,
++                                 const struct drm_connector_state *connector)
++{
++    struct drm_plane_state *primary;
++    if (!connector->hdr10plus_metadata) return 0;
++    if (!connector->crtc) return -EINVAL;
++    primary = drm_atomic_get_new_plane_state(state, connector->crtc->primary);
++    return primary && primary->fb && primary->crtc == connector->crtc ? 0 : -EINVAL;
++}
++
+ int nv_drm_atomic_check(struct drm_device *dev,
+                         nv_drm_atomic_state_base_t *state)
+ {
+@@ -557,8 +569,23 @@
+     bool cursor_only_commit;
+ 
+     bool infoframe_changed;
++    {
++        struct drm_connector *connector;
++        struct drm_connector_state *connector_state;
++        for_each_new_connector_in_state(state, connector, connector_state, i) {
++            ret = nv_drm_cb1_check_frame(state, connector_state);
++            if (ret) return ret;
++        }
++    }
+     for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
+ 
++        {
++            struct drm_plane_state *primary =
++                drm_atomic_get_new_plane_state(state, crtc->primary);
++            to_nv_crtc_state(crtc_state)->cb1_primary_submitted =
++                primary && primary->fb && primary->crtc == crtc;
++        }
++
+         /*
+          * Committing cursor surface change without any other plane change can
+          * cause cursor surface in use by HW to be freed prematurely. Add all
+@@ -752,6 +779,115 @@
+     nv_drm_free(nv_flip);
+ }
+ 
++/* Immediate packet writes must not overtake an outstanding primary or its fence. */
++static void nv_drm_cb1_complete(struct drm_device *dev,
++    nv_drm_atomic_state_base_t *state, bool accepted)
++{
++    struct nv_drm_device *nv_dev = to_nv_device(dev);
++    struct drm_crtc *crtc;
++    struct drm_crtc_state *crtc_state;
++    int i;
++    for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
++        struct nv_drm_crtc_state *s = to_nv_crtc_state(crtc_state);
++        const struct NvKmsKapiHeadModeSetConfig *config = &s->req_config.modeSetConfig;
++        struct drm_crtc_state *old = drm_atomic_get_old_crtc_state(state, crtc);
++        if (!s->cb1_commit_fault && !config->cb1Hdr.enabled &&
++            !to_nv_crtc_state(old)->req_config.modeSetConfig.cb1Hdr.enabled) continue;
++        if (!accepted) s->cb1_commit_fault = true;
++        if (config->numDisplays != 1) continue;
++        if (!accepted) {
++            nvKms->markHdr10PlusFault(nv_dev->pDevice, config->displays[0], to_nv_crtc(crtc)->head);
++        } else if (!config->cb1Hdr.enabled && s->cb1_commit_fault) {
++            NvU32 status = 2;
++            nvKms->getHdr10PlusState(nv_dev->pDevice, config->displays[0], to_nv_crtc(crtc)->head, &status);
++            if (status == 0) s->cb1_commit_fault = false;
++        }
++    }
++}
++
++static int nv_drm_cb1_preflight(struct drm_device *dev,
++    nv_drm_atomic_state_base_t *state, bool nonblock)
++{
++    struct nv_drm_device *nv_dev = to_nv_device(dev);
++    struct drm_crtc *crtc;
++    struct drm_crtc_state *crtc_state;
++    struct drm_plane *plane;
++    struct drm_plane_state *plane_state;
++    int i, j;
++    for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
++        if (!to_nv_crtc_state(crtc_state)->req_config.modeSetConfig.cb1Hdr.enabled &&
++            !to_nv_crtc_state(crtc->state)->req_config.modeSetConfig.cb1Hdr.enabled) continue;
++        if (!list_empty(&to_nv_crtc(crtc)->flip_list)) {
++            if (nonblock || !wait_event_timeout(nv_dev->flip_event_wq,
++                    list_empty(&to_nv_crtc(crtc)->flip_list), 3 * HZ)) return -EBUSY;
++        }
++        for_each_new_plane_in_state(state, plane, plane_state, j) {
++            int ret;
++            if (plane_state->crtc != crtc || !plane_state->fence) continue;
++            if (nonblock) {
++                if (!dma_fence_is_signaled(plane_state->fence)) return -EBUSY;
++            } else {
++                ret = dma_fence_wait_timeout(plane_state->fence, true, 3 * HZ);
++                if (ret < 0) return ret;
++                if (ret == 0) return -ETIMEDOUT;
++            }
++            ret = dma_fence_get_status(plane_state->fence);
++            if (ret < 0) return ret;
++        }
++    }
++    return 0;
++}
++
++static void nv_drm_cb1_unprepare(struct drm_device *dev,
++                                 nv_drm_atomic_state_base_t *state)
++{
++    if (to_nv_atomic_state(state)->cb1_planes_prepared) {
++        drm_atomic_helper_unprepare_planes(dev, state);
++        to_nv_atomic_state(state)->cb1_planes_prepared = false;
++    }
++}
++
++static void nv_drm_cb1_timeout(struct drm_device *dev,
++    nv_drm_atomic_state_base_t *state, struct drm_crtc *crtc)
++{
++    struct nv_drm_device *nv_dev = to_nv_device(dev);
++    struct nv_drm_crtc_state *s = to_nv_crtc_state(crtc->state);
++    const struct NvKmsKapiHeadModeSetConfig *config = &s->req_config.modeSetConfig;
++    struct drm_crtc_state *old = drm_atomic_get_old_crtc_state(state, crtc);
++    if (s->cb1_commit_fault || config->cb1Hdr.enabled ||
++        to_nv_crtc_state(old)->req_config.modeSetConfig.cb1Hdr.enabled) {
++        s->cb1_commit_fault = true;
++        if (config->numDisplays == 1)
++            nvKms->markHdr10PlusFault(nv_dev->pDevice, config->displays[0], to_nv_crtc(crtc)->head);
++        return; /* Only a genuine hardware completion may release this queue. */
++    }
++    while (!list_empty(&to_nv_crtc(crtc)->flip_list)) {
++        __nv_drm_handle_flip_event(to_nv_crtc(crtc));
++    }
++}
++
++static int nv_drm_cb1_prepare(struct drm_device *dev,
++                              nv_drm_atomic_state_base_t *state, bool nonblock)
++{
++    struct drm_crtc *crtc;
++    struct drm_crtc_state *crtc_state;
++    bool transport = false;
++    int i, ret;
++    for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
++        transport |= to_nv_crtc_state(crtc_state)->req_config.modeSetConfig.cb1Hdr.enabled ||
++            to_nv_crtc_state(crtc->state)->req_config.modeSetConfig.cb1Hdr.enabled;
++    }
++    if (!transport) return 0;
++    if (!to_nv_atomic_state(state)->cb1_planes_prepared) {
++        ret = drm_atomic_helper_prepare_planes(dev, state);
++        if (ret) return ret;
++        to_nv_atomic_state(state)->cb1_planes_prepared = true;
++    }
++    ret = nv_drm_cb1_preflight(dev, state, nonblock);
++    if (ret) nv_drm_cb1_unprepare(dev, state);
++    return ret;
++}
++
+ int nv_drm_atomic_commit(struct drm_device *dev,
+                          nv_drm_atomic_state_base_t *state,
+                          bool nonblock)
+@@ -763,6 +899,9 @@
+     struct drm_crtc_state *crtc_state = NULL;
+     struct nv_drm_device *nv_dev = to_nv_device(dev);
+ 
++    ret = nv_drm_cb1_prepare(dev, state, nonblock);
++    if (ret) return ret;
++
+     /*
+      * XXX: drm_mode_config_funcs::atomic_commit() mandates to return -EBUSY
+      * for nonblocking commit if the commit would need to wait for previous
+@@ -803,6 +942,7 @@
+              * empty when it isn't.
+              */
+             if (!list_empty(&nv_crtc->flip_list)) {
++                nv_drm_cb1_unprepare(dev, state);
+                 return -EBUSY;
+             }
+         }
+@@ -820,6 +960,7 @@
+ 
+     ret = drm_atomic_helper_swap_state(state, false /* stall */);
+     if (WARN_ON(ret != 0)) {
++        nv_drm_cb1_unprepare(dev, state);
+         return ret;
+     }
+ 
+@@ -839,6 +980,7 @@
+     if ((ret = nv_drm_atomic_apply_modeset_config(
+                     dev,
+                     state, true /* commit */)) != 0) {
++        nv_drm_cb1_complete(dev, state, false);
+         NV_DRM_DEV_LOG_ERR(
+             nv_dev,
+             "Failed to apply atomic modeset.  Error code: %d",
+@@ -847,6 +989,8 @@
+         goto done;
+     }
+ 
++    nv_drm_cb1_complete(dev, state, true);
++
+     for_each_old_crtc_in_state(state, crtc, crtc_state, i) {
+         struct nv_drm_crtc *nv_crtc = to_nv_crtc(crtc);
+         struct nv_drm_crtc_state *nv_new_crtc_state =
+@@ -930,9 +1074,7 @@
+                 NV_DRM_DEV_LOG_ERR(
+                     nv_dev,
+                     "Flip event timeout on head %u", nv_crtc->head);
+-                while (!list_empty(&nv_crtc->flip_list)) {
+-                    __nv_drm_handle_flip_event(nv_crtc);
+-                }
++                nv_drm_cb1_timeout(dev, state, crtc);
+             }
+         }
+     }
+@@ -942,6 +1084,10 @@
+     /*
+      * State will be freed when the caller drops its reference after we return.
+      */
++    if (to_nv_atomic_state(state)->cb1_planes_prepared) {
++        drm_atomic_helper_cleanup_planes(dev, state);
++        to_nv_atomic_state(state)->cb1_planes_prepared = false;
++    }
+ 
+     return 0;
+ }
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-crtc.h b/kernel-open/nvidia-drm/nvidia-drm-crtc.h
+--- a/kernel-open/nvidia-drm/nvidia-drm-crtc.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-crtc.h
+@@ -144,6 +144,9 @@
+ };
+ 
+ struct nv_drm_crtc_state {
++    /* Snapshot before atomic helpers inherit/expand the plane set. */
++    bool cb1_primary_submitted;
++    bool cb1_commit_fault;
+     /**
+      * @base:
+      *
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-crtc.c b/kernel-open/nvidia-drm/nvidia-drm-crtc.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-crtc.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-crtc.c
+@@ -2535,6 +2535,7 @@
+     }
+ 
+     __drm_atomic_helper_crtc_duplicate_state(crtc, &nv_state->base);
++    nv_state->cb1_commit_fault = nv_old_state->cb1_commit_fault;
+ 
+     nv_state->regamma_tf = nv_old_state->regamma_tf;
+     nv_state->regamma_lut = nv_old_state->regamma_lut;

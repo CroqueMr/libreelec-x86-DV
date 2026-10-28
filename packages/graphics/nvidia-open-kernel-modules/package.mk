@@ -21,6 +21,10 @@ make_target() {
   # compiler as the kernel and without the target's user-space flags.
   unset CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
 
+  # Keep the in-kernel client and independently source-built NVKMS layout matched.
+  cp src/nvidia-modeset/kapi/interface/nvkms-kapi.h kernel-open/common/inc/
+  cp src/common/inc/nvkms-cb1-hdr.h kernel-open/common/inc/
+
   make modules \
     TARGET_ARCH=x86_64 \
     ARCH=x86_64 \

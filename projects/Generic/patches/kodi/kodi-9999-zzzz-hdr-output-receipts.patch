@@ -1,0 +1,155 @@
+Subject: [PATCH] Verify native HDR delivery and restore output contracts
+
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Use live driver receipts and clear rejected dynamic metadata. Separate
+strict HDR depth from the byte-preserving DV and ordinary SDR states.
+
+--- a/xbmc/windowing/gbm/drm/DRMObject.cpp
++++ b/xbmc/windowing/gbm/drm/DRMObject.cpp
+@@ -129,6 +129,18 @@
+   return m_props->prop_values[std::ranges::distance(m_propsInfo.begin(), property)];
+ }
+ 
++std::optional<uint64_t> CDRMObject::ReadPropertyValue(std::string_view name) const
++{
++  const uint32_t id = GetPropertyId(name);
++  if (!id) return {};
++  std::unique_ptr<drmModeObjectProperties, DrmModeObjectPropertiesDeleter> values(
++      drmModeObjectGetProperties(m_fd, m_id, m_type));
++  if (!values) return {};
++  for (uint32_t i = 0; i < values->count_props; ++i)
++    if (values->props[i] == id) return values->prop_values[i];
++  return {};
++}
++
+ bool CDRMObject::CachePropertyValue(uint32_t propertyId, uint64_t value)
+ {
+   for (size_t i = 0; i < m_propsInfo.size(); i++)
+--- a/xbmc/windowing/gbm/drm/DRMObject.h
++++ b/xbmc/windowing/gbm/drm/DRMObject.h
+@@ -47,6 +47,7 @@
+   bool SetProperty(std::string_view name, uint64_t value);
+   bool SupportsProperty(std::string_view name);
+   std::optional<uint64_t> GetPropertyValue(std::string_view name) const;
++  std::optional<uint64_t> ReadPropertyValue(std::string_view name) const;
+   // Read-only inventory status for diagnostics; never re-query DRM for a log.
+   bool HasPropertyInventory() const
+   {
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+@@ -144,14 +144,35 @@
+       edid == m_hdr10plusRejectedEdid ? std::nullopt : std::move(packet);
+ }
+ 
++void CDRMAtomic::AcceptHDR10Plus(bool enabled)
++{
++  m_hdr10plusActive = enabled;
++  m_hdr10plusClearRequired = false;
++  if (!m_connector || !m_connector->SupportsProperty("CB1_HDR10PLUS_STATUS")) return;
++  const auto status = m_connector->ReadPropertyValue("CB1_HDR10PLUS_STATUS");
++  const auto depth = m_connector->ReadPropertyValue("CB1_OUTPUT_BPC");
++  if ((!enabled && status == 0) || (enabled && status == 1 && depth.value_or(0) >= 10)) return;
++  m_hdr10plusActive = false;
++  m_hdr10plusClearRequired = true;
++  if (m_hdr10plusRejectedGeneration != m_hdr10plusGeneration)
++    CLog::Log(LOGWARNING, "HDR10+ transport was not confirmed by the driver; clearing dynamic metadata");
++  m_hdr10plusRejectedGeneration = m_hdr10plusGeneration;
++  m_hdr10plusRejectedEdid = m_connector->GetPropertyValue("EDID").value_or(0);
++}
++
+ bool CDRMAtomic::PrepareHDR10Plus(int& flags, bool& frameMetadata)
+ {
+   auto packet = std::exchange(m_hdr10plusPacket, std::nullopt);
+   frameMetadata = false;
+   if (!m_connector || !m_connector->SupportsProperty("HDR10PLUS_METADATA"))
+-    return !m_hdr10plusActive;
+-  if (!packet && !m_hdr10plusActive) return true;
++    return !m_hdr10plusActive && !m_hdr10plusClearRequired;
++  const bool inherited = !m_hdr10plusActive &&
++      m_connector->GetPropertyValue("HDR10PLUS_METADATA").value_or(0) != 0;
++  if (!packet && !m_hdr10plusActive && !m_hdr10plusClearRequired && !inherited) return true;
+   frameMetadata = true;
++  // Commit-coupled packet output must wait for the primary's render fence.
++  if (m_connector->SupportsProperty("CB1_HDR10PLUS_STATUS"))
++    flags &= ~DRM_MODE_ATOMIC_NONBLOCK;
+   if (packet)
+   {
+     m_req->hdr10plusBlob = CDRMPropertyBlob(m_fd, packet->data(), packet->size());
+@@ -160,7 +181,8 @@
+   if (!AddProperty(m_connector, "HDR10PLUS_METADATA", packet ? m_req->hdr10plusBlob.Get() : 0))
+     return false;
+   m_req->hdr10plus = packet.has_value();
+-  if (packet.has_value() != m_hdr10plusActive) flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
++  if (packet.has_value() != m_hdr10plusActive || m_hdr10plusClearRequired || inherited)
++    flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+   return true;
+ }
+ 
+@@ -197,6 +219,8 @@
+   m_req->sdrRestore = true;
+   flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
+   if (!AddProperty(m_connector, "HDR_OUTPUT_METADATA", 0)) return false;
++  if (m_connector->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR") &&
++      !AddProperty(m_connector, "DVBRIDGE_HDR10_DEEP_COLOR", 0)) return false;
+   if (m_connector->SupportsProperty("Colorspace"))
+   {
+     const auto value = m_sdrRestoreColorspace ? m_sdrRestoreColorspace :
+@@ -425,7 +449,7 @@
+         CLog::Log(LOGINFO, "SDR output restoration accepted after retry");
+       SetSDRRestorePending(false);
+     }
+-    if (m_req->hdr10plus) m_hdr10plusActive = *m_req->hdr10plus;
++    if (m_req->hdr10plus) AcceptHDR10Plus(*m_req->hdr10plus);
+     if (m_req->signalMode)
+       m_committedMode = *m_req->signalMode;
+     if (m_signalDirty && DVBRIDGE::DiagnosticsEnabled())
+@@ -714,6 +738,7 @@
+   ResetCB1PresentationTime();
+   m_hdr10plusPacket.reset();
+   m_hdr10plusActive = false;
++  m_hdr10plusClearRequired = false;
+   m_hdr10plusGeneration = 0;
+   m_hdr10plusRejectedGeneration = 0;
+   m_hdr10plusRejectedEdid = 0;
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.h
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
+@@ -92,6 +92,8 @@
+   std::optional<std::array<uint8_t, 31>> m_hdr10plusPacket;
+   uint64_t m_hdr10plusGeneration{}, m_hdr10plusRejectedGeneration{}, m_hdr10plusRejectedEdid{};
+   bool m_hdr10plusActive{};
++  bool m_hdr10plusClearRequired{};
++  void AcceptHDR10Plus(bool enabled);
+   bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
+                        bool strict = false);
+   void FinishRequest(bool accepted);
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -78,6 +78,7 @@
+   {
+     const Setting native[] = {
+       {connector,"DVBRIDGE_DV_STANDARD_LAB",1,true,false},
++      {connector,"DVBRIDGE_HDR10_DEEP_COLOR",0,false,false},
+       {connector,"HDR_OUTPUT_METADATA",0,false,true},
+       {connector,"max bpc",8,true,false},
+       {connector,"Broadcast RGB",0,true,false,"Full"},
+@@ -108,6 +109,7 @@
+     const uint64_t one = uint64_t{1} << 32;
+     const Setting vendor[] = {
+       {connector,"HDR_OUTPUT_METADATA",0,true,true},
++      {connector,"DVBRIDGE_HDR10_DEEP_COLOR",0,false,false},
+       {connector,"max bpc",8,true,false},
+       {connector,"dithering mode",0,true,false,"off"},
+       {connector,"Colorspace",0,true,false,"Default"},
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -674,6 +674,8 @@
+     const auto* display = GetDisplayInfo();
+     if (GetEotf() != KODI::UTILS::Eotf::PQ)
+       reason = "output-not-pq";
++    else if (GetOutputBitDepth() < 10)
++      reason = "output-buffer-below-10-bit";
+     else if (!drm->GetConnector() || !drm->GetConnector()->SupportsProperty("HDR10PLUS_METADATA"))
+       reason = "driver-unsupported";
+     else if (!display || display->HDR10PlusVersion() < metadata->application_version)
+

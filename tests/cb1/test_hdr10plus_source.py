@@ -38,6 +38,7 @@ struct CWinSystemGbmGLESContext {
  std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
  Display display;KODI::UTILS::Eotf eotf=KODI::UTILS::Eotf::PQ;
  std::string m_hdr10plusReason;
+ int depth=10;int GetOutputBitDepth()const{return depth;}
  const Display* GetDisplayInfo() const {return &display;}
  auto GetEotf() const {return eotf;}
  void StageNativeHDR10Plus(bool overlay) BODY
@@ -56,6 +57,9 @@ int main() {
  auto first=*drm->packet;
  w.StageNativeHDR10Plus(false);assert(*drm->packet==first);
  w.StageNativeHDR10Plus(true);assert((*drm->packet)[30]==0xc0);
+ w.depth=8;w.StageNativeHDR10Plus(false);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
+ w.depth=10;w.StageNativeHDR10Plus(false);assert(drm->packet);
+ w.depth=16;w.StageNativeHDR10Plus(false);assert(drm->packet);
  w.eotf=KODI::UTILS::Eotf::TRADITIONAL_SDR;w.StageNativeHDR10Plus(false);assert(!drm->packet);
  w.eotf=KODI::UTILS::Eotf::PQ;w.display.version=0;w.StageNativeHDR10Plus(false);assert(!drm->packet);
  w.display.version=1;drm->connector.supported=false;w.StageNativeHDR10Plus(false);assert(!drm->packet);

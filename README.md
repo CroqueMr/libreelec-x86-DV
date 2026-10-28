@@ -4,9 +4,9 @@ Dolby Vision playback and HDR10 conversion in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Intel and AMD integrated graphics
 are supported. Dedicated AMD Radeon and NVIDIA GeForce GPUs are experimental.
 
-**R1.0.0 RC1 Preview1** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
+**R1.0.0 RC1** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.3
 
-Local candidate, not published. Existing downloads remain available below.
+RC1 draft candidate. Existing published downloads remain available below.
 
 [Downloads](https://github.com/CroqueMr/libreelec-x86-DV/releases)
 · [Release notes](docs/cb1/RELEASE.md)
@@ -37,10 +37,12 @@ format and the active output capabilities.
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
 | Dolby Vision | **HDR10 Reference Expert** | HDR10 | Map to the configured TV peak and gamut using compatible creative metadata |
+| Dolby Vision | **HDR10+** | HDR10+ | Generate frame-owned dynamic output metadata from the Dolby Vision source |
 | Dolby Vision | **Dolby Vision Disabled (native Kodi)** | Native Kodi output | Use Kodi's original playback and fallback behavior |
 | HDR10 | **Dolby Vision Reference (AI)** | Dolby Vision, TV-Led | Generate L1/L3 scene metadata using image analysis and LightGBM, without an enhancement grade |
 | HDR10 | **Dolby Vision Adaptive HDR Mapping (AI)** | Dolby Vision, TV-Led | Combine AI scene metadata with controlled highlight expansion |
 | HDR10 | **HDR10 Native** | HDR10 | Keep native Kodi HDR10 playback |
+| HDR10+ | **Native** | HDR10+ | Preserve authored dynamic metadata on an admitted deep-colour output |
 | SDR / HLG | **Native** | Native SDR / HLG | Keep native Kodi playback |
 
 Adaptive HDR Mapping and HDR10 Expert require a TV profile. Standard, Master
@@ -102,7 +104,9 @@ A 3D-capable display and suitable glasses are required.
 | Intel iGPU: Core 8th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
 | AMD iGPU: Ryzen 2000G / 3000G and corresponding mobile APUs, 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
 | AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Experimental |
+| AMD Radeon Vega M; Intel Arc A / B | Experimental |
 | NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Experimental |
+| NVIDIA GeForce GTX 10, Pascal | Experimental, separate matched R580 image |
 | Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
 Performance depends on hardware, content and rendering mode. Prior N100 tests
@@ -111,6 +115,8 @@ Heavier conversions require more GPU performance.
 
 For problems, open an issue with the exact CPU/GPU, display, connection chain,
 build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
+The [driver/output matrix](docs/cb1/DRIVER-COVERAGE.md) distinguishes DV V1/V2,
+HDR10/HLG, native HDR10+ and converted HDR10+ from physical qualification.
 
 ## Known issues or limitation
 
@@ -118,8 +124,8 @@ build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
 - Dedicated AMD and NVIDIA GPU support is experimental.
-- HDR10 Support issue on Intel 8th & 9th gen.
-- HDR10+ not supported. 
+- Native HDMI HDR is not admitted on Intel Display9; the new Display10 deep-output route needs physical qualification.
+- New HDR10+ driver routes require physical display qualification; NVIDIA output is experimental and commit-coupled.
 
 ## Components and documentation
 

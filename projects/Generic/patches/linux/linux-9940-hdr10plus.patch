@@ -214,15 +214,16 @@ diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
  
  	return 0;
  }
-@@ -2883,6 +2888,53 @@
+@@ -2883,6 +2888,54 @@
  EXPORT_SYMBOL(drm_connector_attach_hdr_output_metadata_property);
  
  /**
 + * drm_connector_attach_hdr10plus_metadata_property - opt in to dynamic metadata
-+ * @connector: Native HDMI connector with a frame-synchronous packet backend.
++ * @connector: Native HDMI connector with a frame-owned packet backend.
 + *
 + * Payload is a complete 31-byte HDR10+ VSIF. Zero disables the packet. The
-+ * backend must latch it with the framebuffer, never as a separate update.
++ * backend submits it with the framebuffer in the native transaction and
++ * documents its latch/commit synchronization tier. No independent packet loop.
 + */
 +void drm_connector_attach_hdr10plus_metadata_property(struct drm_connector *connector)
 +{
@@ -381,7 +382,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
  
  	if (to_intel_digital_connector_state(conn_state)->dv_lab_standard) {
  		struct hdmi_dolby_vendor_infoframe *dv =
-@@ -1271,6 +1277,51 @@
+@@ -1271,6 +1277,54 @@
  	intel_write_infoframe(encoder, crtc_state,
  			      HDMI_INFOFRAME_TYPE_VENDOR,
  			      &crtc_state->infoframes.hdmi);
@@ -395,6 +396,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
 +int intel_hdmi_hdr10plus_check(struct intel_atomic_state *state, struct intel_crtc *crtc)
 +{
 +	struct intel_crtc_state *pipe = intel_atomic_get_new_crtc_state(state, crtc);
++	struct drm_plane_state *primary;
 +	struct intel_digital_connector_state *conn;
 +	struct intel_connector *connector __maybe_unused;
 +	int i;
@@ -402,7 +404,9 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
 +	for_each_new_intel_connector_in_state(state, connector, conn, i) {
 +		if (conn->base.crtc != &crtc->base || !conn->base.hdr10plus_metadata)
 +			continue;
++		primary = drm_atomic_get_new_plane_state(&state->base, crtc->base.primary);
 +		if (drm_connector_check_hdr10plus(&conn->base) || conn->dv_lab_standard ||
++		    !pipe->uapi.active || !primary || primary->crtc != &crtc->base || !primary->fb ||
 +		    !pipe->has_hdmi_sink || !pipe->has_infoframe || pipe->pipe_bpp < 30 ||
 +		    pipe->uapi.async_flip ||
 +		    (pipe->hw.adjusted_mode.flags & DRM_MODE_FLAG_3D_MASK))
@@ -696,3 +700,59 @@ diff --git a/include/linux/hdmi.h b/include/linux/hdmi.h
  };
  
  /**
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2404,7 +2404,8 @@
+ 	/* Display10 carries ten-bit content through its native twelve-bit link. */
+ 	if (DISPLAY_VER(display) < 10 ||
+ 	    (DISPLAY_VER(display) == 10 && state->max_requested_bpc < 12) ||
+-	    !to_intel_digital_connector_state(state)->dv_hdr10_deep_color ||
++	    (!to_intel_digital_connector_state(state)->dv_hdr10_deep_color &&
++	     !state->hdr10plus_metadata) ||
+ 	    to_intel_digital_connector_state(state)->dv_lab_standard ||
+ 	    (state->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
+ 	     state->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC) ||
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -70,11 +70,12 @@
+ 	const struct drm_connector_state *con = &state->base;
+ 	const struct hdr_output_metadata *hdr;
+ 
+-	if (!state->hdr10_deep_color)
++	if (!state->hdr10_deep_color && !con->hdr10plus_metadata)
+ 		return 0;
+ 	if (state->dv_standard || !con->crtc ||
+ 	    con->connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
+-	    !to_amdgpu_dm_connector(con->connector)->hdr10_deep_color_property ||
++	    (state->hdr10_deep_color &&
++	     !to_amdgpu_dm_connector(con->connector)->hdr10_deep_color_property) ||
+ 	    con->max_requested_bpc < 10 ||
+ 	    (con->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
+ 	     con->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC) ||
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -6995,9 +6995,9 @@
+ 	struct dc_crtc_timing *timing = &stream->timing;
+ 	struct dc_crtc_timing candidate;
+ 
+-	/* Only this private HDR10 request may trade chroma for real precision.
+-	 * Keep a supported RGB10+ result and leave Vanilla/DV tunnels untouched. */
+-	if (!state->hdr10_deep_color || amdgpu_dm_hdr10_validate(state) ||
++	/* Keep genuine HDR precision when an admitted deep-chroma route fits. */
++	if ((!state->hdr10_deep_color && !con->hdr10plus_metadata) ||
++	    amdgpu_dm_hdr10_validate(state) ||
+ 	    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A || !stream->link ||
+ 	    stream->link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A ||
+ 	    requested_bpc < 10 ||
+@@ -8728,7 +8728,7 @@
+ 				      dc_status_to_str(dc_result));
+ 
+ 			/* Retry native 4:2:0 before accepting an 8-bit bandwidth fallback. */
+-			if (dm_state->hdr10_deep_color &&
++			if ((dm_state->hdr10_deep_color || dm_state->base.hdr10plus_metadata) &&
+ 			    !amdgpu_dm_hdr10_validate(dm_state) && requested_bpc >= 10 &&
+ 			    dc_result == DC_FAIL_BANDWIDTH_VALIDATE &&
+ 			    stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422 &&

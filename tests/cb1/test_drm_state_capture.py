@@ -131,16 +131,19 @@ struct CWinSystemGbmGLESContext {
 ''' + admission + r'''
 int main() {
   CDRMAtomic drm;
+  drm.connector.props["DVBRIDGE_HDR10_DEEP_COLOR"]=1;
   CDVBridgeState state;
   assert(state.Capture(drm));
   assert(std::string(state.CaptureFailure())=="none");
   assert(state.Stage(drm,false));
   assert(drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==1);
   assert(drm.staged.at("max bpc")==8);
+  assert(drm.staged.at("DVBRIDGE_HDR10_DEEP_COLOR")==0);
   assert(!drm.staged.contains("HDR_OUTPUT_METADATA"));
   assert(state.Stage(drm,true));
   assert(drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==0);
   assert(drm.staged.at("max bpc")==12);
+  assert(drm.staged.at("DVBRIDGE_HDR10_DEEP_COLOR")==1);
   CDRMAtomic other;
   assert(!state.Stage(other,false));
   CWinSystemGbmGLESContext window{&drm};

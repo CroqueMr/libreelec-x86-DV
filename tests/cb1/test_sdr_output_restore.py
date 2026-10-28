@@ -235,6 +235,7 @@ struct CDRMAtomic {
  void ReportDVFailure(const char*,int){}void ReportDVCommit(const char*){}void ReportSignalState(){}
  bool PrepareHDR10Plus(int&,bool& bound){bound=false;return true;}
  bool RemoveRejectedHDR10Plus(int&){return false;}
+ void AcceptHDR10Plus(bool){assert(false);}
  void SetSDRRestorePending(bool pending) PENDING
  bool PrepareSDRRestore(int& flags) PREPARE
  bool DrmAtomicCommit(int,int,bool,bool,bool=false);
@@ -247,6 +248,7 @@ int main(int argc,char** argv){
  // An accepted HDR movie is the independent physical starting state.
  drm.AddProperty(drm.m_connector,"HDR_OUTPUT_METADATA",17);
  drm.AddProperty(drm.m_connector,"Colorspace",9);
+ drm.AddProperty(drm.m_connector,"DVBRIDGE_HDR10_DEEP_COLOR",1);
  assert(drm.DrmAtomicCommit(42,0,true,false));
  assert(signal["HDR_OUTPUT_METADATA"]==17);
  const auto movie=signal;
@@ -263,6 +265,7 @@ int main(int argc,char** argv){
   // No new SetHDR/stop call: the next native presentation must retry by itself.
   assert(drm.DrmAtomicCommit(42,0,true,false));
   assert(signal["HDR_OUTPUT_METADATA"]==0 && signal["Colorspace"]==0);
+  assert(signal["DVBRIDGE_HDR10_DEEP_COLOR"]==0);
   assert(!drm.m_sdrRestorePending);
  }else if(scenario==3){
   rejectCommit=true;assert(!drm.DrmAtomicCommit(42,0,true,false));rejectCommit=false;

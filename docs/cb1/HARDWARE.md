@@ -40,6 +40,10 @@ newer. Pascal uses the opt-in matched R580 build, not the R615 modules.
 [NVIDIA driver requirements](https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus)
 and [licensing](LICENSING.md).
 
+Native HDR10/HLG, HDR10+, converted HDR10+ and DV V1/V2 use distinct admission
+checks. See the [driver/output matrix](DRIVER-COVERAGE.md), including the
+experimental NVIDIA packet routes and missing physical qualifications.
+
 ## Output and performance
 
 Dolby Vision output requires a compatible HDMI display and an admitted driver

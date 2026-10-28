@@ -1,0 +1,143 @@
+Subject: [PATCH] Preserve HDR10+ request ownership and native AVI timings
+
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Capture primary membership before native helpers add inherited planes.
+Carry CTA timing in AVI when HDR10+ occupies the AMD vendor packet.
+
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -7724,6 +7724,21 @@
+ 	return 0;
+ }
+ 
++static int fill_hdr10plus_stream_packet(const struct drm_property_blob *blob,
++		struct dc_stream_state *stream, const struct drm_display_mode *mode)
++{
++	if (stream->timing.hdmi_vic) {
++		u8 vic = drm_match_cea_mode(mode);
++
++		if (!vic)
++			return -EINVAL;
++		/* HDR10+ owns the vendor packet; carry this timing in native AVI. */
++		stream->timing.vic = vic;
++		stream->timing.hdmi_vic = 0;
++	}
++	return fill_hdr10plus_info_packet(blob, &stream->vsp_infopacket);
++}
++
+ static struct dc_stream_state *
+ create_stream_for_sink(struct drm_connector *connector,
+ 		       const struct drm_display_mode *drm_mode,
+@@ -7952,7 +7967,7 @@
+ 		}
+ 	}
+ 	if (stream && dm_state->base.hdr10plus_metadata &&
+-	    fill_hdr10plus_info_packet(dm_state->base.hdr10plus_metadata, &stream->vsp_infopacket)) {
++	    fill_hdr10plus_stream_packet(dm_state->base.hdr10plus_metadata, stream, drm_mode)) {
+ 		dc_stream_release(stream);
+ 		stream = NULL;
+ 	}
+@@ -13497,6 +13512,7 @@
+ 	struct drm_dp_mst_topology_mgr *mgr;
+ 	struct drm_dp_mst_topology_state *mst_state;
+ 	struct dsc_mst_fairness_vars vars[MAX_PIPES] = {0};
++	u32 hdr10plus_primary_mask = drm_atomic_hdr10plus_frame_mask(state);
+ 
+ 	trace_amdgpu_dm_atomic_check_begin(state);
+ 
+@@ -14004,9 +14020,11 @@
+ 				continue;
+ 			crtc_state = drm_atomic_get_new_crtc_state(state, conn->crtc);
+ 			stream = crtc_state ? to_dm_crtc_state(crtc_state)->stream : NULL;
+-			if (drm_connector_check_hdr10plus(conn) || !stream ||
++			if (!conn->crtc || !(hdr10plus_primary_mask & drm_crtc_mask(conn->crtc)) ||
++			    drm_connector_check_hdr10plus(conn) || !stream ||
+ 			    !crtc_state->active || !hdr10plus_has_frame_update(state, conn->crtc) ||
+ 			    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
++			    stream->timing.hdmi_vic ||
+ 			    convert_dc_color_depth_into_bpc(stream->timing.display_color_depth) < 10 ||
+ 			    crtc_state->async_flip ||
+ 			    (crtc_state->mode.flags & DRM_MODE_FLAG_3D_MASK)) {
+--- a/drivers/gpu/drm/drm_connector.c
++++ b/drivers/gpu/drm/drm_connector.c
+@@ -21,6 +21,8 @@
+  */
+ 
+ #include <drm/drm_auth.h>
++#include <drm/drm_atomic.h>
++#include <drm/drm_plane.h>
+ #include <drm/drm_connector.h>
+ #include <drm/drm_drv.h>
+ #include <drm/drm_edid.h>
+@@ -2936,6 +2938,27 @@
+ EXPORT_SYMBOL(drm_connector_check_hdr10plus);
+ 
+ /**
++ * drm_atomic_hdr10plus_frame_mask - capture primaries before helper expansion
++ * @state: original atomic request
++ *
++ * Return: CRTCs with a primary image supplied by this request.
++ */
++u32 drm_atomic_hdr10plus_frame_mask(struct drm_atomic_commit *state)
++{
++	struct drm_plane *plane;
++	struct drm_plane_state *primary;
++	u32 mask = 0;
++	int i;
++
++	for_each_new_plane_in_state(state, plane, primary, i) {
++		if (primary->crtc && primary->fb && plane == primary->crtc->primary)
++			mask |= drm_crtc_mask(primary->crtc);
++	}
++	return mask;
++}
++EXPORT_SYMBOL(drm_atomic_hdr10plus_frame_mask);
++
++/**
+  * drm_connector_attach_broadcast_rgb_property - attach "Broadcast RGB" property
+  * @connector: connector to attach the property on.
+  *
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -6492,6 +6492,8 @@
+ 	if (!intel_display_driver_check_access(display))
+ 		return -ENODEV;
+ 
++	state->hdr10plus_primary_mask = drm_atomic_hdr10plus_frame_mask(_state);
++
+ 	for_each_oldnew_intel_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state) {
+ 		/*
+ 		 * crtc's state no longer considered to be inherited
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -644,6 +644,7 @@
+ 
+ struct intel_atomic_state {
+ 	struct drm_atomic_commit base;
++	u32 hdr10plus_primary_mask;
+ 
+ 	struct ref_tracker *wakeref;
+ 
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -1296,7 +1296,8 @@
+ 		if (conn->base.crtc != &crtc->base || !conn->base.hdr10plus_metadata)
+ 			continue;
+ 		primary = drm_atomic_get_new_plane_state(&state->base, crtc->base.primary);
+-		if (drm_connector_check_hdr10plus(&conn->base) || conn->dv_lab_standard ||
++		if (!(state->hdr10plus_primary_mask & drm_crtc_mask(&crtc->base)) ||
++		    drm_connector_check_hdr10plus(&conn->base) || conn->dv_lab_standard ||
+ 		    !pipe->uapi.active || !primary || primary->crtc != &crtc->base || !primary->fb ||
+ 		    !pipe->has_hdmi_sink || !pipe->has_infoframe || pipe->pipe_bpp < 30 ||
+ 		    pipe->uapi.async_flip ||
+--- a/include/drm/drm_connector.h
++++ b/include/drm/drm_connector.h
+@@ -2565,6 +2565,7 @@
+ void drm_connector_attach_hdr_output_metadata_property(struct drm_connector *connector);
+ void drm_connector_attach_hdr10plus_metadata_property(struct drm_connector *connector);
+ int drm_connector_check_hdr10plus(const struct drm_connector_state *state);
++u32 drm_atomic_hdr10plus_frame_mask(struct drm_atomic_commit *state);
+ bool drm_connector_atomic_hdr_metadata_equal(struct drm_connector_state *old_state,
+ 					     struct drm_connector_state *new_state);
+ int drm_mode_create_aspect_ratio_property(struct drm_device *dev);

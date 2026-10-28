@@ -1,0 +1,216 @@
+From: CB1 native transport work
+Subject: [PATCH] Validate requested static HDR EOTF and expose accepted output depth
+
+Independent changes against the matched NVIDIA MIT/GPL-2.0 native source.
+No Hades implementation, helper, comment, test or patch is imported.
+The live depth property is read-only through rejected setters, rather than
+IMMUTABLE (which bypasses atomic_get_property in DRM).
+
+diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-hdmi.c
+--- a/src/nvidia-modeset/src/nvkms-hdmi.c
++++ b/src/nvidia-modeset/src/nvkms-hdmi.c
+@@ -526,6 +526,7 @@
+ 
+ static void
+ SendHDRInfoFrame(const NVDispEvoRec *pDispEvo, const NvU32 head,
++                 const NVDispHeadInfoFrameStateEvoRec *pInfoFrameState,
+                  NVT_EDID_INFO *pEdidInfo)
+ {
+     const NVDevEvoRec *pDevEvo = pDispEvo->pDevEvo;
+@@ -537,14 +538,36 @@
+     NvEvoInfoFrameTransmitControl transmitCtrl =
+         NV_EVO_INFOFRAME_TRANSMIT_CONTROL_INIT;
+ 
+-    // Only send the HDMI HDR infoframe if the display supports HDR
+-    if (!pHdrInfo->supported_eotf.smpte_st_2084_eotf ||
+-        (pHdrInfo->static_metadata_type != 1)) {
++    /* EDID bit 3 (named future_eotf by the timing library) advertises HLG. */
++    if (pHdrInfo->static_metadata_type != 1) {
+         return;
+     }
++    if (pHeadState->hdrInfoFrame.state == NVKMS_HDR_INFOFRAME_STATE_ENABLED) {
++        NvBool supported = FALSE;
++        switch (pHeadState->hdrInfoFrame.eotf) {
++        case NVKMS_INFOFRAME_EOTF_SDR_GAMMA:
++            supported = pHdrInfo->supported_eotf.trad_gamma_sdr_eotf;
++            break;
++        case NVKMS_INFOFRAME_EOTF_HDR_GAMMA:
++            supported = pHdrInfo->supported_eotf.trad_gamma_hdr_eotf;
++            break;
++        case NVKMS_INFOFRAME_EOTF_ST2084:
++            supported = pHdrInfo->supported_eotf.smpte_st_2084_eotf;
++            break;
++        case NVKMS_INFOFRAME_EOTF_HLG:
++            supported = pHdrInfo->supported_eotf.future_eotf;
++            break;
++        default:
++            break;
++        }
++        if (!supported) {
++            return;
++        }
++    }
+ 
+-    // XXX HDR is not supported with HDMI 3D due to both using VSI infoframes.
+-    if (pEdidInfo->HDMI3DSupported) {
++    /* A 3D-capable receiver alone does not own the shared packet slot. */
++    if ((pInfoFrameState->vendorSpecificCtrl.Enable ||
++         pHeadState->hdmiVsifMetadata.payloadSize != 0)) {
+         return;
+     }
+ 
+@@ -623,6 +646,7 @@
+ 
+     SendHDRInfoFrame(pDispEvo,
+                      head,
++                     pInfoFrameState,
+                      &pDpyEvo->parsedEdid.info);
+ }
+ 
+diff --git a/src/nvidia-modeset/kapi/src/nvkms-kapi.c b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+--- a/src/nvidia-modeset/kapi/src/nvkms-kapi.c
++++ b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+@@ -2524,6 +2524,44 @@
+     params->overrides = NVKMS_MODE_VALIDATION_NO_RRX1K_CHECK;
+ }
+ 
++/* Query accepted native output, never the requested framebuffer/max precision. */
++static NvU32 GetCurrentOutputBpc(struct NvKmsKapiDevice *device,
++                                 NvKmsKapiDisplay display, NvU32 head)
++{
++    struct NvKmsGetDpyAttributeParams params = { };
++
++    if (device == NULL) {
++        return 0;
++    }
++    params.request.deviceHandle = device->hKmsDevice;
++    params.request.dispHandle = device->hKmsDisp;
++    params.request.dpyId = nvNvU32ToDpyId(display);
++    params.request.attribute = NV_KMS_DPY_ATTRIBUTE_HEAD;
++    if (!nvkms_ioctl_from_kapi(device->pKmsOpen,
++            NVKMS_IOCTL_GET_DPY_ATTRIBUTE, &params, sizeof(params)) ||
++        params.reply.value != head) {
++        return 0;
++    }
++    params.request.attribute = NV_KMS_DPY_ATTRIBUTE_DPMS;
++    if (!nvkms_ioctl_from_kapi(device->pKmsOpen,
++            NVKMS_IOCTL_GET_DPY_ATTRIBUTE, &params, sizeof(params)) ||
++        params.reply.value != NV_KMS_DPY_ATTRIBUTE_DPMS_ON) {
++        return 0;
++    }
++    params.request.attribute = NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC;
++    if (!nvkms_ioctl_from_kapi(device->pKmsOpen,
++            NVKMS_IOCTL_GET_DPY_ATTRIBUTE, &params, sizeof(params))) {
++        return 0;
++    }
++    if (params.reply.value == 6 || params.reply.value == 8 ||
++        params.reply.value == 10 ||
++        (params.reply.value == 12 &&
++         NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_MAX >= 12)) {
++        return (NvU32)params.reply.value;
++    }
++    return 0;
++}
++
+ static int GetDisplayMode
+ (
+     struct NvKmsKapiDevice *device,
+@@ -4148,6 +4186,7 @@
+     funcsTable->destroySurface = DestroySurface;
+ 
+     funcsTable->getDisplayMode      = GetDisplayMode;
++    funcsTable->getCurrentOutputBpc = GetCurrentOutputBpc;
+     funcsTable->validateDisplayMode = ValidateDisplayMode;
+ 
+     funcsTable->applyModeSetConfig   = ApplyModeSetConfig;
+diff --git a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+--- a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
++++ b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+@@ -1611,6 +1611,9 @@
+     (
+         struct NvKmsKapiDevice *device
+     );
++    /* Kernel-client-only diagnostic; appended to preserve preceding offsets. */
++    NvU32 (*getCurrentOutputBpc)(struct NvKmsKapiDevice *device,
++                                NvKmsKapiDisplay display, NvU32 head);
+ };
+ 
+ /** @} */
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+@@ -286,11 +286,29 @@
+     return -EINVAL;
+ }
+ 
++/* Logical read-only property: IMMUTABLE would bypass this live getter. */
++static NvU32 nv_drm_connector_current_output_bpc(
++    struct drm_connector *connector, const struct drm_connector_state *state)
++{
++    struct nv_drm_device *nv_dev = to_nv_device(connector->dev);
++    if (connector->status != connector_status_connected ||
++        !state->crtc || !state->best_encoder || !state->crtc->state->active) {
++        return 0;
++    }
++    return nvKms->getCurrentOutputBpc(nv_dev->pDevice,
++        to_nv_encoder(state->best_encoder)->hDisplay,
++        to_nv_crtc(state->crtc)->head);
++}
++
+ static int nv_cb1_get_property(struct drm_connector *c, const struct drm_connector_state *s,
+                               struct drm_property *p, uint64_t *val)
+ {
+     struct nv_drm_device *d = to_nv_device(c->dev);
+     const struct nv_cb1_connector_state *ns = container_of(s, struct nv_cb1_connector_state, base);
++    if (p == d->cb1_output_bpc_property) {
++        *val = nv_drm_connector_current_output_bpc(c, s);
++        return 0;
++    }
+     if (p == d->cb1_vsif_property) *val = ns->vsif ? ns->vsif->base.id : 0;
+     else if (p == d->cb1_dither_property) *val = ns->dither_off;
+     else return -EINVAL;
+@@ -623,6 +641,8 @@
+ 
+ #if defined(NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT)
+     if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
++        drm_object_attach_property(&nv_connector->base.base,
++                                   nv_dev->cb1_output_bpc_property, 0);
+         nv_connector->base.max_bpc_property = nv_dev->cb1_bpc_property;
+         drm_object_attach_property(&nv_connector->base.base,
+             nv_dev->cb1_bpc_property, 12);
+@@ -641,6 +661,8 @@
+         }
+         drm_connector_attach_hdr_output_metadata_property(&nv_connector->base);
+     } else if (nv_connector->type == NVKMS_CONNECTOR_TYPE_DP) {
++        drm_object_attach_property(&nv_connector->base.base,
++                                   nv_dev->cb1_output_bpc_property, 0);
+ #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
+         if (drm_mode_create_dp_colorspace_property(
+                 &nv_connector->base,
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+--- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+@@ -655,6 +655,13 @@
+         if (!nv_dev->cb1_vsif_property || !nv_dev->cb1_bpc_property ||
+             !nv_dev->cb1_dither_property) return -ENOMEM;
+     }
++
++    /* Writes are refused by atomic_set_property; reads query current NVKMS. */
++    nv_dev->cb1_output_bpc_property = drm_property_create_range(nv_dev->dev,
++        0, "CB1_OUTPUT_BPC", 0, 16);
++    if (!nv_dev->cb1_output_bpc_property) {
++        return -ENOMEM;
++    }
+     return 0;
+ }
+ 
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+--- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+@@ -88,6 +88,7 @@
+ };
+ 
+ struct nv_drm_device {
++    struct drm_property *cb1_output_bpc_property;
+     nv_gpu_info_t gpu_info;
+     MIGDeviceId gpu_mig_device;

@@ -39,13 +39,15 @@ struct CWinSystemGbmGLESContext : CWinSystemGbm {
 int main() {
   CDRMAtomic drm;
   drm.connector.props={{"NV_HDMI_VSIF_METADATA",0},{"max bpc",12},
-      {"dithering mode",1},{"Colorspace",0},{"HDR_OUTPUT_METADATA",33}};
+      {"dithering mode",1},{"Colorspace",0},{"HDR_OUTPUT_METADATA",33},
+      {"DVBRIDGE_HDR10_DEEP_COLOR",1}};
   drm.crtc.props={{"NV_CRTC_REGAMMA_DIVISOR",17}};
   drm.plane.props={{"NV_PLANE_DEGAMMA_MULTIPLIER",19}};
   CDVBridgeState state;
   assert(state.Capture(drm));
   assert(state.Stage(drm,false));
   assert(drm.staged.at("max bpc")==8);
+  assert(drm.staged.at("DVBRIDGE_HDR10_DEEP_COLOR")==0);
   assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==778);
   assert(transportBytes.size()==27 && transportBytes[0]==0x46 &&
       transportBytes[1]==0xd0 && transportBytes[2]==0 && transportBytes[3]==2);
@@ -53,6 +55,7 @@ int main() {
   assert(drm.staged.at("NV_CRTC_REGAMMA_DIVISOR")==4294967296ULL);
   assert(state.Stage(drm,true));
   assert(drm.staged.at("max bpc")==12);
+  assert(drm.staged.at("DVBRIDGE_HDR10_DEEP_COLOR")==1);
   assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==0);
   assert(drm.staged.at("HDR_OUTPUT_METADATA")==777);
   assert(drm.staged.at("NV_CRTC_REGAMMA_DIVISOR")==17);

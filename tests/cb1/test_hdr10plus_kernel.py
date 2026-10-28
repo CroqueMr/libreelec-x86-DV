@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def function(source, name):
-    match = re.search(r'^(?:static )?(?:bool|int|void|u8|ssize_t)(?:\n| )' + name + r'\(', source, re.M)
+    match = re.search(r'^(?:static )?(?:bool|int|void|u8|u32|ssize_t)(?:\n| )' + name + r'\(', source, re.M)
     if not match:
         raise ValueError('Missing kernel function: ' + name)
     start = source.index('{', match.start())
@@ -34,8 +34,12 @@ class HDR10PlusKernelTests(unittest.TestCase):
             self.assertTrue('int drm_connector_check_hdr10plus(' in connector,
                             'The matched kernel lacks frame-owned HDR10+ admission')
             (root / 'connector_check.inc').write_text(function(connector, 'drm_connector_check_hdr10plus'))
+            (root / 'frame_mask.inc').write_text(function(connector, 'drm_atomic_hdr10plus_frame_mask'))
             (root / 'amd_packet.inc').write_text(function(amd, 'fill_hdr10plus_info_packet'))
+            (root / 'amd_stream.inc').write_text(function(amd, 'fill_hdr10plus_stream_packet'))
             (root / 'amd_frame.inc').write_text(function(amd, 'hdr10plus_has_frame_update'))
+            intel = (kernel / 'drivers/gpu/drm/i915/display/intel_hdmi.c').read_text()
+            (root / 'intel_check.inc').write_text(function(intel, 'intel_hdmi_hdr10plus_check'))
             header = (kernel / 'include/linux/hdmi.h').read_text()
             (root / 'hdmi-test.h').write_text(re.sub(r'^#include .*$', '', header, flags=re.M))
             hdmi = (kernel / 'drivers/video/hdmi.c').read_text()
@@ -49,7 +53,13 @@ class HDR10PlusKernelTests(unittest.TestCase):
                      'hdmi_vendor_any_infoframe_check_only', 'hdmi_vendor_any_infoframe_pack_only',
                      'hdmi_vendor_any_infoframe_unpack')
             (root / 'hdmi-functions.inc').write_text('\n'.join(function(hdmi, name) for name in names))
-            for test in ('connector', 'packet', 'amd', 'infoframe'):
+            display = (kernel / 'drivers/gpu/drm/i915/display/intel_display.c').read_text()
+            for code, entry, assignment in (
+                (display, 'int intel_atomic_check(', 'state->hdr10plus_primary_mask ='),
+                (amd, 'static int amdgpu_dm_atomic_check(', 'hdr10plus_primary_mask =')):
+                code = code[code.rindex(entry):]
+                self.assertLess(code.index(assignment), code.index('drm_atomic_helper_check_modeset('))
+            for test in ('connector', 'packet', 'amd', 'infoframe', 'intel', 'frame_mask'):
                 with self.subTest(contract=test):
                     binary = root / test
                     compiled = subprocess.run(['cc', '-Wall', '-Wextra', '-Werror',

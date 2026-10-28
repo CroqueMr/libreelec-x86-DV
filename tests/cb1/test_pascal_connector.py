@@ -23,13 +23,24 @@ class PascalConnector(unittest.TestCase):
 #include <stddef.h>
 #include <stdlib.h>
 #include <errno.h>
+typedef unsigned NvU32;
+#define connector_status_connected 1
 #define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
 struct drm_property {int id;};
 struct drm_property_blob {struct {unsigned id;} base; unsigned length; int refs;};
-struct nv_drm_device {struct drm_property *cb1_vsif_property,*cb1_bpc_property,*cb1_dither_property;};
+struct nv_drm_device {struct drm_property *cb1_vsif_property,*cb1_bpc_property,*cb1_dither_property;
+ struct drm_property *cb1_output_bpc_property,*cb1_hdr10plus_status_property,*cb1_deep_color_property;void*pDevice;};
+struct drm_crtc {struct {int active;}*state;unsigned head;};
+struct drm_encoder {unsigned hDisplay;};
+#define to_nv_crtc(x) (x)
+#define to_nv_encoder(x) (x)
+static unsigned query(void*d,unsigned display,unsigned head){(void)d;(void)display;(void)head;return 0;}
+static struct {unsigned(*getCurrentOutputBpc)(void*,unsigned,unsigned);
+ unsigned(*getHdr10plusStatus)(void*,unsigned,unsigned);}api={query,query},*nvKms=&api;
 struct drm_connector;
-struct drm_connector_state {struct drm_connector *connector; unsigned max_requested_bpc,max_bpc;};
-struct drm_connector {struct drm_connector_state *state; struct nv_drm_device *dev;};
+struct drm_connector_state {struct drm_connector *connector; unsigned max_requested_bpc,max_bpc;
+ struct drm_crtc*crtc;struct drm_encoder*best_encoder;};
+struct drm_connector {struct drm_connector_state *state; struct nv_drm_device *dev;int status;};
 static bool alloc_fail;
 static struct drm_property_blob blob={{91},27,1};
 static void *nv_drm_calloc(size_t n,size_t s){return alloc_fail?NULL:calloc(n,s);}
@@ -43,9 +54,10 @@ static void __drm_atomic_helper_connector_reset(struct drm_connector *c,struct d
 static void __drm_atomic_helper_connector_duplicate_state(struct drm_connector *c,struct drm_connector_state *s){*s=*c->state;}
 '''+struct+'\n'+source[start:end]+r'''
 int main(void){
- struct drm_property vsif={1},bpc={2},dither={3},other={4};
- struct nv_drm_device d={&vsif,&bpc,&dither};
- struct drm_connector c={NULL,&d};
+ struct drm_property vsif={1},bpc={2},dither={3},other={4},deep={5},depth={6},status={7};
+ struct nv_drm_device d={.cb1_vsif_property=&vsif,.cb1_bpc_property=&bpc,.cb1_dither_property=&dither,
+ .cb1_deep_color_property=&deep,.cb1_output_bpc_property=&depth,.cb1_hdr10plus_status_property=&status};
+ struct drm_connector c={NULL,&d,1};
  uint64_t value;
  nv_cb1_reset(&c);assert(c.state && c.state->max_requested_bpc==12);
  assert(nv_cb1_set_property(&c,c.state,&vsif,91)==0 && blob.refs==2);
@@ -60,6 +72,10 @@ int main(void){
  blob.length=27;
  assert(nv_cb1_set_property(&c,c.state,&dither,1)==0);
  assert(nv_cb1_get_property(&c,c.state,&dither,&value)==0 && value==1);
+ assert(nv_cb1_set_property(&c,c.state,&deep,1)==0);
+ assert(nv_cb1_get_property(&c,c.state,&deep,&value)==0 && value==1);
+ assert(nv_cb1_set_property(&c,c.state,&depth,10)==-EINVAL);
+ assert(nv_cb1_set_property(&c,c.state,&status,1)==-EINVAL);
  assert(nv_cb1_set_property(&c,c.state,&dither,2)==-EINVAL);
  assert(nv_cb1_get_property(&c,c.state,&dither,&value)==0 && value==1);
  assert(nv_cb1_set_property(&c,c.state,&other,1)==-EINVAL);

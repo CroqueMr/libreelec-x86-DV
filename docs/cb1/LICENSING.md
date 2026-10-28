@@ -35,6 +35,12 @@ Published Beta5's historical inventory is retained in the
 are documented in the [migration record](../../CB1/docs/GPL2-MIGRATION.md).
 Offline comparisons do not certify hardware or establish patent clearance.
 
+The 2026-10-28 HDR transport additions do not import, copy, translate or adapt
+Hades code. They use the pre-existing candidate and original Linux/NVIDIA
+interfaces under compatible per-file terms. Existing Hades attribution below
+refers to earlier integration and is retained. No new GPLv3 dependency is added;
+this does not change the combined-image licensing stated above.
+
 ## Credits
 
 - [dangerouslaser](https://github.com/dangerouslaser): Global rendering-engine optimizations.
