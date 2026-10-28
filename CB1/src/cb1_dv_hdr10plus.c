@@ -68,10 +68,17 @@ static bool quantized_response(struct cb1_hdr10plus_curve *curve,double *color_e
 bool cb1_dv_hdr10plus_metadata(AVDynamicHDRPlus *out,struct cb1_dv_hdr10plus_report *report,
     const void *metadata,size_t bytes,const struct cb1_hdr10plus_statistics *statistics)
 {
+    return cb1_dv_hdr10plus_metadata_for_version(out,report,metadata,bytes,statistics,1);
+}
+
+bool cb1_dv_hdr10plus_metadata_for_version(AVDynamicHDRPlus *out,
+    struct cb1_dv_hdr10plus_report *report,const void *metadata,size_t bytes,
+    const struct cb1_hdr10plus_statistics *statistics,unsigned version)
+{
     if(!out || !report)return false;
     const unsigned target=992;
     AVDynamicHDRPlus m;
-    if(!cb1_hdr10plus_describe(&m,statistics,target))return false;
+    if(!cb1_hdr10plus_describe_for_version(&m,statistics,target,version))return false;
     const struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_HDR10_EXPERT,
         .tv={target,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
     struct response r={0};

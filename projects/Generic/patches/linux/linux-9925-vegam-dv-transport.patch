@@ -3,6 +3,7 @@ Subject: [PATCH] drm/amd/display: add experimental Vega M DV transport
 Base: Linux 7.2.6 with the Beta5 native DV patches applied.
 Keep DCN/ordinary modes unchanged; admit only Vega M DCE11.22.
 Reuse native DCE packet, gamma, CSC and depth programming.
+HDR conversion retains native 30-bit buffering and final deep-output validation.
 No CB1 pixel processing changes. Physical HDMI qualification pending.
 
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
@@ -34,16 +35,6 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/
  	    connector->base.connector_type != DRM_MODE_CONNECTOR_HDMIA ||
  	    !connector->dc_link ||
  	    connector->dc_link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A)
-@@ -57,6 +58,9 @@
- 			drm_object_attach_property(&connector->base.base,
- 					connector->dv_standard_property, 0);
- 	}
-+	/* This port adds DV only; keep Vega M's native HDR10 interface unchanged. */
-+	if (adev->dm.dc->ctx->dce_version == DCE_VERSION_11_22)
-+		return;
- 	connector->hdr10_deep_color_property = drm_property_create_bool(connector->base.dev,
- 				DRM_MODE_PROP_ATOMIC, "DVBRIDGE_HDR10_DEEP_COLOR");
- 	if (connector->hdr10_deep_color_property)
 @@ -167,7 +171,7 @@
  	struct drm_dvbridge_link link = {
  		.requested = state->dv_standard,

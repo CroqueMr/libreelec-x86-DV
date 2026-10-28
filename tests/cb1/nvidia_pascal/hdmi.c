@@ -30,8 +30,8 @@ NVHDMIPKT_RESULT NvHdmiPkt_PacketWrite(NvHdmiPkt_Handle h, NvU32 sd, NvU32 displ
     (void)h; (void)tc;
     assert(sd == 0 && display == 7 && head == 0);
     assert(type == NVHDMIPKT_TYPE_VENDOR_SPECIFIC_INFOFRAME);
-    assert(size == 30);
-    memcpy(wire, data, 31);
+    assert(size == 30 || size == 27);
+    memcpy(wire, data, size+1);
     writes++;
     return NVHDMIPKT_SUCCESS;
 }
@@ -64,12 +64,30 @@ int main(void)
     const NvU8 expected[31] = {0x81, 0x01, 0x1b, 0x4b, 0x46, 0xd0, 0, 2};
     assert(writes == 1 && disables == 0);
     assert(memcmp(wire, expected, sizeof(expected)) == 0);
+    vsif->payloadSize = 24;
+    memset(vsif->payload,0,sizeof(vsif->payload));
+    vsif->payload[0]=3;vsif->payload[1]=12;
+    for(unsigned vic=93;vic<=97;vic++) {
+        info.ctrl.video_format_id=vic;
+        SendVendorSpecificInfoFrame(disp,0,&info,&edid);
+        assert(wire[2]==24 && wire[4]==3 && wire[5]==12);
+        assert(wire[7]==(vic<=95?32:0) && wire[8]==(vic<=95?96-vic:0));
+        NvU8 sum=0;
+        for(unsigned i=0;i<28;i++)sum+=wire[i];
+        assert(!sum);
+    }
+    info.ctrl.video_format_id=0;
+    info.vendorSpecificCtrl.HDMI_VIC=2;
+    SendVendorSpecificInfoFrame(disp,0,&info,&edid);
+    assert(wire[7]==32 && wire[8]==2);
+    assert(vsif->payload[3]==0 && vsif->payload[4]==0); /* Blob remains immutable. */
+    unsigned before=writes;
     vsif->payloadSize = 28;
     SendVendorSpecificInfoFrame(disp, 0, &info, &edid);
-    assert(writes == 1 && disables == 0);
+    assert(writes == before && disables == 0);
     vsif->payloadSize = 0;
     SendVendorSpecificInfoFrame(disp, 0, &info, &edid);
-    assert(writes == 1 && disables == 1);
+    assert(writes == before && disables == 1);
     free(disp); free(dev);
     return 0;
 }

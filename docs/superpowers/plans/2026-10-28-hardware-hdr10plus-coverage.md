@@ -31,10 +31,10 @@
 **Files:** `packages/linux/package.mk`, `packages/graphics/nvidia/package.mk`, new Pascal package/patch, `projects/Generic/patches/linux/linux-9925-vegam-dv-transport.patch`, hardware documentation and original PR tests.
 **Interfaces:** Existing PR refs and source locks; retain default R615 and opt-in `CB1_NVIDIA_PASCAL=yes`.
 
-- [ ] Import the PR firmware/family/package tests first and run on unchanged production sources: missing xe, DCE11.22 and Pascal selection must fail for the expected reasons.
-- [ ] Port production changes from #40/#43/#57, preserve #44 documentation, recompute current receipts instead of copying old locks.
-- [ ] Replay kernel/NVIDIA patches in private source fixtures and compile affected owners. Run focused tests, native/DCN/default-driver controls and full integration suite. Expected: no failures, skips explicit.
-- [ ] Commit the bounded hardware integration and record evidence.
+- [x] Import the PR firmware/family/package tests first and run on unchanged production sources: missing xe, DCE11.22 and Pascal selection fail for the expected reasons.
+- [x] Port production changes from #40/#43/#57, preserve #44 documentation, recompute current receipts instead of copying old locks.
+- [x] Replay kernel/NVIDIA patches in private source fixtures and compile affected owners. Focused tests, native/DCN/default-driver controls and full integration pass; hardware skips explicit.
+- [x] Commit the bounded hardware integration and record evidence: eb8611d590.
 
 ### Task 2: Close native and converted HDR10+ admission gaps
 
@@ -48,6 +48,10 @@
 
 ### Task 3: NVIDIA HDR10+ selected-frame transport
 
+**Deferred:** desktop FID and static-HDR/custom-VSIF coexistence contracts are
+not established. No HDR10+ property or false acceptance was added. See
+`docs/cb1/DRIVER-COVERAGE.md` and the Astra design/final reports.
+
 **Files:** Current R615 and opt-in R580 source patches, existing Kodi atomic staging only if required, packet/lifetime tests.
 **Interfaces:** Generic `HDR10PLUS_METADATA` blob, native NVKMS VSIF payload/primary transaction and actual deep-colour state.
 
@@ -56,9 +60,9 @@
 - [ ] Compile matching modules, run packet/atomic/restore controls and full suite. Document any physically unsupported stack instead of emulating it unsafely.
 - [ ] Commit and submit the complete hardware range to Astra for implementation review; fix demonstrated important findings with RED/GREEN controls.
 
-### Task 4: AMD DV V1 and precise rejection diagnostics
+### Task 4: Cross-driver DV V1 and precise rejection diagnostics
 
-**Files:** Existing `linux-9920-amd-dcn-native-dv.patch`, shared packet/EDID helpers where reusable, targeted driver-policy tests.
+**Files:** Existing AMD/Intel DV patches, Kodi NVIDIA transport and R615/R580 packet adapters, shared packet/EDID helpers and targeted driver-policy tests.
 **Interfaces:** `amdgpu_dm_dv_configure_stream()`, scanout validation, `dvbridge_parse_edid()` and native AVI/VSIF builders.
 
 - [ ] Add actual-source V1 short/long, legacyV0, V2, LLDV-only and malformed-EDID controls. Assert frozen V2 packet bytes/checksum and ordinary/DCN state.

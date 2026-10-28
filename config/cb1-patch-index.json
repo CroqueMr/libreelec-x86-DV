@@ -1012,5 +1012,53 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
     }
+  },
+  "projects/Generic/patches/linux/linux-9925-vegam-dv-transport.patch": {
+    "summary": "drm/amd/display: add experimental Vega M DV transport",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Native transport integration.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Native transport integration.",
+      "drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c": "Native transport integration.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Native transport integration.",
+      "drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h": "Native transport integration."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9003-dv-v1-legacy.patch": {
+    "summary": "modeset: pair legacy Dolby Vision VSIF with selected AVI timing",
+    "component": "nvidia-open-kernel-modules",
+    "files": {
+      "src/common/inc/nvkms-dv-vsif.h": "Native transport integration.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native transport integration."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9000-dv-transport.patch": {
+    "summary": "Build matched Pascal R580 DV transport from public modeset sources",
+    "component": "nvidia-pascal-modeset",
+    "files": {
+      "kernel-open/common/inc/nvkms-kapi.h": "Native transport integration.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native transport integration.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Native transport integration.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native transport integration.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Native transport integration.",
+      "src/common/inc/nvkms-cb1-vsif.h": "Native transport integration.",
+      "src/nvidia-modeset/include/nvkms-modeset-types.h": "Native transport integration.",
+      "src/nvidia-modeset/include/nvkms-modeset.h": "Native transport integration.",
+      "src/nvidia-modeset/include/nvkms-types.h": "Native transport integration.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h": "Native transport integration.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Native transport integration.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Native transport integration.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native transport integration.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Native transport integration.",
+      "src/nvidia-modeset/src/nvkms.c": "Native transport integration."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9001-dv-v1-legacy.patch": {
+    "summary": "modeset: pair legacy Dolby Vision VSIF with selected AVI timing",
+    "component": "nvidia-pascal-modeset",
+    "files": {
+      "src/common/inc/nvkms-dv-vsif.h": "Native transport integration.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Native transport integration."
+    }
   }
 }

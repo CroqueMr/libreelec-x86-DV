@@ -19,6 +19,22 @@ int main(void)
     assert(r.coverage==CB1_DV_HDR10PLUS_STATISTICS &&
            r.reason==CB1_DV_HDR10PLUS_UNREPRESENTABLE_CURVE);
     uint8_t packet[31];assert(cb1_hdr10plus_vsif(packet,&out,false,true)==CB1_HDR10PLUS_OK);
+    AVDynamicHDRPlus v1=out;
+    assert(cb1_dv_hdr10plus_metadata_for_version(&out,&r,m,bytes,&s,1));
+    assert(!memcmp(&v1,&out,sizeof(v1)));
+    struct cb1_hdr10plus_statistics graded=s;
+    memset(graded.histogram,0,sizeof(graded.histogram));
+    graded.histogram[1]=50;graded.histogram[2]=450;graded.histogram[3]=500;
+    graded.histogram[10]=8900;graded.histogram[250]=100;
+    assert(cb1_dv_hdr10plus_metadata_for_version(&out,&r,m,bytes,&graded,0));
+    assert(out.application_version==0);
+    assert(out.params[0].distribution_maxrgb[1].percentile.num==320);
+    assert(out.params[0].distribution_maxrgb[2].percentile.num==480);
+    assert(cb1_hdr10plus_vsif(packet,&out,false,true)==CB1_HDR10PLUS_OK);
+    assert(packet[10]==2 && packet[11]==3 && (packet[7]>>6)==0);
+    AVDynamicHDRPlus unchanged=out;
+    assert(!cb1_dv_hdr10plus_metadata_for_version(&out,&r,m,bytes,&graded,2));
+    assert(!memcmp(&unchanged,&out,sizeof(out)));
     /* Missing L1 retains measured descriptive metadata, not guessed L1. */
     m->num_ext_blocks=0;
     assert(cb1_dv_hdr10plus_metadata(&out,&r,m,bytes,&s));

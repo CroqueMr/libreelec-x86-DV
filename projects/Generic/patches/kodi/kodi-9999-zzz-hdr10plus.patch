@@ -883,7 +883,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    if (!m_dvPolicyActive) return m_prepared ? FrameStatus::Ready : FrameStatus::Pending;
    const auto status = dvbridge_render_dv_policy_wait(m_renderer,timeoutNs);
    if (status == DVBRIDGE_DV_READY)
-@@ -1442,6 +1654,49 @@
+@@ -1442,6 +1654,50 @@
      return FrameStatus::Failed;
    }
    return FrameStatus::Pending;
@@ -918,8 +918,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  const auto status = cb1_hdr10plus_analysis_poll(m_hdr10plusAnalysis, m_pendingIdentity, &statistics);
 +  if (status == CB1_HDR10PLUS_ANALYSIS_PENDING) return FrameStatus::Pending;
 +  AVDynamicHDRPlus metadata{};
-+  if (status != CB1_HDR10PLUS_ANALYSIS_READY || !cb1_dv_hdr10plus_metadata(&metadata,
-+      &m_hdr10plusReport, m_pendingMetadata.Data(), m_pendingMetadata.Size(), &statistics))
++  if (status != CB1_HDR10PLUS_ANALYSIS_READY || !cb1_dv_hdr10plus_metadata_for_version(&metadata,
++      &m_hdr10plusReport, m_pendingMetadata.Data(), m_pendingMetadata.Size(), &statistics,
++      m_hdr10plusVersion))
 +  {
 +    m_failedIdentity = m_pendingIdentity;
 +    Failure("hdr10plus-analysis");
@@ -1098,7 +1099,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
    };
    Submission CaptureSubmission() const
    {
-@@ -147,6 +153,13 @@
+@@ -147,8 +153,22 @@
      submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ? 3 :
          m_hardwareBinding == m_pendingBinding &&
          m_hardwareFELFilter == m_requested.felUpscaling && m_hardwareFELVpp ? 2 : 1) : 0;
@@ -1111,13 +1112,23 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +    }
      return submission;
    }
++  void SetHDR10PlusVersion(int version)
++  {
++    const int supported = version < 0 ? -1 : version == 0 ? 0 : 1;
++    if (supported == m_hdr10plusVersion) return;
++    if (m_effectiveMode == DVBRIDGE_MODE_HDR10PLUS) Cancel();
++    m_hdr10plusVersion = supported;
++  }
    bool AsyncPreparationActive() const { return m_live && m_hasCommitted && m_asyncEligible; }
-@@ -193,6 +206,11 @@
+   bool Presented(bool success, const Submission& submission);
+   bool PollReady();
+@@ -193,6 +206,12 @@
    bool Presented(bool success);
  
  private:
 +  FrameStatus BeginHDR10Plus();
 +  FrameStatus PollHDR10Plus();
++  int m_hdr10plusVersion{-1};
 +  cb1_hdr10plus_analysis* m_hdr10plusAnalysis{};
 +  std::optional<AVDynamicHDRPlus> m_hdr10plusMetadata;
 +  cb1_dv_hdr10plus_report m_hdr10plusReport{};
@@ -1521,7 +1532,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
 +  const auto* display = GetDisplayInfo();
 +  caps.hdr10plus = connector && connector->SupportsProperty("HDR10PLUS_METADATA") &&
-+      display && display->HDR10PlusVersion() >= 1;
++      display && display->HDR10PlusVersion() >= 0;
    if (m_renderableType != EGL_OPENGL_ES3_BIT)
    {
      caps.processingKnown = true;
@@ -1566,9 +1577,12 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          session.target.hdr.max_luma, session.output.level6 ? "RPU-L6" : "RPU-source-PQ",
          GetOutputBitDepth(), UseLimitedColor() ? "limited" : "full");
      if (m_hdrDeepColorPrevious)
-@@ -1631,7 +1701,9 @@
+@@ -1631,7 +1701,12 @@
    };
    const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10;
++  const auto* hdr10plusDisplay = GetDisplayInfo();
++  const int hdr10plusVersion = hdr10plusDisplay ? hdr10plusDisplay->HDR10PlusVersion() : -1;
++  if (m_dvBridge) m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
    if (!SupportsDVOutputMode()) return failure("output-format", "unsupported-current-mode");
 -  if (m_nWidth != 3840 || m_nHeight != 2160) return failure("output-format", "drawable-size");
 +  const auto selected = m_DRM->GetSelectedMode();
@@ -1577,6 +1591,14 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
      return failure("output-format", "drawable-depth");
    if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
+@@ -1669,6 +1744,7 @@
+     if (!m_dvBridge->Initialize(false, hdr10,m_dvContext))
+       return failure("renderer-init");
++    m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
+   }
+   m_GBM->GetDevice().UseDVOutputLifetime();
+   if (!hdr10 && !m_dvState.Captured())
+   {
 @@ -1843,8 +1915,8 @@
        source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
    const bool strictMaster=preferences.output==DVBRIDGE::OutputMode::MasterReference &&

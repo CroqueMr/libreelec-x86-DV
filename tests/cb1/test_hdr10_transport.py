@@ -359,7 +359,7 @@ int main(void) {
  struct intel_digital_connector_state state={.base={&connector.base,10,DRM_MODE_COLORIMETRY_BT2020_RGB,&blob},
    .dv_hdr10_deep_color=true};
  struct intel_encoder encoder={600000,&connector};
- for(int scenario=0;scenario<17;++scenario) {
+ for(int scenario=0;scenario<19;++scenario) {
   struct intel_connector saved_connector=connector;
   struct intel_digital_connector_state saved_state=state;
   struct intel_crtc_state stream={.hw={.adjusted_mode={594000,0}},.pipe_bpp=30,
@@ -379,9 +379,11 @@ int main(void) {
   if(scenario==11) {state.base.hdr_output_metadata=NULL;want_result=-EINVAL;}
   if(scenario==12) {state.base.max_requested_bpc=8;want_result=-EINVAL;}
   if(scenario==13) {stream.pipe_bpp=24;want_result=-EINVAL;}
-  if(scenario==14) {display_state.version=11;want_result=-EINVAL;}
+  if(scenario==14) {display_state.version=11;}
   if(scenario==15) {state.dv_hdr10_deep_color=false;state.dv_lab_standard=true;want_format=INTEL_OUTPUT_FORMAT_RGB;want_bpp=24;}
   if(scenario==16) {hdr.hdmi_metadata_type1.eotf=1;want_result=-EINVAL;}
+  if(scenario==17) {display_state.version=10;want_result=-EINVAL;}
+  if(scenario==18) {display_state.version=9;want_result=-EINVAL;}
   int clock=stream.hw.adjusted_mode.crtc_clock;
   int result=native_config(&encoder,&stream,&state.base);
   if(result!=want_result) return 20+scenario;

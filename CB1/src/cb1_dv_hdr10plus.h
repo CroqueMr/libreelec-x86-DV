@@ -31,6 +31,9 @@ struct cb1_dv_hdr10plus_report {
  * This function only builds output metadata; it never applies trims to pixels. */
 bool cb1_dv_hdr10plus_metadata(AVDynamicHDRPlus *out,struct cb1_dv_hdr10plus_report *report,
     const void *metadata,size_t bytes,const struct cb1_hdr10plus_statistics *statistics);
+bool cb1_dv_hdr10plus_metadata_for_version(AVDynamicHDRPlus *out,
+    struct cb1_dv_hdr10plus_report *report,const void *metadata,size_t bytes,
+    const struct cb1_hdr10plus_statistics *statistics,unsigned application_version);
 
 #ifdef __cplusplus
 }

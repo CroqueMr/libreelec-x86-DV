@@ -52,7 +52,7 @@ struct CDRMPropertyBlob {
   CDRMPropertyBlob()=default;
   CDRMPropertyBlob(int,const void* data,unsigned length) {
     if (!badClone && length==4 && data==hdrBytes) {value=777; ++clones;}
-    if (!badClone && length==27) {
+    if (!badClone && (length==27 || length==24)) {
       value=778; ++clones;
       auto* bytes=static_cast<const unsigned char*>(data);
       transportBytes.assign(bytes,bytes+length);

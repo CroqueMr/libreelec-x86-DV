@@ -49,9 +49,12 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_submit(
 enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_poll(
     struct cb1_hdr10plus_analysis *ctx, struct dvbridge_identity identity,
     struct cb1_hdr10plus_statistics *out);
-/* Version-1 descriptive metadata only. No synthesized creative curve. */
+/* Descriptive metadata only. No synthesized creative curve. */
 bool cb1_hdr10plus_describe(AVDynamicHDRPlus *out,
     const struct cb1_hdr10plus_statistics *statistics, unsigned target_nits);
+bool cb1_hdr10plus_describe_for_version(AVDynamicHDRPlus *out,
+    const struct cb1_hdr10plus_statistics *statistics, unsigned target_nits,
+    unsigned application_version);
 
 #ifdef __cplusplus
 }

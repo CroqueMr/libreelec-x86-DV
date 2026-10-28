@@ -2,8 +2,8 @@
 
 ## Scope
 
-Execute the user's 2026-10-28 approval of the hardware audit, then repair AMD
-DV EDID V1 compatibility. Preserve the frozen RC1 at
+Execute the user's 2026-10-28 approval of the hardware audit, then cover DV EDID
+V1 across Intel, AMD and NVIDIA, including Pascal. Preserve the frozen RC1 at
 `94b5aa40639af9d46c45aa0c96708d56a4c37009` and its delivered images.
 Work on `candidate/rc1-hardware-coverage`; no publication or mini-PC change.
 
@@ -15,8 +15,8 @@ Use the existing shared DRM metadata transaction and native packet writers.
 Do not add another video engine, shader or per-model Kodi backend.
 
 Pascal keeps a matched opt-in R580 stack, never mixed with R615 components.
-Default R615 stays intact. A user question on separate-image versus boot-time
-selection is pending; implementation of the existing opt-in is independent.
+Default R615 stays intact. Pascal uses a separate image in the same release,
+as selected by the user; there is no boot-time stack selector.
 
 ## Requirements
 
@@ -32,7 +32,7 @@ selection is pending; implementation of the existing opt-in is independent.
 - Native HDR10+ V0/V1 and generated output must use a receiver-compatible
   version and valid payload semantics, not a version-bit-only rewrite.
 - Vega M keeps DV-only RGB8 bypass isolated from ordinary/DCN colour handling.
-- AMD V1 requires appropriate legacy/modern VSIF selected from parsed EDID;
+- V1 on every DV driver requires appropriate legacy/modern VSIF selected from parsed EDID;
   do not merely delete both V2-only guards. Reject LLDV-only/malformed EDID.
 - Preserve the original AMD rejection reason where stream creation currently
   turns unsupported DV into a generic ENOMEM.

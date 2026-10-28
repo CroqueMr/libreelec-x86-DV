@@ -7,6 +7,39 @@ from test_native_video_source import TREE, body
 
 
 class HDR10PlusPrepareTests(unittest.TestCase):
+    def test_receiver_version_change_cancels_only_hdr10plus_work(self):
+        header=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h').read_text()
+        implementation=body(header,'void SetHDR10PlusVersion(')
+        program=r'''
+#include <cassert>
+#include "dvbridge_policy.h"
+struct Renderer{
+ int m_hdr10plusVersion=-1,cancels=0;
+ int m_effectiveMode=DVBRIDGE_MODE_STANDARD;
+ bool packet=true;
+ void Cancel(){++cancels;packet=false;}
+ void SetHDR10PlusVersion(int version) BODY
+};
+int main(){
+ Renderer r;r.SetHDR10PlusVersion(1);
+ assert(r.cancels==0 && r.m_hdr10plusVersion==1);
+ r.m_effectiveMode=DVBRIDGE_MODE_HDR10PLUS;
+ r.SetHDR10PlusVersion(1);assert(r.cancels==0);
+ r.SetHDR10PlusVersion(0);
+ assert(r.cancels==1 && !r.packet && r.m_hdr10plusVersion==0);
+ r.packet=true;r.SetHDR10PlusVersion(-1);
+ assert(r.cancels==2 && !r.packet && r.m_hdr10plusVersion==-1);
+ r.SetHDR10PlusVersion(2);assert(r.m_hdr10plusVersion==1);
+ r.SetHDR10PlusVersion(3);assert(r.cancels==3);
+}
+'''.replace('BODY',implementation)
+        repo=Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);code=root/'test.cpp';binary=root/'test'
+            code.write_text(program)
+            subprocess.run(['c++','-std=c++20','-I'+str(repo/'CB1/src'),str(code),'-o',str(binary)],check=True)
+            subprocess.run([str(binary)],check=True)
+
     def test_pending_analysis_retains_picture_with_async_disabled(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         start=source.index('  const bool renderPending = status',source.index('// A paused final surface'))
@@ -75,8 +108,10 @@ int cb1_hdr10plus_analysis_poll(int*,Identity id,cb1_hdr10plus_statistics* resul
  if(id.stream!=submitted.stream || id.picture!=submitted.picture || id.revision!=submitted.revision)
    return CB1_HDR10PLUS_ANALYSIS_INVALID;
  result->value=123;return state;}
-bool cb1_dv_hdr10plus_metadata(AVDynamicHDRPlus* out,cb1_dv_hdr10plus_report*,const void*,size_t,
- const cb1_hdr10plus_statistics* stats){out->value=stats->value;++buildCount;return true;}
+static unsigned preparedVersion;
+bool cb1_dv_hdr10plus_metadata_for_version(AVDynamicHDRPlus* out,cb1_dv_hdr10plus_report*,const void*,size_t,
+ const cb1_hdr10plus_statistics* stats,unsigned version){
+ preparedVersion=version;out->value=stats->value;++buildCount;return true;}
 struct CDVBridgeGLES {
  enum class FrameStatus{Failed,Pending,Busy,Ready};
  int* m_hdr10plusAnalysis{};int m_log{},m_renderer=1,m_sourceGeometry{};
@@ -86,6 +121,7 @@ struct CDVBridgeGLES {
  Identity m_failedIdentity;
  std::optional<AVDynamicHDRPlus>m_hdr10plusMetadata;
  cb1_dv_hdr10plus_report m_hdr10plusReport;
+ int m_hdr10plusVersion=0;
  bool Failure(const char*){++failures;return false;}
  void Cancel(){m_prepared=m_pending=false;m_hdr10plusMetadata.reset();}
  void PreparedAudit(){++audits;}
@@ -101,6 +137,7 @@ int main(){
  state=CB1_HDR10PLUS_ANALYSIS_READY;
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Ready);
  assert(r.m_prepared && r.m_hdr10plusMetadata->value==123 && buildCount==1 && r.audits==1);
+ assert(preparedVersion==0);
  ++r.m_pendingIdentity.picture;r.m_prepared=false;
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Failed);
  assert(!r.m_hdr10plusMetadata && !r.m_pending && buildCount==1);

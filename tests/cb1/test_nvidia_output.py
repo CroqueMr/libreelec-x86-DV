@@ -58,6 +58,16 @@ int main() {
   assert(drm.staged.at("NV_CRTC_REGAMMA_DIVISOR")==17);
   assert(drm.staged.at("NV_PLANE_DEGAMMA_MULTIPLIER")==19);
   state.Restored(); assert(clones==0);
+  assert(state.Capture(drm,0,true));
+  assert(transportBytes.size()==24 && transportBytes[0]==3 &&
+      transportBytes[1]==12 && transportBytes[2]==0);
+  for(unsigned i=3;i<24;++i) assert(transportBytes[i]==0);
+  assert(state.Stage(drm,false) && state.Stage(drm,true));
+  state.Restored(); assert(clones==0);
+  assert(state.Capture(drm));
+  assert(transportBytes.size()==27 && transportBytes[0]==0x46 &&
+      transportBytes[1]==0xd0 && transportBytes[3]==2);
+  state.Restored(); assert(clones==0);
   drm.connector.props["NV_HDMI_VSIF_METADATA"]=123;
   assert(!state.Capture(drm) && clones==0);
   drm.connector.props["NV_HDMI_VSIF_METADATA"]=0;

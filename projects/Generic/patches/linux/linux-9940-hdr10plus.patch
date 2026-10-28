@@ -44,17 +44,17 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm
  create_stream_for_sink(struct drm_connector *connector,
  		       const struct drm_display_mode *drm_mode,
 @@ -7913,6 +7941,11 @@
+ 			stream = NULL;
+ 		}
  	}
- 	if (dm_state->dv_standard &&
- 	    amdgpu_dm_dv_configure_stream(stream, dm_state, drm_mode)) {
++	if (stream && dm_state->base.hdr10plus_metadata &&
++	    fill_hdr10plus_info_packet(dm_state->base.hdr10plus_metadata, &stream->vsp_infopacket)) {
 +		dc_stream_release(stream);
 +		stream = NULL;
 +	}
-+	if (stream && dm_state->base.hdr10plus_metadata &&
-+	    fill_hdr10plus_info_packet(dm_state->base.hdr10plus_metadata, &stream->vsp_infopacket)) {
- 		dc_stream_release(stream);
- 		stream = NULL;
- 	}
+ finish:
+ 	dc_sink_release(sink);
+ 
 @@ -8879,6 +8912,9 @@
  		return -EINVAL;
  

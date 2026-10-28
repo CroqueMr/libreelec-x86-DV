@@ -120,7 +120,7 @@ int main(void) {
                             function(hwseq, 'dce110_set_input_transfer_func')])
         self.run_c(code.replace('@@ENUM@@', enum).replace('@@FUNCTIONS@@', funcs))
 
-    def test_only_dv_property_is_exposed_on_vegam(self):
+    def test_deep_output_is_independent_of_dv_on_vegam(self):
         source = self.source('amdgpu_dm/amdgpu_dm_dv.c')
         name = 'dv_display_supported' if 'dv_display_supported(' in source else 'dv_dcn_supported'
         policy = function(source, name)
@@ -155,9 +155,10 @@ int main(void) {
  struct link link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector con={.base={&dev,DRM_MODE_CONNECTOR_HDMIA,0},.dc_link=&link};
  dv_standard=true; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==1 && hdr_properties==0);
+ assert(dv_properties==1 && hdr_properties==1);
  dv_properties=hdr_properties=0; dv_standard=false; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==0 && hdr_properties==0);
+ assert(dv_properties==0 && hdr_properties==1);
+ dv_properties=hdr_properties=0;
  ctx.dce_version=DCN_VERSION_1_0; dv_standard=true; amdgpu_dm_dv_attach(&con);
  assert(dv_properties==1 && hdr_properties==1);
  dv_properties=hdr_properties=0; link.connector_signal=0; amdgpu_dm_dv_attach(&con);

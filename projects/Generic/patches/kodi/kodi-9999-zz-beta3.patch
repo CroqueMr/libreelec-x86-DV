@@ -15351,7 +15351,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +936,1699 @@
+@@ -397,13 +936,1708 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16082,7 +16082,16 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  m_GBM->GetDevice().UseDVOutputLifetime();
 +  if (!hdr10 && !m_dvState.Captured())
 +  {
-+    if (!m_dvState.Capture(*drm))
++    const auto* display = GetDisplayInfo();
++    if (!display) return failure("drm-state-capture", "edid-unavailable");
++    const auto sink = display->GetDolbyVisionCaps();
++    const auto* mode = drm->GetSelectedMode();
++    const double rate = mode && mode->htotal && mode->vtotal ?
++        mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
++    if (!sink.supports_2160p60 &&
++        mode && mode->vdisplay >= 2160 && rate > 30.01)
++      return failure("output-format", "sink-dv-rate");
++    if (!m_dvState.Capture(*drm, 0, sink.legacy_vsif))
 +      return failure("drm-state-capture", m_dvState.CaptureFailure());
 +    m_presentStall.Reset();
 +    if (DVBRIDGE::DiagnosticsEnabled())

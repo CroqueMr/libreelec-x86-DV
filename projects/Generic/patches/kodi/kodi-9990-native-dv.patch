@@ -3869,7 +3869,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils
 diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
 --- /dev/null
 +++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,177 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +/* Snapshot public DRM properties, stage transport, then restore owned values. */
 +#include "DVBridgeState.h"
@@ -3918,7 +3918,7 @@ diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/D
 +  return true;
 +}
 +
-+bool CDVBridgeState::Capture(CDRMAtomic& drm, uint64_t ownVsif)
++bool CDVBridgeState::Capture(CDRMAtomic& drm, uint64_t ownVsif, bool legacyVsif)
 +{
 +  m_failure = "none";
 +  if (Captured())
@@ -3962,8 +3962,11 @@ diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/D
 +  else
 +  {
 +    // Vendor VSIF payload and S31.32 neutral factors from the output contract.
-+    const uint8_t payload[27] = {0x46,0xd0,0,2};
-+    CDRMPropertyBlob transport(drm.GetFileDescriptor(),payload,sizeof(payload));
++    const uint8_t modern[27] = {0x46,0xd0,0,2};
++    const uint8_t legacy[24] = {3,12,0};
++    // The driver fills legacy timing fields from its validated active mode.
++    CDRMPropertyBlob transport(drm.GetFileDescriptor(),
++        legacyVsif ? legacy : modern, legacyVsif ? sizeof(legacy) : sizeof(modern));
 +    if (!transport.IsValid())
 +      return Reject("NV_HDMI_VSIF_METADATA");
 +    if (!Read(drm,changes,connector,"NV_HDMI_VSIF_METADATA",transport.Get(),true,true,nullptr))
@@ -4064,7 +4067,7 @@ diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.h b/xbmc/windowing/gbm/drm/DVB
 +public:
 +  enum class Backend { NONE, KERNEL, NVIDIA };
 +  static Backend GetBackend(CDRMConnector&);
-+  bool Capture(CDRMAtomic&, uint64_t ownVsif = 0);
++  bool Capture(CDRMAtomic&, uint64_t ownVsif = 0, bool legacyVsif = false);
 +  bool Stage(CDRMAtomic&, bool restore);
 +  void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
 +  bool Captured() const { return !m_changes.empty(); }

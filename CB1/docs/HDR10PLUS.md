@@ -32,6 +32,10 @@ Unsupported multi-window, saturation-map and nonmonotone quantized native curves
 use HDR10. Packets belong to the same atomic transaction as their framebuffer.
 Seek, source changes, rejected imports and teardown clear stale metadata.
 
+Native and generated metadata support receiver versions 0 and 1. Generated V0
+uses measured 5th/10th percentiles, not V1's reserved distribution values.
+Changing receiver version cancels pending conversion metadata before reuse.
+
 ## Qualification
 
 Software tests cover byte layout, rational units, curve quantization, invalid
