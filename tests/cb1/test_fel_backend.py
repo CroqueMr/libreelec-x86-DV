@@ -45,7 +45,8 @@ struct AVFrame {int width{32},height{24}; int64_t pts{42}; AVBufferRef* hw_frame
 struct AVDRMFrameDescriptor {};
 struct dvbridge_dmabuf {dvbridge_gl_plane planes[3]{}; dvbridge_gl_layout layout{};
  AVFrame* mapping{}; void* display{}; int width{},height{}; void* images[2]{};};
-struct dvbridge_dmabuf_key {uintptr_t surface{},pool{};};
+struct dvbridge_dmabuf_key {uintptr_t surface{},pool{};
+ uint64_t objects_count{},objects[4][4]{},layers[2][5]{};};
 void* eglGetCurrentContext() {return reinterpret_cast<void*>(1);}
 bool dvbridge_dmabuf_make_key(dvbridge_dmabuf_key* key,const AVDRMFrameDescriptor* desc,int,int,const void* pool,void*,void*) {
  *key={reinterpret_cast<uintptr_t>(desc),reinterpret_cast<uintptr_t>(pool)}; return true;
@@ -117,6 +118,7 @@ public:
  std::shared_ptr<void> m_hardwareLease;
  std::weak_ptr<AVFrame> m_hardwareFrame;
  void ClearFELPrefetch() {}
+ void BeginDiagnosticStream(uint64_t) {} // Diagnostic ownership is exercised separately.
  FrameStatus TakeFELPrefetch(const std::shared_ptr<AVFrame>&,DVBRIDGE::SourceBinding,
      const DVBRIDGE::OutputPreferences&,std::shared_ptr<dvbridge_fel_vpp>&,
      const dvbridge_fel_vpp_image*&) {assert(false && "Legacy test must not enter prefetch");return FrameStatus::Unsupported;}

@@ -7,6 +7,32 @@ from test_native_video_source import TREE, body
 
 
 class HDR10PlusSelectionTests(unittest.TestCase):
+    def test_expert_manual_profile_contract_matches_engine_without_panel_choice(self):
+        settings=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
+        profile=body(settings,'bool ProfileValid() const')
+        repo=Path(__file__).resolve().parents[2]
+        program=r'''
+#include <cassert>
+#include <cmath>
+#include <limits>
+#include "dvbridge_policy.c"
+struct Preferences{double peak;int panel,gamut;bool ProfileValid()const BODY};
+int main(){
+ for(double peak:{0.,1410.,10000.,10001.,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()})
+ for(int panel:{-1,0,1,2,3})for(int gamut:{-1,0,1,2,3,4}){
+  Preferences p{peak,panel,gamut};dvbridge_policy policy{};policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;
+  policy.tv={peak,static_cast<dvbridge_panel>(panel),static_cast<dvbridge_gamut>(gamut)};
+  assert(p.ProfileValid()==(dvbridge_policy_validate(&policy)==DVBRIDGE_POLICY_VALID));
+ }
+ Preferences p{1410,0,2};assert(p.ProfileValid());
+}
+'''.replace('BODY',profile).replace('#include <cassert>','#include <cassert>\n#include <initializer_list>')
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);code=root/'check.cpp';binary=root/'check';code.write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-I'+str(repo/'CB1/src'),str(code),'-o',str(binary)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            result=subprocess.run([str(binary)],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
     def test_dynamic_output_admission_preserves_other_routes(self):
         source=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h').read_text()
         implementation=body(source,'inline OutputSelection SelectOutput(')
