@@ -26,15 +26,27 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/
  	case DCN_VERSION_1_0: case DCN_VERSION_1_01:
  	case DCN_VERSION_2_0: case DCN_VERSION_2_01: case DCN_VERSION_2_1:
  	case DCN_VERSION_3_0: case DCN_VERSION_3_01:
-@@ -44,7 +45,7 @@
+@@ -44,7 +45,15 @@
  	struct amdgpu_device *adev = drm_to_adev(connector->base.dev);
  
- 	if (!adev->dm.dc ||
+-	if (!adev->dm.dc ||
 -	    !dv_dcn_supported(adev->dm.dc->ctx->dce_version) ||
-+	    !dv_display_supported(adev->dm.dc->ctx->dce_version) ||
- 	    connector->base.connector_type != DRM_MODE_CONNECTOR_HDMIA ||
- 	    !connector->dc_link ||
- 	    connector->dc_link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A)
+-	    connector->base.connector_type != DRM_MODE_CONNECTOR_HDMIA ||
+-	    !connector->dc_link ||
+-	    connector->dc_link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A)
++	const bool family = adev->dm.dc &&
++		dv_display_supported(adev->dm.dc->ctx->dce_version);
++	const bool hdmi = connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA &&
++		connector->dc_link &&
++		connector->dc_link->connector_signal == SIGNAL_TYPE_HDMI_TYPE_A;
++
++	/* Attachment runs once per connector, including rejected families. */
++	drm_info(connector->base.dev,
++		 "DVBridge: AMD capability connector=%u dce=0x%x family_supported=%u native_hdmi=%u dv_parameter=%u\n",
++		 connector->base.base.id,
++		 adev->dm.dc ? adev->dm.dc->ctx->dce_version : 0,
++		 family, hdmi, dv_standard);
++	if (!family || !hdmi)
 @@ -167,7 +171,7 @@
  	struct drm_dvbridge_link link = {
  		.requested = state->dv_standard,

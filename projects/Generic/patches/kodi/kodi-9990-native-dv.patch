@@ -1265,7 +1265,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/CMakeLists.txt b/xbmc/cores/V
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,277 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1504,6 +1504,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +  uint64_t m_geometryRevision{1};
 +  bool m_geometryKnown{};
 +  bool Failure(const char* stage);
++  void BeginDiagnosticStream(uint64_t stream);
 +  void PreparedAudit();
 +  void Summary(const char* event);
 +  void CountPresentation(bool committed);
@@ -1511,6 +1512,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +  DVBRIDGE::DiagnosticFailures m_auditRequested,m_auditPrepared,m_auditCommitted;
 +  DVBRIDGE::DiagnosticFailures m_auditCreative;
 +  uint64_t m_auditStream{},m_auditSource{},m_auditPolicy{};
++  uint64_t m_diagnosticStream{};
 +  int m_auditSerial{},m_auditRequestedSerial{},m_auditPreparedSerial{},m_auditCommittedSerial{};
 +  uint64_t m_prepares{0}, m_directFrames{0}, m_presentations{0}, m_failedPresentations{0};
 +  uint64_t m_lastSummary{0}, m_lastReported{0};

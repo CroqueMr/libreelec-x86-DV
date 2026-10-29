@@ -25,6 +25,125 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_fel_dma_witness_reports_exported_pitch_offset_and_modifier(self):
+        text=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        marker=text.find('"CB1 FEL DMA:')
+        witness=''
+        if marker>=0:
+            start=text.rfind('      if (cacheable && !m_rawELImports)',0,marker)
+            witness=text[start:text.index('      if (cacheable && !m_rawELCache.empty()',marker)]
+        self.run_cpp(r'''
+#include <fmt/format.h>
+#include <cassert>
+#include <string>
+#include <vector>
+constexpr int LOGINFO=1;
+namespace DVBRIDGE {
+inline std::vector<std::string> lines;
+template<class...T>void DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
+ lines.push_back(fmt::format(f,std::forward<T>(a)...));}
+}
+void Report(bool cacheable,bool newFELSource){
+ (void)cacheable;(void)newFELSource;
+ const unsigned m_rawELImports=newFELSource?0:3;(void)m_rawELImports;
+ struct {struct{unsigned stream=3,picture=1,revision=7;}binding;}base;
+ struct {unsigned objects_count=2;unsigned objects[2][4]={{0,0,0,0x123},{0,0,0,0x456}};
+ unsigned layers[2][5]={{1,1,1,4096,4096},{2,1,0,8192,4096}};}key;
+ BLOCK
+}
+int main(){
+ Report(true,true);assert(DVBRIDGE::lines.size()==1);
+ for(auto part:{"source=3/1/7","pitch=4096/4096","offset=4096/8192","modifier=0x456/0x123"})
+  assert(DVBRIDGE::lines.back().find(part)!=std::string::npos);
+ Report(false,true);Report(true,false);assert(DVBRIDGE::lines.size()==1);
+}
+'''.replace('BLOCK',witness))
+
+    def test_incomplete_profile_reports_the_values_before_output_admission(self):
+        text = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        start = text.index('  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)')
+        end = text.index('  if (m_dvConfiguredOutput', start)
+        self.run_cpp(r'''
+#include <fmt/format.h>
+#include <cassert>
+#include <cstdint>
+#include <string>
+#include <vector>
+constexpr int LOGWARNING=2;
+namespace DVBRIDGE {
+enum class OutputReason {None,TVProfileRequired};
+inline std::vector<std::string> lines;
+void DiagnosticStage(const char*){}
+template<class...T>bool DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
+ lines.push_back(fmt::format(f,std::forward<T>(a)...));return true;}
+}
+struct Window {
+ uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
+ struct {DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::TVProfileRequired;}m_dvSelection;
+ struct {uint64_t stream=12;}binding;
+ struct {uint64_t revision=3;int panel=0,gamut=0;double peak=1410;}preferences;
+ void Report(){ BLOCK }
+};
+int main(){
+ Window window;window.Report();
+ assert(DVBRIDGE::lines.size()==1);
+ for(auto part:{"peak=1410","panel=0","gamut=0","peak_and_gamut_required"})
+  assert(DVBRIDGE::lines.back().find(part)!=std::string::npos);
+ window.Report();assert(DVBRIDGE::lines.size()==1);
+ ++window.preferences.revision;window.Report();assert(DVBRIDGE::lines.size()==2);
+ window.m_dvSelection.reason=DVBRIDGE::OutputReason::None;
+ ++window.preferences.revision;window.Report();assert(DVBRIDGE::lines.size()==2);
+}
+'''.replace('BLOCK',text[start:end]))
+
+    def test_real_render_failure_identifies_ipt_and_target_without_changing_policy(self):
+        failure = function('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp', 'bool CDVBridgeGLES::Failure(')
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticState.h"
+#include <fmt/format.h>
+#include <cassert>
+#include <vector>
+constexpr int LOGERROR=3,LOGWARNING=2;
+namespace DVBRIDGE {
+inline std::vector<std::string> lines;
+template<class...T>void DiagnosticFailureLog(const char*,bool,int,fmt::format_string<T...> f,T&&...a){
+ lines.push_back(fmt::format(f,std::forward<T>(a)...));}
+template<class...T>void DiagnosticLog(T...){}
+struct StreamTelemetry{static void ReferenceWarning(){}};
+}
+struct CDVBridgeGLES {
+ bool m_live=true,m_advanced=false,m_hasCommitted=false,m_hdr10=false,m_pending=false,m_prepared=false;
+ int m_effectiveMode=5;void* m_scanout=this;unsigned m_outputBits=8;
+ struct {bool masterIPT=true;}m_requested;
+ struct {int stream=3,revision=1;}m_pendingBinding,m_committedBinding;
+ DVBRIDGE::DiagnosticFailures m_failures;
+ bool Failure(const char* stage);
+};
+''' + failure + r'''
+int main(){
+ CDVBridgeGLES renderer;
+ assert(!renderer.Failure("master-reference-invalid-metadata"));
+ assert(renderer.m_effectiveMode==5 && renderer.m_requested.masterIPT && renderer.m_failures.Count()==1);
+ const auto& text=DVBRIDGE::lines.back();
+ for(auto part:{"master-reference-invalid-metadata","mode=5","master_ipt=true","target=true","output_bits=8"})
+  assert(text.find(part)!=std::string::npos);
+}
+''')
+
+    def test_boot_capability_denial_survives_until_kodi_collects_it(self):
+        self.run_cpp(r'''
+#include "utils/DVBridgeKernelLog.h"
+#include <cassert>
+int main(){
+ DVBRIDGE::KernelLogFilter filter;
+ auto line=filter.Accept("6,1,1000000,-;amdgpu 0000:03:00.0: DVBridge: AMD capability connector=409 family_supported=0 native_hdmi=1\n",900000000);
+ assert(line && line->find("family_supported=0")!=std::string::npos);
+ assert(!filter.Accept("6,2,1000000,-;DVBridge: old frame detail\n",900000000));
+ assert(!filter.Accept("6,3,1000000000,-;DVBridge: AMD capability future\n",900000000));
+ assert(!filter.Accept("6,1,1000000,-;DVBridge: AMD capability duplicate\n",900000000));
+}
+''')
+
     def test_first_frame_and_policy_details_report_real_layer_and_display_values(self):
         # A swapped logical/physical size or omitted display value loses the witness.
         text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
@@ -49,8 +168,8 @@ struct Preferences {
 };
 int main(){
  DVBRIDGE::DiagnosticOpen();
- Base base{{1920,1080,1,{{2048,1088},{0,0},{0,0}},2},{}};
- Layer el{960,540,2,{{1024,544},{0,0},{0,0}},1};const Layer* enhancement=&el;
+ Base base{{1920,1080,1,{{2048,1088},{1024,544},{0,0}},2},{}};
+ Layer el{960,540,2,{{1024,544},{512,272},{0,0}},1};const Layer* enhancement=&el;
  struct {int width=3840,height=2160,x=0,y=0;} geometry;
  int m_pendingInfo=3;bool m_direct=true,m_fallback=false;
  int revision=7;Preferences preferences;ReturnedPolicy policy;
@@ -59,6 +178,8 @@ int main(){
  assert(CLog::lines.size()==2);
  const auto& frame=CLog::lines[0];
  for(auto key:{"bl_layout=1","bl_texture=2048x1088","el=960x540", "el_texture=1024x544","bl_chroma=2","el_chroma=1"})
+  assert(frame.find(key)!=std::string::npos);
+ for(auto key:{"bl_uv_texture=1024x544","el_uv_texture=512x272"})
   assert(frame.find(key)!=std::string::npos);
  const auto& settings=CLog::lines[1];
  for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1"})

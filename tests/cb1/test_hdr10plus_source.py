@@ -17,6 +17,9 @@ class HDR10PlusSourceTests(unittest.TestCase):
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
 #include "SERIALIZER"
 namespace KODI::UTILS {enum class Eotf {PQ,TRADITIONAL_SDR};}
 struct DRM {virtual ~DRM()=default;};
@@ -33,6 +36,12 @@ struct Cache {uint64_t generation=7; uint64_t GetVideoProcessingGeneration(){ret
 struct CServiceBroker {static inline Cache cache;static Cache& GetDataCacheCore(){return cache;}};
 enum {LOGINFO=1};
 struct CLog {template<class... A>static void Log(A...) {}};
+namespace DVBRIDGE {
+inline std::vector<std::string> messages;
+template<class... A>bool DiagnosticLog(int,fmt::format_string<A...> f,A&&...args){
+ messages.push_back(fmt::format(f,std::forward<A>(args)...));return true;
+}
+}
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
@@ -55,7 +64,21 @@ int main() {
  w.StageNativeHDR10Plus(false);assert(drm->packet && drm->generation==7);
  assert((*drm->packet)[30]==0x40 && (*drm->packet)[8]==10);
  auto first=*drm->packet;
+ assert(!DVBRIDGE::messages.empty());
+ assert(DVBRIDGE::messages.back().find("app_version=1")!=std::string::npos);
+ const auto logs=DVBRIDGE::messages.size();
  w.StageNativeHDR10Plus(false);assert(*drm->packet==first);
+ assert(DVBRIDGE::messages.size()==logs); // Repeated status does not log per frame.
+ // Real decoded V1 variants may reach the strict reserved-field gate.
+ p.distribution_maxrgb[1].percentile={2940,100000};
+ w.m_videoSourceSideData=VideoSourceSideData::Capture(7,2,AV_CODEC_ID_HEVC,frame,nullptr);
+ w.StageNativeHDR10Plus(false);
+ assert(!drm->packet && w.m_hdr10plusReason=="unrepresentable-metadata");
+ assert(DVBRIDGE::messages.back().find("slot5=2940/100000")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("slot10=255/100000")!=std::string::npos);
+ assert(p.distribution_maxrgb[1].percentile.num==2940);
+ p.distribution_maxrgb[1].percentile={0,100000};
+ w.m_videoSourceSideData=VideoSourceSideData::Capture(7,3,AV_CODEC_ID_HEVC,frame,nullptr);
  w.StageNativeHDR10Plus(true);assert((*drm->packet)[30]==0xc0);
  w.depth=8;w.StageNativeHDR10Plus(false);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
  w.depth=10;w.StageNativeHDR10Plus(false);assert(drm->packet);
