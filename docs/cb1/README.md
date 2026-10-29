@@ -11,7 +11,7 @@
 | [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |
 | [Processing](PROCESSING.md) | Mode behavior, metadata use and output limits |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |
-| [RC1 release notes](RELEASE.md) | Changes since Beta5 and known limitations |
+| [RC1.1 Debug release notes](RELEASE.md) | Hotfixes, diagnostics and unresolved reports |
 | [Previous releases](RELEASE-BETA5.md) | Archived Beta5 changes |
 
 ## Engine and integration
