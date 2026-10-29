@@ -33,8 +33,8 @@ format and the active output capabilities.
 
 | Source | Mode | Output | Purpose |
 | --- | --- | --- | --- |
-| Dolby Vision | **Dolby Vision Standard** | Dolby Vision, TV-Led | Prioritize performance with near-imperceptible image differences |
-| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | Preserve original pixels and metadata as accurately as possible, aiming for bit-perfect playback |
+| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | State-of-the-art Dolby vision output will full precision calculation and no compromise |
+| Dolby Vision | **Dolby Vision Standard** | Dolby Vision, TV-Led | Increase performance with near-imperceptible image differences |
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
 | Dolby Vision | **HDR10 Reference Expert** | HDR10 | Map to the configured TV peak and gamut using compatible creative metadata |
