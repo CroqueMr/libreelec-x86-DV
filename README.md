@@ -18,7 +18,7 @@ No external player or proprietary Dolby SDK is required.
 
 ## Open source. Ahead of commercial players.
 
-DMDreview's measurements place Master Reference ahead of the Dolby Vision
+DMDreview's measurements place LibreElec Dolby Vision Master Reference mode ahead of the Dolby Vision
 players included in the comparison.
 
 [![Watch DMDreview's Dolby Vision comparison](https://i.ytimg.com/vi/-9wbVaEgMX8/hqdefault.jpg)](https://www.youtube.com/watch?v=-9wbVaEgMX8)
