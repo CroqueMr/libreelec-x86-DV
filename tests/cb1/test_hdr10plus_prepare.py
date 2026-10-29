@@ -207,7 +207,8 @@ struct StreamTelemetry {template<class... A>static void Metadata(A...) {}};
 }
 struct CDVPlaybackInfo {enum {HDR10=1,HDMI=2,FEL=4,CM4=8};};
 struct CDVBridgeGLES {
- struct Layer {int layout{},width=32,height=32,planes[3]{},chromaLocation=AVCHROMA_LOC_UNSPECIFIED;
+ struct Layer {int layout{},width=32,height=32,chromaLocation=AVCHROMA_LOC_UNSPECIFIED;
+ struct Plane {int width{},height{};} planes[3];
  double pts{};struct {int profile=7;}sourceInfo;};
  struct Pref {bool optimizedDV{},processingOptimizations{},masterIPT{};}m_requested;
  bool m_prepared{},m_packed{},m_direct{},m_hdr10=true,m_overlayVisible{},m_directUsable=true,
