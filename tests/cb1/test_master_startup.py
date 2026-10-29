@@ -14,12 +14,16 @@ class MasterStartupTests(unittest.TestCase):
         entry = entry.split('  // Capture the proven observation key')[0] + 'return FrameStatus::Ready;}'
         signature = 'void CDVBridgeGLES::BeginDiagnosticStream('
         begin = body(source, signature) if signature in source else '{}'
+        summary = body(source, 'void CDVBridgeGLES::Summary(')
         program = r'''
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <string_view>
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
 #include "utils/DVBridgeDiagnosticState.h"
 #include "dvbridge_policy.h"
 namespace DVBRIDGE {
@@ -31,9 +35,11 @@ struct OutputPreferences {uint64_t revision=1;OutputMode output=OutputMode::Mast
  dvbridge_policy Policy()const{return {.revision=revision,.mode=mode};}
  bool ProfileValid()const{return valid;}};
 inline std::string stage;
+inline std::vector<std::string> messages;
 template<class...T>void ObserveDiagnostic(T...){}
 inline void DiagnosticStage(const char* value){stage=value;}
-template<class...T>void DiagnosticLog(T...){}
+template<class...T>void DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
+ messages.push_back(fmt::format(f,std::forward<T>(a)...));}
 }
 enum {LOGINFO};
 struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;}};
@@ -45,14 +51,14 @@ struct CDVBridgeGLES {
  bool AsyncPreparation(uint64_t)const{return true;}}context;
  Context* m_context=&context;int m_renderer=1;
  struct {bool asyncEligible=false;}m_submission;
- bool m_asyncEligible=true,m_firstFrame=false,m_fallback=false;
+ bool m_asyncEligible=true,m_firstFrame=false,m_fallback=false,m_advanced=false;
  uint64_t m_diagnosticStream=0,m_prepares=5,m_directFrames=5,m_presentations=4,
  m_failedPresentations=1,m_lastSummary=10,m_lastReported=5,m_rawELImports=3,m_rawELHits=7;
  DVBRIDGE::DiagnosticFailures m_failures;
  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
  int errors=0,summaries=0;
- bool Failure(const char*){++errors;return false;}
- void Summary(const char*){++summaries;}
+ bool Failure(const char* stage){++errors;m_failures.Record(1,stage);return false;}
+ void Summary(const char* event){++summaries; SUMMARY }
  void BeginDiagnosticStream(uint64_t stream) BEGIN
  FrameStatus PrepareFrame(const Layer& base,const Layer* enhancement,
  const CDVMetadataBuffer& metadata,dvbridge_geometry geometry,
@@ -64,7 +70,7 @@ int main(){
  DVBRIDGE::OutputPreferences preferences;
  CHECKS
 }
-'''.replace('BEGIN', begin).replace('ENTRY', entry).replace('CHECKS', checks)
+'''.replace('BEGIN', begin).replace('ENTRY', entry).replace('CHECKS', checks).replace('SUMMARY',summary)
         repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -110,6 +116,28 @@ int main(){
  assert(renderer.m_prepares==0 && renderer.m_directFrames==0 && renderer.m_presentations==0);
  assert(renderer.m_failedPresentations==0 && renderer.m_failures.Count()==0 && renderer.m_firstFrame);
  assert(renderer.m_rawELImports==0 && renderer.m_rawELHits==0);
+''')
+
+    def test_previous_file_summary_identifies_its_counter_owner(self):
+        self.run_entry(r'''
+ renderer.PrepareFrame(layer,nullptr,metadata,{},preferences,true,nullptr,true);
+ renderer.m_prepares=3;renderer.m_presentations=2;
+ ++layer.binding.stream;metadata.binding=layer.binding;
+ renderer.PrepareFrame(layer,nullptr,metadata,{},preferences,true,nullptr,true);
+ assert(DVBRIDGE::messages.size()==1);
+ assert(DVBRIDGE::messages.back().find("counter_stream=1")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("prepared=3")!=std::string::npos);
+''')
+
+    def test_first_bad_metadata_is_counted_after_a_valid_retry(self):
+        self.run_entry(r'''
+ renderer.PrepareFrame(layer,nullptr,metadata,{},preferences,true,nullptr,true);
+ ++layer.binding.stream; // Metadata still belongs to the previous file.
+ assert(renderer.PrepareFrame(layer,nullptr,metadata,{},preferences,true,nullptr,true)==CDVBridgeGLES::FrameStatus::Failed);
+ assert(renderer.m_diagnosticStream==2 && renderer.m_failures.Count()==1);
+ metadata.binding=layer.binding;
+ assert(renderer.PrepareFrame(layer,nullptr,metadata,{},preferences,true,nullptr,true)==CDVBridgeGLES::FrameStatus::Ready);
+ assert(renderer.m_failures.Count()==1);
 ''')
 
 

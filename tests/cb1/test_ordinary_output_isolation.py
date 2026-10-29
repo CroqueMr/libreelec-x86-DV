@@ -23,6 +23,7 @@ class OrdinaryOutputIsolationTests(unittest.TestCase):
 #include <iostream>
 #include <mutex>
 constexpr int DVBRIDGE_DV_IDLE=0;
+constexpr int LOGWARNING=1;
 struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
 struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_DOLBYVISION};
@@ -38,12 +39,14 @@ namespace DVBRIDGE {
  enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired};
  struct Policy {int mode=0;};
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
+   double peak=1000;int panel=0,gamut=2;
    ::DVBRIDGE::Policy Policy()const{return {};}};
  Preferences FrameOutputSettings(){return {};}
  bool DiagnosticsEnabled(){return false;}
  std::string lastStage;
  void DiagnosticStage(const char* stage){lastStage=stage;}
  template<class... T> void ObserveDiagnostic(T...){}
+ template<class... T> bool DiagnosticLog(T...){return true;}
  using SourceBinding=::Binding;
  int PolicyCode(Policy){return 0;}
  struct StreamTelemetry {
@@ -99,6 +102,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None,m_dvActivationReason=DVBRIDGE::OutputReason::None;
  std::mutex m_dvCapabilityMutex;
  unsigned m_dvAttemptFailures=0,m_hdr10SessionStream=0;
+ uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
  std::optional<int> m_hdr10Session;
  struct {template<class... T> void Begin(T...){}} m_masterSafety;
  int ordinaryStages=0;

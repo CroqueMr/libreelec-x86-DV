@@ -762,14 +762,13 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
      {
        const auto* l1 = av_dovi_find_level(parsed, 1);
        const bool usable = l1 && l1->l1.min_pq <= l1->l1.avg_pq &&
-@@ -1160,11 +1356,17 @@
+@@ -1160,11 +1356,16 @@
    { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
    const bool asyncSetting = m_context->AsyncPreparation(base.binding.stream);
    auto policy = selected ? *selected : preferences.Policy();
 -  const bool masterRecovery=selected && preferences.output==DVBRIDGE::OutputMode::MasterReference &&
 -      preferences.allowMasterFallback && policy.mode==DVBRIDGE_MODE_STANDARD;
 -  const bool fallback = selected ? policy.mode != preferences.Policy().mode && !masterRecovery :
-+  BeginDiagnosticStream(base.binding.stream);
 +  if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && !allowPacked)
 +  {
 +    // The next GUI pass can create its composition target. No render was attempted.

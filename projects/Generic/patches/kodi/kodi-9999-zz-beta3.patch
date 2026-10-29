@@ -11174,7 +11174,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2091 @@
+@@ -0,0 +1,2092 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11916,8 +11916,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  {
 +    if (!DVBRIDGE::DiagnosticsEnabled() ||
 +        (std::string_view(event) == "summary" && m_lastReported == m_presentations)) return;
-+    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge advanced renderer {}: presented={} presentation_failures={} stage_failures={}",
-+        event,m_presentations,m_failedPresentations,m_failures.Count());
++    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge advanced renderer {}: presented={} presentation_failures={} stage_failures={} counter_stream={}",
++        event,m_presentations,m_failedPresentations,m_failures.Count(),m_diagnosticStream);
 +    m_lastReported = m_presentations;
 +    return;
 +  }
@@ -11925,9 +11925,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      (std::string_view(event) == "summary" && m_lastReported == m_prepares))
 +    return;
 +  DVBRIDGE::DiagnosticLog(LOGINFO,
-+      "DVBridge renderer {}: prepared={} direct={} composed={} presented={} presentation_failures={} stage_failures={} raw_el_imports={} raw_el_hits={}",
++      "DVBridge renderer {}: prepared={} direct={} composed={} presented={} presentation_failures={} stage_failures={} raw_el_imports={} raw_el_hits={} counter_stream={}",
 +      event, m_prepares, m_directFrames, m_prepares - m_directFrames,
-+      m_presentations, m_failedPresentations, m_failures.Count(),m_rawELImports,m_rawELHits);
++      m_presentations, m_failedPresentations, m_failures.Count(),m_rawELImports,m_rawELHits,m_diagnosticStream);
 +  m_lastReported = m_prepares;
 +}
 +
@@ -12346,6 +12346,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    const DVBRIDGE::OutputPreferences& preferences, bool allowPacked, const dvbridge_policy* selected,
 +    bool allowAsync)
 +{
++  if (base.binding.Valid()) BeginDiagnosticStream(base.binding.stream);
 +  DVBRIDGE::ObserveDiagnostic(base.binding.stream,base.binding.picture,base.binding.revision,
 +      preferences.revision,"prepare-entry",preferences.output != DVBRIDGE::OutputMode::Disabled,false);
 +  if (m_submission.asyncEligible) m_submission = {};

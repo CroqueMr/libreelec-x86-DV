@@ -134,11 +134,12 @@ struct dc { struct dc_context *ctx; };
 struct amdgpu_device { struct { struct dc *dc; } dm; };
 struct link { int connector_signal; };
 struct amdgpu_dm_connector {
- struct { void *dev; int connector_type,base; } base;
+ struct { void *dev; int connector_type;struct {unsigned id;}base; } base;
  struct link *dc_link; void *dv_standard_property,*hdr10_deep_color_property;
 };
 static bool dv_standard;
 static int dv_properties,hdr_properties;
+#define drm_info(...) ((void)0)
 #define drm_to_adev(p) ((struct amdgpu_device *)(p))
 static void *drm_property_create_bool(void *dev,int flags,const char *name)
 { (void)dev;(void)flags; if (!strcmp(name,"DVBRIDGE_DV_STANDARD_LAB")) ++dv_properties;
@@ -153,7 +154,7 @@ int main(void) {
  struct dc_context ctx={DCE_VERSION_11_22}; struct dc dc={&ctx};
  struct amdgpu_device dev={.dm={&dc}};
  struct link link={SIGNAL_TYPE_HDMI_TYPE_A};
- struct amdgpu_dm_connector con={.base={&dev,DRM_MODE_CONNECTOR_HDMIA,0},.dc_link=&link};
+ struct amdgpu_dm_connector con={.base={&dev,DRM_MODE_CONNECTOR_HDMIA,{0}},.dc_link=&link};
  dv_standard=true; amdgpu_dm_dv_attach(&con);
  assert(dv_properties==1 && hdr_properties==1);
  dv_properties=hdr_properties=0; dv_standard=false; amdgpu_dm_dv_attach(&con);

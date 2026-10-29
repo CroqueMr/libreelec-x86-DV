@@ -10,7 +10,9 @@ class AsyncOutputAdmissionTests(unittest.TestCase):
     def test_admitted_policy_is_not_an_internal_render_failure(self):
         source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         prepare = body(source, 'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
-        selection = prepare[prepare.index('  auto policy = selected ?'):prepare.index('  // Capture the proven observation key')]
+        start=prepare.index('  auto policy = selected ?')
+        selection=prepare[start:prepare.index(';',start)+1]
+        selection+=prepare[prepare.index('  const bool fallback ='):prepare.index('  // Capture the proven observation key')]
         program = r'''
 #include <cassert>
 constexpr int DVBRIDGE_MODE_STANDARD=0,DVBRIDGE_MODE_HDR10_BASIC=2,
