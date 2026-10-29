@@ -1,6 +1,6 @@
 # Algorithms and metadata
 
-This reference describes **CB1 0.3** and the circuits listed in
+This reference describes **CB1 0.4** and the circuits listed in
 [CIRCUITS.md](CIRCUITS.md). Equations describe the implemented processing
 contract, not a certified reproduction of Dolby's proprietary display mapper.
 

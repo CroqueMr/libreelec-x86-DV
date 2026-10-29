@@ -1,7 +1,7 @@
 # CB1
 
 CB1 is an open-source Dolby Vision processing engine with HDR10 and HDR10+ output.
-**CB1 0.3** is a C11 static library linked into the player's render path, without
+**CB1 0.4** is a C11 static library linked into the player's render path, without
 a separate service or external player.
 
 

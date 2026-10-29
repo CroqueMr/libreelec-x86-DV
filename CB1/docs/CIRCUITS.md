@@ -1,6 +1,6 @@
 # Engine and circuits
 
-Engine: **CB1 0.3**. Each end-to-end rendering circuit has its own version.
+Engine: **CB1 0.4**. Each end-to-end rendering circuit has its own version.
 
 | Circuit | Version |
 | --- | --- |

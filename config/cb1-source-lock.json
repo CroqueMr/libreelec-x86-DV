@@ -2,7 +2,7 @@
   "schema": 1,
   "engine": {
     "name": "CB1",
-    "version": "0.3",
+    "version": "0.4",
     "commit": null,
     "base_revision": "b852bd0b5e4c1422e0aa5e005520bca765dcb00a",
     "source": "CB1/"
@@ -48,14 +48,14 @@
     "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch": "71368b1ebf461a7b0ffff4a106ae18fb884f8b3b2bc6affe0c139d22fd98eed7",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
     "projects/Generic/patches/linux/linux-9903-diagnostics.patch": "5c21813bdc2db60a0d7117487b220900825b37da605a8c8ac9e8f39b13d4147b",
-    "projects/Generic/options": "ed067c9e63c4ecbadef3919ec7f5d97938d7b6ab89e0c725bb4299745b1d6346",
+    "projects/Generic/options": "fcec437822c120f55a99a7497944c4c06f22004b77e9766d4f40c1d8e8a951ed",
     "projects/Generic/patches/kodi/kodi-9998-activeae-sink-retry.patch": "5fbca2f8b7036b8a08da2ec21bcac2d5c0409a6897fc2eb6c2ac3d2fb124e5dd",
     "projects/Generic/patches/linux/linux-9902-hdmi-compatibility.patch": "fcb59b6368e42a6383fc5f69af81e924d8baa153b0518e903021f5c4f29e2951",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/DialogPlaybackModes.xml": "0449506089446ca376621f611f4c9de711e5c6cd381573acb2187411ad78fdd5",
     "packages/graphics/nvidia/generate-pci-map.py": "e531d06d13845df09ba0c1e53fe35f6c0de97a5994645a20ef1a9fcb24553b1e",
     "packages/sysutils/busybox/scripts/kernel-overlays-setup": "26ec6b8df01d66a04ae195d6dddb9cb3332c01cb4895bbfeb2ca7a8ba32a7a5e",
     "packages/mediacenter/kodi/patches/9902-headers-only.patch": "a40f2ba9e93df333f88a95d93e476b3d76f5b03ccac5fc6b3032a7b4de7d4d28",
-    "config/cb1-versions.json": "0d0dbc5144ec5310cc5efab7a3ec72b64d9d32536d7e01612798ffda37c9bcec",
+    "config/cb1-versions.json": "1e3e1c3f85caa08fd71a24464581fb91bc1422ccac9d2170223b2ed8f9bbff41",
     "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": "c9b7a00b5f0c03b357eaa80145373438459a03c76e7d540f0f02ebd409abc0bc",
     "projects/Generic/patches/kodi/kodi-9996-output-modes-and-info.patch": "f5aceac6799fe6ae416815ca222843a3b9af1b9dac9d39cac004940bd9d9d34b",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-white.png": "72ed1d13473ec391e897b602bcc7d9473e70d5ca8aa3c7c81f99ea87d7dbb4e5",
@@ -104,7 +104,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": {
       "source": "src/cb1_circuit.c",
-      "sha256": "8c83c98d86bdd67cc3f41f0a5d8e5c8691ef6fa697b6ee29fa2bcd3dc7e0dd19"
+      "sha256": "0dac1eb908a92c0beff6dc0b9734e0b8de6639483d42b24ec64de8c22f3b1b1e"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": {
       "source": "src/cb1_circuit.h",
@@ -328,7 +328,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "8d49cd40eb6568d457e2ebbf43ed25c0d3b61ac0bd3b6373a053357423cd27a5"
+      "sha256": "c46b5ce1f2fb44b71fe60b61fa75867f210fccd6294e6ea57c616195b2681842"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
