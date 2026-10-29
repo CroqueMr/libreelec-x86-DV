@@ -1147,7 +1147,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
    bool AsyncPreparationActive() const { return m_live && m_hasCommitted && m_asyncEligible; }
    bool Presented(bool success, const Submission& submission);
    bool PollReady();
-@@ -193,6 +206,13 @@
+@@ -193,6 +206,15 @@
    bool Presented(bool success);
  
  private:
@@ -1157,6 +1157,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +  cb1_hdr10plus_analysis* m_hdr10plusAnalysis{};
 +  std::optional<AVDynamicHDRPlus> m_hdr10plusMetadata;
 +  cb1_dv_hdr10plus_report m_hdr10plusReport{};
++  void BeginDiagnosticStream(uint64_t stream);
++  uint64_t m_diagnosticStream{};
 +  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
    struct FELPrefetch;
    std::shared_ptr<FELPrefetch> m_felPrefetch;
@@ -1826,13 +1828,14 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    bool PrepareHDR10AIQueue(const VideoPicture& picture,
        std::span<const CDVBridgeGLES::Layer> queue, bool end, bool paused,
        uint64_t presentationDeadline = 0);
-@@ -162,6 +173,10 @@
+@@ -162,6 +173,11 @@
  #endif
    void PublishVideoSource(bool accepted, const std::shared_ptr<const VideoSourceSideData>& source);
    std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
 +#ifdef HAVE_DVBRIDGE
 +  void StageNativeHDR10Plus(bool overlay);
 +  std::string m_hdr10plusReason;
++  uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
 +#endif
    void PresentFrame(bool rendered, bool videoLayer);
    bool m_guiCompositing{false};
