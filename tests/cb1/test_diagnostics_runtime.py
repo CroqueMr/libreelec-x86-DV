@@ -25,6 +25,63 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_first_frame_and_policy_details_report_real_layer_and_display_values(self):
+        # A swapped logical/physical size or omitted display value loses the witness.
+        text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        calls = []
+        for message in ('DVBridge first frame:', 'DVBridge policy requested:'):
+            start = text.rfind('DVBRIDGE::DiagnosticLog(', 0, text.index(message))
+            end = text.index(';', start) + 1
+            calls.append(text[start:end])
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+struct Layer { int width,height,layout; struct Plane {int width,height;} planes[3]; int chromaLocation; };
+struct Binding {int stream=3,picture=4,revision=5;};
+struct Base : Layer {Binding binding;};
+struct CDVPlaybackInfo {static constexpr int FEL=1,CM4=2;};
+struct ReturnedPolicy {int mode=2;};
+struct Preferences {
+ int method=1,panel=2,gamut=3;double peak=1500;
+ bool ProfileValid()const{return true;}
+ ReturnedPolicy Policy()const{return {};}
+ bool L2TrimsDisabled(int)const{return false;}
+};
+int main(){
+ DVBRIDGE::DiagnosticOpen();
+ Base base{{1920,1080,1,{{2048,1088},{0,0},{0,0}},2},{}};
+ Layer el{960,540,2,{{1024,544},{0,0},{0,0}},1};const Layer* enhancement=&el;
+ struct {int width=3840,height=2160,x=0,y=0;} geometry;
+ int m_pendingInfo=3;bool m_direct=true,m_fallback=false;
+ int revision=7;Preferences preferences;ReturnedPolicy policy;
+ FIRST
+ POLICY
+ assert(CLog::lines.size()==2);
+ const auto& frame=CLog::lines[0];
+ for(auto key:{"bl_layout=1","bl_texture=2048x1088","el=960x540", "el_texture=1024x544","bl_chroma=2","el_chroma=1"})
+  assert(frame.find(key)!=std::string::npos);
+ const auto& settings=CLog::lines[1];
+ for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1"})
+  assert(settings.find(key)!=std::string::npos);
+ enhancement=nullptr;
+ FIRST
+ assert(CLog::lines.back().find("el=0x0")!=std::string::npos);
+ assert(CLog::lines.back().find("el_texture=0x0")!=std::string::npos);
+}
+'''.replace('FIRST', calls[0]).replace('POLICY', calls[1]), {'utils/log.h':r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+ inline static std::vector<std::string> lines;
+ template<class...T>static void Log(int,fmt::format_string<T...> f,T&&...a){
+  lines.push_back(fmt::format(f,std::forward<T>(a)...));
+ }
+};
+'''})
+
     def test_first_presentation_logs_once_only_for_the_current_live_stream(self):
         self.run_cpp(r'''
 #include "utils/DVBridgeDiagnosticLog.h"

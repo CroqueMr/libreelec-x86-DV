@@ -11174,7 +11174,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2063 @@
+@@ -0,0 +1,2068 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -12296,10 +12296,15 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    {
 +      m_firstFrame = false;
 +      m_lastSummary = DVBRIDGE::DiagnosticNowMs();
-+      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={}",
++      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={} bl_layout={} bl_texture={}x{} el={}x{} el_layout={} el_texture={}x{} bl_chroma={} el_chroma={}",
 +          base.width, base.height, geometry.width, geometry.height, geometry.x, geometry.y,
 +          enhancement != nullptr, bool(m_pendingInfo & CDVPlaybackInfo::FEL),
-+          bool(m_pendingInfo & CDVPlaybackInfo::CM4), m_direct);
++          bool(m_pendingInfo & CDVPlaybackInfo::CM4), m_direct,
++          int(base.layout), base.planes[0].width, base.planes[0].height,
++          enhancement ? enhancement->width : 0, enhancement ? enhancement->height : 0,
++          enhancement ? int(enhancement->layout) : -1,
++          enhancement ? enhancement->planes[0].width : 0, enhancement ? enhancement->planes[0].height : 0,
++          int(base.chromaLocation), enhancement ? int(enhancement->chromaLocation) : -1);
 +    }
 +  }
 +  return m_prepared;

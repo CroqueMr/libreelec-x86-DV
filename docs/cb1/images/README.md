@@ -1,7 +1,8 @@
 # Interface screenshots
 
 Native captures illustrate the interface, not HDR/Dolby Vision image fidelity or
-sustained performance. The RC1 selector capture is unchanged at 3840x2160.
+sustained performance. The main pages use the retained Beta4 selector capture.
+The separate RC1 selector capture is unchanged at 3840x2160.
 The retained Beta4 examples are 1920x1080 sRGB previews converted from their
 original BT.2020/PQ captures. Their source version is preserved below.
 

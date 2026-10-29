@@ -65,7 +65,7 @@ The quick selector uses Kodi controls in a compact bottom-right panel. Its heigh
 follows the available modes; longer lists use native scrolling. Other selectors
 keep the active skin's layout.
 
-![RC1 Dolby Vision rendering selection](images/rc1-quick-rendering-menu.png)
+![Dolby Vision rendering selection on Avatar](images/beta4-quick-rendering-menu.png)
 
 ![HDR10 rendering selection](images/quick-display-hdr10.png)
 
