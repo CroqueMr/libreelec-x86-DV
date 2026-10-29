@@ -8172,7 +8172,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40832"
-+msgid "Select the TV panel type for the shared manual profile. Unset leaves the profile incomplete."
++msgid "Optional TV panel type. Peak luminance and color gamut define the manual profile."
 +msgstr ""
 +
 +msgctxt "#40833"
@@ -11174,7 +11174,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2068 @@
+@@ -0,0 +1,2092 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11862,6 +11862,18 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +}
 +#endif
 +
++void CDVBridgeGLES::BeginDiagnosticStream(uint64_t stream)
++{
++  if (!stream || stream == m_diagnosticStream) return;
++  if (m_diagnosticStream) Summary("stream-end");
++  m_diagnosticStream = stream;
++  m_failures.Reset();
++  m_prepares = m_directFrames = m_presentations = m_failedPresentations = 0;
++  m_lastSummary = m_lastReported = m_rawELImports = m_rawELHits = 0;
++  m_hdr10plusDiagnostics = {};
++  m_firstFrame = true;
++}
++
 +bool CDVBridgeGLES::Failure(const char* stage)
 +{
 +  if (DVBRIDGE::DiagnosticsEnabled())
@@ -11869,7 +11881,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    const auto now=DVBRIDGE::DiagnosticNowMs();
 +    const bool changed = m_failures.Record(now, stage);
 +    DVBRIDGE::DiagnosticFailureLog(stage, changed, LOGERROR,
-+          "DVBridge renderer: stage={} failures={}", stage,m_failures.Count());
++          "DVBridge renderer: stage={} failures={} mode={} master_ipt={} hdr10={} target={} pending={} prepared={} output_bits={}",
++          stage,m_failures.Count(),int(m_effectiveMode),m_requested.masterIPT,m_hdr10,
++          m_scanout != nullptr,m_pending,m_prepared,m_outputBits);
 +    const bool eligible=m_live && m_advanced && m_hasCommitted &&
 +        m_pendingBinding.stream==m_committedBinding.stream &&
 +        m_pendingBinding.revision==m_committedBinding.revision;
@@ -11902,8 +11916,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  {
 +    if (!DVBRIDGE::DiagnosticsEnabled() ||
 +        (std::string_view(event) == "summary" && m_lastReported == m_presentations)) return;
-+    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge advanced renderer {}: presented={} presentation_failures={} stage_failures={}",
-+        event,m_presentations,m_failedPresentations,m_failures.Count());
++    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge advanced renderer {}: presented={} presentation_failures={} stage_failures={} counter_stream={}",
++        event,m_presentations,m_failedPresentations,m_failures.Count(),m_diagnosticStream);
 +    m_lastReported = m_presentations;
 +    return;
 +  }
@@ -11911,9 +11925,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      (std::string_view(event) == "summary" && m_lastReported == m_prepares))
 +    return;
 +  DVBRIDGE::DiagnosticLog(LOGINFO,
-+      "DVBridge renderer {}: prepared={} direct={} composed={} presented={} presentation_failures={} stage_failures={} raw_el_imports={} raw_el_hits={}",
++      "DVBridge renderer {}: prepared={} direct={} composed={} presented={} presentation_failures={} stage_failures={} raw_el_imports={} raw_el_hits={} counter_stream={}",
 +      event, m_prepares, m_directFrames, m_prepares - m_directFrames,
-+      m_presentations, m_failedPresentations, m_failures.Count(),m_rawELImports,m_rawELHits);
++      m_presentations, m_failedPresentations, m_failures.Count(),m_rawELImports,m_rawELHits,m_diagnosticStream);
 +  m_lastReported = m_prepares;
 +}
 +
@@ -12296,7 +12310,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    {
 +      m_firstFrame = false;
 +      m_lastSummary = DVBRIDGE::DiagnosticNowMs();
-+      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={} bl_layout={} bl_texture={}x{} el={}x{} el_layout={} el_texture={}x{} bl_chroma={} el_chroma={}",
++      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={} bl_layout={} bl_texture={}x{} el={}x{} el_layout={} el_texture={}x{} bl_chroma={} el_chroma={} bl_uv_texture={}x{} el_uv_texture={}x{}",
 +          base.width, base.height, geometry.width, geometry.height, geometry.x, geometry.y,
 +          enhancement != nullptr, bool(m_pendingInfo & CDVPlaybackInfo::FEL),
 +          bool(m_pendingInfo & CDVPlaybackInfo::CM4), m_direct,
@@ -12304,7 +12318,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +          enhancement ? enhancement->width : 0, enhancement ? enhancement->height : 0,
 +          enhancement ? int(enhancement->layout) : -1,
 +          enhancement ? enhancement->planes[0].width : 0, enhancement ? enhancement->planes[0].height : 0,
-+          int(base.chromaLocation), enhancement ? int(enhancement->chromaLocation) : -1);
++          int(base.chromaLocation), enhancement ? int(enhancement->chromaLocation) : -1,
++          base.planes[1].width,base.planes[1].height,
++          enhancement ? enhancement->planes[1].width : 0,enhancement ? enhancement->planes[1].height : 0);
 +    }
 +  }
 +  return m_prepared;
@@ -12330,6 +12346,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    const DVBRIDGE::OutputPreferences& preferences, bool allowPacked, const dvbridge_policy* selected,
 +    bool allowAsync)
 +{
++  if (base.binding.Valid()) BeginDiagnosticStream(base.binding.stream);
 +  DVBRIDGE::ObserveDiagnostic(base.binding.stream,base.binding.picture,base.binding.revision,
 +      preferences.revision,"prepare-entry",preferences.output != DVBRIDGE::OutputMode::Disabled,false);
 +  if (m_submission.asyncEligible) m_submission = {};
@@ -12736,6 +12753,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    m_asyncEligible = false;
 +    return FrameStatus::Failed;
 +  }
++  BeginDiagnosticStream(base.binding.stream);
 +  struct Import
 +  {
 +    struct Raw
@@ -12849,6 +12867,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +          reinterpret_cast<const AVDRMFrameDescriptor*>(imported->image.mapping->data[0]),
 +          imported->image.width,imported->image.height,enhancement->hw_frames_ctx->data,
 +          imported->image.display,eglGetCurrentContext());
++      if (cacheable && !m_rawELImports)
++        DVBRIDGE::DiagnosticLog(LOGINFO,
++            "CB1 FEL DMA: source={}/{}/{} objects={} format={:#x}/{:#x} pitch={}/{} offset={}/{} modifier={:#x}/{:#x}",
++            base.binding.stream,base.binding.picture,base.binding.revision,key.objects_count,
++            key.layers[0][0],key.layers[1][0],key.layers[0][4],key.layers[1][4],key.layers[0][3],key.layers[1][3],
++            key.objects[key.layers[0][2]][3],key.objects[key.layers[1][2]][3]);
 +      if (cacheable && !m_rawELCache.empty() &&
 +          std::static_pointer_cast<Import::Raw>(m_rawELCache.front())->key.pool != key.pool)
 +        m_rawELCache.clear();
@@ -15360,7 +15384,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +936,1717 @@
+@@ -397,13 +936,1727 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16309,7 +16333,17 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +      m_hdr10SessionStream != picture.doviMetadata.Binding().stream)
 +    return ConfigureHDR10Conversion(picture);
 +  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)
++  {
 +    DVBRIDGE::DiagnosticStage("output-tv-profile-required");
++    if ((m_dvProfileLoggedRevision != preferences.revision || m_dvProfileLoggedStream != binding.stream) &&
++        DVBRIDGE::DiagnosticLog(LOGWARNING,
++            "DVBridge profile incomplete: peak={} panel={} gamut={} requirement=peak_and_gamut_required",
++            preferences.peak,preferences.panel,preferences.gamut))
++    {
++      m_dvProfileLoggedRevision = preferences.revision;
++      m_dvProfileLoggedStream = binding.stream;
++    }
++  }
 +  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring &&
 +      (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla || m_dvState.Captured() || m_hdrConversion))
 +    return true;

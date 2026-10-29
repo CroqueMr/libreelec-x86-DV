@@ -594,7 +594,7 @@ diff --git a/xbmc/utils/DVBridgeKernelLog.h b/xbmc/utils/DVBridgeKernelLog.h
    std::optional<std::string> Accept(std::string_view record, uint64_t nowUs)
    {
      uint64_t priority, sequence, timestamp;
-@@ -32,14 +33,23 @@
+@@ -32,14 +33,24 @@
      }
      m_seen = true;
      m_sequence = sequence;
@@ -615,7 +615,8 @@ diff --git a/xbmc/utils/DVBridgeKernelLog.h b/xbmc/utils/DVBridgeKernelLog.h
 +         message.find("PCON") != message.npos ||
 +         message.find("DP-to-HDMI") != message.npos ||
 +         message.find("DP-HDMI") != message.npos);
-+    if (timestamp > nowUs || (!route && nowUs - timestamp > 60000000))
++    const bool capability = message.find("DVBridge: AMD capability ") != message.npos;
++    if (timestamp > nowUs || (!route && !capability && nowUs - timestamp > 60000000))
 +      return {};
      const bool incident = priority <= 4 && intel &&
          (message.find("GPU HANG") != message.npos ||

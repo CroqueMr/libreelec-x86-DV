@@ -87,13 +87,27 @@ int main(){
 #include <optional>
 #include <cstdint>
 #include <cstddef>
+#include <string>
+#include <vector>
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
+#include "DIAGNOSTIC_HEADER"
+#include "CRC_SOURCE"
+enum {LOGINFO};
+namespace DVBRIDGE {
+inline std::vector<std::string> messages;
+template<class... T>bool DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
+ messages.push_back(fmt::format(f,std::forward<T>(a)...));return true;
+}
+}
 struct Identity {unsigned stream=3,picture=7,revision=9;};
 struct pl_rect2d {int x0,y0,x1,y1;};
 struct Texture {struct {int w=3840,h=2160;}params;};
 Texture texture;Texture* dvbridge_render_texture(int){return &texture;}
 struct Metadata {const void* Data()const{return this;}size_t Size()const{return sizeof(*this);}};
 struct AVDynamicHDRPlus {int value{};};
-struct cb1_hdr10plus_statistics {int value{};};
+struct cb1_hdr10plus_statistics {int value{};double maxscl[3]={100,200,300},average_maxrgb=12.3;
+ uint64_t count=2304;uint32_t histogram[256]{};};
 struct cb1_dv_hdr10plus_report {int coverage=2,reason=0;bool l3_used=true;};
 enum {CB1_HDR10PLUS_ANALYSIS_INVALID,CB1_HDR10PLUS_ANALYSIS_PENDING,
  CB1_HDR10PLUS_ANALYSIS_READY,CB1_HDR10PLUS_ANALYSIS_BUSY,CB1_HDR10PLUS_OK};
@@ -122,6 +136,7 @@ struct CDVBridgeGLES {
  std::optional<AVDynamicHDRPlus>m_hdr10plusMetadata;
  cb1_dv_hdr10plus_report m_hdr10plusReport;
  int m_hdr10plusVersion=0;
+ DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
  bool Failure(const char*){++failures;return false;}
  void Cancel(){m_prepared=m_pending=false;m_hdr10plusMetadata.reset();}
  void PreparedAudit(){++audits;}
@@ -138,6 +153,10 @@ int main(){
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Ready);
  assert(r.m_prepared && r.m_hdr10plusMetadata->value==123 && buildCount==1 && r.audits==1);
  assert(preparedVersion==0);
+ assert(DVBRIDGE::messages.size()==1);
+ assert(DVBRIDGE::messages.back().find("pixels=2304")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("source=3/7/9")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("maxscl=100,200,300")!=std::string::npos);
  ++r.m_pendingIdentity.picture;r.m_prepared=false;
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Failed);
  assert(!r.m_hdr10plusMetadata && !r.m_pending && buildCount==1);
@@ -147,8 +166,14 @@ int main(){
  state=CB1_HDR10PLUS_ANALYSIS_INVALID;r.m_pending=true;
  assert(r.BeginHDR10Plus()==CDVBridgeGLES::FrameStatus::Failed);
  assert(!r.m_pending && r.failures==2 && r.m_failedIdentity.picture==r.m_pendingIdentity.picture);
+ assert(DVBRIDGE::messages.size()==1); // Stale, busy and invalid jobs add no analysis witness.
 }
 '''.replace('BEGIN',method('BeginHDR10Plus')).replace('POLL',method('PollHDR10Plus'))
+        program=program.replace('DIAGNOSTIC_HEADER',str(TREE/'xbmc/utils/DVBridgeDiagnosticState.h'))
+        crc=(TREE/'xbmc/utils/Crc32.cpp').read_text().split('uint32_t Crc32::ComputeFromLowerCase')[0]
+        crc=crc.replace('#include "utils/StringUtils.h"','')
+        crc=crc.replace('#include "Crc32.h"','#include "'+str(TREE/'xbmc/utils/Crc32.h')+'"')
+        program=program.replace('#include "CRC_SOURCE"',crc)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);code=root/'check.cpp';binary=root/'check'
             code.write_text(program)
@@ -179,6 +204,7 @@ struct dvbridge_gl_frame {struct Frame {Frame* enhancement_layer{};}frame;};
 struct dvbridge_color {struct {bool nlq_active=true;}dovi;};
 struct GL {int gpu;};
 static int rawCalls,basicCalls,directCalls,standardCalls,masterCalls;
+static int masterStatus=CB1_MASTER_READY,iptCalls;
 template<class... A>bool dvbridge_gl_frame_import(A...){return true;}
 template<class... A>bool ImportDVLayer(A... a){return dvbridge_gl_frame_import(a...);}
 template<class... A>void dvbridge_gl_frame_release(A...){}
@@ -196,9 +222,9 @@ template<class... A>bool dvbridge_render_packed(A...){++standardCalls;return tru
 template<class... A>bool dvbridge_render_packed_overlay(A...){++standardCalls;return true;}
 // The production code stores this concrete function in a local variable.
 int dvbridge_render_master_reference(int,dvbridge_gl_frame::Frame*,const void*,size_t,
-    double,double,dvbridge_geometry,int,bool,const int*){++masterCalls;return CB1_MASTER_READY;}
+    double,double,dvbridge_geometry,int,bool,const int*){++masterCalls;return masterStatus;}
 int dvbridge_render_master_reference_ipt(int,dvbridge_gl_frame::Frame*,const void*,size_t,
-    double,double,dvbridge_geometry,int,bool,const int*){assert(false);return CB1_MASTER_READY;}
+    double,double,dvbridge_geometry,int,bool,const int*){++iptCalls;return masterStatus;}
 namespace DVBRIDGE {
 bool DiagnosticsEnabled(){return false;}
 uint64_t DiagnosticNowMs(){return 0;}
@@ -234,6 +260,16 @@ int main(){
  rawCalls=basicCalls=directCalls=0;
  assert(r.Prepare(bl,nullptr,metadata,{},false));assert(basicCalls==1 && !rawCalls);
  assert(r.Prepare(bl,nullptr,metadata,{},true));assert(directCalls==1);
+ r.m_hdr10=false;r.m_effectiveMode=DVBRIDGE_MODE_MASTER_REFERENCE;
+ for(bool ipt:{false,true}){
+  r.m_requested.masterIPT=ipt;masterStatus=CB1_MASTER_READY;
+  assert(r.Prepare(bl,&el,metadata,{},true));
+  assert(r.m_direct && r.m_prepared && rawCalls==0);
+  masterStatus=CB1_MASTER_INVALID;
+  assert(!r.Prepare(bl,&el,metadata,{},true));
+  assert(!r.m_direct && !r.m_prepared && rawCalls==0); // Never RGB fallback.
+ }
+ assert(masterCalls==2 && iptCalls==2);
 }
 '''.replace('BODY',implementation)
         repo=Path(__file__).resolve().parents[2]
