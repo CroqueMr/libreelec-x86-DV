@@ -131,7 +131,6 @@ A 3D-capable display and suitable glasses are required.
 | AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Supported |
 | AMD Radeon Vega M; Intel Arc A / B | Supported |
 | NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Supported |
-| NVIDIA GeForce GTX 10, Pascal | Supported; matched R580 driver selected automatically |
 | Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
 Performance depends on hardware, content and rendering mode. Prior N100 tests
