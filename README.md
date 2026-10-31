@@ -25,7 +25,7 @@ players included in the comparison.
 
 [Watch the analysis on YouTube](https://www.youtube.com/watch?v=-9wbVaEgMX8).
 
-Dolby Vision Master Reference and Standard output modes from the build deliver exceptional 12 bits precision 
+Dolby Vision Master Reference and Standard output modes from the build deliver absolute 12 bits precision 
 with FEL reconstruction, surpassing the best Dolby Vision-certified devices available on the market.
 
 ## Supported Dolby Vision profiles
