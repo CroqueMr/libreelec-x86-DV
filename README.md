@@ -21,9 +21,9 @@ No external player or proprietary Dolby SDK is required.
 DMDreview's measurements place LibreElec Dolby Vision Master Reference mode ahead of the Dolby Vision
 players included in the comparison.
 
-[![Watch DMDreview's Dolby Vision comparison](https://i.ytimg.com/vi/-9wbVaEgMX8/hqdefault.jpg)](https://www.youtube.com/watch?v=-9wbVaEgMX8)
+[![Dolby Vision grayscale output accuracy compared with reference measurements](docs/cb1/images/dolby-vision-grayscale-comparison.png)](https://www.youtube.com/watch?v=-9wbVaEgMX8)
 
-[Watch the analysis on YouTube](https://www.youtube.com/watch?v=-9wbVaEgMX8).
+*Synthetic grayscale comparison measured by DMDreview on LibreELEC R1.0.0 Beta5. Lower is better.* [Watch the analysis](https://www.youtube.com/watch?v=-9wbVaEgMX8).
 
 Dolby Vision Master Reference and Standard output modes from the build deliver absolute 12 bits precision 
 with FEL reconstruction, surpassing the best Dolby Vision-certified devices available on the market.
