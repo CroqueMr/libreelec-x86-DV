@@ -8,6 +8,28 @@ static void enhanced_log(void *priv,enum pl_log_level level,const char *message)
     if(level<=PL_LOG_ERR)render_errors++;
 }
 static bool withhold_fetch;
+static bool reject_fused_render;
+static unsigned fused_rejections;
+static bool ai_test_render(pl_renderer renderer,const struct pl_frame *source,
+    const struct pl_frame *target,const struct pl_render_params *params)
+{
+    for(int i=0;reject_fused_render && i<params->num_hooks;i++)
+        if(params->hooks[i]->signature==0x4342314149450002ULL){fused_rejections++;return false;}
+    return pl_render_image(renderer,source,target,params);
+}
+static void ai_test_dispatch(GLuint x,GLuint y,GLuint z)
+{
+    if(reject_fused_render){
+        GLint binding,name;GLint64 capacity;
+        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_BINDING,&binding);
+        glGetIntegeri_v(GL_SHADER_STORAGE_BUFFER_BINDING,1,&name);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,name);
+        glGetBufferParameteri64v(GL_SHADER_STORAGE_BUFFER,GL_BUFFER_SIZE,&capacity);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER,binding);
+        assert(capacity>=(GLint64)x*16 && "Retry reduction exceeds its actual scratch storage");
+    }
+    glDispatchCompute(x,y,z);
+}
 static bool ai_test_has_ext(pl_opengl gl,const char *name)
 {return !(withhold_fetch && !strcmp(name,"GL_EXT_shader_framebuffer_fetch_non_coherent")) && pl_opengl_has_ext(gl,name);}
 static GLuint rejected_texture;
@@ -25,10 +47,14 @@ static pl_tex ai_test_wrap(pl_gpu gpu,const struct pl_opengl_wrap_params *params
 #define pl_opengl_wrap ai_test_wrap
 #define glDeleteTextures ai_test_delete
 #define pl_opengl_has_ext ai_test_has_ext
+#define pl_render_image ai_test_render
+#define glDispatchCompute ai_test_dispatch
 #include "dvbridge_render.c"
 #undef pl_opengl_wrap
 #undef glDeleteTextures
 #undef pl_opengl_has_ext
+#undef pl_render_image
+#undef glDispatchCompute
 #include <time.h>
 
 static enum dvbridge_dv_policy_status finish(struct dvbridge_renderer *r)
@@ -112,6 +138,27 @@ int main(int argc,char **argv)
     struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
     GLint fragment_images;glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS,&fragment_images);
     const bool can_direct=r->fragment_quad && fragment_images>=3;
+    if(argc==2 && !strcmp(argv[1],"--retry-scratch")){
+        if(!can_direct){puts("SKIP retry requires real fragment quad support");return 77;}
+        pl_tex texture=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
+            .format=pl_find_named_fmt(gpu.gl->gpu,"rgba32f"),.sampleable=true,.renderable=true));assert(texture);
+        float q=dv_ideal_pq(500);pl_tex_clear(gpu.gl->gpu,texture,(float[4]){q,q,q,1});
+        struct pl_frame frame=reference_frame(texture,3840,2160);frame.repr=pl_color_repr_rgb;
+        frame.color=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,
+            .transfer=PL_COLOR_TRC_PQ,.hdr={.max_luma=1000}};
+        struct cb1_ai_result prediction={.id={31,1,7},.pts=0,
+            .raw={.l1_min=0,.l1_max=3080,.l1_avg=1463,.l3_min=2048,.l3_max=2048,.l3_avg=2048}};
+        struct dvbridge_policy policy={.revision=7,.mode=DVBRIDGE_MODE_ENHANCED_DV,
+            .tv={2300,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020}};
+        struct dvbridge_geometry geometry={3840,2160,0,0,3840,2160};
+        reject_fused_render=true;
+        assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&frame,&geometry));
+        assert(fused_rejections && r->ai_fusion_failed && !r->ai_enhanced_fused);
+        assert(finish(r)==DVBRIDGE_DV_READY);
+        reject_fused_render=false;retire(r);pl_tex_destroy(gpu.gl->gpu,&texture);
+        dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
+        reference_gpu_destroy(&gpu);puts("PASS same-frame AI retry keeps sufficient scratch and valid output");return 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--metadata-shape")){
         for(unsigned count=0;count<=5;count++){
             uint32_t words[640]={0};
@@ -190,7 +237,7 @@ int main(int argc,char **argv)
     unsigned char *control_bytes=malloc(packed_bytes),*direct_bytes=malloc(packed_bytes);assert(control_bytes && direct_bytes);
     pl_tex overlay_planes[3];
     overlay_planes[0]=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
-        .format=pl_find_named_fmt(gpu.gl->gpu,"rgba16f"),.renderable=true,.sampleable=true));assert(overlay_planes[0]);
+        .format=pl_find_named_fmt(gpu.gl->gpu,"rgba16f"),.renderable=true,.sampleable=true,.blit_dst=true));assert(overlay_planes[0]);
     pl_tex_clear(gpu.gl->gpu,overlay_planes[0],(float[4]){.1,.1,.1,.5});
     for(unsigned i=1;i<3;i++)overlay_planes[i]=reference_texture(gpu.gl->gpu,1,1,(float[4]){.1,.1,.1,.5});
     struct dvbridge_native_overlay late={.texture=overlay_planes[0],.degamma=overlay_planes[1],.pq=overlay_planes[2],
@@ -199,8 +246,41 @@ int main(int argc,char **argv)
     pl_tex_destroy(gpu.gl->gpu,&tex);tex=reference_texture(gpu.gl->gpu,4,2,pixel);
     source.planes[0].texture=tex;
     pl_tex full_source=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
-        .format=pl_find_named_fmt(gpu.gl->gpu,"rgba32f"),.sampleable=true,.renderable=true));assert(full_source);
+        .format=pl_find_named_fmt(gpu.gl->gpu,"rgba32f"),.sampleable=true,.renderable=true,.blit_dst=true));assert(full_source);
     pl_tex_clear(gpu.gl->gpu,full_source,(float[4]){pixel[0],pixel[1],pixel[2],1});
+    /* Deferred native GUI consumes the same PQ and statistics, not an unused carrier. */
+    for(unsigned rejected=0;can_direct && rejected<2;rejected++){
+        uint32_t statistics[12];uint8_t metadata[2560];unsigned metadata_count=0;
+        source.planes[0].texture=full_source;source.crop=(pl_rect2df){0,0,3840,2160};
+        source.color.hdr.max_luma=rejected?50:1000;
+        geometry=(struct dvbridge_geometry){3840,2160,0,0,3840,2160};
+        for(unsigned visible=0;visible<2;visible++){
+            dvbridge_renderer_set_overlay_visible(r,visible);
+            assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
+            assert(r->ai_enhanced_prepack && (!visible || !r->dv.prepacked));
+            assert(dvbridge_render_dv_policy_update_overlay(r,&late,true));
+            assert(finish(r)==DVBRIDGE_DV_READY);
+            assert(dvbridge_render_dv_policy_output(r)->value.expansion_reason==
+                (rejected?CB1_DVE_SOURCE_BOUND:CB1_DVE_ACTIVE));
+            unsigned count;const uint32_t *packets=dvbridge_packets(r->pending,&count);
+            assert(count && count<=5);
+            if(!visible){memcpy(statistics,r->dv.mapped,sizeof(statistics));
+                memcpy(metadata,packets,count*512);metadata_count=count;}
+            else assert(!memcmp(statistics,r->dv.mapped,sizeof(statistics)) && count==metadata_count &&
+                !memcmp(metadata,packets,count*512));
+            glBindFramebuffer(GL_FRAMEBUFFER,direct_fbo);glDisable(GL_SCISSOR_TEST);
+            glClearColor(1,0,1,1);glClear(GL_COLOR_BUFFER_BIT);glBindFramebuffer(GL_FRAMEBUFFER,0);
+            assert(dvbridge_render_dv_policy_resolve(r,direct_target,direct_fbo,false));
+            unsigned char *actual=visible?direct_bytes:control_bytes;
+            glBindFramebuffer(GL_FRAMEBUFFER,direct_fbo);glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);assert(glGetError()==GL_NO_ERROR);
+            size_t changed=0;for(size_t n=0;n<packed_bytes;n++)
+                changed+=actual[n]!=(uint8_t[]){255,0,255,255}[n%4];
+            assert(changed>1000000 && (!visible || !memcmp(control_bytes,direct_bytes,packed_bytes)));
+            retire(r);
+        }
+    }
+    source.color.hdr.max_luma=1000;
     for(unsigned preset=0;can_direct && preset<2;preset++)for(unsigned flip=0;flip<2;flip++)for(unsigned gui=0;gui<3;gui++){
         source.planes[0].texture=preset?full_source:tex;
         source.crop=preset?(pl_rect2df){0,0,3840,2160}:(pl_rect2df){0,0,4,2};
@@ -336,8 +416,9 @@ int main(int argc,char **argv)
     assert(out->value.expansion_reason==CB1_DVE_SOURCE_BOUND && out->value.nominal_max_nits==50);
     pl_tex original=dvbridge_render_dv_policy_rgb(r);
     unsigned original_name=pl_opengl_unwrap(gpu.gl->gpu,original,NULL,NULL,NULL);
-    float gui[4]={.1f,.1f,.1f,1};pl_tex gui_tex=reference_texture(gpu.gl->gpu,1,1,gui);
-    struct dvbridge_native_overlay overlay={.texture=gui_tex,.degamma=gui_tex,.pq=gui_tex,
+    float gui[4]={.1f,.1f,.1f,1};pl_tex gui_tex[3];
+    for(unsigned i=0;i<3;i++)gui_tex[i]=reference_texture(gpu.gl->gpu,1,1,gui);
+    struct dvbridge_native_overlay overlay={.texture=gui_tex[0],.degamma=gui_tex[1],.pq=gui_tex[2],
         .rect={0,0,3840,2160},.input_pq=true};
     assert(dvbridge_render_dv_policy_update_overlay(r,&overlay,true));
     pl_tex target=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,
@@ -436,7 +517,8 @@ int main(int argc,char **argv)
     assert(!rejected_texture || rejected_deleted);
     out=dvbridge_render_dv_policy_output(r);assert(out && out->value.measured);
     retire(r);reject_statistics=false;
-    pl_tex_destroy(gpu.gl->gpu,&target);pl_tex_destroy(gpu.gl->gpu,&gui_tex);
+    pl_tex_destroy(gpu.gl->gpu,&target);
+    for(unsigned i=0;i<3;i++)pl_tex_destroy(gpu.gl->gpu,&gui_tex[i]);
     for(unsigned p=0;p<2;p++)pl_tex_destroy(gpu.gl->gpu,&planar.planes[p].texture);
     pl_tex_destroy(gpu.gl->gpu,&tex);dvbridge_renderer_destroy(r);
     assert(dvbridge_retirement_owner_destroy(&owner));reference_gpu_destroy(&gpu);

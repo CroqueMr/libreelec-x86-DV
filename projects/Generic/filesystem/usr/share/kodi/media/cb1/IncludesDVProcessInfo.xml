@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <includes>
-  <variable name="DVAudioOutput">
-    <value condition="Player.Passthrough">Passthrough</value>
-    <value>Decoded player PCM</value>
-  </variable>
   <variable name="DVSourceFormat">
     <value condition="String.IsEqual(VideoPlayer.HdrType,dolbyvision)">Dolby Vision</value>
+    <value condition="String.IsEqual(VideoPlayer.HdrType,hdr10plus)">HDR10+</value>
     <value condition="String.IsEqual(VideoPlayer.HdrType,hdr10)">HDR10</value>
     <value condition="String.IsEqual(VideoPlayer.HdrType,hlg)">HLG</value>
     <value condition="!String.IsEmpty(VideoPlayer.HdrType)">$INFO[VideoPlayer.HdrType]</value>
@@ -23,11 +20,11 @@
     <param name="label"/><param name="value"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><height>30</height><visible>$PARAM[visible]</visible>
-        <control type="label"><width>230</width><height>30</height>
+        <control type="label"><width>252</width><height>30</height>
           <font>CB1.InfoBody</font><textcolor>FFBFC8CC</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label"><left>234</left><right>0</right><height>30</height>
-          <font>CB1.InfoBody</font><textcolor>FFF4F6F6</textcolor><align>right</align><label>$PARAM[value]</label>
+        <control type="fadelabel"><left>264</left><right>0</right><height>30</height>
+          <font>CB1.InfoBody</font><textcolor>FFF4F6F6</textcolor><align>right</align><label>$PARAM[value]</label><scroll>true</scroll><resetonlabelchange>false</resetonlabelchange>
         </control>
       </control>
     </definition>
@@ -43,8 +40,7 @@
     </definition>
   </include>
   <include name="DVVideoFields"><definition>
-      <include content="DVSection"><param name="label" value="VIDEO"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>
-      <include content="DVInfoRow"><param name="label" value="Format"/><param name="value" value="$VAR[DVSourceFormat]"/><param name="visible" value="true"/></include>
+      <include content="DVSection"><param name="label" value="VIDEO : $VAR[DVSourceFormat]"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>
       <include content="DVInfoRow"><param name="label" value="Display output"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Display)]"/><param name="visible" value="true"/></include>
       <include content="DVInfoRow"><param name="label" value="Video stream"/><param name="value" value="$INFO[Player.Process(videowidth)]x$INFO[Player.Process(videoheight)] / $INFO[Player.Process(videofps)] fps"/><param name="visible" value="true"/></include>
       <include content="DVInfoRow"><param name="label" value="Decoder"/><param name="value" value="$INFO[Player.Process(videodecoder)]"/><param name="visible" value="true"/></include>
@@ -52,18 +48,24 @@
       <include content="DVInfoRow"><param name="label" value="Source bit depth"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SourceBits)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceBits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceBits),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Aspect ratio"/><param name="value" value="$INFO[Player.Process(videodar)]"/><param name="visible" value="true"/></include>
       <include content="DVInfoRow"><param name="label" value="Video bitrate"/><param name="value" value="$INFO[Player.Process(videolivebitrate)]"/><param name="visible" value="true"/></include>
-      <include content="DVInfoRow"><param name="label" value="Playback time"/><param name="value" value="$INFO[Player.Time] / $INFO[Player.Duration]"/><param name="visible" value="true"/></include>
     </definition></include>
   <include name="DVAudioFields"><definition>
-      <include content="DVSection"><param name="label" value="AUDIO"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>
+      <include content="DVSection"><param name="label" value="AUDIO : $INFO[Player.Process(audiosourcetitle)]"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
+      <include content="DVSection"><param name="label" value="AUDIO"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="!Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
       <include content="DVInfoRow"><param name="label" value="Track"/><param name="value" value="No audio track"/><param name="visible" value="!Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Source codec"/><param name="value" value="$INFO[VideoPlayer.AudioCodec]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Decoder"/><param name="value" value="$INFO[Player.Process(audiodecoder)]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Decoded format"/><param name="value" value="$INFO[Player.Process(audiobitspersample)] bit / $INFO[Player.Process(audiosamplerate)] Hz"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0) + !Player.Passthrough"/></include>
-      <include content="DVInfoRow"><param name="label" value="Source channels"/><param name="value" value="$INFO[Player.Process(audiochannels)]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Player audio path"/><param name="value" value="$VAR[DVAudioOutput]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Bitrate"/><param name="value" value="$INFO[Player.Process(audiolivebitrate)]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Language"/><param name="value" value="$INFO[VideoPlayer.AudioLanguage]"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
+      <include content="DVInfoRow"><param name="label" value="Source format"/><param name="value" value="$INFO[Player.Process(audiosourceformat)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiosourceformat))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Source channels"/><param name="value" value="$INFO[Player.Process(audiosourcechannels)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiosourcechannels))"/></include>
+      <include content="DVInfoRow"><param name="label" value="$INFO[Player.Process(audiobedobjectslabel)]"/><param name="value" value="$INFO[Player.Process(audiobedobjects)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiobedobjects))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Presentation"/><param name="value" value="$INFO[Player.Process(audiopresentation)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiopresentation))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Dialnorm"/><param name="value" value="$INFO[Player.Process(audiodialnorm)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiodialnorm))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Bitrate"/><param name="value" value="$INFO[Player.Process(audiosourcebitrate)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiosourcebitrate))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Language"/><param name="value" value="$INFO[Player.Process(audiosourcelanguage)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiosourcelanguage))"/></include>
+      <include content="DVSection"><param name="label" value="KODI OUTPUT"/><param name="gap" value="8"/><param name="height" value="42"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputtransport))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Transport"/><param name="value" value="$INFO[Player.Process(audiooutputtransport)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputtransport))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Sent codec"/><param name="value" value="$INFO[Player.Process(audiooutputcodec)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputcodec))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Data"/><param name="value" value="$INFO[Player.Process(audiooutputdata)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputdata))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Output channels"/><param name="value" value="$INFO[Player.Process(audiooutputchannels)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputchannels))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Decoder"/><param name="value" value="$INFO[Player.Process(audiodecoder)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputtransport)) + !String.IsEmpty(Player.Process(audiodecoder))"/></include>
       <include content="DVInfoRow"><param name="label" value="Subtitles"/><param name="value" value="$VAR[DVSubtitleLanguage]"/><param name="visible" value="true"/></include>
     </definition></include>
   <include name="DVStaticHDRFields"><definition>
@@ -72,7 +74,7 @@
     </definition></include>
   <include name="DVRenderingFields"><param name="gauge"/><definition>
       <include content="DVSection"><param name="label" value="RENDERING &amp; SYSTEM"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>
-      <include content="DVInfoRow"><param name="label" value="Render engine + GUI"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.GPURender)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)"/></include>
+      <include content="DVInfoRow"><param name="label" value="Render engine"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.GPURender)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)"/></include>
       <control type="group"><height>24</height><visible>String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)</visible>
         <control type="progress" id="$PARAM[gauge]"><top>8</top><width>564</width><height>8</height>
           <texturebg colordiffuse="FF343E42">special://xbmc/media/cb1-white.png</texturebg>
@@ -89,7 +91,7 @@
       <include content="DVSection"><param name="label" value="OUTPUT &amp; PROCESSING"/><param name="gap" value="18"/><param name="height" value="60"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true)"/></include>
       <include content="DVInfoRow"><param name="label" value="Engine"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Engine)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Engine))"/></include>
       <include content="DVInfoRow"><param name="label" value="Circuit"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Circuit)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Circuit))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Compatibility fallback"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Fallback)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Fallback"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Fallback)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback))"/></include>
       <include content="DVInfoRow"><param name="label" value="Requested policy"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback))"/></include>
       <include content="DVInfoRow"><param name="label" value="Pending output"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.OutputStage)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage))"/></include>
       <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40849]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AdmissionReason)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AdmissionReason))"/></include>
@@ -110,11 +112,11 @@
       <include content="DVInfoRow"><param name="label" value="Level"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Level)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Level)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Level),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Version"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Version)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Version)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Version),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="CM metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CM)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.CM)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CM),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Parsed source blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.ParsedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Applied source blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AppliedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Source blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.ParsedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Applied blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AppliedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))"/></include>
       <include content="DVInfoRow"><param name="label" value="Partial block use"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.PartialBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.PartialBlocks))"/></include>
       <include content="DVInfoRow"><param name="label" value="Output blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TransmittedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Unapplied source blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.UnappliedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.UnappliedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Unused blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.UnappliedBlocks)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.UnappliedBlocks))"/></include>
       <include content="DVInfoRow"><param name="label" value="RPU"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.RPU)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.RPU)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.RPU),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Base layer"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.BL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.BL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.BL),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Enhancement layer"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.EL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.EL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.EL),N/A)"/></include>
@@ -141,23 +143,23 @@
         <control type="image"><left>36</left><top>88</top><right>36</right><height>1</height>
           <texture>special://xbmc/media/cb1-white.png</texture><colordiffuse>28FFFFFF</colordiffuse>
         </control>
-        <control type="grouplist" id="$PARAM[col1]"><left>36</left><top>108</top><width>548</width><height>700</height><itemgap>0</itemgap>
+        <control type="grouplist" id="$PARAM[col1]"><left>36</left><top>108</top><width>548</width><height>900</height><itemgap>0</itemgap>
           <include>DVVideoFields</include>
           <control type="group"><height>24</height><visible>$PARAM[dv]</visible></control>
           <include condition="$PARAM[dv]">DVAudioFields</include>
           <include content="DVSection"><param name="label" value="HDR METADATA"/><param name="gap" value="24"/><param name="height" value="66"/><param name="visible" value="![$PARAM[dv]] + [[!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceMastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceLight)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)]]"/></include>
           <include condition="![$PARAM[dv]]">DVStaticHDRFields</include>
         </control>
-        <control type="grouplist" id="$PARAM[col2]"><left>630</left><top>108</top><width>580</width><height>700</height><itemgap>0</itemgap>
+        <control type="grouplist" id="$PARAM[col2]"><left>630</left><top>108</top><width>580</width><height>900</height><itemgap>0</itemgap>
           <include condition="$PARAM[dv]">DVDynamicFields</include>
           <include condition="![$PARAM[dv]]">DVAudioFields</include>
           <include content="DVSection"><param name="label" value="AI RECONSTRUCTION"/><param name="gap" value="18"/><param name="height" value="60"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Reconstruction))"/></include>
           <include content="DVInfoRow"><param name="label" value="Metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Reconstruction)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Reconstruction))"/></include>
-          <include content="DVInfoRow"><param name="label" value="Estimated L1 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AIL1)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AIL1))"/></include>
-          <include content="DVInfoRow"><param name="label" value="Estimated L3 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AIL3)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AIL3))"/></include>
-          <include content="DVInfoRow"><param name="label" value="Output L1 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.OutputL1)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL1))"/></include>
+          <include content="DVInfoRow"><param name="label" value="AI L1 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AIL1)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AIL1))"/></include>
+          <include content="DVInfoRow"><param name="label" value="AI L3 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AIL3)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AIL3))"/></include>
+          <include content="DVInfoRow"><param name="label" value="Out L1 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.OutputL1)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL1))"/></include>
         </control>
-        <control type="grouplist" id="$PARAM[col3]"><left>1256</left><top>108</top><width>564</width><height>700</height><itemgap>0</itemgap>
+        <control type="grouplist" id="$PARAM[col3]"><left>1256</left><top>108</top><width>564</width><height>900</height><itemgap>0</itemgap>
           <include content="DVRenderingFields"><param name="gauge" value="$PARAM[gauge]"/></include>
         </control>
       </control>
@@ -170,19 +172,15 @@
       <include content="DVProcessLayout"><param name="height" value="620"/><param name="background" value="660"/><param name="panel" value="9601"/><param name="surface" value="9611"/><param name="col1" value="9630"/><param name="col2" value="9631"/><param name="col3" value="9632"/><param name="dv" value="false"/><param name="gauge" value="9401"/></include>
     </control>
   </include>
-  <variable name="CB1PlaybackModeTextColor">
-    <value condition="ListItem.Property(disabled)">grey</value>
-    <value>white</value>
-  </variable>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
       <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
       <control type="image" id="9101">
         <left>0</left><top>0</top><width>660</width><height>412</height>
-        <texture colordiffuse="dialog_tint">colors/white.png</texture>
+        <texture colordiffuse="FF1A2123">special://xbmc/media/cb1-white.png</texture>
       </control>
       <control type="label" id="1">
-        <left>20</left><top>12</top><width>620</width><height>40</height><font>font12</font><scroll>true</scroll>
+        <left>20</left><top>12</top><width>620</width><height>40</height><font>CB1.SwitchBody</font><textcolor>FFF0F0F0</textcolor><scroll>true</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
       <control type="list" id="3">
@@ -199,7 +197,7 @@
       </control>
       <control type="textbox" id="9102">
         <left>20</left><top>370</top><width>620</width><height>38</height>
-        <font>font10</font><textcolor>grey</textcolor>
+        <font>CB1.SwitchHelp</font><textcolor>FFA0A0A0</textcolor>
         <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
       </control>
     </control>
@@ -208,27 +206,27 @@
     <itemlayout width="620" height="50">
       <control type="image">
         <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
+        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
       </control>
       <control type="label">
         <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>font12</font><label>$INFO[ListItem.Label]</label>
-        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
+        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
       </control>
     </itemlayout>
     <focusedlayout width="620" height="50">
       <control type="image">
         <left>0</left><top>1</top><width>620</width><height>48</height>
-        <texture colordiffuse="button_focus">lists/focus.png</texture>
+        <texture colordiffuse="FF12A0C7">special://xbmc/media/cb1-white.png</texture>
       </control>
       <control type="image">
         <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
+        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
       </control>
       <control type="label">
         <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>font12</font><label>$INFO[ListItem.Label]</label>
-        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
+        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
       </control>
     </focusedlayout>
   </include>

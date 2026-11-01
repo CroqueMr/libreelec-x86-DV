@@ -1,6 +1,6 @@
 --- a/drivers/gpu/drm/i915/display/intel_atomic.c
 +++ b/drivers/gpu/drm/i915/display/intel_atomic.c
-@@ -64,6 +64,12 @@
+@@ -64,6 +64,17 @@
  	const struct intel_digital_connector_state *intel_conn_state =
  		to_intel_digital_connector_state(state);
  
@@ -9,11 +9,16 @@
 +		*val = intel_conn_state->dv_lab_standard;
 +		return 0;
 +	}
++	if (to_intel_connector(connector)->dv_hdr10_property &&
++	    property == to_intel_connector(connector)->dv_hdr10_property) {
++		*val = intel_conn_state->dv_hdr10_deep_color;
++		return 0;
++	}
 +
  	if (property == display->properties.force_audio)
  		*val = intel_conn_state->force_audio;
  	else if (property == display->properties.broadcast_rgb)
-@@ -96,6 +102,16 @@
+@@ -96,6 +107,24 @@
  	struct intel_digital_connector_state *intel_conn_state =
  		to_intel_digital_connector_state(state);
  
@@ -26,29 +31,47 @@
 +		intel_conn_state->dv_lab_standard = val;
 +		return 0;
 +	}
++	if (to_intel_connector(connector)->dv_hdr10_property &&
++	    property == to_intel_connector(connector)->dv_hdr10_property) {
++		if (val > 1 || (connector->connector_type != DRM_MODE_CONNECTOR_HDMIA &&
++			       connector->connector_type != DRM_MODE_CONNECTOR_DisplayPort))
++			return -EINVAL;
++		intel_conn_state->dv_hdr10_deep_color = val;
++		return 0;
++	}
 +
  	if (property == display->properties.force_audio) {
  		intel_conn_state->force_audio = val;
  		return 0;
-@@ -126,8 +142,10 @@
+@@ -125,9 +154,17 @@
+ 	struct drm_crtc_state *crtc_state;
  
  	intel_hdcp_atomic_check(conn, old_state, new_state);
- 
+-
 -	if (!new_state->crtc)
 -		return 0;
++	if (drm_connector_check_hdr10plus(new_state) ||
++	    (new_state->hdr10plus_metadata && new_conn_state->dv_lab_standard))
++		return -EINVAL;
++
 +	if (!new_state->crtc) {
 +		new_conn_state->dv_lab_standard = false;
++		new_conn_state->dv_hdr10_deep_color = false;
 +		return 0;
 +	}
++	if (new_conn_state->dv_lab_standard && new_conn_state->dv_hdr10_deep_color)
++		return -EINVAL;
  
  	crtc_state = drm_atomic_get_new_crtc_state(state, new_state->crtc);
  
-@@ -135,7 +153,8 @@
+@@ -135,7 +172,10 @@
  	 * These properties are handled by fastset, and might not end
  	 * up in a modeset.
  	 */
 -	if (new_conn_state->force_audio != old_conn_state->force_audio ||
 +	if (new_conn_state->dv_lab_standard != old_conn_state->dv_lab_standard ||
++	    !!new_state->hdr10plus_metadata != !!old_state->hdr10plus_metadata ||
++	    new_conn_state->dv_hdr10_deep_color != old_conn_state->dv_hdr10_deep_color ||
 +	    new_conn_state->force_audio != old_conn_state->force_audio ||
  	    new_conn_state->broadcast_rgb != old_conn_state->broadcast_rgb ||
  	    new_conn_state->base.colorspace != old_conn_state->base.colorspace ||

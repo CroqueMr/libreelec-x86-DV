@@ -1,0 +1,35 @@
+--- a/src/include/libplacebo/shaders/colorspace.h
++++ b/src/include/libplacebo/shaders/colorspace.h
+@@ -309,6 +309,12 @@
+     // faster pure GLSL replacements (e.g. clip, linear, saturation).
+     bool force_tone_mapping_lut;
+ 
++    // CB policy opt-in: require actual FP32 tone-LUT storage. Default false
++    // preserves existing callers' automatic format selection. This changes
++    // storage precision only, not the curve or lookup operator. Requires
++    // matching CB-patched headers/library; this is not an upstream ABI field.
++    bool cb1_fp32_tone_lut;
++
+     // Visualize the tone-mapping LUT and gamut mapping 3DLUT, in IPT space.
+     bool visualize_lut;
+ 
+--- a/src/shaders/colorspace.c
++++ b/src/shaders/colorspace.c
+@@ -1942,9 +1942,17 @@
+         } else {
+ 
+             pl_assert(obj);
++            pl_fmt tone_fmt = params->cb1_fp32_tone_lut ?
++                pl_find_fmt(SH_GPU(sh), PL_FMT_FLOAT, 1, 32, 32,
++                            PL_FMT_CAP_SAMPLEABLE | PL_FMT_CAP_LINEAR) : NULL;
++            if (params->cb1_fp32_tone_lut && !tone_fmt) {
++                SH_FAIL(sh, "CB policy requires FP32 linear tone-LUT storage!");
++                return;
++            }
+             ident_t lut = sh_lut(sh, sh_lut_params(
+                 .object     = &obj->tone.lut,
+                 .var_type   = PL_VAR_FLOAT,
++                .fmt        = tone_fmt,
+                 .lut_type   = SH_LUT_AUTO,
+                 .method     = SH_LUT_LINEAR,
+                 .width      = tone.lut_size,

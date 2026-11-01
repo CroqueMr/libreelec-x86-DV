@@ -156,6 +156,8 @@ int main(){
         allocation = allocation[allocation.index('  m_vaapiConfig.maxReferences += 6;'):]
         allocation = allocation.split('  if (!ConfigVAAPI())', 1)[0]
         budget = body((base/'HDR10AIBuffers.h').read_text(), 'struct HDR10AIBuffers')
+        source_mode = re.search(r'enum class HDR10SourceMode[^;]+;',
+            (base/'DVOutputSettings.h').read_text()).group()
         limit = re.search(r'static constexpr unsigned DVEnhancementPendingPictures\s*=\s*\d+;',
             (base/'DVDVideoCodecFFmpeg.h').read_text()).group()
         methods = '\n'.join(signature+body(source, signature) for signature in (
@@ -175,7 +177,7 @@ int main(){
 AI_DEFINE
 #define NUM_RENDER_PICS 7
 namespace DVBRIDGE {
- enum class HDR10SourceMode {Native,ReferenceDV,EnhancedDV};
+ HDR10_SOURCE_MODE
  struct HDR10AIActivation {static unsigned BufferCount(double) {return 24;}};
  struct HDR10AIBuffers BUDGET;
 }
@@ -230,6 +232,8 @@ struct COutput {
 };
 WORK
 int main() {
+ assert(DVBRIDGE::HDR10AIBuffers::Count(true,DVBRIDGE::HDR10SourceMode::HDR10PlusDV,24,false)==24);
+ assert(DVBRIDGE::HDR10AIBuffers::Count(true,DVBRIDGE::HDR10SourceMode::HDR10PlusDV,24,true)==6);
  CDVDVideoCodecFFmpeg decoder;
  auto ordinary=configure(decoder);
  assert(ordinary.maxReferences==22 && ordinary.renderPictures==7);
@@ -277,7 +281,7 @@ int main() {
  assert(fel.maxReferences==38); // 16 HEVC + 6 native safety + 16 retained BL.
  puts("PASS: delayed EL at BL8; 16 pending BL + 7 native slots; native/AI unchanged");
 }
-'''.replace('BUDGET', budget).replace('ALLOCATION', allocation).replace('METHODS', methods)
+'''.replace('BUDGET', budget).replace('ALLOCATION', allocation).replace('METHODS', methods).replace('HDR10_SOURCE_MODE', source_mode)
         program = program.replace('LIMIT', limit).replace('WORK', work)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

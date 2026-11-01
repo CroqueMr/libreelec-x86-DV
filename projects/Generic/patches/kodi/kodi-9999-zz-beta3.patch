@@ -3409,7 +3409,38 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp b/xbmc/cores
      isRotated = true;
  
    float newWidth;
-@@ -348,10 +353,32 @@
+@@ -165,6 +170,30 @@
+     {
+       newWidth = std::min(width, height);
+       newHeight = newWidth * outputFrameRatio;
++    }
++  }
++
++  if (m_videoSettings.m_ViewMode == ViewModeAuto && zoomAmount == 1.0f)
++  {
++    float sourceWidth = m_sourceRect.Width() > 0 ? m_sourceRect.Width() : m_sourceWidth;
++    float sourceHeight = m_sourceRect.Height() > 0 ? m_sourceRect.Height() : m_sourceHeight;
++    if (isRotated)
++      std::swap(sourceWidth, sourceHeight);
++
++    const auto& info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
++    // Hardware-plane destinations already use physical pixels.
++    const float pixelScaleX = useVideoSettings ? float(info.iScreenWidth) / info.iWidth : 1.0f;
++    const float pixelScaleY = useVideoSettings ? float(info.iScreenHeight) / info.iHeight : 1.0f;
++    if (sourceWidth > 0 && sourceHeight > 0)
++    {
++      const float scaleX = newWidth * pixelScaleX / sourceWidth;
++      const float scaleY = newHeight * pixelScaleY / sourceHeight;
++      const float scale = std::max(scaleX, scaleY);
++      if (scaleX >= 1.0f && scaleY >= 1.0f && scale <= 1.01f)
++      {
++        newWidth /= scale;
++        newHeight /= scale;
++      }
+     }
+   }
+ 
+@@ -348,10 +377,32 @@
        break;
    }
  
@@ -3443,6 +3474,25 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp b/xbmc/cores
  }
  
  EShaderFormat CBaseRenderer::GetShaderFormat()
+@@ -399,7 +450,7 @@
+ 
+ void CBaseRenderer::SetViewMode(int viewMode)
+ {
+-  if (viewMode < ViewModeNormal || viewMode > ViewModeZoom110Width)
++  if (viewMode < ViewModeNormal || viewMode > ViewModeAuto)
+     viewMode = ViewModeNormal;
+ 
+   m_videoSettings.m_ViewMode = viewMode;
+@@ -413,7 +464,8 @@
+   float sourceFrameRatio = GetAspectRatio();
+ 
+   bool is43 = (sourceFrameRatio < 8.f/(3.f*sqrt(3.f)) &&
+-              m_videoSettings.m_ViewMode == ViewModeNormal);
++              (m_videoSettings.m_ViewMode == ViewModeNormal ||
++               m_videoSettings.m_ViewMode == ViewModeAuto));
+ 
+   // Splitres scaling factor
+   float xscale = (float)info.iScreenWidth  / (float)info.iWidth;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
@@ -6883,7 +6933,53 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
            MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
        {
          CLog::Log(
-@@ -274,7 +711,7 @@
+@@ -261,7 +698,44 @@
+ 
+     CLog::Log(LOGDEBUG, "[WHITELIST] No match for a resolution with a 3:2 pulldown refresh rate");
+   }
+-
++  // Fit cropped/arbitrary-sized 2D sources before falling back to the desktop.
++  if (!is3D && width > 0 && height > 0)
++  {
++    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++    for (float multiplier : {1.0f, 2.0f, 2.5f})
++    {
++      if (!noWhiteList &&
++          ((multiplier == 2.0f &&
++            !settings->GetBool(SETTING_VIDEOSCREEN_WHITELIST_DOUBLEREFRESHRATE)) ||
++           (multiplier == 2.5f && !settings->GetBool(SETTING_VIDEOSCREEN_WHITELIST_PULLDOWN))))
++        continue;
++
++      penalty = std::numeric_limits<unsigned int>::max();
++      for (const auto& mode : indexList)
++      {
++        const auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
++        const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
++        if (info.iScreenWidth >= width && info.iScreenHeight >= height &&
++            (info.dwFlags & modeMask) == (curr.dwFlags & modeMask) &&
++            MathUtils::FloatEquals(info.fRefreshRate, fps * multiplier, 0.01f))
++        {
++          const unsigned int pen = (info.iScreenWidth - width) + (info.iScreenHeight - height);
++          if (pen < penalty)
++          {
++            resolution = i;
++            found = true;
++            penalty = pen;
++          }
++        }
++      }
++      if (found)
++      {
++        CLog::Log(LOGDEBUG, "[WHITELIST] Matched a containing resolution {} at refresh multiplier {}",
++                  resolution, multiplier);
++        return;
++      }
++    }
++  }
+ 
+   CLog::Log(LOGDEBUG, "[WHITELIST] Searching for a desktop resolution with an exact refresh rate");
+ 
+@@ -274,7 +748,7 @@
  
      // allow resolutions that are desktop resolution but have the correct refresh rate
      if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -6892,7 +6988,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
          MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
      {
        CLog::Log(LOGDEBUG,
-@@ -300,8 +737,7 @@
+@@ -300,8 +774,7 @@
  
        // allow resolutions that are desktop resolution but have double the refresh rate
        if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -6902,7 +6998,7 @@ diff --git a/xbmc/windowing/Resolution.cpp b/xbmc/windowing/Resolution.cpp
            MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
        {
          CLog::Log(LOGDEBUG,
-@@ -329,8 +765,7 @@
+@@ -329,8 +802,7 @@
  
        // allow resolutions that are desktop resolution but have 2.5 times the refresh rate
        if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -7997,13 +8093,16 @@ diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUti
  
    res.strMode =
        StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
-@@ -945,6 +1015,20 @@
+@@ -945,6 +1015,23 @@
    return GetResolutionInfo(m_mode);
  }
  
 +const drmModeModeInfo* CDRMUtils::GetDVTransportMode() const
 +{
-+  if (!m_mode || !m_connector || m_connector->GetType() != "HDMI-A" || IsCTATiming(*m_mode))
++  if (!m_mode || !m_connector || IsCTATiming(*m_mode) ||
++      (m_connector->GetType() != "HDMI-A" &&
++       (m_connector->GetType() != "DP" || !m_connector->SupportsProperty("CB1_NATIVE_TMDS") ||
++        m_connector->ReadPropertyValue("CB1_NATIVE_TMDS") != 1)))
 +    return m_mode;
 +  // Only the DV transaction needs a CTA AVI VIC; native selection is untouched.
 +  for (int i = 0; i < m_connector->GetModesCount(); ++i)
@@ -8095,7 +8194,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +
 +#: system/settings/settings.xml
 +msgctxt "#40810"
-+msgid "Dolby Vision"
++msgid "CB1 - Dolby Vision engine"
 +msgstr ""
 +
 +#: system/settings/settings.xml
@@ -8105,7 +8204,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +
 +#: system/settings/settings.xml
 +msgctxt "#40812"
-+msgid "Dolby Vision Standard"
++msgid "Dolby Vision Reference"
 +msgstr ""
 +
 +#: system/settings/settings.xml
@@ -8120,7 +8219,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +
 +#: system/settings/settings.xml
 +msgctxt "#40815"
-+msgid "Choose Dolby Vision Master Reference, Dolby Vision Standard, Adaptive HDR Mapping, HDR10 conversion or standard Kodi playback. Changes apply at a video frame boundary."
++msgid "Choose Dolby Vision Master Reference, Dolby Vision Reference, Adaptive HDR Mapping, HDR10 conversion or standard Kodi playback. Changes apply at a video frame boundary."
 +msgstr ""
 +
 +#: system/settings/settings.xml
@@ -8281,7 +8380,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40905"
-+msgid "Standard always uses Fast. Master Reference never uses Fast; Auto switches it to Standard if rendering headroom is low. Other modes follow this setting. Small colour-detail differences may occur."
++msgid "Reference always uses Fast. Master Reference never uses Fast; Auto switches it to Reference if rendering headroom is low. Other modes follow this setting. Small colour-detail differences may occur."
 +msgstr ""
 +
 +msgctxt "#40906"
@@ -8361,7 +8460,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40915"
-+msgid "Insufficient rendering headroom. Switching to Dolby Vision Standard."
++msgid "Insufficient rendering headroom. Switching to Dolby Vision Reference."
 +msgstr ""
 +
 +msgctxt "#40916"
@@ -8381,7 +8480,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40920"
-+msgid "Allow Master Reference to switch to Standard"
++msgid "Allow Master Reference to switch to Reference"
 +msgstr ""
 +
 +msgctxt "#40921"
@@ -9742,7 +9841,7 @@ new file mode 100644
 +      case 4: return "Dolby Vision Adaptive HDR Mapping";
 +      case 5: return "Dolby Vision Master Reference";
 +      case 6: return "Dolby Vision Adaptive HDR Mapping";
-+      default: return output.flags & HDR10 ? "HDR10 Reference Basic" : "Dolby Vision Standard";
++      default: return output.flags & HDR10 ? "HDR10 Reference Basic" : "Dolby Vision Reference";
 +    }
 +  }
 +  static const char* RequestedPolicy(int mode, bool hdr10AI = false)
@@ -9752,7 +9851,7 @@ new file mode 100644
 +    switch(mode)
 +    {
 +      case 0:return "Dolby Vision Disabled (native Kodi)";
-+      case 1:return "Dolby Vision Standard";
++      case 1:return "Dolby Vision Reference";
 +      case 2:return "HDR10 Reference Basic";
 +      case 3:return "HDR10 Reference Expert";
 +      case 4:return "Dolby Vision Adaptive HDR Mapping";
@@ -9768,7 +9867,7 @@ new file mode 100644
 +    std::string mode = output.flags & HDR10 ? Policy(output) :
 +        output.effective == 6 ? "Dolby Vision Adaptive HDR Mapping" :
 +        output.effective == 5 ? "Dolby Vision Master Reference" :
-+        output.effective == 4 ? "Dolby Vision Adaptive HDR Mapping" : "Dolby Vision Standard";
++        output.effective == 4 ? "Dolby Vision Adaptive HDR Mapping" : "Dolby Vision Reference";
 +    if (output.fallback)
 +      mode += " / compatibility fallback";
 +    return mode;
@@ -10478,13 +10577,13 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 -        if (GetStream(i) == nullptr)
 +        if (GetStream(i) == nullptr
 +#ifdef HAVE_DVBRIDGE
-+            && static_cast<int>(i) != m_blurayEnhancement
++            && static_cast<int>(i) != m_blurayEnhancement && static_cast<int>(i) != m_blurayBase
 +#endif
 +        )
            m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
        }
      }
-@@ -1818,10 +1958,16 @@
+@@ -1818,11 +1958,22 @@
      delete it->second;
    m_streams.clear();
    m_parsers.clear();
@@ -10499,8 +10598,14 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 +    return nullptr;
 +#endif
    AVStream* pStream = m_pFormatContext->streams[streamIdx];
++#ifdef HAVE_DVBRIDGE
++  // In-band HEVC headers are extracted by ParsePacket before native stream selection.
++  if (m_blurayDovi && streamIdx == m_blurayBase && !pStream->codecpar->extradata)
++    return nullptr;
++#endif
    if (pStream && pStream->discard != AVDISCARD_ALL)
    {
+     // Video (mp4) from GoPro cameras can have a 'meta' track used for a file repair containing
 @@ -1974,10 +2120,16 @@
            sideData =
                av_packet_side_data_get(pStream->codecpar->coded_side_data,
@@ -10627,7 +10732,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
 -    if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
 +      int idx = m_pFormatContext->programs[m_program]->stream_index[i];
 +#ifdef HAVE_DVBRIDGE
-+      if (idx == m_blurayEnhancement)
++      if (idx == m_blurayEnhancement || (idx == m_blurayBase && !GetStream(idx)))
 +        continue;
 +#endif
 +      if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
@@ -10796,6 +10901,16 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
  }
  
  std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap* conversionMap)
+@@ -2598,6 +2969,9 @@
+     CDemuxStream* stream = GetStream(st->index);
+     if (!stream)
++#ifdef HAVE_DVBRIDGE
++      if (!m_blurayDovi || st->index != m_blurayBase)
++#endif
+       return;
+ 
+     if (parser->second->m_parserCtx && parser->second->m_parserCtx->parser &&
+         parser->second->m_codecCtx && !st->codecpar->extradata)
 @@ -2840,6 +3211,270 @@
    }
  }
@@ -11174,7 +11289,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2092 @@
+@@ -0,0 +1,2098 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11871,6 +11986,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  m_prepares = m_directFrames = m_presentations = m_failedPresentations = 0;
 +  m_lastSummary = m_lastReported = m_rawELImports = m_rawELHits = 0;
 +  m_hdr10plusDiagnostics = {};
++  m_hdr10plusAnalyzed = m_hdr10plusGenerated = m_hdr10plusAccepted = {};
++  m_hdr10plusSubmits = 0;
++  m_hdr10plusLight = {};
 +  m_firstFrame = true;
 +}
 +
@@ -12310,7 +12428,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    {
 +      m_firstFrame = false;
 +      m_lastSummary = DVBRIDGE::DiagnosticNowMs();
-+      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={} bl_layout={} bl_texture={}x{} el={}x{} el_layout={} el_texture={}x{} bl_chroma={} el_chroma={} bl_uv_texture={}x{} el_uv_texture={}x{}",
++      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge first frame: source={}x{} output={}x{} offset={},{} enhancement={} fel={} cm4={} direct={} bl_layout={} bl_texture={}x{} el={}x{} el_layout={} el_texture={}x{} bl_chroma={} el_chroma={} bl_uv_texture={}x{} el_uv_texture={}x{} bl_texture_ids={},{} el_texture_ids={},{}",
 +          base.width, base.height, geometry.width, geometry.height, geometry.x, geometry.y,
 +          enhancement != nullptr, bool(m_pendingInfo & CDVPlaybackInfo::FEL),
 +          bool(m_pendingInfo & CDVPlaybackInfo::CM4), m_direct,
@@ -12320,7 +12438,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +          enhancement ? enhancement->planes[0].width : 0, enhancement ? enhancement->planes[0].height : 0,
 +          int(base.chromaLocation), enhancement ? int(enhancement->chromaLocation) : -1,
 +          base.planes[1].width,base.planes[1].height,
-+          enhancement ? enhancement->planes[1].width : 0,enhancement ? enhancement->planes[1].height : 0);
++          enhancement ? enhancement->planes[1].width : 0,enhancement ? enhancement->planes[1].height : 0,
++          base.planes[0].texture,base.planes[1].texture,
++          enhancement ? enhancement->planes[0].texture : 0,enhancement ? enhancement->planes[1].texture : 0);
 +    }
 +  }
 +  return m_prepared;
@@ -13219,6 +13339,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +#ifdef CB1_HAS_HDR10_AI
 +  if (m_aiFrame && DVBRIDGE::DiagnosticsEnabled() && m_aiSummary.Due(DVBRIDGE::DiagnosticNowMs()))
 +  {
++    m_aiSummary.Emitted(DVBRIDGE::DiagnosticNowMs());
 +    const auto metrics=m_context->HDR10AI().Metrics();
 +    DVBRIDGE::DiagnosticLog(LOGINFO,
 +        "CB1 AI summary: engine={} circuit={} bundle={} source={}/{}/{} pictures={} readback_bytes={} inferences={} analysis_submit_us={} readback_latency_us={} inference_us={} render_submit_us={}",
@@ -13270,7 +13391,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,206 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVPlaybackModes.h"
 +#ifdef HAVE_DVBRIDGE
@@ -13295,6 +13416,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +#include "utils/StringUtils.h"
 +#include "utils/JSONVariantParser.h"
 +#include "utils/Variant.h"
++#include "utils/DVBridgeDiagnosticLog.h"
 +#include "utils/log.h"
 +#include "threads/IRunnable.h"
 +#include <cstdio>
@@ -13388,14 +13510,22 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +          (choice.output!=1 || preferences.method==choice.method))) current=i;
 +    }
 +    CSettingConditions::DVOutputOptions(choiceSetting,options);
++    DVBRIDGE::DiagnosticLog(LOGINFO,
++        "Playback mode menu: source_known={} dv={} hdr10={} hdr10plus={} processing_known={} requested={} hdr10source={}",
++        source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
++        int(preferences.output), int(preferences.hdr10Source));
 +    dialog->Reset();
 +    dialog->SetHeading(StringUtils::Format(strings.Get(40876), hdr10Source ? "HDR10" : "Dolby Vision"));
 +    dialog->SetUseDetails(true);
 +    for(const auto& option : options)
 +    {
++      DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
++          option.value, option.label, option.label2);
 +      CFileItem item(option.label);
 +      item.SetLabel2(option.label2);
 +      for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
++      item.SetProperty("CB1.TextColor", item.GetProperty("disabled").asBoolean() ?
++                                      "FFA0A0A0" : "FFF0F0F0");
 +      dialog->Add(item);
 +    }
 +    dialog->SetSelected(current);
@@ -13813,7 +13943,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.h b/xbmc/dialogs/GUIDialogP
 diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 --- a/xbmc/dialogs/GUIDialogSelect.cpp
 +++ b/xbmc/dialogs/GUIDialogSelect.cpp
-@@ -12,11 +12,16 @@
+@@ -12,11 +12,18 @@
  #include "FileItemList.h"
  #include "ServiceBroker.h"
  #include "guilib/GUIMessage.h"
@@ -13824,6 +13954,8 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  #include "utils/StringUtils.h"
 -
 +#ifdef HAVE_DVBRIDGE
++#include "guilib/GUIFontManager.h"
++#include "guilib/GUIIncludes.h"
 +#include "windowing/GraphicContext.h"
 +#endif
 +
@@ -13831,10 +13963,28 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  #include <memory>
  
  #define CONTROL_HEADING         1
-@@ -45,6 +50,23 @@
+@@ -45,6 +50,41 @@
  
  CGUIDialogSelect::~CGUIDialogSelect(void) = default;
  
++#ifdef HAVE_DVBRIDGE
++std::unique_ptr<TiXmlElement> CGUIDialogSelect::Prepare(
++    const std::unique_ptr<TiXmlElement>& rootElement)
++{
++  if (!GetProperty("CB1.PlaybackModes").asBoolean())
++    return CGUIDialogBoxBase::Prepare(rootElement);
++  if (!rootElement)
++    return nullptr;
++
++  // This closed app include graph has no conditional includes or skin defaults.
++  auto preparedRoot = std::make_unique<TiXmlElement>(*rootElement);
++  CGUIIncludes includes;
++  includes.Load("special://xbmc/media/cb1/IncludesDVProcessInfo.xml");
++  includes.Resolve(preparedRoot.get());
++  return preparedRoot;
++}
++#endif
++
 +bool CGUIDialogSelect::OnAction(const CAction& action)
 +{
 +#ifdef HAVE_DVBRIDGE
@@ -13855,7 +14005,7 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
  bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
  {
    switch (message.GetMessage())
-@@ -78,6 +100,17 @@
+@@ -78,6 +100,25 @@
  
    case GUI_MSG_WINDOW_INIT:
      {
@@ -13868,7 +14018,15 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
 +        FreeResources(true);
 +        SetProperty("xmlfile", file);
 +      }
-+      if (playback) SetCoordsRes(RESOLUTION_INFO(1920, 1080));
++      if (playback)
++      {
++        const RESOLUTION_INFO resolution(1920, 1080);
++        SetCoordsRes(resolution);
++        g_fontManager.LoadTTF("CB1.SwitchBody", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff0f0f0, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
++        g_fontManager.LoadTTF("CB1.SwitchHelp", "special://xbmc/media/Fonts/arial.ttf",
++                            0xffa0a0a0, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
++      }
 +#endif
        m_bButtonPressed = false;
        m_bButton2Pressed = false;
@@ -14112,7 +14270,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticLog.h b/xbmc/utils/DVBridgeDiagnosticL
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticLog.h
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,214 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeDiagnosticState.h"
@@ -14191,6 +14349,25 @@ new file mode 100644
 +    return WriteDiagnosticLocked(DiagnosticEvent::Normal, level, format, std::forward<Args>(args)...);
 +  }
 +  catch (...) { return false; } // Diagnostics cannot escape into a C callback or playback.
++}
++
++inline void DiagnosticReserveProgress() noexcept
++{
++  if (!DiagnosticsEnabled()) return;
++  try { std::lock_guard lock(diagnosticMutex); diagnosticSession.ReserveProgress(); }
++  catch (...) {}
++}
++
++template<class... Args>
++bool DiagnosticProgressLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
++{
++  if (!DiagnosticsEnabled()) return false;
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    return WriteDiagnosticLocked(DiagnosticEvent::Progress, level, format, std::forward<Args>(args)...);
++  }
++  catch (...) { return false; }
 +}
 +
 +template<class... Args>
@@ -14445,14 +14622,14 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
 +}
 +
 +bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async,
-+                                    bool retainSignal)
++                                    bool retainSignal, struct gbm_bo* bo)
 +{
 +  if (!CompleteDVBridgePage()) return false;
 +  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
 +  if (!drm || !m_GBM || !state.Captured())
 +    return false;
 +  auto& surface = m_GBM->GetDevice().GetSurface();
-+  auto* bo = surface.LockTransactionalBuffer();
++  if (!bo) bo = surface.LockTransactionalBuffer();
 +  bool valid = bo != nullptr;
 +  if (valid && !restore)
 +  {
@@ -14782,7 +14959,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  std::unique_ptr<CWinSystemBase> CWinSystemGbmGLESContext::CreateWinSystem()
-@@ -111,15 +198,55 @@
+@@ -111,15 +198,62 @@
    return true;
  }
  
@@ -14790,6 +14967,13 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +bool CWinSystemGbmGLESContext::PrepareNvidiaModeRestore(const RESOLUTION_INFO& res)
 +{
 +  if (m_dvState.CapturedBackend() != CDVBridgeState::Backend::NVIDIA) return true;
++  // Retire GPU work before changing timing; Kodi rolls back a refused request.
++  if (!RetireDVContext())
++  {
++    if (!m_dvContext || m_dvContext->Quarantined()) return false;
++    glFinish();
++    if (!RetireDVContext()) return false;
++  }
 +  const auto previous = m_DRM->GetCurrentMode();
 +  if (m_DRM->SetMode(res) && m_DRM->SetVideoMode(res,nullptr) && EndDVBridge())
 +    return true;
@@ -14839,7 +15023,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +255,311 @@
+@@ -128,16 +255,318 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -14908,13 +15092,15 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  if (!m_modeAnnouncement.Before(transport)) return;
 +  glFinish();
 +  OnLostDevice();
-+  m_dispResetTimer.Set(std::chrono::milliseconds(
-+      std::max(0,CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("videoscreen.delayrefreshchange"))*100));
 +}
 +
 +void CWinSystemGbmGLESContext::CompleteCB1Mode(bool accepted, bool transport)
 +{
++  const bool announced = m_modeAnnouncement.Pending() == CHeldModeAnnouncement::Step::TOLD;
 +  m_modeAnnouncement.After(accepted,transport);
++  if (accepted && announced)
++    m_dispResetTimer.Set(std::chrono::milliseconds(
++        std::max(0,CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("videoscreen.delayrefreshchange"))*100));
 +  if (accepted && m_modeHold.Holding() == CModeChangeHold::Kind::START)
 +    m_modeHold.Configured();
 +}
@@ -14955,7 +15141,12 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      return;
 +
 +  PresentFrame(rendered, videoLayer);
-+  if (m_dispReset && m_dispResetTimer.IsTimePast())
++  if (m_dispReset && m_dispResetTimer.IsTimePast()
++#ifdef HAVE_DVBRIDGE
++      && m_modeAnnouncement.Pending() == CHeldModeAnnouncement::Step::NONE
++      && !HasPendingDVOutputSurface()
++#endif
++      )
 +  {
 +    CLog::Log(LOGDEBUG, "CWinSystemGbmGLESContext::{} - Sending display reset to all clients",
 +              __FUNCTION__);
@@ -14999,7 +15190,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    auto* bo = surface.LockTransactionalBuffer();
 +    AnnounceCB1Mode(false);
 +    const bool nvidiaRestore = m_dvState.CapturedBackend() == CDVBridgeState::Backend::NVIDIA;
-+    const bool submitted = drm && (nvidiaRestore ? FlipDVBridgePage(m_dvState,true,false,true) :
++    const bool submitted = drm && (nvidiaRestore ? FlipDVBridgePage(m_dvState,true,false,true,bo) :
 +                                  drm->FlipPageTransactional(bo,true));
 +    CompleteCB1Mode(submitted,false);
 +    surface.CompleteTransactionalBuffer(submitted);
@@ -15043,7 +15234,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +             FloatOutputUsable());
 +        AnnounceCB1Mode(true);
 +        const bool nvidiaRestore = m_dvState.CapturedBackend() == CDVBridgeState::Backend::NVIDIA;
-+        presented = drm && (nvidiaRestore ? (valid && FlipDVBridgePage(m_dvState,true,false,true)) :
++        presented = drm && (nvidiaRestore ? (valid && FlipDVBridgePage(m_dvState,true,false,true,bo)) :
 +                            drm->FlipPageTransactional(valid ? bo : nullptr, false, asynchronous));
 +        CompleteCB1Mode(presented,true);
 +        if (!drm || !drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(presented);
@@ -15241,7 +15432,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -290,8 +751,30 @@
+@@ -290,8 +751,53 @@
    if (!guiWillRender)
      return true;
  
@@ -15264,9 +15455,32 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvState.Captured() || m_hdrConversion)
 +  {
-+    // CB1 can leave the video crop in GL; restore Kodi's GUI clip before clearing.
++    // Restore Kodi's GUI viewport and clip after offscreen video or AI passes.
++    CRect viewport;
++    CRenderSystemGLES::GetViewPort(viewport);
++    GLint before[4]{}, framebuffer{};
++    const auto now = DVBRIDGE::DiagnosticNowMs();
++    const bool report = DVBRIDGE::DiagnosticsEnabled() && m_dvGuiDiagnostic.Due(now);
++    if (report)
++    {
++      // Bound GL queries even when the common diagnostic budget is exhausted.
++      m_dvGuiDiagnostic.Emitted(now);
++      glGetIntegerv(GL_VIEWPORT, before);
++      glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
++    }
++    CRenderSystemGLES::SetViewPort(viewport);
 +    const auto& context = GetGfxContext();
 +    CRenderSystemGLES::SetScissors(context.StereoCorrection(context.GetScissors()));
++    if (report)
++    {
++      GLint after[4]{};
++      glGetIntegerv(GL_VIEWPORT, after);
++      DVBRIDGE::DiagnosticLog(LOGINFO,
++          "CB1 GUI viewport: before={},{},{},{} after={},{},{},{} framebuffer={} fbo={}x{} window={}x{} dv={} hdr_conversion={}",
++          before[0], before[1], before[2], before[3], after[0], after[1], after[2], after[3],
++          framebuffer, m_guiFboWidth, m_guiFboHeight, m_nWidth, m_nHeight,
++          m_dvState.Captured(), m_hdrConversion);
++    }
 +  }
 +#endif
  
@@ -15384,7 +15598,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +936,1727 @@
+@@ -397,13 +936,1732 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -16198,6 +16412,11 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    if (!m_dvContext) m_dvContext = std::make_shared<CDVBridgeGLES::Context>();
 +    if (!m_dvContext->Initialize(false)) return false;
 +    m_dvOutputRetiring = false;
++    const bool linkChange =
++        (m_dvSelection.route == DVBRIDGE::OutputRoute::NativeDV) != m_dvState.Captured() ||
++        (m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10) != m_hdrConversion;
++    if (linkChange && m_modeAnnouncement.Pending() == CHeldModeAnnouncement::Step::NONE)
++      m_modeAnnouncement.Held();
 +    m_GBM->GetDevice().UseDVOutputLifetime();
 +    UseDVOutputSurfaceTransaction(true);
 +    const bool staged = CWinSystemGbmEGLContext::SetVideoOutput(picture);
@@ -16542,7 +16761,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    if(switched)
 +    {
 +      CLog::Log(LOGWARNING,
-+          "CB1 Master safety: sustained headroom below 2.5ms; next accepted mode is Standard");
++          "CB1 Master safety: sustained headroom below 2.5ms; next accepted mode is Reference");
 +      DVBRIDGE::PlaybackNotification::ArmMasterRecovery();
 +    }
 +    drm->SetCB1TimingPeriod(m_masterFramePeriodNs);
@@ -17176,6 +17395,15 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
  #include <iterator>
  #include <map>
  #include <memory>
+@@ -607,4 +608,8 @@
+       m_paused = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
+       CLog::Log(LOGDEBUG, "CVideoPlayerVideo - CDVDMsg::GENERAL_PAUSE: {}", m_paused);
++#ifdef HAVE_DVBRIDGE
++      if (DVBRIDGE::DiagnosticsEnabled())
++        DVBRIDGE::DiagnosticLog(LOGINFO, "CB1 video pause: paused={}", m_paused);
++#endif
+     }
+     else if (pMsg->IsType(CDVDMsg::PLAYER_REQUEST_STATE))
 @@ -721,10 +722,10 @@
      CLog::Log(LOGDEBUG, "CVideoPlayerVideo - video decoder was flushed");
      while (!m_packets.empty())
@@ -17191,8 +17419,15 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
      }
  
      m_pVideoCodec->SetVideoProcessingGeneration(
-@@ -740,9 +741,9 @@
+@@ -740,9 +741,16 @@
    {
++#ifdef HAVE_DVBRIDGE
++    if (DVBRIDGE::DiagnosticsEnabled())
++      DVBRIDGE::DiagnosticLog(LOGWARNING,
++          "CB1 decoder reopen: codec={} extradata={} replay_packets={} paused={} speed={} sync={}",
++          static_cast<int>(m_hints.codec), m_hints.extradata.GetSize(), m_packets.size(),
++          m_paused, m_speed, static_cast<int>(m_syncState));
++#endif
      while (!m_packets.empty())
      {
 -      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.front().message);
@@ -17231,3 +17466,61 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
    {
      m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
      CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);
+diff --git a/xbmc/cores/VideoSettings.h b/xbmc/cores/VideoSettings.h
+--- a/xbmc/cores/VideoSettings.h
++++ b/xbmc/cores/VideoSettings.h
+@@ -207,7 +207,8 @@
+   ViewModeCustom,
+   ViewModeStretch16x9Nonlin,
+   ViewModeZoom120Width,
+-  ViewModeZoom110Width
++  ViewModeZoom110Width,
++  ViewModeAuto
+ };
+ 
+ class CVideoSettings
+diff --git a/xbmc/video/ViewModeSettings.cpp b/xbmc/video/ViewModeSettings.cpp
+--- a/xbmc/video/ViewModeSettings.cpp
++++ b/xbmc/video/ViewModeSettings.cpp
+@@ -29,6 +29,7 @@
+ static const ViewModeProperties viewModes[] =
+ {
+   { 630,   ViewModeNormal },
++  { 16316, ViewModeAuto },
+   { 631,   ViewModeZoom },
+   { 39008, ViewModeZoom120Width },
+   { 39009, ViewModeZoom110Width },
+diff --git a/xbmc/settings/MediaSettings.cpp b/xbmc/settings/MediaSettings.cpp
+--- a/xbmc/settings/MediaSettings.cpp
++++ b/xbmc/settings/MediaSettings.cpp
+@@ -69,7 +69,7 @@
+       scalingMethod = (int)VS_SCALINGMETHOD_LINEAR;
+     m_defaultVideoSettings.m_ScalingMethod = (ESCALINGMETHOD)scalingMethod;
+ 
+-    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeZoom110Width);
++    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeAuto);
+     if (!XMLUtils::GetFloat(pElement, "zoomamount", m_defaultVideoSettings.m_CustomZoomAmount, 0.5f, 2.0f))
+       m_defaultVideoSettings.m_CustomZoomAmount = 1.0f;
+     if (!XMLUtils::GetFloat(pElement, "pixelratio", m_defaultVideoSettings.m_CustomPixelRatio, 0.5f, 2.0f))
+diff --git a/xbmc/interfaces/json-rpc/PlayerOperations.cpp b/xbmc/interfaces/json-rpc/PlayerOperations.cpp
+--- a/xbmc/interfaces/json-rpc/PlayerOperations.cpp
++++ b/xbmc/interfaces/json-rpc/PlayerOperations.cpp
+@@ -721,6 +721,7 @@
+ std::map<std::string, ViewMode> viewModes =
+ {
+   {"normal", ViewModeNormal},
++  {"auto", ViewModeAuto},
+   {"zoom", ViewModeZoom},
+   {"stretch4x3", ViewModeStretch4x3},
+   {"widezoom", ViewModeWideZoom, },
+diff --git a/xbmc/interfaces/json-rpc/schema/types.json b/xbmc/interfaces/json-rpc/schema/types.json
+--- a/xbmc/interfaces/json-rpc/schema/types.json
++++ b/xbmc/interfaces/json-rpc/schema/types.json
+@@ -530,6 +530,7 @@
+     "type": "string",
+     "enum": [
+       "normal",
++      "auto",
+       "zoom",
+       "stretch4x3",
+       "widezoom",

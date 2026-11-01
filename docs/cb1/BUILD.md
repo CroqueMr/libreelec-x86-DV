@@ -1,9 +1,9 @@
-# R1.0.0 RC1.1 Debug build
+# R1.0.0 RC2 build
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
-Default image identity: `DV-R1.0.0-RC1.1-Debug`. GitHub tag identity:
-`R1.0.0-RC1.1-Debug`.
+Default image identity: `DV-R1.0.0-RC2`. GitHub tag identity:
+`R1.0.0-RC2`.
 
 ```sh
 python3 CB1/tools/verify.py

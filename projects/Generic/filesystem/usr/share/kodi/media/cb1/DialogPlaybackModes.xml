@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <window>
   <defaultcontrol always="true">3</defaultcontrol>
-  <include>Animation_DialogPopupOpenClose</include>
-  <depth>DepthOSD</depth>
+  <depth>0.40</depth>
   <controls>
     <include file="special://xbmc/media/cb1/IncludesDVProcessInfo.xml">CB1PlaybackModeLayout</include>
   </controls>

@@ -18,7 +18,7 @@ class RenderingLabelsTests(unittest.TestCase):
         settings=ET.parse(TREE/'system/settings/settings.xml')
         safety=settings.find(".//setting[@id='dvbridge.masterfallback']")
         self.assertEqual(labels[safety.get('label')],
-                         'Allow Master Reference to switch to Standard')
+                         'Allow Master Reference to switch to Reference')
         self.assertEqual(labels[safety.get('help')],
                          'Switch when sustained rendering headroom is insufficient. Off keeps Master Reference strict.')
         method=settings.find(".//setting[@id='dvbridge.hdr10method']")

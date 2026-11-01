@@ -19,13 +19,13 @@ its Dolby Vision display mapping.
 
 ## Rendering and Master recovery
 
-Each mode uses one fixed rendering recipe. Standard and conversions retain
+Each mode uses one fixed rendering recipe. Reference and conversions retain
 their qualified performance optimizations. Master Reference keeps its exact
 reconstruction and dedicated filters. There is no quality On/Off/Auto selector.
 
-**Allow Master Reference to switch to Standard** is off by default. When enabled,
+**Allow Master Reference to switch to Reference** is off by default. When enabled,
 sustained presentation margin below 2.5 ms can switch the current playback to
-Standard. A notification confirms the accepted switch; the saved Master selection
+Reference. A notification confirms the accepted switch; the saved Master selection
 is retained. GUI, capture, pause and discontinuous pictures are excluded from
 the decision. Recovery state resets for a new video or manual mode change.
 
@@ -45,7 +45,7 @@ VAAPI/Nearest preference.
 **Master Reference output**, at Expert level, selects YCbCr or IPT-PQc2 transport.
 YCbCr is the default. Profile 5 keeps its direct IPT path in either Master output.
 
-**Disable L2 trims** is an Expert option, off by default, for Standard and Master
+**Disable L2 trims** is an Expert option, off by default, for Reference and Master
 Reference only. It removes outgoing L2 blocks without changing movie pixels or
 source metadata. L8 remains active. Adaptive, AI and HDR conversions ignore it.
 
@@ -76,6 +76,20 @@ mode changes.
 GPU usage is Kodi's render-engine occupancy, including visible GUI. Unsupported
 counters remain hidden. Source audio format and PCM/passthrough output are
 reported separately.
+
+## Bitmap subtitles and Blu-ray menus
+
+Native **Player > Subtitles** settings provide PGS/DVB brightness, saturation,
+placement, vertical offset and size. Original colors, placement and 100% size
+are the defaults. SDR and PQ authoring have separate color controls. Explicit
+PGS authoring changes require subtitle reselection or reopening playback.
+Disc-menu graphics and text subtitles are excluded.
+Video-relative placement follows Kodi's video rectangle; encoded black bars
+are not removed through a separate L5 interpretation.
+
+Blu-ray navigation uses Kodi/libbluray. BD-J requires the existing LibreELEC
+Java add-on; restart Kodi after installing it. Title selection remains available
+where supported without Java. Menu compatibility depends on the disc application.
 
 ## AMD HDMI 3D
 

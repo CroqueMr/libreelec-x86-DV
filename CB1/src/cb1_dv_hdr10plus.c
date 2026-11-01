@@ -23,6 +23,17 @@ struct response {
     enum cb1_dv_hdr10plus_coverage family;
 };
 
+static bool secondary_neutral(const struct dvbridge_cm4_anchor *a)
+{
+    const struct dvbridge_cm4_controls *c=&a->controls;
+    if(!a->present)return true;
+    for(unsigned i=0;i<6;i++){
+        if((c->present_fields&DVBRIDGE_CM4_SATURATION) && c->saturation[i]!=128)return false;
+        if((c->present_fields&DVBRIDGE_CM4_HUE) && c->hue[i]!=128)return false;
+    }
+    return true;
+}
+
 static bool sample_rgb(const struct response *r,const double in[3],double out[3])
 {
     double maximum=fmax(in[0],fmax(in[1],in[2]));
@@ -102,11 +113,16 @@ bool cb1_dv_hdr10plus_metadata_for_version(AVDynamicHDRPlus *out,
     result.reason=CB1_DV_HDR10PLUS_OK;
     bool rejected_trim=false;
     if(dvbridge_creative_cm4_coefficients(&r.cm4,&r.plan)){
+        const struct dvbridge_cm4_anchor *a=r.plan.cm4_lower.present?&r.plan.cm4_lower:&r.plan.cm4_upper;
+        const struct dvbridge_cm4_anchor *b=r.plan.cm4_upper.present?&r.plan.cm4_upper:a;
+        double w=r.plan.cm4_lower.present && r.plan.cm4_upper.present?r.plan.cm4_weight:0;
+        /* Expert coefficients omit SDR secondary edits. Inspect contributing
+         * source anchors before accepting their luminous response. */
         rejected_trim=r.cm4.chroma_base!=1 || r.cm4.saturation_gain!=1 || r.cm4.detail_mix!=0 ||
-            (r.cm4.present&((1u<<8)|(1u<<9)));
+            (w<1 && !secondary_neutral(a)) || (w>0 && !secondary_neutral(b));
         if(!rejected_trim)r.family=CB1_DV_HDR10PLUS_L8;
     }else if(r.plan.anchor_present){
-        rejected_trim=r.plan.codes[3]!=2048 || r.plan.codes[4]!=2048 ||
+        rejected_trim=r.plan.codes[4]!=2048 ||
             r.plan.reason==DVBRIDGE_CREATIVE_SPATIAL_UNQUALIFIED;
         if(!rejected_trim)r.family=CB1_DV_HDR10PLUS_L2;
     }else if(r.plan.cm4 && r.plan.cm4_targets!=DVBRIDGE_CM4_NO_CONTROLS){

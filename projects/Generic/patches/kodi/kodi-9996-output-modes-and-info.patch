@@ -560,10 +560,11 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h b/xbmc/c
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
-@@ -28,6 +28,9 @@
+@@ -28,6 +28,10 @@
  #include <optional>
  #ifdef HAVE_DVBRIDGE
  #include "DVDVideoCodecFFmpeg.h"
++#include "utils/DVBridgeDiagnosticLog.h"
 +#endif
 +#ifdef CB1_HAS_HDR10_AI
 +#include "HDR10AIBuffers.h"
@@ -594,6 +595,29 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/Video
  
    if (!ConfigVAAPI())
    {
+@@ -1046,5 +1066,22 @@
+             "surface: {}",
+             __FUNCTION__, decoded, processed, m_videoSurfaces.HasFree() ? "yes" : "no");
++#ifdef HAVE_DVBRIDGE
++  if (DVBRIDGE::DiagnosticsEnabled())
++  {
++    uint16_t stalledDecoded{}, stalledProcessed{}, stalledRender{};
++    bool stalledVpp{};
++    m_bufferStats.Get(stalledDecoded, stalledProcessed, stalledRender, stalledVpp);
++    unsigned aiBuffers{};
++#ifdef CB1_HAS_HDR10_AI
++    aiBuffers = m_hdr10AIBuffers;
++#endif
++    DVBRIDGE::DiagnosticFailureLog("vaapi-output-timeout", true, LOGERROR,
++        "CB1 VAAPI output timeout: decoded={} processed={} render={} decode_free={} vpp={} decode_limit={} render_limit={} ai_buffers={} present={} drain={} control={}",
++        stalledDecoded, stalledProcessed, stalledRender, m_videoSurfaces.HasFree(), stalledVpp,
++        m_vaapiConfig.maxReferences, m_vaapiConfig.renderPictures, aiBuffers,
++        m_presentPicture != nullptr, drain, m_codecControl);
++  }
++#endif
+   m_DisplayState = VAAPI_ERROR;
+ 
+   return CDVDVideoCodec::VC_ERROR;
 @@ -1058,6 +1078,14 @@
      state = m_DisplayState;
    }
@@ -671,6 +695,20 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/Video
      pic->valid = false;
    }
    procPicId = 0;
+@@ -2048,5 +2084,13 @@
+ bool COutput::Uninit()
+ {
++#ifdef HAVE_DVBRIDGE
++  if (DVBRIDGE::DiagnosticsEnabled() && m_bufferPool)
++    DVBRIDGE::DiagnosticLog(LOGINFO,
++        "CB1 VAAPI output teardown: decoded={} processed={} held={} render_free={} postproc={} discarded={}",
++        m_bufferPool->decodedPics.size(), m_bufferPool->processedPics.size(),
++        m_bufferPool->processedPicsAway.size(), m_bufferPool->HasFree(),
++        m_pp != nullptr, m_discardedPostprocs.size());
++#endif
+   ProcessSyncPicture();
+   ReleaseBufferPool();
+   if (m_pp)
 @@ -2249,6 +2286,7 @@
  {
    CVaapiRenderPicture *retPic;
@@ -939,7 +977,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.h b/xbmc/cores/VideoPlayer/Video
 diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
 --- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
-@@ -7,12 +7,21 @@
+@@ -7,12 +7,22 @@
   */
  
  #include "VideoPlayerVideo.h"
@@ -947,6 +985,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
 +#include "DVDCodecs/Video/DVStreamTelemetry.h"
 +#include "DVDCodecs/Video/DVPlaybackInfo.h"
 +#include "DVDCodecs/Video/DVPlaybackNotification.h"
++#include "utils/DVBridgeDiagnosticLog.h"
 +#include "utils/DVBridgeDiagnosticState.h"
 +#include "utils/StringUtils.h"
 +#include "windowing/gbm/WinSystemGbmGLESContext.h"
@@ -2211,6 +2250,15 @@ diff --git a/xbmc/dialogs/GUIDialogSelect.h b/xbmc/dialogs/GUIDialogSelect.h
    bool OnMessage(CGUIMessage& message) override;
    bool OnBack(int actionID) override;
  
+@@ -56,5 +57,8 @@
+ protected:
++#ifdef HAVE_DVBRIDGE
++  std::unique_ptr<TiXmlElement> Prepare(const std::unique_ptr<TiXmlElement>& rootElement) override;
++#endif
+   CGUIControl *GetFirstFocusableControl(int id) override;
+   void OnWindowLoaded() override;
+   void OnInitWindow() override;
+   void OnDeinitWindow(int nextWindowID) override;
 diff --git a/xbmc/guilib/guiinfo/GUIInfoLabels.h b/xbmc/guilib/guiinfo/GUIInfoLabels.h
 --- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
 +++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h

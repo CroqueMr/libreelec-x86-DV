@@ -22,6 +22,8 @@ class OrdinaryOutputIsolationTests(unittest.TestCase):
 #include <string>
 #include <iostream>
 #include <mutex>
+#include "windowing/gbm/ModeChangeHold.h"
+using KODI::WINDOWING::GBM::CHeldModeAnnouncement;
 constexpr int DVBRIDGE_DV_IDLE=0;
 constexpr int LOGWARNING=1;
 struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
@@ -110,6 +112,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  std::optional<unsigned> m_hdrDeepColorPrevious;
  unsigned m_dvPendingStream=0,m_dvPendingPolicy=0;
  struct {void Cancel(){}} m_modeHold;
+ CHeldModeAnnouncement m_modeAnnouncement;
  State m_dvState;
  Selection m_dvSelection;
  std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
@@ -190,6 +193,16 @@ int main(){
   expect(window.SetVideoOutput(&picture) && window.stages==1 && window.pending &&
          window.m_dvOrdinaryFrame==(kind!=0),
          "real CB1 activation/restore remains transactional kind="+std::to_string(kind));
+  expect(window.m_modeAnnouncement.Pending()==CHeldModeAnnouncement::Step::BEFORE_NEXT,
+         "same-refresh transport entry/exit announces its actual commit");
+ }
+ for(auto route : {DVBRIDGE::OutputRoute::NativeDV,DVBRIDGE::OutputRoute::HDR10}) {
+  CWinSystemGbmGLESContext window;VideoPicture picture;window.requested=true;
+  window.m_dvSelection.route=route;
+  window.m_dvState.captured=route==DVBRIDGE::OutputRoute::NativeDV;
+  window.m_hdrConversion=route==DVBRIDGE::OutputRoute::HDR10;
+  expect(window.SetVideoOutput(&picture) && window.m_modeAnnouncement.Pending()==CHeldModeAnnouncement::Step::NONE,
+         "stable transport does not announce a metadata/policy-only update");
  }
  for(auto hdr : {StreamHdrType::HDR_TYPE_NONE,StreamHdrType::HDR_TYPE_HDR10,StreamHdrType::HDR_TYPE_HLG}) {
   for(int history=0;history<2;++history) {
@@ -234,7 +247,7 @@ int main(){
             binary = root / 'check'
             code.write_text(program)
             build = subprocess.run(
-                ['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror', str(code), '-o', str(binary)],
+                ['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror', '-I'+str(TREE/'xbmc'),str(code), '-o', str(binary)],
                 capture_output=True, text=True)
             self.assertEqual(build.returncode, 0, build.stderr)
             run = subprocess.run([str(binary)], capture_output=True, text=True)

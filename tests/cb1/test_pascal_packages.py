@@ -19,7 +19,7 @@ class PascalPackages(unittest.TestCase):
             'src/common/inc/nvkms-cb1-vsif.h': 'common/inc/nvkms-cb1-vsif.h',
             'src/common/inc/nvkms-cb1-hdr10plus.h': 'common/inc/nvkms-cb1-hdr10plus.h',
         }
-        for name in ('connector.c', 'connector.h', 'drv.c', 'priv.h', 'modeset.c'):
+        for name in ('connector.c', 'connector.h', 'drv.c', 'priv.h', 'modeset.c', 'encoder.c', 'encoder.h'):
             owner = 'nvidia-drm/nvidia-drm-' + name
             artifacts['kernel-open/' + owner] = owner
         for enabled, recipe in [('yes', 'nvidia-pascal'), ('no', 'nvidia')]:

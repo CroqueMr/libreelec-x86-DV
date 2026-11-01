@@ -45,9 +45,11 @@ struct CSettings {
  static constexpr const char* SETTING_VIDEOSCREEN_WHITELIST="whitelist";
  static constexpr const char* SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE="stereo";
  static constexpr const char* SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE="adjust";
- std::vector<CVariant> whitelist; int adjust=1;
+ std::vector<CVariant> whitelist; int adjust=1; bool doubleRate=false,pulldown=false;
  std::vector<CVariant> GetList(const char*)const{return whitelist;}
- bool GetBool(const char*)const{return false;}
+ bool GetBool(const char* key)const {
+  return std::string(key)=="videoscreen.whitelistdoublerefreshrate" ? doubleRate : pulldown;
+ }
  int GetInt(const char*)const{return adjust;}
 };
 struct RefreshOverride {bool fallback=false;float fpsmin=0,fpsmax=100,refreshmin=0,refreshmax=100;};
@@ -118,8 +120,8 @@ int main() {
  };
  add(3840,2160,60);
  const auto dci=add(4096,2160,film);
- add(3840,2160,film,D3DPRESENTFLAG_INTERLACED);
- add(3840,2160,film,D3DPRESENTFLAG_MODE3DSBS);
+ const auto interlaced=add(3840,2160,film,D3DPRESENTFLAG_INTERLACED);
+ const auto sbs=add(3840,2160,film,D3DPRESENTFLAG_MODE3DSBS);
  add(3840,2160,film,D3DPRESENTFLAG_MODE3DTB);
  add(3840,2160,120);add(3840,2160,144);add(3840,1080,film);
  const auto uhd=add(3840,2160,film);
@@ -127,7 +129,7 @@ int main() {
  add(3840,2160,24);
  const auto uhd25=add(3840,2160,25);
  const auto uhd30=add(3840,2160,30);
- add(3840,2160,60000.f/1001);add(3840,2160,60);
+ add(3840,2160,60000.f/1001);const auto uhd60=add(3840,2160,60);
  auto& component=*CServiceBroker::GetSettingsComponent();
  CRenderManager manager;
  CDVDStreamInfo stream;
@@ -159,6 +161,67 @@ int main() {
  component.settings.adjust=ADJUST_REFRESHRATE_OFF;
  assert(manager.GetResolution()==RES_DESKTOP && "CB1 must preserve native adjustment Off");
  manager.m_nativeDVRate=false;
+ assert(manager.GetResolution()==RES_DESKTOP);
+
+ // Cropped sources use a containing native mode before desktop fallback.
+ component.advanced.m_videoAdjustRefreshOverrides.clear();
+ component.settings.adjust=1;component.settings.whitelist.clear();
+ modes[RES_DESKTOP]=RESOLUTION_INFO(1920,1080);
+ modes[RES_DESKTOP].fRefreshRate=120;
+ for(const auto dimensions: {std::pair{3800,1600},std::pair{3832,1600}}) {
+  manager.m_picture.iWidth=dimensions.first;manager.m_picture.iHeight=dimensions.second;
+  manager.m_fps=film;
+  for(bool cb1:{false,true}) {
+   manager.m_nativeDVRate=cb1;
+   assert(manager.GetResolution()==uhd && "cropped source must not fall back to 1080p");
+  }
+ }
+ auto list=[&](std::initializer_list<RESOLUTION> allowed) {
+  component.settings.whitelist.clear();
+  for(auto mode:allowed)component.settings.whitelist.emplace_back(std::to_string(mode));
+ };
+ auto choose=[&](int width,int height,float fps=24000.f/1001,bool stereo=false,
+                 RenderStereoMode output=RenderStereoMode::OFF) {
+  return CResolutionUtils::ChooseBestResolution(fps,width,height,stereo,output);
+ };
+ list({dci,uhd});assert(choose(3832,1600)==uhd);
+ assert(choose(2048,858)==uhd);
+ list({uhd,dci});assert(choose(3832,1600)==uhd);
+ assert(choose(1920,1080)==uhd); // A restrictive whitelist still controls output.
+ list({fhd});assert(choose(3832,1600)==fhd); // Native downscale fallback retained.
+ list({fhd,uhd});assert(choose(1920,1080)==fhd);
+ assert(choose(1920,1088)==fhd); // Existing decoder-padding tolerance.
+ const auto qhd=add(2560,1440,film);
+ list({uhd,qhd});assert(choose(2560,1440)==qhd);
+ assert(choose(2500,1400)==qhd);
+ list({uhd});assert(choose(2560,1440)==uhd);
+ list({uhd30});assert(choose(3832,1600)==RES_DESKTOP); // No permitted cadence.
+ list({interlaced,sbs});assert(choose(3832,1600)==RES_DESKTOP);
+ list({uhd30});
+ assert(choose(0,0,30)==RES_DESKTOP);
+ assert(choose(5000,3000,30)==RES_DESKTOP);
+ const auto doubleQHD=add(2560,1440,film*2);
+ const auto pulldownQHD=add(2560,1440,film*2.5f);
+ list({doubleQHD,pulldownQHD,uhd});
+ component.settings.doubleRate=true;component.settings.pulldown=true;
+ assert(choose(2048,858)==uhd); // Cadence outranks containing-mode proximity.
+ list({pulldownQHD,doubleQHD});assert(choose(2048,858)==doubleQHD);
+ component.settings.doubleRate=false;assert(choose(2048,858)==pulldownQHD);
+ component.settings.pulldown=false;assert(choose(2048,858)==RES_DESKTOP);
+ const auto doubleFHD=add(1920,1080,film*2);
+ list({doubleFHD,uhd});component.settings.doubleRate=true;
+ assert(choose(1920,1080)==doubleFHD); // Existing spatial match has priority.
+ component.settings.doubleRate=false;
+ list({uhd30});assert(choose(3832,1600,30)==uhd30); // Explicit 30 Hz permitted.
+ component.settings.whitelist.clear();assert(choose(3832,1600,30)==uhd60);
+ list({uhd});
+ assert(choose(3832,1600,film,true,RenderStereoMode::MONO)==RES_DESKTOP);
+ assert(choose(3832,1600,film,true,RenderStereoMode::SPLIT_VERTICAL)==sbs);
+ component.advanced.m_videoAdjustRefreshOverrides.push_back({false,23,24,120,120});
+ assert(choose(3832,1600)==RES_DESKTOP); // Native override remains authoritative.
+ component.advanced.m_videoAdjustRefreshOverrides.clear();
+ component.settings.adjust=ADJUST_REFRESHRATE_OFF;
+ manager.m_picture.iWidth=3832;manager.m_picture.iHeight=1600;
  assert(manager.GetResolution()==RES_DESKTOP);
 }
 '''.replace('RESOLUTION_CODE', resolution).replace('MANAGER_CODE', manager).replace(

@@ -54,6 +54,20 @@ int main(void)
     stream.timing.hdmi_vic=0;stream.timing.vic=97;
     assert(fill_hdr10plus_stream_packet(&blob,&stream,&unknown)==0 && stream.timing.vic==97);
     for(unsigned i=28;i<32;i++)assert(!p.sb[i]);
+    const u8 modern_fields[][3]={{38,98,119},{30,82,143},{8,93,154}};
+    for(unsigned i=0;i<sizeof(modern_fields)/sizeof(modern_fields[0]);i++){
+        u8 modern[31];
+        memcpy(modern,data,sizeof(modern));
+        modern[3]=modern_fields[i][2];
+        modern[10]=modern_fields[i][0];
+        modern[11]=modern_fields[i][1];
+        struct drm_property_blob modern_blob={sizeof(modern),modern};
+        struct dc_info_packet modern_packet={0};
+        assert(fill_hdr10plus_info_packet(&modern_blob,&modern_packet)==0);
+        assert(modern_packet.valid && !memcmp(modern_packet.sb,modern+3,28));
+        assert(fill_hdr10plus_stream_packet(&modern_blob,&stream,&cinema)==0);
+        assert(stream.vsp_infopacket.valid && !memcmp(stream.vsp_infopacket.sb,modern+3,28));
+    }
     before=p;
     blob.length=30;
     assert(fill_hdr10plus_info_packet(&blob,&p)==-EINVAL);

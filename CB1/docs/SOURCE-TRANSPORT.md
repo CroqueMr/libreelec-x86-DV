@@ -33,7 +33,7 @@ retains its reference filter. Input-chroma filtering does not change metadata,
 the FEL luma enlargement filter or output-plane sampling. A matched renderer
 header/library pair is required.
 
-Master-to-Standard recovery is a separate opt-in playback policy, off by default.
+Master-to-Reference recovery is a separate opt-in playback policy, off by default.
 It observes accepted presentation readiness; it does not change a filter inside
 Master. Native Kodi, SDR,3D and vanilla fallback retain their normal scheduling.
 

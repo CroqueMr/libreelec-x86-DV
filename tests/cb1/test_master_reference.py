@@ -139,6 +139,7 @@ int main(){
 #define HAVE_DVBRIDGE
 extern "C" {
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 }
 #include "utils/DVBridgePresentation.h"
 struct Settings {

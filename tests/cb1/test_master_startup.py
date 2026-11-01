@@ -26,6 +26,7 @@ class MasterStartupTests(unittest.TestCase):
 #include <fmt/format.h>
 #include "utils/DVBridgeDiagnosticState.h"
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 namespace DVBRIDGE {
 enum class OutputMode{Disabled,Standard,HDR10,MasterReference};
 struct Binding {uint64_t stream=1,picture=1,revision=1;bool Valid()const{return stream!=0;}
@@ -38,6 +39,7 @@ inline std::string stage;
 inline std::vector<std::string> messages;
 template<class...T>void ObserveDiagnostic(T...){}
 inline void DiagnosticStage(const char* value){stage=value;}
+inline void DiagnosticReserveProgress(){}
 template<class...T>void DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
  messages.push_back(fmt::format(f,std::forward<T>(a)...));}
 }
@@ -56,6 +58,8 @@ struct CDVBridgeGLES {
  m_failedPresentations=1,m_lastSummary=10,m_lastReported=5,m_rawELImports=3,m_rawELHits=7;
  DVBRIDGE::DiagnosticFailures m_failures;
  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
+ DVBRIDGE::DiagnosticFrames m_hdr10plusAnalyzed,m_hdr10plusGenerated,m_hdr10plusAccepted;
+ uint64_t m_hdr10plusSubmits{};std::array<double,4> m_hdr10plusLight{};
  int errors=0,summaries=0;
  bool Failure(const char* stage){++errors;m_failures.Record(1,stage);return false;}
  void Summary(const char* event){++summaries; SUMMARY }

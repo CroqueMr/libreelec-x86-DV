@@ -1,6 +1,6 @@
 # Algorithms and metadata
 
-This reference describes **CB1 0.4** and the circuits listed in
+This reference describes **CB1 0.5** and the circuits listed in
 [CIRCUITS.md](CIRCUITS.md). Equations describe the implemented processing
 contract, not a certified reproduction of Dolby's proprietary display mapper.
 
@@ -53,9 +53,9 @@ display peak or an output brightness cap.
 
 ## Metadata use
 
-| Metadata | Standard Dolby Vision | HDR10 conversion | Authored Dolby Vision Adaptive HDR Mapping |
+| Metadata | Dolby Vision Reference | HDR10 conversion | Authored Dolby Vision Adaptive HDR Mapping |
 | --- | --- | --- | --- |
-| RPU reconstruction data | Reconstruct source pixels | Reconstruct before conversion | Same reconstruction as Standard |
+| RPU reconstruction data | Reconstruct source pixels | Reconstruct before conversion | Same reconstruction as Reference |
 | L1 min/max/average | Transport | Maximum/average guide scene mapping; minimum validated and retained | Guide expansion; transform authored scene descriptors through the applied curve |
 | L3 offsets | Transport | Expert applies to effective L1 once | Fold once; emit neutral offsets when the block is present |
 | L2 CM2.9 trims | Transport | Expert applies eligible controls | Guide luminance retention and color protection |
@@ -74,7 +74,7 @@ L1-only authored DV does not acquire fabricated L2/L8 trims. Its Adaptive HDR Ma
 treatment can therefore remain unchanged. Missing optional creative metadata
 does not imply that source reconstruction is missing.
 
-## Standard Dolby Vision
+## Dolby Vision Reference
 
 BL samples are reshaped using the RPU's piecewise polynomial or MMR mapping.
 For applicable Profile 7 FEL, the timestamp-matched EL contributes the decoded
@@ -487,6 +487,23 @@ fresh L1/L5 replaces input L3. Identity retains the original AI image/metadata
 pair. A source-bound rejection applies to the whole frame, not individual
 pixels. Final display mapping remains TV-Led.
 
+### HDR10+ metadata-guided Reference output
+
+The selected picture supplies an immutable, validated single-window HDR10+
+snapshot. Its maximum MaxSCL channel is normalized linear light, with 1 equal
+to 10000 nits. Convert that value through ST.2084 and quantize to 12-bit L1 max.
+Targeted-system-display luminance is not a source peak.
+
+HDR10+ AverageMaxRGB is not mean PQ. Minimum and mean PQ therefore retain the
+existing AI estimates, with signed L3 applied once and bounded by the source
+peak. Output L3 is neutral after this fold. A zero MaxSCL retains the unchanged
+AI estimate and is reported as estimated, not source-translated.
+
+Authored Bezier curves and saturation mappings remain untranslated; no extra
+pixel pass is added. Multi-window, invalid or mismatched source snapshots are
+rejected without reusing an earlier RPU. This mode does not reconstruct a studio
+Dolby Vision grade. The existing HDR10 Reference movie path and model are reused.
+
 ## Source map
 
 | Implementation | Responsibility |
@@ -498,6 +515,7 @@ pixels. Final display mapping remains TV-Led.
 | `src/dvbridge_core.c` | Metadata serialization and transport transaction |
 | `src/cb1_hdr10_*.c` | GPU descriptors and temporal HDR10 analysis |
 | `src/cb1_l1l3_model.c` | Native model inference and bounded L1/L3 projection |
+| `src/cb1_hdr10plus_dovi.c` | Descriptive HDR10+ source peak and explicit estimate provenance |
 | `src/cb1_circuit.c` | Engine and circuit identities |
 
 [Creative-source attribution](CREATIVE-MAPPING.md) and

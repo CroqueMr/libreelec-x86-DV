@@ -30,8 +30,8 @@ NVHDMIPKT_RESULT NvHdmiPkt_PacketWrite(NvHdmiPkt_Handle h, NvU32 sd, NvU32 displ
     (void)h; (void)tc;
     assert(sd == 0 && display == 7 && head == 0);
     assert(type == NVHDMIPKT_TYPE_VENDOR_SPECIFIC_INFOFRAME);
-    assert(size == 30 || size == 27);
-    memcpy(wire, data, size+1);
+    assert(size == 31 || size == 28);
+    memcpy(wire, data, size);
     writes++;
     return NVHDMIPKT_SUCCESS;
 }

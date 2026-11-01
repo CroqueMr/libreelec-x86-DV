@@ -1,0 +1,12 @@
+HDR10+ distribution estimator and semantic scene comparison
+Author: Hades <15710513+hadesdevls@users.noreply.github.com>,2026.
+Used under the additional GPL-2.0-or-later offer for Hades-authored files and
+patches in NOTICE.md. Original patch headers also offer GPL-3.0-or-later.
+The GPL-2.0 text is provided in GPL-2.0.txt.
+
+Pinned source and additional license offer:
+https://github.com/hadesdevls/LibreELEC-Hades/blob/af256f9dfa5eaa6e24150e50d1e308572b219e16/projects/Generic/patches/kodi/x86/kodi-9436-tools-dvbridge-dolby-vision-metadata-made-from-hdr10-metadata.patch
+https://github.com/hadesdevls/LibreELEC-Hades/blob/af256f9dfa5eaa6e24150e50d1e308572b219e16/NOTICE.md#licences
+
+Adaptations: existing CB1 adapter/API and validation; original source peaks
+retained without CM2.9 floors; no imported RPU generator, renderer or allocator.

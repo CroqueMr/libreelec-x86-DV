@@ -32,17 +32,18 @@ struct HDR10AISource {
  pl_gpu m_gpu=nullptr;void* m_context=nullptr;uint64_t m_revision=0,m_lastSubmitted=0;
  DVBRIDGE::SourceBinding m_binding{},m_preparedBinding{};DVBRIDGE::OutputPreferences m_preferences;
  double m_origin=0;std::optional<int> m_prepared,m_committed;
+ std::optional<int> m_preparedHDR10Plus,m_committedHDR10Plus;bool m_metadataOnly=false;
  const char* m_diagnosticStage="none";cb1_ai_status m_diagnosticStatus=CB1_AI_READY;bool m_diagnosticFailure=false;
  DVBRIDGE::HDR10AIActivation m_activation;
  bool Current(DVBRIDGE::SourceBinding,const DVBRIDGE::OutputPreferences&){return m_resetPending;}
  cb1_ai_identity Identity(DVBRIDGE::SourceBinding b){return {b.stream,b.picture,m_revision};}
  cb1_ai_status Collect(){return CB1_AI_PENDING;}
  cb1_ai_status RecordStatus(const char*,cb1_ai_status status){return status;}
- cb1_ai_status Begin(pl_gpu,const char*,const DVBRIDGE::OutputPreferences&,DVBRIDGE::SourceBinding,double,uint64_t,bool);
+ cb1_ai_status Begin(pl_gpu,const char*,const DVBRIDGE::OutputPreferences&,DVBRIDGE::SourceBinding,double,uint64_t,bool,bool=false);
 };
 cb1_ai_status HDR10AISource::Begin(pl_gpu gpu,const char* bundle,
  const DVBRIDGE::OutputPreferences& preferences,DVBRIDGE::SourceBinding binding,
- double pts,uint64_t now,bool buffered) FUNCTION
+ double pts,uint64_t now,bool buffered,bool metadataOnly) FUNCTION
 int main(){
  HDR10AISource s;DVBRIDGE::SourceBinding b;DVBRIDGE::OutputPreferences p;
  assert(s.Begin(&s,"bundle",p,b,0,0,false)==CB1_AI_PENDING);
@@ -102,18 +103,25 @@ int main(){
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <thread>
 #include <vector>
 enum cb1_ai_status {CB1_AI_READY,CB1_AI_PENDING,CB1_AI_INVALID,CB1_AI_INCOMPATIBLE};
 struct cb1_ai_result{};
+struct AVDynamicHDRPlus{};
+struct cb1_hdr10plus_dovi_result{};
+enum {CB1_HDR10PLUS_DOVI_OK};
+int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const AVDynamicHDRPlus*,const void*){assert(false);return -1;}
+struct Binding {uint64_t picture;};
+struct SideData {const AVDynamicHDRPlus* HDR10Plus()const{assert(false);return nullptr;}};
 namespace DVBRIDGE {
-enum class HDR10SourceMode {Native,ReferenceDV,EnhancedDV};
+enum class HDR10SourceMode {Native,ReferenceDV,EnhancedDV,HDR10PlusDV};
 struct OutputPreferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
+bool HDR10PlusDVSnapshotMatches(const std::shared_ptr<SideData>&,Binding,Binding,uint64_t,uint64_t,bool){assert(false);return false;}
 }
 enum {DVBRIDGE_DV_FAILED=-1};
-struct Binding {uint64_t picture;};
 struct HDR10AISource {
  enum class Decision {Wait,Ignore,Native,Prepare};
  bool active=false,covered=false;unsigned analysed=0,armed=0;uint64_t last=0;
@@ -124,21 +132,26 @@ struct HDR10AISource {
  bool AwaitingPresentation(){return false;} cb1_ai_status Collect(){return CB1_AI_READY;}
  uint64_t LastSubmitted(){return last;}
  cb1_ai_status Seal(double){covered=true;return CB1_AI_READY;} void End(){covered=true;}
- void RecordStatus(const char*,cb1_ai_status){}
+ cb1_ai_status RecordStatus(const char*,cb1_ai_status s){return s;}
+ bool MetadataOnly(){return false;}
+ cb1_ai_status Begin(void*,const char*,const DVBRIDGE::OutputPreferences&,Binding,double,uint64_t,bool,bool){assert(false);return CB1_AI_INVALID;}
+ Decision DescribeHDR10Plus(Binding,std::shared_ptr<const AVDynamicHDRPlus>,double,uint64_t,cb1_ai_result*){assert(false);return Decision::Ignore;}
  Decision Prediction(Binding,const DVBRIDGE::OutputPreferences&,uint64_t,cb1_ai_result*,bool){
   return covered?Decision::Prepare:Decision::Wait;
  }
 };
 struct CDVBridgeGLES {
- struct Layer {Binding binding;double pts;};
+ struct Layer {Binding binding;double pts;std::shared_ptr<SideData> sourceSideData;struct {uint64_t informationGeneration{};} sourceInfo;uint64_t sourceSerial{};};
  struct Context {
   struct State {bool aiStopping=false,aiNextFailed=false,attached=false;
+   struct GL {void* gpu;};GL* gl=nullptr;
    struct NextHDR10AI {Layer layer;Binding binding;double pts;DVBRIDGE::OutputPreferences preferences;};
    std::optional<NextHDR10AI> aiNext;
   } state,*m_state=&state;
   HDR10AISource source;bool beganBuffered=true;
   void ClearNextHDR10AI(){state.aiNext.reset();}
   bool StopHDR10AI(){return true;} int Poll(){return 0;}
+  bool Quarantined(){return false;}
   HDR10AISource& HDR10AI(){return source;} bool FenceLastUse(){return true;}
   bool FenceHDR10AIUse(){return true;}
   cb1_ai_status BeginHDR10AI(const char*,const DVBRIDGE::OutputPreferences&,Binding,double,uint64_t,bool buffered=true){

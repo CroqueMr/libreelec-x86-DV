@@ -1,4 +1,25 @@
 {
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9006-infoframe-wire-length.patch": {
+    "summary": "Transmit the complete native HDMI packet including inserted checksum",
+    "component": "nvidia",
+    "files": {
+      "src/nvidia-modeset/src/nvkms-evo1.c": "Count the inserted checksum byte in PacketWrite length; preserve the final payload byte and leave no-checksum EMP unchanged."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9004-infoframe-wire-length.patch": {
+    "summary": "Transmit the complete Pascal native HDMI packet including checksum",
+    "component": "nvidia",
+    "files": {
+      "src/nvidia-modeset/src/nvkms-evo1.c": "Apply the same exact packet-length correction to the matched R580 source."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9005-return-thunk.patch": {
+    "summary": "Match native Pascal x86 return thunks to the target kernel",
+    "component": "nvidia",
+    "files": {
+      "src/nvidia-modeset/Makefile": "Compile the rebuilt core with the external return-thunk contract."
+    }
+  },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": {
     "summary": "Recognize explicitly associated Dolby Vision layers in HEVC MOV sample entries",
     "component": "ffmpeg",
@@ -44,21 +65,21 @@
     "summary": "Expose progressive 1080p half-SBS modes on HDMI 3D displays",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/drm_edid.c\t2026-09-04 19:39:10": "Expose progressive 1080p half-SBS modes on HDMI 3D displays."
+      "drivers/gpu/drm/drm_edid.c": "Expose owned EDID allocation size and the existing native AVI VIC admission policy."
     }
   },
   "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": {
     "summary": "Expose the validated Dolby Vision connector control",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_atomic.c": "Expose/read/write the per-connector DV property in atomic state."
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Native DV/deep-color property lifecycle and original-primary HDR10+ atomic contract."
     }
   },
   "projects/Generic/patches/linux/linux-9900-01-drivers__gpu__drm__i915__display__intel_display.c.patch": {
     "summary": "Protect Dolby Vision transport from display processing",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_display.c": "Validate byte-preserving scanout and reject incompatible display processing."
+      "drivers/gpu/drm/i915/display/intel_display.c": "Generation-accurate DV scanout guards and native modeset/metadata presentation lifecycle."
     }
   },
   "projects/Generic/patches/linux/linux-9900-02-drivers__gpu__drm__i915__display__intel_display_params.c.patch": {
@@ -79,7 +100,7 @@
     "summary": "Track Dolby Vision state on Intel HDMI connectors",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store DV property and transport state on the Intel connector."
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Native connector DV capability snapshot and existing atomic transport state."
     }
   },
   "projects/Generic/patches/linux/linux-9900-05-drivers__gpu__drm__i915__display__intel_dv_lab_policy.h.patch": {
@@ -100,7 +121,8 @@
     "summary": "Connect Intel HDMI negotiation to Dolby Vision output",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Connect hardware eligibility, HDMI timing, signaling and HDR precision policy."
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Native HDMI packet owners, detected DV snapshot, advertised CTA admission and documented Gen9 GMP HDR path.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.h": "Native HDMI transport, packet and Gen9 GMP route declarations."
     }
   },
   "projects/Generic/patches/linux/linux-9900-08-drivers__video__hdmi.c.patch": {
@@ -121,8 +143,7 @@
     "summary": "Recognize native HDMI level shifters without allowing active DP conversion",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Validate EDID, modes and native-HDMI topology, including level shifters.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Connect hardware eligibility, HDMI timing, signaling and HDR precision policy."
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Validate EDID, modes and native-HDMI topology, including level shifters."
     }
   },
   "projects/Generic/patches/kodi/kodi-9990-native-dv.patch": {
@@ -207,20 +228,9 @@
     "component": "linux",
     "files": {
       "drivers/gpu/drm/i915/display/dvbridge_edid.h": "Validate complete EDIDs and distinguish Standard DV v0/v1/v2, legacy signaling and LLDV-only sinks.",
-      "drivers/gpu/drm/i915/display/intel_display.c": "Recognize both modern and legacy Standard DV packets for byte-safe scanout and modeset guards.",
       "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Use shared sink eligibility while preserving existing byte-safe transport restrictions.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Choose valid Standard DV HDMI signaling and enforce advertised timing capabilities.",
       "drivers/video/hdmi.c": "Pack and validate the legacy Standard DV vendor packet without changing ordinary HDMI packets.",
       "include/linux/hdmi.h": "Represent the opt-in legacy Standard DV vendor packet explicitly."
-    }
-  },
-  "projects/Generic/patches/linux/linux-9903-diagnostics.patch": {
-    "summary": "Retain bounded kernel rejection reasons without verbose DRM logging",
-    "component": "linux",
-    "files": {
-      "drivers/gpu/drm/i915/display/intel_display.c": "Report bounded scanout safety rejection reasons without changing admission decisions.",
-      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store connector-local diagnostic rate limits, separate from output policy.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Log the first DV link/clock rejection and rate-limit repeats per connector."
     }
   },
   "projects/Generic/patches/kodi/kodi-9994-hdmi-recovery.patch": {
@@ -314,9 +324,10 @@
     "component": "linux",
     "summary": "Require a deep-color HDMI link only for explicitly selected HDR10 conversion",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_atomic.c": "Track and validate the opt-in HDR10 deep-color connector state independently of the DV enable switch.",
-      "drivers/gpu/drm/i915/display/intel_display_types.h": "Store the optional HDR10 connector property and atomic state.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Expose the independent display12+ HDR10 guard; require PQ/BT.2020 and reject sub-10-bit conversion links without overriding bandwidth."
+      "drivers/gpu/drm/i915/display/intel_color.c": "Select encoded BT.2020 NCL CSC only for the active YUV transport; preserve RGB and BT.709.",
+      "drivers/gpu/drm/i915/display/intel_dp.c": "Native DP deep-color admission with real selected depth and downstream limits; matching NCL VSC.",
+      "drivers/gpu/drm/i915/display/intel_connector.c": "Shared native attachment of the opt-in minimum-depth property.",
+      "drivers/gpu/drm/i915/display/intel_connector.h": "Native minimum-depth property attachment declaration."
     }
   },
   "projects/Generic/patches/kodi/kodi-9997-dv-static-metadata-latch.patch": {
@@ -462,7 +473,9 @@
       "include/drm/drm_dvbridge.h": "Provide side-effect-free shared transport admission and CTA timing checks.",
       "include/drm/drm_dvbridge_edid.h": "Validate complete Standard-DV v0/v1/v2 EDIDs and reject malformed, duplicate and LLDV-only blocks.",
       "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Forward Intel policy to the shared checks while retaining native topology and platform admission.",
-      "drivers/gpu/drm/i915/display/dvbridge_edid.h": "Use the shared EDID parser through the existing Intel include path."
+      "drivers/gpu/drm/i915/display/dvbridge_edid.h": "Use the shared EDID parser through the existing Intel include path.",
+      "drivers/gpu/drm/drm_edid.c": "Expose owned EDID allocation size and the existing native AVI VIC admission policy.",
+      "include/drm/drm_edid.h": "Declarations for owned EDID size and native AVI VIC policy."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-bluray-dv.patch": {
@@ -470,7 +483,8 @@
     "component": "kodi",
     "files": {
       "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Preserve independent layer decode order and pair unchanged RPU by exact presentation time.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback."
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Use native complete VFS reads for Blu-ray image sectors, including fragmented network reads."
     }
   },
   "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": {
@@ -478,12 +492,12 @@
     "component": "linux",
     "files": {
       "drivers/gpu/drm/amd/display/amdgpu_dm/Makefile": "Build the native AMD Standard-DV adapter with Display Core.",
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Attach independent DV/HDR10 properties; validate HDR metadata before stream construction and final depth after native DC validation; require affected state and modesets at opt-in transitions.",
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h": "Track connector-local independent boolean DV and HDR10 properties with scalar atomic lifecycle.",
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Keep explicit native DCN/DV-v2 admission; expose HDR10 independently of DV and map final DC depth explicitly; preserve packets and native format/bandwidth selection.",
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h": "Declare native DV and independent HDR10 metadata/final-depth validation interfaces.",
       "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Retain the packed RGB8 tunnel marker independently of normal color state.",
-      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Treat DV transport entry and exit as timing changes requiring reprogramming."
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Native AMD connector, HDR/DV presentation and progressive stereo packet/timing lifecycle.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Native byte-tunnel admission, owned sink capabilities and effective neutral-color guards.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Native stream and pipe reprogramming decisions, deterministic vendor packets and generation-specific linebuffer depth."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-native-screenshots.patch": {
@@ -602,7 +616,7 @@
       "xbmc/cores/VideoPlayer/VideoPlayer.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp": "Integrate CB1 playback controls and diagnostics.",
       "xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
       "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Render Dolby Vision and HDR10 output; publish accepted frames and captured-generation failures.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeVAScaler.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -647,7 +661,7 @@
       "xbmc/utils/DVBridgePresentation.h": "Measure accepted presentation readiness and apply optional Master-to-Standard recovery.",
       "xbmc/windowing/GraphicContext.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/GraphicContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/windowing/Resolution.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/windowing/Resolution.cpp": "Preserve native 3D selection and search permitted containing 2D modes before desktop fallback; keep exact matches, whitelist refresh permissions and overrides unchanged.",
       "xbmc/windowing/Resolution.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -656,14 +670,18 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback."
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoSettings.h": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
+      "xbmc/video/ViewModeSettings.cpp": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
+      "xbmc/settings/MediaSettings.cpp": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
+      "xbmc/interfaces/json-rpc/PlayerOperations.cpp": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
+      "xbmc/interfaces/json-rpc/schema/types.json": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection."
     }
   },
   "projects/Generic/patches/linux/linux-9930-amd-3d.patch": {
     "summary": "Signal display-advertised AMD HDMI 3D modes",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Signal display-advertised AMD HDMI 3D modes.",
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c": "Signal display-advertised AMD HDMI 3D modes.",
       "drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c": "Signal display-advertised AMD HDMI 3D modes.",
       "drivers/gpu/drm/amd/display/modules/info_packet/info_packet.c": "Signal display-advertised AMD HDMI 3D modes."
@@ -723,7 +741,6 @@
     "summary": "Keep CRC and FreeSync paths byte-preserving during AMD Dolby Vision",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Keep CRC and FreeSync paths byte-preserving during AMD Dolby Vision.",
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crc.c": "Keep the Dolby Vision formatter unchanged when configuring CRC."
     }
   },
@@ -969,15 +986,10 @@
     "summary": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "drivers/gpu/drm/drm_atomic_state_helper.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "drivers/gpu/drm/drm_atomic_uapi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "drivers/gpu/drm/drm_connector.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "drivers/gpu/drm/drm_edid.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
-      "drivers/gpu/drm/i915/display/intel_atomic.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
-      "drivers/gpu/drm/i915/display/intel_display.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "drivers/video/hdmi.c": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "include/drm/drm_connector.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
       "include/drm/drm_hdr10plus.h": "Validate and present frame-owned HDR10+ HDMI metadata on Intel and AMD.",
@@ -1017,11 +1029,11 @@
     "summary": "drm/amd/display: add experimental Vega M DV transport",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Native transport integration.",
-      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Native transport integration.",
-      "drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c": "Native transport integration.",
-      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Native transport integration.",
-      "drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h": "Native transport integration."
+      "drivers/gpu/drm/amd/display/dc/inc/hw/ipp.h": "Native transport integration.",
+      "drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c": "Vega M graphics CSC save/bypass/restore at the native prescale owner; ordinary LUT programming retained.",
+      "drivers/gpu/drm/amd/display/dc/dce/dce_ipp.h": "Native DCE IPP graphics CSC register fields and bounded per-IPP restoration state.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Vega M input-color dispatch on stream transitions and native D0 invalidation.",
+      "drivers/gpu/drm/amd/display/dc/resource/dce112/dce112_resource.c": "Native per-DCP graphics INPUT_CSC register, shift and mask bindings."
     }
   },
   "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9003-dv-v1-legacy.patch": {
@@ -1103,6 +1115,9 @@
     "summary": "Bind typed HDR10+ intents to native accepted presentations",
     "component": "nvidia-open-kernel-modules",
     "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-encoder.c": "Retain the native signal format for the connected encoder.",
+      "kernel-open/nvidia-drm/nvidia-drm-encoder.h": "Keep TMDS distinct from the DRM encoder type shared with DP.",
+      "src/nvidia-modeset/src/nvkms-hw-flip.c": "Admit only proven native TMDS on dual-mode ports.",
       "src/common/inc/nvkms-cb1-hdr.h": "Native output state and metadata ownership.",
       "src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h": "Native output state and metadata ownership.",
       "src/nvidia-modeset/include/nvkms-private.h": "Native output state and metadata ownership.",
@@ -1129,6 +1144,8 @@
     "summary": "R580 Pascal commit-coupled HDR10+ and strict native 422-10",
     "component": "nvidia-pascal-modeset",
     "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-encoder.c": "Retain the native signal format for the connected encoder.",
+      "kernel-open/nvidia-drm/nvidia-drm-encoder.h": "Keep TMDS distinct from the DRM encoder type shared with DP.",
       "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Native output state and metadata ownership.",
       "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Native output state and metadata ownership.",
       "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Native output state and metadata ownership.",
@@ -1147,16 +1164,123 @@
       "src/common/inc/nvkms-cb1-hdr10plus.h": "Native output state and metadata ownership."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzz-audio-passthrough-diagnostics.patch": {
+    "summary": "Log native audio passthrough selection inputs without changing audio policy",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.cpp": "Record settings and admitted stream type once per codec selection."
+    }
+  },
   "projects/Generic/patches/linux/linux-9941-hdr10plus-presentation-contract.patch": {
     "summary": "Preserve HDR10+ request ownership and native AVI timings",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Native output state and metadata ownership.",
       "drivers/gpu/drm/drm_connector.c": "Native output state and metadata ownership.",
-      "drivers/gpu/drm/i915/display/intel_display.c": "Native output state and metadata ownership.",
-      "drivers/gpu/drm/i915/display/intel_display_types.h": "Native output state and metadata ownership.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Native output state and metadata ownership.",
       "include/drm/drm_connector.h": "Native output state and metadata ownership."
+    }
+  },
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-08-pgs-authoring.patch": {
+    "summary": "Select explicit PGS palette matrix while retaining native Auto output",
+    "component": "ffmpeg",
+    "files": {
+      "libavcodec/pgssubdec.c": "Select explicit PGS palette matrix while retaining native Auto output."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzy-native-menu-overlay-source.patch": {
+    "summary": "Preserve native Blu-ray menu identity through overlay flattening",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Preserve native Blu-ray menu identity through overlay flattening."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzz-bitmap-subtitles.patch": {
+    "summary": "Customize native bitmap subtitle colors and placement without changing menus",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "system/settings/settings.xml": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayCodecFFmpeg.cpp": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/DVDSubtitles/BitmapSubtitles.h": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/settings/SubtitlesSettings.cpp": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/settings/SubtitlesSettings.h": "Customize native bitmap subtitle colors and placement without changing menus."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzx-hdr10plus-dovi-source.patch": {
+    "summary": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/DataCacheCore.cpp": "Expose accepted generation-bound HDR10+ source identity independently of output state.",
+      "xbmc/cores/DataCacheCore.h": "Expose accepted generation-bound HDR10+ source identity independently of output state.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Report decoded HDR10+ only for the current native HDR10 stream.",
+      "xbmc/dialogs/DVPlaybackModes.h": "Share current native source classification for paused menu recovery.",
+      "addons/resource.language.en_gb/resources/strings.po": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "system/settings/settings.xml": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10PlusDVSource.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/cores/VideoProcessingInfo.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/settings/SettingConditions.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzz-cmv40.patch": {
+    "summary": "Optional CM4 metadata append for authored DV Reference and Master",
+    "component": "kodi",
+    "files": {
+      "system/settings/settings.xml": "Native CM4 output metadata options, independent L2 removal and committed reporting.",
+      "addons/resource.language.en_gb/resources/strings.po": "Native CM4 output metadata options, independent L2 removal and committed reporting.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Native CM4 output metadata options, independent L2 removal and committed reporting.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Native CM4 output metadata options, independent L2 removal and committed reporting.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Native CM4 output metadata options, independent L2 removal and committed reporting.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Native CM4 output metadata options, independent L2 removal and committed reporting."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzz-audio-information.patch": {
+    "summary": "Read-only audio source information and truthful native output labels",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/GUIInfoManager.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/CMakeLists.txt": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/Interfaces/AE.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/DataCacheCore.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/DataCacheCore.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/Interface/StreamInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/Process/ProcessInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/VideoPlayerAudio.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/guilib/guiinfo/GUIInfoLabels.h": "Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/guilib/guiinfo/PlayerGUIInfo.cpp": "Native source facts and actual sink reporting; no audio processing changes."
     }
   }
 }

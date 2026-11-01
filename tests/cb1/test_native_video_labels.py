@@ -1,5 +1,6 @@
 """Execute the registered native processing-label getter with controlled cache facts."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -14,7 +15,9 @@ class LabelTests(unittest.TestCase):
         ids=ids.split('constexpr uint32_t PLAYER_PROCESS_START',1)[1].split('constexpr uint32_t ADDON_INFOS_START',1)[0]
         playback=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h').read_text()
         manager=(TREE/'xbmc/GUIInfoManager.cpp').read_text()
-        registration=manager.split('constexpr std::array<InfoMap, 38> player_process',1)[1].split('// clang-format on',1)[0]
+        match=re.search(r'constexpr std::array<InfoMap,\s*(\d+)> player_process',manager)
+        self.assertIsNotNone(match)
+        registration=manager[match.end():].split('// clang-format on',1)[0]
         program=r'''
 #include "VideoProcessingInfo.h"
 #include <cassert>
@@ -28,7 +31,7 @@ struct CServiceBroker { static Resources GetResourcesComponent() {return {};} };
 PLAYBACK
 constexpr uint32_t PLAYER_PROCESS_START IDS
 struct InfoMap { const char* str; uint32_t val; };
-constexpr std::array<InfoMap,38> player_process REGISTRATION
+constexpr std::array<InfoMap,COUNT> player_process REGISTRATION
 HELPER
 bool registeredLabel(const char* key, const VideoProcessingInfo& info, std::string& value) {
  for (const auto& item : player_process)
@@ -55,7 +58,7 @@ int main() {
  assert(registeredLabel("videoprocessingmode",info,value) && value=="40868");
  assert(!VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_PIXELFORMAT,info,value));
 }
-'''.replace('PLAYBACK',playback).replace('IDS',ids).replace('HELPER',code).replace('REGISTRATION',registration)
+'''.replace('PLAYBACK',playback).replace('IDS',ids).replace('HELPER',code).replace('REGISTRATION',registration).replace('COUNT',match[1])
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); (root/'test.cpp').write_text(program)
             build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc/cores'),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)

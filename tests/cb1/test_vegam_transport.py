@@ -73,8 +73,10 @@ struct ipp_funcs {
  void (*ipp_program_input_lut)(struct input_pixel_processor *,const struct gamma *);
  void (*ipp_set_degamma)(struct input_pixel_processor *,enum ipp_degamma_mode);
 };
-struct input_pixel_processor { const struct ipp_funcs *funcs; };
-struct dce_ipp { int unused; };
+enum {DCE_VERSION_11_22=1122};
+struct dc_context {int dce_version;};
+struct input_pixel_processor { const struct ipp_funcs *funcs; struct dc_context *ctx; };
+struct dce_ipp { bool dv_csc_saved; uint32_t dv_csc_mode; };
 struct dc_stream_state { bool dv_standard; };
 struct pipe_ctx { struct { struct input_pixel_processor *ipp; } plane_res;
  struct dc_stream_state *stream; };
@@ -87,6 +89,8 @@ static void update(const char *field,int value) {
 }
 #define ASSERT(x) assert(x)
 #define TO_DCE_IPP(p) ((void)(p),&fake)
+#define REG(r) 0
+#define REG_GET(r,f,p) ((void)(p))
 #define REG_UPDATE(reg,field,value) ((void)ipp_dce,update(#field,value))
 #define REG_SET_2(reg,initial,f1,v1,f2,v2) ((void)ipp_dce,(void)(v1),(void)(v2))
 static bool dce_use_lut(int format) { (void)format; return true; }
@@ -97,7 +101,8 @@ static void set_degamma(struct input_pixel_processor *p,enum ipp_degamma_mode mo
 @@FUNCTIONS@@
 int main(void) {
  const struct ipp_funcs funcs={ dce_ipp_program_prescale,input_lut,set_degamma };
- struct input_pixel_processor ipp={&funcs};
+ struct dc_context context={0};
+ struct input_pixel_processor ipp={&funcs,&context};
  struct dc_stream_state stream={0};
  struct pipe_ctx pipe={.plane_res={&ipp},.stream=&stream};
  struct dc_plane_state plane={.format=SURFACE_PIXEL_FORMAT_GRPH_ARGB8888,

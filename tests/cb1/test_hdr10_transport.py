@@ -285,7 +285,7 @@ int main(void) {
         root = Path(os.environ['CB1_KERNEL_SOURCE'])/'drivers/gpu/drm/i915/display'
         source = (root/'intel_hdmi.c').read_text()
         policy = (root/'intel_dvbridge_hdr_policy.h').read_text()
-        names = ('intel_hdmi_tmds_clock', 'intel_hdmi_source_bpc_possible',
+        names = ('intel_hdmi_has_gmp_hdr', 'intel_hdmi_tmds_clock', 'intel_hdmi_source_bpc_possible',
                  'intel_hdmi_sink_bpc_possible', 'intel_hdmi_sink_format_valid',
                  'intel_hdmi_compute_bpc', 'intel_hdmi_compute_clock',
                  'intel_hdmi_output_format', 'intel_hdmi_compute_output_format',
@@ -325,7 +325,7 @@ struct drm_connector_state {struct drm_connector *connector;unsigned max_request
  struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata;};
 struct intel_digital_connector_state {struct drm_connector_state base;bool dv_hdr10_deep_color,dv_lab_standard;};
 struct drm_display_mode {int crtc_clock,flags;};
-struct intel_display {int version;void *drm;};
+struct intel_display {int version;void *drm;struct{bool skylake,kabylake;}platform;};
 struct intel_encoder {int limit;struct intel_connector *connector;};
 struct intel_crtc_state {struct {struct drm_display_mode adjusted_mode;} hw;
  int pipe_bpp,port_clock;enum intel_output_format sink_format,output_format;bool has_hdmi_sink;
@@ -365,7 +365,7 @@ int main(void) {
  struct intel_digital_connector_state state={.base={&connector.base,10,DRM_MODE_COLORIMETRY_BT2020_RGB,&blob},
    .dv_hdr10_deep_color=true};
  struct intel_encoder encoder={600000,&connector};
- for(int scenario=0;scenario<26;++scenario) {
+ for(int scenario=0;scenario<30;++scenario) {
   struct intel_connector saved_connector=connector;
   struct intel_digital_connector_state saved_state=state;
   struct intel_crtc_state stream={.hw={.adjusted_mode={594000,0}},.pipe_bpp=30,
@@ -400,15 +400,27 @@ int main(void) {
   if(scenario==21) {connector.base.display_info.hdmi.y420_dc_modes=0;want_result=-EINVAL;}
   if(scenario==22) {connector.base.display_info.max_tmds_clock=400000;want_result=-EINVAL;}
   if(scenario==23) {display_state.version=9;want_result=-EINVAL;}
-  if(scenario>=24) {state.dv_hdr10_deep_color=false;state.base.hdr10plus_metadata=&state;}
+  if(scenario>=24 && scenario<=25) {state.dv_hdr10_deep_color=false;state.base.hdr10plus_metadata=&state;}
   if(scenario==25) {display_state.version=10;state.base.max_requested_bpc=12;stream.pipe_bpp=36;
    connector.base.display_info.hdmi.y420_dc_modes=DRM_EDID_YCBCR420_DC_36;want_bpp=36;}
+  if(scenario>=26){
+   display_state.version=9;display_state.platform.kabylake=true;state.base.max_requested_bpc=12;
+   stream.pipe_bpp=36;stream.hw.adjusted_mode.crtc_clock=148500;encoder.limit=300000;
+   connector.base.display_info.max_tmds_clock=300000;
+   connector.base.display_info.edid_hdmi_rgb444_dc_modes=DRM_EDID_HDMI_DC_36;
+   want_format=INTEL_OUTPUT_FORMAT_RGB;want_bpp=36;
+  }
+  if(scenario==27){state.base.max_requested_bpc=10;want_result=-EINVAL;}
+  if(scenario==28){connector.base.display_info.edid_hdmi_rgb444_dc_modes=0;want_result=-EINVAL;}
+  if(scenario==29){stream.hw.adjusted_mode.crtc_clock=297000;
+   connector.base.display_info.also420=false;want_result=-EINVAL;}
   int clock=stream.hw.adjusted_mode.crtc_clock;
   int result=native_config(&encoder,&stream,&state.base);
   if(result!=want_result) return 20+scenario;
   if(!result && (stream.sink_format!=want_format || stream.pipe_bpp!=want_bpp)) return 50+scenario;
   assert(stream.hw.adjusted_mode.crtc_clock==clock);
   connector=saved_connector;state=saved_state;encoder.limit=600000;display_state.version=12;
+  display_state.platform.kabylake=false;
   hdr.hdmi_metadata_type1.eotf=HDMI_EOTF_SMPTE_ST2084;
  }
 }

@@ -26,6 +26,8 @@ class FELFactsTests(unittest.TestCase):
 #include <array>
 #include <optional>
 #include <string>
+#include "cb1_cmv40.h"
+cb1_cmv40_status dvbridge_renderer_cmv40_status(int value){return static_cast<cb1_cmv40_status>(value);}
 struct VideoSourceSideData;
 using pl_tex=void*;
 struct dvbridge_identity {uint64_t stream{},picture{},revision{};};
@@ -55,6 +57,7 @@ class CDVBridgeGLES {
 public:
  struct Submission SUBMISSION;
  Submission m_submission{};
+ int m_renderer=CB1_CMV40_APPEND;
  int m_effectiveMode=1;
  struct {uint64_t informationGeneration{9};} m_pendingSourceInfo;
  struct {int felUpscaling{};} m_requested;
@@ -68,6 +71,7 @@ public:
  uint64_t m_reportedFELStream{};
  void CaptureMetadata(const CDVMetadataBuffer& metadata,bool fel) CAPTURE
  Submission CaptureSubmission() const GETTER
+ void ObserveHDR10PlusSubmission(const Submission&) const {}
  void Accepted(const Submission& submission) {ACCEPTED}
  void NativePrepared(const CDVMetadataBuffer& metadata,bool enhancement) {const bool hdr10plus=false;NATIVE}
  void AIState() {AI_RESET}
@@ -76,6 +80,9 @@ int main() {
  CDVBridgeGLES r;CDVMetadataBuffer metadata;r.m_submission.identity={7,4,3};
  r.m_hardwareFELVpp=true;r.CaptureMetadata(metadata,true);
  auto vpp=r.CaptureSubmission();assert(vpp.felFilter==0 && vpp.felBackend==2);
+ assert(vpp.cmv40Status==CB1_CMV40_APPEND);
+ r.m_renderer=CB1_CMV40_OFF;assert(vpp.cmv40Status==CB1_CMV40_APPEND);
+ assert(r.CaptureSubmission().cmv40Status==CB1_CMV40_OFF);
  r.Accepted(vpp);assert(DVBRIDGE::reports==1 && DVBRIDGE::backend=="vaapi-vpp" && DVBRIDGE::executed=="vaapi");
  r.Accepted(vpp);assert(DVBRIDGE::reports==1);
  r.m_requested.felUpscaling=1;r.m_hardwareFELVpp=false;r.CaptureMetadata(metadata,true);
@@ -108,6 +115,7 @@ int main() {
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'test.cpp').write_text(program)
             built=subprocess.run(['c++','-std=c++20','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
+                '-I'+str(Path(__file__).resolve().parents[2]/'CB1/src'),
                 str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
             ran=subprocess.run([str(root/'test')],capture_output=True,text=True)

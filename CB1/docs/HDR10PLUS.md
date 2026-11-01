@@ -5,12 +5,15 @@ Supported: native HDR10+ playback and Dolby Vision-to-HDR10+ conversion.
 | Source | Output | Processing |
 | --- | --- | --- |
 | HDR10+ | HDR10+ | Original pixels and frame-owned FFmpeg metadata. |
+| HDR10+ | Dolby Vision, explicit metadata-guided mode | Source pixels retained; representable MaxSCL guidance plus labeled L1/L3 AI estimates. Authored curves and saturation maps are not translated. |
 | Dolby Vision | HDR10+ | BL/EL/RPU reconstruction, image statistics and representable luminous trims. |
 | Unsupported transport | HDR10 | Dynamic metadata cleared; fallback reported. |
 
 Intel, AMD and NVIDIA use their supported native-HDMI driver routes, an accepted
 dynamic-metadata transaction and at least 10-bit output. Native and converted
-HDR10+ share the output contract. HDR10+ to Dolby Vision is not included.
+HDR10+ share the output contract. HDR10+ stays native by default, including with
+a saved general HDR10 AI preference. Dolby Vision conversion requires explicit
+selection of the metadata-guided mode and an admitted Dolby Vision output.
 [Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
 ## Metadata conversion
@@ -34,7 +37,10 @@ use HDR10. Packets belong to the same atomic transaction as their framebuffer.
 Seek, source changes, rejected imports and teardown clear stale metadata.
 
 Native and generated metadata support receiver versions 0 and 1. Generated V0
-uses measured 5th/10th percentiles, not V1's reserved distribution values.
+uses measured 5th/10th percentiles. Generated V1 retains its existing 0/255 defaults
+for the additional system fields.
+Native V1 also accepts its Y99 luminance and Y100nit percentage fields. The latter
+is transmitted without luminance quantization; values 101..254 remain rejected.
 Changing receiver version cancels pending conversion metadata before reuse.
 
 ## Verification
@@ -49,6 +55,7 @@ HDMI certification.
 ## References
 
 - [SMPTE ST 2094-40](https://pub.smpte.org/pub/st2094-40/st2094-40-2020.pdf).
+- [Qualcomm HDR10+ system field description, section 0170/Table 2](https://patents.google.com/patent/EP4591567A1/en), citing HDR10+ specification 1.6. This is supporting implementation evidence, not HDMI certification.
 - FFmpeg `AVDynamicHDRPlus`, its LGPL parser and serializer.
 - [Amlogic public HDMI quantization implementation](https://nest-open-source.googlesource.com/manifest_repos/kernel/+/1650886512330522da41d487bb2ce75fd5da5ec8/drivers/amlogic/media/enhancement/amvecm/hdr/am_hdr10_plus.c), cross-checked, not copied.
 

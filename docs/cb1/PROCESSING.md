@@ -6,17 +6,17 @@ output metadata. Kodi retains decoding, audio, subtitles and playback timing.
 Native HDR10/HLG/SDR and [stereoscopic 3D](3D.md) remain outside CB1 conversion.
 See [hardware support](HARDWARE.md) for supported integrated and dedicated GPUs.
 
-## Standard and Master Reference
+## Reference and Master Reference
 
 Both modes reconstruct the Dolby Vision source, including the applicable matched
 FEL, and send TV-Led Dolby Vision with the source display-management metadata.
 
 | Mode | Reconstruction | TV profile |
 | --- | --- | --- |
-| Dolby Vision Standard | Fixed performance-oriented reconstruction and input-chroma interpolation | Not required |
+| Dolby Vision Reference | Fixed performance-oriented reconstruction and input-chroma interpolation | Not required |
 | Dolby Vision Master Reference | Exact source-domain reference arithmetic and dedicated FEL filters | Not required |
 
-Standard accepts very small image differences for substantially higher rendering
+Reference accepts very small image differences for substantially higher rendering
 performance. Master Reference aims for bit-perfect playback within its admitted
 source/output contract. It does not establish equality to a certified player's
 physical HDMI output. Resizing is a spatial operation, not an identity transform.
@@ -33,7 +33,7 @@ shared direct IPT path in both Master variants.
 
 ## Metadata use
 
-| Metadata | Standard / Master | HDR10 Basic | HDR10 Expert | Adaptive |
+| Metadata | Reference / Master | HDR10 Basic | HDR10 Expert | Adaptive |
 | --- | --- | --- | --- | --- |
 | RPU mapping / residual | Reconstruct source | Reconstruct source | Reconstruct source | Reconstruct source |
 | L1 scene min/max/average | Forward to TV | Scene guidance | Scene guidance | Expansion strength and output scene descriptors |
@@ -198,6 +198,22 @@ internal bound, not a fabricated mastering claim.
 
 Reference AI and Adaptive AI therefore share the model, but do not apply the
 same pixel treatment. No claim of equivalence to authored Dolby Vision is made.
+
+## HDR10+ to Dolby Vision
+
+This mode preserves the decoded picture and uses the existing Reference output.
+For a complete single-window source, MaxSCL supplies the scene peak and the
+percentile distribution plus AverageMaxRGB estimate mean PQ. Known mastering
+minimum is preserved separately; content minimum defaults to zero.
+
+Complete source statistics avoid GPU image analysis. Valid sparse statistics
+retain the existing AI estimates. Scene descriptions are committed only with
+their matching presented picture. Invalid or missing metadata after activation
+keeps native fallback until a source or mode reset, avoiding repeated switching.
+
+HDR10+ target curves, saturation operations and multiple spatial windows are not
+universally translated to Dolby Vision. Native HDR10+ playback remains Kodi's
+default path and does not activate this conversion.
 
 ## Performance controls and output
 

@@ -24,7 +24,77 @@ physical HDMI packet/frame association remain unqualified.
  #include "nvidia-drm-crtc.h"
  #include "nvidia-drm-utils.h"
  #include "nvidia-drm-encoder.h"
-@@ -259,6 +260,7 @@
+@@ -45,6 +46,22 @@
+ #include <drm/drm_atomic_helper.h>
+ #include <drm/drm_edid.h>
+ 
++static bool nv_drm_connector_hdmi_properties(const struct nv_drm_connector *c)
++{
++    return c->type == NVKMS_CONNECTOR_TYPE_HDMI ||
++        (c->type == NVKMS_CONNECTOR_TYPE_DP && !c->internal && !c->dpAddress[0]);
++}
++
++static bool nv_drm_connector_dual_tmds(struct drm_connector *connector,
++                                      const struct nv_drm_encoder *encoder)
++{
++    const struct nv_drm_connector *c = to_nv_connector(connector);
++    return connector->status == connector_status_connected &&
++        c->type == NVKMS_CONNECTOR_TYPE_DP && nv_drm_connector_hdmi_properties(c) &&
++        encoder && encoder == c->nv_detected_encoder &&
++        encoder->signal_format == NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS;
++}
++
+ static void nv_drm_connector_destroy(struct drm_connector *connector)
+ {
+     struct nv_drm_connector *nv_connector = to_nv_connector(connector);
+@@ -54,7 +71,7 @@
+     drm_connector_cleanup(connector);
+ 
+     if (nv_connector->edid != NULL) {
+-        nv_drm_free(nv_connector->edid);
++        drm_edid_free(nv_connector->edid);
+     }
+ 
+     nv_drm_free(nv_connector);
+@@ -130,18 +147,17 @@
+ #endif
+ 
+     if (pDetectParams->connected) {
+-        if (!pDetectParams->overrideEdid && pDetectParams->edid.bufferSize) {
+-
+-            if ((nv_connector->edid = nv_drm_calloc(
+-                        1,
+-                        pDetectParams->edid.bufferSize)) != NULL) {
+-
+-                memcpy(nv_connector->edid,
+-                       pDetectParams->edid.buffer,
+-                       pDetectParams->edid.bufferSize);
+-            } else {
+-                NV_DRM_LOG_ERR("Out of Memory");
++        NvU32 size = pDetectParams->edid.bufferSize;
++        if (size >= EDID_LENGTH && size <= sizeof(pDetectParams->edid.buffer) &&
++            size % EDID_LENGTH == 0) {
++            nv_connector->edid = drm_edid_alloc(pDetectParams->edid.buffer, size);
++            if (!drm_edid_valid(nv_connector->edid)) {
++                drm_edid_free(nv_connector->edid);
++                nv_connector->edid = NULL;
++                NV_DRM_LOG_ERR("Invalid or unavailable EDID; retaining native modes only");
+             }
++        } else if (size) {
++            NV_DRM_LOG_ERR("Invalid EDID length %u; retaining native modes only", size);
+         }
+ 
+         return true;
+@@ -167,7 +183,7 @@
+     BUG_ON(!mutex_is_locked(&dev->mode_config.mutex));
+ 
+     if (nv_connector->edid != NULL) {
+-        nv_drm_free(nv_connector->edid);
++        drm_edid_free(nv_connector->edid);
+         nv_connector->edid = NULL;
+     }
+ 
+@@ -259,6 +275,7 @@
      __drm_atomic_helper_connector_duplicate_state(c, &s->base);
      s->vsif = drm_property_blob_get(nv_cb1_state(c->state)->vsif);
      s->dither_off = nv_cb1_state(c->state)->dither_off;
@@ -32,7 +102,7 @@ physical HDMI packet/frame association remain unqualified.
      return &s->base;
  }
  
-@@ -283,6 +285,11 @@
+@@ -283,6 +300,11 @@
          ns->dither_off = val == 1;
          return 0;
      }
@@ -44,10 +114,14 @@ physical HDMI packet/frame association remain unqualified.
      return -EINVAL;
  }
  
-@@ -305,6 +312,21 @@
+@@ -305,6 +327,25 @@
  {
      struct nv_drm_device *d = to_nv_device(c->dev);
      const struct nv_cb1_connector_state *ns = container_of(s, struct nv_cb1_connector_state, base);
++    if (p == d->cb1_native_tmds_property) {
++        *val = nv_drm_connector_dual_tmds(c, to_nv_connector(c)->nv_detected_encoder);
++        return 0;
++    }
 +    if (p == d->cb1_hdr10plus_status_property) {
 +        if (c->status != connector_status_connected || !s->crtc ||
 +            !s->best_encoder || !s->crtc->state->active) {
@@ -66,7 +140,19 @@ physical HDMI packet/frame association remain unqualified.
      if (p == d->cb1_output_bpc_property) {
          *val = nv_drm_connector_current_output_bpc(c, s);
          return 0;
-@@ -462,6 +484,8 @@
+@@ -338,8 +379,9 @@
+     int   count = 0;
+ 
+ 
+-    if (nv_connector->edid != NULL) {
+-        nv_drm_connector_update_edid_property(connector, nv_connector->edid);
++    if (drm_edid_connector_update(connector, nv_connector->edid) < 0) {
++        NV_DRM_LOG_ERR("Failed to publish EDID capabilities");
++        drm_edid_connector_update(connector, NULL);
+     }
+ 
+     while (1) {
+@@ -462,9 +504,16 @@
      struct nv_drm_crtc_state *nv_crtc_state;
      struct NvKmsKapiHeadRequestedConfig *req_config;
  
@@ -75,7 +161,15 @@ physical HDMI packet/frame association remain unqualified.
      if (!crtc) {
          return 0;
      }
-@@ -474,6 +498,7 @@
++
++    if (to_nv_connector(connector)->type != NVKMS_CONNECTOR_TYPE_HDMI &&
++        (nv_cb1_state(new_connector_state)->vsif || new_connector_state->hdr10plus_metadata) &&
++        !nv_drm_connector_dual_tmds(connector, to_nv_encoder(new_connector_state->best_encoder)))
++        return -EINVAL;
+ 
+     crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
+     nv_crtc_state = to_nv_crtc_state(crtc_state);
+@@ -474,6 +523,7 @@
          const struct nv_cb1_connector_state *ns = nv_cb1_state(new_connector_state);
          struct NvKmsCb1Vsif next = {0};
          NvU32 bpc = 0;
@@ -83,7 +177,7 @@ physical HDMI packet/frame association remain unqualified.
          if (ns->vsif) {
              next.payloadSize = ns->vsif->length;
              memcpy(next.payload, ns->vsif->data, next.payloadSize);
-@@ -481,6 +506,19 @@
+@@ -481,6 +531,19 @@
          next.disableDithering = ns->dither_off;
          if (connector->max_bpc_property && new_connector_state->max_requested_bpc < 10)
              bpc = 8;
@@ -103,10 +197,15 @@ physical HDMI packet/frame association remain unqualified.
          req_config->flags.hdmiVsifMetadataChanged =
              memcmp(&req_config->modeSetConfig.hdmiVsifMetadata, &next, sizeof(next)) != 0;
          req_config->modeSetConfig.hdmiVsifMetadata = next;
-@@ -641,6 +679,11 @@
+@@ -640,7 +703,15 @@
+     }
  
  #if defined(NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT)
-     if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
+-    if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
++    if (nv_drm_connector_hdmi_properties(nv_connector)) {
++        if (nv_connector->type == NVKMS_CONNECTOR_TYPE_DP)
++            drm_object_attach_property(&nv_connector->base.base,
++                                       nv_dev->cb1_native_tmds_property, 0);
 +        drm_connector_attach_hdr10plus_metadata_property(&nv_connector->base);
 +        drm_object_attach_property(&nv_connector->base.base,
 +            nv_dev->cb1_hdr10plus_status_property, 0);
@@ -117,6 +216,15 @@ physical HDMI packet/frame association remain unqualified.
          nv_connector->base.max_bpc_property = nv_dev->cb1_bpc_property;
 --- a/kernel-open/nvidia-drm/nvidia-drm-connector.h
 +++ b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+@@ -45,7 +45,7 @@
+     char dpAddress[NVKMS_DP_ADDRESS_STRING_LENGTH];
+ 
+     struct nv_drm_encoder *nv_detected_encoder;
+-    struct edid *edid;
++    const struct drm_edid *edid;
+ 
+     atomic_t connection_status_dirty;
+ 
 @@ -79,6 +79,7 @@
      struct drm_connector_state base;
      struct drm_property_blob *vsif;
@@ -127,10 +235,18 @@ physical HDMI packet/frame association remain unqualified.
  static inline void nv_drm_connector_mark_connection_status_dirty(
 --- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
 +++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
-@@ -662,6 +662,17 @@
+@@ -657,10 +657,24 @@
+     }
+ 
+     /* Writes are refused by atomic_set_property; reads query current NVKMS. */
++    nv_dev->cb1_native_tmds_property = drm_property_create_bool(nv_dev->dev,
++        0, "CB1_NATIVE_TMDS");
++    if (!nv_dev->cb1_native_tmds_property) return -ENOMEM;
+     nv_dev->cb1_output_bpc_property = drm_property_create_range(nv_dev->dev,
+         0, "CB1_OUTPUT_BPC", 0, 16);
      if (!nv_dev->cb1_output_bpc_property) {
          return -ENOMEM;
-     }
++    }
 +    {
 +        static const struct drm_prop_enum_list status[] = {
 +            {0, "disabled"}, {1, "active-commit-coupled"}, {2, "fault"}
@@ -141,10 +257,9 @@ physical HDMI packet/frame association remain unqualified.
 +            0, "DVBRIDGE_HDR10_DEEP_COLOR");
 +        if (!nv_dev->cb1_hdr10plus_status_property || !nv_dev->cb1_deep_color_property)
 +            return -ENOMEM;
-+    }
+     }
      return 0;
  }
- 
 --- a/kernel-open/nvidia-drm/nvidia-drm-modeset.c
 +++ b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
 @@ -48,6 +48,7 @@
@@ -328,10 +443,11 @@ physical HDMI packet/frame association remain unqualified.
  }
 --- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
 +++ b/kernel-open/nvidia-drm/nvidia-drm-priv.h
-@@ -89,6 +89,8 @@
+@@ -89,6 +89,9 @@
  
  struct nv_drm_device {
      struct drm_property *cb1_output_bpc_property;
++    struct drm_property *cb1_native_tmds_property;
 +    struct drm_property *cb1_hdr10plus_status_property;
 +    struct drm_property *cb1_deep_color_property;
      nv_gpu_info_t gpu_info;
@@ -733,7 +849,55 @@ physical HDMI packet/frame association remain unqualified.
  
  #include <ctrl/ctrl0073/ctrl0073dfp.h> // NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS
  #include <ctrl/ctrl0073/ctrl0073dp.h> // NV0073_CTRL_CMD_DP_SET_AUDIO_MUTESTREAM
-@@ -379,6 +381,105 @@
+@@ -45,6 +47,47 @@
+ #include <ctrl/ctrl2080/ctrl2080unix.h> // NV2080_CTRL_OS_UNIX_AUDIO_DYNAMIC_POWER
+ 
+ #include <hdmipacket/nvhdmipkt.h>
++
++/* Use only an advertised CTA identity; leave GENERIC to its native owners. */
++static NvU8 nvHdmiCtaVic(const NVT_EDID_INFO *edid,
++                        const NVDispHeadInfoFrameStateEvoRec *info,
++                        NvU32 customSize)
++{
++    static const NvU8 vic[] = { 0, 95, 94, 93, 98 };
++    const NVT_VENDOR_SPECIFIC_INFOFRAME_CTRL *v = &info->vendorSpecificCtrl;
++    const NVT_HDR_STATIC_METADATA *hdr = &edid->hdr_static_metadata_info;
++    NvU8 mapped;
++    unsigned ext, i;
++
++    if (customSize || !v->Enable ||
++        v->VSIFVersion != NVT_VSIF_VERSION_H14B_VSIF ||
++        v->HDMIFormat != NVT_HDMI_VS_BYTE4_HDMI_VID_FMT_EXT ||
++        v->HDMI_VIC < 1 || v->HDMI_VIC > 4 ||
++        edid->ext861.revision < NVT_CEA861_REV_B ||
++        hdr->static_metadata_type != 1 ||
++        (!hdr->supported_eotf.smpte_st_2084_eotf &&
++         !hdr->supported_eotf.future_eotf)) return 0;
++    mapped = vic[v->HDMI_VIC];
++    if (info->ctrl.video_format_id && info->ctrl.video_format_id != mapped) return 0;
++    for (ext = 0; ext < 2; ext++) {
++        const NVT_EDID_CEA861_INFO *cea = ext ? &edid->ext861_2 : &edid->ext861;
++        for (i = 0; i < cea->total_svd && i < sizeof(cea->video); i++) {
++            if (NVT_GET_CTA_8BIT_VIC(cea->video[i]) == mapped) return mapped;
++        }
++    }
++    return 0;
++}
++
++static void nvHdmiUseCtaVic(const NVT_EDID_INFO *edid,
++                           NVDispHeadInfoFrameStateEvoRec *info,
++                           NvU32 customSize)
++{
++    NvU8 vic = nvHdmiCtaVic(edid, info, customSize);
++    if (!vic) return;
++    info->ctrl.video_format_id = vic;
++    if (vic == 98) info->ctrl.pic_aspect_ratio = NVT_VIDEO_INFOFRAME_BYTE2_M1M0_NO_DATA;
++    info->vendorSpecificCtrl.Enable = FALSE;
++}
+ 
+ #define CAP_HDMI_SUPPORT_GPU             0x00000001
+ #define CAP_HDMI_SUPPORT_MONITOR         0x00000002
+@@ -379,6 +422,112 @@
  /*!
   * Sends General Control Packet to the HDMI sink.
   */
@@ -743,6 +907,7 @@ physical HDMI packet/frame association remain unqualified.
 +    const struct NvKmsCb1Vsif *vsif, NvBool vrr)
 +{
 +    const NVDpyEvoRec *dpy;
++    NVDispHeadInfoFrameStateEvoRec normalized;
 +    (void)apiHead;
 +    /* This matched image qualifies the original Pascal packet layout only. */
 +    if ((disp->pDevEvo->dispClass != NV9770_DISPLAY &&
@@ -750,13 +915,19 @@ physical HDMI packet/frame association remain unqualified.
 +        nvCountDpyIdsInDpyIdList(dpys) != 1 ||
 +        color->bpc != 10 || color->colorimetry != NVKMS_OUTPUT_COLORIMETRY_BT2100 ||
 +        color->format != NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_SPACE_YCbCr422 ||
-+        info->vendorSpecificCtrl.Enable || info->empCtrl.EnableVRR ||
++        info->empCtrl.EnableVRR ||
 +        vsif->payloadSize || vrr) {
 +        return FALSE;
 +    }
 +    dpy = nvGetOneArbitraryDpyEvo(dpys, disp);
-+    return dpy && dpy->pConnectorEvo->type == NVKMS_CONNECTOR_TYPE_HDMI &&
-+        nvDpyIsHdmiEvo(dpy);
++    if (!dpy || !dpy->parsedEdid.valid) return FALSE;
++    normalized = *info;
++    nvHdmiUseCtaVic(&dpy->parsedEdid.info, &normalized, vsif->payloadSize);
++    if (normalized.vendorSpecificCtrl.Enable) return FALSE;
++    return (dpy->pConnectorEvo->type == NVKMS_CONNECTOR_TYPE_HDMI ||
++            dpy->pConnectorEvo->type == NVKMS_CONNECTOR_TYPE_DP) &&
++        dpy->pConnectorEvo->signalFormat == NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS &&
++        !nvDpyUsesDPLib(dpy) && nvDpyIsHdmiEvo(dpy);
 +}
 +
 +NvU32 nvCb1Hdr10plusStatus(NVDispEvoRec *disp, NvU32 head,
@@ -839,9 +1010,38 @@ physical HDMI packet/frame association remain unqualified.
  static void SendHdmiGcp(const NVDispEvoRec *pDispEvo,
                          const NvU32 head, NvBool avmute)
  {
+@@ -622,6 +771,7 @@
+                             const NVDispHeadInfoFrameStateEvoRec *pInfoFrameState,
+                             NVDpyEvoRec *pDpyEvo)
+ {
++    NVDispHeadInfoFrameStateEvoRec normalized;
+     if (!nvDpyIsHdmiEvo(pDpyEvo)) {
+         return;
+     }
+@@ -632,6 +782,11 @@
+             "No EDID: cannot construct video/vendor-specific info frame");
+         return;
+     }
++
++    normalized = *pInfoFrameState;
++    nvHdmiUseCtaVic(&pDpyEvo->parsedEdid.info, &normalized,
++                    pDispEvo->headState[head].hdmiVsifMetadata.payloadSize);
++    pInfoFrameState = &normalized;
+ 
+     SendVideoInfoFrame(pDispEvo,
+                        head,
 --- a/src/nvidia-modeset/src/nvkms-modeset.c
 +++ b/src/nvidia-modeset/src/nvkms-modeset.c
-@@ -4096,6 +4096,32 @@
+@@ -1121,6 +1121,8 @@
+                 if (!nvCb1VsifValid(&vsif[sd][apiHead]) ||
+                     (vsif[sd][apiHead].payloadSize != 0 &&
+                      (!nvDpyIsHdmiEvo(pDpyEvo) ||
++                      pDpyEvo->pConnectorEvo->signalFormat != NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS ||
++                      nvDpyUsesDPLib(pDpyEvo) ||
+                       nvCountDpyIdsInDpyIdList(pRequestHead->dpyIdList) != 1))) {
+                     pReply->disp[sd].head[apiHead].status =
+                         NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_MODE;
+@@ -4096,6 +4098,32 @@
          goto done;
      }
  
@@ -874,7 +1074,7 @@ physical HDMI packet/frame association remain unqualified.
      /* The requested configuration is valid. */
  
      ret = TRUE;
-@@ -4112,6 +4138,18 @@
+@@ -4112,6 +4140,18 @@
      }
  
      /* From this point, we should not fail. */
@@ -893,7 +1093,7 @@ physical HDMI packet/frame association remain unqualified.
  
      /*
       * Disable stereo pin during console restore or modeset owner changes.
-@@ -4181,6 +4219,20 @@
+@@ -4181,6 +4221,20 @@
  
      BeginEndModeset(pDevEvo, pProposed, END_MODESET);
  
@@ -941,4 +1141,23 @@ physical HDMI packet/frame association remain unqualified.
 +    NvBool occupied;
 +};
 +#endif
-
+--- a/kernel-open/nvidia-drm/nvidia-drm-encoder.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-encoder.c
+@@ -134,6 +134,7 @@
+     }
+ 
+     nv_encoder->hDisplay = hDisplay;
++    nv_encoder->signal_format = format;
+ 
+     /* Initialize the base encoder object and add it to the drm subsystem */
+ 
+--- a/kernel-open/nvidia-drm/nvidia-drm-encoder.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-encoder.h
+@@ -35,6 +35,7 @@
+ 
+ struct nv_drm_encoder {
+     NvKmsKapiDisplay hDisplay;
++    NvKmsConnectorSignalFormat signal_format;
+ 
+     struct nv_drm_connector *nv_connector;
+ 

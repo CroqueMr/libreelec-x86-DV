@@ -21,6 +21,7 @@ sharing the same Ryzen generation number.
 | AMD Radeon RX 5000, RDNA 1 | RX 5500 XT, 5600 XT, 5700 / 5700 XT | Supported |
 | AMD Radeon RX 6000, RDNA 2 | RX 6400, 6600, 6700 XT, 6800, 6900 XT | Supported |
 | AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Supported |
+| AMD Radeon RX 9000, RDNA 4 | RX 9070 / 9070 XT | DCN4 transport implemented; physical qualification pending |
 | AMD Radeon RX Vega M, DCE 11.22 | Vega M GL / GH | Supported, [transport](VEGA-M.md) |
 | Intel Arc A / B | A750, A770, B570, B580 | Supported, [firmware and HDMI](INTEL-ARC.md) |
 | NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Supported; matched [R580 driver](PASCAL.md), same image |
@@ -30,9 +31,11 @@ sharing the same Ryzen generation number.
 | NVIDIA GeForce RTX 40, Ada | RTX 4060, 4070, 4080, 4090 | Supported |
 | NVIDIA GeForce RTX 50, Blackwell | RTX 5060, 5070, 5080, 5090 | Supported |
 
-The AMD Dolby Vision driver covers selected DCN 1.x, 2.x and 3.x display engines.
-RX 9000 / DCN 4, Polaris RX 400 / 500 and discrete Vega cards are outside its
-current allowlist. Vega-based Ryzen APUs listed above use a different display path.
+The AMD Dolby Vision driver admits selected DCN1.x,2.x,3.x and DCN4.01/4.2/4.2B
+display engines. DCN4's native color blocks and atomic admission are software
+tested; RX9000 HDMI byte preservation is not physically qualified here.
+Polaris RX400/500 and discrete Vega remain outside this allowlist. Vega-based
+Ryzen APUs listed above use a different display path.
 
 NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
 and a VAAPI-to-NVDEC bridge. The default open-module stack requires Turing or

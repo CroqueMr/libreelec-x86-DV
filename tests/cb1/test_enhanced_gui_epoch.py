@@ -22,7 +22,7 @@ static bool dvbridge_render_dv_policy_update_overlay(void*,const void* overlay,b
 }
 void run(int mode,bool visible,bool direct){
   bool rendered=direct,m_direct=direct,m_overlayVisible=visible;
-  void *m_renderer=nullptr;int prediction=0,geometry=0;
+  void *m_renderer=nullptr;int rendition=0,geometry=0;
   struct {int frame=0;} imported;
   struct {int mode;} policy{mode};
 '''+code[start:end]+r'''

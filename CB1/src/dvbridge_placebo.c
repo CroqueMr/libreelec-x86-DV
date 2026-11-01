@@ -94,7 +94,7 @@ bool dvbridge_map_color(struct dvbridge_color *out, const void *metadata,
             return false;
         for (int p = 0; p < curve->num_pivots; ++p) {
             if (curve->pivots[p] >= (1u << h->bl_bit_depth) ||
-                (p && curve->pivots[p] <= curve->pivots[p - 1]))
+                (p && curve->pivots[p] < curve->pivots[p - 1]))
                 return false;
         }
         for (int p = 0; p + 1 < curve->num_pivots; ++p) {

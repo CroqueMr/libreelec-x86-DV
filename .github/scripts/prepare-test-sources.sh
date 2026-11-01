@@ -51,9 +51,9 @@ python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \
     --disable-doc --disable-network --disable-autodetect --disable-x86asm \
     --enable-gpl --enable-version3 --enable-shared --disable-static \
-    --enable-filter=buffer,buffersink,hstack,settb --enable-decoder=hevc \
-    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc --enable-protocol=file \
-    --enable-bsf=hevc_mp4toannexb
+    --enable-filter=buffer,buffersink,hstack,settb --enable-decoder=hevc,pgssub \
+    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc,ac3 --enable-protocol=file \
+    --enable-bsf=hevc_mp4toannexb,dovi_split
   make -j2
   make install
 )
@@ -62,6 +62,9 @@ printf '%s\n' \
   "KODI_UPSTREAM_ARCHIVE=$test_root/kodi.tar.gz" \
   "CB1_DRM_STATE_SOURCE=$test_root/kodi" \
   "FFMPEG_TEST_PREFIX=$test_root/prefix" \
+  "FFMPEG_PGS_TEST_PREFIX=$test_root/prefix" \
+  "LIBBLURAY_TEST_INCLUDE=/usr/include" \
+  "CB1_FMT_INCLUDE=/usr/include" \
   "FFMPEG_MATCHED_SOURCE=$test_root/ffmpeg" \
   "FFMPEG_SOURCE_ARCHIVE=$test_root/ffmpeg.tar.xz" \
   "LD_LIBRARY_PATH=$test_root/prefix/lib" >> "${GITHUB_ENV:?}"

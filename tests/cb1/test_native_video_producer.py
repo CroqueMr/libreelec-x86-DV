@@ -14,6 +14,7 @@ class ProducerTests(unittest.TestCase):
         program=r'''
 #define CB1_HAS_HDR10_AI
 #include "VideoProcessingInfo.h"
+#include "cb1_circuit.h"
 #include <cassert>
 #include <string>
 #include <bitset>
@@ -21,10 +22,6 @@ enum AVPixelFormat { AV_PIX_FMT_NONE=-1 };
 struct SourceBinding { uint64_t stream{}, picture{}, revision{}; bool Valid() const {return stream && picture && revision;} };
 struct OutputCapabilities { bool isHDR10{},isDV{}; };
 using OutputReason=VideoProcessingReason;
-const char* cb1_circuit_version(int id) {return id==1 ? "CB1-HDR10DV.0.1" : "CB1-DVHDR10.0.1";}
-const char* cb1_engine_version() {return "CB1 0.4";}
-enum {CB1_HDR10_DV_REFERENCE=1,CB1_HDR10_DV_ADAPTIVE,
-CB1_DV_DV_REFERENCE,CB1_DV_HDR10_BASIC,CB1_DV_HDR10_EXPERT,CB1_DV_DV_ADAPTIVE,CB1_DV_DV_MASTER_REFERENCE,CB1_DV_DV_ADAPTIVE_B,CB1_DV_DV_MASTER_IPT,CB1_DV_HDR10PLUS};
 struct CDVPlaybackInfo { enum {HDMI=1,FEL=2,CM4=4,HDR10=8,HDR10PLUS=16}; };
 namespace DVBRIDGE { using ::SourceBinding; using ::OutputCapabilities; using ::OutputReason; struct StreamSnapshot SNAPSHOT }
 #include "DVProcessingInfo.h"
@@ -51,6 +48,11 @@ int main() {
  assert(info.appliedBlocks.none() && info.profile==0 && info.output.hdr10AI);
  assert(info.transmittedBlocks[1] && info.transmittedBlocks[5]);
  assert(info.output.aiL1L3[1]==2000 && !info.output.engine.empty());
+ assert(info.output.circuit=="CB1-HDR10DVR.0.1.3" && info.output.engine=="CB1 0.5");
+ s.output.hdr10PlusDV=true;s.output.guidedSourceFields=2;s.output.guidedEstimatedFields=5;
+ info=DVBRIDGE::NativeProcessingInfo(s);
+ assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.0.1");
+ assert(info.output.guidedSourceFields==2 && info.output.guidedEstimatedFields==5);
  s={}; info=DVBRIDGE::NativeProcessingInfo(s);
  assert(!info.outputType.has_value() && info.output.engine.empty());
  assert(info.output.felUpscaling==-1);
@@ -68,7 +70,14 @@ int main() {
 '''.replace('SNAPSHOT',snapshot)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); (root/'test.cpp').write_text(program)
-            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),'-I'+str(TREE/'xbmc/cores'),'-I'+str(helper.parent),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            core=Path(__file__).resolve().parents[2]/'CB1/src'
+            circuit=root/'circuit.o'
+            compiled=subprocess.run(['cc','-std=c11','-I'+str(core),'-c',str(core/'cb1_circuit.c'),
+                '-o',str(circuit)],capture_output=True,text=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr)
+            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),'-I'+str(TREE/'xbmc/cores'),
+                '-I'+str(helper.parent),'-I'+str(core),str(root/'test.cpp'),str(circuit),'-o',str(root/'test')],
+                capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             run=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)

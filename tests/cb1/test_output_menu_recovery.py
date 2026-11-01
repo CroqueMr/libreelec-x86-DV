@@ -23,9 +23,16 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <cmath>
 #include <memory>
 #include <vector>
+enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
+struct CDVPlaybackModes {
+ static inline StreamHdrType nativeSource=StreamHdrType::HDR_TYPE_NONE;
+ static StreamHdrType SourceType(){return nativeSource;}
+};
 namespace DVBRIDGE {
 enum class OutputMode {Standard, HDR10, Disabled};
-struct Preferences { OutputMode output{}; double peak=1000; int gamut=2;
+enum class HDR10SourceMode {Native, ReferenceDV, EnhancedDV, HDR10PlusDV};
+struct Preferences { OutputMode output{}; HDR10SourceMode hdr10Source{};
+ double peak=1000; int gamut=2;
  bool ProfileValid() const { return peak>0 && gamut>0; } } preferences;
 Preferences FrameOutputSettings() {return preferences;}
 struct Identity { bool valid{}; bool Valid() const {return valid;} };
@@ -49,9 +56,10 @@ struct IntegerSettingOption {std::string label="Standard",label2;int value{};
  std::vector<std::pair<std::string,bool>> properties;};
 struct CSettingConditions {static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
  std::vector<IntegerSettingOption>& list) BODY };
-bool disabled(int value=0) {
+bool disabled(int value=0, const char* settingId="dvbridge.outputmode") {
  std::vector<IntegerSettingOption> list(1);list[0].value=value;
- CSettingConditions::DVOutputOptions(std::make_shared<CSetting>(),list);
+ auto setting=std::make_shared<CSetting>();setting->id=settingId;
+ CSettingConditions::DVOutputOptions(setting,list);
  return list[0].properties.back().second;
 }
 int main() {
@@ -82,18 +90,82 @@ int main() {
  frame.capabilities.sourceKnown=true;frame.capabilities.isDV=true;
  frame.capabilities.processing[1]={false,OutputReason::SourceIneligible};
  assert(disabled());
+#ifdef CB1_HAS_HDR10_AI
+ // Native HDR10 must expose AI choices before AI output has ever activated.
+ preferences={};
+ for(auto& mode:window.available.hdr10Processing) mode={true,OutputReason::None};
+ frame.capabilities=window.available;
+ frame.capabilities.sourceKnown=true;frame.capabilities.isDV=false;frame.capabilities.isHDR10=true;
+ frame.capabilities.processing=window.available.hdr10Processing;
+ assert(preferences.hdr10Source==HDR10SourceMode::Native);
+ for(const auto& choice : {std::pair{"dvbridge.hdr10source",1},
+                           std::pair{"dvbridge.hdr10source",2},
+                           std::pair{"dvbridge.hdr10playbackchoice",0},
+                           std::pair{"dvbridge.hdr10playbackchoice",1}})
+   assert(!disabled(choice.second,choice.first));
+ // Unknown source uses reusable HDR10-AI hardware facts, not authored-DV processing.
+ window.available.processing[1]={false,OutputReason::NoGPUProcessing};
+ frame={};
+ assert(!disabled(1,"dvbridge.hdr10source"));
+ frame.identity.valid=true;frame.capabilities=window.available;
+ frame.capabilities.sourceKnown=true;frame.capabilities.isHDR10=true;
+ frame.capabilities.processing=window.available.hdr10Processing;
+ // Actual per-picture import failure must not be masked by reusable hardware facts.
+ frame.capabilities.processing[1]={false,OutputReason::SourceIneligible};
+ assert(disabled(1,"dvbridge.hdr10source"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ frame.capabilities.processing[1]={true,OutputReason::None};
+ frame.capabilities.processingKnown=false;
+ assert(disabled(1,"dvbridge.hdr10source"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ frame.capabilities.processingKnown=true;
+ // Unsupported hardware and transport remain unavailable.
+ frame.capabilities.processing[1]={false,OutputReason::NoGPUProcessing};
+ assert(disabled(1,"dvbridge.hdr10source"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ frame.capabilities.processing[1]={true,OutputReason::None};
+ window.available.nativeDV=false;
+ assert(disabled(1,"dvbridge.hdr10source"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ window.available.nativeDV=true;
+ // HDR10+ is eligible only for metadata-guided conversion, with valid source metadata.
+ frame.capabilities.hdr10PlusSource=true;
+ assert(disabled(1,"dvbridge.hdr10source"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ assert(disabled(3,"dvbridge.hdr10source"));
+ assert(disabled(3,"dvbridge.hdr10playbackchoice"));
+ frame.capabilities.isHDR10Plus=true;
+ assert(!disabled(3,"dvbridge.hdr10source"));
+ assert(!disabled(3,"dvbridge.hdr10playbackchoice"));
+ // Native HDR10+ classification survives output teardown while paused.
+ // Selection is deferred; this does not assert or manufacture per-picture admission.
+ CDVPlaybackModes::nativeSource=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ frame={};
+ assert(!disabled(2,"dvbridge.hdr10playbackchoice"));
+ assert(!disabled(3,"dvbridge.hdr10playbackchoice"));
+ assert(disabled(0,"dvbridge.hdr10playbackchoice"));
+ assert(disabled(1,"dvbridge.hdr10playbackchoice"));
+ // Explicit per-picture failures must not be replaced by the stream's HDR label.
+ frame.identity.valid=true;
+ assert(disabled(3,"dvbridge.hdr10playbackchoice"));
+ frame.capabilities=window.available;frame.capabilities.sourceKnown=true;
+ frame.capabilities.isHDR10=true;frame.capabilities.hdr10PlusSource=true;
+ frame.capabilities.isHDR10Plus=false;
+ assert(disabled(3,"dvbridge.hdr10playbackchoice"));
+#endif
 }
 '''.replace('BODY', source[start:end])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'test.cpp').write_text(program)
-            for flags in ([],):
-                built = subprocess.run(['c++', '-std=c++20', *flags, '-I' + str(tree / 'xbmc'),
-                                    str(root / 'test.cpp'), '-o', str(root / 'test')],
-                                   capture_output=True, text=True)
-                self.assertEqual(built.returncode, 0, built.stderr)
-                ran = subprocess.run([str(root / 'test')], capture_output=True, text=True)
-                self.assertEqual(ran.returncode, 0, ran.stderr)
+            for flags in ([], ['-DCB1_HAS_HDR10_AI']):
+                with self.subTest(flags=flags):
+                    built = subprocess.run(['c++', '-std=c++20', *flags, '-I' + str(tree / 'xbmc'),
+                                        str(root / 'test.cpp'), '-o', str(root / 'test')],
+                                       capture_output=True, text=True)
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                    ran = subprocess.run([str(root / 'test')], capture_output=True, text=True)
+                    self.assertEqual(ran.returncode, 0, ran.stderr)
 
 
 if __name__ == '__main__':

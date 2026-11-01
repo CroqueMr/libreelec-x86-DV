@@ -1,0 +1,1181 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -25955,7 +25955,7 @@
+ msgstr ""
+ 
+ msgctxt "#40848"
+-msgid "Driver-validated link minimum"
++msgid "Link minimum"
+ msgstr ""
+ 
+ msgctxt "#40849"
+diff --git a/xbmc/GUIInfoManager.cpp b/xbmc/GUIInfoManager.cpp
+--- a/xbmc/GUIInfoManager.cpp
++++ b/xbmc/GUIInfoManager.cpp
+@@ -1233,7 +1233,7 @@
+ ///
+ /// -----------------------------------------------------------------------------
+ // clang-format off
+-constexpr std::array<InfoMap, 38> player_process = {{
++constexpr std::array<InfoMap, 51> player_process = {{
+     {"videodecoder",        PLAYER_PROCESS_VIDEODECODER},
+     {"deintmethod",         PLAYER_PROCESS_DEINTMETHOD},
+     {"pixformat",           PLAYER_PROCESS_PIXELFORMAT},
+@@ -1271,6 +1271,19 @@
+     {"videooutputformat", PLAYER_PROCESS_VIDEOOUTPUTFORMAT},
+     {"videooutputbits", PLAYER_PROCESS_VIDEOOUTPUTBITS},
+     {"video.sidedata", PLAYER_PROCESS_VIDEOSIDEDATA},
++    {"audiosourcetitle", PLAYER_PROCESS_AUDIOSOURCETITLE},
++    {"audiosourceformat", PLAYER_PROCESS_AUDIOSOURCEFORMAT},
++    {"audiosourcechannels", PLAYER_PROCESS_AUDIOSOURCECHANNELS},
++    {"audiobedobjectslabel", PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL},
++    {"audiobedobjects", PLAYER_PROCESS_AUDIOBEDOBJECTS},
++    {"audiopresentation", PLAYER_PROCESS_AUDIOPRESENTATION},
++    {"audiodialnorm", PLAYER_PROCESS_AUDIODIALNORM},
++    {"audiosourcelanguage", PLAYER_PROCESS_AUDIOSOURCELANGUAGE},
++    {"audiosourcebitrate", PLAYER_PROCESS_AUDIOSOURCEBITRATE},
++    {"audiooutputtransport", PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT},
++    {"audiooutputcodec", PLAYER_PROCESS_AUDIOOUTPUTCODEC},
++    {"audiooutputdata", PLAYER_PROCESS_AUDIOOUTPUTDATA},
++    {"audiooutputchannels", PLAYER_PROCESS_AUDIOOUTPUTCHANNELS},
+ }};
+ // clang-format on
+ 
+diff --git a/xbmc/cores/AudioEngine/CMakeLists.txt b/xbmc/cores/AudioEngine/CMakeLists.txt
+--- a/xbmc/cores/AudioEngine/CMakeLists.txt
++++ b/xbmc/cores/AudioEngine/CMakeLists.txt
+@@ -15,6 +15,7 @@
+             Utils/AELimiter.cpp
+             Utils/AEPackIEC61937.cpp
+             Utils/AEStreamInfo.cpp
++            Utils/AEAudioSourceInfo.cpp
+             Utils/AEUtil.cpp
+             Utils/PackerMAT.cpp)
+ 
+@@ -48,6 +49,7 @@
+             Utils/AERingBuffer.h
+             Utils/AEStreamData.h
+             Utils/AEStreamInfo.h
++            Utils/AEAudioSourceInfo.h
+             Utils/AEUtil.h
+             Utils/PackerMAT.h)
+ 
+diff --git a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp b/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp
+--- a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp
++++ b/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp
+@@ -289,16 +289,29 @@
+   return m_suspended;
+ }
+ 
+-void CEngineStats::SetCurrentSinkFormat(const AEAudioFormat& SinkFormat)
++void CEngineStats::SetCurrentSinkFormat(const AEAudioFormat& SinkFormat, AE::SinkMode mode)
+ {
+   std::unique_lock lock(m_lock);
+   m_sinkFormat = SinkFormat;
++  m_sinkMode = mode;
+ }
+ 
+ AEAudioFormat CEngineStats::GetCurrentSinkFormat()
+ {
+   std::unique_lock lock(m_lock);
+   return m_sinkFormat;
++}
++
++AE::SinkInfo CEngineStats::GetCurrentSinkInfo()
++{
++  std::unique_lock lock(m_lock);
++  return {m_sinkFormat, m_sinkMode};
++}
++
++void CEngineStats::InvalidateCurrentSinkInfo()
++{
++  std::unique_lock lock(m_lock);
++  m_sinkMode = AE::SinkMode::Unknown;
+ }
+ 
+ CActiveAE::CActiveAE() :
+@@ -1966,6 +1979,7 @@
+ 
+ bool CActiveAE::InitSink()
+ {
++  m_stats.InvalidateCurrentSinkInfo();
+   SinkConfig config;
+   config.format = m_sinkRequestFormat;
+   config.stats = &m_stats;
+@@ -2003,7 +2017,9 @@
+       m_sinkHasVolume = data->hasVolume;
+       m_stats.SetSinkCacheTotal(data->cacheTotal);
+       m_stats.SetSinkLatency(data->latency);
+-      m_stats.SetCurrentSinkFormat(m_sinkFormat);
++      m_stats.SetCurrentSinkFormat(m_sinkFormat,
++          m_mode == MODE_RAW ? AE::SinkMode::Passthrough :
++          m_mode == MODE_TRANSCODE ? AE::SinkMode::Transcoded : AE::SinkMode::PCM);
+       m_stats.SetSinkNeedIec(m_sink.NeedIecPack());
+     }
+     reply->Release();
+@@ -2050,6 +2066,7 @@
+ 
+ void CActiveAE::UnconfigureSink()
+ {
++  m_stats.InvalidateCurrentSinkInfo();
+   // send message to sink
+   Message *reply;
+   if (m_sink.m_controlPort.SendOutMessageSync(CSinkControlProtocol::UNCONFIGURE, &reply, 2s))
+@@ -3274,6 +3291,12 @@
+   return true;
+ }
+ 
++bool CActiveAE::GetCurrentSinkInfo(AE::SinkInfo& info)
++{
++  info = m_stats.GetCurrentSinkInfo();
++  return info.mode != AE::SinkMode::Unknown && info.format.m_dataFormat != AE_FMT_INVALID;
++}
++
+ void CActiveAE::OnLostDisplay()
+ {
+   Message *reply;
+diff --git a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h b/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h
+--- a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h
++++ b/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "ActiveAESink.h"
++#include "cores/AudioEngine/Interfaces/AE.h"
+ #include "cores/AudioEngine/Engines/ActiveAE/ActiveAEBuffer.h"
+ #include "cores/AudioEngine/Interfaces/AESound.h"
+ #include "cores/AudioEngine/Interfaces/AEStream.h"
+@@ -200,7 +201,10 @@
+   float GetMaxDelay() const;
+   float GetWaterLevel();
+   void SetSuspended(bool state);
+-  void SetCurrentSinkFormat(const AEAudioFormat& SinkFormat);
++  void SetCurrentSinkFormat(const AEAudioFormat& SinkFormat,
++                            AE::SinkMode mode = AE::SinkMode::Unknown);
++  AE::SinkInfo GetCurrentSinkInfo();
++  void InvalidateCurrentSinkInfo();
+   void SetSinkCacheTotal(float time) { m_sinkCacheTotal = time; }
+   void SetSinkLatency(float time) { m_sinkLatency = time; }
+   void SetSinkNeedIec(bool needIEC) { m_sinkNeedIecPack = needIEC; }
+@@ -214,6 +218,7 @@
+   AEDelayStatus m_sinkDelay;
+   bool m_suspended;
+   AEAudioFormat m_sinkFormat;
++  AE::SinkMode m_sinkMode{AE::SinkMode::Unknown};
+   bool m_pcmOutput;
+   bool m_sinkNeedIecPack{false};
+   CCriticalSection m_lock;
+@@ -275,6 +280,7 @@
+   void DefaultDeviceChange() override;
+   void DeviceCountChange(const std::string& driver) override;
+   bool GetCurrentSinkFormat(AEAudioFormat &SinkFormat) override;
++  bool GetCurrentSinkInfo(AE::SinkInfo& info) override;
+ 
+   void RegisterAudioCallback(IAudioCallback* pCallback) override;
+   void UnregisterAudioCallback(IAudioCallback* pCallback) override;
+diff --git a/xbmc/cores/AudioEngine/Interfaces/AE.h b/xbmc/cores/AudioEngine/Interfaces/AE.h
+--- a/xbmc/cores/AudioEngine/Interfaces/AE.h
++++ b/xbmc/cores/AudioEngine/Interfaces/AE.h
+@@ -75,6 +75,16 @@
+   int dither_bits;
+ };
+ 
++namespace AE
++{
++enum class SinkMode { Unknown, PCM, Passthrough, Transcoded };
++struct SinkInfo
++{
++  AEAudioFormat format;
++  SinkMode mode{SinkMode::Unknown};
++};
++}
++
+ /*!
+  * \brief IAE Interface
+  */
+@@ -288,6 +298,7 @@
+    * \return Returns true on success, else false.
+    */
+   virtual bool GetCurrentSinkFormat(AEAudioFormat &SinkFormat) { return false; }
++  virtual bool GetCurrentSinkInfo(AE::SinkInfo& info) { return false; }
+ 
+ private:
+   friend class IAEStreamDeleter;
+diff --git a/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.cpp b/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.cpp
+--- /dev/null
++++ b/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.cpp
+@@ -0,0 +1,431 @@
++/*
++ * Copyright (C) 2026 Team Kodi
++ * Atmos program/EMDF parsing adapted from avdvplus/xbmc e0614d7,
++ * AEStreamInfo.cpp (GPL-2.0-or-later). No payload modification or DTS:X heuristics.
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ */
++#include "AEAudioSourceInfo.h"
++
++#include <algorithm>
++#include <array>
++#include <bit>
++#include <cctype>
++#include <limits>
++#include <string_view>
++#include <fmt/format.h>
++
++extern "C"
++{
++#include <libavcodec/ac3_parser.h>
++#include <libavcodec/avcodec.h>
++#include <libavutil/channel_layout.h>
++#include <libavutil/crc.h>
++}
++
++namespace
++{
++struct Bits
++{
++  const uint8_t* data;
++  unsigned pos;
++  unsigned limit;
++  bool ok{true};
++
++  bool Skip(unsigned count)
++  {
++    if (!ok || count > limit || pos > limit - count)
++      return ok = false;
++    pos += count;
++    return true;
++  }
++  uint32_t Read(unsigned count)
++  {
++    if (count > 32 || !Skip(count))
++    {
++      ok = false;
++      return 0;
++    }
++    uint32_t value = 0;
++    for (unsigned bit = pos - count; bit < pos; ++bit)
++      value = (value << 1) | ((data[bit / 8] >> (7 - bit % 8)) & 1);
++    return value;
++  }
++};
++
++bool Program(Bits& bits, int elements, bool trueHD, AE::AudioSourceInfo& info)
++{
++  if (bits.Read(1))
++  {
++    const int bed = bits.Read(1);
++    if (!bits.ok || elements < bed)
++      return false;
++    info.bedChannels = bed;
++    info.objects = elements - bed;
++    return true;
++  }
++  const auto content = bits.Read(4);
++  int bed = 0;
++  if (content & 1)
++  {
++    bits.Skip(1);
++    const unsigned beds = bits.Read(1) ? bits.Read(3) + 2 : 1;
++    constexpr unsigned widths[] = {2, 1, 1, 2, 2, 2, 2, 2, 2, 1};
++    for (unsigned n = 0; n < beds && bits.ok; ++n)
++    {
++      if (bits.Read(1))
++        ++bed;
++      else if (bits.Read(1))
++      {
++        for (unsigned i = 0; i < 10; ++i)
++          if (bits.Read(1)) bed += widths[9 - i];
++      }
++      else
++        bed += std::popcount(bits.Read(17));
++    }
++  }
++  int spatial = 0;
++  if (content & 2)
++  {
++    const auto index = bits.Read(3);
++    constexpr int isf[] = {4, 8, 10, 14, 15, 30};
++    constexpr int trueHDIsf[] = {0, 0, 10, 14, 15, 0, 0, 0};
++    if (trueHD)
++    {
++      spatial = trueHDIsf[index];
++      if (!spatial) return false;
++    }
++    else
++    {
++      if (index >= std::size(isf)) return false;
++      spatial = isf[index];
++    }
++  }
++  int objects = 0;
++  if (content & 4)
++  {
++    auto count = bits.Read(5);
++    if (count == 31) count += bits.Read(7);
++    objects = static_cast<int>(count) + 1;
++  }
++  if (content & 8)
++  {
++    const auto bytes = bits.Read(4) + 1;
++    bits.Skip(bytes * 8);
++  }
++  if (!bits.ok || bed + spatial + objects > elements)
++    return false;
++  info.bedChannels = bed;
++  // An intermediate spatial representation does not declare its original object count.
++  info.objects = spatial && !(content & 4) ? -1 : objects;
++  return true;
++}
++
++uint32_t Variable(Bits& bits, unsigned width)
++{
++  uint32_t value = 0;
++  for (unsigned guard = 0; guard < 8 && bits.ok; ++guard)
++  {
++    const auto part = bits.Read(width);
++    if (value > std::numeric_limits<uint32_t>::max() - part) break;
++    value += part;
++    if (!bits.Read(1)) return value;
++    const uint32_t increment = 1u << width;
++    if (value > (std::numeric_limits<uint32_t>::max() - increment) >> width) break;
++    value = (value << width) + increment;
++  }
++  bits.ok = false;
++  return 0;
++}
++
++bool OAMD(Bits& bits, AE::AudioSourceInfo& info)
++{
++  auto version = bits.Read(2);
++  if (version == 3) version += bits.Read(3);
++  if (!bits.ok || version) return false;
++  int elements = bits.Read(5) + 1;
++  if (elements == 32) elements += bits.Read(7);
++  if (!bits.ok || !Program(bits, elements, false, info)) return false;
++  info.presentation = elements;
++  info.profile = AV_PROFILE_EAC3_DDP_ATMOS;
++  return true;
++}
++
++bool EMDF(const uint8_t* data, unsigned start, unsigned limit, AE::AudioSourceInfo& info)
++{
++  Bits bits{data, start, limit};
++  bits.Skip(16);
++  const auto bytes = bits.Read(16);
++  if (!bits.ok || bytes > (limit - bits.pos) / 8) return false;
++  bits.limit = bits.pos + bytes * 8;
++  if (bits.Read(2) != 0) return false;
++  if (bits.Read(3) == 7) Variable(bits, 3);
++  for (unsigned count = 0; count < 32 && bits.ok; ++count)
++  {
++    auto id = bits.Read(5);
++    if (id == 31) id += Variable(bits, 5);
++    if (!bits.ok || !id) return false;
++    const bool offset = bits.Read(1);
++    if (offset) bits.Skip(12);
++    if (bits.Read(1)) Variable(bits, 11);
++    if (bits.Read(1)) Variable(bits, 2);
++    if (bits.Read(1)) bits.Skip(8);
++    if (!bits.Read(1))
++    {
++      bool aligned = false;
++      if (!offset)
++      {
++        aligned = bits.Read(1);
++        if (aligned) bits.Skip(2);
++      }
++      if (offset || aligned) bits.Skip(7);
++    }
++    const auto size = Variable(bits, 8);
++    if (!bits.ok || size > (bits.limit - bits.pos) / 8) return false;
++    const unsigned end = bits.pos + size * 8;
++    if (id == 11)
++    {
++      Bits payload{data, bits.pos, end};
++      if (OAMD(payload, info)) return true;
++    }
++    bits.pos = end;
++  }
++  return false;
++}
++
++bool ScanOAMD(std::span<const uint8_t> frame, AE::AudioSourceInfo& info)
++{
++  uint16_t window = 0;
++  const unsigned limit = frame.size() * 8;
++  for (unsigned bit = 0; bit < limit; ++bit)
++  {
++    window = (window << 1) | ((frame[bit / 8] >> (7 - bit % 8)) & 1);
++    if (bit >= 15 && window == 0x5838 && EMDF(frame.data(), bit - 15, limit, info))
++      return true;
++  }
++  return false;
++}
++
++int Dialogue(unsigned value)
++{
++  return value ? -static_cast<int>(value) : -31;
++}
++
++void AC3(std::span<const uint8_t> packet, AE::AudioSourceInfo& info)
++{
++  uint8_t bsid;
++  uint16_t size;
++  if (packet.size() < 8 || av_ac3_parse_header(packet.data(), packet.size(), &bsid, &size) < 0 ||
++      size < 8 || size > packet.size() || bsid > 16 ||
++      av_crc(av_crc_get_table(AV_CRC_16_ANSI), 0, packet.data() + 2, size - 2))
++    return;
++  const bool enhanced = bsid > 10;
++  if (enhanced != (info.codec == AV_CODEC_ID_EAC3)) return;
++  Bits bits{packet.data(), enhanced ? 16u : 48u, unsigned(size) * 8};
++  unsigned mode;
++  if (enhanced)
++  {
++    const auto type = bits.Read(2);
++    const auto substream = bits.Read(3);
++    if (type == 1 || type == 3 || substream) return;
++    bits.Skip(11);
++    bits.Skip(4); // sample-rate code and secondary-rate/block code
++    mode = bits.Read(3);
++    bits.Skip(1 + 5); // LFE and bsid
++  }
++  else
++  {
++    mode = bits.Read(3);
++    if ((mode & 1) && mode != 1) bits.Skip(2);
++    if (mode & 4) bits.Skip(2);
++    if (mode == 2) bits.Skip(2);
++    bits.Skip(1);
++  }
++  const int first = Dialogue(bits.Read(5));
++  if (bits.Read(1)) bits.Skip(8);
++  if (!enhanced)
++  {
++    if (bits.Read(1)) bits.Skip(8);
++    if (bits.Read(1)) bits.Skip(7);
++  }
++  std::optional<int> second;
++  if (mode == 0) second = Dialogue(bits.Read(5));
++  if (!bits.ok) return;
++  info.dialnorm = first;
++  info.secondDialnorm = second;
++  if (enhanced && info.objects < 0) ScanOAMD(packet.first(size), info);
++}
++
++void TrueHD(std::span<const uint8_t> packet, AE::AudioSourceInfo& info)
++{
++  if (packet.size() < 32 || packet[4] != 0xf8 || packet[5] != 0x72 ||
++      packet[6] != 0x6f || packet[7] != 0xba || (packet[8] >> 4) == 15)
++    return;
++  const bool extension = packet[29] & 1;
++  const unsigned words = extension ? packet[30] >> 4 : 0;
++  const unsigned major = 28 + (extension ? 2 + words * 2 : 0);
++  const unsigned unit = (((packet[0] & 0x0f) << 8) | packet[1]) * 2;
++  if (unit < major + 4 || unit > packet.size()) return;
++  static const auto table = [] {
++    std::array<AVCRC, 1024> value{};
++    av_crc_init(value.data(), 0, 16, 0x2d, sizeof(value));
++    return value;
++  }();
++  const unsigned crc = av_crc(table.data(), 0, packet.data() + 4, major - 4) ^
++                       ((packet[major + 1] << 8) | packet[major]);
++  if (crc != unsigned(packet[major + 2] | (packet[major + 3] << 8))) return;
++  const bool atmos = packet[21] & 0x80;
++  info.profile = atmos ? AV_PROFILE_TRUEHD_ATMOS : AV_PROFILE_UNKNOWN;
++  if (!atmos || !extension || !words) return;
++  Bits bits{packet.data(), 244, 240 + (words + 1) * 16};
++  const int dialogue = Dialogue(bits.Read(5));
++  bits.Skip(6);
++  const int elements = bits.Read(5) + 1;
++  if (!bits.ok || elements > 16) return;
++  info.dialnorm = dialogue;
++  info.presentation = elements;
++  Program(bits, elements, true, info);
++}
++} // namespace
++
++namespace AE
++{
++void AudioSourceObserver::Reset(const AudioSourceInfo& source)
++{
++  m_source = source;
++  m_remaining = 512;
++}
++
++bool AudioSourceObserver::UpdateProfile(int profile)
++{
++  // Zero is the audio decoder's unreported/default profile, not a source update.
++  if (!m_source.valid || profile == AV_PROFILE_UNKNOWN || profile == 0 || profile == m_source.profile)
++    return false;
++  m_source.profile = profile;
++  return true;
++}
++
++bool AudioSourceObserver::Observe(std::span<const uint8_t> packet)
++{
++  if (!m_source.valid || !m_remaining) return false;
++  --m_remaining;
++  packet = packet.first(std::min<size_t>(packet.size(), 65536));
++  const auto previous = m_source;
++  if (m_source.codec == AV_CODEC_ID_TRUEHD)
++    TrueHD(packet, m_source);
++  else if (m_source.codec == AV_CODEC_ID_AC3 || m_source.codec == AV_CODEC_ID_EAC3)
++    AC3(packet, m_source);
++  return m_source != previous;
++}
++
++bool IsNativePCM(int codec)
++{
++  const auto* descriptor = avcodec_descriptor_get(static_cast<AVCodecID>(codec));
++  return descriptor && std::string_view(descriptor->name).starts_with("pcm_");
++}
++
++std::string SourceCodec(const AudioSourceInfo& source)
++{
++  if (!source.valid) return {};
++  switch (source.codec)
++  {
++    case AV_CODEC_ID_TRUEHD: return "TrueHD";
++    case AV_CODEC_ID_EAC3: return "Dolby Digital Plus";
++    case AV_CODEC_ID_AC3: return "Dolby Digital";
++    case AV_CODEC_ID_DTS:
++      switch (source.profile)
++      {
++        case AV_PROFILE_DTS_HD_HRA: return "DTS-HD HRA";
++        case AV_PROFILE_DTS_HD_MA:
++        case AV_PROFILE_DTS_HD_MA_X:
++        case AV_PROFILE_DTS_HD_MA_X_IMAX: return "DTS-HD MA";
++        case AV_PROFILE_DTS_ES: return "DTS-ES";
++        case AV_PROFILE_DTS_96_24: return "DTS 96/24";
++        default: return "DTS";
++      }
++    default: break;
++  }
++  if (IsNativePCM(source.codec)) return "PCM";
++  std::string name = avcodec_get_name(static_cast<AVCodecID>(source.codec));
++  if (name == "unknown_codec") return {};
++  std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::toupper(c); });
++  return name;
++}
++
++std::string SourceTitle(const AudioSourceInfo& source)
++{
++  auto name = SourceCodec(source);
++  if (name.empty()) return name;
++  if ((source.codec == AV_CODEC_ID_TRUEHD && source.profile == AV_PROFILE_TRUEHD_ATMOS) ||
++      (source.codec == AV_CODEC_ID_EAC3 && source.profile == AV_PROFILE_EAC3_DDP_ATMOS))
++    name += " Atmos";
++  else if (source.codec == AV_CODEC_ID_DTS &&
++           (source.profile == AV_PROFILE_DTS_HD_MA_X || source.profile == AV_PROFILE_DTS_HD_MA_X_IMAX))
++    name += " DTS:X";
++  return name;
++}
++
++std::string FormatSampleRate(int rate)
++{
++  if (rate <= 0) return {};
++  return rate % 1000 ? fmt::format("{:g} kHz", rate / 1000.0) : fmt::format("{} kHz", rate / 1000);
++}
++
++std::string SourceFormat(const AudioSourceInfo& source)
++{
++  if (!source.valid) return {};
++  const auto* descriptor = avcodec_descriptor_get(static_cast<AVCodecID>(source.codec));
++  auto rate = FormatSampleRate(source.sampleRate);
++  if (source.bitsPerSample > 0 && descriptor && (descriptor->props & AV_CODEC_PROP_LOSSLESS))
++    return fmt::format("{}-bit{}{}", source.bitsPerSample, rate.empty() ? "" : " / ", rate);
++  return rate;
++}
++
++std::string FormatChannels(uint64_t mask, int channels)
++{
++  if (mask && (!channels || std::popcount(mask) == channels))
++  {
++    AVChannelLayout layout{};
++    char name[128];
++    if (av_channel_layout_from_mask(&layout, mask) == 0)
++    {
++      const int length = av_channel_layout_describe(&layout, name, sizeof(name));
++      av_channel_layout_uninit(&layout);
++      if (length >= 0 && length < int(sizeof(name))) return name;
++    }
++  }
++  return channels > 0 ? fmt::format("{} channels", channels) : std::string{};
++}
++
++std::string SourceChannels(const AudioSourceInfo& source)
++{
++  return source.valid ? FormatChannels(source.channelMask, source.channels) : std::string{};
++}
++
++std::string BedObjects(const AudioSourceInfo& source)
++{
++  if (!source.valid) return {};
++  if (source.bedChannels >= 0 && source.objects >= 0)
++    return fmt::format("{} / {}", source.bedChannels, source.objects);
++  if (source.bedChannels >= 0) return std::to_string(source.bedChannels);
++  return source.objects >= 0 ? std::to_string(source.objects) : std::string{};
++}
++
++std::string BedObjectsLabel(const AudioSourceInfo& source)
++{
++  if (source.bedChannels >= 0 && source.objects >= 0) return "Bed / objects";
++  return source.bedChannels >= 0 ? "Bed channels" : "Atmos objects";
++}
++
++std::string Presentation(const AudioSourceInfo& source)
++{
++  return source.valid && source.presentation > 0 ? fmt::format("{} elements", source.presentation) : std::string{};
++}
++
++std::string Dialnorm(const AudioSourceInfo& source)
++{
++  if (!source.valid || !source.dialnorm) return {};
++  if (source.secondDialnorm)
++    return fmt::format("{} / {} LKFS", *source.dialnorm, *source.secondDialnorm);
++  return fmt::format("{} LKFS", *source.dialnorm);
++}
++} // namespace AE
+diff --git a/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.h b/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.h
+--- /dev/null
++++ b/xbmc/cores/AudioEngine/Utils/AEAudioSourceInfo.h
+@@ -0,0 +1,59 @@
++/*
++ * Copyright (C) 2026 Team Kodi
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ */
++#pragma once
++
++#include <cstdint>
++#include <optional>
++#include <span>
++#include <string>
++
++namespace AE
++{
++struct AudioSourceInfo
++{
++  bool valid{false};
++  int uniqueId{-1};
++  int64_t demuxerId{-1};
++  int codec{0};
++  int profile{-99};
++  int channels{0};
++  int sampleRate{0};
++  int bitsPerSample{0};
++  uint64_t channelMask{0};
++  int bedChannels{-1};
++  int objects{-1};
++  int presentation{-1};
++  std::optional<int> dialnorm;
++  std::optional<int> secondDialnorm;
++
++  bool operator==(const AudioSourceInfo&) const = default;
++};
++
++// Observes accepted source packets. It never decodes or changes their contents.
++class AudioSourceObserver
++{
++public:
++  void Reset(const AudioSourceInfo& source);
++  bool Observe(std::span<const uint8_t> packet);
++  bool UpdateProfile(int profile);
++  const AudioSourceInfo& Get() const { return m_source; }
++
++private:
++  AudioSourceInfo m_source;
++  unsigned m_remaining{0};
++};
++
++std::string SourceCodec(const AudioSourceInfo& source);
++std::string SourceTitle(const AudioSourceInfo& source);
++std::string SourceFormat(const AudioSourceInfo& source);
++std::string SourceChannels(const AudioSourceInfo& source);
++std::string BedObjects(const AudioSourceInfo& source);
++std::string BedObjectsLabel(const AudioSourceInfo& source);
++std::string Presentation(const AudioSourceInfo& source);
++std::string Dialnorm(const AudioSourceInfo& source);
++std::string FormatChannels(uint64_t mask, int channels);
++std::string FormatSampleRate(int sampleRate);
++bool IsNativePCM(int codec);
++} // namespace AE
+diff --git a/xbmc/cores/DataCacheCore.cpp b/xbmc/cores/DataCacheCore.cpp
+--- a/xbmc/cores/DataCacheCore.cpp
++++ b/xbmc/cores/DataCacheCore.cpp
+@@ -30,6 +30,7 @@
+ 
+ void CDataCacheCore::Reset()
+ {
++  SetAudioSourceInfo({});
+   {
+     std::unique_lock lock(m_stateSection);
+     m_stateInfo = {};
+@@ -327,6 +328,22 @@
+ }
+ 
+ // player audio info
++void CDataCacheCore::SetAudioSourceInfo(const AE::AudioSourceInfo& source)
++{
++  std::unique_lock lock(m_audioPlayerSection);
++  if (m_playerAudioInfo.source != source)
++  {
++    m_playerAudioInfo.source = source;
++    m_hasAVInfoChanges = true;
++  }
++}
++
++AE::AudioSourceInfo CDataCacheCore::GetAudioSourceInfo()
++{
++  std::unique_lock lock(m_audioPlayerSection);
++  return m_playerAudioInfo.source;
++}
++
+ void CDataCacheCore::SetAudioDecoderName(std::string name)
+ {
+   std::unique_lock lock(m_audioPlayerSection);
+diff --git a/xbmc/cores/DataCacheCore.h b/xbmc/cores/DataCacheCore.h
+--- a/xbmc/cores/DataCacheCore.h
++++ b/xbmc/cores/DataCacheCore.h
+@@ -10,6 +10,7 @@
+ 
+ #include "EdlEdit.h"
+ #include "VideoProcessingInfo.h"
++#include "cores/AudioEngine/Utils/AEAudioSourceInfo.h"
+ #include "threads/CriticalSection.h"
+ 
+ #include <atomic>
+@@ -77,6 +78,8 @@
+   bool IsVideoInterlaced();
+ 
+   // player audio info
++  void SetAudioSourceInfo(const AE::AudioSourceInfo& source);
++  AE::AudioSourceInfo GetAudioSourceInfo();
+   void SetAudioDecoderName(std::string name);
+   std::string GetAudioDecoderName();
+   void SetAudioChannels(std::string channels);
+@@ -262,6 +265,7 @@
+   CCriticalSection m_audioPlayerSection;
+   struct SPlayerAudioInfo
+   {
++    AE::AudioSourceInfo source;
+     std::string decoderName;
+     std::string channels;
+     int sampleRate;
+diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
+--- a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
++++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
+@@ -12,6 +12,21 @@
+ #include "cores/VideoPlayer/Interface/DemuxCrypto.h"
+ 
+ #include <cstring>
++
++AE::AudioSourceInfo CDVDStreamInfo::GetAudioSourceInfo() const
++{
++  AE::AudioSourceInfo source;
++  source.valid = type == StreamType::AUDIO && codec != AV_CODEC_ID_NONE;
++  source.uniqueId = uniqueId;
++  source.demuxerId = demuxerId;
++  source.codec = codec;
++  source.profile = profile;
++  source.channels = channels;
++  source.sampleRate = samplerate;
++  source.bitsPerSample = bitspersample;
++  source.channelMask = channellayout;
++  return source;
++}
+ 
+ CDVDStreamInfo::CDVDStreamInfo() : extradata{}
+ {
+diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.h b/xbmc/cores/VideoPlayer/DVDStreamInfo.h
+--- a/xbmc/cores/VideoPlayer/DVDStreamInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "DVDDemuxers/DVDDemux.h"
++#include "cores/AudioEngine/Utils/AEAudioSourceInfo.h"
+ 
+ extern "C"
+ {
+@@ -32,6 +33,7 @@
+   ~CDVDStreamInfo();
+ 
+   void Clear(); // clears current information
++  AE::AudioSourceInfo GetAudioSourceInfo() const;
+   bool Equal(const CDVDStreamInfo& right, int compare);
+   bool Equal(const CDemuxStream &right, bool withextradata);
+ 
+diff --git a/xbmc/cores/VideoPlayer/Interface/StreamInfo.h b/xbmc/cores/VideoPlayer/Interface/StreamInfo.h
+--- a/xbmc/cores/VideoPlayer/Interface/StreamInfo.h
++++ b/xbmc/cores/VideoPlayer/Interface/StreamInfo.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "utils/Geometry.h"
++#include "cores/AudioEngine/Utils/AEAudioSourceInfo.h"
+ #include "utils/LanguageTag.h"
+ 
+ #include <cstdint>
+@@ -62,6 +63,7 @@
+ 
+ struct AudioStreamInfo : StreamInfo
+ {
++  AE::AudioSourceInfo source;
+   int channels = 0;
+   int samplerate = 0;
+   int bitspersample = 0;
+diff --git a/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp b/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
+--- a/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
++++ b/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
+@@ -405,6 +405,7 @@
+ 
+   if (m_dataCache)
+   {
++    m_dataCache->SetAudioSourceInfo({});
+     m_dataCache->SetAudioDecoderName(m_audioDecoderName);
+     m_dataCache->SetAudioChannels(m_audioChannels);
+     m_dataCache->SetAudioSampleRate(m_audioSampleRate);
+@@ -425,6 +426,13 @@
+     m_dataCache->SetAudioDecoderName(m_audioDecoderName);
+ }
+ 
++void CProcessInfo::SetAudioSourceInfo(const AE::AudioSourceInfo& source)
++{
++  std::unique_lock lock(m_audioCodecSection);
++  if (m_dataCache)
++    m_dataCache->SetAudioSourceInfo(source);
++}
++
+ std::string CProcessInfo::GetAudioDecoderName()
+ {
+   std::unique_lock lock(m_audioCodecSection);
+diff --git a/xbmc/cores/VideoPlayer/Process/ProcessInfo.h b/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
+--- a/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
++++ b/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
+@@ -23,6 +23,7 @@
+ class CDataCacheCore;
+ struct VideoProcessingInfo;
+ class VideoSourceSideData;
++namespace AE { struct AudioSourceInfo; }
+ 
+ using CreateProcessControl = CProcessInfo* (*)();
+ 
+@@ -72,6 +73,7 @@
+   void SetPixFormats(std::vector<AVPixelFormat> &formats);
+ 
+   // player audio info
++  void SetAudioSourceInfo(const AE::AudioSourceInfo& source);
+   void ResetAudioCodecInfo();
+   void SetAudioDecoderName(const std::string &name);
+   std::string GetAudioDecoderName();
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -604,11 +604,13 @@
+         s.codecDesc = aStream->GetStreamType();
+         s.channels = aStream->iChannels;
+         s.bitrate = aStream->iBitRate;
++        s.audioSource = CDVDStreamInfo(*aStream).GetAudioSourceInfo();
+       }
+       else
+       {
+         s.codecDesc = info.codecDesc;
+         s.channels = info.channels;
++        s.audioSource = info.source;
+       }
+       s.language = info.language;
+       s.flags = info.flags;
+@@ -704,6 +706,7 @@
+         s.codecDesc = static_cast<CDemuxStreamAudio*>(stream)->GetStreamType();
+         s.channels = static_cast<CDemuxStreamAudio*>(stream)->iChannels;
+         s.bitrate = static_cast<CDemuxStreamAudio*>(stream)->iBitRate;
++        s.audioSource = CDVDStreamInfo(*stream).GetAudioSourceInfo();
+       }
+       if (stream->type == StreamType::SUBTITLE)
+       {
+@@ -6481,6 +6484,16 @@
+   info.codecName = s.codec;
+   info.codecDesc = s.codecDesc;
+   info.flags = s.flags;
++  info.source = s.audioSource;
++  if (index == m_content.m_audioIndex && info.source.valid)
++  {
++    const auto observed = CServiceBroker::GetDataCacheCore().GetAudioSourceInfo();
++    if (observed.valid && observed.uniqueId == info.source.uniqueId &&
++        observed.demuxerId == info.source.demuxerId && observed.codec == info.source.codec)
++      info.source = observed;
++  }
++  info.samplerate = info.source.sampleRate;
++  info.bitspersample = info.source.bitsPerSample;
+ }
+ 
+ int CVideoPlayer::GetAudioStreamCount() const
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.h b/xbmc/cores/VideoPlayer/VideoPlayer.h
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.h
+@@ -208,6 +208,7 @@
+   std::string codec;
+   std::string codecDesc;
+   AVCodecID codecId = AV_CODEC_ID_NONE;
++  AE::AudioSourceInfo audioSource;
+   int profile = AV_PROFILE_UNKNOWN;
+   int channels = 0;
+   int bitrate = 0;
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp
+@@ -116,6 +116,14 @@
+ 
+   /* store our stream hints */
+   m_streaminfo = hints;
++  m_audioStats = BitstreamStats{};
++  m_audioStats.Start();
++  m_audioSource.Reset(hints.GetAudioSourceInfo());
++  m_audioSourceLogged = false;
++  m_processInfo.SetAudioSourceInfo(m_audioSource.Get());
++  CLog::Log(LOGINFO, "Audio source: codec={} profile={} rate={} bits={} channels={} layout={:#x}",
++            hints.codec, hints.profile, hints.samplerate, hints.bitspersample,
++            hints.channels, hints.channellayout);
+ 
+   /* update codec information from what codec gave out, if any */
+   int channelsFromCodec   = m_pAudioCodec->GetFormat().m_channelLayout.Count();
+@@ -167,6 +175,8 @@
+ 
+   // shut down the adio_decode thread and wait for it
+   StopThread(); // will set this->m_bStop to true
++  m_audioSource.Reset({});
++  m_processInfo.SetAudioSourceInfo({});
+ 
+   // destroy audio device
+   CLog::Log(LOGINFO, "Closing audio device");
+@@ -236,7 +246,6 @@
+   DVDAudioFrame audioframe;
+   audioframe.nb_frames = 0;
+   audioframe.framesOut = 0;
+-  m_audioStats.Start();
+   m_disconAdjustCounter = 0;
+ 
+   bool onlyPrioMsgs = false;
+@@ -438,6 +447,23 @@
+       }
+ 
+       m_audioStats.AddSampleBytes(pPacket->iSize);
++      bool sourceChanged = false;
++      if (pPacket->pData && pPacket->iSize > 0)
++        sourceChanged = m_audioSource.Observe({pPacket->pData, size_t(pPacket->iSize)});
++      if (!m_pAudioCodec->NeedPassthrough())
++        sourceChanged = m_audioSource.UpdateProfile(m_pAudioCodec->GetProfile()) || sourceChanged;
++      if (sourceChanged)
++      {
++        const auto& source = m_audioSource.Get();
++        m_processInfo.SetAudioSourceInfo(source);
++        if (!m_audioSourceLogged && (source.presentation > 0 || source.dialnorm))
++        {
++          CLog::Log(LOGINFO, "Audio metadata: source={} presentation={} bed={} objects={} dialnorm={}",
++                    AE::SourceTitle(source), source.presentation, source.bedChannels, source.objects,
++                    AE::Dialnorm(source));
++          m_audioSourceLogged = true;
++        }
++      }
+       UpdatePlayerInfo();
+ 
+       if (ProcessDecoderOutput(audioframe))
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.h b/xbmc/cores/VideoPlayer/VideoPlayerAudio.h
+--- a/xbmc/cores/VideoPlayer/VideoPlayerAudio.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayerAudio.h
+@@ -87,6 +87,8 @@
+ 
+   // holds stream information for current playing stream
+   CDVDStreamInfo m_streaminfo;
++  AE::AudioSourceObserver m_audioSource;
++  bool m_audioSourceLogged{false};
+ 
+   double m_audioClock;
+ 
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -58,7 +58,7 @@
+       const RESOLUTION_INFO resolution(1920, 1080);
+       SetCoordsRes(resolution);
+       g_fontManager.LoadTTF("CB1.InfoBody", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xfff4f6f6, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
++                            0xfff4f6f6, 0, 22, 0, false, 1.0f, 1.0f, &resolution);
+       g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",
+                             0xfff4f6f6, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
+       g_fontManager.LoadTTF("CB1.InfoTitle", "special://xbmc/media/Fonts/arial.ttf",
+diff --git a/xbmc/guilib/guiinfo/GUIInfoLabels.h b/xbmc/guilib/guiinfo/GUIInfoLabels.h
+--- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
++++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h
+@@ -835,6 +835,19 @@
+ constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTFORMAT = PLAYER_PROCESS_START + 35;
+ constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTBITS = PLAYER_PROCESS_START + 36;
+ constexpr uint32_t PLAYER_PROCESS_VIDEOSIDEDATA = PLAYER_PROCESS_START + 37;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCETITLE = PLAYER_PROCESS_START + 38;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCEFORMAT = PLAYER_PROCESS_START + 39;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCECHANNELS = PLAYER_PROCESS_START + 40;
++constexpr uint32_t PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL = PLAYER_PROCESS_START + 41;
++constexpr uint32_t PLAYER_PROCESS_AUDIOBEDOBJECTS = PLAYER_PROCESS_START + 42;
++constexpr uint32_t PLAYER_PROCESS_AUDIOPRESENTATION = PLAYER_PROCESS_START + 43;
++constexpr uint32_t PLAYER_PROCESS_AUDIODIALNORM = PLAYER_PROCESS_START + 44;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCELANGUAGE = PLAYER_PROCESS_START + 45;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCEBITRATE = PLAYER_PROCESS_START + 46;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT = PLAYER_PROCESS_START + 47;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTCODEC = PLAYER_PROCESS_START + 48;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTDATA = PLAYER_PROCESS_START + 49;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTCHANNELS = PLAYER_PROCESS_START + 50;
+ 
+ constexpr uint32_t ADDON_INFOS_START                 = 1600;
+ constexpr uint32_t ADDON_SETTING_STRING              = ADDON_INFOS_START;
+diff --git a/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp b/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
+--- a/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
++++ b/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
+@@ -17,9 +17,11 @@
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "application/ApplicationVolumeHandling.h"
++#include "cores/AudioEngine/Interfaces/AE.h"
+ #include "cores/AudioEngine/Utils/AEUtil.h"
+ #include "cores/DataCacheCore.h"
+ #include "cores/EdlEdit.h"
++#include "cores/VideoPlayer/Interface/StreamInfo.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIDialog.h"
+ #include "guilib/GUIWindowManager.h"
+@@ -351,14 +353,133 @@
+       value = StringUtils::Format("{:.2f}", CServiceBroker::GetDataCacheCore().GetVideoDAR());
+       return true;
+     case PLAYER_PROCESS_VIDEOWIDTH:
+-      value = StringUtils::FormatNumber(CServiceBroker::GetDataCacheCore().GetVideoWidth());
++      value = std::to_string(CServiceBroker::GetDataCacheCore().GetVideoWidth());
+       return true;
+     case PLAYER_PROCESS_VIDEOHEIGHT:
+-      value = StringUtils::FormatNumber(CServiceBroker::GetDataCacheCore().GetVideoHeight());
++      value = std::to_string(CServiceBroker::GetDataCacheCore().GetVideoHeight());
+       return true;
+     case PLAYER_PROCESS_VIDEOSCANTYPE:
+       value = CServiceBroker::GetDataCacheCore().IsVideoInterlaced() ? "i" : "p";
+       return true;
++    case PLAYER_PROCESS_AUDIOSOURCETITLE:
++    case PLAYER_PROCESS_AUDIOSOURCEFORMAT:
++    case PLAYER_PROCESS_AUDIOSOURCECHANNELS:
++    case PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL:
++    case PLAYER_PROCESS_AUDIOBEDOBJECTS:
++    case PLAYER_PROCESS_AUDIOPRESENTATION:
++    case PLAYER_PROCESS_AUDIODIALNORM:
++    case PLAYER_PROCESS_AUDIOSOURCELANGUAGE:
++    case PLAYER_PROCESS_AUDIOSOURCEBITRATE:
++    case PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT:
++    case PLAYER_PROCESS_AUDIOOUTPUTCODEC:
++    case PLAYER_PROCESS_AUDIOOUTPUTDATA:
++    case PLAYER_PROCESS_AUDIOOUTPUTCHANNELS:
++    {
++      if (!m_appPlayer->IsPlaying() || !m_appPlayer->HasAudio())
++        return false;
++      AudioStreamInfo stream;
++      m_appPlayer->GetAudioStreamInfo(CURRENT_STREAM, stream);
++      const auto& source = stream.source;
++      if (!stream.valid || !source.valid)
++        return false;
++      switch (info.GetInfo())
++      {
++        case PLAYER_PROCESS_AUDIOSOURCETITLE:
++          value = AE::SourceTitle(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCEFORMAT:
++          value = AE::SourceFormat(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCECHANNELS:
++          value = AE::SourceChannels(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL:
++          value = AE::BedObjectsLabel(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOBEDOBJECTS:
++          value = AE::BedObjects(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOPRESENTATION:
++          value = AE::Presentation(source);
++          return true;
++        case PLAYER_PROCESS_AUDIODIALNORM:
++          value = AE::Dialnorm(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCELANGUAGE:
++          value = stream.language.GetEnglishName();
++          if (!value.empty() && (stream.flags & FLAG_COMMENT))
++            value += " (commentary)";
++          if (!value.empty() && (stream.flags & FLAG_VISUAL_IMPAIRED))
++            value += " (audio description)";
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCEBITRATE:
++        {
++          const auto observed = CServiceBroker::GetDataCacheCore().GetAudioSourceInfo();
++          const bool current = observed.valid && observed.uniqueId == source.uniqueId &&
++                               observed.demuxerId == source.demuxerId && observed.codec == source.codec;
++          const int measured = current ? CServiceBroker::GetDataCacheCore().GetAudioLiveBitRate() : 0;
++          const int bitrate = measured > 0 ? measured : stream.bitrate;
++          if (bitrate > 0)
++          {
++            value = bitrate >= 1000000 ? StringUtils::Format("{:.1f} Mb/s", bitrate / 1000000.0)
++                                       : StringUtils::Format("{:.0f} Kb/s", bitrate / 1000.0);
++            if (measured <= 0)
++              value += " (stream)";
++          }
++          return true;
++        }
++      }
++      auto* engine = CServiceBroker::GetActiveAE();
++      AE::SinkInfo sink;
++      if (!engine || !engine->GetCurrentSinkInfo(sink))
++        return false;
++      const bool raw = sink.mode == AE::SinkMode::Passthrough || sink.mode == AE::SinkMode::Transcoded;
++      const auto& format = sink.format;
++      if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT)
++      {
++        value = sink.mode == AE::SinkMode::Passthrough ? "Passthrough"
++                : sink.mode == AE::SinkMode::Transcoded ? "Transcoded"
++                : AE::IsNativePCM(source.codec) ? "Native PCM" : "PCM decoded";
++      }
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTDATA)
++      {
++        if (raw)
++          value = "RAW";
++        else
++        {
++          const auto bits = CAEUtil::DataFormatToUsedBits(format.m_dataFormat);
++          if (bits > 0)
++            value = StringUtils::Format("{}-bit{}", bits,
++                format.m_dataFormat == AE_FMT_FLOAT || format.m_dataFormat == AE_FMT_FLOATP ? " float" : "");
++          const auto rate = AE::FormatSampleRate(format.m_sampleRate);
++          if (!rate.empty())
++            value += (value.empty() ? "" : " / ") + rate;
++        }
++      }
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTCHANNELS && !raw)
++        value = AE::FormatChannels(CAEUtil::GetAVChannelLayout(format.m_channelLayout),
++                                   format.m_channelLayout.Count());
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTCODEC && raw)
++      {
++        switch (format.m_streamInfo.m_type)
++        {
++          case CAEStreamInfo::STREAM_TYPE_AC3: value = "Dolby Digital"; break;
++          case CAEStreamInfo::STREAM_TYPE_EAC3: value = "Dolby Digital Plus"; break;
++          case CAEStreamInfo::STREAM_TYPE_TRUEHD: value = "TrueHD"; break;
++          case CAEStreamInfo::STREAM_TYPE_MLP: value = "MLP"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD_MA: value = "DTS-HD MA"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD: value = "DTS-HD HRA"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD_CORE: value = "DTS core"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTS_512:
++          case CAEStreamInfo::STREAM_TYPE_DTS_1024:
++          case CAEStreamInfo::STREAM_TYPE_DTS_2048: value = "DTS"; break;
++          default: break;
++        }
++        if (sink.mode == AE::SinkMode::Passthrough && value == AE::SourceCodec(source))
++          value.clear();
++      }
++      return true;
++    }
+     case PLAYER_PROCESS_AUDIODECODER:
+       value = CServiceBroker::GetDataCacheCore().GetAudioDecoderName();
+       return true;

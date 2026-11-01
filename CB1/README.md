@@ -1,7 +1,7 @@
 # CB1
 
 CB1 is an open-source Dolby Vision processing engine with HDR10 and HDR10+ output.
-**CB1 0.4** is a C11 static library linked into the player's render path, without
+**CB1 0.5** is a C11 static library linked into the player's render path, without
 a separate service or external player.
 
 
@@ -26,7 +26,7 @@ source contains creative trims or that every output mode applies every field.
 
 | Source | Mode | Output | Result |
 | --- | --- | --- | --- |
-| Dolby Vision | Dolby Vision Standard | Dolby Vision, TV-Led | Prioritize performance with small reconstruction differences and final TV mapping |
+| Dolby Vision | Dolby Vision Reference | Dolby Vision, TV-Led | Prioritize performance with small reconstruction differences and final TV mapping |
 | Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
 | Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
 | Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
@@ -34,6 +34,7 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | HDR10+ | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
 | HDR10 | Dolby Vision Reference (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
 | HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
+| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels, translate compatible source peaks and estimate missing minimum/mean PQ |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 
@@ -44,7 +45,7 @@ Native HDR10+ preserves the source picture and its authored dynamic metadata
 through the player's supported output path. [HDR10+ processing](docs/HDR10PLUS.md).
 
 Master Reference offers YCbCr or IPT-PQc2 output, with YCbCr selected by default.
-Profile 5 keeps the shared direct IPT path in both Master variants. Standard uses
+Profile 5 keeps the shared direct IPT path in both Master variants. Reference uses
 the dedicated, performance-oriented P5 IPT path.
 
 ## Documentation

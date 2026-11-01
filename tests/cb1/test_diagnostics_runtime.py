@@ -155,7 +155,7 @@ int main(){
         self.run_cpp(r'''
 #include "utils/DVBridgeDiagnosticLog.h"
 #include <cassert>
-struct Layer { int width,height,layout; struct Plane {int width,height;} planes[3]; int chromaLocation; };
+struct Layer { int width,height,layout; struct Plane {int width,height;unsigned texture=0;} planes[3]; int chromaLocation; };
 struct Binding {int stream=3,picture=4,revision=5;};
 struct Base : Layer {Binding binding;};
 struct CDVPlaybackInfo {static constexpr int FEL=1,CM4=2;};
@@ -170,6 +170,8 @@ int main(){
  DVBRIDGE::DiagnosticOpen();
  Base base{{1920,1080,1,{{2048,1088},{1024,544},{0,0}},2},{}};
  Layer el{960,540,2,{{1024,544},{512,272},{0,0}},1};const Layer* enhancement=&el;
+ base.planes[0].texture=11;base.planes[1].texture=12;
+ el.planes[0].texture=21;el.planes[1].texture=22;
  struct {int width=3840,height=2160,x=0,y=0;} geometry;
  int m_pendingInfo=3;bool m_direct=true,m_fallback=false;
  int revision=7;Preferences preferences;ReturnedPolicy policy;
@@ -180,6 +182,8 @@ int main(){
  for(auto key:{"bl_layout=1","bl_texture=2048x1088","el=960x540", "el_texture=1024x544","bl_chroma=2","el_chroma=1"})
   assert(frame.find(key)!=std::string::npos);
  for(auto key:{"bl_uv_texture=1024x544","el_uv_texture=512x272"})
+  assert(frame.find(key)!=std::string::npos);
+ for(auto key:{"bl_texture_ids=11,12","el_texture_ids=21,22"})
   assert(frame.find(key)!=std::string::npos);
  const auto& settings=CLog::lines[1];
  for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1"})

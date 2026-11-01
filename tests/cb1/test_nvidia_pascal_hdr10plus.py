@@ -21,6 +21,8 @@ class PascalHdr10plus(unittest.TestCase):
             source, binary = Path(tmp)/'check.c', Path(tmp)/'check'
             source.write_text(code)
             result = subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror',
+                '-I'+str(Path(os.environ['CB1_PASCAL_SOURCE'])/'src/common/modeset'),
+                '-I'+str(Path(os.environ['CB1_PASCAL_SOURCE'])/'src/common/sdk/nvidia/inc'),
                 str(source), '-o', str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
@@ -184,30 +186,38 @@ int main(void){
 ''')
 
     def test_native_route_rejects_conflicting_owner_and_unqualified_topology(self):
-        native = self.native('src/nvidia-modeset/src/nvkms-hdmi.c', 'nvCb1Hdr10plusRoute')
+        native = '\n'.join(self.native('src/nvidia-modeset/src/nvkms-hdmi.c', name)
+                           for name in ('nvHdmiCtaVic','nvHdmiUseCtaVic','nvCb1Hdr10plusRoute'))
         self.run_c(r'''
 #include <assert.h>
-typedef int NvBool;typedef unsigned NvU32;typedef unsigned NVDpyIdList;
+#include "timing/nvtiming.h"
+typedef unsigned NVDpyIdList;
 #define FALSE 0
 #define TRUE 1
 #define NV9770_DISPLAY 0x9770
 #define NV9870_DISPLAY 0x9870
 #define NVKMS_CONNECTOR_TYPE_HDMI 2
+#define NVKMS_CONNECTOR_TYPE_DP 3
+#define NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS 2
 #define NVKMS_OUTPUT_COLORIMETRY_BT2100 3
 #define NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_SPACE_YCbCr422 4
 #define NV_YUV420_MODE_NONE 0
 typedef struct {int bpc,colorimetry,format;}NVDpyAttributeColor;
-typedef struct {struct {int Enable;}vendorSpecificCtrl;struct {int EnableVRR;}empCtrl;}NVDispHeadInfoFrameStateEvoRec;
+typedef struct {NVT_VIDEO_INFOFRAME_CTRL ctrl;NVT_VENDOR_SPECIFIC_INFOFRAME_CTRL vendorSpecificCtrl;
+ struct {int EnableVRR;}empCtrl;}NVDispHeadInfoFrameStateEvoRec;
 struct NvKmsCb1Vsif {int payloadSize;};
-typedef struct {struct {unsigned type;}*pConnectorEvo;int hdmi;}NVDpyEvoRec;
+typedef struct {struct {unsigned type,signalFormat;}*pConnectorEvo;int hdmi,dp;
+ struct {int valid;NVT_EDID_INFO info;}parsedEdid;}NVDpyEvoRec;
 typedef struct {struct {int dispClass;}*pDevEvo;struct {unsigned hwHeadsMask;}apiHeadState[1];}NVDispEvoRec;
 static NVDpyEvoRec dpy;
 static unsigned nvCountDpyIdsInDpyIdList(unsigned x){return __builtin_popcount(x);}
 static NVDpyEvoRec*nvGetOneArbitraryDpyEvo(unsigned x,const NVDispEvoRec*d){(void)x;(void)d;return &dpy;}
 static int nvDpyIsHdmiEvo(const NVDpyEvoRec*d){return d->hdmi;}
+  static int nvDpyUsesDPLib(const NVDpyEvoRec*d){return d->dp;}
 ''' + native + r'''
 int main(void){
- typeof(*dpy.pConnectorEvo) connector={2};dpy.pConnectorEvo=&connector;dpy.hdmi=1;
+ typeof(*dpy.pConnectorEvo) connector={2,2};dpy.pConnectorEvo=&connector;dpy.hdmi=1;
+ dpy.parsedEdid.valid=1;
  typeof(*((NVDispEvoRec*)0)->pDevEvo) dev={0x9870};NVDispEvoRec disp={.pDevEvo=&dev};
  NVDpyAttributeColor color={10,3,4};NVDispHeadInfoFrameStateEvoRec info={0};struct NvKmsCb1Vsif vsif={0};
  assert(nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
@@ -215,9 +225,22 @@ int main(void){
  info.vendorSpecificCtrl.Enable=1;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));info.vendorSpecificCtrl.Enable=0;
  vsif.payloadSize=27;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));vsif.payloadSize=0;
  color.bpc=8;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));color.bpc=10;
+ info.vendorSpecificCtrl.Enable=1;info.vendorSpecificCtrl.VSIFVersion=NVT_VSIF_VERSION_H14B_VSIF;
+ info.vendorSpecificCtrl.HDMIFormat=NVT_HDMI_VS_BYTE4_HDMI_VID_FMT_EXT;info.vendorSpecificCtrl.HDMI_VIC=1;
+ dpy.parsedEdid.info.ext861.revision=NVT_CEA861_REV_F;
+ dpy.parsedEdid.info.ext861.total_svd=1;dpy.parsedEdid.info.ext861.video[0]=95;
+ dpy.parsedEdid.info.hdr_static_metadata_info.static_metadata_type=1;
+ dpy.parsedEdid.info.hdr_static_metadata_info.supported_eotf.smpte_st_2084_eotf=1;
+ assert(nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
+ vsif.payloadSize=24;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
+ vsif.payloadSize=0;info.vendorSpecificCtrl.Enable=0;
  assert(!nvCb1Hdr10plusRoute(&disp,0,3,&color,&info,&vsif,0));
  assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,1));
  connector.type=1;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));connector.type=2;
+ connector.type=3;assert(nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
+ dpy.dp=1;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));dpy.dp=0;
+ connector.signalFormat=3;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
+ connector.signalFormat=2;connector.type=2;
  dev.dispClass=0xc670;assert(!nvCb1Hdr10plusRoute(&disp,0,1,&color,&info,&vsif,0));
 }
 ''')

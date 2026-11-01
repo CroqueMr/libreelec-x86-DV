@@ -35,7 +35,13 @@ int main(void)
     }
     p[7]|=1; checksum(p); assert(!drm_hdr10plus_infoframe_valid(p,31));
     p[7]=0xbe; checksum(p); assert(!drm_hdr10plus_infoframe_valid(p,31));
-    p[7]=0x7e; p[10]=1; checksum(p); assert(!drm_hdr10plus_infoframe_valid(p,31));
+    p[7]=0x7e;
+    const unsigned modern[][2]={{38,98},{30,82},{8,93},{0,0},{255,100},{255,255}};
+    for(unsigned i=0;i<sizeof(modern)/sizeof(*modern);i++) {
+        p[10]=modern[i][0];p[11]=modern[i][1];checksum(p);
+        assert(drm_hdr10plus_infoframe_valid(p,31));
+    }
+    p[11]=101;checksum(p);assert(!drm_hdr10plus_infoframe_valid(p,31));
     p[10]=0; p[11]=254; checksum(p); assert(!drm_hdr10plus_infoframe_valid(p,31));
     p[11]=255; p[18]=0xa0; checksum(p); assert(!drm_hdr10plus_infoframe_valid(p,31));
     p[18]=0x10; p[21]=128; checksum(p); assert(drm_hdr10plus_infoframe_valid(p,31));

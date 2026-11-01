@@ -1090,11 +1090,11 @@ diff --git a/xbmc/windowing/gbm/ModeChangeHold.h b/xbmc/windowing/gbm/ModeChange
 +    }
 +    return false;
 +  }
-+  //! ... it was made: accepted, or refused by the driver (only a frame of native output can be)
++  //! Refused commits retain the announcement until a retry or ordinary restoration succeeds.
 +  void After(bool accepted, bool transport)
 +  {
 +    if (m_step == Step::TOLD)
-+      m_step = !accepted && transport ? Step::BEFORE_ORDINARY : Step::NONE;
++      m_step = accepted ? Step::NONE : (transport ? Step::BEFORE_ORDINARY : Step::BEFORE_NEXT);
 +  }
 +  Step Pending() const { return m_step; }
 +
@@ -1115,7 +1115,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm
 -  bool FlipDVBridgePage(CDVBridgeState& state, bool restore);
 -  bool SupportsNativeDVOutput() const;
 +  bool FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async = false,
-+                        bool retainSignal = false);
++                        bool retainSignal = false, struct gbm_bo* bo = nullptr);
 +  bool CompleteDVBridgePage(int timeoutMs = 0);
 +  bool SupportsNativeDVOutput(bool requireCurrentMode = true) const;
 +  bool SupportsDVOutputMode(bool requireCurrentMode = true) const;
@@ -1264,9 +1264,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    DVBRIDGE::SourceBinding m_dvImportBinding{};
    dvbridge_geometry m_dvImportGeometry{};
    bool m_dvImportUsable{};
-@@ -163,12 +184,23 @@
+@@ -163,12 +184,24 @@
    CDVBridgeState m_dvState;
    DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
++  DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
    bool m_dvFrame = false;
 +  bool m_cb1FramePending{};
 +  bool m_dvEndPending{};

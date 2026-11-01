@@ -24,8 +24,41 @@ static AVDynamicHDRPlus *fixture(void)
     return m;
 }
 
+/* FF Pictures' public hdr10+test_lake_2021_02_01.mp4, first frame (0.4s).
+ * MP4 SHA256: ff0aa117f4622387d7d76a33fb6094cb576dab8b8cb59fe18047a614c0e92a5f.
+ * This is the 300-nit / 2094 / 96 metadata reported in the RC1.1 forum log.
+ * Rejecting ordinary V1 Y99/Y100nit fields must fail this exact reproduction. */
+static void ff_pictures_first_frame(void)
+{
+    AVDynamicHDRPlus *m=fixture();
+    m->targeted_system_display_maximum_luminance=(AVRational){300,1};
+    AVHDRPlusColorTransformParams *p=&m->params[0];
+    const unsigned maxscl[]={3956,2063,2047};
+    const unsigned distribution[]={0,2094,96,3,4,5,88,720,2888};
+    const unsigned anchors[]={102,205,307,410,512,614,717,819,922};
+    for(unsigned i=0;i<3;i++)p->maxscl[i]=(AVRational){maxscl[i],100000};
+    p->average_maxrgb=(AVRational){93,100000};
+    for(unsigned i=0;i<9;i++){
+        p->distribution_maxrgb[i].percentile=(AVRational){distribution[i],100000};
+        p->bezier_curve_anchors[i]=(AVRational){anchors[i],1023};
+    }
+    p->tone_mapping_flag=1;p->num_bezier_curve_anchors=9;
+    p->knee_point_x=p->knee_point_y=(AVRational){0,4095};
+    const AVDynamicHDRPlus original=*m;
+    uint8_t packet[31];
+    assert(cb1_hdr10plus_vsif(packet,m,false,true)==CB1_HDR10PLUS_OK);
+    /* Independent 16-nit statistics and quarter-step curve quantization. */
+    const uint8_t expected_payload[]={0x8b,0x84,0x90,0x52,1,0,13,96,0,0,0,1,5,18,
+        0x90,0,0,26,51,77,103,128,154,179,205,231,0x40};
+    assert(!memcmp(packet+4,expected_payload,sizeof(expected_payload)));
+    unsigned sum=0;for(unsigned i=0;i<31;i++)sum+=packet[i];assert(!(sum&255));
+    assert(!memcmp(m,&original,sizeof(*m)));
+    av_free(m);
+}
+
 int main(void)
 {
+    ff_pictures_first_frame();
     AVDynamicHDRPlus *m=fixture();
     uint8_t packet[31]; memset(packet,0xa5,sizeof(packet));
     assert(cb1_hdr10plus_vsif(packet,m,false,true)==CB1_HDR10PLUS_OK);
@@ -33,6 +66,28 @@ int main(void)
     const uint8_t expected[31]={0x81,1,27,0,0x8b,0x84,0x90,0x7e,
         10,1,0,255,4,8,16,32,64,128,0,0,0,0,0,0,0,0,0,0,0,0,0x40};
     assert(!memcmp(packet,expected,sizeof(packet)));
+    /* Reported V1 Y99 / Y100nit pairs, with hand-derived wire bytes/checksum. */
+    const unsigned modern[][4]={{6123,98,38,119},{4768,82,30,143},{1298,93,8,154}};
+    for(unsigned i=0;i<3;i++){
+        m->params[0].distribution_maxrgb[1].percentile=(AVRational){modern[i][0],100000};
+        m->params[0].distribution_maxrgb[2].percentile=(AVRational){modern[i][1],100000};
+        AVDynamicHDRPlus original=*m;
+        uint8_t wire[31];memcpy(wire,expected,sizeof(wire));
+        wire[3]=modern[i][3];wire[10]=modern[i][2];wire[11]=modern[i][1];
+        assert(cb1_hdr10plus_vsif(packet,m,false,true)==CB1_HDR10PLUS_OK);
+        assert(!memcmp(packet,wire,sizeof(wire)) && !memcmp(m,&original,sizeof(*m)));
+    }
+    m->params[0].distribution_maxrgb[1].percentile=(AVRational){0,100000};
+    const unsigned allowed[]={0,100,255},rejected[]={101,254,256};
+    for(unsigned i=0;i<3;i++){
+        m->params[0].distribution_maxrgb[2].percentile=(AVRational){allowed[i],100000};
+        assert(cb1_hdr10plus_vsif(packet,m,false,true)==CB1_HDR10PLUS_OK && packet[11]==allowed[i]);
+        uint8_t retained[31];memcpy(retained,packet,sizeof(retained));
+        m->params[0].distribution_maxrgb[2].percentile=(AVRational){rejected[i],100000};
+        assert(cb1_hdr10plus_vsif(packet,m,false,true)==CB1_HDR10PLUS_UNREPRESENTABLE);
+        assert(!memcmp(packet,retained,sizeof(packet)));
+    }
+    m->params[0].distribution_maxrgb[2].percentile=(AVRational){255,100000};
     /* The v0 ten-entry form carries 98% as well; HDMI retains the last peak. */
     m->application_version=0;
     AVHDRPlusColorTransformParams *v0=&m->params[0];

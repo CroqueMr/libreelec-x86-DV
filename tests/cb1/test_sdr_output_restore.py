@@ -67,7 +67,7 @@ struct CWinSystemGbmGLESContext{
  struct Bridge{void Reset(){}};std::unique_ptr<Bridge> m_dvBridge;
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  bool CompleteDVOutputSurface(bool){return true;}void PublishVideoSource(bool,int){}
- bool FlipDVBridgePage(CDVBridgeState&,bool,bool,bool){return false;}
+ bool FlipDVBridgePage(CDVBridgeState&,bool,bool,bool,void*){return false;}
  void SetColorimetry(const VideoPicture* picture){if(!picture)++colorClears;}
  bool SetHDR(const VideoPicture* picture){if(!picture){++hdrClears;
    std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)->pending=true;}return picture!=nullptr;}

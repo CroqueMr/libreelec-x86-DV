@@ -8,11 +8,12 @@ original BT.2020/PQ captures. Their source version is preserved below.
 
 | File | Content |
 | --- | --- |
+| `player-information-rc2.png` | RC2; native 3840x2160 capture; Avatar Profile8 in Master Reference, Dolby Digital Plus Atmos source decoded to stereo PCM |
 | `rc1-quick-rendering-menu.png` | RC1; Avatar; compact automatic-height panel with all seven Dolby Vision source choices |
 | `beta4-quick-rendering-menu.png` | Avatar; six rendering choices, Master Reference active |
 | `quick-display-hdr10.png` | HDR10 source; AI Reference, Adaptive AI and native HDR10 |
 | `beta4-player-information-master-reference.png` | Avatar Profile 8 in Master Reference, with its AC3 audio track |
 | `player-information-standard.png` | Profile 8 in Standard |
 
-Master images use the private capture-only fix. Playback processing is unchanged.
+Screenshot readback does not change playback processing.
 No labels or processing values were altered in these images.

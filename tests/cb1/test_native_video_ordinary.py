@@ -37,6 +37,8 @@ struct CServiceBroker { static CDataCacheCore& GetDataCacheCore() {return cache;
  static Components GetAppComponents() {return {};} };
 struct DRM {bool accepted=true,hdr10plus=false; bool LastPageAccepted() const {return accepted;}
  bool HDR10PlusActive() const {return hdr10plus;}};
+namespace KODI::UTILS {enum class Eotf {TRADITIONAL_SDR,PQ,HLG};}
+auto GetEotf(){return KODI::UTILS::Eotf::TRADITIONAL_SDR;}
 namespace DVBRIDGE {
  uint64_t decodedGeneration{};
  struct StreamTelemetry {static VideoProcessingInfo Read() {VideoProcessingInfo info; info.informationGeneration=decodedGeneration; info.sourceBits=8; return info;}};
@@ -46,11 +48,11 @@ void present(DRM* drm,bool videoLayer) { SNIPPET }
 int main() {
  DRM drm; DVBRIDGE::decodedGeneration=cache.ResetVideoProcessingInfo();
  present(&drm,false); assert(cache.GetVideoProcessingInfo().sourceBits==8);
- assert(!cache.GetVideoProcessingInfo().outputType);
+ assert(cache.GetVideoProcessingInfo().outputType==VideoOutputType::SDR);
  drm.hdr10plus=true; present(&drm,false);
  assert(cache.GetVideoProcessingInfo().outputType==VideoOutputType::HDR10Plus);
  drm.hdr10plus=false; present(&drm,false);
- assert(!cache.GetVideoProcessingInfo().outputType);
+ assert(cache.GetVideoProcessingInfo().outputType==VideoOutputType::SDR);
  cache.ResetVideoProcessingInfo(); player.playing=false;
  present(&drm,false); assert(cache.GetVideoProcessingInfo().sourceBits==0);
  player.playing=true; drm.accepted=false;

@@ -282,9 +282,8 @@ static void qualify_planes(struct reference_gpu *g,bool planar,bool flip)
     pl_tex_destroy(g->gl->gpu,&bl);av_free(m);
 }
 
-static void qualify_imported_base_rows(struct reference_gpu *g)
+static void qualify_imported_base_rows(struct reference_gpu *g,int w,int h,int modes)
 {
-    const int w=64,h=48;
     pl_gpu gpu=g->gl->gpu;
     pl_tex textures[4]={0};
     struct dvbridge_gl_frame imported[2]={0};
@@ -292,12 +291,13 @@ static void qualify_imported_base_rows(struct reference_gpu *g)
         struct dvbridge_gl_plane handles[3]={0};
         for(int p=0;p<2;p++){
             int pw=w>>(layer+p),ph=h>>(layer+p),components=p?2:1;
-            uint16_t data[pw*ph*components];
+            uint16_t *data=malloc((size_t)pw*ph*components*sizeof(*data));assert(data);
             for(int y=0;y<ph;y++)for(int x=0;x<pw;x++)for(int c=0;c<components;c++)
                 data[(y*pw+x)*components+c]=(layer || p?512:256+(y&1)*128)<<6;
             pl_fmt fmt=pl_find_fmt(gpu,PL_FMT_UNORM,components,16,16,PL_FMT_CAP_SAMPLEABLE);assert(fmt);
             pl_tex tex=textures[layer*2+p]=pl_tex_create(gpu,pl_tex_params(.w=pw,.h=ph,
                 .format=fmt,.sampleable=true,.initial_data=data));assert(tex);
+            free(data);
             handles[p]=(struct dvbridge_gl_plane){pl_opengl_unwrap(gpu,tex,NULL,NULL,NULL),pw,ph};
         }
         assert(dvbridge_gl_frame_import(&imported[layer],gpu,DVBRIDGE_P010,w>>layer,h>>layer,handles));
@@ -317,7 +317,10 @@ static void qualify_imported_base_rows(struct reference_gpu *g)
         .descriptors=descriptors,.num_descriptors=2,
         .body="ivec2 p=ivec2(gl_FragCoord.xy);color=vec4(texelFetch(base_y,p,0).r,texelFetch(base_uv,p/2,0).rg,1.0);"}));
     assert(pl_dispatch_finish(dispatch,pl_dispatch_params(.shader=&sh,.target=packed)));
-    float raw[w*h*4],actual[w*h*4],expected[w*h*4],without_el[w*h*4];
+    const size_t frame_bytes=(size_t)w*h*4*sizeof(float);
+    float *raw=malloc(frame_bytes),*actual=malloc(frame_bytes),
+        *expected=malloc(frame_bytes),*without_el=malloc(frame_bytes);
+    assert(raw && actual && expected && without_el);
     reference_read(gpu,packed,0,0,w,h,raw);
     for(int y=0;y<h;y++)for(int x=0;x<w;x++)for(int c=0;c<4;c++){
         float want=c==3?1.f:(float)((c?512:256+(y&1)*128)<<6)/65535.f;
@@ -339,7 +342,7 @@ static void qualify_imported_base_rows(struct reference_gpu *g)
     struct dvbridge_renderer *r=dvbridge_renderer_create(gpu),*reference=dvbridge_renderer_create(gpu);
     assert(r && reference);
     dvbridge_renderer_set_fel_nearest(r,true);dvbridge_renderer_set_fel_nearest(reference,true);
-    for(int mode=0;mode<2;mode++)for(int paired=0;paired<2;paired++){
+    for(int mode=0;mode<modes;mode++)for(int paired=0;paired<2;paired++){
         av_dovi_get_header(m)->disable_residual_flag=!paired;
         imported[0].frame.enhancement_layer=oracle.enhancement_layer=paired?&imported[1].frame:NULL;
         reference_read(gpu,render_mode(r,&imported[0].frame,m,bytes,geometry,mode),0,0,w,h,actual);
@@ -359,12 +362,13 @@ static void qualify_imported_base_rows(struct reference_gpu *g)
         fprintf(stderr,"P010 BL rows mode=%d EL=%d oracle_max=%.9g neutral_max=%.9g row_min=%.9g\n",
             mode,paired,maximum,neutral_error,min_row);
         assert(maximum<3e-5f && neutral_error<3e-5f && min_row>1e-4f);
-        if(!paired)memcpy(without_el,actual,sizeof(actual));
+        if(!paired)memcpy(without_el,actual,frame_bytes);
     }
     dvbridge_renderer_destroy(r);dvbridge_renderer_destroy(reference);av_free(m);
     for(int i=0;i<2;i++)dvbridge_gl_frame_release(&imported[i]);
     for(int i=0;i<4;i++)pl_tex_destroy(gpu,&textures[i]);
     pl_tex_destroy(gpu,&packed);pl_dispatch_destroy(&dispatch);
+    free(raw);free(actual);free(expected);free(without_el);
 }
 
 int main(void)
@@ -377,7 +381,8 @@ int main(void)
     qualify_modes(&g,false);qualify_modes(&g,true);
     for(int planar=0;planar<2;planar++)for(int flip=0;flip<2;flip++)
         qualify_planes(&g,planar,flip);
-    qualify_imported_base_rows(&g);
+    qualify_imported_base_rows(&g,64,48,2);
+    qualify_imported_base_rows(&g,3840,2160,1);
     reference_gpu_destroy(&g);
     puts("PASS FEL nearest phase, borders, residual, policy reset and non-FEL identity");
 }

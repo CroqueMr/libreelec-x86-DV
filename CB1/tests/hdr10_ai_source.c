@@ -7,10 +7,12 @@
 /* Reject an unnecessary half-resolution temporary while checking the complete
  * preview against independently computed, block-constant limited-range Y. */
 static bool preview_budget;
+static bool bounds_budget;
 bool __real_pl_tex_recreate(pl_gpu,pl_tex *,const struct pl_tex_params *);
 bool __wrap_pl_tex_recreate(pl_gpu gpu,pl_tex *texture,const struct pl_tex_params *p)
 {
     if(preview_budget && p->w*p->h>128*72)return false;
+    if(bounds_budget && (size_t)p->w*p->h*p->format->texel_size>4u*1024u*1024u)return false;
     return __real_pl_tex_recreate(gpu,texture,p);
 }
 static void check_preview_footprint(pl_gpu gpu)
@@ -86,6 +88,36 @@ static void check_producer(pl_gpu gpu,const struct pl_frame *source,const float 
     cb1_hdr10_ai_destroy(&c);
 }
 static unsigned gpu_errors;
+static void check_bounds_footprint(pl_gpu gpu)
+{
+    if(getenv("CB1_TEST_NO_COMPACT"))return;
+    struct pl_frame frame={.num_planes=2,.crop={0,0,3840,2160},
+        .repr={.sys=PL_COLOR_SYSTEM_BT_2020_NC,.levels=PL_COLOR_LEVELS_LIMITED,
+            .bits={.sample_depth=16,.color_depth=10,.bit_shift=6}},
+        .color={.primaries=PL_COLOR_PRIM_BT_2020,.transfer=PL_COLOR_TRC_PQ}};
+    for(unsigned p=0;p<2;p++){
+        unsigned w=p?1920:3840,h=p?1080:2160,c=p?2:1;
+        uint16_t *data=malloc((size_t)w*h*c*sizeof(*data));assert(data);
+        for(unsigned i=0;i<w*h*c;i++)data[i]=(p?512:700)<<6;
+        frame.planes[p]=(struct pl_plane){.components=c,.component_mapping={p,p+1},
+            .texture=pl_tex_create(gpu,pl_tex_params(.w=w,.h=h,.sampleable=true,.initial_data=data,
+                .format=pl_find_fmt(gpu,PL_FMT_UNORM,c,16,16,PL_FMT_CAP_SAMPLEABLE)))};
+        free(data);assert(frame.planes[p].texture);
+    }
+    struct cb1_hdr10_extrema *ctx=cb1_hdr10_extrema_create(gpu);assert(ctx);
+    const struct cb1_ai_identity id={91,1,1};
+    cb1_hdr10_extrema_reset(ctx,id.stream,id.revision);
+    assert(cb1_hdr10_extrema_set_coalesced(ctx,true));
+    bounds_budget=true;
+    assert(cb1_hdr10_extrema_submit_source(ctx,&frame,id)==CB1_AI_PENDING);
+    bounds_budget=false;
+    pl_gpu_finish(gpu);struct cb1_hdr10_bounds out;
+    assert(cb1_hdr10_extrema_poll(ctx,id,&out)==CB1_AI_READY);
+    assert(!out.x0 && !out.y0 && out.x1==3840 && out.y1==2160 &&
+        out.minimum>0 && out.minimum==out.maximum);
+    cb1_hdr10_extrema_destroy(&ctx);
+    for(unsigned p=0;p<2;p++)pl_tex_destroy(gpu,&frame.planes[p].texture);
+}
 static void strict_log(void *priv,enum pl_log_level level,const char *message)
 {(void)priv;if(level<=PL_LOG_ERR){++gpu_errors;fprintf(stderr,"%s\n",message);}}
 int main(int argc,char **argv){
@@ -93,6 +125,7 @@ int main(int argc,char **argv){
     setenv("CB1_REFERENCE_TRACE","1",1);
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
     check_preview_footprint(gpu);
+    check_bounds_footprint(gpu);
     pl_log_update(g.log,pl_log_params(.log_cb=strict_log,.log_level=PL_LOG_ERR));
     struct cb1_hdr10_ingress *legacy=cb1_hdr10_ingress_create(gpu);
     struct cb1_hdr10_extrema *ext[2]={cb1_hdr10_extrema_create(gpu),cb1_hdr10_extrema_create(gpu)};
@@ -100,7 +133,7 @@ int main(int argc,char **argv){
     struct cb1_hdr10_quantiles *quant[2]={cb1_hdr10_quantiles_create(gpu),cb1_hdr10_quantiles_create(gpu)};
     assert(legacy && ext[0] && ext[1] && stat[0] && stat[1] && quant[0] && quant[1]);
     unsigned compared=0;double maximum_error=0;
-    for(unsigned fixture=0;fixture<50;fixture++){
+    for(unsigned fixture=0;fixture<52;fixture++){
         if(benchmark && fixture!=4)continue;
         int width=fixture<4?3840:fixture<8?1920:256;
         int height=fixture<4?(fixture%2?1600:2160):fixture<8?1080:144;
@@ -110,7 +143,7 @@ int main(int argc,char **argv){
         if(fixture==48){width=3841;height=1081;}
         int padding=fixture%3==0?8:0,depth=fixture&1?12:10;
         bool packed=(fixture%3)!=2,sub=fixture%4!=3;
-        bool directed=fixture>=14;
+        bool directed=fixture>=14 && fixture<50;
         unsigned dx0=0,dy0=0,dx1=width,dy1=height;
         if(directed){
             padding=8;depth=10;packed=true;sub=fixture!=48;
@@ -122,6 +155,9 @@ int main(int argc,char **argv){
             }
             if(fixture==48){dx0=3;dy0=1;dx1=width-2;dy1=height-2;}
             if(fixture==49){dx0=width/2;dy0=height/2;dx1=dx0+1;dy1=dy0+1;}
+        }
+        if(fixture>=50){
+            width=10;height=6;padding=2;depth=12;packed=fixture==50;sub=true;
         }
         struct pl_frame frame={.num_planes=packed?2:3,.crop={padding,padding,width+padding,height+padding},
             .repr={.sys=PL_COLOR_SYSTEM_BT_2020_NC,.levels=PL_COLOR_LEVELS_LIMITED,
@@ -144,6 +180,11 @@ int main(int argc,char **argv){
                     q=plane?128*scale:(active?235*scale:16*scale);
                     /* Chroma outside a cropped picture must not bleed into its bounds. */
                     if(fixture==49 && plane && (y<padding/2 || y>=h-padding/2))q=255*scale;
+                }
+                if(fixture>=50){
+                    /* Non-neutral 12-bit clipping, partial tiles and chroma crop edges. */
+                    static const unsigned codes[]={0,1,255,256,257,3759,3760,3761,4094,4095};
+                    q=codes[(x+3*y+plane+c)%10];
                 }
                 values[((size_t)y*w+x)*components+c]=q<<(packed?16-depth:0);
             }

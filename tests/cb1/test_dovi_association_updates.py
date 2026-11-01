@@ -53,7 +53,7 @@ struct CDemuxStreamAudioFFmpeg:CDemuxStream {int iChannels{};};
 struct Demux {
  AVFormatContext* m_pFormatContext{};
  unsigned m_program=0,m_newProgram=0,m_initialProgramNumber=UINT_MAX,m_streamsInProgram=0;
- int m_blurayEnhancement=-1;
+ int m_blurayBase=-1,m_blurayEnhancement=-1;
  unsigned m_doviGroups=0;
  std::vector<CDemuxStream> cache;
  CDemuxStream* GetStream(unsigned i){return i<cache.size()?&cache[i]:nullptr;}
@@ -89,6 +89,11 @@ int main(int argc,char**argv){
    assert(f->nb_stream_groups==1);
    assert(d.IsProgramChange() && "HEVC side-data-only DV discovery must rebuild streams");
    d.Snapshot();assert(!d.IsProgramChange() && "Stable association must not rebuild repeatedly");
+   d.m_blurayBase=0;d.m_blurayEnhancement=1;d.cache.clear();
+   assert(!d.IsProgramChange() && "Waiting for native in-band headers must not reset layer assembly");
+   d.m_blurayEnhancement=-1;
+   assert(d.IsProgramChange() && "An unrelated missing stream still triggers native discovery");
+   d.m_blurayEnhancement=1;
    d.m_program=UINT_MAX;
    d.m_doviGroups=0;
    assert(d.IsProgramChange() && "Late groups must be observed without an MPEG program");

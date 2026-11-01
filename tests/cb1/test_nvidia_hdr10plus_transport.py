@@ -454,31 +454,36 @@ int main(void){
 
     def test_native_route_uses_final_depth_and_real_static_hdr_owners(self):
         root=Path(os.environ['CB1_NVIDIA_SOURCE'])
-        native=function((root/'src/nvidia-modeset/src/nvkms-hdmi.c').read_text(),'nvCb1HdrValidate')
+        hdmi=(root/'src/nvidia-modeset/src/nvkms-hdmi.c').read_text()
+        native='\n'.join(function(hdmi,name) for name in
+                        ('nvHdmiCtaVic','nvHdmiUseCtaVic','nvCb1HdrValidate'))
         program=r'''
 #include <assert.h>
 #include <stddef.h>
 #include "nvkms-cb1-hdr.h"
+#include "timing/nvtiming.h"
+#define FALSE NV_FALSE
 enum {NVKMS_MAIN_LAYER=0,NVKMS_INFOFRAME_EOTF_ST2084=2,NVKMS_INFOFRAME_EOTF_HLG=3,
- NVKMS_OUTPUT_COLORIMETRY_BT2100=2,NVKMS_DPY_VRR_TYPE_NONE=0};
+ NVKMS_OUTPUT_COLORIMETRY_BT2100=2,NVKMS_DPY_VRR_TYPE_NONE=0,NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS=2};
 typedef struct {struct {int supportsGenericSharedInfoFrames;}caps;int ada,swAcr;} NVDevEvoRec;
 typedef struct {NVDevEvoRec*pDevEvo;} NVDispEvoRec;
-typedef struct {NVDispEvoRec*pDispEvo;int hdmi;struct {int valid;struct {
- struct {struct {int hdr10Plus;}valid;}ext861;
- struct {int static_metadata_type;struct {int smpte_st_2084_eotf;}supported_eotf;}hdr_static_metadata_info;
- struct {unsigned application_version;}hdr10PlusInfo;}info;}parsedEdid;} NVDpyEvoRec;
+typedef struct {NVDispEvoRec*pDispEvo;int hdmi,dp;struct {int signalFormat;}*pConnectorEvo;
+ struct {int valid;NVT_EDID_INFO info;}parsedEdid;} NVDpyEvoRec;
 typedef struct {unsigned bpc;int colorimetry;} NVDpyAttributeColor;
 typedef struct {int hdmi3D;struct {int type;}vrr;} NVHwModeTimingsEvo;
-typedef struct {struct {int Enable;}vendorSpecificCtrl;struct {int EnableVRR;}empCtrl;} NVDispHeadInfoFrameStateEvoRec;
+typedef struct {NVT_VIDEO_INFOFRAME_CTRL ctrl;NVT_VENDOR_SPECIFIC_INFOFRAME_CTRL vendorSpecificCtrl;
+ struct {int EnableVRR;}empCtrl;} NVDispHeadInfoFrameStateEvoRec;
 typedef struct {struct {int enabled,eotf;}hdrInfoFrame;struct {void*pSurfaceEvo[1];int tearing;}layer[1];
  struct {unsigned payloadSize;}hdmiVsifMetadata;} NVFlipEvoHwState;
 static int nvDpyIsHdmiEvo(const NVDpyEvoRec*d){return d->hdmi;}
+static int nvDpyUsesDPLib(const NVDpyEvoRec*d){return d->dp;}
 /* Hardware capability-query boundary; all native route assembly remains real. */
 static void nvCb1HdrCaps(const NVDevEvoRec*d,struct NvKmsCb1HdrRoute*r){
  r->shared=d->caps.supportsGenericSharedInfoFrames;r->ada=d->ada;r->swAcr=d->swAcr;}
 @@NATIVE@@
 int main(void){
  NVDevEvoRec dev={0};NVDispEvoRec disp={&dev};NVDpyEvoRec d={.pDispEvo=&disp,.hdmi=1};
+ typeof(*d.pConnectorEvo) connector={2};d.pConnectorEvo=&connector;
  d.parsedEdid.valid=1;d.parsedEdid.info.ext861.valid.hdr10Plus=1;
  d.parsedEdid.info.hdr_static_metadata_info.static_metadata_type=1;
  d.parsedEdid.info.hdr_static_metadata_info.supported_eotf.smpte_st_2084_eotf=1;
@@ -488,6 +493,8 @@ int main(void){
  c.packet[0]=0x81;c.packet[1]=1;c.packet[2]=27;c.packet[4]=0x8b;c.packet[5]=0x84;c.packet[6]=0x90;c.packet[30]=0x40;
  unsigned sum=0;for(unsigned i=0;i<31;i++)sum+=c.packet[i];c.packet[3]=-sum;
  assert(nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,1,&slot)&&slot==1);
+ connector.signalFormat=3;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,1,&slot));
+ connector.signalFormat=2;d.dp=1;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,1,&slot));d.dp=0;
  color.bpc=8;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,1,&slot));color.bpc=12;
  assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
  info.vendorSpecificCtrl.Enable=1;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,1,&slot));
@@ -504,6 +511,17 @@ int main(void){
  dev.caps.supportsGenericSharedInfoFrames=1;
  assert(nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
  dev.caps.supportsGenericSharedInfoFrames=0;info.vendorSpecificCtrl.Enable=0;
+ /* Admission follows the proposed payload, not the currently displayed DV frame. */
+ info.vendorSpecificCtrl.Enable=1;
+ info.vendorSpecificCtrl.VSIFVersion=NVT_VSIF_VERSION_H14B_VSIF;
+ info.vendorSpecificCtrl.HDMIFormat=NVT_HDMI_VS_BYTE4_HDMI_VID_FMT_EXT;
+ info.vendorSpecificCtrl.HDMI_VIC=1;
+ d.parsedEdid.info.ext861.revision=NVT_CEA861_REV_F;
+ d.parsedEdid.info.ext861.total_svd=1;d.parsedEdid.info.ext861.video[0]=95;
+ assert(nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
+ flip.hdmiVsifMetadata.payloadSize=24;
+ assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
+ flip.hdmiVsifMetadata.payloadSize=0;info.vendorSpecificCtrl.Enable=0;
  timing.hdmi3D=1;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));timing.hdmi3D=0;
  flip.hdrInfoFrame.enabled=0;assert(!nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
  c.deepColor=0;assert(nvCb1HdrValidate(&d,&color,&timing,&info,&flip,&c,0,&slot));
@@ -514,6 +532,7 @@ int main(void){
             source,binary=Path(tmp)/'check.c',Path(tmp)/'check'
             source.write_text(program.replace('@@NATIVE@@',native))
             build=subprocess.run(['cc','-std=gnu11','-Wall','-Wextra','-Werror',
+                '-I'+str(root/'src/common/modeset'),
                 '-I'+str(root/'src/common/inc'),'-I'+str(root/'src/common/sdk/nvidia/inc'),
                 str(source),'-o',str(binary)],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
@@ -704,6 +723,13 @@ int main(void){
  NvU8 p[31]={0x81,1,27,0,0x8b,0x84,0x90};p[11]=255;p[30]=0x40;checksum(p);
  assert(nvCb1HdrPacketValid(p));
  p[7]=0x40;checksum(p);assert(nvCb1HdrPacketValid(p));
+ const unsigned modern[][2]={{38,98},{30,82},{8,93},{0,0},{255,100},{255,255}};
+ for(unsigned i=0;i<sizeof(modern)/sizeof(*modern);i++){
+  p[10]=modern[i][0];p[11]=modern[i][1];checksum(p);assert(nvCb1HdrPacketValid(p));
+ }
+ p[11]=101;checksum(p);assert(!nvCb1HdrPacketValid(p));
+ p[11]=254;checksum(p);assert(!nvCb1HdrPacketValid(p));
+ p[10]=0;p[11]=255;checksum(p);
  for(unsigned i=0;i<31;i++){p[i]^=1;assert(!nvCb1HdrPacketValid(p));p[i]^=1;}
  p[7]=0x80;checksum(p);assert(!nvCb1HdrPacketValid(p));p[7]=0;
  p[18]=0xa0;checksum(p);assert(!nvCb1HdrPacketValid(p));p[18]=0;

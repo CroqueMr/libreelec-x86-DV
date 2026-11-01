@@ -93,6 +93,27 @@ int main(void){
     assert(!memcmp(s.vsp_infopacket.sb,v2,sizeof(v2)));
     assert(s.timing.vic==95 && s.timing.hdmi_vic==0 && !sum(&s.vsp_infopacket));
     struct dc_info_packet frozen=s.vsp_infopacket;
+    const enum dce_version dcn4[]={DCN_VERSION_4_01,DCN_VERSION_4_2,DCN_VERSION_4_2B};
+    for(unsigned i=0;i<sizeof(dcn4)/sizeof(dcn4[0]);i++){
+        ctx.dce_version=dcn4[i];
+        assert(dv_display_supported(ctx.dce_version));
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+        assert(!memcmp(&s.vsp_infopacket,&frozen,sizeof(frozen)));
+        edid(&sink.dc_edid,1,14,false,true);
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+        assert(s.vsp_infopacket.sb[1]==3 && !sum(&s.vsp_infopacket));
+        state.base.max_requested_bpc=10;
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+        state.base.max_requested_bpc=8;
+        s.signal=0;
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+        s.signal=SIGNAL_TYPE_HDMI_TYPE_A;
+        state.base.hdr_output_metadata=&state;
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+        state.base.hdr_output_metadata=NULL;
+        edid(&sink.dc_edid,2,11,false,true);
+    }
+    ctx.dce_version=DCN_VERSION_1_0;
     for(unsigned length=11;length<=14;length+=3)for(unsigned ll=0;ll<2;ll++){
         edid(&sink.dc_edid,1,length,ll,true);
         for(int vic=93;vic<=97;vic++){

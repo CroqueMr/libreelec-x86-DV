@@ -16,6 +16,143 @@ def execute(program):
 
 
 class AIReentryTests(unittest.TestCase):
+    def test_rejected_guided_snapshot_latches_active_source_and_retries_new_source(self):
+        window=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        prepare=body(window,'bool CWinSystemGbmGLESContext::PrepareHDR10AIQueue(')
+        stop=prepare[:prepare.index('  // The ordinary commit retires')]
+        header=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.h').read_text()
+        pending=body(header,'bool HDR10AISelectionPending() const')
+        execute(r'''
+#include <cassert>
+#include <mutex>
+namespace DVBRIDGE{
+enum class HDR10SourceMode{Native,ReferenceDV,EnhancedDV,HDR10PlusDV};
+enum class OutputRoute{Vanilla,NativeDV};
+struct Preferences{unsigned revision=7;HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
+struct Caps{bool isHDR10=true,hdr10PlusSource=true,nativeDV=true,eligible=false;};
+inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+struct Selection{OutputRoute route;};
+// The real selector has separate source/admission controls; this fixture owns teardown only.
+auto SelectOutput(const Preferences&,const Caps& c){return Selection{c.eligible?OutputRoute::NativeDV:OutputRoute::Vanilla};}
+}
+struct Context{bool stopped=true;unsigned calls=0;bool StopHDR10AI(){++calls;return stopped;}};
+struct Window{
+ Context context;Context* m_dvContext=&context;DVBRIDGE::Caps caps;
+ bool m_aiActive=true,m_aiReady=true,m_aiFallback=false;
+ struct Binding{unsigned stream{},revision{},picture{};}m_aiActivation{11,2,17};
+ struct Picture{Binding doviSourceBinding;}picture{{11,2,17}};
+ unsigned m_aiPolicy=7,m_aiSelectionPolicy=7;mutable std::mutex m_dvCapabilityMutex;
+ DVBRIDGE::Caps GetDVOutputCapabilities(const Picture*,const DVBRIDGE::Preferences&)const{return caps;}
+ bool Pending()const PENDING
+ bool Stop(){PREFIX return false;}
+};
+int main(){
+ Window rejected;assert(rejected.Stop());
+ assert(!rejected.m_aiReady && !rejected.m_aiActive && rejected.m_aiFallback);
+ assert(!rejected.Pending()); // Same activation must not alternate HDMI output.
+ rejected.caps.eligible=true;assert(!rejected.Pending() && !rejected.m_aiReady);
+ rejected.caps.eligible=false;++rejected.picture.doviSourceBinding.stream;
+ assert(rejected.Stop() && rejected.Pending() && !rejected.m_aiFallback);
+ Window busy;busy.context.stopped=false;assert(!busy.Stop());assert(!busy.m_aiReady);
+ DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;
+ Window native;assert(native.Stop() && !native.Pending() && !native.m_aiReady);
+ DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::ReferenceDV;
+ Window saved;assert(saved.Stop() && !saved.Pending() && !saved.m_aiReady);
+ DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::HDR10PlusDV;
+ Window absent;absent.m_dvContext=nullptr;absent.m_aiActive=absent.m_aiReady=false;
+ assert(absent.Stop() && absent.Pending());
+}
+'''.replace('PENDING',pending).replace('PREFIX',stop.lstrip()[1:]))
+
+    def test_hdr10plus_render_storage_tracks_actual_pool_not_live_processing_policy(self):
+        source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text()
+        configure=body(source,'bool CRendererVAAPIGLES::Configure(')
+        selection=configure[configure.index('  CVaapiRenderPicture *pic ='):configure.index('#endif')+len('#endif')]
+        changed=body(source,'bool CRendererVAAPIGLES::ConfigChanged(')
+        orientation=body(source,'bool CRendererVAAPIGLES::DVBridgeOrientationSupported(')
+        hdr_types=body((TREE/'xbmc/cores/VideoPlayer/Interface/StreamInfo.h').read_text(),
+                       'enum class StreamHdrType')
+        helper=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text()
+        eligible=body(helper,'inline bool IsHDR10AIInput(')
+        family=body(helper,'inline bool IsHDR10Family(')
+        execute(r'''
+#include <cassert>
+#include <initializer_list>
+#define CB1_HAS_HDR10_AI
+constexpr int VA_INVALID_ID=-1,NUM_BUFFERS=6;
+constexpr unsigned DVP_FLAG_INTERLACED=1;
+enum class StreamHdrType HDR_TYPES;
+namespace DVBRIDGE {
+enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};
+struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
+inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline bool IsHDR10Family(StreamHdrType source) FAMILY
+inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
+}
+struct VideoBuffer {virtual ~VideoBuffer()=default;};
+struct CVaapiRenderPicture:VideoBuffer {
+ struct {int videoSurface=7,fourcc=11;}procPic;
+ unsigned renderBufferCount=36;
+};
+struct VideoPicture {
+ VideoBuffer* videoBuffer;
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ struct {unsigned profile=0;}doviSourceInfo;
+ unsigned iFlags=0;
+};
+struct Renderer {
+ bool m_isVAAPIBuffer=false,m_aiLookahead=false;
+ int m_vaapiFourcc=0;
+ unsigned m_aiBuffers=NUM_BUFFERS,m_renderOrientation=0;
+ bool DVBridgeOrientationSupported(unsigned orientation)const ORIENTATION
+ void Configure(const VideoPicture& picture,unsigned orientation=0){
+  m_renderOrientation=orientation;
+  SELECTION
+ }
+ bool ConfigChanged(const VideoPicture& picture) CHANGED
+};
+int main(){
+ using namespace DVBRIDGE;
+ CVaapiRenderPicture pool;VideoPicture picture{&pool};Renderer renderer;
+ renderer.Configure(picture);
+ assert(renderer.m_aiBuffers==36 && renderer.m_aiLookahead && !renderer.ConfigChanged(picture));
+ prefs.hdr10Source=HDR10SourceMode::Native;
+ assert(!renderer.ConfigChanged(picture) && "A preference change must not pretend the retained 36-slot pool shrank");
+ renderer.Configure(picture);
+ assert(renderer.m_aiBuffers==36 && renderer.m_aiLookahead);
+ pool.renderBufferCount=6;
+ assert(renderer.ConfigChanged(picture));renderer.Configure(picture);
+ assert(renderer.m_aiBuffers==6 && !renderer.m_aiLookahead);
+ prefs.hdr10Source=HDR10SourceMode::HDR10PlusDV;
+ assert(!renderer.ConfigChanged(picture) && "Guided admission must not invent decoder surfaces before reopen");
+ renderer.Configure(picture);assert(renderer.m_aiBuffers==6 && !renderer.m_aiLookahead);
+ pool.renderBufferCount=36;
+ assert(renderer.ConfigChanged(picture));renderer.Configure(picture);
+ assert(renderer.m_aiBuffers==36 && renderer.m_aiLookahead);
+ // Plain HDR10 storage has always followed the actual pool, even in native mode.
+ picture.hdrType=StreamHdrType::HDR_TYPE_HDR10;prefs.hdr10Source=HDR10SourceMode::Native;
+ renderer.Configure(picture);assert(renderer.m_aiBuffers==36 && !renderer.ConfigChanged(picture));
+ // Storage eligibility still excludes SDR, DV, software, interlace and rotation.
+ for(auto mode:{HDR10SourceMode::Native,HDR10SourceMode::HDR10PlusDV}){
+  prefs.hdr10Source=mode;
+  for(unsigned excluded=0;excluded<7;++excluded){
+   VideoPicture other{&pool};unsigned rotation=0;pool.procPic.videoSurface=7;
+   if(excluded==0)other.hdrType=StreamHdrType::HDR_TYPE_NONE;
+   if(excluded==1)other.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+   if(excluded==2)other.doviSourceInfo.profile=7;
+   if(excluded==3)pool.procPic.videoSurface=VA_INVALID_ID;
+   if(excluded==4)other.iFlags=DVP_FLAG_INTERLACED;
+   if(excluded==5)rotation=90;
+   if(excluded==6)other.hdrType=StreamHdrType::HDR_TYPE_HLG;
+   Renderer control;control.Configure(other,rotation);
+   assert(control.m_aiBuffers==NUM_BUFFERS && !control.m_aiLookahead);
+   assert(!control.ConfigChanged(other));
+  }
+ }
+}
+'''.replace('HDR_TYPES',hdr_types).replace('ELIGIBLE',eligible).replace('FAMILY',family).replace('ORIENTATION',orientation)
+            .replace('SELECTION',selection).replace('CHANGED',changed))
+
     def test_strict_dv_failure_does_not_abort_a_native_hdr10_transition(self):
         source=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
                     'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(')
@@ -84,6 +221,7 @@ struct Renderer{
  bool m_firstFrame=false,m_prepared=true,m_packed=true,m_direct=true;
  bool m_pending=true,m_asyncEligible=true,m_dvPolicyActive=true;
  bool m_aiFrame=true,m_aiOutputAccepted=true;
+ std::optional<int> m_aiGuidance=1;
  struct Submission{int sequence;}m_submission{12};
  void ClearFELPrefetch(){}void Summary(const char*){}
  void Reset() RESET
@@ -96,6 +234,7 @@ int main(){
   assert(!r.m_asyncEligible && !r.m_submission.sequence);
   assert(r.m_dvPolicyActive==active);
   assert(!r.m_aiFrame && !r.m_aiOutputAccepted && r.m_rawELCache.empty());
+  assert(!r.m_aiGuidance);
  }
 }
 '''.replace('RESET',reset).replace('CANCEL',cancel))
@@ -104,6 +243,10 @@ int main(){
         source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text(),
                     'bool CRendererVAAPIGLES::BuildDVBridgeLayer(')
         selection=source[source.index('  auto& buffer ='):source.index('  const auto texture =')]
+        hdr_types=body((TREE/'xbmc/cores/VideoPlayer/Interface/StreamInfo.h').read_text(),
+                       'enum class StreamHdrType')
+        eligible=body((TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text(),
+                      'inline bool IsHDR10AIInput(')
         execute(r'''
 #include <cassert>
 #include <cmath>
@@ -114,7 +257,14 @@ constexpr double DVD_TIME_BASE=1000000,DVD_NOPTS_VALUE=1e20;
 constexpr int64_t AV_NOPTS_VALUE=INT64_MIN;
 enum{VA_FOURCC_NV12,VA_FOURCC_P010,VA_FOURCC_P012,VA_FOURCC_P016};
 enum{DVBRIDGE_NV12,DVBRIDGE_P010,DVBRIDGE_P012,DVBRIDGE_P016};
-enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION};
+enum class StreamHdrType HDR_TYPES;
+namespace DVBRIDGE {
+enum class HDR10SourceMode {ReferenceDV,HDR10PlusDV};
+struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
+inline Preferences prefs;
+inline auto FrameOutputSettings(){return prefs;}
+inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
+}
 struct Binding{bool Valid()const{return true;}};
 struct Picture{StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;
  Binding doviSourceBinding;struct{int profile=0;}doviSourceInfo;
@@ -139,7 +289,7 @@ int main(){
  r.m_buffers[0].doviSourcePicture->doviSourceInfo.profile=7;
  assert(r.Build(replayed) && replayed.pts==1.25);
 }
-'''.replace('SELECTION',selection))
+'''.replace('SELECTION',selection).replace('HDR_TYPES',hdr_types).replace('ELIGIBLE',eligible))
 
     def test_ai_capture_horizon_uses_the_same_repaired_presentation_timeline(self):
         source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text(),
@@ -377,25 +527,28 @@ int main(){
     def test_ai_waits_for_ordinary_restore_before_preparing_first_image(self):
         source=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
                     'bool CWinSystemGbmGLESContext::PrepareHDR10AIQueue(')
-        selection=source[:source.index('  const auto binding =')]
+        selection=source[:source.index('  if (queue.empty()')]
         execute(r'''
 #include <cassert>
 #include <mutex>
 namespace DVBRIDGE {
-enum class HDR10SourceMode {Native,ReferenceDV};enum class OutputRoute {Vanilla,DV};
+enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};enum class OutputRoute {Vanilla,DV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
-struct Caps{bool isHDR10=true;};
+struct Caps{bool isHDR10=true,hdr10PlusSource=false,nativeDV=true;};
 struct Selection{OutputRoute route;};
 inline Selection SelectOutput(Preferences p,Caps){return {p.hdr10Source==HDR10SourceMode::Native?OutputRoute::Vanilla:OutputRoute::DV};}
 }
 struct Context{int stops=0;bool ready=true;bool StopHDR10AI(){++stops;return ready;}};
 struct Window{
  std::mutex m_dvCapabilityMutex;bool m_aiActive=true;int m_aiPolicy=17,m_aiSelectionPolicy=0;
+ bool m_aiReady=true,m_aiFallback=false;
+ struct Binding{int stream{},revision{},picture{};}m_aiActivation{7,17,1};
+ struct Picture{Binding doviSourceBinding;}picture{{7,17,1}};
  bool m_dvOrdinaryFrame=false,m_dvEndPending=false,m_dvStopPending=false;
  Context context;Context* m_dvContext=&context;
- auto GetDVOutputCapabilities(int*,DVBRIDGE::Preferences){return DVBRIDGE::Caps{};}
- int picture=0;bool Prepare()
+ auto GetDVOutputCapabilities(Picture*,DVBRIDGE::Preferences){return DVBRIDGE::Caps{};}
+ bool Prepare()
   SELECTION
   return true;
  }
@@ -408,9 +561,9 @@ int main(){
  }
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;
  w.context.ready=false;assert(!w.Prepare());
- assert(w.m_aiPolicy==17 && w.m_aiSelectionPolicy==0);
+ assert(w.m_aiPolicy==0 && w.m_aiSelectionPolicy==0 && !w.m_aiReady);
  w.context.ready=true;assert(w.Prepare());
- assert(w.context.stops==2 && !w.m_aiActive && w.m_aiPolicy==17 && w.m_aiSelectionPolicy==1);
+ assert(w.context.stops==2 && !w.m_aiActive && w.m_aiPolicy==0 && w.m_aiSelectionPolicy==1);
 }
 '''.replace('SELECTION',selection))
 

@@ -1,5 +1,6 @@
 """HDR10+ requires a dynamic transport, not just static PQ support."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -42,16 +43,17 @@ int main(){
         configure=body(renderer,'bool CLinuxRendererGLES::ConfigureVideoOutput(const VideoPicture& picture)')
         settings=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         profile=body(settings,'bool ProfileValid() const')
+        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;',settings))
         program=r'''
 #define HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 #include <atomic>
 #include <cassert>
 #include <cmath>
 namespace DVBRIDGE {
-enum class OutputMode {Standard,HDR10,Disabled};
-enum class HDR10SourceMode {Native,ReferenceDV};
+NATIVE_ENUMS
 enum class OutputRoute {Vanilla,NativeDV,HDR10};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 struct OutputPreferences {
@@ -136,7 +138,7 @@ int main(){
  r=select(p,c);assert(r.route==OutputRoute::NativeDV && r.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
  c.stereoSource=true;assert(select(p,c).route==OutputRoute::Vanilla);
 }
-'''.replace('BODY',implementation).replace('WANTS',wants).replace('CONFIGURE',configure).replace('PROFILE',profile)
+'''.replace('BODY',implementation).replace('WANTS',wants).replace('CONFIGURE',configure).replace('PROFILE',profile).replace('NATIVE_ENUMS',enums)
         repo=Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);code=root/'check.cpp';binary=root/'check'

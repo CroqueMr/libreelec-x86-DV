@@ -7,10 +7,12 @@ successful-output receipt.
 
 | Driver / display block | Dolby Vision V1 / V2 | HDR10 / HLG | Native HDR10+ | Dolby Vision to HDR10+ |
 | --- | --- | --- | --- | --- |
-| Intel Display9, including Kaby Lake | Admitted DV route | No demonstrated native HDMI static-HDR bank | Not admitted | Not admitted |
+| Intel Display9, Skylake / Kaby Lake | Admitted DV route | Documented HDMI GMP bank, native 12-bit constraints; receiver confirmation pending | Guarded native route; receiver confirmation pending | Same guarded route |
+| Other Intel Display9 / LSPCON routes | Admitted DV route | Native restrictions retained | No new admission | No new admission |
 | Intel Display10 | Admitted DV route | Native selector; converted PQ uses 12 bits | Frame-owned output, native 12-bit route | Same guarded 12-bit route |
 | Intel Display11 and newer, i915 / xe | Admitted DV route | Native selector, guarded deep PQ conversions | Frame-owned output, at least 10 bits | Same frame-owned deep output |
 | AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
+| AMD DCN4.01 / 4.2 / 4.2B | Implemented DV route; physical qualification pending | Native AMD output | Shared frame-owned output, at least 10 bits | Same guarded output contract |
 | AMD Vega M, DCE11.22 | Supported | Native DCE output | Supported DCE packet path | Supported guarded DCE deep output |
 | NVIDIA R615, Turing and newer | Supported | Native output, PQ and HLG capabilities checked separately | Supported commit-coupled native packet routes | Same supported deep-output routes |
 | NVIDIA R580, same image | Supported | Native output, PQ and HLG capabilities checked separately | Supported native HDMI 4:2:2 10-bit route | Same supported 4:2:2 10-bit route |
@@ -26,13 +28,18 @@ conversion mode. Ordinary HLG uses native driver admission without this flag.
 
 Display10 uses its native RGB12 or YCbCr42012 selector, including EDID DC36,
 format and bandwidth checks. An 8/10-bit user ceiling is not overridden.
-Display9 does not gain HDR10 support by exposing a property it cannot deliver.
+Display9 HDMI GMP handling is limited to documented Skylake/Kaby Lake hardware.
+It retains native 12-bit, EDID and TMDS limits. Native DP opt-in requires a real
+HDR/VSC-capable external route and selected depth of at least 10 bits. LSPCON
+remains native and does not expose the new CB1 conversion opt-in. Software tests
+exercise register bytes, readback and modesets; they do not prove receiver output.
 Intel DP converters remain subject to their native protocol validation.
 
 AMD DV remains limited to its explicit display-engine allowlist. Vega M is a
-separate supported DCE11.22 path; discrete Polaris/Vega and DCN4 are not
-promoted to supported DV hardware by these changes. Native HDR admission is
-separate from the custom DV allowlist.
+separate supported DCE11.22 path. DCN4.01/4.2/4.2B reuse verified native neutral
+color-block programming; physical RX9000 output remains unqualified.
+Discrete Polaris/Vega are not admitted. Native HDR admission is separate from
+the custom DV allowlist.
 
 R615 retains matched 615.78.08 modules, firmware and userspace. Its native depth
 ceiling is 12 bits; EDID and bandwidth still gate selection. This can also raise
@@ -101,7 +108,7 @@ packet. Kodi rejects native HDR10+ staging if its actual drawable falls below
 
 | Source / circuit | Required transport |
 | --- | --- |
-| DV Standard / Master Reference / Adaptive | Admitted DV V1/V2 TV-Led link |
+| DV Reference / Master Reference / Adaptive | Admitted DV V1/V2 TV-Led link |
 | HDR10 to DV Reference AI / Adaptive AI | Same admitted DV link |
 | DV to HDR10 Basic / Expert | Native PQ output, actual depth at least 10 bits |
 | DV to HDR10+ | PQ deep output plus frame-owned HDR10+ metadata |

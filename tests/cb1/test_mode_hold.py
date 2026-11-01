@@ -7,6 +7,96 @@ from test_native_video_source import TREE, body
 
 
 class ModeHoldTests(unittest.TestCase):
+    def test_display_reset_delay_starts_after_commit_not_before(self):
+        source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        announce=body(source,'void CWinSystemGbmGLESContext::AnnounceCB1Mode(bool transport)')
+        complete=body(source,'void CWinSystemGbmGLESContext::CompleteCB1Mode(bool accepted, bool transport)')
+        present=body(source,'void CWinSystemGbmGLESContext::PresentRender(bool rendered, bool videoLayer)')
+        program=r'''
+#define HAVE_DVBRIDGE
+#include "ModeChangeHold.h"
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <mutex>
+#include <vector>
+using namespace KODI::WINDOWING::GBM;
+int now=0;
+void glFinish(){}
+constexpr int LOGDEBUG=0;
+struct CLog {template<class... T>static void Log(T...) {}};
+struct Settings {Settings* GetSettings(){return this;}int GetInt(const char*){return 3;}};
+struct CServiceBroker {static Settings* GetSettingsComponent(){static Settings s;return &s;}};
+struct Timer {int deadline=0,sets=0;void Set(std::chrono::milliseconds d){deadline=now+d.count();++sets;}
+ bool IsTimePast(){return now>=deadline;}};
+struct Resource {int resets=0;void OnResetDisplay(){++resets;}};
+struct Window {
+ CHeldModeAnnouncement m_modeAnnouncement;CModeChangeHold m_modeHold;
+ bool m_bRenderCreated=true,m_dispReset=false,pending=false;
+ int lost=0;Timer m_dispResetTimer;std::mutex m_resourceSection;
+ Resource audio;std::vector<Resource*> m_resources{&audio};
+ void OnLostDevice(){if(!m_dispReset){m_dispReset=true;++lost;}}
+ void PresentFrame(bool,bool){}
+ bool HasPendingDVOutputSurface(){return pending;}
+ void announce(bool transport) ANNOUNCE
+ void complete(bool accepted,bool transport) COMPLETE
+ void present(bool rendered,bool videoLayer) PRESENT
+};
+int main(){
+ Window w;w.m_modeAnnouncement.Held();w.announce(true);
+ assert(w.lost==1 && w.m_dispResetTimer.sets==0);
+ now=10000;w.present(false,false);assert(w.audio.resets==0);
+ w.complete(true,true);assert(w.m_dispResetTimer.sets==1);
+ now=10299;w.present(false,false);assert(w.audio.resets==0);
+ now=10300;w.present(false,false);assert(w.audio.resets==1);
+ w.announce(true);w.complete(true,true);assert(w.lost==1 && w.m_dispResetTimer.sets==1);
+ w.m_modeAnnouncement.Held();w.announce(true);w.complete(false,true);
+ now=20000;w.present(false,false);assert(w.audio.resets==1);
+ w.announce(true);assert(w.lost==2);
+ w.announce(false);w.complete(true,false);assert(w.m_dispResetTimer.sets==2);
+ w.pending=true;now=21000;w.present(false,false);assert(w.audio.resets==1);
+ w.pending=false;w.present(false,false);assert(w.audio.resets==2);
+ w.m_modeAnnouncement.Held();w.announce(false);w.complete(false,false);
+ now=30000;w.present(false,false);assert(w.audio.resets==2);
+ w.announce(false);w.complete(true,false);assert(w.m_dispResetTimer.sets==3);
+ now=30299;w.present(false,false);assert(w.audio.resets==2);
+ now=30300;w.present(false,false);assert(w.audio.resets==3);
+}
+'''.replace('ANNOUNCE',announce).replace('COMPLETE',complete).replace('PRESENT',present)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc/windowing/gbm'),
+                str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_native_display_reset_compiles_without_dvbridge(self):
+        present=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
+                     'void CWinSystemGbmGLESContext::PresentRender(bool rendered, bool videoLayer)')
+        program=r'''
+#include <cassert>
+#include <mutex>
+#include <vector>
+constexpr int LOGDEBUG=0;
+struct CLog {template<class... T>static void Log(T...) {}};
+struct Resource {int resets=0;void OnResetDisplay(){++resets;}};
+struct Window {
+ bool m_bRenderCreated=true,m_dispReset=true;
+ struct {bool IsTimePast(){return true;}} m_dispResetTimer;
+ std::mutex m_resourceSection;Resource audio;std::vector<Resource*> m_resources{&audio};
+ void PresentFrame(bool,bool){}
+ void present(bool rendered,bool videoLayer) PRESENT
+};
+int main(){Window w;w.present(false,false);assert(w.audio.resets==1 && !w.m_dispReset);}
+'''.replace('PRESENT',present)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_held_start_does_not_queue_an_unpresented_egl_buffer(self):
         method=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
                     'bool CWinSystemGbmGLESContext::SetFullScreen(')

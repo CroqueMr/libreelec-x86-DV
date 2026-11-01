@@ -51,8 +51,15 @@ class HDR10PlusKernelTests(unittest.TestCase):
                      'hdmi_dolby_vendor_infoframe_pack', 'hdmi_dolby_vendor_infoframe_unpack',
                      'hdmi_hdr10plus_vendor_infoframe_pack', 'hdmi_hdr10plus_vendor_infoframe_unpack',
                      'hdmi_vendor_any_infoframe_check_only', 'hdmi_vendor_any_infoframe_pack_only',
-                     'hdmi_vendor_any_infoframe_unpack')
-            (root / 'hdmi-functions.inc').write_text('\n'.join(function(hdmi, name) for name in names))
+                     'hdmi_vendor_any_infoframe_unpack', 'hdmi_avi_infoframe_init',
+                     'hdmi_drm_infoframe_init', 'hdmi_audio_infoframe_init',
+                     'hdmi_spd_infoframe_init', 'hdmi_drm_infoframe_unpack_only',
+                     'hdmi_avi_infoframe_unpack', 'hdmi_drm_infoframe_unpack',
+                     'hdmi_spd_infoframe_unpack', 'hdmi_audio_infoframe_unpack',
+                     'hdmi_infoframe_unpack')
+            (root / 'hdmi-functions.inc').write_text(
+                '#define min(a,b) ((a)<(b)?(a):(b))\n' +
+                '\n'.join(function(hdmi, name) for name in names))
             display = (kernel / 'drivers/gpu/drm/i915/display/intel_display.c').read_text()
             for code, entry, assignment in (
                 (display, 'int intel_atomic_check(', 'state->hdr10plus_primary_mask ='),
@@ -63,7 +70,7 @@ class HDR10PlusKernelTests(unittest.TestCase):
                 with self.subTest(contract=test):
                     binary = root / test
                     compiled = subprocess.run(['cc', '-Wall', '-Wextra', '-Werror',
-                        '-Wno-unused-function', '-fsanitize=address,undefined',
+                        '-Wno-unused-function', '-Wno-pointer-sign', '-fsanitize=address,undefined',
                         '-I' + str(root), '-I' + str(kernel / 'include/drm'),
                         str(ROOT / 'tests/cb1' / ('hdr10plus_' + test + '.c')),
                         '-o', str(binary)], capture_output=True, text=True)

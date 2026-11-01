@@ -79,6 +79,8 @@ def verify(root, dependency_roots=None, prefix=None):
                       'src/cb1_hdr10plus_analysis.c', 'src/cb1_hdr10plus_analysis.h',
                       'src/cb1_hdr10plus_curve.c', 'src/cb1_hdr10plus_curve.h',
                       'src/cb1_dv_hdr10plus.c', 'src/cb1_dv_hdr10plus.h',
+                      'src/cb1_hdr10plus_dovi.c', 'src/cb1_hdr10plus_dovi.h',
+                      'src/cb1_cmv40.c', 'src/cb1_cmv40.h',
                       'src/dvbridge_gl_frame.c', 'src/dvbridge_gl_frame.h',
                       'src/dvbridge_dmabuf.c', 'src/dvbridge_dmabuf.h',
                       'src/dvbridge_cache.c', 'src/dvbridge_cache.h',

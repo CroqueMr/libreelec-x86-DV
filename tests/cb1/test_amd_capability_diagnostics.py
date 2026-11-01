@@ -10,7 +10,7 @@ from test_hdr10_transport import function
 
 @unittest.skipUnless(os.environ.get('CB1_KERNEL_SOURCE'), 'matched patched kernel required')
 class AMDCapabilityDiagnosticsTests(unittest.TestCase):
-    def test_attach_reports_family_route_and_parameter_without_enabling_dcn4(self):
+    def test_attach_reports_validated_families_and_rejects_unknown_routes(self):
         path = Path(os.environ['CB1_KERNEL_SOURCE']) / 'drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c'
         source = path.read_text()
         gate = function(source, 'dv_display_supported')
@@ -48,11 +48,17 @@ int main(){
  struct amdgpu_dm_connector c={.base={.base={.id=409},.connector_type=DRM_MODE_CONNECTOR_HDMIA},.dc_link=(void*)&link};
  amdgpu_dm_dv_attach(&c);assert(properties==2);
  assert(strstr(message,"connector=409") && strstr(message,"family_supported=1") && strstr(message,"native_hdmi=1"));
- for(int version=DCN_VERSION_4_01;version<=DCN_VERSION_4_02;++version){
+ const enum dce_version supported[]={DCN_VERSION_4_01,DCN_VERSION_4_2,DCN_VERSION_4_2B};
+ for(unsigned i=0;i<sizeof(supported)/sizeof(supported[0]);++i){
+  ctx.dce_version=supported[i];properties=0;message[0]=0;
+  amdgpu_dm_dv_attach(&c);assert(properties==2 && strstr(message,"family_supported=1"));
+ }
+ {
+  int version=DCN_VERSION_4_02;
   ctx.dce_version=version;properties=0;message[0]=0;
   amdgpu_dm_dv_attach(&c);assert(properties==0 && strstr(message,"family_supported=0"));
  }
- ctx.dce_version=DCN_VERSION_3_2;link.connector_signal=99;message[0]=0;
+ properties=0;ctx.dce_version=DCN_VERSION_3_2;link.connector_signal=99;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"native_hdmi=0"));
  link.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A;dv_standard=false;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(properties==1 && strstr(message,"dv_parameter=0"));

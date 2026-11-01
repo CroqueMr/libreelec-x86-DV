@@ -1,5 +1,5 @@
 add_executable(trim_contract trim_contract.c)
-foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis)
+foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus_dovi cmv40)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   add_test(NAME ${name} COMMAND ${name})
@@ -201,7 +201,10 @@ if(NOT EXISTS "${CB1_FFMPEG_SOURCE}/libavcodec/dovi_rpudec.c" OR
    NOT EXISTS "${CB1_FFMPEG_SOURCE}/config.h")
   message(FATAL_ERROR "CB1_FFMPEG_SOURCE must name configured matched producer sources")
 endif()
-add_executable(ffmpeg_metadata_layout ffmpeg_metadata_layout.c)
+# The included producer uses private FFmpeg helpers, not shared-library exports.
+add_executable(ffmpeg_metadata_layout ffmpeg_metadata_layout.c
+  "${CB1_FFMPEG_SOURCE}/libavcodec/dovi_rpu.c"
+  "${CB1_FFMPEG_SOURCE}/libavcodec/golomb.c")
 file(READ "${PROJECT_SOURCE_DIR}/config/dependencies.json" dependency_lock)
 foreach(path libavcodec/dovi_rpudec.c libavutil/dovi_meta.h)
   string(JSON expected_digest GET "${dependency_lock}" modified_sources "ffmpeg/${path}")
@@ -364,12 +367,14 @@ if(CB1_ENABLE_HDR10_AI)
   add_test(NAME hdr10_ai_enhanced_nodirect COMMAND "${CMAKE_COMMAND}" -E env
     CB1_TEST_NO_FETCH=1 "$<TARGET_FILE:hdr10_ai_enhanced>")
   add_test(NAME hdr10_ai_enhanced_live COMMAND hdr10_ai_enhanced "${CB1_L1L3_TEST_BUNDLE}")
+  add_test(NAME hdr10_ai_enhanced_retry COMMAND hdr10_ai_enhanced --retry-scratch)
+  set_tests_properties(hdr10_ai_enhanced_retry PROPERTIES SKIP_RETURN_CODE 77)
   add_executable(hdr10_ai_transport hdr10_ai_transport.c)
   target_link_libraries(hdr10_ai_transport PRIVATE dvbridge_core)
   add_test(NAME hdr10_ai_transport COMMAND hdr10_ai_transport)
   set_tests_properties(hdr10_ai_transport PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(hdr10_ai_gpu_extrema hdr10_ai_gpu_identity hdr10_ai_gpu_quantiles
-    hdr10_ai_gpu_statistics hdr10_ai_gpu_spatial hdr10_ai_gpu_source hdr10_ai_gpu_source_nocompact hdr10_ai_gpu_ingress hdr10_ai_live hdr10_ai_render hdr10_ai_enhanced metadata_hook_shape hdr10_ai_enhanced_nodirect hdr10_ai_enhanced_live hdr10_ai_transport PROPERTIES ENVIRONMENT
+    hdr10_ai_gpu_statistics hdr10_ai_gpu_spatial hdr10_ai_gpu_source hdr10_ai_gpu_source_nocompact hdr10_ai_gpu_ingress hdr10_ai_live hdr10_ai_render hdr10_ai_enhanced metadata_hook_shape hdr10_ai_enhanced_nodirect hdr10_ai_enhanced_live hdr10_ai_enhanced_retry hdr10_ai_transport PROPERTIES ENVIRONMENT
     "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=halt_on_error=1")
   add_test(NAME hdr10_ai_malformed_bundle COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/test_hdr10_ai_bundles.py"

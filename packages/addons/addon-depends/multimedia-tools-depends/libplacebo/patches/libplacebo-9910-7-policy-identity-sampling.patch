@@ -1,0 +1,35 @@
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -344,6 +344,12 @@
+     // A value of 32 requires floating-point intermediates without a lower-depth fallback.
+     int min_fbo_precision;
+ 
++    // CB policy opt-in: aligned, exact 1:1 plane/main sampling uses the
++    // existing nearest sampler instead of automatic bilinear sampling.
++    // Default false preserves all existing callers. Requires matching
++    // CB-patched headers and library; this is not an upstream ABI field.
++    bool cb1_nearest_identity;
++
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+     // with any compile-time constants being replaced by runtime-adjustable
+     // values. This is generally a performance loss, but has the advantage of
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -703,6 +703,17 @@
+     pl_shader_obj *lut = NULL;
+     switch (info.dir) {
+     case SAMPLER_NOOP:
++        if (params->cb1_nearest_identity &&
++            src->new_w == fabsf(pl_rect_w(src->rect)) &&
++            src->new_h == fabsf(pl_rect_h(src->rect)) &&
++            src->rect.x0 == floorf(src->rect.x0) &&
++            src->rect.y0 == floorf(src->rect.y0) &&
++            src->rect.x1 == floorf(src->rect.x1) &&
++            src->rect.y1 == floorf(src->rect.y1))
++        {
++            pl_shader_sample_nearest(sh, src);
++            return;
++        }
+         goto fallback;
+     case SAMPLER_DOWN:
+         lut = &sampler->downscaler_state;

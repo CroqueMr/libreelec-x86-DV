@@ -69,16 +69,24 @@ int main() {
  const auto logs=DVBRIDGE::messages.size();
  w.StageNativeHDR10Plus(false);assert(*drm->packet==first);
  assert(DVBRIDGE::messages.size()==logs); // Repeated status does not log per frame.
- // Real decoded V1 variants may reach the strict reserved-field gate.
+ // Modern decoded V1 Y99 / Y100nit values retain their distinct wire units.
  p.distribution_maxrgb[1].percentile={2940,100000};
+ p.distribution_maxrgb[2].percentile={98,100000};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,2,AV_CODEC_ID_HEVC,frame,nullptr);
  w.StageNativeHDR10Plus(false);
+ assert(drm->packet && (*drm->packet)[10]==18 && (*drm->packet)[11]==98);
+ p.distribution_maxrgb[2].percentile={101,100000};
+ w.m_videoSourceSideData=VideoSourceSideData::Capture(7,3,AV_CODEC_ID_HEVC,frame,nullptr);
+ w.StageNativeHDR10Plus(false);
  assert(!drm->packet && w.m_hdr10plusReason=="unrepresentable-metadata");
- assert(DVBRIDGE::messages.back().find("slot5=2940/100000")!=std::string::npos);
- assert(DVBRIDGE::messages.back().find("slot10=255/100000")!=std::string::npos);
+ assert(DVBRIDGE::messages.size()==logs+3);
+ const auto& rejectedSummary=DVBRIDGE::messages[logs];
+ assert(rejectedSummary.find("slot5=2940/100000")!=std::string::npos);
+ assert(rejectedSummary.find("slot10=101/100000")!=std::string::npos);
  assert(p.distribution_maxrgb[1].percentile.num==2940);
  p.distribution_maxrgb[1].percentile={0,100000};
- w.m_videoSourceSideData=VideoSourceSideData::Capture(7,3,AV_CODEC_ID_HEVC,frame,nullptr);
+ p.distribution_maxrgb[2].percentile={255,100000};
+ w.m_videoSourceSideData=VideoSourceSideData::Capture(7,4,AV_CODEC_ID_HEVC,frame,nullptr);
  w.StageNativeHDR10Plus(true);assert((*drm->packet)[30]==0xc0);
  w.depth=8;w.StageNativeHDR10Plus(false);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
  w.depth=10;w.StageNativeHDR10Plus(false);assert(drm->packet);

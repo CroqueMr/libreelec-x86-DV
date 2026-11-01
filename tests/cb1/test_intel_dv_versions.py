@@ -38,6 +38,8 @@ struct drm_display_mode{unsigned vic,flags;};
 struct drm_property_blob{void *data;size_t length;};
 struct drm_display_info{bool has_hdmi_infoframe;};
 struct drm_connector{struct drm_display_info display_info;struct drm_property_blob*edid_blob_ptr;};
+struct intel_connector{struct drm_connector base;struct dvbridge_sink_caps dv_sink_caps;};
+#define to_intel_connector(p) ((struct intel_connector *)(p))
 struct drm_connector_state{struct drm_connector*connector;
  struct drm_property_blob*hdr10plus_metadata;bool dv_lab_standard;};
 #define to_intel_digital_connector_state(p) (p)
@@ -60,8 +62,8 @@ static void checksum(u8*b){u8 sum=0;b[127]=0;for(int i=0;i<127;i++)sum+=b[i];b[1
 int main(void){
  u8 raw[256],wire[31],golden[31]={0x81,1,27,0x4b,0x46,0xd0,0,2};
  struct drm_property_blob blob={raw,sizeof(raw)};
- struct drm_connector con={{true},&blob};
- struct drm_connector_state state={.connector=&con,.dv_lab_standard=true};
+ struct intel_connector con={.base={{true},&blob}};
+ struct drm_connector_state state={.connector=&con.base,.dv_lab_standard=true};
  struct intel_crtc_state crtc={.has_infoframe=true};
  struct intel_encoder encoder={0};
  for(unsigned version=1;version<=2;version++)for(unsigned length=11;length<=14;length+=3)
@@ -72,6 +74,8 @@ int main(void){
   b[0]=2;b[1]=3;b[2]=5+length;b[4]=0xe0|length;
   b[5]=1;b[6]=0x46;b[7]=0xd0;b[9]=(version<<5)|2;b[11]=2;b[12]=ll;
   checksum(raw);checksum(b);
+  con.dv_sink_caps=dvbridge_parse_edid(raw,sizeof(raw));
+  con.base.edid_blob_ptr=NULL; // Atomic serialization uses the detect snapshot.
   for(unsigned vic=93;vic<=97;vic++){
    crtc.hw.adjusted_mode.vic=vic;
    assert(intel_hdmi_compute_hdmi_infoframe(&encoder,&crtc,&state));

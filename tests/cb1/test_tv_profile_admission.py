@@ -19,10 +19,10 @@ class TVProfileAdmissionTests(unittest.TestCase):
 #include <vector>
 #include <utility>
 struct Option {std::string label="Adaptive",label2;std::vector<std::pair<std::string,bool>> properties;};
-Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double peak,int gamut) {
+Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double peak,int gamut,bool guided=false) {
  struct {double peak;int gamut;} preferences{peak,gamut};
  struct Localizer {std::string Get(int id) {return std::to_string(id);}} localizer;
- Option option;int mode=4;
+ Option option;int mode=guided?1:4;
  int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
  SECTION
  return option;
@@ -38,6 +38,8 @@ int main() {
  assert(annotate(R::TVProfileRequired,false,true,0,2).properties.back().second);
  assert(annotate(R::NoDVTransport,false,false,1000,2).properties.back().second);
  assert(!annotate(R::None,true,false,1000,2).properties.back().second);
+ auto sourceGuided=annotate(R::None,false,true,1000,2,true);
+ assert(!sourceGuided.properties.back().second && sourceGuided.label2=="40971");
 }
 '''.replace('SECTION',section)
         with tempfile.TemporaryDirectory() as temporary:

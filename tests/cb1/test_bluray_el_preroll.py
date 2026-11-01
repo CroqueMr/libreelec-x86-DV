@@ -59,7 +59,7 @@ int main() {
   assert(join.TakePrerollCount()==3 && !join.Pending());
 
   // A timestamp match is insufficient: retain references without both IRAPs,
-  // exact decode clocks, and proof that each retired RPU is orphaned.
+  // monotone per-layer decode clocks, and proof that each retired RPU is orphaned.
   for (int refusal=0; refusal<5; ++refusal) {
     join.Reset(true);
     push(join, false, 100, 90, 1, refusal==0 ? 1 : 21);
@@ -68,6 +68,11 @@ int main() {
     push(join, true, 70, 70, 3);
     push(join, true, 80, refusal==2 ? AV_NOPTS_VALUE : 80, 4);
     push(join, true, 100, refusal==3 ? 91 : 90, 5, refusal==1 ? 1 : 21);
+    if(refusal==3) {
+      assert(join.Take(out)==0 && out->pts==100 && out->dts==90);
+      assert(out->data[14]==5 && out->data[out->size-1]==100);
+      assert(join.TakePrerollCount()==2);av_packet_unref(out);continue;
+    }
     assert(join.Take(out)==AVERROR(EAGAIN));
     assert(join.Pending());
     assert(join.TakePrerollCount()==0);

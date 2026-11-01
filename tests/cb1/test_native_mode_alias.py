@@ -46,7 +46,16 @@ HELPERS
 struct RESOLUTION_INFO {std::string strId;};
 struct Connector {
  std::vector<drmModeModeInfo> modes;std::string type="HDMI-A";
- uint64_t dv=0;std::optional<uint64_t> GetPropertyValue(const char*)const{return dv;}
+ uint64_t dv=0,tmds=0;bool proof=false;
+ bool SupportsProperty(const char*name)const{return std::string(name)=="CB1_NATIVE_TMDS" && proof;}
+ std::optional<uint64_t> GetPropertyValue(const char*name)const{
+  if(std::string(name)=="CB1_NATIVE_TMDS")return proof?std::optional<uint64_t>(0):std::nullopt;
+  return dv;
+ }
+ std::optional<uint64_t> ReadPropertyValue(const char*name)const{
+  if(std::string(name)=="CB1_NATIVE_TMDS")return proof?std::optional<uint64_t>(tmds):std::nullopt;
+  return dv;
+ }
  int GetModesCount()const{return modes.size();}
  drmModeModeInfo* GetModeForIndex(int i){return &modes.at(i);}
  std::string GetType()const{return type;}
@@ -85,6 +94,10 @@ int main(){
  d.connector.modes={mode(false)};assert(d.GetModes().size()==1 && d.GetModes()[0].strId=="0");
  d.connector.type="DisplayPort";d.connector.modes={mode(false),mode(true)};assert(d.GetModes().size()==2);
  d.m_mode=&d.connector.modes[0];assert(d.GetDVTransportMode()==d.m_mode);
+ d.connector.type="DP";d.connector.proof=true;d.connector.tmds=1;
+ assert(d.GetDVTransportMode()==&d.connector.modes[1]);
+ d.connector.tmds=0;assert(d.GetDVTransportMode()==d.m_mode);
+ d.connector.proof=false;
  d.connector.type="HDMI-A";
  auto shifted=mode(true);shifted.hsync_start++;d.connector.modes={mode(false),shifted};assert(d.GetModes().size()==2);
  d.m_mode=&d.connector.modes[0];assert(d.GetDVTransportMode()==d.m_mode);

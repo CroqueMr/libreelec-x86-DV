@@ -62,7 +62,7 @@
     "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": "f2f7d6ac70566b2035966cfe83db8c02b3d6b874b81d31d41a7be126cb52c55a",
     "patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": "4ce28e60a949a51554d3c0d8d2596b2ca791463baf352d7f250c6e710d0f0ac2",
     "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": "5c463382da9b54a4786bb3f4ad087ec7cc1e6a3f948240433ebf87c243e9cb52",
-    "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": "28ae21bd76915b873bdc3235b7ae78b651bf6d0ad4760c213be19763f9eec058",
+    "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": "dc7e1e8b02e978bd8e090ef6441b110a4865e8fba321025934cec6c31c9c7235",
     "patches/ffmpeg/ffmpeg-9910-mvc.patch": "58886cc463a811a226024da50e5014dd561f79230d6fa9dd9b94b6e84acce5e6",
     "patches/libplacebo/libplacebo-9900-0-src__dispatch.c.patch": "6011006138e5c40670e4d7eb83cf86523354e23d4ca7ea2a622eafd4dee581bb",
     "patches/libplacebo/libplacebo-9900-1-src__opengl__gpu.c.patch": "acc0e901671fc8a0c7fa442dbb69ef149d524c1af47ad40b6d7da919d3f820ad",
@@ -83,7 +83,8 @@
     "patches/libplacebo/libplacebo-9914-shared-mmr-intervals.patch": "be5a37db02a43295a72e6e9719fe1874389f1c08dca6c04aaaa77d27906b24d7",
     "patches/libplacebo/libplacebo-9915-hdr10-linear-conversion.patch": "4736a693879367a5b7f63c245568f0ddeae40a52b8fe1938393f83da4d11da33",
     "patches/libplacebo/libplacebo-9916-fel-filter.patch": "b49d68e53d5bea48153dd345b9bba83394d72cb5fd506dfb4669142493f20007",
-    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "1da49eabf1c5f2ee190abbcd5eab0d2a865f077c7e035c21147dd56cdd8d336a"
+    "patches/libplacebo/libplacebo-9917-native-bounds.patch": "1da49eabf1c5f2ee190abbcd5eab0d2a865f077c7e035c21147dd56cdd8d336a",
+    "patches/ffmpeg/ffmpeg-9900-08-pgs-authoring.patch": "f6c9a7501706d01b45daa6ab5bbf2fecdccdfc3f06c4915b370a3c26c20931bb"
   },
   "modified_sources": {
     "ffmpeg/libavcodec/dovi_rpudec.c": "8c25559492f09b6d114e05c64aee550b00388d9a187dd84176fe508a1dbb348f",
@@ -111,6 +112,7 @@
     "libplacebo/src/shaders.h": "c3cbb9e5dda36355a5db1258151ae3d4d7a3f59cd834ab24a5cc0f2be7670df3",
     "ffmpeg/libavformat/mpegts.c": "229c92abd17c0c9bc37338adf660515d18f84af85ba4339e782ff92e4af21565",
     "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e",
-    "ffmpeg/libavformat/matroskadec.c": "ab6010ab5f3350c91f50c8c4241aa70269bf87dfdc2397910639112fb7a4413b"
+    "ffmpeg/libavformat/matroskadec.c": "ab6010ab5f3350c91f50c8c4241aa70269bf87dfdc2397910639112fb7a4413b",
+    "ffmpeg/libavcodec/pgssubdec.c": "46f628e57af1c998b3654b11fe46d984db3f13e23127fd4044726216d91cf836"
   }
 }

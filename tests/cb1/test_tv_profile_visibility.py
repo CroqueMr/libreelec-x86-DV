@@ -23,7 +23,7 @@ class TVProfileVisibilityTests(unittest.TestCase):
                 (1, 0, 0, False), (1, 1, 0, True), (3, 0, 0, True), (5, 0, 0, True),
                 (0, 0, 1, False), (0, 0, 2, True)]:
             values = {'dvbridge.outputmode': output, 'dvbridge.hdr10method': method,
-                      'dvbridge.hdr10source': ai}
+                      'dvbridge.hdr10source': ai, 'dvbridge.cmv40': 0, 'dvbridge.cmv40trigger': 0}
             for key in ('dvbridge.configureprofile', 'dvbridge.tvpeak', 'dvbridge.tvgamut'):
                 node = settings[key]
                 dependencies = node.findall('./dependencies/dependency[@type="visible"]')

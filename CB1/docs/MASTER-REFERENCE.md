@@ -1,9 +1,9 @@
 # Dolby Vision Master Reference
 
-Circuit: `CB1-DVDVMR.0.6`. Engine: `CB1 0.4`.
+Circuit: `CB1-DVDVMR.0.6`. Engine: `CB1 0.5`.
 
 Opt-in integer reconstruction for source-domain Dolby Vision output.
-Standard playback and the existing conversion circuits are unchanged.
+Reference playback and the existing conversion circuits are unchanged.
 
 ## Admitted output
 
@@ -20,7 +20,7 @@ Standard playback and the existing conversion circuits are unchanged.
 
 HLG, custom filters, invalid geometry, other chroma positions
 and unsafe arithmetic are not admitted. The existing output-selection fallback
-applies. A rejected Master frame never silently uses Standard reconstruction.
+applies. A rejected Master frame never silently uses Reference reconstruction.
 
 FEL uses `Reference GPU`, independently of the saved VAAPI/Nearest preference.
 The exact reconstruction has no quality toggle. No display calibration is required.
@@ -32,9 +32,9 @@ pixels do not undergo a YCbCr/RGB/LMS conversion or a PQ/linear round trip.
 The diagnostic Master Reference IPT mode uses this same Profile 5 path.
 GUI conversion is confined to the overlay footprint; the IPT black code is zero.
 
-Automatic Master-to-Standard recovery is off by default. When explicitly enabled,
-sustained low presentation margin can select Standard for the current playback.
-The notification appears only after successful Standard presentation. The saved
+Automatic Master-to-Reference recovery is off by default. When explicitly enabled,
+sustained low presentation margin can select Reference for the current playback.
+The notification appears only after successful Reference presentation. The saved
 Master selection is not rewritten.
 
 Canonical MEL has no active residual. Its unused EL filter flag does not require
@@ -146,8 +146,8 @@ signed rounding is preserved by power-of-two division and floor.
 
 Profile 5 remains in its decoded IPT-PQ-C2 domain through reconstruction and
 transport. Master uses integer reconstruction and the exact chroma filter,
-with no selectable quality variant. Standard may use FP32 reconstruction and
+with no selectable quality variant. Reference may use FP32 reconstruction and
 a compact five-tap chroma filter on supported left-sited 10-bit inputs. Its
 mapped chroma grid uses RG UNORM16; metadata and tunnel packing are shared with
-Master. Unsupported Standard inputs retain the existing YCbCr path. Other
+Master. Unsupported Reference inputs retain the existing YCbCr path. Other
 profiles and conversion circuits do not select this Profile 5 strategy.

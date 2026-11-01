@@ -76,6 +76,7 @@ struct CDRMObject {
     auto it=props.find(name); return it==props.end() ? std::nullopt : std::optional<uint64_t>(it->second);
   }
   bool SupportsProperty(const char* name) const {return props.contains(name);}
+  std::optional<uint64_t> ReadPropertyValue(const char* name) const {return GetPropertyValue(name);}
   bool IsConnected() const {return true;}
   std::optional<uint64_t> GetPropertyEnumValue(const char* name,const char*) const {
     return badEnum==name ? std::nullopt : GetPropertyValue(name);

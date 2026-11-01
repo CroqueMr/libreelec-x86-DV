@@ -38,5 +38,16 @@ int main(void)
     bad[15] ^= 1;
     assert(hdmi_vendor_any_infoframe_unpack(&frame, bad, sizeof(bad)) < 0);
     assert(!memcmp(&frame, &saved, sizeof(frame)));
+    const u8 modern_fields[][3] = {{38,98,119},{30,82,143},{8,93,154}};
+    for (unsigned i = 0; i < sizeof(modern_fields) / sizeof(modern_fields[0]); i++) {
+        u8 modern[31];
+        memcpy(modern, packet, sizeof(modern));
+        modern[3] = modern_fields[i][2];
+        modern[10] = modern_fields[i][0];
+        modern[11] = modern_fields[i][1];
+        assert(hdmi_vendor_any_infoframe_unpack(&frame, modern, sizeof(modern)) == 0);
+        assert(hdmi_vendor_any_infoframe_pack_only(&frame, output, sizeof(output)) == 31);
+        assert(!memcmp(modern, output, sizeof(modern)));
+    }
     puts("hdr10plus HDMI vendor round trip: pass");
 }

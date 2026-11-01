@@ -52,7 +52,8 @@ enum cb1_hdr10plus_status cb1_hdr10plus_vsif(uint8_t out[CB1_HDR10PLUS_VSIF_BYTE
         if(!code(p->distribution_maxrgb[index].percentile,100000,100000,&distribution[i]))
             return CB1_HDR10PLUS_INVALID;
     }
-    if(m->application_version==1 && (distribution[1]!=0 || distribution[2]!=255))
+    /* V1 slot 2 is a percentage, or 255 when unavailable; slot 1 is luminance. */
+    if(m->application_version==1 && distribution[2]>100 && distribution[2]!=255)
         return CB1_HDR10PLUS_UNREPRESENTABLE;
     uint8_t packet[31]={0x81,1,27,0,0x8b,0x84,0x90};
     uint8_t *payload=packet+4;

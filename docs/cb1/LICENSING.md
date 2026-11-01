@@ -45,6 +45,8 @@ this does not change the combined-image licensing stated above.
 
 - [dangerouslaser](https://github.com/dangerouslaser): Global rendering-engine optimizations.
 - [hadesdevls](https://github.com/hadesdevls): NVIDIA integration adapted from LibreELEC Hades.
+- [hadesdevls](https://github.com/hadesdevls): HDR10+ distribution estimator and semantic scene comparison, adapted under the author's additional GPL-2.0-or-later offer.
+- [avdvplus](https://github.com/avdvplus/xbmc): bitmap subtitle controls, CM2.9-to-CM4 selection rules and read-only Atmos program/EMDF parsing; [audio provenance](AUDIO-INFORMATION.md). [quietvoid](https://github.com/quietvoid/dovi_tool): neutral CM4 blocks and PQ formulas.
 - [CinemaOne](https://github.com/cinema-ONE) and [popcornmix](https://github.com/popcornmix): Blu-ray 3D work and stereo-output selection.
 - [dovi_tool](https://github.com/quietvoid/dovi_tool): Dolby Vision tooling and references.
 - Development assistance: OpenAI ChatGPT, GPT-6 Astra and Codex.

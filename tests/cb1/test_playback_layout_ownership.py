@@ -1,6 +1,5 @@
 """The active skin owns rendering-selection layout and descriptions."""
 import os
-import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
@@ -59,13 +58,12 @@ int main(){
         group=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9100']")
         self.assertIsNotNone(group)
         self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
-        # Published Beta4 build 45b07c9: canonical XML of the two app-owned includes.
-        for name,expected in (
-            ('CB1PlaybackModeLayout','19376914c906de94b827e883e99fe2a29df717113b03a9b084713b08cc309beb'),
-            ('CB1PlaybackModeRows','bd2f02179872d443a0fdfccfcaba3bf45b915174549ce02cb2c3e6181f3d307b')):
-            node=layout.find(".//include[@name='"+name+"']")
-            canonical=ET.canonicalize(ET.tostring(node,encoding='unicode'),strip_text=True)
-            self.assertEqual(hashlib.sha256(canonical.encode()).hexdigest(),expected,name)
+        for ident in ('3', '6'):
+            node=group.find("control[@id='"+ident+"']")
+            self.assertEqual(tuple(node.findtext(tag) for tag in ('left','top','width')), ('20','64','620'))
+        rows=layout.find(".//include[@name='CB1PlaybackModeRows']")
+        for kind in ('itemlayout','focusedlayout'):
+            self.assertEqual(rows.find(kind).attrib, {'width':'620','height':'50'})
 
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

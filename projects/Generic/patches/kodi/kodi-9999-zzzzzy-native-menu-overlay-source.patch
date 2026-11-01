@@ -1,0 +1,156 @@
+From: CB1 contributors
+Subject: [PATCH] Preserve native disc-menu identity and per-plane presentation
+
+Keep prepared overlays separate from committed images. FLUSH and CLOSE affect
+only their plane; global close releases both. Preserve MENU identity after crop
+and flattening so bitmap subtitle settings do not modify authored menus.
+
+SPDX-License-Identifier: GPL-2.0-or-later
+
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+@@ -809,7 +809,10 @@
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
+   for(SPlane& plane : m_planes)
++  {
+     plane.o.clear();
++    plane.committed.clear();
++  }
+   auto group = std::make_shared<CDVDOverlayGroup>();
+   group->bForced = true;
+   group->SetSource(DVDOverlaySource::MENU);
+@@ -823,6 +826,7 @@
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
+   plane.o.clear();
++  plane.committed.clear();
+   plane.w = w;
+   plane.h = h;
+ #endif
+@@ -867,9 +871,10 @@
+ #endif
+ }
+ 
+-void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
++void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  updated.committed = updated.o;
+   auto group = std::make_shared<CDVDOverlayGroup>();
+   group->bForced       = true;
+   group->iPTSStartTime = static_cast<double>(pts);
+@@ -883,19 +888,19 @@
+ 
+   for(SPlane& plane : m_planes)
+   {
+-    for(SOverlays::iterator it = plane.o.begin(); it != plane.o.end(); ++it)
++    for(SOverlays::iterator it = plane.committed.begin(); it != plane.committed.end(); ++it)
+       group->m_overlays.push_back(*it);
+   }
+ 
+   m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
+-  m_hasOverlay = true;
++  m_hasOverlay = !group->m_overlays.empty();
+ #endif
+ }
+ 
+ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
+-  if(ov == nullptr || ov->cmd == BD_OVERLAY_CLOSE)
++  if (ov == nullptr)
+   {
+     OverlayClose();
+     return;
+@@ -909,6 +914,13 @@
+ 
+   SPlane& plane(m_planes[ov->plane]);
+ 
++  if (ov->cmd == BD_OVERLAY_CLOSE)
++  {
++    plane.o.clear();
++    OverlayFlush(plane, 0);
++    return;
++  }
++
+   if (ov->cmd == BD_OVERLAY_CLEAR)
+   {
+     plane.o.clear();
+@@ -928,6 +940,7 @@
+   if (ov->img && ov->cmd == BD_OVERLAY_DRAW)
+   {
+     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
++    overlay->SetSource(DVDOverlaySource::MENU);
+ 
+     if (ov->palette)
+     {
+@@ -957,14 +970,14 @@
+   }
+ 
+   if (ov->cmd == BD_OVERLAY_FLUSH)
+-    OverlayFlush(ov->pts);
++    OverlayFlush(plane, ov->pts);
+ #endif
+ }
+ 
+ #ifdef HAVE_LIBBLURAY_BDJ
+ void CDVDInputStreamBluray::OverlayCallbackARGB(const struct bd_argb_overlay_s * const ov)
+ {
+-  if(ov == nullptr || ov->cmd == BD_ARGB_OVERLAY_CLOSE)
++  if (ov == nullptr)
+   {
+     OverlayClose();
+     return;
+@@ -978,6 +991,13 @@
+ 
+   SPlane& plane(m_planes[ov->plane]);
+ 
++  if (ov->cmd == BD_ARGB_OVERLAY_CLOSE)
++  {
++    plane.o.clear();
++    OverlayFlush(plane, 0);
++    return;
++  }
++
+   if (ov->cmd == BD_ARGB_OVERLAY_INIT)
+   {
+     OverlayInit(plane, ov->w, ov->h);
+@@ -991,6 +1011,7 @@
+   if (ov->argb && ov->cmd == BD_ARGB_OVERLAY_DRAW)
+   {
+     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
++    overlay->SetSource(DVDOverlaySource::MENU);
+ 
+     overlay->palette.clear();
+     size_t bytes = static_cast<size_t>(ov->stride * ov->h * 4);
+@@ -1008,7 +1029,7 @@
+   }
+ 
+   if(ov->cmd == BD_ARGB_OVERLAY_FLUSH)
+-    OverlayFlush(ov->pts);
++    OverlayFlush(plane, ov->pts);
+ }
+ #endif
+ 
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+@@ -233,7 +233,7 @@
+ protected:
+   struct SPlane;
+ 
+-  void OverlayFlush(int64_t pts);
++  void OverlayFlush(SPlane& updated, int64_t pts);
+   void OverlayClose();
+   static void OverlayClear(SPlane& plane, int x, int y, int w, int h);
+   static void OverlayInit (SPlane& plane, int w, int h);
+@@ -261,6 +261,7 @@
+   struct SPlane
+   {
+     SOverlays o;
++    SOverlays committed;
+     int w = 0;
+     int h = 0;
+   };

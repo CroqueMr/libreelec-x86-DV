@@ -96,7 +96,12 @@ int main(){
 enum {LOGINFO};
 namespace DVBRIDGE {
 inline std::vector<std::string> messages;
+inline bool allowProgress=true;
 template<class... T>bool DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
+ messages.push_back(fmt::format(f,std::forward<T>(a)...));return true;
+}
+template<class... T>bool DiagnosticProgressLog(int,fmt::format_string<T...> f,T&&...a){
+ if(!allowProgress)return false;
  messages.push_back(fmt::format(f,std::forward<T>(a)...));return true;
 }
 }
@@ -137,11 +142,17 @@ struct CDVBridgeGLES {
  cb1_dv_hdr10plus_report m_hdr10plusReport;
  int m_hdr10plusVersion=0;
  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
+ DVBRIDGE::DiagnosticFrames m_hdr10plusAnalyzed,m_hdr10plusAccepted;
+ mutable DVBRIDGE::DiagnosticFrames m_hdr10plusGenerated;
+ uint64_t m_hdr10plusSubmits{};std::array<double,4> m_hdr10plusLight{};
+ struct Submission{Identity identity;std::optional<std::array<uint8_t,31>> hdr10plus;};
  bool Failure(const char*){++failures;return false;}
  void Cancel(){m_prepared=m_pending=false;m_hdr10plusMetadata.reset();}
  void PreparedAudit(){++audits;}
  FrameStatus BeginHDR10Plus() BEGIN
  FrameStatus PollHDR10Plus() POLL
+ void ReportHDR10Plus() REPORT
+ void ObserveHDR10PlusSubmission(const Submission& submission)const OBSERVE
 };
 int main(){
  CDVBridgeGLES r;
@@ -149,14 +160,24 @@ int main(){
  assert(measured.x0==2 && measured.x1==3836 && measured.y0==6 && measured.y1==2152);
  assert(!r.m_prepared && !r.m_hdr10plusMetadata);
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Pending && buildCount==0);
+ assert(DVBRIDGE::messages.size()==1);
+ assert(DVBRIDGE::messages.back().find("submitted=1 analyzed=0")!=std::string::npos);
+ r.m_hdr10plusDiagnostics={};
  state=CB1_HDR10PLUS_ANALYSIS_READY;
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Ready);
  assert(r.m_prepared && r.m_hdr10plusMetadata->value==123 && buildCount==1 && r.audits==1);
  assert(preparedVersion==0);
- assert(DVBRIDGE::messages.size()==1);
- assert(DVBRIDGE::messages.back().find("pixels=2304")!=std::string::npos);
- assert(DVBRIDGE::messages.back().find("source=3/7/9")!=std::string::npos);
+ assert(DVBRIDGE::messages.size()==2);
+ assert(DVBRIDGE::messages.back().find("submitted=1 analyzed=1")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("analysis=3/7/9")!=std::string::npos);
  assert(DVBRIDGE::messages.back().find("maxscl=100,200,300")!=std::string::npos);
+ CDVBridgeGLES::Submission packet{{3,7,9},std::array<uint8_t,31>{1,2,3}};
+ r.ObserveHDR10PlusSubmission(packet);r.ObserveHDR10PlusSubmission(packet);
+ assert(r.m_hdr10plusGenerated.count==1);
+ r.m_hdr10plusDiagnostics={};DVBRIDGE::allowProgress=false;r.ReportHDR10Plus();
+ assert(r.m_hdr10plusDiagnostics.Due(DVBRIDGE::DiagnosticNowMs()));
+ DVBRIDGE::allowProgress=true;r.ReportHDR10Plus();
+ assert(DVBRIDGE::messages.size()==3 && DVBRIDGE::messages.back().find("generated=1")!=std::string::npos);
  ++r.m_pendingIdentity.picture;r.m_prepared=false;
  assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Failed);
  assert(!r.m_hdr10plusMetadata && !r.m_pending && buildCount==1);
@@ -166,9 +187,20 @@ int main(){
  state=CB1_HDR10PLUS_ANALYSIS_INVALID;r.m_pending=true;
  assert(r.BeginHDR10Plus()==CDVBridgeGLES::FrameStatus::Failed);
  assert(!r.m_pending && r.failures==2 && r.m_failedIdentity.picture==r.m_pendingIdentity.picture);
- assert(DVBRIDGE::messages.size()==1); // Stale, busy and invalid jobs add no analysis witness.
+ assert(DVBRIDGE::messages.size()==3); // Stale, busy and invalid jobs add no analysis witness.
+ // A later analysis remains pending past the interval: report, never prepare it.
+ state=CB1_HDR10PLUS_ANALYSIS_PENDING;
+ assert(r.BeginHDR10Plus()==CDVBridgeGLES::FrameStatus::Pending);
+ r.m_hdr10plusDiagnostics.Emitted(DVBRIDGE::DiagnosticNowMs()-5000);
+ assert(r.PollHDR10Plus()==CDVBridgeGLES::FrameStatus::Pending);
+ assert(!r.m_prepared && !r.m_hdr10plusMetadata && buildCount==1);
+ assert(DVBRIDGE::messages.size()==4);
+ assert(DVBRIDGE::messages.back().find("submitted=2 analyzed=1")!=std::string::npos);
+ assert(DVBRIDGE::messages.back().find("generated=1 packet_changes=0 accepted=0")!=std::string::npos);
 }
 '''.replace('BEGIN',method('BeginHDR10Plus')).replace('POLL',method('PollHDR10Plus'))
+        program=program.replace('REPORT',body(source,'void CDVBridgeGLES::ReportHDR10Plus()'))
+        program=program.replace('OBSERVE',body(source,'void CDVBridgeGLES::ObserveHDR10PlusSubmission('))
         program=program.replace('DIAGNOSTIC_HEADER',str(TREE/'xbmc/utils/DVBridgeDiagnosticState.h'))
         crc=(TREE/'xbmc/utils/Crc32.cpp').read_text().split('uint32_t Crc32::ComputeFromLowerCase')[0]
         crc=crc.replace('#include "utils/StringUtils.h"','')
@@ -234,7 +266,7 @@ struct StreamTelemetry {template<class... A>static void Metadata(A...) {}};
 struct CDVPlaybackInfo {enum {HDR10=1,HDMI=2,FEL=4,CM4=8};};
 struct CDVBridgeGLES {
  struct Layer {int layout{},width=32,height=32,chromaLocation=AVCHROMA_LOC_UNSPECIFIED;
- struct Plane {int width{},height{};} planes[3];
+ struct Plane {int width{},height{};unsigned texture{};} planes[3];
  double pts{};struct {int profile=7;}sourceInfo;};
  struct Pref {bool optimizedDV{},processingOptimizations{},masterIPT{};}m_requested;
  bool m_prepared{},m_packed{},m_direct{},m_hdr10=true,m_overlayVisible{},m_directUsable=true,

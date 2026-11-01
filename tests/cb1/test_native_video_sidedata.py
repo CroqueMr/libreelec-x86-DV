@@ -114,7 +114,7 @@ int main() {
 }
 '''.replace('@@METHOD@@',code))
 
-    def compile_run(self, program, libraries=()):
+    def compile_run(self, program, libraries=(), objects=()):
         helper = TREE / 'xbmc/cores/VideoSourceSideData.cpp'
         self.assertTrue(helper.exists(), 'native source snapshot producer is missing')
         prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
@@ -134,7 +134,7 @@ int main() {
                        str(root / 'test.cpp'), str(helper),
                        str(TREE / 'xbmc/utils/Base64.cpp'),
                        str(TREE / 'xbmc/utils/Variant.cpp'),
-                       str(root/'writer.cpp'),
+                       str(root/'writer.cpp'), *map(str, objects),
                        '-L' + str(prefix / 'lib'), *('-l' + name for name in libraries),
                        '-lavutil', '-lm', '-o', str(root / 'test')]
             result = subprocess.run(command, capture_output=True, text=True)

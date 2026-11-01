@@ -1,0 +1,21 @@
+From: CB1 contributors
+Subject: [PATCH] Include the inserted checksum in the native HDMI packet length
+
+PacketWrite forwards exactly packetLen bytes. Include the checksum byte
+already allocated and inserted by EVO1 so the final payload byte is transmitted.
+The no-checksum EMP path is unchanged.
+
+SPDX-License-Identifier: MIT
+
+diff --git a/src/nvidia-modeset/src/nvkms-evo1.c b/src/nvidia-modeset/src/nvkms-evo1.c
+--- a/src/nvidia-modeset/src/nvkms-evo1.c
++++ b/src/nvidia-modeset/src/nvkms-evo1.c
+@@ -232,7 +232,7 @@ void nvEvo1SendHdmiInfoFrame(const NVDispEvoRec *pDispEvo,
+                                 head,
+                                 hdmiLibType,
+                                 hdmiLibTransmitCtrl,
+-                                infoframeSize,
++                                infoframeSize + (needChecksum ? sizeof(checksum) : 0),
+                                 infoframe);
+ 
+     if (ret != NVHDMIPKT_SUCCESS) {

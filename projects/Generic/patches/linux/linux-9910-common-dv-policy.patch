@@ -430,3 +430,78 @@
 -#endif
 +/* SPDX-License-Identifier: MIT */
 +#include <drm/drm_dvbridge_edid.h>
+--- a/drivers/gpu/drm/drm_edid.c
++++ b/drivers/gpu/drm/drm_edid.c
+@@ -2519,6 +2519,21 @@
+ }
+ EXPORT_SYMBOL(drm_edid_raw);
+ 
++/**
++ * drm_edid_size - Size of the owned EDID buffer, including EEODB extensions.
++ * @drm_edid: drm_edid container
++ *
++ * This is an allocation size, not a validation result. It does not extend the
++ * container's lifetime; drm_edid_raw() may still reject the buffer.
++ *
++ * Return: Owned buffer size, or zero for NULL.
++ */
++size_t drm_edid_size(const struct drm_edid *drm_edid)
++{
++	return drm_edid ? drm_edid->size : 0;
++}
++EXPORT_SYMBOL(drm_edid_size);
++
+ /* Allocate struct drm_edid container *without* duplicating the edid data */
+ static const struct drm_edid *_drm_edid_alloc(const void *edid, size_t size)
+ {
+@@ -7358,7 +7373,14 @@
+  * If the sink lists the VIC in CTA VDB, assume it's fine, regardless of HDMI
+  * version.
+  */
+-static u8 vic_for_avi_infoframe(const struct drm_connector *connector, u8 vic)
++/**
++ * drm_hdmi_avi_infoframe_vic - Apply the sink's native AVI VIC policy.
++ * @connector: connector with published display information
++ * @vic: matching CTA VIC
++ *
++ * Return: VIC admissible in AVI, or zero when it cannot be signalled there.
++ */
++u8 drm_hdmi_avi_infoframe_vic(const struct drm_connector *connector, u8 vic)
+ {
+ 	if (!is_hdmi2_sink(connector) && vic > 64 &&
+ 	    !cta_vdb_has_vic(connector, vic))
+@@ -7366,6 +7388,7 @@
+ 
+ 	return vic;
+ }
++EXPORT_SYMBOL(drm_hdmi_avi_infoframe_vic);
+ 
+ /**
+  * drm_hdmi_avi_infoframe_from_display_mode() - fill an HDMI AVI infoframe with
+@@ -7436,7 +7459,7 @@
+ 		picture_aspect = HDMI_PICTURE_ASPECT_NONE;
+ 	}
+ 
+-	frame->video_code = vic_for_avi_infoframe(connector, vic);
++	frame->video_code = drm_hdmi_avi_infoframe_vic(connector, vic);
+ 	frame->picture_aspect = picture_aspect;
+ 	frame->active_aspect = HDMI_ACTIVE_ASPECT_PICTURE;
+ 	frame->scan_mode = HDMI_SCAN_MODE_UNDERSCAN;
+--- a/include/drm/drm_edid.h
++++ b/include/drm/drm_edid.h
+@@ -365,6 +365,7 @@
+ drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *frame,
+ 					 const struct drm_connector *connector,
+ 					 const struct drm_display_mode *mode);
++u8 drm_hdmi_avi_infoframe_vic(const struct drm_connector *connector, u8 vic);
+ int
+ drm_hdmi_vendor_infoframe_from_display_mode(struct hdmi_vendor_infoframe *frame,
+ 					    const struct drm_connector *connector,
+@@ -469,6 +470,7 @@
+ void drm_edid_free(const struct drm_edid *drm_edid);
+ bool drm_edid_valid(const struct drm_edid *drm_edid);
+ const struct edid *drm_edid_raw(const struct drm_edid *drm_edid);
++size_t drm_edid_size(const struct drm_edid *drm_edid);
+ const struct drm_edid *drm_edid_read(struct drm_connector *connector);
+ const struct drm_edid *drm_edid_read_ddc(struct drm_connector *connector,
+ 					 struct i2c_adapter *adapter);

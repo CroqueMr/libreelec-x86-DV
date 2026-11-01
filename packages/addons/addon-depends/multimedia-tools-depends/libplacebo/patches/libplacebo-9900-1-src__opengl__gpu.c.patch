@@ -1,0 +1,24 @@
+--- a/src/opengl/gpu.c
++++ b/src/opengl/gpu.c
+@@ -164,6 +164,21 @@
+         get(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &glsl->max_group_threads);
+         for (int i = 0; i < 3; i++)
+             geti(GL_MAX_COMPUTE_WORK_GROUP_SIZE, i, &glsl->max_group_size[i]);
++    }
++
++    /* Experimental capability discovery, not a vendor or model override.
++     * The public abstraction has a single stage-independent subgroup flag;
++     * require every advertised operation in both fragment and compute. */
++    if (gl_test_ext(gpu, "GL_KHR_shader_subgroup", 0, 0)) {
++        GLint size=0, stages=0, features=0;
++        gl->GetIntegerv(0x9532, &size);     /* GL_SUBGROUP_SIZE_KHR */
++        gl->GetIntegerv(0x9533, &stages);   /* GL_SUBGROUP_SUPPORTED_STAGES_KHR */
++        gl->GetIntegerv(0x9534, &features); /* GL_SUBGROUP_SUPPORTED_FEATURES_KHR */
++        if (size >= 4 && size <= 128 && !(size & (size-1)) &&
++            (stages & (GL_FRAGMENT_SHADER_BIT | GL_COMPUTE_SHADER_BIT)) ==
++                (GL_FRAGMENT_SHADER_BIT | GL_COMPUTE_SHADER_BIT) &&
++            (features & 0xdf) == 0xdf)
++            glsl->subgroup_size = size;
+     }
+ 
+     if (gl_test_ext(gpu, "GL_ARB_texture_gather", 40, 31) &&

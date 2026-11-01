@@ -309,7 +309,7 @@ diff --git a/xbmc/utils/DVBridgeDiagnosticState.h b/xbmc/utils/DVBridgeDiagnosti
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticState.h
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,243 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <chrono>
@@ -351,7 +351,7 @@ new file mode 100644
 +  bool operator==(const DiagnosticProperty&) const = default;
 +};
 +
-+enum class DiagnosticEvent { Normal, Failure, Final, Connection };
++enum class DiagnosticEvent { Normal, Failure, Final, Connection, Progress };
 +
 +// One active native stream, shared by every producer. Pure observation: none of
 +// these facts are consumed by output selection, retry, or GPU synchronization.
@@ -360,6 +360,7 @@ new file mode 100644
 +{
 +public:
 +  void Open() { *this = {}; }
++  void ReserveProgress() { m_reserveProgress = true; }
 +  void Candidate(uint64_t now)
 +  {
 +    if (!m_requested && !m_stream && !m_ended)
@@ -401,9 +402,17 @@ new file mode 100644
 +    if (now < m_lastNow) now = m_lastNow;
 +    m_lastNow = now;
 +    while (m_size && now >= m_lines[m_head] && now - m_lines[m_head] >= 30000)
-+    { m_head = (m_head + 1) % m_lines.size(); --m_size; }
-+    if (m_size == m_lines.size()) { ++m_suppressed; return false; }
-+    m_lines[(m_head + m_size) % m_lines.size()] = now;
++    {
++      m_progress -= m_progressLines[m_head];
++      m_head = (m_head + 1) % m_lines.size(); --m_size;
++    }
++    const bool progress = event == DiagnosticEvent::Progress;
++    if (m_size == m_lines.size() || (m_reserveProgress &&
++        (progress ? m_progress >= 6 : m_size - m_progress >= 18)))
++    { ++m_suppressed; return false; }
++    const auto slot = (m_head + m_size) % m_lines.size();
++    m_lines[slot] = now; m_progressLines[slot] = progress;
++    m_progress += progress;
 +    ++m_size;
 +    return true;
 +  }
@@ -443,6 +452,9 @@ new file mode 100644
 +  const char* FirstFailure() const { return m_failure ? m_failure : "none"; }
 +private:
 +  std::array<uint64_t, 24> m_lines{};
++  std::array<bool, 24> m_progressLines{};
++  size_t m_progress{};
++  bool m_reserveProgress{};
 +  size_t m_head{}, m_size{};
 +  uint64_t m_lastNow{}, m_suppressed{}, m_truncated{};
 +  uint64_t m_stream{}, m_picture{}, m_revision{}, m_policy{};
@@ -451,14 +463,28 @@ new file mode 100644
 +  bool m_requested{}, m_paused{}, m_presented{}, m_firstFailure{}, m_ended{}, m_waited{};
 +};
 +
++// Count distinct frame transactions, independently of log admission.
++struct DiagnosticFrames
++{
++  std::array<uint64_t, 3> identity{};
++  uint64_t count{}, changes{};
++  uint32_t crc{};
++  void Observe(std::array<uint64_t, 3> frame, uint32_t fingerprint)
++  {
++    if (!frame[0] || !frame[1] || frame == identity) return;
++    if (count && fingerprint != crc) ++changes;
++    identity=frame; crc=fingerprint; ++count;
++  }
++};
++
 +class DiagnosticInterval
 +{
 +public:
-+  bool Due(uint64_t now)
++  bool Due(uint64_t now) const
 +  {
-+    if (m_reported && (now<m_last || now-m_last<5000)) return false;
-+    m_reported=true;m_last=now;return true;
++    return !m_reported || (now>=m_last && now-m_last>=5000);
 +  }
++  void Emitted(uint64_t now) { m_reported=true; m_last=now; }
 +private:
 +  uint64_t m_last{};
 +  bool m_reported{};

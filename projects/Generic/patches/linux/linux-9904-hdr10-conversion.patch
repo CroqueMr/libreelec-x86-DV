@@ -1,132 +1,163 @@
---- a/drivers/gpu/drm/i915/display/intel_atomic.c
-+++ b/drivers/gpu/drm/i915/display/intel_atomic.c
-@@ -69,6 +69,11 @@
- 		*val = intel_conn_state->dv_lab_standard;
- 		return 0;
- 	}
-+	if (to_intel_connector(connector)->dv_hdr10_property &&
-+	    property == to_intel_connector(connector)->dv_hdr10_property) {
-+		*val = intel_conn_state->dv_hdr10_deep_color;
-+		return 0;
-+	}
- 
- 	if (property == display->properties.force_audio)
- 		*val = intel_conn_state->force_audio;
-@@ -111,6 +116,13 @@
- 		intel_conn_state->dv_lab_standard = val;
- 		return 0;
- 	}
-+	if (to_intel_connector(connector)->dv_hdr10_property &&
-+	    property == to_intel_connector(connector)->dv_hdr10_property) {
-+		if (val > 1 || connector->connector_type != DRM_MODE_CONNECTOR_HDMIA)
-+			return -EINVAL;
-+		intel_conn_state->dv_hdr10_deep_color = val;
-+		return 0;
-+	}
- 
- 	if (property == display->properties.force_audio) {
- 		intel_conn_state->force_audio = val;
-@@ -144,8 +156,11 @@
- 
- 	if (!new_state->crtc) {
- 		new_conn_state->dv_lab_standard = false;
--		return 0;
--	}
-+		new_conn_state->dv_hdr10_deep_color = false;
-+		return 0;
-+	}
-+	if (new_conn_state->dv_lab_standard && new_conn_state->dv_hdr10_deep_color)
-+		return -EINVAL;
- 
- 	crtc_state = drm_atomic_get_new_crtc_state(state, new_state->crtc);
- 
-@@ -154,6 +169,7 @@
- 	 * up in a modeset.
- 	 */
- 	if (new_conn_state->dv_lab_standard != old_conn_state->dv_lab_standard ||
-+	    new_conn_state->dv_hdr10_deep_color != old_conn_state->dv_hdr10_deep_color ||
- 	    new_conn_state->force_audio != old_conn_state->force_audio ||
- 	    new_conn_state->broadcast_rgb != old_conn_state->broadcast_rgb ||
- 	    new_conn_state->base.colorspace != old_conn_state->base.colorspace ||
---- a/drivers/gpu/drm/i915/display/intel_display_types.h
-+++ b/drivers/gpu/drm/i915/display/intel_display_types.h
-@@ -522,6 +522,7 @@
- 	struct drm_connector base;
- 	/* Private experimental property; gated by enable_dv_lab. */
- 	struct drm_property *dv_lab_property;
-+	struct drm_property *dv_hdr10_property;
- 	/* Diagnostics only: no influence on DV admission or recovery. */
- 	struct ratelimit_state dv_log_limit;
- 	/*
-@@ -620,6 +621,7 @@
- 	struct drm_connector_state base;
- 	/* Scalar copy/reset lifecycle, no property-blob reference to leak. */
- 	bool dv_lab_standard;
-+	bool dv_hdr10_deep_color;
- 
- 	enum hdmi_force_audio force_audio;
- 	int broadcast_rgb;
---- a/drivers/gpu/drm/i915/display/intel_hdmi.c
-+++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
-@@ -2350,13 +2350,19 @@
- {
- 	const struct hdr_output_metadata *hdr;
- 
--	if (!display->params.enable_dv_lab || !display->platform.lunarlake ||
-+	/* Display10 carries ten-bit content through its native twelve-bit link. */
-+	if (DISPLAY_VER(display) < 10 ||
-+	    (DISPLAY_VER(display) == 10 && state->max_requested_bpc < 12) ||
-+	    !to_intel_digital_connector_state(state)->dv_hdr10_deep_color ||
- 	    to_intel_digital_connector_state(state)->dv_lab_standard ||
-+	    (state->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
-+	     state->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC) ||
- 	    state->max_requested_bpc < 10 || !state->hdr_output_metadata ||
- 	    state->hdr_output_metadata->length < sizeof(*hdr))
- 		return false;
- 	hdr = state->hdr_output_metadata->data;
- 	return hdr->metadata_type == 0 &&
-+		hdr->hdmi_metadata_type1.metadata_type == 0 &&
- 		hdr->hdmi_metadata_type1.eotf == HDMI_EOTF_SMPTE_ST2084;
+--- a/drivers/gpu/drm/i915/display/intel_color.c
++++ b/drivers/gpu/drm/i915/display/intel_color.c
+@@ -31,6 +31,7 @@
+ #include "intel_display_types.h"
+ #include "intel_display_utils.h"
+ #include "intel_dsb.h"
++#include "intel_hdmi.h"
+ #include "intel_vrr.h"
+ #include "skl_universal_plane.h"
+ #include "skl_universal_plane_regs.h"
+@@ -190,6 +191,36 @@
+ 	memset(csc, 0, sizeof(*csc));
  }
  
-@@ -2477,6 +2481,11 @@
++/* BT.2020 NCL, full RGB to limited Cr/Y/Cb; native ILK coefficient format. */
++static const struct intel_csc_matrix ilk_csc_matrix_rgb_to_ycbcr2020 = {
++	.coeff = {
++		0x1e10, 0x9cf0, 0xb488,
++		0x2e70, 0x0950, 0x3688,
++		0xbfb0, 0x9a20, 0x1e10,
++	},
++	.postoff = { 0x0800, 0x0100, 0x0800 },
++};
++
++static const struct intel_csc_matrix *
++intel_csc_rgb_to_ycbcr(const struct intel_crtc_state *crtc_state)
++{
++	const struct hdmi_avi_infoframe *avi = &crtc_state->infoframes.avi.avi;
++	const struct drm_dp_vsc_sdp *vsc = &crtc_state->infoframes.vsc;
++
++	if ((crtc_state->infoframes.enable & intel_hdmi_infoframe_enable(HDMI_INFOFRAME_TYPE_AVI)) &&
++	    avi->colorspace != HDMI_COLORSPACE_RGB &&
++	    avi->colorimetry == HDMI_COLORIMETRY_EXTENDED &&
++	    avi->extended_colorimetry == HDMI_EXTENDED_COLORIMETRY_BT2020)
++		return &ilk_csc_matrix_rgb_to_ycbcr2020;
++	if ((crtc_state->infoframes.enable & intel_hdmi_infoframe_enable(DP_SDP_VSC)) &&
++	    (vsc->pixelformat == DP_PIXELFORMAT_YUV444 ||
++	     vsc->pixelformat == DP_PIXELFORMAT_YUV422 ||
++	     vsc->pixelformat == DP_PIXELFORMAT_YUV420) &&
++	    vsc->colorimetry == DP_COLORIMETRY_BT2020_YCC)
++		return &ilk_csc_matrix_rgb_to_ycbcr2020;
++	return &ilk_csc_matrix_rgb_to_ycbcr;
++}
++
+ static bool lut_is_legacy(const struct drm_property_blob *lut)
+ {
+ 	return lut && drm_color_lut_size(lut) == LEGACY_LUT_LENGTH;
+@@ -536,7 +567,7 @@
+ 	} else if (crtc_state->output_format != INTEL_OUTPUT_FORMAT_RGB) {
+ 		drm_WARN_ON(display->drm, !crtc_state->csc_enable);
  
- 	if (!intel_link_bw_compute_pipe_bpp(pipe_config))
- 		return -EINVAL;
-+	/* This opt-in applies only to reconstructed HDR10, never ordinary Kodi HDR.
-+	 * A 10-bit framebuffer alone does not prevent an 8-bit HDMI fallback. */
-+	if (to_intel_digital_connector_state(conn_state)->dv_hdr10_deep_color &&
-+	    !intel_dvbridge_hdr_deep_requested(display, conn_state))
-+		return -EINVAL;
+-		ilk_csc_copy(display, &crtc_state->csc, &ilk_csc_matrix_rgb_to_ycbcr);
++		ilk_csc_copy(display, &crtc_state->csc, intel_csc_rgb_to_ycbcr(crtc_state));
+ 	} else if (limited_color_range) {
+ 		drm_WARN_ON(display->drm, !crtc_state->csc_enable);
  
- 	pipe_config->has_audio =
- 		intel_hdmi_has_audio(encoder, pipe_config, conn_state) &&
-@@ -2487,6 +2496,13 @@
+@@ -582,7 +613,7 @@
+ 	if (crtc_state->output_format != INTEL_OUTPUT_FORMAT_RGB) {
+ 		drm_WARN_ON(display->drm, (crtc_state->csc_mode & ICL_OUTPUT_CSC_ENABLE) == 0);
+ 
+-		ilk_csc_copy(display, &crtc_state->output_csc, &ilk_csc_matrix_rgb_to_ycbcr);
++		ilk_csc_copy(display, &crtc_state->output_csc, intel_csc_rgb_to_ycbcr(crtc_state));
+ 	} else if (crtc_state->limited_color_range) {
+ 		drm_WARN_ON(display->drm, (crtc_state->csc_mode & ICL_OUTPUT_CSC_ENABLE) == 0);
+ 
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -3170,7 +3170,8 @@
+ 		vsc->colorimetry = DP_COLORIMETRY_BT2020_CYCC;
+ 		break;
+ 	case DRM_MODE_COLORIMETRY_BT2020_RGB:
+-		vsc->colorimetry = DP_COLORIMETRY_BT2020_RGB;
++		vsc->colorimetry = crtc_state->output_format == INTEL_OUTPUT_FORMAT_RGB ?
++			DP_COLORIMETRY_BT2020_RGB : DP_COLORIMETRY_BT2020_YCC;
+ 		break;
+ 	case DRM_MODE_COLORIMETRY_BT2020_YCC:
+ 		vsc->colorimetry = DP_COLORIMETRY_BT2020_YCC;
+@@ -3645,6 +3646,25 @@
+ 	return 0;
+ }
+ 
++static bool intel_dp_hdr10_deep_requested(struct intel_encoder *encoder,
++					const struct drm_connector_state *state)
++{
++	const struct intel_digital_connector_state *conn = to_intel_digital_connector_state(state);
++	struct intel_dp *dp = enc_to_intel_dp(encoder);
++	const struct hdr_output_metadata *hdr;
++
++	if (intel_dp_is_edp(dp) || !intel_dp_has_gamut_metadata_dip(encoder) ||
++	    !dp->colorimetry_support || conn->dv_lab_standard ||
++	    state->max_requested_bpc < 10 ||
++	    (state->colorspace != DRM_MODE_COLORIMETRY_BT2020_RGB &&
++	     state->colorspace != DRM_MODE_COLORIMETRY_BT2020_YCC) ||
++	    !state->hdr_output_metadata || state->hdr_output_metadata->length < sizeof(*hdr))
++		return false;
++	hdr = state->hdr_output_metadata->data;
++	return hdr->metadata_type == 0 && hdr->hdmi_metadata_type1.metadata_type == 0 &&
++		hdr->hdmi_metadata_type1.eotf == HDMI_EOTF_SMPTE_ST2084;
++}
++
+ int
+ intel_dp_compute_config(struct intel_encoder *encoder,
+ 			struct intel_crtc_state *pipe_config,
+@@ -3681,10 +3701,16 @@
  	 * that fails assume the user might know something we don't.
  	 */
- 	ret = intel_hdmi_compute_formats(encoder, pipe_config, conn_state, true);
-+	if (!ret && to_intel_digital_connector_state(conn_state)->dv_hdr10_deep_color &&
-+	    pipe_config->pipe_bpp < 30) {
-+		if (__ratelimit(&connector->dv_log_limit))
-+			drm_info(display->drm, "DVBridge HDR10: rejecting sub-10-bit link on connector=%u bpp=%u\n",
-+				 connector->base.base.id, pipe_config->pipe_bpp);
+ 	ret = intel_dp_compute_formats(encoder, pipe_config, conn_state, true);
+-	if (ret)
++	if (to_intel_digital_connector_state(conn_state)->dv_hdr10_deep_color &&
++	    !intel_dp_hdr10_deep_requested(encoder, conn_state))
 +		return -EINVAL;
-+	}
- 	/* Experimental DV/HDR must never override the sink bandwidth limit. */
- 	if (ret && !to_intel_digital_connector_state(conn_state)->dv_lab_standard &&
- 	    !intel_dvbridge_hdr_deep_requested(display, conn_state))
-@@ -2864,6 +2880,14 @@
- 			DRM_MODE_PROP_ATOMIC, "DVBRIDGE_DV_STANDARD_LAB");
- 		if (connector->dv_lab_property)
- 			drm_object_attach_property(&_connector->base, connector->dv_lab_property, 0);
-+	}
-+
-+	if (DISPLAY_VER(display) >= 10) {
-+		ratelimit_state_init(&connector->dv_log_limit, 30 * HZ, 1);
-+		connector->dv_hdr10_property = drm_property_create_bool(display->drm,
-+			DRM_MODE_PROP_ATOMIC, "DVBRIDGE_HDR10_DEEP_COLOR");
-+		if (connector->dv_hdr10_property)
-+			drm_object_attach_property(&_connector->base, connector->dv_hdr10_property, 0);
++	if (ret && !to_intel_digital_connector_state(conn_state)->dv_hdr10_deep_color)
+ 		ret = intel_dp_compute_formats(encoder, pipe_config, conn_state, false);
+ 	if (ret)
+ 		return ret;
++	if (to_intel_digital_connector_state(conn_state)->dv_hdr10_deep_color &&
++	    pipe_config->pipe_bpp < 30)
++		return -EINVAL;
+ 
+ 	ret = intel_pfit_compute_config(pipe_config, conn_state);
+ 	if (ret)
+@@ -7180,8 +7206,11 @@
+ 		intel_attach_dp_colorspace_property(&connector->base);
  	}
  
- 	intel_attach_force_audio_property(&connector->base);
+-	if (intel_dp_has_gamut_metadata_dip(&dp_to_dig_port(intel_dp)->base))
++	if (intel_dp_has_gamut_metadata_dip(&dp_to_dig_port(intel_dp)->base)) {
+ 		drm_connector_attach_hdr_output_metadata_property(&connector->base);
++		if (DISPLAY_VER(display) >= 9 && !intel_dp_is_edp(intel_dp))
++			intel_attach_hdr10_deep_color_property(&connector->base);
++	}
+ 
+ 	if (HAS_VRR(display))
+ 		drm_connector_attach_vrr_capable_property(&connector->base);
+--- a/drivers/gpu/drm/i915/display/intel_connector.c
++++ b/drivers/gpu/drm/i915/display/intel_connector.c
+@@ -38,6 +38,16 @@
+ #include "intel_hdcp.h"
+ #include "intel_panel.h"
+ 
++void intel_attach_hdr10_deep_color_property(struct drm_connector *connector)
++{
++	struct intel_connector *intel_connector = to_intel_connector(connector);
++
++	intel_connector->dv_hdr10_property = drm_property_create_bool(connector->dev,
++		DRM_MODE_PROP_ATOMIC, "DVBRIDGE_HDR10_DEEP_COLOR");
++	if (intel_connector->dv_hdr10_property)
++		drm_object_attach_property(&connector->base, intel_connector->dv_hdr10_property, 0);
++}
++
+ static void intel_connector_modeset_retry_work_fn(struct work_struct *work)
+ {
+ 	struct intel_connector *connector = container_of(work, typeof(*connector),
+--- a/drivers/gpu/drm/i915/display/intel_connector.h
++++ b/drivers/gpu/drm/i915/display/intel_connector.h
+@@ -27,6 +27,7 @@
+ 				 const struct drm_edid *drm_edid);
+ int intel_ddc_get_modes(struct drm_connector *c, struct i2c_adapter *ddc);
+ void intel_attach_force_audio_property(struct drm_connector *connector);
++void intel_attach_hdr10_deep_color_property(struct drm_connector *connector);
+ void intel_attach_broadcast_rgb_property(struct drm_connector *connector);
+ void intel_attach_aspect_ratio_property(struct drm_connector *connector);
+ void intel_attach_hdmi_colorspace_property(struct drm_connector *connector);

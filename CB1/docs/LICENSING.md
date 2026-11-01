@@ -62,3 +62,19 @@ conditions of the exact vanilla LibreELEC reference. The [migration record](GPL2
 lists grants, completed replacements and remaining complete-product checks.
 
 No proprietary Dolby SDK or media are included.
+
+Optional CM4 output metadata adapts the GPL-2.0-or-later selection rules in
+`avdvplus/xbmc` revision `e0614d7a6713369bbcfe42152223f1cdaec3dbf1`,
+`xbmc/utils/BitstreamConverterDoVi.cpp` (Team Kodi notice retained).
+Default L3/L9/L11/L254 blocks and PQ formulas follow MIT-licensed
+`quietvoid/dovi_tool` revision `d1abe0e27ff2c7ab3339614d06db9f8a058af6b2`,
+`dolby_vision/src/rpu/extension_metadata/cmv40.rs` and its block definitions.
+See `LICENSES/MIT-dovi-tool-cmv40.txt`. The adapter uses existing FFmpeg storage and
+the CB1 serializer; it imports neither VS10 nor proprietary Amlogic code.
+
+Native bitmap subtitle controls adapt GPL-2.0-or-later code from
+`avdvplus/xbmc` revision `e0614d7a6713369bbcfe42152223f1cdaec3dbf1`.
+The explicit PGS decoder matrix adapts the LGPL-2.1-or-later FFmpeg patch in
+`avdvplus/CoreELEC` revision `74f24ab95ac05c215de3d82919ecc5b3670c348f`.
+The integration patches retain file-level notices and source locations. No skin
+or proprietary VS10 code is included.

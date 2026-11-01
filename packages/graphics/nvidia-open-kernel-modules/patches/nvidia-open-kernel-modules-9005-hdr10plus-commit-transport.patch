@@ -42,7 +42,7 @@ diff --git a/src/common/inc/nvkms-cb1-hdr.h b/src/common/inc/nvkms-cb1-hdr.h
 +        p[4] != 0x8b || p[5] != 0x84 || p[6] != 0x90 ||
 +        (p[7] >> 6) > 1 || (p[7] & 1) || (p[30] & 0x3f) ||
 +        !(p[30] & 0x40) ||
-+        ((p[7] >> 6) == 1 && (p[10] != 0 || p[11] != 255))) return NV_FALSE;
++        ((p[7] >> 6) == 1 && p[11] > 100 && p[11] != 255)) return NV_FALSE;
 +    anchors = p[18] >> 4;
 +    if (anchors > 9) return NV_FALSE;
 +    for (NvU32 i = 1; i < anchors; i++)
@@ -296,7 +296,7 @@ diff --git a/src/nvidia-modeset/src/nvkms.c b/src/nvidia-modeset/src/nvkms.c
 diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-hdmi.c
 --- a/src/nvidia-modeset/src/nvkms-hdmi.c
 +++ b/src/nvidia-modeset/src/nvkms-hdmi.c
-@@ -54,6 +54,145 @@
+@@ -54,6 +54,195 @@
  #include <ctrl/ctrl2080/ctrl2080unix.h> // NV2080_CTRL_OS_UNIX_AUDIO_DYNAMIC_POWER
  
  #include <hdmipacket/nvhdmipkt.h>
@@ -397,6 +397,47 @@ diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-
 +    return nvCb1HdrSlot(&r) != 0;
 +}
 +
++/* Use only an advertised CTA identity; leave GENERIC to its native owners. */
++static NvU8 nvHdmiCtaVic(const NVT_EDID_INFO *edid,
++                        const NVDispHeadInfoFrameStateEvoRec *info,
++                        NvU32 customSize)
++{
++    static const NvU8 vic[] = { 0, 95, 94, 93, 98 };
++    const NVT_VENDOR_SPECIFIC_INFOFRAME_CTRL *v = &info->vendorSpecificCtrl;
++    const NVT_HDR_STATIC_METADATA *hdr = &edid->hdr_static_metadata_info;
++    NvU8 mapped;
++    unsigned ext, i;
++
++    if (customSize || !v->Enable ||
++        v->VSIFVersion != NVT_VSIF_VERSION_H14B_VSIF ||
++        v->HDMIFormat != NVT_HDMI_VS_BYTE4_HDMI_VID_FMT_EXT ||
++        v->HDMI_VIC < 1 || v->HDMI_VIC > 4 ||
++        edid->ext861.revision < NVT_CEA861_REV_B ||
++        hdr->static_metadata_type != 1 ||
++        (!hdr->supported_eotf.smpte_st_2084_eotf &&
++         !hdr->supported_eotf.future_eotf)) return 0;
++    mapped = vic[v->HDMI_VIC];
++    if (info->ctrl.video_format_id && info->ctrl.video_format_id != mapped) return 0;
++    for (ext = 0; ext < 2; ext++) {
++        const NVT_EDID_CEA861_INFO *cea = ext ? &edid->ext861_2 : &edid->ext861;
++        for (i = 0; i < cea->total_svd && i < sizeof(cea->video); i++) {
++            if (NVT_GET_CTA_8BIT_VIC(cea->video[i]) == mapped) return mapped;
++        }
++    }
++    return 0;
++}
++
++static void nvHdmiUseCtaVic(const NVT_EDID_INFO *edid,
++                           NVDispHeadInfoFrameStateEvoRec *info,
++                           NvU32 customSize)
++{
++    NvU8 vic = nvHdmiCtaVic(edid, info, customSize);
++    if (!vic) return;
++    info->ctrl.video_format_id = vic;
++    if (vic == 98) info->ctrl.pic_aspect_ratio = NVT_VIDEO_INFOFRAME_BYTE2_M1M0_NO_DATA;
++    info->vendorSpecificCtrl.Enable = FALSE;
++}
++
 +NvBool nvCb1HdrValidate(const NVDpyEvoRec *dpy,
 +                        const NVDpyAttributeColor *color,
 +                        const NVHwModeTimingsEvo *timing,
@@ -407,9 +448,16 @@ diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-
 +{
 +    struct NvKmsCb1HdrRoute r = {0};
 +    const NVDevEvoRec *dev;
++    NVDispHeadInfoFrameStateEvoRec normalized;
 +    if (!config->deepColor && !config->enabled) { *slot = 0; return NV_TRUE; }
 +    if (!dpy) return NV_FALSE;
 +    dev = dpy->pDispEvo->pDevEvo;
++    normalized = *info;
++    if (dpy->parsedEdid.valid && !dev->caps.supportsGenericSharedInfoFrames) {
++        nvHdmiUseCtaVic(&dpy->parsedEdid.info, &normalized,
++                        flip->hdmiVsifMetadata.payloadSize);
++        info = &normalized;
++    }
 +    if ((config->deepColor || config->enabled) && color->bpc < 10) return NV_FALSE;
 +    if (config->deepColor && (!flip->hdrInfoFrame.enabled ||
 +        (flip->hdrInfoFrame.eotf != NVKMS_INFOFRAME_EOTF_ST2084 &&
@@ -421,7 +469,9 @@ diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-
 +                           info->vendorSpecificCtrl.Enable))) return NV_FALSE;
 +    if (!config->enabled) { *slot = 0; return NV_TRUE; }
 +    nvCb1HdrCaps(dev, &r);
-+    r.hdmi = nvDpyIsHdmiEvo(dpy) && dpy->parsedEdid.valid;
++    r.hdmi = nvDpyIsHdmiEvo(dpy) && dpy->parsedEdid.valid &&
++        dpy->pConnectorEvo->signalFormat == NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS &&
++        !nvDpyUsesDPLib(dpy);
 +    r.pq = flip->hdrInfoFrame.enabled &&
 +           flip->hdrInfoFrame.eotf == NVKMS_INFOFRAME_EOTF_ST2084;
 +    r.bt2020 = color->colorimetry == NVKMS_OUTPUT_COLORIMETRY_BT2100;
@@ -442,7 +492,28 @@ diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-
  
  #define CAP_HDMI_SUPPORT_GPU             0x00000001
  #define CAP_HDMI_SUPPORT_MONITOR         0x00000002
-diff --git a/src/nvidia-modeset/src/nvkms-flip.c b/src/nvidia-modeset/src/nvkms-flip.c
+@@ -749,6 +938,7 @@
+                             NvEvoInfoFrameTransmitControl *newTransmitCtrl,
+                             NVDpyEvoRec *pDpyEvo)
+ {
++    NVDispHeadInfoFrameStateEvoRec normalized;
+     if (!nvDpyIsHdmiEvo(pDpyEvo)) {
+         return;
+     }
+@@ -762,6 +952,13 @@
+             pDispEvo, EVO_LOG_WARN,
+             "No EDID: cannot construct video/vendor-specific info frame");
+         return;
++    }
++
++    normalized = *pInfoFrameState;
++    if (!pDispEvo->pDevEvo->caps.supportsGenericSharedInfoFrames) {
++        nvHdmiUseCtaVic(&pDpyEvo->parsedEdid.info, &normalized,
++                        pDispEvo->headState[head].hdmiVsifMetadata.payloadSize);
++        pInfoFrameState = &normalized;
+     }
+ 
+     SendVideoInfoFrame(pDispEvo,
 --- a/src/nvidia-modeset/src/nvkms-flip.c
 +++ b/src/nvidia-modeset/src/nvkms-flip.c
 @@ -32,6 +32,7 @@
@@ -524,10 +595,11 @@ diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvk
              &pProposedDisp->apiHead[apiHead];
  
          if (!pProposedApiHead->changed ||
-@@ -2168,6 +2176,29 @@
+@@ -2167,6 +2175,29 @@
+                 pReplyDisp->head[apiHead].status =
                      NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_FLIP;
                  return FALSE;
-             }
++            }
 +            {
 +                const NVDispEvoRec *disp = pDevEvo->pDispEvo[0];
 +                const NVDpyEvoRec *dpy = nvGetOneArbitraryDpyEvo(pProposedApiHead->dpyIdList, disp);
@@ -550,10 +622,9 @@ diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvk
 +                }
 +                /* Only the selected slot is retained; TEST_ONLY never programs it. */
 +                pProposedApiHead->cb1Slot = slot;
-+            }
+             }
          }
      }
- 
 @@ -2583,6 +2614,11 @@
      const NvU32 sd = pDispEvo->displayOwner;
      NVDispHeadStateEvoPtr pHeadState = &pDispEvo->headState[head];
@@ -566,18 +637,17 @@ diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvk
      nvHdmiDpEnableDisableAudio(pDispEvo, head, FALSE /* enable */);
  
      nvEvoDetachConnector(pHeadState->pConnectorEvo, head,
-@@ -3320,6 +3356,10 @@
+@@ -3319,6 +3355,10 @@
+     nvAssert(pDpyEvo != NULL);
  
      nvUpdateInfoFrames(pDpyEvo, flipSynchronizeInfoframes);
- 
++
 +    FOR_EACH_EVO_HW_HEAD_IN_MASK(pApiHeadState->hwHeadsMask, head) {
 +        nvCb1HdrApply(pDispEvo, head, &pProposedApiHead->cb1Hdr, pProposedApiHead->cb1Slot);
 +    }
-+
+ 
      /* Perform 3D vision authentication */
      nv3DVisionAuthenticationEvo(pDispEvo, apiHead);
- 
-diff --git a/src/nvidia-modeset/kapi/src/nvkms-kapi.c b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
 --- a/src/nvidia-modeset/kapi/src/nvkms-kapi.c
 +++ b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
 @@ -34,6 +34,7 @@
@@ -772,6 +842,15 @@ diff --git a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h b/src/nvidia-modeset
 diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.h b/kernel-open/nvidia-drm/nvidia-drm-connector.h
 --- a/kernel-open/nvidia-drm/nvidia-drm-connector.h
 +++ b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+@@ -45,7 +45,7 @@
+     char dpAddress[NVKMS_DP_ADDRESS_STRING_LENGTH];
+ 
+     struct nv_drm_encoder *nv_detected_encoder;
+-    struct edid *edid;
++    const struct drm_edid *edid;
+ 
+     enum NvKmsContentProtection cp;
+ 
 @@ -81,6 +81,7 @@
  #define NV_DRM_MAX_BPC_DEFAULT 12
  
@@ -780,7 +859,6 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.h b/kernel-open/nvidia-
         struct drm_connector_state base;
         enum nv_drm_dithering_mode dithering_mode;
         struct drm_property_blob *hdcp_topology_blob;
-diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-drm/nvidia-drm-connector.c
 --- a/kernel-open/nvidia-drm/nvidia-drm-connector.c
 +++ b/kernel-open/nvidia-drm/nvidia-drm-connector.c
 @@ -46,6 +46,7 @@
@@ -791,7 +869,77 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
  
  /*
   * Dithering support requires connector atomic_check, which we only enable on
-@@ -337,6 +338,7 @@
+@@ -92,6 +93,22 @@
+ }
+ #endif /* NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT */
+ 
++static bool nv_drm_connector_hdmi_properties(const struct nv_drm_connector *c)
++{
++    return c->type == NVKMS_CONNECTOR_TYPE_HDMI ||
++        (c->type == NVKMS_CONNECTOR_TYPE_DP && !c->internal && !c->dpAddress[0]);
++}
++
++static bool nv_drm_connector_dual_tmds(struct drm_connector *connector,
++                                      const struct nv_drm_encoder *encoder)
++{
++    const struct nv_drm_connector *c = to_nv_connector(connector);
++    return connector->status == connector_status_connected &&
++        c->type == NVKMS_CONNECTOR_TYPE_DP && nv_drm_connector_hdmi_properties(c) &&
++        encoder && encoder == c->nv_detected_encoder &&
++        encoder->signal_format == NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS;
++}
++
+ static void nv_drm_connector_destroy(struct drm_connector *connector)
+ {
+     struct nv_drm_connector *nv_connector = to_nv_connector(connector);
+@@ -101,7 +118,7 @@
+     drm_connector_cleanup(connector);
+ 
+     if (nv_connector->edid != NULL) {
+-        nv_drm_free(nv_connector->edid);
++        drm_edid_free(nv_connector->edid);
+     }
+ 
+     nv_drm_free(nv_connector);
+@@ -180,18 +197,17 @@
+ #endif
+ 
+     if (pDetectParams->connected) {
+-        if (!pDetectParams->overrideEdid && pDetectParams->edid.bufferSize) {
+-
+-            if ((nv_connector->edid = nv_drm_calloc(
+-                        1,
+-                        pDetectParams->edid.bufferSize)) != NULL) {
+-
+-                memcpy(nv_connector->edid,
+-                       pDetectParams->edid.buffer,
+-                       pDetectParams->edid.bufferSize);
+-            } else {
+-                NV_DRM_LOG_ERR("Out of Memory");
++        NvU32 size = pDetectParams->edid.bufferSize;
++        if (size >= EDID_LENGTH && size <= sizeof(pDetectParams->edid.buffer) &&
++            size % EDID_LENGTH == 0) {
++            nv_connector->edid = drm_edid_alloc(pDetectParams->edid.buffer, size);
++            if (!drm_edid_valid(nv_connector->edid)) {
++                drm_edid_free(nv_connector->edid);
++                nv_connector->edid = NULL;
++                NV_DRM_LOG_ERR("Invalid or unavailable EDID; retaining native modes only");
+             }
++        } else if (size) {
++            NV_DRM_LOG_ERR("Invalid EDID length %u; retaining native modes only", size);
+         }
+ 
+         return true;
+@@ -217,7 +233,7 @@
+     BUG_ON(!mutex_is_locked(&dev->mode_config.mutex));
+ 
+     if (nv_connector->edid != NULL) {
+-        nv_drm_free(nv_connector->edid);
++        drm_edid_free(nv_connector->edid);
+         nv_connector->edid = NULL;
+     }
+ 
+@@ -337,6 +353,7 @@
      __drm_atomic_helper_connector_duplicate_state(connector, &nv_drm_new_connector_state->base);
  
      nv_drm_new_connector_state->dithering_mode = nv_drm_old_connector_state->dithering_mode;
@@ -799,7 +947,7 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
      nv_drm_new_connector_state->hdcp_topology_blob = nv_drm_old_connector_state->hdcp_topology_blob;
      if (nv_drm_new_connector_state->hdcp_topology_blob) {
          drm_property_blob_get(nv_drm_new_connector_state->hdcp_topology_blob);
-@@ -387,7 +389,13 @@
+@@ -387,7 +404,14 @@
      struct nv_drm_connector_state *nv_connector_state =
          to_nv_drm_connector_state(state);
  
@@ -809,15 +957,21 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
 +        nv_connector_state->cb1_deep_color = val;
 +        return 0;
 +    }
-+    if (property == nv_dev->cb1_output_bpc_property ||
++    if (property == nv_dev->cb1_native_tmds_property ||
++        property == nv_dev->cb1_output_bpc_property ||
 +        property == nv_dev->cb1_hdr10plus_status_property) {
          return -EINVAL;
      }
      if (property == nv_dev->nv_connector_dithering_mode_property) {
-@@ -440,6 +448,26 @@
+@@ -439,6 +463,30 @@
+     struct nv_drm_connector *nv_conn = to_nv_connector(connector);    
      const struct nv_drm_connector_state *nv_connector_state =
          to_nv_drm_connector_state_const(state);
- 
++
++    if (property == nv_dev->cb1_native_tmds_property) {
++        *val = nv_drm_connector_dual_tmds(connector, nv_conn->nv_detected_encoder);
++        return 0;
++    }
 +    if (property == nv_dev->cb1_deep_color_property) {
 +        *val = nv_connector_state->cb1_deep_color;
 +        return 0;
@@ -837,14 +991,34 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
 +        *val = status;
 +        return 0;
 +    }
-+
+ 
      if (property == nv_dev->cb1_output_bpc_property) {
          *val = nv_drm_connector_current_output_bpc(connector, state);
+@@ -490,8 +538,9 @@
+     int   count = 0;
+ 
+ 
+-    if (nv_connector->edid != NULL) {
+-        nv_drm_connector_update_edid_property(connector, nv_connector->edid);
++    if (drm_edid_connector_update(connector, nv_connector->edid) < 0) {
++        NV_DRM_LOG_ERR("Failed to publish EDID capabilities");
++        drm_edid_connector_update(connector, NULL);
+     }
+ 
+     while (1) {
+@@ -638,9 +687,44 @@
          return 0;
-@@ -642,6 +670,36 @@
+     }
+ 
++    if (to_nv_connector(connector)->type != NVKMS_CONNECTOR_TYPE_HDMI &&
++        (nv_new_connector_state->hdmi_vsif_metadata || new_connector_state->hdr10plus_metadata) &&
++        !nv_drm_connector_dual_tmds(connector, to_nv_encoder(new_connector_state->best_encoder)))
++        return -EINVAL;
++
+     crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
      nv_crtc_state = to_nv_crtc_state(crtc_state);
      req_config = &nv_crtc_state->req_config;
- 
++
 +    {
 +        const bool active = new_connector_state->hdr10plus_metadata != NULL;
 +        const bool deep = nv_new_connector_state->cb1_deep_color;
@@ -874,11 +1048,10 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
 +        hdr->enabled = active;
 +        hdr->deepColor = deep;
 +    }
-+
+ 
      /* Handle dithering changes */
      req_config->flags.ditheringChanged =
-         nv_old_connector_state->dithering_mode !=
-@@ -664,9 +722,14 @@
+@@ -664,9 +748,14 @@
       * this head; a change needs a modeset.
       */
      {
@@ -896,8 +1069,15 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
              req_config->modeSetConfig.colorBpc = bpc;
              req_config->flags.colorBpcChanged = NV_TRUE;
          }
-@@ -876,6 +939,13 @@
-     if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
+@@ -873,9 +962,19 @@
+ 
+ 
+ #if defined(NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT)
+-    if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
++    if (nv_drm_connector_hdmi_properties(nv_connector)) {
++        if (nv_connector->type == NVKMS_CONNECTOR_TYPE_DP)
++            drm_object_attach_property(&nv_connector->base.base,
++                                       nv_dev->cb1_native_tmds_property, 0);
          drm_object_attach_property(&nv_connector->base.base,
                                     nv_dev->cb1_output_bpc_property, 0);
 +        drm_object_attach_property(&nv_connector->base.base,
@@ -910,7 +1090,7 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
  #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
          if (drm_mode_create_hdmi_colorspace_property(
                  &nv_connector->base,
-@@ -895,6 +965,8 @@
+@@ -895,6 +994,8 @@
      } else if (nv_connector->type == NVKMS_CONNECTOR_TYPE_DP) {
          drm_object_attach_property(&nv_connector->base.base,
                                     nv_dev->cb1_output_bpc_property, 0);
@@ -919,13 +1099,31 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-
  #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
          if (drm_mode_create_dp_colorspace_property(
                  &nv_connector->base,
-diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+@@ -909,7 +1010,7 @@
+ #endif /* defined(NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT) */
+ 
+     /* Attach the standard "max bpc" property to HDMI connectors */
+-    if ((nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) &&
++    if (nv_drm_connector_hdmi_properties(nv_connector) &&
+         nv_dev->nv_connector_max_bpc_property) {
+         nv_connector->base.max_bpc_property =
+             nv_dev->nv_connector_max_bpc_property;
 --- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
 +++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
-@@ -721,6 +721,16 @@
-     if (!nv_dev->cb1_output_bpc_property) {
+@@ -715,11 +715,25 @@
          return -ENOMEM;
      }
+ 
++    nv_dev->cb1_native_tmds_property = drm_property_create_bool(nv_dev->dev,
++        0, "CB1_NATIVE_TMDS");
++    if (!nv_dev->cb1_native_tmds_property) return -ENOMEM;
++
+     /* Writes are refused by atomic_set_property; reads query current NVKMS. */
+     nv_dev->cb1_output_bpc_property = drm_property_create_range(nv_dev->dev,
+         0, "CB1_OUTPUT_BPC", 0, 16);
+     if (!nv_dev->cb1_output_bpc_property) {
+         return -ENOMEM;
++    }
 +    {
 +        static const struct drm_prop_enum_list states[] = {
 +            {0, "disabled"}, {1, "commit-coupled active"}, {2, "fault"}};
@@ -935,23 +1133,21 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nv
 +            0, "DVBRIDGE_HDR10_DEEP_COLOR");
 +        if (!nv_dev->cb1_hdr10plus_status_property || !nv_dev->cb1_deep_color_property)
 +            return -ENOMEM;
-+    }
+     }
  
      return 0;
- }
-diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
 --- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
 +++ b/kernel-open/nvidia-drm/nvidia-drm-priv.h
-@@ -100,6 +100,8 @@
+@@ -100,6 +100,9 @@
  
  struct nv_drm_device {
      struct drm_property *cb1_output_bpc_property;
++    struct drm_property *cb1_native_tmds_property;
 +    struct drm_property *cb1_hdr10plus_status_property;
 +    struct drm_property *cb1_deep_color_property;
      nv_gpu_info_t gpu_info;
      MIGDeviceId gpu_mig_device;
  
-diff --git a/kernel-open/nvidia-drm/nvidia-drm-modeset.c b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
 --- a/kernel-open/nvidia-drm/nvidia-drm-modeset.c
 +++ b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
 @@ -50,6 +50,7 @@
@@ -1218,3 +1414,37 @@ diff --git a/kernel-open/nvidia-drm/nvidia-drm-crtc.c b/kernel-open/nvidia-drm/n
  
      nv_state->regamma_tf = nv_old_state->regamma_tf;
      nv_state->regamma_lut = nv_old_state->regamma_lut;
+--- a/kernel-open/nvidia-drm/nvidia-drm-encoder.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-encoder.c
+@@ -134,6 +134,7 @@
+     }
+ 
+     nv_encoder->hDisplay = hDisplay;
++    nv_encoder->signal_format = format;
+ 
+     /* Initialize the base encoder object and add it to the drm subsystem */
+ 
+--- a/kernel-open/nvidia-drm/nvidia-drm-encoder.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-encoder.h
+@@ -35,6 +35,7 @@
+ 
+ struct nv_drm_encoder {
+     NvKmsKapiDisplay hDisplay;
++    NvKmsConnectorSignalFormat signal_format;
+ 
+     struct nv_drm_connector *nv_connector;
+ 
+--- a/src/nvidia-modeset/src/nvkms-hw-flip.c
++++ b/src/nvidia-modeset/src/nvkms-hw-flip.c
+@@ -1898,7 +1898,10 @@
+ {
+     if (pFlipState->hdmiVsifMetadata.payloadSize != 0) {
+         if ((pConnectorEvo == NULL) ||
+-            (pConnectorEvo->type != NVKMS_CONNECTOR_TYPE_HDMI)) {
++            (pConnectorEvo->type != NVKMS_CONNECTOR_TYPE_HDMI &&
++             (pConnectorEvo->type != NVKMS_CONNECTOR_TYPE_DP ||
++              pConnectorEvo->signalFormat != NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS ||
++              nvConnectorUsesDPLib(pConnectorEvo)))) {
+             return FALSE;
+         }
+         /* Prevent HDR + VSIF when both infoframes can't be sent simultaneously. */

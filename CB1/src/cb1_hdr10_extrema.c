@@ -79,48 +79,32 @@ static const char reduce_body[] =
     "color=vec4(lo.x==4096u?-1.0:pack_xy(lo),pack_xy(hi),bad?-1.0:low,high);";
 
 static const char direct_codes[]=
-    "void mark_code(ivec3 code,uvec2 p,inout uvec2 lo,inout uvec2 hi,inout float low,inout float high){"
-    "int minimum=min(code.r,min(code.g,code.b)),maximum=max(code.r,max(code.g,code.b));"
-    "low=min(low,float(minimum));high=max(high,float(maximum));"
-    "if(maximum>1){lo=min(lo,p);hi=max(hi,p);}}";
+    "ivec2 analysis_chroma(ivec2 chroma){"
+    "ivec2 uv=chroma-ivec2(128*(1<<depth_shift)*4);"
+    "ivec3 value=ivec3(uv.y*13752,-uv.x*1535-uv.y*5328,uv.x*17545);"
+    "return ivec2(min(value.r,min(value.g,value.b)),max(value.r,max(value.g,value.b)));}"
+    /* Common luma addition, signed shift and clamp preserve chroma ordering. */
+    "void mark_code(int y,ivec2 chroma,uvec2 p,inout uvec2 lo,inout uvec2 hi,inout float low,inout float high){"
+    "int base=(4*y-16*(1<<depth_shift)*4)*9539+(1<<(depth_shift+6));"
+    "ivec2 range=clamp((ivec2(base)+chroma)>>ivec2(depth_shift+7),ivec2(0),ivec2(65535));"
+    "low=min(low,float(range.x));high=max(high,float(range.y));"
+    "if(range.y>1){lo=min(lo,p);hi=max(hi,p);}}";
 static const char direct_tile_body[]=
     "uint group=uint(gl_FragCoord.x)+output_width*uint(gl_FragCoord.y);"
     "uint columns=(dimensions.x+SOURCE_TILE-1u)/SOURCE_TILE,rows=(dimensions.y+1u)/2u;"
     "uvec2 lo=uvec2(4096u),hi=uvec2(0u);float low=65535.0,high=0.0;"
     "if(group<columns*rows){uvec2 tb=uvec2(gl_FragCoord.xy)*uvec2(SOURCE_TILE,2u);"
     "int row=int(tb.y)/2,last=int(height)/2-1;"
-    "\n#ifdef CB1_SOURCE_GATHER\n"
-    "vec2 uv_pos=vec2(ivec2(int(tb.x)/2,row)+origin/2)+vec2(1.0,0.0);"
-    "vec2 uv_size=vec2(textureSize(U_input,0));"
-    "ivec4 ua=ivec4(roundEven(textureGather(U_input,uv_pos/uv_size,0)*65535.0))>>ivec4(bit_shift);"
-    "ivec4 va=ivec4(roundEven((source_packed!=0u?textureGather(U_input,uv_pos/uv_size,1):textureGather(V_input,uv_pos/uv_size,0))*65535.0))>>ivec4(bit_shift);"
-    "uv_pos.y+=1.0;"
-    "ivec4 ub=ivec4(roundEven(textureGather(U_input,uv_pos/uv_size,0)*65535.0))>>ivec4(bit_shift);"
-    "ivec4 vb=ivec4(roundEven((source_packed!=0u?textureGather(U_input,uv_pos/uv_size,1):textureGather(V_input,uv_pos/uv_size,0))*65535.0))>>ivec4(bit_shift);"
-    "ivec2 up_u=row>0?ua.wz:ua.xy,up_v=row>0?va.wz:va.xy;"
-    "ivec2 down_u=row<last?ub.xy:ua.xy,down_v=row<last?vb.xy:va.xy;"
-    "ivec2 even_pair[2]=ivec2[2](3*ivec2(ua.x,va.x)+ivec2(up_u.x,up_v.x),3*ivec2(ua.y,va.y)+ivec2(up_u.y,up_v.y));"
-    "ivec2 odd_pair[2]=ivec2[2](3*ivec2(ua.x,va.x)+ivec2(down_u.x,down_v.x),3*ivec2(ua.y,va.y)+ivec2(down_u.y,down_v.y));"
-    "\n#endif\n"
     "for(uint i=0u;i<SOURCE_TILE/2u;i++){uint x=tb.x+2u*i;if(x>=dimensions.x)break;"
-    "\n#ifdef CB1_SOURCE_GATHER\n"
-    "ivec2 yp=ivec2(x,tb.y)+origin;"
-    "ivec4 ys=ivec4(roundEven(textureGather(Y_input,(vec2(yp)+1.0)/vec2(textureSize(Y_input,0)),0)*65535.0))>>ivec4(bit_shift);"
-    "\n#else\n"
     "ivec4 ys=ivec4(sample_y(ivec2(x,tb.y+1u)),sample_y(ivec2(x+1u,tb.y+1u)),"
     "sample_y(ivec2(x+1u,tb.y)),sample_y(ivec2(x,tb.y)));"
-    "\n#endif\n"
-    "\n#ifdef CB1_SOURCE_GATHER\n"
-    "ivec2 even=even_pair[i],odd=odd_pair[i];"
-    "\n#else\n"
     "ivec2 uv=sample_uv(ivec2(int(x)/2,row));"
-    "ivec2 even=3*uv+sample_uv(ivec2(int(x)/2,max(row-1,0)));"
-    "ivec2 odd=3*uv+sample_uv(ivec2(int(x)/2,min(row+1,last)));"
-    "\n#endif\n"
-    "mark_code(analysis_code(ys.w,even),uvec2(x,tb.y),lo,hi,low,high);"
-    "mark_code(analysis_code(ys.z,even),uvec2(x+1u,tb.y),lo,hi,low,high);"
-    "mark_code(analysis_code(ys.x,odd),uvec2(x,tb.y+1u),lo,hi,low,high);"
-    "mark_code(analysis_code(ys.y,odd),uvec2(x+1u,tb.y+1u),lo,hi,low,high);}}"
+    "ivec2 even=analysis_chroma(3*uv+sample_uv(ivec2(int(x)/2,max(row-1,0))));"
+    "ivec2 odd=analysis_chroma(3*uv+sample_uv(ivec2(int(x)/2,min(row+1,last))));"
+    "mark_code(ys.w,even,uvec2(x,tb.y),lo,hi,low,high);"
+    "mark_code(ys.z,even,uvec2(x+1u,tb.y),lo,hi,low,high);"
+    "mark_code(ys.x,odd,uvec2(x,tb.y+1u),lo,hi,low,high);"
+    "mark_code(ys.y,odd,uvec2(x+1u,tb.y+1u),lo,hi,low,high);}}"
     "\n#ifdef CB1_COMPACT_OUTPUT\n"
     "uvec2 tb=uvec2(gl_FragCoord.xy)*uvec2(SOURCE_TILE,2u);"
     "uint local=lo.x==4096u?0u:1u+(lo.x-tb.x)+SOURCE_TILE*(lo.y-tb.y)+2u*SOURCE_TILE*(hi.x-tb.x)+2u*SOURCE_TILE*SOURCE_TILE*(hi.y-tb.y);"
@@ -248,11 +232,7 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
         shader_header=compact_header;
     }
     char source_header[sizeof(compact_header)+128];
-    bool gather=source && ctx->gpu->glsl.version>=310;
-    if(source)for(int p=0;p<source->num_planes;p++)
-        gather=gather && source->planes[p].texture->params.format->gatherable;
-    snprintf(source_header,sizeof(source_header),"#define SOURCE_TILE 4u\n#define SOURCE_BITS 2u\n%s%s",
-        gather?"#define CB1_SOURCE_GATHER 1\n":"",shader_header);
+    snprintf(source_header,sizeof(source_header),"#define SOURCE_TILE 8u\n#define SOURCE_BITS 3u\n%s",shader_header);
     shader_header=source_header;
     pl_shader shader = pl_dispatch_begin(ctx->dispatch);
     bool ok = !source || !scan || cb1_hdr10_ingress_source_shader(shader,source);
@@ -385,7 +365,7 @@ static enum cb1_ai_status submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
     extern void cb1_probe_extrema_selected(unsigned,unsigned,bool);
     cb1_probe_extrema_selected(ctx->width,ctx->height,ctx->tiled);
 #endif
-    const unsigned tile_width=source?4:16;
+    const unsigned tile_width=source?8:16;
     const unsigned groups=ctx->tiled?((ctx->width+tile_width-1)/tile_width)*((ctx->height+1)/2):(count+127)/128;
     const unsigned cropped_groups=source?(groups+127)/128:groups;
     if(ctx->tiled && !allocate(ctx,&ctx->cropped_scan,cropped_groups)){ctx->failed=true;return CB1_AI_INVALID;}

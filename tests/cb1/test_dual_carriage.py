@@ -14,7 +14,7 @@ def atom(tag, data):
     return struct.pack('>I4s', len(data)+8, tag)+data
 
 
-def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
+def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1', clocks=None, frames=2):
     """Synthetic framing only, not decodable audiovisual content."""
     packets = [b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc']
     if packet_pair is not None:
@@ -37,7 +37,8 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
         tkhd[40:76] = matrix
         struct.pack_into('>II', tkhd, 76, width<<16, height<<16)
         mdhd = bytearray(24)
-        struct.pack_into('>IIH', mdhd, 12, 1000, 2000, 0x55c4)
+        clock, duration = clocks[i] if clocks else (1000, 1000)
+        struct.pack_into('>IIH', mdhd, 12, clock, frames*duration, 0x55c4)
         hdlr = bytearray(24)
         hdlr[8:12] = b'vide'
         visual = bytearray(78)
@@ -53,11 +54,11 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
             flags = (7<<9)|(9<<3)|6  # P7.9, RPU + EL, no BL in this track.
             extra += atom(b'dvcC', bytes([1, 0, flags>>8, flags&255, 0x60])+bytes(19))
         stsd = atom(b'stsd', bytes(4)+struct.pack('>I', 1)+atom(codec, visual+extra))
-        stts = atom(b'stts', struct.pack('>4I', 0, 1, 2, 1000))
-        stsc = atom(b'stsc', struct.pack('>5I', 0, 1, 1, 2, 1))
-        stsz = atom(b'stsz', struct.pack('>5I', 0, 0, 2, len(packets[i]), len(packets[i])))
+        stts = atom(b'stts', struct.pack('>4I', 0, 1, frames, duration))
+        stsc = atom(b'stsc', struct.pack('>5I', 0, 1, 1, frames, 1))
+        stsz = atom(b'stsz', struct.pack('>3I', 0, len(packets[i]), frames))
         stco = atom(b'stco', struct.pack('>3I', 0, 1, offset))
-        stss = atom(b'stss', struct.pack('>4I', 0, 2, 1, 2))
+        stss = atom(b'stss', struct.pack('>2I', 0, frames)+struct.pack('>'+str(frames)+'I', *range(1, frames+1)))
         stbl = atom(b'stbl', stsd+stts+stsc+stsz+stco+stss)
         mdia = atom(b'mdia', atom(b'mdhd', mdhd)+atom(b'hdlr', hdlr)+atom(b'minf', stbl))
         tref = b''
@@ -75,9 +76,9 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1'):
     tracks = []
     for i, packet in enumerate(packets):
         tracks.append(track(i, offset))
-        offset += 2*len(packet)
+        offset += frames*len(packet)
     moov = atom(b'moov', atom(b'mvhd', mvhd)+b''.join(tracks))
-    return ftyp+moov+atom(b'mdat', b''.join(packet*2 for packet in packets))
+    return ftyp+moov+atom(b'mdat', b''.join(packet*frames for packet in packets))
 
 
 def transport(kind, m2ts=False, hevc_el=False):
@@ -127,6 +128,9 @@ def transport(kind, m2ts=False, hevc_el=False):
 
 
 class DualCarriage(unittest.TestCase):
+    def test_mp4_reported_layer_clocks_keep_exact_pts_and_payloads(self):
+        self.run_carriage([('clocks-paired.mp4', mp4('paired', clocks=[(24000,1001), (480000,20020)], frames=64), True)])
+
     def test_joined_length_prefixed_tracks_keep_their_seek_framing(self):
         # Two uniform synthetic 64x64 IDR pictures, generated without media input.
         hvcc = base64.b64decode('AQQIAAAAn6gAAAAAHvAA/P34+AAADwMgAAEAF0ABDAH//wQIAAADAJ+oAAADAAAeugJAIQABACdCAQEECAAAAwCfqAAAAwAAHqAggQWW6SkwvAWgIAAAAwAgAAADACEiAAEABkQBwHGBEg==')
@@ -368,12 +372,13 @@ int main(int argc,char**argv) {
    while((ret=d.ReadBlurayDovi(packet))==0){
     const uint8_t expected[]={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,0xbb,0,0,0,1,0x7c,1,0xcc};
     assert(packet->stream_index==bl && packet->size==sizeof(expected) && !memcmp(packet->data,expected,sizeof(expected)));
-    const int64_t timestamp=mov ? count*1000 : 90000+count*3754;
+    const bool clocks=strstr(argv[i],"clocks-paired");
+    const int64_t timestamp=mov ? count*(clocks?1001:1000) : 90000+count*3754;
     assert(packet->pts==timestamp && packet->dts==timestamp);
-    assert(packet->duration==(mov ? 1000 : 0));
+    assert(packet->duration==(mov ? (clocks?1001:1000) : 0));
     count++;av_packet_unref(packet);
    }
-   assert(ret==AVERROR_EOF && count==(mov ? 2 : 32) && !d.m_blurayDovi->Pending());av_packet_free(&packet);
+   assert(ret==AVERROR_EOF && count==(mov ? (strstr(argv[i],"clocks-paired")?64:2) : 32) && !d.m_blurayDovi->Pending());av_packet_free(&packet);
    d.m_blurayDovi->Reset(true);assert(!d.m_blurayDovi->Pending());
    mode=2;d.InitBlurayDovi(UINT_MAX);assert(!d.m_blurayDovi);
    assert(!av_packet_side_data_get(d.m_pFormatContext->streams[bl]->codecpar->coded_side_data,d.m_pFormatContext->streams[bl]->codecpar->nb_coded_side_data,AV_PKT_DATA_DOVI_CONF));

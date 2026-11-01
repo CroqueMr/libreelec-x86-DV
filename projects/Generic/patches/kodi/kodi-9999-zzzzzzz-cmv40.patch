@@ -1,0 +1,252 @@
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -40,6 +40,7 @@
+           <requirement>HAVE_DVBRIDGE</requirement>
+           <level>0</level><default>0</default>
+           <dependencies><dependency type="visible"><or>
++            <and><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or><or><condition setting="dvbridge.cmv40" operator="is">4</condition><and><condition setting="dvbridge.cmv40" operator="is">3</condition><condition setting="dvbridge.cmv40trigger" operator="is">0</condition></and></or></and>
+             <condition setting="dvbridge.outputmode" operator="is">3</condition>
+             <condition setting="dvbridge.outputmode" operator="is">5</condition>
+             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
+@@ -109,6 +110,39 @@
+             <condition setting="dvbridge.outputmode" operator="is">4</condition>
+           </or></dependency></dependencies>
+           <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.cmv40" type="integer" label="40980" help="40981">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition>
++          </or></dependency></dependencies>
++          <constraints><options>
++            <option label="231">0</option><option label="40982">1</option>
++            <option label="40983">2</option><option label="40984">3</option><option label="40985">4</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40trigger" type="integer" label="40986" help="40987" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">3</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or></dependency>
++          </dependencies>
++          <constraints><options>
++            <option label="40988">0</option><option label="40989">1000</option>
++            <option label="40990">2000</option><option label="40991">4000</option><option label="40992">10000</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40headroom" type="integer" label="40993" help="40994" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>20</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">4</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or></dependency>
++          </dependencies>
++          <constraints><minimum>0</minimum><maximum>50</maximum><step>1</step></constraints>
++          <control type="edit" format="integer" />
+         </setting>
+         <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
+           <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26195,3 +26195,62 @@
+ msgid "Adjust only bitmap subtitles in their authoring domain before composition. 100% preserves original colours. Changes apply while paused too. Text subtitles, disc menus and movie pixels are unchanged."
+ msgstr ""
+ 
++msgctxt "#40980"
++msgid "CM4.0 metadata"
++msgstr ""
++
++msgctxt "#40981"
++msgid "Reference and Master only. Adds default CM4 metadata without changing video pixels. Automatic selection uses the original L2 trims."
++msgstr ""
++
++msgctxt "#40982"
++msgid "CM2.9 without L2 trims"
++msgstr ""
++
++msgctxt "#40983"
++msgid "Always"
++msgstr ""
++
++msgctxt "#40984"
++msgid "Auto"
++msgstr ""
++
++msgctxt "#40985"
++msgid "Auto 2"
++msgstr ""
++
++msgctxt "#40986"
++msgid "CM4.0 Auto trigger"
++msgstr ""
++
++msgctxt "#40987"
++msgid "Source: append when the TV peak covers the mastering peak. Other choices use a fixed mastering limit. Sources without L2 always qualify."
++msgstr ""
++
++msgctxt "#40988"
++msgid "Source"
++msgstr ""
++
++msgctxt "#40989"
++msgid "1000 nits"
++msgstr ""
++
++msgctxt "#40990"
++msgid "2000 nits"
++msgstr ""
++
++msgctxt "#40991"
++msgid "4000 nits"
++msgstr ""
++
++msgctxt "#40992"
++msgid "10000 nits"
++msgstr ""
++
++msgctxt "#40993"
++msgid "CM4.0 Auto 2 headroom (%)"
++msgstr ""
++
++msgctxt "#40994"
++msgid "Append while L1 peak fits the TV peak plus this margin. Requires TV peak brightness. Sources without L2 always qualify."
++msgstr ""
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -12,6 +12,7 @@
+ #include <mutex>
+ #ifdef HAVE_DVBRIDGE
+ #include "dvbridge_policy.h"
++#include "cb1_cmv40.h"
+ #endif
+ 
+ namespace DVBRIDGE
+@@ -40,6 +41,7 @@
+   bool optimizedDV{true};
+   bool masterIPT{false}, allowMasterFallback{false};
+   bool disableL2Trims{false};
++  int cmv40Mode{}, cmv40Trigger{}, cmv40Headroom{20};
+   int felUpscaling{0};
+   bool processingOptimizations{false};
+   uint64_t revision{1};
+@@ -56,6 +58,8 @@
+         panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
+         masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
+         disableL2Trims == other.disableL2Trims &&
++        cmv40Mode == other.cmv40Mode && cmv40Trigger == other.cmv40Trigger &&
++        cmv40Headroom == other.cmv40Headroom &&
+         felUpscaling == other.felUpscaling &&
+         processingOptimizations == other.processingOptimizations &&
+         std::bit_cast<uint64_t>(peak) == std::bit_cast<uint64_t>(other.peak);
+@@ -66,6 +70,12 @@
+   {
+     return disableL2Trims && !hdr10AI &&
+         (mode == DVBRIDGE_MODE_STANDARD || mode == DVBRIDGE_MODE_MASTER_REFERENCE);
++  }
++  cb1_cmv40_options CMv40Options(dvbridge_mode mode, bool hdr10AI = false) const
++  {
++    if (hdr10AI || (mode != DVBRIDGE_MODE_STANDARD && mode != DVBRIDGE_MODE_MASTER_REFERENCE)) return {};
++    return {static_cast<cb1_cmv40_mode>(cmv40Mode), static_cast<unsigned>(cmv40Trigger),
++        static_cast<unsigned>(cmv40Headroom), peak};
+   }
+   dvbridge_policy Policy() const
+   {
+@@ -146,7 +156,14 @@
+     next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
+     next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
+     next.disableL2Trims = settings->GetBool("dvbridge.disablel2");
+-  }
++    next.cmv40Mode = settings->GetInt("dvbridge.cmv40");
++    next.cmv40Trigger = settings->GetInt("dvbridge.cmv40trigger");
++    next.cmv40Headroom = settings->GetInt("dvbridge.cmv40headroom");
++  }
++  if (next.cmv40Mode < 0 || next.cmv40Mode > 4) next.cmv40Mode = 0;
++  if (next.cmv40Trigger != 1000 && next.cmv40Trigger != 2000 &&
++      next.cmv40Trigger != 4000 && next.cmv40Trigger != 10000) next.cmv40Trigger = 0;
++  if (next.cmv40Headroom < 0 || next.cmv40Headroom > 50) next.cmv40Headroom = 20;
+   if (next.method < 0 || next.method > 2) next.method = 0;
+   if (next.felUpscaling < 0 || next.felUpscaling > 1) next.felUpscaling = 0;
+   next.revision = previous.revision;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+@@ -65,6 +65,7 @@
+     int creativeStatus{}, creativeReason{};
+     bool iptTransport{};
+     bool l2TrimsDisabled{};
++    bool cmv40Appended{};
+     int felUpscaling{-1};
+ #ifdef CB1_HAS_HDR10_AI
+     bool hdr10AI{};
+@@ -132,6 +133,7 @@
+     if (output.authoredLegacy) { result[1]=result[5]=true; return result; }
+     result=blocks;
+     if (output.l2TrimsDisabled) result[2]=false;
++    if (output.cmv40Appended) result[3]=result[9]=result[11]=result[254]=true;
+     result[6]=false; // L6 is static HDR metadata, not dynamic DV wire data.
+     result[5]=true; // Native serializer always supplies final-raster margins.
+     return result;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -146,11 +146,13 @@
+     int felFilter{-1}, felBackend{};
+     std::optional<std::array<uint8_t,CB1_HDR10PLUS_VSIF_BYTES>> hdr10plus{};
+     bool hdr10plusAccepted{};
++    cb1_cmv40_status cmv40Status{CB1_CMV40_OFF};
+   };
+   Submission CaptureSubmission() const
+   {
+     auto submission=m_submission;
+     submission.informationGeneration=m_pendingSourceInfo.informationGeneration;
++    submission.cmv40Status=dvbridge_renderer_cmv40_status(m_renderer);
+     const bool fel=(m_pendingInfo & CDVPlaybackInfo::FEL) != 0;
+     submission.felFilter=fel ? m_requested.felUpscaling : -1;
+     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ? 3 :
+@@ -284,6 +286,8 @@
+   DVBRIDGE::DiagnosticFailures m_failures;
+   DVBRIDGE::DiagnosticFailures m_auditRequested,m_auditPrepared,m_auditCommitted;
+   DVBRIDGE::DiagnosticFailures m_auditCreative;
++  DVBRIDGE::DiagnosticFailures m_auditCMv40;
++  uint64_t m_cmv40LogStream{};
+   uint64_t m_auditStream{},m_auditSource{},m_auditPolicy{};
+   int m_auditSerial{},m_auditRequestedSerial{},m_auditPreparedSerial{},m_auditCommittedSerial{};
+   uint64_t m_prepares{0}, m_directFrames{0}, m_presentations{0}, m_failedPresentations{0};
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1429,6 +1429,8 @@
+   }
+   // Capture the proven observation key before geometry or refresh rekeys work.
+   dvbridge_renderer_set_l2_trims_disabled(m_renderer, preferences.L2TrimsDisabled(policy.mode));
++  const auto cmv40 = preferences.CMv40Options(fallback ? DVBRIDGE_MODE_DISABLED : policy.mode);
++  dvbridge_renderer_set_cmv40(m_renderer, &cmv40);
+   const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
+       policy.mode);
+   const bool sameGeometry = geometry.source_width == m_sourceGeometry.source_width &&
+@@ -2328,6 +2330,20 @@
+ #endif
+       m_requested.output==DVBRIDGE::OutputMode::AdaptiveB)output.effective=6;
+   output.method = m_requested.method;
++  output.cmv40Appended = submission.cmv40Status == CB1_CMV40_APPEND;
++  if (output.cmv40Appended) output.flags |= CDVPlaybackInfo::CM4;
++  if (m_cmv40LogStream != submission.identity.stream)
++  {
++    m_auditCMv40 = {};
++    m_cmv40LogStream = submission.identity.stream;
++  }
++  if (m_auditCMv40.Record(DVBRIDGE::DiagnosticNowMs(), "cmv40", int(submission.cmv40Status)))
++    DVBRIDGE::DiagnosticLog(LOGINFO,
++        "CB1 CM4 output: mode={} result={} source_cm4={} appended={} l2_removed={} tv_peak={} trigger={} headroom={} source={}/{}",
++        m_requested.cmv40Mode, int(submission.cmv40Status), bool(m_pendingInfo & CDVPlaybackInfo::CM4),
++        output.cmv40Appended, m_requested.L2TrimsDisabled(m_effectiveMode),
++        m_requested.peak, m_requested.cmv40Trigger, m_requested.cmv40Headroom,
++        submission.identity.stream, submission.identity.picture);
+   output.l2TrimsDisabled = m_requested.L2TrimsDisabled(m_effectiveMode
+ #ifdef CB1_HAS_HDR10_AI
+       , m_aiFrame

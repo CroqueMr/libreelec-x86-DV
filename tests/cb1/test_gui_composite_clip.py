@@ -17,17 +17,30 @@ class GUICompositeClip(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #define HAVE_DVBRIDGE 1
+using GLint=int;
+namespace DVBRIDGE {
+bool DiagnosticsEnabled(){return false;}
+uint64_t DiagnosticNowMs(){return 0;}
+struct DiagnosticInterval{bool Due(uint64_t){return false;}void Emitted(uint64_t){}};
+template<class...T>void DiagnosticLog(T...){}
+}
 struct CRect {
   int x1=0,y1=0,x2=0,y2=0;
   bool contains(int x,int y) const {return x>=x1 && x<x2 && y>=y1 && y<y2;}
 };
 CRect rawClip{0,276,3840,1884};
 bool bottomCleared=false;
-constexpr int GL_TEXTURE_2D=1,GL_RGBA=2,GL_COLOR_BUFFER_BIT=4,LOGERROR=0,LOGDEBUG=1;
+constexpr int GL_TEXTURE_2D=1,GL_RGBA=2,GL_COLOR_BUFFER_BIT=4,LOGERROR=0,LOGDEBUG=1,LOGINFO=2;
+constexpr int GL_VIEWPORT=5,GL_FRAMEBUFFER_BINDING=6;
+void glGetIntegerv(int,int*){assert(false && "Disabled diagnostics queried GL");}
 void glClearColor(float,float,float,float) {}
 void glClear(int) {bottomCleared=rawClip.contains(1900,1950);}
 struct CLog {template<class... T> static void Log(T...) {}};
-struct CRenderSystemGLES {static void SetScissors(const CRect& r) {rawClip=r;}};
+struct CRenderSystemGLES {
+  static void SetScissors(const CRect& r) {rawClip=r;}
+  static void GetViewPort(CRect& r) {r={0,0,3840,2160};}
+  static void SetViewPort(const CRect& r) {rawClip=r;}
+};
 struct CGraphicContext {
   CRect scissors{0,0,3840,2160};
   CRect GetScissors() const {return scissors;}
@@ -55,6 +68,7 @@ struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   unsigned m_dvGUIContentGeneration=0,m_dvSubtitleDraws=0,m_dvSubtitleContent=0,m_dvPQSubtitleDraws=0;
   int m_dvPQSubtitleWidth=3840,m_dvPQSubtitleHeight=2160;
   CRect m_dvSubtitleBounds;
+  DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
   CGraphicContext& GetGfxContext() {return context;}
   bool GetEnabledFrontToBackRendering() const {return false;}
   bool HasDVBridgeScreenshot() const {return false;}

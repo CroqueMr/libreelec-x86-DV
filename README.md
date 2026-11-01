@@ -4,15 +4,15 @@ Dolby Vision playback and HDR10/HDR10+ output in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Supported Intel, AMD and NVIDIA
 GPU families are listed below. One Generic image includes both NVIDIA driver branches.
 
-**R1.0.0 RC1.1 Debug** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.4
+**R1.0.0 RC2** Â· LibreELEC 13 Â· Kodi 22 RC1 Â· CB1 0.5
 
-[R1.0.0 RC1.1 Debug](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-RC1.1-Debug)
-is available as a diagnostic pre-release with an installation image and a LibreELEC update archive.
-It includes the Master startup hotfix and automatic, rate-limited diagnostics.
+[R1.0.0 RC2](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414)
+provides an installation image and a LibreELEC update archive.
+Includes CB1 0.5, HDR10+ to Dolby Vision, Blu-ray menu improvements and bounded diagnostics.
 
 [Downloads](https://github.com/CroqueMr/libreelec-x86-DV/releases)
-· [Release notes](docs/cb1/RELEASE.md)
-· [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
+Â· [Release notes](docs/cb1/RELEASE.md)
+Â· [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
 
 No external player or proprietary Dolby SDK is required.
 
@@ -25,7 +25,7 @@ players included in the comparison.
 
 *Synthetic grayscale comparison measured by DMDreview on LibreELEC R1.0.0 Beta5. Lower is better.* [Watch the analysis](https://www.youtube.com/watch?v=-9wbVaEgMX8).
 
-Dolby Vision Master Reference and Standard output modes from the build deliver absolute 12 bits precision 
+Dolby Vision Master Reference and Reference output modes from the build deliver absolute 12 bits precision
 with FEL reconstruction, surpassing the best Dolby Vision-certified devices available on the market.
 
 ## Supported Dolby Vision profiles
@@ -47,7 +47,7 @@ format and the active output capabilities.
 | Source | Mode | Output | Purpose |
 | --- | --- | --- | --- |
 | Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | State-of-the-art Dolby vision output will full precision calculation and no compromise |
-| Dolby Vision | **Dolby Vision Standard** | Dolby Vision, TV-Led | Increase performance with near-imperceptible image differences |
+| Dolby Vision | **Dolby Vision Reference** | Dolby Vision, TV-Led | Increase performance with near-imperceptible image differences |
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
 | Dolby Vision | **HDR10 Reference Expert** | HDR10 | Map to the configured TV peak and gamut using compatible creative metadata |
@@ -57,13 +57,14 @@ format and the active output capabilities.
 | HDR10 | **Dolby Vision Adaptive HDR Mapping (AI)** | Dolby Vision, TV-Led | Combine AI scene metadata with controlled highlight expansion |
 | HDR10 | **HDR10 Native** | HDR10 | Keep native Kodi HDR10 playback |
 | HDR10+ | **Native** | HDR10+ | Preserve authored dynamic metadata on an admitted deep-colour output |
+| HDR10+ | **HDR10+ to Dolby Vision (metadata-guided)** | Dolby Vision, TV-Led | Preserve source pixels, translate compatible scene peaks and estimate missing statistics with AI |
 | SDR / HLG | **Native** | Native SDR / HLG | Keep native Kodi playback |
 
-Adaptive HDR Mapping and HDR10 Expert require a TV profile. Standard, Master
+Adaptive HDR Mapping and HDR10 Expert require a TV profile. Reference, Master
 Reference, Basic and Reference AI do not.
 
 For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
-The [Master Reference / Standard comparison](docs/reports/master-reference-vs-standard-2026-10-21.md)
+The [historical Master Reference / Standard comparison](docs/reports/master-reference-vs-standard-2026-10-21.md)
 contains the retained Beta5 image and GPU measurements.
 
 ### Quick rendering selection
@@ -80,14 +81,21 @@ Press **O** to cycle through **Player information**, **rendering selection** and
 
 Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
 metadata, active rendering mode and supported GPU render-engine usage.
+Audio source details and actual Kodi output are shown separately.
+[Audio information](docs/cb1/AUDIO-INFORMATION.md).
 HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
-RC2 preview: separate audio source details and actual Kodi output, with compact headings and readable metadata.
-
-![RC2 Player information on Avatar in Master Reference, with audio source and Kodi output](docs/cb1/images/player-information-rc2-sdr.png)
+![Player information on Avatar in Master Reference, with audio source and Kodi output](docs/cb1/images/player-information-rc2-sdr.png)
 
 GPU usage is Kodi's render-engine load, including visible menus. It is not total
 GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
+
+### Bitmap subtitles and Blu-ray menus
+
+Native Kodi settings provide PGS/DVB brightness, saturation, placement, offset
+and size. SDR/PQ authoring controls are separate; disc-menu graphics are excluded.
+Blu-ray menus use Kodi/libbluray, with the existing Java add-on required for BD-J.
+[Subtitle and menu settings](docs/cb1/PLAYBACK.md#bitmap-subtitles-and-blu-ray-menus).
 
 ## HDR10+
 
@@ -98,8 +106,9 @@ GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
 
 Supported on the listed Intel, AMD and NVIDIA driver routes, with a compatible
 HDR10+ display and at least 10-bit output. Kodi reports HDR10+ display capability,
-source format and accepted output separately. HDR10+ to Dolby Vision is not included.
-[HDR10+ processing](CB1/docs/HDR10PLUS.md) · [Driver/output support](docs/cb1/DRIVER-COVERAGE.md).
+source format and accepted output separately. Metadata-guided HDR10+ to Dolby
+Vision is a separate manual mode; it does not translate authored tone curves.
+[HDR10+ processing](CB1/docs/HDR10PLUS.md) Â· [Driver/output support](docs/cb1/DRIVER-COVERAGE.md).
 
 ## Install or update
 
@@ -112,8 +121,8 @@ Choose the matching version from [releases](https://github.com/CroqueMr/libreele
 | `sources.tar.zst` + `vendor-inputs.tar.zst` | Rebuild the release; not required for installation |
 
 Settings are in **Kodi > Settings > Player > Videos**.
-Standard Dolby Vision is the default. Each mode has one fixed rendering recipe.
-Automatic Master-to-Standard recovery is off by default. [Build instructions](docs/cb1/BUILD.md).
+Dolby Vision Reference is the default. Each mode has one fixed rendering recipe.
+Automatic Master-to-Reference recovery is off by default. [Build instructions](docs/cb1/BUILD.md).
 
 ## AMD HDMI 3D
 
@@ -133,9 +142,10 @@ A 3D-capable display and suitable glasses are required.
 | --- | --- |
 | Intel iGPU: Core 7th gen and newer, Core Ultra Series 1 / 2, N-series | Supported |
 | AMD iGPU: Ryzen 2000G / 3000G and corresponding mobile APUs, 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
-| AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 series | Supported |
+| AMD dedicated GPU: Radeon RX 5000 / 6000 / 7000 / 9000 series | Supported |
 | AMD Radeon Vega M; Intel Arc A / B | Supported |
 | NVIDIA dedicated GPU: GeForce GTX 16, RTX 20 / 30 / 40 / 50 series | Supported |
+| NVIDIA GeForce GTX 10, Pascal | Supported; matched R580 driver selected automatically |
 | Other hardware | Dolby Vision processing to HDR10 where supported; no custom Dolby Vision HDMI output |
 
 Performance depends on hardware, content and rendering mode. Prior N100 tests
@@ -149,10 +159,10 @@ HDR10/HLG, native HDR10+ and converted HDR10+, including route-specific limits.
 
 ## Known limitations
 
-- Screenshots are unavailable in Dolby Vision Master Reference.
+- HDR/Dolby Vision screenshots illustrate the interface, not HDMI output fidelity.
 - Heavy conversions and visible menus can exceed N100 rendering capacity, especially at 60 FPS.
 - Adaptive HDR Mapping remains subject to visual refinement.
-- Intel Display9, including Kaby Lake and Coffee Lake: native HDMI HDR10/HLG/HDR10+ is not supported. Dolby Vision uses its separate tunnel path.
+- Intel Display9: the Skylake/Kaby Lake HDR path retains native 12-bit and bandwidth limits; other Display9 and LSPCON routes retain their native restrictions. Physical HDR reception still needs confirmation on the affected setups. Dolby Vision uses its separate tunnel path.
 - NVIDIA GTX 10/16 and RTX 20/30: some HDMI-VIC, stereoscopic or vendor-packet combinations prevent native HDR signaling. See the driver/output matrix.
 
 ## Components and documentation

@@ -6,6 +6,7 @@
 #include "dvbridge_placebo.h"
 #include "dvbridge_creative.h"
 #include "cb1_master_reference.h"
+#include "cb1_cmv40.h"
 struct dvbridge_renderer;
 struct dvbridge_native_overlay;
 
@@ -14,6 +15,9 @@ struct cb1_ai_result;
 /* Next-picture authored Standard/Master output only (default false).
  * Reconstruction still consumes the original metadata. Adaptive/AI clears it. */
 void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *renderer,bool disabled);
+#define DVBRIDGE_CMV40_API 1
+void dvbridge_renderer_set_cmv40(struct dvbridge_renderer *renderer,const struct cb1_cmv40_options *options);
+enum cb1_cmv40_status dvbridge_renderer_cmv40_status(const struct dvbridge_renderer *renderer);
 #define DVBRIDGE_SPATIAL_API 1
 /* Synchronous final fitting of an already processed, single-plane picture.
  * The player owns its native filter and the returned texture. Keep both alive

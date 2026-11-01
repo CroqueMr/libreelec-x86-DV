@@ -184,7 +184,9 @@ int main(void)
     pl_fmt format=pl_find_fmt(gpu,PL_FMT_UNORM,4,8,8,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_HOST_READABLE);assert(format);
     pl_tex target=pl_tex_create(gpu,pl_tex_params(.w=3840,.h=2160,.format=format,.renderable=true,.host_readable=true));assert(target);
     unsigned fbo;assert(pl_opengl_unwrap(gpu,target,NULL,NULL,&fbo));
-    const size_t bytes=(size_t)3840*2160*4;uint8_t *expected=malloc(bytes),*actual=malloc(bytes);assert(expected && actual);
+    const size_t bytes=(size_t)3840*2160*4;
+    uint8_t *expected=malloc(bytes),*actual=malloc(bytes),*flag_control=malloc(bytes);
+    assert(expected && actual && flag_control);
     struct cb1_ai_result prediction={.id={1,1,1},.pts=0,.raw={.l1_min=0,.l1_max=3000,.l1_avg=1000,.l3_min=2048,.l3_max=2048,.l3_avg=2048}};
     const struct dvbridge_policy policy={.mode=DVBRIDGE_MODE_STANDARD,.revision=1};
     const struct dvbridge_geometry cases[]={{3840,1600,0,280,3840,1600},{3840,1920,0,120,3840,1920},{1440,1080,1200,540,1440,1080},{1920,800,0,280,3840,1600}};
@@ -218,22 +220,38 @@ int main(void)
         for(unsigned flip=0;flip<2;flip++){
             assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
             assert(dvbridge_render_dv_policy_resolve(r,target,fbo,flip));
+            const struct dvbridge_dv_policy_output *rgb_output=dvbridge_render_dv_policy_output(r);assert(rgb_output);
+            size_t rgb_metadata_bytes=rgb_output->bytes;
+            void *rgb_metadata=av_memdup(rgb_output->output_metadata,rgb_metadata_bytes);assert(rgb_metadata);
             assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=expected)));retire(r);
-            if(k==3){
-                assert(!dvbridge_render_hdr10_ai_packed(r,&policy,&prediction,&source,&geometry,target,fbo,flip));
-                assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=actual)));
-                assert(!memcmp(expected,actual,bytes));
-                continue;
-            }
+            /* Native geometry admits placement and scaling. The historical DV
+             * optimization flag must not select a second HDR10 AI circuit. */
             dvbridge_renderer_set_optimized_dv(r,false);
-            assert(!dvbridge_render_hdr10_ai_packed(r,&policy,&prediction,&source,&geometry,target,fbo,flip));
+            assert(dvbridge_render_hdr10_ai_packed(r,&policy,&prediction,&source,&geometry,target,fbo,flip));
+            assert(dvbridge_render_dv_policy_resolve(r,target,fbo,flip));
+            const struct dvbridge_dv_policy_output *control=dvbridge_render_dv_policy_output(r);
+            assert(control && !control->intermediate);
+            size_t metadata_bytes=control->bytes;
+            void *metadata=av_memdup(control->output_metadata,metadata_bytes);assert(metadata);
+            assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=flag_control)));
+            retire(r);
             dvbridge_renderer_set_optimized_dv(r,true);
-            assert(dvbridge_render_hdr10_ai_packed(r,&policy,&prediction,&source,&geometry,target,fbo,flip) && "Letterboxed AI must use fused output");
+            assert(dvbridge_render_hdr10_ai_packed(r,&policy,&prediction,&source,&geometry,target,fbo,flip) &&
+                "Placed and scaled AI must use the same packed circuit");
+            assert(dvbridge_render_dv_policy_resolve(r,target,fbo,flip));
             const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out && !out->intermediate);
+            assert(out->bytes==metadata_bytes && !memcmp(metadata,out->output_metadata,metadata_bytes) &&
+                "The historical DV optimization flag must not change any AI metadata byte");
+            av_free(metadata);
+            assert(out->bytes==rgb_metadata_bytes && !memcmp(rgb_metadata,out->output_metadata,rgb_metadata_bytes) &&
+                "Materialized and packed AI must emit identical complete metadata");
+            av_free(rgb_metadata);
             const AVDOVIDmData *l5=av_dovi_find_level(out->output_metadata,5);assert(l5);
             assert(l5->l5.left_offset==geometry.x && l5->l5.top_offset==geometry.y);
             assert(out->value.l1[1]==3000 && out->value.l1[2]==1000);
             assert(pl_tex_download(gpu,pl_tex_transfer_params(.tex=target,.ptr=actual)));
+            assert(!memcmp(flag_control,actual,bytes) &&
+                "The historical DV optimization flag must not change any complete AI carrier byte");
             for(unsigned y=0;y<2160;y++)for(unsigned x=0;x<3840;x++){
                 unsigned logical_y=flip?2159-y:y;
                 if(x>=(unsigned)geometry.x && x<(unsigned)(geometry.x+geometry.width) &&
@@ -241,6 +259,7 @@ int main(void)
                 const uint8_t *pixel=actual+((size_t)y*3840+x)*4;
                 assert(((pixel[1]<<4)|(pixel[2]&15))==256);
                 assert((((pixel[0]<<4)|(pixel[2]>>4))&~1)==2048 && pixel[3]==255);
+                if(k==3)assert(!memcmp(expected+((size_t)y*3840+x)*4,pixel,4));
             }
             unsigned cx=geometry.x+geometry.width/2,cy=geometry.y+geometry.height/2;
             if(flip)cy=2159-cy;
@@ -270,7 +289,14 @@ int main(void)
                 }
             }
             fflush(stdout);
-            if(k<4)assert(!changed);
+            if(k<3)assert(!changed);
+            else if(k==3){
+                /* Newly admitted scaled RGB, not Master: identical Lanczos
+                 * configuration can round a decoded 12-bit code by one across
+                 * materialized/packed precision and viewport boundaries. */
+                assert(max_y<=1 && max_c<=1);
+                for(size_t i=3;i<bytes;i+=4)assert(expected[i]==actual[i]);
+            }
             else{
                 /* Removing the FP32 store/load boundary can change a rounded video code by one. */
                 assert(max_y<=1 && max_c<=1);
@@ -284,6 +310,6 @@ int main(void)
         else pl_tex_destroy(gpu,&input);
     }
     native_signal(r,gpu,target,fbo);
-    free(expected);free(actual);dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
+    free(expected);free(actual);free(flag_control);dvbridge_renderer_destroy(r);assert(dvbridge_retirement_owner_destroy(&owner));
     pl_tex_destroy(gpu,&target);reference_gpu_destroy(&g);
 }

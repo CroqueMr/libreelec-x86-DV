@@ -17,6 +17,7 @@ class NvidiaModeRestore(unittest.TestCase):
         self.assertIsNotNone(found,'joined NVIDIA mode restoration is missing')
         program=r'''
 #include <cassert>
+void glFinish(){}
 struct RESOLUTION_INFO {int id=1;};
 struct CDVBridgeState {enum class Backend {KERNEL,NVIDIA}; Backend backend=Backend::NVIDIA;
  Backend CapturedBackend() const {return backend;}};
@@ -26,6 +27,8 @@ struct DRM {RESOLUTION_INFO mode; bool accepts=true; int staged=1;
  bool SetVideoMode(const RESOLUTION_INFO& value,void*) {staged=value.id;return true;}};
 struct CWinSystemGbmGLESContext {
  CDVBridgeState m_dvState; DRM drm; DRM* m_DRM=&drm; bool restore=true; int observed=0;
+ struct Context{bool Quarantined(){return false;}}context;
+ Context* m_dvContext=&context;bool RetireDVContext(){return true;}
  bool EndDVBridge(){observed=drm.staged;return restore;}
  bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&);
 };

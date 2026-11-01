@@ -1,20 +1,57 @@
 --- a/drivers/gpu/drm/i915/display/intel_display_types.h
 +++ b/drivers/gpu/drm/i915/display/intel_display_types.h
-@@ -519,6 +519,8 @@
+@@ -28,6 +28,7 @@
+ 
+ #include <linux/pm_qos.h>
+ #include <linux/pwm.h>
++#include <linux/ratelimit.h>
+ 
+ #include <drm/display/drm_dp_dual_mode_helper.h>
+ #include <drm/display/drm_dp_mst_helper.h>
+@@ -37,6 +38,7 @@
+ #include <drm/drm_colorop.h>
+ #include <drm/drm_crtc.h>
+ #include <drm/drm_encoder.h>
++#include <drm/drm_dvbridge_edid.h>
+ #include <drm/drm_framebuffer.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_rect.h>
+@@ -519,6 +521,11 @@
  
  struct intel_connector {
  	struct drm_connector base;
 +	/* Private experimental property; gated by enable_dv_lab. */
 +	struct drm_property *dv_lab_property;
++	struct drm_property *dv_hdr10_property;
++	/* Diagnostics only: no influence on DV admission or recovery. */
++	struct ratelimit_state dv_log_limit;
  	/*
  	 * The fixed encoder this connector is connected to.
  	 */
-@@ -613,6 +615,8 @@
+@@ -543,6 +550,8 @@
+ 
+ 	/* Cached EDID for detect. */
+ 	const struct drm_edid *detect_edid;
++	/* Detect/force and atomic readers share connection_mutex. */
++	struct dvbridge_sink_caps dv_sink_caps;
+ 
+ 	/* Number of times hotplug detection was tried after an HPD interrupt */
+ 	int hotplug_retries;
+@@ -613,6 +622,9 @@
  
  struct intel_digital_connector_state {
  	struct drm_connector_state base;
 +	/* Scalar copy/reset lifecycle, no property-blob reference to leak. */
 +	bool dv_lab_standard;
++	bool dv_hdr10_deep_color;
  
  	enum hdmi_force_audio force_audio;
  	int broadcast_rgb;
+@@ -635,6 +647,7 @@
+ 
+ struct intel_atomic_state {
+ 	struct drm_atomic_commit base;
++	u32 hdr10plus_primary_mask;
+ 
+ 	struct ref_tracker *wakeref;
+ 

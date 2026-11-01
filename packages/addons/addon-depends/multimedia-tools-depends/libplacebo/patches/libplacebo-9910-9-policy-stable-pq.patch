@@ -1,0 +1,235 @@
+Subject: CB policy-only stable ST2084 FP32 emission, default off
+
+Matched renderer/shader/dispatch ABI required. Existing defaults and equations
+remain unchanged. The inverse uses a bounded general expm1 primitive seed,
+not a fitted transfer curve or an extra pass.
+
+diff --git a/src/dispatch.c b/src/dispatch.c
+index b6ef375..ab715c9 100644
+--- a/src/dispatch.c
++++ b/src/dispatch.c
+@@ -44,6 +44,7 @@ struct pl_dispatch_t {
+     uint8_t current_ident;
+     uint8_t current_index;
+     bool dynamic_constants;
++    bool cb1_stable_pq;
+     int max_passes;
+ 
+     void (*info_callback)(void *, const struct pl_dispatch_info *);
+@@ -150,6 +151,7 @@ pl_shader pl_dispatch_begin_ex(pl_dispatch dp, bool unique)
+         .gpu = dp->gpu,
+         .index = dp->current_index,
+         .dynamic_constants = dp->dynamic_constants,
++        .cb1_stable_pq = dp->cb1_stable_pq,
+     };
+ 
+     pl_shader sh = NULL;
+@@ -169,6 +171,11 @@ void pl_dispatch_mark_dynamic(pl_dispatch dp, bool dynamic)
+     dp->dynamic_constants = dynamic;
+ }
+ 
++void pl_dispatch_mark_cb1_stable_pq(pl_dispatch dp, bool enabled)
++{
++    dp->cb1_stable_pq = enabled;
++}
++
+ void pl_dispatch_callback(pl_dispatch dp, void *priv,
+                           void (*cb)(void *priv, const struct pl_dispatch_info *))
+ {
+diff --git a/src/include/libplacebo/dispatch.h b/src/include/libplacebo/dispatch.h
+index 141055c..07989d2 100644
+--- a/src/include/libplacebo/dispatch.h
++++ b/src/include/libplacebo/dispatch.h
+@@ -42,6 +42,10 @@ PL_API void pl_dispatch_destroy(pl_dispatch *dp);
+ // are the same.
+ PL_API void pl_dispatch_reset_frame(pl_dispatch dp);
+ 
++// CB policy-only option for subsequent new/reset shaders. Default off.
++// The renderer sets this on every call, including false after an opted-in call.
++PL_API void pl_dispatch_mark_cb1_stable_pq(pl_dispatch dp, bool enabled);
++
+ // Returns a blank pl_shader object, suitable for recording rendering commands.
+ // For more information, see the header documentation in `shaders/*.h`.
+ PL_API pl_shader pl_dispatch_begin(pl_dispatch dp);
+diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
+index 3c8d9b2..6bddef7 100644
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -349,6 +349,9 @@ struct pl_render_params {
+     // Default false preserves all existing callers. Requires matching
+     // CB-patched headers and library; this is not an upstream ABI field.
+     bool cb1_nearest_identity;
++    // CB policy-only equivalent ST2084 FP32 realization, default off.
++    // Requires matched renderer/shader/dispatch headers and library.
++    bool cb1_stable_pq;
+ 
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+     // with any compile-time constants being replaced by runtime-adjustable
+diff --git a/src/include/libplacebo/shaders.h b/src/include/libplacebo/shaders.h
+index 96b9525..ab2475d 100644
+--- a/src/include/libplacebo/shaders.h
++++ b/src/include/libplacebo/shaders.h
+@@ -63,6 +63,9 @@ struct pl_shader_params {
+     // dynamic variables. This is mainly useful to avoid recompilation for
+     // shaders which expect to have their values change constantly.
+     bool dynamic_constants;
++    // CB policy-only equivalent ST2084 FP32 realization, default off.
++    // Matched modified headers and library are required.
++    bool cb1_stable_pq;
+ };
+ 
+ #define pl_shader_params(...) (&(struct pl_shader_params) { __VA_ARGS__ })
+diff --git a/src/renderer.c b/src/renderer.c
+index b2edc30..97bfc25 100644
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -3643,6 +3643,7 @@ bool pl_render_image(pl_renderer rr, const struct pl_frame *pimage,
+ {
+     params = PL_DEF(params, &pl_render_default_params);
+     pl_dispatch_mark_dynamic(rr->dp, params->dynamic_constants);
++    pl_dispatch_mark_cb1_stable_pq(rr->dp, params->cb1_stable_pq);
+     if (!pimage)
+         return draw_empty_overlays(rr, ptarget, params);
+ 
+@@ -3826,6 +3827,7 @@ bool pl_render_image_mix(pl_renderer rr, const struct pl_frame_mix *images,
+     params = PL_DEF(params, &pl_render_default_params);
+     struct params_info par_info = render_params_info(params);
+     pl_dispatch_mark_dynamic(rr->dp, params->dynamic_constants);
++    pl_dispatch_mark_cb1_stable_pq(rr->dp, params->cb1_stable_pq);
+ 
+     require(images->num_frames >= 1);
+     require(images->vsync_duration > 0.0);
+diff --git a/src/shaders/colorspace.c b/src/shaders/colorspace.c
+index fa08fc7..5c3a32a 100644
+--- a/src/shaders/colorspace.c
++++ b/src/shaders/colorspace.c
+@@ -23,6 +23,36 @@
+ 
+ #include <libplacebo/shaders/colorspace.h>
+ 
++// Original ST2084 constants, guards and domain. Avoid a rounded near-unity root.
++// Fixed expm1 P5(z/16) seed and four doublings; analytic 1/n! coefficients,
++// bounded primitive approximation, not a fitted curve or an exact identity.
++static void cb1_pq_eotf(pl_shader sh, const char *signal)
++{
++    GLSL("{ for (int cb1_pq_i = 0; cb1_pq_i < 3; cb1_pq_i++) {\n"
++         "float cb1_pq_q = %s[cb1_pq_i];\n"
++         "if (cb1_pq_q <= 0.0) { %s[cb1_pq_i] = 0.0; } else {\n"
++         "float cb1_pq_log = log(cb1_pq_q), cb1_pq_z = cb1_pq_log / 78.84375, cb1_pq_y = cb1_pq_z / 16.0;\n"
++         "float cb1_pq_d = -cb1_pq_y * (1.0 + cb1_pq_y * (0.5 + cb1_pq_y * ((1.0/6.0) + cb1_pq_y * ((1.0/24.0) + cb1_pq_y/120.0))));\n"
++         "cb1_pq_d = cb1_pq_d * (2.0 - cb1_pq_d);\n"
++         "cb1_pq_d = cb1_pq_d * (2.0 - cb1_pq_d);\n"
++         "cb1_pq_d = cb1_pq_d * (2.0 - cb1_pq_d);\n"
++         "cb1_pq_d = cb1_pq_d * (2.0 - cb1_pq_d);\n"
++         "%s[cb1_pq_i] = max(0.1640625 - cb1_pq_d, 0.0) / (0.1640625 + 18.6875 * cb1_pq_d);\n"
++         "} } }\n"
++         "%s = pow(%s, vec3(1.0/0.1593017578125));\n",
++         signal, signal, signal, signal, signal);
++}
++
++static void cb1_pq_oetf(pl_shader sh, const char *signal)
++{
++    GLSL("{\n"
++         "vec3 v = pow(max(%s, 0.0), vec3(0.1593017578125));\n"
++         "v = vec3(1.0) - 0.1640625 * (vec3(1.0) - v) / (vec3(1.0) + 18.6875 * v);\n"
++         "vec3 v2=v*v, v4=v2*v2, v8=v4*v4, v16=v8*v8, v32=v16*v16, v64=v32*v32;\n"
++         "%s = ((v64*v8)*v4)*v2*pow(v, vec3(0.84375));\n"
++         "}\n", signal, signal);
++}
++
+ void pl_shader_set_alpha(pl_shader sh, struct pl_color_repr *repr,
+                          enum pl_alpha_mode mode)
+ {
+@@ -466,19 +496,27 @@ void pl_shader_decode_color_ex(pl_shader sh,
+         });
+ 
+         // PQ EOTF
++        if (SH_PARAMS(sh).cb1_stable_pq) {
++            cb1_pq_eotf(sh, "color.rgb");
++        } else {
+         GLSL("color.rgb = pow(max(color.rgb, 0.0), vec3(1.0/%f));   \n"
+              "color.rgb = max(color.rgb - vec3(%f), 0.0)            \n"
+              "             / (vec3(%f) - vec3(%f) * color.rgb);     \n"
+              "color.rgb = pow(color.rgb, vec3(1.0/%f));             \n",
+              PQ_M2, PQ_C1, PQ_C2, PQ_C3, PQ_M1);
++        }
+         // LMS matrix
+         GLSL("color.rgb = "$" * color.rgb; \n", mat);
+         // PQ OETF
++        if (SH_PARAMS(sh).cb1_stable_pq) {
++            cb1_pq_oetf(sh, "color.rgb");
++        } else {
+         GLSL("color.rgb = pow(max(color.rgb, 0.0), vec3(%f));       \n"
+              "color.rgb = (vec3(%f) + vec3(%f) * color.rgb)         \n"
+              "             / (vec3(1.0) + vec3(%f) * color.rgb);    \n"
+              "color.rgb = pow(color.rgb, vec3(%f));                 \n",
+              PQ_M1, PQ_C1, PQ_C2, PQ_C3, PQ_M2);
++        }
+         break;
+ #else
+         SH_FAIL(sh, "libplacebo was compiled without support for dolbyvision reshaping");
+@@ -726,6 +764,11 @@ void pl_shader_linearize(pl_shader sh, const struct pl_color_space *csp)
+         GLSL("color.rgb = vec3(52.37/48.0) * pow(color.rgb, vec3(2.6));\n");
+         goto scale_out;
+     case PL_COLOR_TRC_PQ:
++        if (SH_PARAMS(sh).cb1_stable_pq) {
++            cb1_pq_eotf(sh, "color.rgb");
++            GLSL("color.rgb *= vec3(%f);\n", 10000.0 / PL_COLOR_SDR_WHITE);
++            return;
++        }
+         GLSL("color.rgb = pow(color.rgb, vec3(1.0/%f));         \n"
+              "color.rgb = max(color.rgb - vec3(%f), 0.0)        \n"
+              "             / (vec3(%f) - vec3(%f) * color.rgb); \n"
+@@ -865,6 +908,11 @@ void pl_shader_delinearize(pl_shader sh, const struct pl_color_space *csp)
+              "                lessThanEqual(vec3(0.001953), color.rgb));     \n");
+         return;
+     case PL_COLOR_TRC_PQ:
++        if (SH_PARAMS(sh).cb1_stable_pq) {
++            GLSL("color.rgb *= vec3(1.0/%f);\n", 10000 / PL_COLOR_SDR_WHITE);
++            cb1_pq_oetf(sh, "color.rgb");
++            return;
++        }
+         GLSL("color.rgb *= vec3(1.0/%f);                         \n"
+              "color.rgb = pow(color.rgb, vec3(%f));              \n"
+              "color.rgb = (vec3(%f) + vec3(%f) * color.rgb)      \n"
+@@ -1880,6 +1928,12 @@ void pl_shader_color_map_ex(pl_shader sh, const struct pl_color_map_params *para
+     }
+ 
+     // Full path: convert input from normalized RGB to IPT
++    if (SH_PARAMS(sh).cb1_stable_pq) {
++        GLSL("vec3 lms = "$" * color.rgb;\n"
++             "vec3 lmspq = %f * lms;\n", SH_MAT3(rgb2lms), PL_COLOR_SDR_WHITE / 10000);
++        cb1_pq_oetf(sh, "lmspq");
++        GLSL("vec3 ipt = "$" * lmspq;\nfloat i_orig = ipt.x;\n", lms2ipt);
++    } else {
+     GLSL("vec3 lms = "$" * color.rgb;               \n"
+          "vec3 lmspq = %f * lms;                    \n"
+          "lmspq = pow(max(lmspq, 0.0), vec3(%f));   \n"
+@@ -1892,6 +1946,7 @@ void pl_shader_color_map_ex(pl_shader sh, const struct pl_color_map_params *para
+          PL_COLOR_SDR_WHITE / 10000,
+          PQ_M1, PQ_C1, PQ_C2, PQ_C3, PQ_M2,
+          lms2ipt);
++    }
+ 
+     if (params->show_clipping) {
+         const float eps = 1e-6f;
+@@ -2081,6 +2136,11 @@ void pl_shader_color_map_ex(pl_shader sh, const struct pl_color_map_params *para
+     }
+ 
+     // Convert IPT back to linear RGB
++    if (SH_PARAMS(sh).cb1_stable_pq) {
++        GLSL("lmspq = "$" * ipt;\nlms = lmspq;\n", ipt2lms);
++        cb1_pq_eotf(sh, "lms");
++        GLSL("lms *= %f;\ncolor.rgb = "$" * lms;\n", 10000 / PL_COLOR_SDR_WHITE, SH_MAT3(lms2rgb));
++    } else {
+     GLSL("lmspq = "$" * ipt;                        \n"
+          "lms = pow(max(lmspq, 0.0), vec3(1.0/%f)); \n"
+          "lms = max(lms - vec3(%f), 0.0)            \n"
+@@ -2092,6 +2152,7 @@ void pl_shader_color_map_ex(pl_shader sh, const struct pl_color_map_params *para
+          PQ_M2, PQ_C1, PQ_C2, PQ_C3, PQ_M1,
+          10000 / PL_COLOR_SDR_WHITE,
+          SH_MAT3(lms2rgb));
++    }
+ 
+     if (params->show_clipping) {
+         GLSL("if (clip_hi) {                                                \n"

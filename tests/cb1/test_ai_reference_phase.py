@@ -1,5 +1,6 @@
 """Reference AI selects 30 FPS pictures on physical 60 Hz refresh boundaries."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -46,6 +47,8 @@ int main(){
     def test_reference_selection_does_not_start_halfway_through_refresh(self):
         source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
         function = body(source, 'void CRenderManager::PrepareNextRender()')
+        source_mode = re.search(r'enum class HDR10SourceMode[^;]+;',
+            (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()).group()
         program = r'''
 #define HAVE_DVBRIDGE 1
 #define CB1_HAS_HDR10_AI 1
@@ -58,7 +61,7 @@ constexpr int PRESENT_READY=0,PRESENT_IDLE=1,PRESENT_FLIP=2;
 constexpr int PRESENT_METHOD_SINGLE=0,FS_NONE=0,LOGERROR=0,LOGDEBUG=0,LOGAVTIMING=0;
 struct CLog {template<class...T> static void Log(T...){} template<class...T> static void LogFC(T...){} };
 namespace DVBRIDGE {
-enum class HDR10SourceMode {Native,ReferenceDV,EnhancedDV};
+HDR10_SOURCE_MODE
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;
 inline Preferences FrameOutputSettings(){return prefs;}
@@ -114,6 +117,13 @@ int main(){
  boundary.PrepareNextRender();
  assert(boundary.m_presentstep==PRESENT_FLIP);
  assert(boundary.m_presentsource==2);
+ DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::HDR10PlusDV;
+ window.age=8387.119;CRenderManager guidedHalfway;
+ guidedHalfway.PrepareNextRender();
+ assert(guidedHalfway.m_presentstep==PRESENT_READY && guidedHalfway.m_queued.front()==2);
+ window.age=16666.666666666668;CRenderManager guidedBoundary;
+ guidedBoundary.m_dvdClock.now+=8279.547666666668;guidedBoundary.PrepareNextRender();
+ assert(guidedBoundary.m_presentstep==PRESENT_FLIP && guidedBoundary.m_presentsource==2);
  // Other source modes, matched refresh, missing anchors and pause retain selection.
  window.age=8387.119;
  for(auto mode:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
@@ -184,7 +194,7 @@ int main(){
  vanilla.PrepareNextRender();
  assert(vanilla.m_presentsource==3 && vanilla.m_queued.front()==4);
 }
-'''.replace('FUNCTION', function)
+'''.replace('FUNCTION', function).replace('HDR10_SOURCE_MODE', source_mode)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test.cpp').write_text(program)

@@ -125,6 +125,8 @@ struct dvbridge_renderer {
     struct dvbridge_candidate *pending;
     bool ready, direct_output, overlay_visible;
     bool l2_trims_disabled;
+    struct cb1_cmv40_options cmv40;
+    enum cb1_cmv40_status cmv40_status;
     bool p5_native_pending;
     bool packed, fragment_quad, exact_scaler_cache, optimized_dv;
     bool enhanced_linear;
@@ -1298,6 +1300,16 @@ void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *r,bool di
     if(r)r->l2_trims_disabled=disabled;
 }
 
+void dvbridge_renderer_set_cmv40(struct dvbridge_renderer *r,const struct cb1_cmv40_options *options)
+{
+    if(r)r->cmv40=options?*options:(struct cb1_cmv40_options){0};
+}
+
+enum cb1_cmv40_status dvbridge_renderer_cmv40_status(const struct dvbridge_renderer *r)
+{
+    return r && r->ready?r->cmv40_status:CB1_CMV40_OFF;
+}
+
 void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *r, bool enabled)
 {
     if (r) r->fel_nearest = enabled;
@@ -1479,23 +1491,26 @@ static struct dvbridge_candidate *prepare_picture_candidate(struct dvbridge_rend
     /* Validate the original through the exact existing transport path first:
      * filtering must not turn malformed or duplicate L2 into eligible input. */
     struct dvbridge_candidate *candidate=prepare(r->context,metadata,bytes,pts,geometry,paired,force_refresh);
-    if(!candidate || !disable_l2)return candidate;
-    const AVDOVIMetadata *m=metadata;
-    bool has_l2=false;
-    for(int i=0;i<m->num_ext_blocks;i++)
-        if(av_dovi_get_ext(m,i)->level==2){has_l2=true;break;}
-    if(!has_l2)return candidate;
-    dvbridge_candidate_destroy(candidate);
-    AVDOVIMetadata *output=av_memdup(metadata,bytes);
-    if(!output)return NULL;
-    output->num_ext_blocks=0;
-    for(int i=0;i<m->num_ext_blocks;i++){
-        if(av_dovi_get_ext(m,i)->level==2)continue;
-        memcpy(av_dovi_get_ext(output,output->num_ext_blocks++),av_dovi_get_ext(m,i),m->ext_block_size);
+    r->cmv40_status=CB1_CMV40_OFF;
+    if(!candidate || (!disable_l2 && !r->cmv40.mode))return candidate;
+    AVDOVIMetadata *output=NULL;size_t output_bytes=0;
+    if(!cb1_cmv40_output(&r->cmv40,metadata,bytes,disable_l2,&output,&output_bytes,&r->cmv40_status)){
+        r->cmv40_status=CB1_CMV40_REJECTED;
+        if(!disable_l2)return candidate;
+        dvbridge_candidate_destroy(candidate);return NULL;
     }
-    candidate=prepare(r->context,output,bytes,pts,geometry,paired,force_refresh);
+    if(!output)return candidate;
+    struct dvbridge_candidate *changed=prepare(r->context,output,output_bytes,pts,geometry,paired,force_refresh);
+    if(!changed && r->cmv40_status==CB1_CMV40_APPEND){
+        /* Optional metadata must not reject a valid movie when the wire is full. */
+        r->cmv40_status=CB1_CMV40_REJECTED;
+        if(!disable_l2){av_free(output);return candidate;}
+        output->num_ext_blocks-=4;
+        changed=prepare(r->context,output,output_bytes,pts,geometry,paired,force_refresh);
+    }
+    dvbridge_candidate_destroy(candidate);
     av_free(output);
-    return candidate;
+    return changed;
 }
 
 static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *source,
@@ -1510,7 +1525,10 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
 {
     if (!r)
         return false;
-    if(session || policy || enhanced_reconstruction)r->l2_trims_disabled=false;
+    r->cmv40_status=CB1_CMV40_OFF;
+    if(session || policy || enhanced_reconstruction){
+        r->l2_trims_disabled=false;dvbridge_renderer_set_cmv40(r,NULL);
+    }
     if (r->dv.active) {
         dvbridge_render_dv_policy_cancel(r);
         return false;
@@ -2127,7 +2145,10 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
        !(policy?reference_area(area,metadata,geometry):dvbridge_frame_area(margins,metadata,bytes,geometry)) ||
        geometry.source_width<=0 || geometry.source_width>3840 ||
        geometry.source_height<=0 || geometry.source_height>2160)return false;
-    pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
+    /* Non-Master HDR10 keeps its source grid in PQ before the native scaler. */
+    pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_UNORM,4,16,16,
+        PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
+    if(!fmt)fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,
         PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
     if(!fmt || !pl_tex_recreate(r->gpu,&r->native_picture,pl_tex_params(
         .w=geometry.source_width,.h=geometry.source_height,.format=fmt,
@@ -3068,6 +3089,12 @@ static bool dve_allocate(struct dvbridge_renderer *r,unsigned width,unsigned hei
     }
     return true;
 }
+static bool ai_pack_output(const struct dvbridge_renderer *r)
+{
+    /* Deferred GUI composition consumes the retained PQ, not this scratch carrier. */
+    return r->ai_enhanced_prepack &&
+        (!r->overlay_visible || r->dv.enhanced_overlay || r->dv.ai_direct_target);
+}
 static bool dve_clear_rows(unsigned framebuffer,unsigned first,unsigned end)
 {
     if(!first && end==2160)return true;
@@ -3219,7 +3246,7 @@ static bool dve_run(struct dvbridge_renderer *r,const struct cb1_dv_enhanced_pla
     }
     glActiveTexture(GL_TEXTURE0);
     glBindSampler(0,sampler);glBindTexture(GL_TEXTURE_2D,binding);glActiveTexture(active);
-    s->prepacked=prepack || (s->ai_source && r->ai_enhanced_fused && r->ai_enhanced_prepack);
+    s->prepacked=prepack || (s->ai_source && r->ai_enhanced_fused && ai_pack_output(r));
     return dv_last_use(r) && ok && glGetError()==GL_NO_ERROR;
 }
 
@@ -3304,6 +3331,7 @@ static enum dvbridge_dv_policy_status dv_policy_prepare(struct dvbridge_renderer
 {
     if(!r)return DVBRIDGE_DV_FAILED;
     r->l2_trims_disabled=false;
+    dvbridge_renderer_set_cmv40(r,NULL);r->cmv40_status=CB1_CMV40_OFF;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return r->dv.quarantined?DVBRIDGE_DV_FAILED:DVBRIDGE_DV_BUSY;}
     dvbridge_render_policy_cancel(r);
     if(!r->owner)return DVBRIDGE_DV_UNSUPPORTED;
@@ -3951,7 +3979,10 @@ static AVDOVIMetadata *ai_output_metadata(const struct cb1_ai_result *prediction
     /* Missing mastering data stays unknown. PQ capacity is a transport envelope. */
     double peak=color->hdr.max_luma;
     c->source_max_pq=isfinite(peak) && peak>0 && peak<=10000?dv_wire_code(dv_ideal_pq(peak)):4095;
-    c->source_min_pq=0;c->scene_refresh_flag=0;m->num_ext_blocks=3;
+    c->source_min_pq=(prediction->source_flags&CB1_SOURCE_HDR10PLUS) &&
+        isfinite(color->hdr.min_luma) && color->hdr.min_luma>0 ?
+        dv_wire_code(dv_ideal_pq(color->hdr.min_luma)) : 0;
+    c->scene_refresh_flag=(prediction->source_flags&CB1_SOURCE_SCENE_REFRESH)!=0;m->num_ext_blocks=3;
     AVDOVIDmData *l1=av_dovi_get_ext(m,0),*l5=av_dovi_get_ext(m,1),*l3=av_dovi_get_ext(m,2);
     l1->level=1;l1->l1.min_pq=raw->l1_min;l1->l1.max_pq=raw->l1_max;l1->l1.avg_pq=raw->l1_avg;
     l5->level=5;l5->l5.left_offset=margins[0];l5->l5.right_offset=margins[1];
@@ -4037,7 +4068,7 @@ static struct pl_hook_res ai_enhanced_output(void *priv,const struct pl_hook_par
             "\n#ifdef CB1_AI_PREPACK\ncolor.rgb=q;\n#endif\n}",
         .description="HDR10 Enhanced conversion and expansion"};
     bool ok=p->stage==PL_HOOK_OUTPUT && !pl_shader_is_compute(p->sh) && pl_shader_custom(p->sh,&shader);
-    if(ok && r->ai_enhanced_prepack)return pack_active_area(mask,p);
+    if(ok && ai_pack_output(r))return pack_active_area(mask,p);
     return (struct pl_hook_res){.failed=!ok,.output=PL_HOOK_SIG_NONE};
 }
 
@@ -4283,7 +4314,7 @@ static pl_tex render_hdr10_ai(struct dvbridge_renderer *r,const struct dvbridge_
     const struct cb1_ai_result *prediction,const struct pl_frame *source,const struct dvbridge_geometry *geometry,
     pl_tex packed,bool flip,const struct dvbridge_native_overlay *overlay)
 {
-    if(r)r->l2_trims_disabled=false;
+    if(r){r->l2_trims_disabled=false;dvbridge_renderer_set_cmv40(r,NULL);r->cmv40_status=CB1_CMV40_OFF;}
     if(!r || !geometry)return NULL;
     if(r->dv.active){dvbridge_render_dv_policy_cancel(r);return NULL;}
     if(!configure_target(r,*geometry))return NULL;

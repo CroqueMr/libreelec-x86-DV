@@ -262,6 +262,10 @@ int main(int argc,char **argv)
         struct dvbridge_hdr10_session session;
         assert(dvbridge_hdr10_session_init(&session,metadata,bytes));
         assert(dvbridge_render_hdr10_rgb(r,&session,&source,metadata,bytes,0,NAN,geometry));
+        assert((!pl_find_fmt(gpu.gl->gpu,PL_FMT_UNORM,4,16,16,
+            PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE) ||
+            r->native_picture->params.format->texel_size<=8) &&
+            "Non-Master HDR10 source-grid storage must stay within eight bytes per pixel");
         fprintf(stderr,"Basic processing target %ux%u, expected %ux%u\n",
             reconstruction_width,reconstruction_height,w,h);
         assert(reconstruction_width==w && reconstruction_height==h);

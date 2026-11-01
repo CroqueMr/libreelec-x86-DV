@@ -20,6 +20,7 @@ class AdaptiveNamesTests(unittest.TestCase):
         program = '''
 #define HAVE_DVBRIDGE
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 #include <cassert>
 #include <bit>
 #include <cmath>
@@ -77,8 +78,8 @@ int main() {
   saved={3,CDVPlaybackInfo::HDR10,false};
   assert(CDVPlaybackInfo::Mode(saved) == "HDR10 Reference Expert");
   saved={1,CDVPlaybackInfo::HDMI,false};
- assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Standard");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision Standard");
+  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Reference");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision Reference");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision Reference (AI)");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(4, true)) == "Dolby Vision Adaptive HDR Mapping (AI)");
 }
@@ -119,6 +120,7 @@ int main() {
 #include <cassert>
 #define HAVE_DVBRIDGE
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 struct Settings {
  std::map<std::string,int> ints;
  int GetInt(const char* key){return ints[key];}
@@ -176,6 +178,7 @@ int main(){using namespace DVBRIDGE;
         declarations = '''
 #include <array>
 #include "dvbridge_policy.h"
+#include "cb1_cmv40.h"
 enum class OutputReason { None };
 struct NativeOutput @@NATIVE@@;
 
@@ -187,7 +190,7 @@ struct NativeOutput @@NATIVE@@;
 @@DECLARATIONS@@
 std::string label(VideoProcessingInfo data){bool transaction=true,active=true;return @@REQUESTED@@;}
 int main(){VideoProcessingInfo data;data.transaction.requested=1;
- assert(label(data)=="Dolby Vision Standard");
+ assert(label(data)=="Dolby Vision Reference");
  data.transaction.hdr10AI=true;assert(label(data)=="Dolby Vision Reference (AI)");
  data.transaction.requested=4;assert(label(data)=="Dolby Vision Adaptive HDR Mapping (AI)");
  assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
