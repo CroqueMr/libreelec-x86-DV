@@ -2,9 +2,6 @@
 
 ## R1.0.0 DV RC3 Preview
 
-[View the benchmark PDF](../reports/R1.0.0-DV-RC3-Preview-benchmark.pdf)
- · [Download PDF](../reports/R1.0.0-DV-RC3-Preview-benchmark.pdf?raw=1)
-
 Intel N100 and AMD Ryzen 3 3200U, measured on 1 November 2026.
 The two tables compare the CPUs side by side, without GUI first, then with
 Kodi's playback OSD open.
@@ -14,6 +11,14 @@ Kodi's playback OSD open.
   DV Adaptive HDR, HDR10 to DV AI and HDR10 to Adaptive HDR AI.
 - Metrics: presentation rate, rendering-engine load, total/busiest-core CPU load,
   headroom mean/P05 and missed frames.
+
+### Without GUI
+
+[![R1.0.0 DV RC3 Preview: Intel N100 and AMD 3200U without GUI](../reports/rc3-preview/without-gui.png)](../reports/rc3-preview/without-gui.png)
+
+### With GUI ON
+
+[![R1.0.0 DV RC3 Preview: Intel N100 and AMD 3200U with GUI](../reports/rc3-preview/with-gui.png)](../reports/rc3-preview/with-gui.png)
 
 ### Reading the results
 
