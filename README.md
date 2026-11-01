@@ -4,15 +4,15 @@ Dolby Vision playback and HDR10/HDR10+ output in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Supported Intel, AMD and NVIDIA
 GPU families are listed below. One Generic image includes both NVIDIA driver branches.
 
-**R1.0.0 RC2** Â· LibreELEC 13 Â· Kodi 22 RC1 Â· CB1 0.5
+**R1.0.0 RC2** · LibreELEC 13 · Kodi 22 RC1 · CB1 0.5
 
 [R1.0.0 RC2](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414)
 provides an installation image and a LibreELEC update archive.
 Includes CB1 0.5, HDR10+ to Dolby Vision, Blu-ray menu improvements and bounded diagnostics.
 
 [Downloads](https://github.com/CroqueMr/libreelec-x86-DV/releases)
-Â· [Release notes](docs/cb1/RELEASE.md)
-Â· [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
+ · [Release notes](docs/cb1/RELEASE.md)
+ · [Report an issue](https://github.com/CroqueMr/libreelec-x86-DV/issues)
 
 No external player or proprietary Dolby SDK is required.
 
@@ -34,7 +34,7 @@ with FEL reconstruction, surpassing the best Dolby Vision-certified devices avai
 | --- | --- |
 | 5 | Yes |
 | 7 MEL | Yes |
-| 7 FEL | Yes, including enhancement-layer reconstruction |
+| 7 FEL | Yes |
 | 8.1 / 8.2 / 8.4 | Yes |
 | 10 | Yes |
 | 9, legacy profiles, 20 | No |
