@@ -20,8 +20,11 @@ The existing driver-policy test compiles the shipped policy and checks Display
 
 Dolby Vision requires the admitted native-HDMI route. Systems routed through
 DisplayPort adapters or an LSPCON do not gain support from their CPU model.
-Display9 does not provide the native HDMI static-HDR path used for HDR10, HLG
-or HDR10+ output. HDMI bandwidth and playback performance depend on the machine.
+RC2 adds bounded Skylake/Kaby Lake HDMI HDR packet handling using the documented
+GMP bank. HDR10/HLG and HDR10+ retain native 12-bit, EDID, bandwidth and atomic
+validation requirements; physical reception still needs confirmation on the
+affected systems. This does not enable every Display9 or LSPCON route.
+HDMI bandwidth and playback performance depend on the machine.
 [Driver/output matrix](DRIVER-COVERAGE.md).
 
 References:

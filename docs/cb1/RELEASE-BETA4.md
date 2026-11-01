@@ -1,5 +1,8 @@
 # R1.0.0 Beta4 - Major pipeline optimizations, Master Reference and NVIDIA support
 
+Archived release notes. Names and support status below describe Beta4, not the
+current build. [Current RC2 release notes](RELEASE.md).
+
 ## Rendering modes
 
 - **Dolby Vision Standard**: accepts near-imperceptible image differences to deliver substantially higher rendering performance.

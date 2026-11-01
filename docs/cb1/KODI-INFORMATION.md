@@ -1,5 +1,9 @@
 # Kodi video information
 
+The RC2 Player information panel uses these native source/output facts and the
+[AudioEngine source and sink report](AUDIO-INFORMATION.md). Source format is
+shown in the Video heading; accepted rendering mode identifies the output.
+
 Source and output are separate facts. Existing `VideoPlayer.HdrType/HdrDetail`
 and `ListItem.HdrType/HdrDetail` describe the original source. HDR10 converted
 to Dolby Vision remains an HDR10 source; Dolby Vision converted to HDR10 remains
@@ -52,6 +56,14 @@ labels retain their original meaning.
 
 Skins can use the native source labels unchanged. These additional processing
 labels do not automatically add new elements to third-party skins.
+
+## Audio information
+
+The audio heading combines the source codec and validated immersive profile.
+Source precision, channels, bed/objects, presentation and dialnorm are independent
+of the actual PCM, passthrough/RAW or transcoded output. Missing fields are hidden.
+Packet observation is read-only; it does not change gain, audio timing or devices.
+[Fields, parsing limits and provenance](AUDIO-INFORMATION.md).
 
 ## Original source payloads
 

@@ -1,4 +1,6 @@
-# Documentation
+# R1.0.0 RC2 documentation
+
+Current release: **R1.0.0 RC2**, **CB1 0.5**.
 
 ## Playback
 
@@ -10,9 +12,10 @@
 | [AMD HDMI 3D](3D.md) | MVC, frame packing, SBS/TAB and native Kodi setup |
 | [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |
 | [Processing](PROCESSING.md) | Mode behavior, metadata use and output limits |
+| [Audio information](AUDIO-INFORMATION.md) | Source codec/Atmos details and actual PCM, passthrough or transcoded output |
+| [CM2.9 to CM4 controls](../../CB1/docs/CM4-APPEND.md) | Optional metadata conversion, Auto/Auto 2 and independent L2 removal |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |
-| [RC1.1 Debug release notes](RELEASE.md) | Hotfixes, diagnostics and unresolved reports |
-| [Previous releases](RELEASE-BETA5.md) | Archived Beta5 changes |
+| [RC2 release notes](RELEASE.md) | Dolby Vision, HDR10+, playback, menus, hardware and audio changes |
 
 ## Engine and integration
 
@@ -31,7 +34,7 @@
 | [Creative mapping](../../CB1/docs/CREATIVE-MAPPING.md) | CM2.9/CM4 implementation and attribution |
 | [Creative integration](../../CB1/docs/CREATIVE-INTEGRATION.md) | Policy and metadata transaction contracts |
 | [CM4 qualification](../../CB1/docs/CM4-QUALIFICATION.md) | Applied controls and qualification limits |
-| [Master / Standard comparison](../reports/master-reference-vs-standard-2026-10-21.md) | Retained Beta5 image and performance measurements |
+| [Historical Master / Standard comparison](../reports/master-reference-vs-standard-2026-10-21.md) | Beta5 measurements; Standard is now named Reference |
 
 ## Build and licenses
 
@@ -42,3 +45,5 @@
 
 [Archived numerical contracts](../../CB1/docs/REFERENCE-CONTRACTS.md) retain earlier
 experiments; they do not define the current playback menu.
+
+Archived release notes: [Beta5](RELEASE-BETA5.md) · [Beta4](RELEASE-BETA4.md).

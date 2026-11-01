@@ -1,6 +1,7 @@
 # Optional CM4 metadata
 
-Player > Videos > CB1, Advanced level. Off by default. Applies only to
+**Kodi > Settings > Player > Videos > CB1 - Dolby Vision engine**, Advanced level.
+Off by default. Applies only to
 authored DV Reference and Master Reference, including the IPT output.
 It does not change reconstructed pixels or synthesize L8 creative trims.
 

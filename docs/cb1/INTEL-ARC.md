@@ -26,6 +26,9 @@ and a successful atomic validation. DisplayPort outputs, adapters and HDMI
 ports behind active DP converters are not enabled by this change. Decoding and
 HDR10 processing remain available where the normal driver supports them.
 Performance depends on the GPU, source and selected rendering mode.
+Arc B570 HDR10 modeset/return-to-SDR failures remain under investigation in
+[issue #73](https://github.com/CroqueMr/libreelec-x86-DV/issues/73); implemented
+driver support does not mean that report is confirmed resolved.
 
 ## Verification
 

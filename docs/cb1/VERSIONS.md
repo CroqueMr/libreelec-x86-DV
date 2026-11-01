@@ -2,7 +2,7 @@
 
 | Component | RC2 version |
 | --- | --- |
-| Release | R1.0.0 RC2, tag identity `R1.0.0-RC2` |
+| Release | [R1.0.0 RC2](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414) |
 | LibreELEC | 13.0-devel |
 | Kodi | 22 RC1, `28ea2eac1eb7af8fdcbd2672d933ce87f594be79` |
 | CB1 | 0.5 |

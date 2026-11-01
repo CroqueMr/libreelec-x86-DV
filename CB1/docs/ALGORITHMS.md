@@ -70,9 +70,10 @@ block length, not whether the value is nonzero. Unknown targets are not assigned
 invented peak, black-level or transfer values. Duplicate or inconsistent data
 is not presented as valid processing.
 
-L1-only authored DV does not acquire fabricated L2/L8 trims. Its Adaptive HDR Mapping
-treatment can therefore remain unchanged. Missing optional creative metadata
-does not imply that source reconstruction is missing.
+L1-only authored DV does not acquire fabricated L2/L8 trims. The selected Adaptive
+path can expand it using neutral trim retention. Missing usable scene analysis
+still preserves the source image/metadata pair; missing optional creative trims
+alone does not disable reconstruction or expansion.
 
 ## Dolby Vision Reference
 
@@ -292,7 +293,8 @@ The pixel shader linearly interpolates this table at
 `u=clamp((Y-10)/(M-10),0,1)`. Highlights can expand when the display peak is
 below the mastering bound but above the authored scene peak.
 Dark scenes do not automatically reach T.
-Missing L1 or usable creative anchors preserves the original image/metadata pair.
+Missing usable L1 preserves the original image/metadata pair. With valid L1 and
+no creative anchors, retention is one and trim-derived color restraint is neutral.
 HDR10 AI uses its separate expansion contract.
 
 Two global color coefficients and 65 circular hue samples restrain expansion
@@ -387,7 +389,8 @@ unsupported formats retain analytic PQ. Pixel/statistic differences are qualifie
 to one logical 12-bit PQ code. A 0.001-nit tolerance protects the 10-nit shadow
 boundary from lookup roundoff.
 Identity-size 4K reconstruction stays linear through expansion, normalized to
-10000 nits in FP32 storage. This removes the intermediate PQ encode/decode pair.
+10000 nits. The selected Adaptive recipe uses an FP16 reconstruction intermediate
+and FP32 expansion calculations. This removes the intermediate PQ encode/decode pair.
 Explicit intermediate luminance prevents SDR inference. A bound rejection alone
 re-encodes the unexpanded image. PQ recovery and protected-shadow re-encoding
 are qualified within one logical 12-bit code, not byte-for-byte PQ identity.
@@ -402,8 +405,8 @@ visibility signaling. Unresolved Adaptive HDR Mapping frames accept updated GUI 
 without restarting content analysis. Visibility changes refresh the outgoing L5
 candidate, including source-bound identity output.
 
-The GPU uses one retained FP32 output, compact reductions and asynchronous
-completion. Both RGB and packed preparation may return Pending. No image buffer
+The GPU uses compact reductions, bounded reconstruction/output resources and
+asynchronous completion. Both RGB and packed preparation may return Pending. No image buffer
 is downloaded to the CPU. This numerical qualification does not establish TV
 appearance, Dolby equivalence or Intel/AMD hardware throughput.
 
@@ -494,10 +497,16 @@ snapshot. Its maximum MaxSCL channel is normalized linear light, with 1 equal
 to 10000 nits. Convert that value through ST.2084 and quantize to 12-bit L1 max.
 Targeted-system-display luminance is not a source peak.
 
-HDR10+ AverageMaxRGB is not mean PQ. Minimum and mean PQ therefore retain the
-existing AI estimates, with signed L3 applied once and bounded by the source
-peak. Output L3 is neutral after this fold. A zero MaxSCL retains the unchanged
-AI estimate and is reported as estimated, not source-translated.
+HDR10+ AverageMaxRGB is not mean PQ. With complete valid statistics, the
+distribution estimator uses the percentiles and AverageMaxRGB to estimate mean
+PQ; it does not treat PQ(mean linear light) as mean PQ. Content minimum defaults
+to zero, known mastering minimum stays separate, and GPU/AI analysis is skipped.
+
+Valid sparse statistics use the existing AI estimates for missing values, with
+signed L3 applied once and bounds checked against the source peak. Output L3 is
+neutral after this fold. A zero MaxSCL retains the qualified estimate and is
+reported as estimated, not source-translated. These estimates are not authored
+Dolby scene analysis or recovered creative trims.
 
 Authored Bezier curves and saturation mappings remain untranslated; no extra
 pixel pass is added. Multi-window, invalid or mismatched source snapshots are

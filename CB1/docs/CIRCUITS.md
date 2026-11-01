@@ -38,8 +38,10 @@ trims. Output L1 follows that curve rather than instantaneous frame extrema.
 The inference model and HDR10 Reference AI circuit are unchanged.
 
 HDR10+ metadata-guided Reference preserves the source picture and uses compatible
-single-window MaxSCL statistics for the outgoing descriptive peak. Minimum and
-mean PQ remain identified estimates from the existing AI analysis. HDR10+ target
+single-window MaxSCL statistics for the outgoing descriptive peak. Complete
+distributions and AverageMaxRGB estimate mean PQ without GPU image analysis;
+content minimum defaults to zero. Sparse source statistics use explicitly
+identified estimates from the existing AI model. HDR10+ target
 display luminance is not the source peak. Authored tone curves and saturation
 adjustments are not translated or applied to pixels. Unsupported source metadata
 does not reuse an earlier frame's RPU.

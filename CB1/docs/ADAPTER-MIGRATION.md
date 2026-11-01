@@ -1,8 +1,11 @@
-# Adapter migration status
+# Adapter migration record
 
-Local Beta5 source migration. Full-image and hardware qualification remain open.
+Historical Beta5 source-migration decisions and differential tests. Current
+runtime contracts are in [Player integration](API.md); current component and
+combined-build terms are in [Licensing](LICENSING.md). The historical tests below
+do not qualify every RC2 GPU or display route.
 
-| Portion | Current decision | Preserved contract |
+| Portion | Migration decision | Preserved contract |
 | --- | --- | --- |
 | Kodi `DVBridgeState.cpp/.h` | Replacement GPL-2.0-or-later transaction and property-plan implementation | Public API, capture/rejection decisions, required/optional properties, enum selection, complete stage/restore order, blob ownership and foreign-VSIF rejection |
 | libplacebo `9915-hdr10-linear-conversion` additions | Original CB1 contribution under owner's GPL-2.0-or-later grant; upstream LGPL code/notices retained | Patch implementation bytes unchanged; no shader, ABI or default change |

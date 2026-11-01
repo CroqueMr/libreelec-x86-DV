@@ -1,7 +1,8 @@
 # Creative mapping integration
 
 Dependencies remain exactly those pinned in `config/dependencies.json`.
-No kernel, driver, display query, player UI, audio or scheduling patch is included.
+This page describes the creative-processing API, not the complete RC2 driver,
+audio or player integration.
 
 ## Caller contract
 
@@ -48,7 +49,7 @@ L8 primary and present optional fields are checked against preserved raw RPU
 bytes. L10 PQ limits and present custom primaries are checked independently.
 Unknown target/primary IDs remain unsupported, without a default 100-nit target.
 Expert rejects unknown L9 mastering IDs and inconsistent custom raw/parsed
-coordinates. Standard and Basic retain their existing admission. Expert consumes
+coordinates. Reference and Basic retain their existing admission. Expert consumes
 L1/L3 maximum and average values; minimum is validated and preserved, not applied.
 Same-peak different-gamut L8 targets remain distinct; only gamut matches at the
 metadata's signed 16-bit coordinate precision participate in the anchor snapshot.

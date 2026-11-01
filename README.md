@@ -41,12 +41,14 @@ with FEL reconstruction, surpassing the best Dolby Vision-certified devices avai
 
 CM2.9 and CM4 metadata are supported. Mode availability depends on the source
 format and the active output capabilities.
+Optional [CM2.9-to-CM4 controls](CB1/docs/CM4-APPEND.md) provide Auto/Auto 2
+selection and independent L2-trim removal for Reference and Master Reference.
 
 ## Rendering modes
 
 | Source | Mode | Output | Purpose |
 | --- | --- | --- | --- |
-| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | State-of-the-art Dolby vision output will full precision calculation and no compromise |
+| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | Exact reconstruction, aiming for bit-perfect TV-Led playback |
 | Dolby Vision | **Dolby Vision Reference** | Dolby Vision, TV-Led | Increase performance with near-imperceptible image differences |
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
@@ -103,12 +105,14 @@ Blu-ray menus use Kodi/libbluray, with the existing Java add-on required for BD-
 | --- | --- | --- |
 | HDR10+ | HDR10+ | Preserve the original picture and its frame-associated dynamic metadata |
 | Dolby Vision | HDR10+ | Reconstruct the source, including FEL, and generate HDR10+ statistics and compatible luminance guidance |
+| HDR10+ | Dolby Vision | Preserve source pixels; use source scene statistics and AI only when those statistics are incomplete |
 
-Supported on the listed Intel, AMD and NVIDIA driver routes, with a compatible
+HDR10+ output uses the listed Intel, AMD and NVIDIA driver routes, a compatible
 HDR10+ display and at least 10-bit output. Kodi reports HDR10+ display capability,
 source format and accepted output separately. Metadata-guided HDR10+ to Dolby
-Vision is a separate manual mode; it does not translate authored tone curves.
-[HDR10+ processing](CB1/docs/HDR10PLUS.md) Â· [Driver/output support](docs/cb1/DRIVER-COVERAGE.md).
+Vision is a separate manual mode requiring an admitted Dolby Vision display;
+it does not translate authored tone curves.
+[HDR10+ processing](CB1/docs/HDR10PLUS.md) · [Driver/output support](docs/cb1/DRIVER-COVERAGE.md).
 
 ## Install or update
 

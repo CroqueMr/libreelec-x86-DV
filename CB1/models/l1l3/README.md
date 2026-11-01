@@ -3,6 +3,10 @@
 LightGBM model for HDR10-to-Dolby Vision L1/L3 estimation. Reference and Adaptive
 HDR Mapping use the same model.
 
+HDR10+-to-Dolby Vision also reuses this bundle when valid source statistics are
+incomplete. Complete HDR10+ statistics use the source distribution estimator
+without AI inference. Native HDR10+ playback does not use this model.
+
 | Property | Value |
 | --- | --- |
 | Backend | LightGBM 4.7.0, native C API |
@@ -13,7 +17,8 @@ HDR Mapping use the same model.
 | Native integrity contract | `contract/cb1_l1l3_bundle.h` |
 
 The bundle is the exact runtime artifact. File hashes are pinned in
-`config/hdr10-ai-dependencies.json` and checked by `tools/verify.py`.
+[the model dependency lock](../../config/hdr10-ai-dependencies.json) and checked by
+[`verify.py`](../../tools/verify.py).
 No training clips, extracted frames or training dataset are included.
 
 Model assets are distributed under [GPL-2.0-or-later](LICENSE.md).

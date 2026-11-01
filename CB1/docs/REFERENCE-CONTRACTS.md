@@ -1,4 +1,9 @@
-# CB1 numerical contracts
+# Archived CB1 numerical contracts
+
+Historical design and offline experiments. Current RC2 processing is defined in
+[Algorithms](ALGORITHMS.md), [Circuits](CIRCUITS.md) and
+[Master Reference](MASTER-REFERENCE.md). This record does not describe current
+menu choices, qualification status or performance.
 
 Status: Task 6A offline image composition and state contract reviewed and
 sponsor-approved. Task 6B experimental transformed TV-Led contract is declared,

@@ -2,8 +2,9 @@
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
-Default image identity: `DV-R1.0.0-RC2`. GitHub tag identity:
-`R1.0.0-RC2`.
+Default image identity: `DV-R1.0.0-RC2`. Source configuration uses the logical
+release ID `R1.0.0-RC2`; use the published [RC2 release](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414)
+for its attached image and corresponding-source archives.
 
 ```sh
 python3 CB1/tools/verify.py

@@ -61,10 +61,10 @@ do not constitute Dolby or HDMI certification.
 
 | Component | Source |
 | --- | --- |
-| Release | R1.0.0 RC1, one Generic image |
+| Release | R1.0.0 RC2, one Generic image |
 | NVIDIA proprietary payload | `580.178.04` |
 | Public modeset sources | NVIDIA `c8e699821c23e4335bf23330a54a23d15cfb95e9` |
 | Driver patch | `packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9000-dv-transport.patch` |
 
-The new code is limited to transport and packaging. CB1 algorithms, generated
+The Pascal-specific code is limited to transport and packaging. CB1 algorithms, generated
 metadata, codecs and existing Intel/AMD/NVIDIA rendering paths are unchanged.

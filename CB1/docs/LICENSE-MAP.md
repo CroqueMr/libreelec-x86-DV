@@ -1,17 +1,21 @@
 # License map
 
+Historical inventory for published Beta5. For current RC2 component terms and
+the combined Kodi/FFmpeg build, use [Licensing](LICENSING.md) and the
+[image license inventory](../../docs/cb1/LICENSING.md).
+
 ## Published Beta5 reference
 
 The tables below retain the published Beta5 declarations. Local compatible
 grants and replacements are tracked in [migration status](GPL2-MIGRATION.md).
-The migration is incomplete and does not yet establish a GPLv2-compatible image.
+Project grants/replacements do not establish a GPLv2-only complete image.
 
 This inventory describes the extracted normal Beta5 source tree. The complete matching
 release components are in the [release source archives](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-Beta5);
 the main-branch code is not a substitute for those archives.
 
 The modified Kodi program links the shared rendering and creative modules.
-Those modules contain GPL-3.0-only code; the current combined executable is
+Those Beta5 modules contain GPL-3.0-only code; that combined executable is
 therefore distributed under GPL-3.0-only. This does not change the license of
 Linux, unrelated programs, firmware or each upstream source file.
 

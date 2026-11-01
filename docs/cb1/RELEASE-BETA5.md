@@ -1,5 +1,8 @@
 # R1.0.0 Beta5 - Playback stability and wider format support
 
+Archived release notes. Names and support status below describe Beta5, not the
+current build. [Current RC2 release notes](RELEASE.md).
+
 Changes from the MVC-corrected [Beta4](RELEASE-BETA4.md).
 
 ## Playback

@@ -1,7 +1,9 @@
-# Beta5 licensing migration
+# Project licensing migration record
 
-Work in progress. The linked program still contains GPLv3 dependencies.
-This record does not change the licenses of published Beta5 releases.
+This record covers project grants and replacements since Beta5. Current RC2
+component terms are in [Licensing](LICENSING.md). The combined program retains
+GPLv3 dependency conditions; compatible project additions do not make the full
+image GPLv2-only. Published Beta5 licenses are unchanged.
 
 ## Grants
 

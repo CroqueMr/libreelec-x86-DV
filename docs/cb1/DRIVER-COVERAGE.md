@@ -8,7 +8,8 @@ successful-output receipt.
 | Driver / display block | Dolby Vision V1 / V2 | HDR10 / HLG | Native HDR10+ | Dolby Vision to HDR10+ |
 | --- | --- | --- | --- | --- |
 | Intel Display9, Skylake / Kaby Lake | Admitted DV route | Documented HDMI GMP bank, native 12-bit constraints; receiver confirmation pending | Guarded native route; receiver confirmation pending | Same guarded route |
-| Other Intel Display9 / LSPCON routes | Admitted DV route | Native restrictions retained | No new admission | No new admission |
+| Other Intel Display9 native-HDMI routes | Admitted DV route | Native restrictions retained | No new admission | No new admission |
+| Intel DP/LSPCON or converted routes | No new DV admission | Native route restrictions retained | No new admission | No new admission |
 | Intel Display10 | Admitted DV route | Native selector; converted PQ uses 12 bits | Frame-owned output, native 12-bit route | Same guarded 12-bit route |
 | Intel Display11 and newer, i915 / xe | Admitted DV route | Native selector, guarded deep PQ conversions | Frame-owned output, at least 10 bits | Same frame-owned deep output |
 | AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
@@ -110,13 +111,15 @@ packet. Kodi rejects native HDR10+ staging if its actual drawable falls below
 | --- | --- |
 | DV Reference / Master Reference / Adaptive | Admitted DV V1/V2 TV-Led link |
 | HDR10 to DV Reference AI / Adaptive AI | Same admitted DV link |
+| HDR10+ to DV, metadata-guided | Same admitted DV link; native HDR10+ remains the default source path |
 | DV to HDR10 Basic / Expert | Native PQ output, actual depth at least 10 bits |
 | DV to HDR10+ | PQ deep output plus frame-owned HDR10+ metadata |
 | Native HDR10+ | Same HDR10+ transport, original authored metadata |
 | Native SDR / HDR10 / HLG, DV disabled and 3D | Native Kodi and driver path |
 
-This work does not add HDR10+ to DV conversion or alter reconstruction, Master
-movie pixels, Dolby metadata, tone mapping, resolution selection or 3D processing.
+The driver transports do not implement reconstruction or tone mapping.
+HDR10+ to Dolby Vision is a separate engine circuit using the admitted DV route,
+not a requirement for native HDR10+ playback. [Processing](PROCESSING.md).
 
 ## Verification
 
