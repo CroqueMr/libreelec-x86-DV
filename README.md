@@ -71,7 +71,7 @@ contains the retained Beta5 image and GPU measurements.
 Change rendering mode during playback. The bottom-right menu shows the choices
 for the current source and explains unavailable modes.
 
-![Rendering mode menu on Avatar](docs/cb1/images/beta4-quick-rendering-menu.png)
+![Rendering mode menu on Avatar](docs/cb1/images/quick-switch-rc2-sdr.png)
 
 Press **O** to cycle through **Player information**, **rendering selection** and
 **video only**. Play/pause and seek remain available with either panel open.
