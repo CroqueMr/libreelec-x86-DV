@@ -141,27 +141,27 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +        <setting id="subtitles.bitmapzoom" type="integer" label="40956" help="40957">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
 +          <constraints><minimum>10</minimum><step>5</step><maximum>200</maximum></constraints>
-+          <control type="spinner" format="percentage" />
++          <control type="spinner" format="string"><format>{}%</format></control>
 +        </setting>
 +        <setting id="subtitles.bitmapsdrbrightness" type="integer" label="40958" help="40962">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
 +          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
-+          <control type="spinner" format="percentage" />
++          <control type="spinner" format="string"><format>{}%</format></control>
 +        </setting>
 +        <setting id="subtitles.bitmapsdrsaturation" type="integer" label="40959" help="40962">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
 +          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
-+          <control type="spinner" format="percentage" />
++          <control type="spinner" format="string"><format>{}%</format></control>
 +        </setting>
 +        <setting id="subtitles.bitmaphdrbrightness" type="integer" label="40960" help="40962">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
 +          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
-+          <control type="spinner" format="percentage" />
++          <control type="spinner" format="string"><format>{}%</format></control>
 +        </setting>
 +        <setting id="subtitles.bitmaphdrsaturation" type="integer" label="40961" help="40962">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
 +          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
-+          <control type="spinner" format="percentage" />
++          <control type="spinner" format="string"><format>{}%</format></control>
 +        </setting>
 +      </group>
        <group id="1" label="39186">
@@ -634,7 +634,7 @@ diff --git a/xbmc/settings/SubtitlesSettings.cpp b/xbmc/settings/SubtitlesSettin
  }
  
  CSubtitlesSettings::~CSubtitlesSettings()
-@@ -65,6 +68,22 @@
+@@ -65,6 +68,26 @@
  Align CSubtitlesSettings::GetAlignment() const
  {
    return static_cast<Align>(m_settings->GetInt(CSettings::SETTING_SUBTITLES_ALIGN));
@@ -644,14 +644,18 @@ diff --git a/xbmc/settings/SubtitlesSettings.cpp b/xbmc/settings/SubtitlesSettin
 +{
 +  BitmapOptions options;
 +#ifdef HAVE_DVBRIDGE
-+  options.authoring = m_settings->GetInt("subtitles.bitmapauthoring");
-+  options.placement = m_settings->GetInt("subtitles.bitmapplacement");
-+  options.offset = m_settings->GetInt("subtitles.bitmapoffset");
-+  options.zoom = m_settings->GetInt("subtitles.bitmapzoom");
-+  options.sdrBrightness = m_settings->GetInt("subtitles.bitmapsdrbrightness");
-+  options.sdrSaturation = m_settings->GetInt("subtitles.bitmapsdrsaturation");
-+  options.hdrBrightness = m_settings->GetInt("subtitles.bitmaphdrbrightness");
-+  options.hdrSaturation = m_settings->GetInt("subtitles.bitmaphdrsaturation");
++  const auto read = [this](const char* id, int fallback)
++  {
++    return m_settings->GetSetting(id) ? m_settings->GetInt(id) : fallback;
++  };
++  options.authoring = read("subtitles.bitmapauthoring", options.authoring);
++  options.placement = read("subtitles.bitmapplacement", options.placement);
++  options.offset = read("subtitles.bitmapoffset", options.offset);
++  options.zoom = read("subtitles.bitmapzoom", options.zoom);
++  options.sdrBrightness = read("subtitles.bitmapsdrbrightness", options.sdrBrightness);
++  options.sdrSaturation = read("subtitles.bitmapsdrsaturation", options.sdrSaturation);
++  options.hdrBrightness = read("subtitles.bitmaphdrbrightness", options.hdrBrightness);
++  options.hdrSaturation = read("subtitles.bitmaphdrsaturation", options.hdrSaturation);
 +#endif
 +  return options;
  }

@@ -29,6 +29,7 @@ Changes since R1.0.0-RC1, including the RC1.1 Debug fixes. CB1 **0.5**.
 
 - Add experimental **HDMV and BD-J menus** support
 - Added **PGS/DVB subtitle controls** for brightness, saturation, size, placement and vertical offset, adapted from [avdvplus](https://github.com/avdvplus/xbmc).
+- Fixed PGS subtitle size and colour defaults, and restored the bitmap size/brightness controls in native Kodi settings.
 - Improved AMD HDMI 3D mode entry, switching and return to 2D, building on the work of [CinemaOne](https://github.com/cinema-ONE) and [popcornmix](https://github.com/popcornmix).
 
 ## GPU and HDMI support

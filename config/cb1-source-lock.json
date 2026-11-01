@@ -98,7 +98,7 @@
     "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "d7e0386f45fa3dfe8b42d34571896a87a19f16eaa98c1b1abeffc3c97084fc4e",
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-08-pgs-authoring.patch": "f6c9a7501706d01b45daa6ab5bbf2fecdccdfc3f06c4915b370a3c26c20931bb",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzy-native-menu-overlay-source.patch": "4afe392eef2b7588a18f7f66070c042fb1a7251317e9070bf3b9fbb5ecdcafe9",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzz-bitmap-subtitles.patch": "791115f720555630b6841f439e703017851343e43ae7023ea59433200534bd40",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzz-bitmap-subtitles.patch": "015de6530fae10fbdd93979741dc0d0ddd550d325035d89a4e2c4039ffc95396",
     "tests/cb1/test_bitmap_subtitles.py": "9497f1d4af98083a780c967861721039b2dbd5269be159d30613186e462e2a99",
     "tests/cb1/test_bluray_menu_source.py": "cb207ada62d49462f736885fdfb7be28c6ba1ada0fe03b0686d44a4cfa3ea313",
     "tests/cb1/test_hdr10plus_dovi_mode.py": "ec609d247d7081c6f74e4cabbd0dfca7515fb7443c5aec738367239008d6ab64",
@@ -123,7 +123,7 @@
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9006-infoframe-wire-length.patch": "10080d9c1c69717009c7ddcc003bdbe66689acffaa77a895d68167dbc5699a48",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9004-infoframe-wire-length.patch": "10080d9c1c69717009c7ddcc003bdbe66689acffaa77a895d68167dbc5699a48",
     "tests/cb1/test_nvidia_hdmi_vic.py": "d05f6216037107266c9f55b0ccc1f09ac347125bbc31051a526e517ed6fe5c93",
-    "tests/cb1/test_nvidia_edid_owner.py": "b0cb3d2e6fd956ef14c998939f5ed6261b31e94828304fa14f01f60ca440765b",
+    "tests/cb1/test_nvidia_edid_owner.py": "ec0f5d4a85d05b3ea8707ca85544b36732e6ba7c710ad648cd46ca08fd6c41be",
     "tests/cb1/test_nvidia_return_thunk.py": "f51db2e0898dfcddc4f9cce7a2e7e04f04d218fc57dde34dc30857d71416f17f",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9005-return-thunk.patch": "1509c960f94fb8842dbf523e541f9eedf8e52bbcdeb2f65fd6ab2ca39993ba20",
     "tests/cb1/test_nvidia_dual_mode.py": "ac7f3d8a90207f28a0b61ba19d775e84f920ff702c68f0093e54b5c3ece90f15",
@@ -152,7 +152,8 @@
     "docs/cb1/AUDIO-INFORMATION.md": "6fdc265aade47661b518154e497b82d7d29e6a7c8ae97c0fae32131878b1b116",
     "tests/cb1/test_audio_sink_lifecycle.py": "260bfcfcb874a7dac2022b7c3ee4172af210b4808f9d080e4284bbd73c9ae62a",
     "tests/cb1/test_audio_track_bitrate.py": "0e83dd09868b3aedf4d769981703f3069516e5360ea90736d89e446fc1b080ba",
-    "tests/cb1/test_process_info_readability.py": "38c452e56753c6d6f01f2a5a61839e77b1735eadcdb06acac159efd76367e760"
+    "tests/cb1/test_process_info_readability.py": "38c452e56753c6d6f01f2a5a61839e77b1735eadcdb06acac159efd76367e760",
+    "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

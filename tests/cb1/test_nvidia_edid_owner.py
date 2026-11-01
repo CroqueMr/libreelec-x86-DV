@@ -13,6 +13,9 @@ class NvidiaEdidOwner(unittest.TestCase):
     sources = native_hdr.NvidiaNativeHdr.sources
 
     def test_complete_edid_survives_detect_override_and_failed_publication(self):
+        roots = self.sources()
+        if 'CB1_KERNEL_SOURCE' not in os.environ:
+            self.skipTest('requires matched kernel DRM source')
         kernel = Path(os.environ['CB1_KERNEL_SOURCE'])/'drivers/gpu/drm/drm_edid.c'
         drm = kernel.read_text()
         # Real DRM allocation/copy/free and legacy-size wrapper. Validation and
@@ -20,7 +23,7 @@ class NvidiaEdidOwner(unittest.TestCase):
         allocation = '\n'.join(function(drm, name) for name in (
             '_drm_edid_alloc','drm_edid_alloc','drm_edid_free',
             'drm_edid_legacy_init','drm_connector_update_edid_property'))
-        for root in self.sources():
+        for root in roots:
             source = (root/'kernel-open/nvidia-drm/nvidia-drm-connector.c').read_text()
             source = re.sub(r'#if defined\(NV_DRM_CONNECTOR_HAS_OVERRIDE_EDID\)\n(.*?)#else\n.*?#endif',
                             r'\1',source,flags=re.S)
