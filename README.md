@@ -82,7 +82,9 @@ Source and output formats, Dolby Vision profile, CM version, BL/EL/FEL status,
 metadata, active rendering mode and supported GPU render-engine usage.
 HDR10 and SDR show their relevant information without empty Dolby Vision sections.
 
-![Player information example on Avatar in Master Reference with its audio track](docs/cb1/images/beta4-player-information-master-reference.png)
+RC2 preview: separate audio source details and actual Kodi output, with compact headings and readable metadata.
+
+![RC2 Player information on Avatar in Master Reference, with audio source and Kodi output](docs/cb1/images/player-information-rc2.png)
 
 GPU usage is Kodi's render-engine load, including visible menus. It is not total
 GPU or video-decoder load. [Controls and settings](docs/cb1/PLAYBACK.md).
