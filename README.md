@@ -48,8 +48,8 @@ selection and independent L2-trim removal for Reference and Master Reference.
 
 | Source | Mode | Output | Purpose |
 | --- | --- | --- | --- |
-| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | Exact reconstruction, aiming for bit-perfect TV-Led playback |
-| Dolby Vision | **Dolby Vision Reference** | Dolby Vision, TV-Led | Increase performance with near-imperceptible image differences |
+| Dolby Vision | **Dolby Vision Master Reference** | Dolby Vision, TV-Led | State-of-the-art Dolby Vision output with uncompromised precision |
+| Dolby Vision | **Dolby Vision Reference** | Dolby Vision, TV-Led | Optimized Dolby Vision output with imperceptible quality loss, significantly reducing GPU load |
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Reference Basic** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
 | Dolby Vision | **HDR10 Reference Expert** | HDR10 | Map to the configured TV peak and gamut using compatible creative metadata |
