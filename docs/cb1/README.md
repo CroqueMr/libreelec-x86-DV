@@ -8,6 +8,7 @@ Current release: **R1.0.0 RC2**, **CB1 0.5**.
 | --- | --- |
 | [Features and downloads](../../README.md) | Profiles, rendering modes, captures and installation |
 | [Hardware](HARDWARE.md) | Supported Intel, AMD and NVIDIA GPU families |
+| [Performance benchmarks](BENCHMARKS.md) | RC3 Preview on Intel N100 and AMD Ryzen 3 3200U, with and without GUI |
 | [Driver/output matrix](DRIVER-COVERAGE.md) | Dolby Vision V1/V2, HDR10/HLG and HDR10+ by driver |
 | [AMD HDMI 3D](3D.md) | MVC, frame packing, SBS/TAB and native Kodi setup |
 | [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |

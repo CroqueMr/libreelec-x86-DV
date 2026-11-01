@@ -60,6 +60,12 @@ processing are available, without custom Dolby Vision HDMI output.
 Performance depends on hardware, content and rendering mode. Report problems
 with the exact CPU/GPU, display, connection chain, build version and `kodi.log`.
 
+## Performance benchmarks
+
+[RC3 Preview benchmark](BENCHMARKS.md): Intel N100 and AMD Ryzen 3 3200U,
+with and without the playback GUI. The report includes source profiles, output
+formats, CPU/GPU load, presentation cadence, headroom and missed frames.
+
 ## AMD HDMI 3D
 
 MVC Blu-ray ISO, HDMI frame packing, side-by-side and top-and-bottom use a

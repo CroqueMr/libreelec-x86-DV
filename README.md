@@ -156,6 +156,9 @@ Performance depends on hardware, content and rendering mode. Prior N100 tests
 covered Master Reference with 4K FEL remuxes and 4K60 content.
 Heavier conversions require more GPU performance.
 
+[Performance benchmarks](docs/cb1/BENCHMARKS.md): Intel N100 and AMD Ryzen 3 3200U,
+with and without the playback GUI.
+
 For problems, open an issue with the exact CPU/GPU, display, connection chain,
 build version and `kodi.log`. [Hardware details](docs/cb1/HARDWARE.md).
 The [driver/output matrix](docs/cb1/DRIVER-COVERAGE.md) distinguishes DV V1/V2,
