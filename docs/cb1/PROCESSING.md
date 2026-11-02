@@ -219,8 +219,10 @@ default path and does not activate this conversion.
 
 Each circuit owns its input-chroma recipe. Async prepares at most one future
 picture without changing native Kodi/fallback playback scheduling.
-Master uses dedicated FEL filters; other applicable modes retain VAAPI/Nearest
-selection. [Settings](PLAYBACK.md).
+Master keeps its Reference GPU FEL filters. From RC3, other applicable modes
+select VAAPI, Bilinear (GPU) or Reference (GPU).
+[Compare FEL upscalers](FEL-UPSCALING.md), including the Nearest method removed
+in RC3. [Settings](PLAYBACK.md).
 
 Dolby Vision uses an RGB8 byte tunnel carrying higher-precision video and
 metadata, not ordinary 8-bit SDR. HDR10 conversion requires a driver-validated

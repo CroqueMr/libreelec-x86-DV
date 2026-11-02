@@ -27,6 +27,8 @@ For **HDR10 Expert**, disable the TV's dynamic tone mapping to avoid a second
 dynamic mapping stage. Dolby Vision output remains TV-Led: the TV still performs
 its Dolby Vision display mapping.
 
+[Compare FEL upscalers: VAAPI, Bilinear, Reference and former Nearest](FEL-UPSCALING.md).
+
 ## Rendering and Master recovery
 
 Each mode uses one fixed rendering recipe. Reference and conversions retain
