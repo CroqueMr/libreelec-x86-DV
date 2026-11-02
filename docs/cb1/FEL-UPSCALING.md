@@ -10,16 +10,16 @@ MEL and sources without FEL do not use these filters.
 | Method | Processing | Use |
 | --- | --- | --- |
 | **VAAPI** | The GPU's video-processing hardware enlarges the FEL. Interpolation depends on the driver. | Default where supported. Falls back to GPU bilinear when VPP cannot be used. |
-| **Bilinear (GPU)** | Blends neighbouring samples directly in the reconstruction shader. | Lightweight alternative without the block replication of Nearest; also used when VAAPI is unavailable. |
+| **Bilinear (GPU)** | Blends neighbouring samples directly in the reconstruction shader. | Lightweight alternative without the block replication of Nearest neighbour; also used when VAAPI is unavailable. |
 | **Reference (GPU)** | Uses the reference FEL interpolation from Master Reference, with dedicated GPU filtering passes. | Higher reconstruction fidelity at additional GPU and memory cost. Selecting this filter alone does not select the complete Master pipeline. |
-| **Nearest â€” removed in RC3** | Repeats each sample instead of interpolating between samples. Half-size FEL samples become 2Ã—2 blocks. | Poor quality/performance trade-off: visible stair-stepping and no meaningful speed advantage over bilinear in the matched comparison. Replaced by GPU bilinear. |
+| **Nearest neighbour - removed in RC3** | Repeats each sample instead of interpolating between samples. Half-size FEL samples become 2x2 blocks. | Poor quality/performance trade-off: visible stair-stepping and no meaningful speed advantage over bilinear in the matched comparison. Replaced by GPU bilinear. |
 
 ## Visual comparison
 
 Same frame and crop from a FEL detail pattern, reconstructed on an Intel N100.
-All crops use the same contrast amplification and 3Ã— integer enlargement.
+All crops use the same contrast amplification and 3x integer enlargement.
 
-| VAAPI | Bilinear (GPU) | Nearest â€” removed | Master Reference |
+| VAAPI | Bilinear (GPU) | Nearest neighbour - removed | Master Reference |
 | --- | --- | --- | --- |
 | ![VAAPI FEL reconstruction](images/fel-vaapi.png) | ![GPU bilinear FEL reconstruction](images/fel-bilinear.png) | ![Former nearest-neighbour FEL reconstruction](images/fel-nearest.png) | ![Master Reference FEL reconstruction](images/fel-reference.png) |
 
@@ -38,5 +38,5 @@ FEL method. **Master Reference always keeps its own Reference GPU filters**,
 independently of this setting. Player information reports the method actually
 used, not just the saved preference.
 
-[Rendering modes](PROCESSING.md) Â· [Settings](PLAYBACK.md) Â·
+[Rendering modes](PROCESSING.md) | [Settings](PLAYBACK.md) |
 [VAAPI implementation details](../../CB1/docs/FEL-VAAPI.md)
