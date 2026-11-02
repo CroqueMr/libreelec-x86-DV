@@ -2123,14 +2123,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 +  const auto index = queue.front();
 +  const auto binding = head->doviSourceBinding;
 +  const auto preferences = DVBRIDGE::FrameOutputSettings();
-+  // A mode switch can reuse the decoded pool without another Configure().
-+  m_aiOutputPending |=
-+      (preferences.hdr10Source != DVBRIDGE::HDR10SourceMode::Native) != m_dvRequested;
 +  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
 +  {
 +    // Preserve the original locked/native stop and readiness path.
 +    const bool ready = window->PrepareHDR10AIQueue(*head,layers,end,paused,presentationDeadline);
 +    m_aiLookahead = window->HDR10AILookaheadActive();
++    m_aiOutputPending |= m_aiLookahead != m_dvRequested;
 +    if (ready && m_aiOutputPending)
 +    {
 +      if (!ConfigureVideoOutput(*head)) return {false, {}, {}};
@@ -2150,6 +2148,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 +            settings.revision != preferences.revision || !settings.SameValues(preferences))
 +          return false;
 +        m_aiLookahead = outcome.lookahead;
++        // Automatic fallback can change the resolved route without a mode switch.
++        m_aiOutputPending |= m_aiLookahead != m_dvRequested;
 +        if (outcome.ready && m_aiOutputPending)
 +        {
 +          if (!ConfigureVideoOutput(*current)) return false;

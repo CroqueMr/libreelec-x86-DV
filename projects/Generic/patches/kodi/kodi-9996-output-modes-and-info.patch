@@ -618,16 +618,25 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/Video
    m_DisplayState = VAAPI_ERROR;
  
    return CDVDVideoCodec::VC_ERROR;
-@@ -1058,6 +1078,14 @@
+@@ -1058,6 +1078,23 @@
      state = m_DisplayState;
    }
  
 +#ifdef CB1_HAS_HDR10_AI
 +  if (state == VAAPI_OPEN &&
-+      m_hdr10AIBuffers != static_cast<ICallbackHWAccel*>(avctx->opaque)->GetHDR10AIBufferCount())
++      m_hdr10AIBuffers < static_cast<ICallbackHWAccel*>(avctx->opaque)->GetHDR10AIBufferCount())
 +  {
-+    static_cast<ICallbackHWAccel*>(avctx->opaque)->PrepareHDR10AIReopen();
-+    return CDVDVideoCodec::VC_REOPEN;
++    // Finish output reads before Reopen destroys the codec-owned VA context.
++    Reset();
++    {
++      std::unique_lock lock(m_DecoderSection);
++      state = m_DisplayState;
++    }
++    if (state == VAAPI_OPEN)
++    {
++      static_cast<ICallbackHWAccel*>(avctx->opaque)->PrepareHDR10AIReopen();
++      return CDVDVideoCodec::VC_REOPEN;
++    }
 +  }
 +#endif
    if (state == VAAPI_LOST)
@@ -1952,16 +1961,27 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
        m_presentstep = PRESENT_FRAME;
        m_presentevent.notifyAll();
      }
-@@ -456,6 +579,9 @@
+@@ -456,9 +579,20 @@
      {
        m_overlays.Flush();
        m_debugRenderer.Flush();
 +#ifdef CB1_HAS_HDR10_AI
-+      ResetHDR10AIQueue();
++      // Reset display timing even when its decoded pictures survive.
++      if (m_clockSync.m_cb1Phase)
++      {
++        m_clockSync.Reset();
++        m_dvdClock.SetVsyncAdjust(0);
++      }
 +#endif
  
        if (!m_pRenderer->Flush(saveBuffers))
        {
++#ifdef CB1_HAS_HDR10_AI
++        ResetHDR10AIQueue();
++#endif
+         m_queued.clear();
+         m_discard.clear();
+         m_free.clear();
 @@ -714,6 +840,11 @@
  
    {

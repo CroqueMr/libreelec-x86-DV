@@ -420,8 +420,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  {
 +    cb1_hdr10plus_dovi_result description{};
 +    const bool direct=metadata && cb1_hdr10plus_dovi_describe(&description,metadata.get(),nullptr)==CB1_HDR10PLUS_DOVI_OK;
-+    // The existing stop fence retires prior analysis/leases before changing strategy.
-+    if(direct && !StopHDR10AI())return Decision::Wait;
++    // A stop completed at entry already retired prior analysis/leases.
++    if(direct && !retiring && !StopHDR10AI())return Decision::Wait;
 +    const auto status = direct ? (m_state->gl && !Quarantined() ?
 +        HDR10AI().Begin(m_state->gl->gpu,bundle,preferences,head.binding,head.pts,now,true,true) :
 +        HDR10AI().RecordStatus("metadata-context",CB1_AI_INCOMPATIBLE)) :
@@ -861,9 +861,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    const auto binding = head->doviSourceBinding;
 -  const auto preferences = DVBRIDGE::FrameOutputSettings();
 +  const auto preferences = DVBRIDGE::FrameOutputSettings(head->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
-   // A mode switch can reuse the decoded pool without another Configure().
-   m_aiOutputPending |=
-       (preferences.hdr10Source != DVBRIDGE::HDR10SourceMode::Native) != m_dvRequested;
+   if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
+   {
+     // Preserve the original locked/native stop and readiness path.
 @@ -348,7 +355,7 @@
        },
        [this,index,binding,preferences](const HDR10AIQueuePreparation::Outcome& outcome) {
@@ -1300,7 +1300,16 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (queue.empty() || !(queue.front().binding == binding)) return false;
    {
      std::lock_guard lock(m_dvCapabilityMutex);
-@@ -1966,7 +1984,7 @@
+@@ -1536,6 +1554,8 @@
+   cb1_ai_result prediction{};
+   if (m_dvContext->Initialize(false))
+   {
++    // Kodi's display-reset delay is not time spent waiting for an AI prediction.
++    paused |= picture.hdrType == StreamHdrType::HDR_TYPE_HDR10 && m_dispReset;
+     decision = m_dvContext->PrepareHDR10AIQueue(queue, preferences,
+         CB1_L1L3_BUNDLE_DIR, DVBRIDGE::DiagnosticNowMs(), end, &prediction, paused,
+         presentationDeadline);
+@@ -1966,7 +1986,7 @@
    if (m_dvOrdinaryFrame && HasPendingDVOutputSurface())
      return deferred("output-await-previous-scanout");
    ResetDVActivation(&picture);
@@ -1309,6 +1318,18 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    const auto capabilities = GetDVOutputCapabilities(&picture, preferences);
  #ifdef CB1_HAS_HDR10_AI
    if ((!capabilities.isHDR10 || preferences.hdr10Source==DVBRIDGE::HDR10SourceMode::Native) &&
+@@ -2270,5 +2297,10 @@
+       m_dvSelection.reason == DVBRIDGE::OutputReason::None;
+-  const auto preferences = DVBRIDGE::FrameOutputSettings();
++#ifdef CB1_HAS_HDR10_AI
++  const auto preferences = DVBRIDGE::FrameOutputSettings(
++      !metadata.Data() && m_dvContext && m_dvContext->HDR10AI().HDR10Plus());
++#else
++  const auto preferences = DVBRIDGE::FrameOutputSettings();
++#endif
+   m_masterFramePeriodNs=m_continuousFrameEligible && preferences.allowMasterFallback &&
+       m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
+       DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h

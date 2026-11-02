@@ -149,3 +149,20 @@ diff --git a/xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.h b/xbmc/cores/Aud
    unsigned int m_extErrorRetries{0};
    bool m_extDrain;
    XbmcThreads::EndTime<> m_extDrainTimer;
+diff --git a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
+--- a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
++++ b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
+@@ -204,6 +204,13 @@
+ 
+       info = ALSAchmapToAEChannelMap(actualMap);
+ 
++      // HDMI may report unnamed channels while ELD is being refreshed.
++      if (channels == 2 && actualMap->channels == 2 && !info.IsLayoutValid() &&
++          format.m_channelLayout.Count() == 2 &&
++          format.m_channelLayout.HasChannel(AE_CH_FL) &&
++          format.m_channelLayout.HasChannel(AE_CH_FR))
++        info = GetChannelLayoutLegacy(format, channels, channels);
++
+       /* "fake" a compatible map if it is more suitable for AE */
+       if (!info.ContainsChannels(format.m_channelLayout))
+       {

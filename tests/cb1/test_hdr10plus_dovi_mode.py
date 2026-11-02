@@ -11,6 +11,101 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class HDR10PlusDVModeTests(unittest.TestCase):
+    def test_primed_guided_picture_reaches_render_with_its_source_preferences(self):
+        native = TREE/'xbmc/cores/VideoPlayer/VideoRenderers'
+        settings = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
+        source = (native/'HDR10AISource.cpp').read_text()
+        render = body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
+                      'bool CWinSystemGbmGLESContext::RenderDVBridge(')
+        snapshot = re.search(r'  const auto preferences = DVBRIDGE::FrameOutputSettings\([\s\S]*?;', render).group()
+        gate = render[render.index('  const bool aiFrame ='):render.index('#endif', render.index('  const bool aiFrame ='))]
+        program = r'''
+#define HAVE_DVBRIDGE
+#include "dvbridge_policy.h"
+#include "cb1_hdr10_ai.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h"
+#include <algorithm>
+#include <bit>
+#include <cassert>
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <optional>
+namespace DVBRIDGE {
+ENUMS
+PREFERENCES
+OutputPreferences stored;
+OutputPreferences FrameOutputSettings(bool plus=false){
+ auto p=stored;if(plus)p.hdr10Source=p.hdr10PlusSource;return p;
+}
+uint64_t DiagnosticNowMs(){return 1;}
+}
+struct HDR10AISource {
+ using Decision=DVBRIDGE::HDR10AIActivation::Decision;
+ DVBRIDGE::OutputPreferences m_preferences;
+ DVBRIDGE::SourceBinding m_binding{7,1,11},m_preparedBinding{7,1,11};
+ uint64_t m_revision=13;bool m_active=true,m_fallback=false;
+ cb1_hdr10_ai* m_context=nullptr;
+ std::optional<cb1_ai_result> m_prepared,m_committed;
+ DVBRIDGE::HDR10AIActivation m_activation;
+ bool HDR10Plus()const{return m_preferences.hdr10Source==DVBRIDGE::HDR10SourceMode::HDR10PlusDV;}
+ bool Matches(DVBRIDGE::SourceBinding binding)const MATCHES
+ cb1_ai_identity Identity(DVBRIDGE::SourceBinding binding)const IDENTITY
+ cb1_ai_status Collect(){assert(false);return CB1_AI_INCOMPATIBLE;}
+ void RecordStatus(const char*,cb1_ai_status,bool){}
+ Decision Prediction(DVBRIDGE::SourceBinding binding,const DVBRIDGE::OutputPreferences& preferences,
+     uint64_t now,cb1_ai_result* result,bool required=true) PREDICTION
+ void Prime(bool plus){
+  m_preferences=DVBRIDGE::FrameOutputSettings(plus);
+  m_prepared=cb1_ai_result{};m_prepared->id={7,1,13};
+  m_prepared->source_flags=plus?CB1_SOURCE_HDR10PLUS:0;
+  m_activation.Begin(7,13,0);
+ }
+};
+extern "C" cb1_ai_status cb1_hdr10_ai_poll(cb1_hdr10_ai*,cb1_ai_identity,cb1_ai_result*){
+ assert(false);return CB1_AI_INCOMPATIBLE;
+}
+struct Context {HDR10AISource source;auto& HDR10AI(){return source;}};
+struct Bridge {
+ Context* context;
+ auto PredictHDR10AI(DVBRIDGE::SourceBinding binding,const DVBRIDGE::OutputPreferences& p,
+     uint64_t now,cb1_ai_result* result){return context->source.Prediction(binding,p,now,result);}
+};
+struct Window {
+ Context context;Context* m_dvContext=&context;Bridge bridge{&context};Bridge* m_dvBridge=&bridge;
+ bool Render(bool authored=false){
+  struct {bool authored;bool Data()const{return authored;}}metadata{authored};
+  struct {DVBRIDGE::SourceBinding binding{7,1,11};}layer;
+  SNAPSHOT
+  GATE
+  return true; // The real rendering body can now submit/present the primed image.
+ }
+};
+int main(){
+ using namespace DVBRIDGE;
+ stored.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;
+ for(auto plain:{HDR10SourceMode::Native,HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
+  stored.hdr10Source=plain;Window guided;guided.context.source.Prime(true);
+  assert(guided.Render()); // A plain-HDR10 preference must never veto selected HDR10+.
+ }
+ for(auto plain:{HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
+  stored.hdr10Source=plain;Window ordinary;ordinary.context.source.Prime(false);
+  assert(ordinary.Render()); // The sibling HDR10 path keeps its own preference.
+ }
+ Window authored;authored.context.source.Prime(true);assert(authored.Render(true));
+}
+'''
+        replacements = dict(ENUMS=enums,PREFERENCES=preferences,SNAPSHOT=snapshot,GATE=gate,
+            MATCHES=body(source,'bool HDR10AISource::Matches('),
+            IDENTITY=body(source,'cb1_ai_identity HDR10AISource::Identity('),
+            PREDICTION=body(source,'HDR10AISource::Decision HDR10AISource::Prediction('))
+        for name,value in replacements.items():
+            program = re.sub(r'\b'+name+r'\b',lambda unused:value,program)
+        self.compile_run(program)
+
     def test_missing_snapshot_keeps_the_existing_activation_fallback(self):
         headers=TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings=(headers/'DVOutputSettings.h').read_text()
@@ -583,7 +678,7 @@ int main(){
         common = body(decoder, 'bool CDVDVideoCodecFFmpeg::GetPictureCommon(')
         promotion = common[common.index('  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||'):
                            common.index('#ifdef CB1_HAS_HDR10_AI', common.index('  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||'))]
-        vaapi = (native/'xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp').read_text()
+        vaapi = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp').read_text()
         check = body(vaapi, 'CDVDVideoCodec::VCReturn CDecoder::Check(')
         check = check[check.index('  if (state == VAAPI_OPEN &&'):check.index('#endif')]
         renderer = (TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text()
@@ -674,6 +769,8 @@ struct Decoder:ICallbackHWAccel{
  }
 };
 struct CDVDVideoCodec {enum VCReturn{VC_NONE,VC_REOPEN};};
+std::mutex m_DecoderSection;int m_DisplayState=0;
+void Reset(){}
 CDVDVideoCodec::VCReturn Check(AVCodecContext* avctx,unsigned m_hdr10AIBuffers){
  enum{VAAPI_OPEN};int state=VAAPI_OPEN;
  CHECK
@@ -719,7 +816,9 @@ int main(){
   assert(select(current,caps).route==OutputRoute::Vanilla);
  }
  current.hdr10PlusSource=HDR10SourceMode::Native;hdr10PlusPlaybackMode.store(current.hdr10PlusSource);
- assert(Check(&context,buffers)==CDVDVideoCodec::VC_REOPEN);
+ decoder.m_decoderState=Decoder::STATE_HW;
+ assert(Check(&context,buffers)==CDVDVideoCodec::VC_NONE);
+ assert(decoder.m_decoderState==Decoder::STATE_HW); // A smaller request can reuse this file's pool.
  assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);
  assert(select(current,caps).route==OutputRoute::Vanilla && !LayerEligible(picture));
  AVFrame* withoutMetadata=av_frame_alloc();

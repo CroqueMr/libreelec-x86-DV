@@ -101,7 +101,7 @@ CWinSystemGbmGLESContext window;
 struct CServiceBroker {static auto* GetWinSystem(){return &window;}};
 bool DVBRIDGE::WantsNativeOutput(const ::VideoPicture* picture) WANTS
 struct CLinuxRendererGLES {
- bool m_bConfigured=false,m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false;
+ bool m_bConfigured=false,m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false,m_reloadShaders=false;
  bool ConfigureVideoOutput(const ::VideoPicture& picture) CONFIGURE
 };
 int main(){

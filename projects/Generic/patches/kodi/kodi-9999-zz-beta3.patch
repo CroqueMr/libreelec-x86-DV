@@ -3994,10 +3994,12 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
      return true;
    }
  #endif
-@@ -262,6 +296,7 @@
+@@ -262,6 +296,9 @@
      CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: HDR passthrough active but GUI "
                            "compositing not supported by windowing system");
  
++  // AI priming may have compiled the ordinary shader before HDR was selected.
++  m_reloadShaders = true;
 +  m_bConfigured = true;
    return true;
  }
@@ -4727,9 +4729,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
  
    std::unique_lock lock(m_statelock);
 @@ -624,6 +767,7 @@
- 
-       if (!m_pRenderer->Flush(saveBuffers))
-       {
+ #ifdef CB1_HAS_HDR10_AI
+         ResetHDR10AIQueue();
+ #endif
 +        for (auto& slot : m_Queue) slot.sourceSideData.reset();
          m_queued.clear();
          m_discard.clear();
@@ -10714,6 +10716,18 @@ diff --git a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp b/xbmc/cores/
          delete stream;
          return nullptr;
        }
+@@ -2292,6 +2502,11 @@
+   {
+     /* was new stream */
+     stream->uniqueId = streamIdx;
++#ifdef HAVE_DVBRIDGE
++    // The joined BL can be admitted after Kodi's initial stream inventory.
++    if (m_blurayDovi && streamIdx == m_blurayBase)
++      stream->source = STREAM_SOURCE_NONE;
++#endif
+   }
+   else
+   {
 @@ -2419,6 +2624,13 @@
  
  bool CDVDDemuxFFmpeg::IsProgramChange()
@@ -11299,7 +11313,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp b/xbmc/cores/VideoPlaye
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2098 @@
+@@ -0,0 +1,2099 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "utils/DVBridgeDiagnosticLog.h"
@@ -11766,7 +11780,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  ClearNextHDR10AI();
 +  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
 +    return StopHDR10AI() ? Decision::Native : Decision::Wait;
-+  if (m_state->aiStopping && !StopHDR10AI()) return Decision::Wait;
++  const bool retiring = m_state->aiStopping;
++  if (retiring && !StopHDR10AI()) return Decision::Wait;
 +  if (queue.empty() || !result) return Decision::Ignore;
 +  // Retire completed RGB leases even while anticipation is incomplete.
 +  if (Poll() == DVBRIDGE_DV_FAILED)
@@ -15444,30 +15459,14 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -290,8 +751,53 @@
-   if (!guiWillRender)
-     return true;
- 
+@@ -241,5 +702,37 @@
+ bool CWinSystemGbmGLESContext::BeginGuiComposite(bool guiWillRender)
+ {
 +#ifdef HAVE_DVBRIDGE
-+  m_dvPQGuiMergeAttempted = m_dvPQGuiComposed = false;
-+  m_dvSubtitleBounds = {};
-+  ++m_dvGUIContentGeneration;
-+  m_dvSubtitleDraws = 0;
-+  m_dvSubtitleContent = 0;
-+  m_dvPQSubtitleDraws = 0;
-+  m_dvPQSubtitleCleared = false;
-+  // The one prepared next picture already owns its packed subtitle composition.
-+  if (!m_cb1FramePending || !m_dvFrame)
-+    m_dvNativeGui = false;
-+#endif
-+
-   if (!m_guiFbo.BeginRender())
-     return false;
-+
-+#ifdef HAVE_DVBRIDGE
-+  if (m_dvState.Captured() || m_hdrConversion)
++  if (guiWillRender && (m_dvContext || m_dvState.Captured() || m_hdrConversion))
 +  {
-+    // Restore Kodi's GUI viewport and clip after offscreen video or AI passes.
++    // AI priming can run before DV output or GUI compositing is active.
++    // Restore Kodi's logical GUI state before either drawing path.
 +    CRect viewport;
 +    CRenderSystemGLES::GetViewPort(viewport);
 +    GLint before[4]{}, framebuffer{};
@@ -15495,6 +15494,29 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +    }
 +  }
 +#endif
+   if (!m_guiCompositing)
+     return false;
+ 
+@@ -290,8 +787,22 @@
+   if (!guiWillRender)
+     return true;
+ 
++#ifdef HAVE_DVBRIDGE
++  m_dvPQGuiMergeAttempted = m_dvPQGuiComposed = false;
++  m_dvSubtitleBounds = {};
++  ++m_dvGUIContentGeneration;
++  m_dvSubtitleDraws = 0;
++  m_dvSubtitleContent = 0;
++  m_dvPQSubtitleDraws = 0;
++  m_dvPQSubtitleCleared = false;
++  // The one prepared next picture already owns its packed subtitle composition.
++  if (!m_cb1FramePending || !m_dvFrame)
++    m_dvNativeGui = false;
++#endif
++
+   if (!m_guiFbo.BeginRender())
+     return false;
++
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
@@ -17478,6 +17500,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlaye
    {
      m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
      CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);
+@@ -1104,6 +1123,9 @@
+   int buffer = m_renderManager.WaitForBuffer(m_bAbortOutput, maxWaitTime);
+   if (buffer < 0)
+   {
++    if (m_bAbortOutput)
++      return OUTPUT_ABORT;
++
+     // The render buffer pool can fill up in trick-play FF, with more new pictures decoded than
+     // are taken out at the display rate.
+     // Drop the picture to let the renderer naturally drain the pool and make room for next iteration.
 diff --git a/xbmc/cores/VideoSettings.h b/xbmc/cores/VideoSettings.h
 --- a/xbmc/cores/VideoSettings.h
 +++ b/xbmc/cores/VideoSettings.h

@@ -1,3 +1,34 @@
+**Update 5 | 2026-11-03 00:09 CET (Paris)**
+
+### Update 5 changes
+
+#### Playback and stability
+
+- Fixed conversion startup being interrupted by Kodi's configured display-switch delay.
+- Fixed OSD viewport and clipping during conversion startup.
+- Fixed seek/re-entry stalls caused by repeated GPU retirement or a retained first frame losing its startup state.
+- Drain VAAPI output before reopening a larger decoder surface pool, preventing a startup/reopen crash.
+- Intentional cancellation of a video-buffer wait is no longer reported as a timeout or dropped frame.
+
+#### Dolby Vision
+
+- Fixed incorrect native HDR10 contrast after switching away from Dolby Vision conversion, including automatic fallback. The fix restores native renderer state and reloads its shader; no compensating filter is applied.
+
+#### HDR10+
+
+- Fixed HDR10+ playback using the plain-HDR10 rendering preference after its first frame.
+- Fixed forward/backward seek freezes in HDR10+ to Dolby Vision playback.
+
+#### Audio and Player information
+
+- Recover ordinary stereo PCM when HDMI/ALSA temporarily reports an unnamed two-channel layout; passthrough is unchanged.
+- Corrected Player information when a dual-track Profile 7 base layer is discovered after the initial stream inventory.
+
+#### Remaining limitation
+
+- Some HDR10+ metadata still triggers native HDR10 fallback. Metadata mapping/validation refinement remains in progress; this update does not add an AI handoff at that transition.
+- The final automatic-fallback contrast fix was checked against the same rendered frame in native HDR10: no RGB-code difference in software captures outside the GUI. Additional post-fix whole-file/seek checks were interrupted when the temporary Support connection closed.
+
 **Update 4 | 2026-11-02 18:35 CET (Paris)**
 
 ### Update 4 changes

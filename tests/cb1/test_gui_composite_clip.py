@@ -60,6 +60,7 @@ struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false;
   int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160;
   FBO m_guiFbo,m_dvPQSubtitleFbo;
+  void* m_dvContext=nullptr;
   CGraphicContext context;
   DVState m_dvState;
   bool m_hdrConversion=false,m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
@@ -95,11 +96,14 @@ int main() {
   vanilla.m_dvState.captured=false;rawClip={100,200,3000,1800};
   assert(vanilla.BeginGuiComposite(true));
   assert(rawClip.contains(200,300) && !rawClip.contains(1900,1950));
-  // Skipped and failed GUI passes must not change the active framebuffer's clip.
+  // No GUI drawing leaves the active framebuffer's clip alone.
   assert(master.BeginGuiComposite(false));
   assert(!rawClip.contains(1900,1950));
+  // Failure to bind the GUI FBO falls through to native GUI drawing, which
+  // still needs Kodi's clip; the failed pass must not clear any framebuffer.
   master.m_guiFbo.begin=false;
-  assert(!master.BeginGuiComposite(true) && !rawClip.contains(1900,1950));
+  bottomCleared=false;
+  assert(!master.BeginGuiComposite(true) && rawClip.contains(1900,1950) && !bottomCleared);
 }
 '''.replace('@@BEGIN@@', begin)
         with tempfile.TemporaryDirectory() as temporary:
