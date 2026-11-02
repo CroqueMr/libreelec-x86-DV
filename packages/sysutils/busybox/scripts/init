@@ -1064,6 +1064,7 @@ if [ "$STORAGE_NETBOOT" = "yes" ]; then
 fi
 
 # switch to new sysroot and start real init
+[ ! -e /sysroot/run/nvidia-boot-diagnostics ] || INIT_ARGS="$INIT_ARGS --show-status=yes"
 exec /usr/bin/busybox switch_root /sysroot /usr/lib/systemd/systemd $INIT_ARGS
 
 error "switch_root" "Error in initramfs. Could not switch to new root"

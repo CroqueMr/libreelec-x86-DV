@@ -8,6 +8,104 @@ from test_native_video_source import TREE
 
 
 class BlurayPairingTests(unittest.TestCase):
+    def test_failure_snapshot_distinguishes_el_head_from_minimum_rpu_pts(self):
+        if not os.environ.get('FFMPEG_TEST_PREFIX'):
+            self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')
+        prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
+        program = r'''
+#include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include <cassert>
+template<class T> void check(const T& join, bool populated, bool resync) {
+ if constexpr(requires {join.GetState();}) {
+  const auto s=join.GetState();
+  assert(s.resync==resync && s.restartPeer==-1);
+  assert(s.basePackets==(populated?1:0) && s.elPackets==(populated?2:0));
+  assert(s.rpuPackets==(populated?2:0));
+  assert(s.basePts==(populated?106:AV_NOPTS_VALUE));
+  assert(s.baseDts==(populated?104:AV_NOPTS_VALUE));
+  assert(s.elPts==(populated?110:AV_NOPTS_VALUE));
+  assert(s.elDts==(populated?108:AV_NOPTS_VALUE));
+  assert(s.baseIrap==populated && !s.elIrap);
+ } else assert(false && "Rejection diagnostics need the actual EL decode head");
+}
+int main() {
+ CBlurayDovi join;join.Reset(true);check(join,false,true);
+ AVPacket *b=av_packet_alloc(),*e=av_packet_alloc();
+ assert(b && e && av_new_packet(b,6)==0 && av_new_packet(e,13)==0);
+ const uint8_t base[]={0,0,1,0x26,1,0xaa};
+ const uint8_t enhancement[]={0,0,0,1,0x02,1,0xbb,0,0,1,0x7c,1,0xcc};
+ memcpy(b->data,base,6);memcpy(e->data,enhancement,13);
+ b->pts=106;b->dts=104;e->pts=110;e->dts=108;
+ assert(join.Push(b,false) && join.Push(e,true));
+ e->pts=100;e->dts=109;assert(join.Push(e,true));
+ check(join,true,true);
+ assert(join.RpuPTS()==100 && "Minimum RPU PTS must not stand in for EL head PTS110");
+ join.Reset();check(join,false,false);
+ av_packet_free(&b);av_packet_free(&e);
+}
+'''
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-I'+str(TREE/'xbmc'),'-I'+str(prefix/'include'),str(root/'test.cpp'),
+                '-L'+str(prefix/'lib'),'-lavcodec','-lavutil','-lm','-o',str(root/'test')],
+                capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_seek_aligned_heads_keep_decode_order_with_unequal_layer_delays(self):
+        if not os.environ.get('FFMPEG_TEST_PREFIX'):
+            self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')
+        prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
+        program = r'''
+#include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include <cassert>
+int presentation(int i, bool alternate) {
+ return (i/3)*3+(i%3==0?3:alternate?3-i%3:i%3);
+}
+int main() {
+ for(bool seek : {false,true}) for(int elDelay : {0,1,2})
+ for(bool alternate : {false,true}) {
+  CBlurayDovi join;join.Reset(seek);
+  AVPacket *b=av_packet_alloc(),*e=av_packet_alloc(),*out=av_packet_alloc();
+  assert(b && e && out && av_new_packet(b,6)==0 && av_new_packet(e,13)==0);
+  const uint8_t base[]={0,0,1,0x02,1,0xaa};
+  const uint8_t enhancement[]={0,0,0,1,0x02,1,0xbb,0,0,1,0x7c,1,0xcc};
+  int emitted=0;
+  for(int i=0;i<30;++i) {
+   assert(av_packet_make_writable(b)==0 && av_packet_make_writable(e)==0);
+   memcpy(b->data,base,6);memcpy(e->data,enhancement,13);
+   b->pts=presentation(i,false);b->dts=i-1;b->data[5]=1+i;
+   e->pts=presentation(i,alternate);e->dts=i-elDelay;
+   e->data[6]=100+i;e->data[12]=e->pts;
+   assert(join.Push(b,false) && join.Push(e,true));
+   while(join.Take(out)==0) {
+    const int pts=presentation(emitted,false);
+    assert(out->pts==pts && out->dts==emitted-1);
+    const uint8_t expected[]={0,0,1,0x02,1,uint8_t(1+emitted),
+      0,0,0,1,0x7e,1,0x02,1,uint8_t(100+emitted),
+      0,0,0,1,0x7c,1,uint8_t(pts)};
+    assert(out->size==sizeof(expected) && !memcmp(out->data,expected,sizeof(expected)));
+    ++emitted;av_packet_unref(out);
+   }
+  }
+  assert(emitted==30 && "Aligned seek heads must not wait for equal layer DTS");
+  assert(!join.Pending() && join.TakePrerollCount()==0);
+  av_packet_free(&b);av_packet_free(&e);av_packet_free(&out);
+ }
+}
+'''
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-I'+str(TREE/'xbmc'),'-I'+str(prefix/'include'),str(root/'test.cpp'),
+                '-L'+str(prefix/'lib'),'-lavcodec','-lavutil','-lm','-o',str(root/'test')],
+                capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_seek_common_irap_accepts_different_layer_decode_delays(self):
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
             self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')

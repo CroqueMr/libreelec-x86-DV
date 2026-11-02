@@ -43,14 +43,15 @@ the decision. Recovery state resets for a new video or manual mode change.
 
 At Expert level:
 
-- **FEL upscaling**: VAAPI or Nearest neighbour (GPU). Other modes can use the GPU
+- **FEL upscaling**: VAAPI, Bilinear (GPU) or Reference (GPU). Other modes can use the GPU
   path when VAAPI is unavailable. The enhancement layer is not discarded.
 - **Asynchronous frame preparation**: enabled by default. Eligible CB1 modes
   prepare at most one next image while the current image is displayed. Changes
   apply to the next video. Native Kodi and fallback scheduling are unchanged.
 
 Master Reference uses its own reference FEL filters, independently of the saved
-VAAPI/Nearest preference.
+FEL upscaling preference. Reference (GPU) shares Master's FEL interpolation with
+the other FEL circuits, without selecting the complete Master pipeline.
 
 **Master Reference output**, at Expert level, selects YCbCr or IPT-PQc2 transport.
 YCbCr is the default. Profile 5 keeps its direct IPT path in either Master output.
@@ -125,9 +126,11 @@ Disc-menu graphics and text subtitles are excluded.
 Video-relative placement follows Kodi's video rectangle; encoded black bars
 are not removed through a separate L5 interpretation.
 
-Blu-ray navigation uses Kodi/libbluray. BD-J requires the existing LibreELEC
-Java add-on; restart Kodi after installing it. Title selection remains available
-where supported without Java. Menu compatibility depends on the disc application.
+Blu-ray navigation uses Kodi/libbluray. The image includes Java and both BD-J
+support JARs built with its libbluray version; no Java addon installation is
+needed. The system runtime takes priority over an older installed Java addon.
+Java is loaded on demand for BD-J, not as a background service. Menu
+compatibility depends on the disc application.
 
 ## AMD HDMI 3D
 

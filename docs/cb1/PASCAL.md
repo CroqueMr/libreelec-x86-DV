@@ -49,6 +49,15 @@ or vendor-packet ownership. [Output requirements and limits](DRIVER-COVERAGE.md)
 
 ## Verification
 
+NVIDIA boots display kernel messages, overlay selection and native service status.
+The early snapshot is saved in `/storage/.cache/log/nvidia-boot/early.log`, with one
+previous `.old` copy. The native persistent journal is limited to 10 MiB and is
+included by `createlog`; `journalctl -b -1` reads the previous boot. Runtime-only
+overrides leave user settings and non-NVIDIA boots unchanged. Kodi's last 40
+journal entries are displayed when its service exits; continuous journal-to-console
+forwarding is not enabled. A failed HDMI
+initialization can still make the console invisible; collect the journal over SSH.
+
 Host tests exercise blob ownership, invalid requests, VSIF bounds, the actual
 R580 HDMI builder and Pascal packet packer, including the HDMI checksum.
 Package tests check both fixed dependencies, complete installation, explicit PCI

@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 ADDON = ROOT / 'packages/addons/tools/jre.zulu'
 BLURAY = ROOT / 'packages/multimedia/libbluray/package.mk'
+BUILTIN = ROOT / 'packages/multimedia/bdj-runtime'
 
 
 @unittest.skipUnless(shutil.which('bash'), 'Native LibreELEC packaging requires bash')
@@ -69,6 +70,82 @@ addon
                     'libbluray-j2se-0.0.0.jar', 'libbluray-awt-j2se-0.0.0.jar'})
                 self.assertNotEqual(result.returncode, 0,
                                     'An incomplete BD-J runtime must not be released')
+
+    def test_builtin_runtime_keeps_java_and_licenses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ('bin/java', 'lib/amd64/server/libjvm.so', 'LICENSE',
+                         'THIRD_PARTY_README'):
+                file = root / 'jdk/jre' / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(name.encode())
+                if name == 'bin/java':
+                    file.chmod(0o755)
+            recipe = BUILTIN / 'package.mk'
+            self.assertTrue(recipe.is_file(), 'The system image needs a native Java package')
+            result = subprocess.run(['bash', '-e', '-c', '''
+get_build_dir() { printf '%s/jdk\\n' "$FIXTURE"; }
+. "$PKG_DIR/package.mk"
+makeinstall_target
+'''], env=dict(os.environ, FIXTURE=str(root), PKG_DIR=str(BUILTIN),
+              INSTALL=str(root / 'image'), TARGET_ARCH='x86_64'),
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for name in ('bin/java', 'lib/amd64/server/libjvm.so', 'LICENSE',
+                         'THIRD_PARTY_README'):
+                self.assertEqual((root/'image/usr/lib/jvm/zulu8'/name).read_bytes(),
+                                 name.encode())
+
+    def test_builtin_profile_overrides_stale_addon_without_starting_java(self):
+        profile = BUILTIN / 'profile.d/90-bdj.conf'
+        self.assertTrue(profile.is_file(), 'Native profile must select the matched system runtime')
+        result = subprocess.run(['sh', '-e', '-c', '''
+export JAVA_HOME=/storage/.kodi/addons/tools.jre.zulu
+export LIBBLURAY_CP=/storage/.kodi/addons/tools.jre.zulu/
+. "$BDJ_PROFILE"
+printf '%s\\n%s\\n' "$JAVA_HOME" "$LIBBLURAY_CP"
+'''], env=dict(os.environ, BDJ_PROFILE=str(profile)), capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['/usr/lib/jvm/zulu8', '/usr/share/java/'])
+
+    def test_native_library_build_requires_both_matching_jars(self):
+        wanted = self.matched()
+        for omitted in (None, *sorted(wanted)):
+            with self.subTest(omitted=omitted), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                jars = root/'image/usr/share/java'
+                jars.mkdir(parents=True)
+                for name in wanted - {omitted}:
+                    (jars/name).write_bytes(b'JAR fixture')
+                result = subprocess.run(['bash', '-e', '-c', '''
+get_build_dir() { printf '%s/jdk\\n' "$FIXTURE"; }
+. "$BLURAY_RECIPE"
+configure_package
+pre_configure_target
+[[ "$PKG_MESON_OPTS_TARGET" == *"-Dbdj_jar=enabled"* ]]
+post_makeinstall_target
+'''], env=dict(os.environ, FIXTURE=str(root), BLURAY_RECIPE=str(BLURAY),
+              INSTALL=str(root/'image'), PROJECT='Generic', TARGET_ARCH='x86_64',
+              MACHINE_HARDWARE_NAME='x86_64'), capture_output=True, text=True)
+                if omitted is None:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0,
+                                        'A missing matching JAR must fail the native build')
+
+    def test_jdk_is_registered_before_native_unpack_hashing(self):
+        result = subprocess.run(['bash', '-e', '-c', '''
+. "$BLURAY_RECIPE"
+case " $PKG_DEPENDS_UNPACK " in
+  *" jdk-x86_64-zulu "*) exit 0 ;;
+  *) exit 1 ;;
+esac
+'''], env=dict(os.environ, BLURAY_RECIPE=str(BLURAY), PROJECT='Generic',
+              TARGET_ARCH='x86_64', MACHINE_HARDWARE_NAME='x86_64'),
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0,
+                         'A JDK update must invalidate native libbluray and its JARs')
 
 
 if __name__ == '__main__':

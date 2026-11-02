@@ -1,5 +1,16 @@
-**Update 3 | 2026-11-02 16:24 CET (Paris)**
+**Update 4 | 2026-11-02 18:35 CET (Paris)**
 
+### Update 4 changes
+
+- Included Java and matching libbluray 1.5.0 BD-J support files directly in the image; no Java add-on installation is required.
+- The built-in Java runtime takes priority over older installed Java add-ons.
+- Fixed BL/EL recovery getting stuck after seeking when matching presentation timestamps have different decode delays.
+- Added BL/EL queue-head diagnostics for remaining disc-specific stalls.
+- Added early NVIDIA boot messages, persistent boot snapshots and previous-boot journal collection.
+- Movie pixel processing and Dolby Vision metadata are unchanged.
+
+**Update 3 | 2026-11-02 16:24 CET (Paris)**
+> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stabilized release.
 ### Update 3 changes
 
 - Player information separates File metadata, Used by CB1 and Sent to TV.
@@ -10,8 +21,8 @@
 - Fixed missing startup intent on the later Kodi renderer resolution request, avoiding a separate SDR timing switch before HDR activation.
 - Added bounded HDMI startup diagnostics. Movie pixel processing and metadata are unchanged.
 
-> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stabilized release.
->**Update 2 | 2026-11-02 13:19 CET (Paris)**
+
+
 
 
 
