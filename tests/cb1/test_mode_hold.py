@@ -7,6 +7,79 @@ from test_native_video_source import TREE, body
 
 
 class ModeHoldTests(unittest.TestCase):
+    def test_renderer_carries_startup_intent_with_its_native_resolution_request(self):
+        method=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text(),
+                    'void CRenderManager::UpdateResolution()')
+        program=r'''
+#define HAVE_DVBRIDGE
+#include <atomic>
+#include <cassert>
+#include <optional>
+#include <string>
+using RESOLUTION=int;
+constexpr int ADJUST_REFRESHRATE_OFF=0;
+namespace DVBRIDGE {
+inline std::atomic<int> modeChangeResolution{-1};
+inline thread_local std::optional<int> guiModeChangeResolution;
+}
+struct CSettings {static constexpr const char* SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE="adjust";};
+struct Picture {int iWidth=3840,iHeight=2160;std::string stereoMode;};
+struct Gfx {
+ bool fullscreen=true,deferred=false,interleave=false;int resolution=60,intent=-9,calls=0;
+ bool IsFullScreenVideo(){return fullscreen;}bool IsFullScreenRoot(){return true;}
+ void SetVideoResolution(int res,bool){
+  if(interleave)DVBRIDGE::modeChangeResolution.store(90);
+  intent=DVBRIDGE::guiModeChangeResolution.value_or(DVBRIDGE::modeChangeResolution.load());
+  if(!deferred)resolution=res;++calls;
+ }
+ int GetVideoResolution(){return resolution;}
+};
+namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext {
+ Gfx gfx;Gfx& GetGfxContext(){return gfx;}
+ bool DVModeSwitchDeferred(){return gfx.deferred;}bool CompleteDVModeSwitch(const Picture&){return true;}
+};}
+struct Settings {int adjust=2;Settings* GetSettings(){return this;}int GetInt(const char*){return adjust;}};
+struct CServiceBroker {
+ static auto* GetWinSystem(){static KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;return &window;}
+ static Settings* GetSettingsComponent(){static Settings settings;return &settings;}
+};
+struct CResolutionUtils {static int ChooseBestResolution(float,int,int,bool){return 24;}};
+struct Renderer {int updates=0;void Update(){++updates;}};
+struct Port {int changes=0;void VideoParamsChange(){++changes;}};
+struct Manager {
+ bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;float m_fps=24;Picture m_picture;
+ Renderer renderer,*m_pRenderer=&renderer;Port port,*m_playerPort=&port;
+ void UpdateLatencyTweak(){}
+ void update() METHOD
+};
+int main(){
+ auto& gfx=CServiceBroker::GetWinSystem()->gfx;
+ // The initial request can be a no-op; the render manager owns the later switch.
+ Manager native;native.update();assert(gfx.intent==24 && gfx.resolution==24);
+ assert(DVBRIDGE::modeChangeResolution.load()==-1 && !native.m_bTriggerUpdateResolution);
+ DVBRIDGE::modeChangeResolution.store(90);Manager pending;pending.update();
+ assert(gfx.intent==24 && DVBRIDGE::modeChangeResolution.load()==90);
+ Manager ordinary;ordinary.m_nativeDVRate=false;ordinary.update();
+ assert(gfx.intent==-1 && DVBRIDGE::modeChangeResolution.load()==90);
+ gfx.deferred=true;gfx.resolution=60;Manager deferred;deferred.update();
+ assert(gfx.intent==24 && DVBRIDGE::modeChangeResolution.load()==90 && deferred.m_bTriggerUpdateResolution);
+ gfx.deferred=false;
+ DVBRIDGE::modeChangeResolution.store(-1);gfx.interleave=true;Manager overlap;overlap.update();
+ assert(gfx.intent==24 && DVBRIDGE::modeChangeResolution.load()==90);
+ assert(!DVBRIDGE::guiModeChangeResolution.has_value());gfx.interleave=false;
+ int calls=gfx.calls;Manager inactive;gfx.fullscreen=false;inactive.update();assert(gfx.calls==calls);
+ gfx.fullscreen=true;CServiceBroker::GetSettingsComponent()->adjust=0;
+ Manager disabled;disabled.update();assert(gfx.calls==calls);
+}
+'''.replace('METHOD',method)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],
+                                 capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_display_reset_delay_starts_after_commit_not_before(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         announce=body(source,'void CWinSystemGbmGLESContext::AnnounceCB1Mode(bool transport)')
@@ -107,15 +180,17 @@ int main(){Window w;w.present(false,false);assert(w.audio.resets==1 && !w.m_disp
 #include <atomic>
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 using namespace KODI::WINDOWING::GBM;
 struct RESOLUTION_INFO {int iWidth=3840,iHeight=2160,dwFlags=0; std::string strId="mode";};
 using RESOLUTION=int;
-constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2,LOGERROR=0,LOGDEBUG=1;
+constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2,LOGERROR=0,LOGDEBUG=1,LOGINFO=2;
 struct CLog {template<class... T> static void Log(T...) {}};
 struct CEGLUtils {template<class... T> static void Log(T...) {}};
-namespace DVBRIDGE {std::atomic<int> modeChangeResolution{0}; int DiagnosticNowMs(){return 0;}}
+namespace DVBRIDGE {std::atomic<int> modeChangeResolution{0};
+inline thread_local std::optional<int> guiModeChangeResolution;int DiagnosticNowMs(){return 0;}}
 struct CDisplaySettings {
  static CDisplaySettings& GetInstance(){static CDisplaySettings value;return value;}
  RESOLUTION_INFO GetResolutionInfo(RESOLUTION) const{return {};}

@@ -1,17 +1,31 @@
-# R1.0.0-RC3 Preview
+**Update 3 | 2026-11-02 16:24 CET (Paris)**
 
-**Update 2 | 2026-11-02 13:19 CET (Paris)**
+### Update 3 changes
 
-### Update 2 changes
+- Player information separates File metadata, Used by CB1 and Sent to TV.
+- Clearer CM4 option names and actual CM4 status, without conversion arrows.
+- Removed reserved blank row space from metadata fields.
+- Fixed a Settings-to-playback freeze during automatic refresh-rate changes.
+- Preserved the desktop return resolution without opening a display-confirmation dialog during playback.
+- Fixed missing startup intent on the later Kodi renderer resolution request, avoiding a separate SDR timing switch before HDR activation.
+- Added bounded HDMI startup diagnostics. Movie pixel processing and metadata are unchanged.
+
+> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stabilized release.
+>**Update 2 | 2026-11-02 13:19 CET (Paris)**
+
+
+
+### Update 2 changes since Update 1
 
 - Smaller text throughout Player information.
 - Simplified metadata blocks: Source blocks and Sent to TV or Used by CB1.
 - Fixed text instead of scrolling values, with shorter descriptions and multiline diagnostics.
 - Video processing is unchanged.
 
-> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stabilized release.
 
-## Changes since R1.0.0-RC2
+
+### Update 2 changes since RC2
+
 
 ### Dolby Vision
 

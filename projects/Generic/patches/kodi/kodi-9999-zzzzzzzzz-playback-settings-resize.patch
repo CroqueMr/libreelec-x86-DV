@@ -1,0 +1,94 @@
+diff --git a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
+--- a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
++++ b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
+@@ -10,6 +10,8 @@
+ #include "GUIPassword.h"
+ #include "GUIUserMessages.h"
+ #include "ServiceBroker.h"
++#include "application/ApplicationComponents.h"
++#include "application/ApplicationPlayer.h"
+ #include "input/actions/Action.h"
+ #include "input/actions/ActionIDs.h"
+ #include "settings/DisplaySettings.h"
+@@ -107,7 +109,11 @@
+     {
+       if (message.GetParam1() == GUI_MSG_WINDOW_RESIZE)
+       {
+-        if (IsActive() && CDisplaySettings::GetInstance().GetCurrentResolution() != CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution())
++        // Playback timing is temporary; retain the desktop return resolution.
++        if (IsActive() &&
++            !CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->IsPlaying() &&
++            CDisplaySettings::GetInstance().GetCurrentResolution() !=
++                CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution())
+         {
+           CDisplaySettings::GetInstance().SetCurrentResolution(CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution(), true);
+           CreateSettings();
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -241,6 +241,9 @@
+   m_dvBridge.reset();
+   if (!RetireDVContext()) return false;
+-  const int opening = DVBRIDGE::modeChangeResolution.load();
++  const int opening = DVBRIDGE::guiModeChangeResolution.value_or(
++      DVBRIDGE::modeChangeResolution.load());
++  CLog::Log(LOGINFO,"CB1 HDMI startup: intent={} output_usable={}",
++      opening, SupportsDVOutputMode());
+   if (opening >= 0 && SupportsDVOutputMode())
+   {
+     const auto& requested=CDisplaySettings::GetInstance().GetResolutionInfo(static_cast<RESOLUTION>(opening));
+@@ -303,7 +303,15 @@
+ 
+ bool CWinSystemGbmGLESContext::HoldCB1Mode(RESOLUTION_INFO& res)
+ {
+-  if (!CB1ModeCanJoin(res) || m_dispReset || !m_DRM->SetMode(res) ||
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  const bool eligible = CB1ModeCanJoin(res);
++  if (!eligible || m_dispReset)
++    DVBRIDGE::DiagnosticLog(LOGINFO,
++        "CB1 HDMI transition: join_refused eligible={} reset_pending={} page_pending={} committed={} selected_refresh={:.3f} requested_refresh={:.3f}",
++        eligible, m_dispReset, drm && drm->HasPendingCB1Page(),
++        drm && drm->IsSelectedModeCommitted(),
++        m_DRM ? m_DRM->GetCurrentMode().fRefreshRate : 0.0f, res.fRefreshRate);
++  if (!eligible || m_dispReset || !m_DRM->SetMode(res) ||
+       !m_DRM->SetVideoMode(res,nullptr)) return false;
+   m_modeAnnouncement.Held();
+   DVBRIDGE::DiagnosticLog(LOGINFO,"CB1 HDMI transition: mode_selected={}x{}@{:.3f} commit=deferred",
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -1194,8 +1194,14 @@
+       {
+         RESOLUTION res = CResolutionUtils::ChooseBestResolution(
+             m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());
++#ifdef HAVE_DVBRIDGE
++        // Carry the stream's intent when this later request performs the modeset.
++        const auto previous = DVBRIDGE::guiModeChangeResolution;
++        DVBRIDGE::guiModeChangeResolution = m_nativeDVRate ? static_cast<int>(res) : -1;
++#endif
+         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+ #ifdef HAVE_DVBRIDGE
++        DVBRIDGE::guiModeChangeResolution = previous;
+         if (m_nativeDVRate)
+           if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+           {
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h
+@@ -1,6 +1,7 @@
+ /* SPDX-License-Identifier: GPL-2.0-or-later */
+ #pragma once
+ #include <atomic>
++#include <optional>
+ 
+ class CDVDStreamInfo;
+ class VideoPicture;
+@@ -8,6 +9,8 @@
+ namespace DVBRIDGE
+ {
+ inline std::atomic<int> modeChangeResolution{-1};
++// A synchronous GUI request must not replace a queued decoder request's intent.
++inline thread_local std::optional<int> guiModeChangeResolution;
+ // Keep software metadata probes and ordinary HDR/SDR playback on Kodi's path.
+ constexpr bool Eligible(bool standardDVDisplay, bool transportAvailable,
+                         bool dolbySource, bool softwareProbe, bool interlaced, bool stereo)

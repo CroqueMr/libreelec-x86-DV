@@ -376,6 +376,7 @@ int main() {
 #include <memory>
 #include <mutex>
 #include <array>
+#include <optional>
 #include <stdexcept>
 #include "utils/DVBridgeDiagnosticState.h"
 #include "windowing/gbm/ModeChangeHold.h"
@@ -388,6 +389,7 @@ enum class RenderStereoMode {MONO};
 enum dvbridge_mode {DVBRIDGE_MODE_DISABLED};
 namespace DVBRIDGE {enum class OutputReason {None,NoGPUProcessing};
 inline std::atomic<int> modeChangeResolution{-1};
+inline thread_local std::optional<int> guiModeChangeResolution;
 template<class... T> void DiagnosticLog(T...) {}}
 struct Admission {bool usable=false; DVBRIDGE::OutputReason reason{};};
 struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,hdr10plus=false,processingKnown=false;

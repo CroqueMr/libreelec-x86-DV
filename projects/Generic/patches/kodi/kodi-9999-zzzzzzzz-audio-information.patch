@@ -1000,7 +1000,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
        const RESOLUTION_INFO resolution(1920, 1080);
        SetCoordsRes(resolution);
        g_fontManager.LoadTTF("CB1.InfoBody", "special://xbmc/media/Fonts/arial.ttf",
-+                            0xfff4f6f6, 0, 20, 0, false, 1.0f, 1.0f, &resolution);
++                            0xfff4f6f6, 0, 18, 0, false, 1.0f, 1.0f, &resolution);
 +      g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",
                              0xfff4f6f6, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
 -      g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",

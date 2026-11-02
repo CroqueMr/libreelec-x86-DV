@@ -70,14 +70,14 @@ int main() {
             ran = subprocess.run([str(root/'test')], capture_output=True, text=True)
             self.assertEqual(ran.returncode, 0, ran.stderr)
 
-    def test_block_details_use_two_contextual_rows_and_static_native_values(self):
+    def test_block_details_keep_source_use_and_delivery_visible_together(self):
         panel=ET.parse(Path(__file__).resolve().parents[2]/
             'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
         rows=panel.findall('.//include[@content="DVInfoRow"]')
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
-        expected={'DV.ParsedBlocks':'Source blocks','DV.AppliedBlocks':'Used by CB1',
+        expected={'DV.ParsedBlocks':'File metadata','DV.AppliedBlocks':'Used by CB1',
                   'DV.TransmittedBlocks':'Sent to TV','DV.MinimumLinkBits':'$LOCALIZE[40848]',
                   'DV.Fallback':'Fallback'}
         for prop,label in expected.items():
@@ -89,7 +89,8 @@ int main() {
                         '$INFO[Window(playerprocessinfo).Property('+prop+')]')
         used=row_for('DV.AppliedBlocks').find('./param[@name="visible"]').get('value')
         sent=row_for('DV.TransmittedBlocks').find('./param[@name="visible"]').get('value')
-        self.assertIn('String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))',used)
+        self.assertNotIn('DV.TransmittedBlocks',used)
+        self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))',used)
         self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))',sent)
         values={r.find('./param[@name="value"]').get('value') for r in rows}
         self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.UnappliedBlocks)]',values)
@@ -103,6 +104,10 @@ int main() {
         self.assertEqual(controls[1].findtext('aligny'),'top')
         for prop in ('DV.Fallback','DV.AdmissionReason','DV.Reconstruction'):
             self.assertGreaterEqual(int(row_for(prop).find('./param[@name="height"]').get('value')),90)
-        for prop in ('DV.RequestedPolicy','DV.OutputStage','DV.AtomicResult','DV.L1Nits'):
+        for prop in ('DV.RequestedPolicy','DV.OutputStage','DV.AtomicResult'):
             height=row_for(prop).find('./param[@name="height"]')
             self.assertGreaterEqual(int(height.get('value')) if height is not None else 30,54,prop)
+        default=panel.find('./include[@name="DVInfoRow"]/param[@name="height"]').get('default')
+        for prop in ('DV.ParsedBlocks','DV.AppliedBlocks','DV.TransmittedBlocks','DV.L1Nits'):
+            height=row_for(prop).find('./param[@name="height"]')
+            self.assertEqual(int(height.get('value') if height is not None else default),30,prop)

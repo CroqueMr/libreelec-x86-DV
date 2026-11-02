@@ -18,13 +18,14 @@ class NvidiaRefreshCycle(unittest.TestCase):
 #include <cassert>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <mutex>
 #include <stdexcept>
 #include <string>
 using namespace KODI::WINDOWING::GBM;
 using RESOLUTION=int;
 constexpr int RES_WINDOW=-1,RES_DESKTOP=0,FILM=1;
-constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2,LOGERROR=0,LOGDEBUG=1;
+constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2,LOGERROR=0,LOGDEBUG=1,LOGINFO=2;
 constexpr int GUI_MSG_NOTIFY_ALL=0,GUI_MSG_WINDOW_RESIZE=1;
 constexpr int DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_BUSY=1,DVBRIDGE_DV_FAILED=2;
 struct RESOLUTION_INFO {
@@ -38,7 +39,8 @@ struct CDisplaySettings {
 };
 struct CLog {template<class... T>static void Log(T...){}};
 struct CEGLUtils {template<class... T>static void Log(T...){}};
-namespace DVBRIDGE {std::atomic<int> modeChangeResolution{-1};int DiagnosticNowMs(){return 0;}}
+namespace DVBRIDGE {std::atomic<int> modeChangeResolution{-1};
+inline thread_local std::optional<int> guiModeChangeResolution;int DiagnosticNowMs(){return 0;}}
 bool gpuReady=false,gpuBroken=false;unsigned finishes=0;
 void glFinish(){++finishes;if(!gpuBroken)gpuReady=true;}
 struct CDRMAtomic {

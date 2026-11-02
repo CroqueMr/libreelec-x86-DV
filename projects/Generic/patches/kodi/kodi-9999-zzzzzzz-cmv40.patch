@@ -57,15 +57,15 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
 +msgctxt "#40980"
-+msgid "CM4.0 metadata"
++msgid "Add CM4.0 metadata"
 +msgstr ""
 +
 +msgctxt "#40981"
-+msgid "Reference and Master only. Adds default CM4 metadata without changing video pixels. Automatic selection uses the original L2 trims."
++msgid "Adds CM4 metadata without changing video pixels or removing L2 trims. TV rendering may change. Reference and Master only."
 +msgstr ""
 +
 +msgctxt "#40982"
-+msgid "CM2.9 without L2 trims"
++msgid "Only if source has no L2 trims"
 +msgstr ""
 +
 +msgctxt "#40983"
@@ -260,11 +260,11 @@ diff --git a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h b/xbmc/guilib/guiinfo/
 +  static std::string CMVersion(const VideoProcessingInfo& info)
 +  {
 +    if (!info.metadata) return "";
-+    if (info.cm4) return "CM4 source";
++    if (info.cm4) return "CM4.0 (original)";
 +    if ((info.output.flags & CDVPlaybackInfo::HDMI) && !info.output.hdr10AI &&
 +        !info.output.authoredLegacy && (info.output.effective==1 || info.output.effective==5))
-+      return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 -> CM4: On" : "CM2.9 -> CM4: Off";
-+    return "CM2.9 source";
++      return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 (CM4 added)" : "CM2.9 (CM4 not added)";
++    return "CM2.9";
 +  }
    static std::string Mode(const VideoProcessingInfo& info)
    {

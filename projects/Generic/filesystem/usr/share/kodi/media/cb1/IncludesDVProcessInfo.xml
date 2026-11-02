@@ -17,13 +17,13 @@
     <value>Off</value>
   </variable>
   <include name="DVInfoRow">
-    <param name="label"/><param name="value"/><param name="visible" default="true"/><param name="height" default="30"/>
+    <param name="label"/><param name="value"/><param name="visible" default="true"/><param name="height" default="30"/><param name="labelwidth" default="252"/><param name="valueleft" default="264"/>
     <definition>
       <control type="group"><height>$PARAM[height]</height><visible>$PARAM[visible]</visible>
-        <control type="label"><width>252</width><height>30</height>
+        <control type="label"><width>$PARAM[labelwidth]</width><height>30</height>
           <font>CB1.InfoBody</font><textcolor>FFBFC8CC</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label"><left>264</left><right>0</right><height>$PARAM[height]</height>
+        <control type="label"><left>$PARAM[valueleft]</left><right>0</right><height>$PARAM[height]</height>
           <font>CB1.InfoBody</font><textcolor>FFF4F6F6</textcolor><align>right</align><aligny>top</aligny><label>$PARAM[value]</label><wrapmultiline>true</wrapmultiline>
         </control>
       </control>
@@ -112,9 +112,9 @@
       <include content="DVInfoRow"><param name="label" value="Level"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Level)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Level)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Level),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Version"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Version)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Version)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Version),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="CM metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CM)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.CM)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CM),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Source blocks"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.ParsedBlocks)]"/><param name="height" value="54"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Sent to TV"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TransmittedBlocks)]"/><param name="height" value="54"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Used by CB1"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AppliedBlocks)]"/><param name="height" value="54"/><param name="visible" value="String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="File metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.ParsedBlocks)]"/><param name="labelwidth" value="132"/><param name="valueleft" value="144"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Used by CB1"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AppliedBlocks)]"/><param name="labelwidth" value="132"/><param name="valueleft" value="144"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Sent to TV"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TransmittedBlocks)]"/><param name="labelwidth" value="132"/><param name="valueleft" value="144"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))"/></include>
       <include content="DVInfoRow"><param name="label" value="RPU"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.RPU)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.RPU)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.RPU),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Base layer"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.BL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.BL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.BL),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Enhancement layer"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.EL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.EL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.EL),N/A)"/></include>
@@ -123,7 +123,7 @@
       <include content="DVInfoRow"><param name="label" value="RPU max / min"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Mastering)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="RPU CLL / FALL"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CLL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="L1 PQ min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L1PQ)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L1 nits min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L1Nits)]"/><param name="height" value="54"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="L1 nits min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L1Nits)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="L5 L/R/T/B"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L5)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)"/></include>
     </definition></include>
   <include name="DVProcessLayout"><param name="height"/><param name="background"/><param name="panel"/><param name="surface"/><param name="col1"/><param name="col2"/><param name="col3"/><param name="dv"/><param name="gauge"/><definition>

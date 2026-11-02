@@ -10,6 +10,40 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class CMv40Tests(unittest.TestCase):
+    def test_display_separates_original_cm_from_committed_cm4_addition(self):
+        from test_native_video_source import body
+        tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        code=body((tree/'xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h').read_text(),
+                  'static std::string CMVersion(')
+        program=r'''
+#include "cores/VideoProcessingInfo.h"
+#include <cassert>
+struct CDVPlaybackInfo {enum {HDMI=1,CM4=2};};
+std::string label(const VideoProcessingInfo& info) BODY
+int main(){
+ VideoProcessingInfo s;assert(label(s).empty());s.metadata=true;
+ assert(label(s)=="CM2.9");
+ s.output.flags=CDVPlaybackInfo::HDMI;s.output.effective=1;
+ assert(label(s)=="CM2.9 (CM4 not added)");
+ s.output.flags|=CDVPlaybackInfo::CM4;
+ assert(label(s)=="CM2.9 (CM4 added)");
+ s.output.effective=5;assert(label(s)=="CM2.9 (CM4 added)");
+ s.cm4=true;assert(label(s)=="CM4.0 (original)");
+ s.cm4=false;s.output.hdr10AI=true;assert(label(s)=="CM2.9");
+ s.output.hdr10AI=false;s.output.authoredLegacy=true;assert(label(s)=="CM2.9");
+ s.output.authoredLegacy=false;s.output.effective=3;assert(label(s)=="CM2.9");
+ s.output.effective=1;s.output.flags=CDVPlaybackInfo::HDMI;
+ assert(label(s)=="CM2.9 (CM4 not added)");
+}
+'''.replace('BODY',code)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-I'+str(tree/'xbmc'),str(root/'test.cpp'),
+                                  '-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stderr)
+
     def test_all_five_choices_are_user_selectable_with_conditional_controls(self):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings=ET.parse(tree/'system/settings/settings.xml')
