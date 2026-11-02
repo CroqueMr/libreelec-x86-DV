@@ -1,6 +1,15 @@
 # R1.0.0-RC3 Preview
 
-> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stable release.
+**Update 2 | 2026-11-02 13:19 CET (Paris)**
+
+### Update 2 changes
+
+- Smaller text throughout Player information.
+- Simplified metadata blocks: Source blocks and Sent to TV or Used by CB1.
+- Fixed text instead of scrolling values, with shorter descriptions and multiline diagnostics.
+- Video processing is unchanged.
+
+> **Work-in-progress build:** this preview evolves as fixes are added. Code cleanup is not complete. This is not a stabilized release.
 
 ## Changes since R1.0.0-RC2
 
