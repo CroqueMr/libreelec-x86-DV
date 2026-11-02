@@ -25,10 +25,13 @@ _pkg_copy_lib() {
 }
 
 addon() {
+  local bluray_version="$(get_pkg_version libbluray)"
+  local bluray_jars="$(get_install_dir jre-libbluray)/usr/share/java"
   mkdir -p ${ADDON_BUILD}/${PKG_ADDON_ID}/lib
 
   cp -a $(get_build_dir jdk-${TARGET_ARCH}-zulu)/jre \
-        $(get_install_dir jre-libbluray)/usr/share/java/*.jar \
+        "${bluray_jars}/libbluray-j2se-${bluray_version}.jar" \
+        "${bluray_jars}/libbluray-awt-j2se-${bluray_version}.jar" \
         ${PKG_DIR}/profile.d \
     ${ADDON_BUILD}/${PKG_ADDON_ID}
 

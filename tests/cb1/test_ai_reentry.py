@@ -30,7 +30,7 @@ enum class HDR10SourceMode{Native,ReferenceDV,EnhancedDV,HDR10PlusDV};
 enum class OutputRoute{Vanilla,NativeDV};
 struct Preferences{unsigned revision=7;HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
 struct Caps{bool isHDR10=true,hdr10PlusSource=true,nativeDV=true,eligible=false;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 struct Selection{OutputRoute route;};
 // The real selector has separate source/admission controls; this fixture owns teardown only.
 auto SelectOutput(const Preferences&,const Caps& c){return Selection{c.eligible?OutputRoute::NativeDV:OutputRoute::Vanilla};}
@@ -40,7 +40,8 @@ struct Window{
  Context context;Context* m_dvContext=&context;DVBRIDGE::Caps caps;
  bool m_aiActive=true,m_aiReady=true,m_aiFallback=false;
  struct Binding{unsigned stream{},revision{},picture{};}m_aiActivation{11,2,17};
- struct Picture{Binding doviSourceBinding;}picture{{11,2,17}};
+ enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;}picture{{11,2,17}};
  unsigned m_aiPolicy=7,m_aiSelectionPolicy=7;mutable std::mutex m_dvCapabilityMutex;
  DVBRIDGE::Caps GetDVOutputCapabilities(const Picture*,const DVBRIDGE::Preferences&)const{return caps;}
  bool Pending()const PENDING
@@ -85,7 +86,7 @@ enum class StreamHdrType HDR_TYPES;
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 inline bool IsHDR10Family(StreamHdrType source) FAMILY
 inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
 }
@@ -262,7 +263,7 @@ namespace DVBRIDGE {
 enum class HDR10SourceMode {ReferenceDV,HDR10PlusDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;
-inline auto FrameOutputSettings(){return prefs;}
+inline auto FrameOutputSettings(bool=false){return prefs;}
 inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
 }
 struct Binding{bool Valid()const{return true;}};
@@ -423,11 +424,14 @@ int main(){
 #include <optional>
 #include <mutex>
 namespace DVBRIDGE{
-enum class HDR10SourceMode{Native,ReferenceDV};
+enum class HDR10SourceMode{Native,ReferenceDV,HDR10PlusDV};
 struct Preferences{int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool plus=false){auto p=prefs;
+ if(plus)p.hdr10Source=HDR10SourceMode::HDR10PlusDV;return p;}
 }
-struct Source{bool Current(int binding,DVBRIDGE::Preferences p){return binding==7 && p.revision==1;}};
+struct Source{bool guided=false;bool MetadataOnly(){return false;}bool HDR10Plus(){return guided;}
+ bool Current(int binding,DVBRIDGE::Preferences p){return binding==7 && p.revision==1 &&
+ p.hdr10Source==(guided?DVBRIDGE::HDR10SourceMode::HDR10PlusDV:DVBRIDGE::HDR10SourceMode::ReferenceDV);}};
 struct Context{Source source;Source& HDR10AI(){return source;}};
 struct Bridge{std::optional<int> committed=1;const auto& CommittedHDR10AI(){return committed;}};
 struct Window{Context context;Context* m_dvContext=&context;Bridge bridge;Bridge* m_dvBridge=&bridge;
@@ -436,7 +440,9 @@ struct Window{Context context;Context* m_dvContext=&context;Bridge bridge;Bridge
  bool SelectionPending()const PENDING
 };
 int main(){
- Window w;assert(w.Committed());w.m_aiActivation=8;assert(!w.Committed());
+ Window w;assert(w.Committed());
+ w.context.source.guided=true;assert(w.Committed()); // Sparse HDR10+ can use AI, not metadata-only.
+ w.context.source.guided=false;w.m_aiActivation=8;assert(!w.Committed());
  w.m_aiActivation=7;DVBRIDGE::prefs.revision=2;assert(!w.Committed());DVBRIDGE::prefs.revision=1;
  w.bridge.committed.reset();assert(!w.Committed());
  assert(!w.SelectionPending());DVBRIDGE::prefs.revision=2;assert(w.SelectionPending());
@@ -534,7 +540,7 @@ int main(){
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};enum class OutputRoute {Vanilla,DV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 struct Caps{bool isHDR10=true,hdr10PlusSource=false,nativeDV=true;};
 struct Selection{OutputRoute route;};
 inline Selection SelectOutput(Preferences p,Caps){return {p.hdr10Source==HDR10SourceMode::Native?OutputRoute::Vanilla:OutputRoute::DV};}
@@ -544,7 +550,8 @@ struct Window{
  std::mutex m_dvCapabilityMutex;bool m_aiActive=true;int m_aiPolicy=17,m_aiSelectionPolicy=0;
  bool m_aiReady=true,m_aiFallback=false;
  struct Binding{int stream{},revision{},picture{};}m_aiActivation{7,17,1};
- struct Picture{Binding doviSourceBinding;}picture{{7,17,1}};
+ enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;}picture{{7,17,1}};
  bool m_dvOrdinaryFrame=false,m_dvEndPending=false,m_dvStopPending=false;
  Context context;Context* m_dvContext=&context;
  auto GetDVOutputCapabilities(Picture*,DVBRIDGE::Preferences){return DVBRIDGE::Caps{};}
@@ -580,7 +587,7 @@ constexpr double DVD_NOPTS_VALUE=-1e20;
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::Native;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 }
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext {
@@ -629,10 +636,11 @@ namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;
  bool SameValues(const Preferences& other)const{return hdr10Source==other.hdr10Source;}};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 }
 struct Binding{int stream=1,picture=1,revision=1;bool operator==(const Binding&)const=default;};
-struct Picture{Binding doviSourceBinding;};
+enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;};
 struct Preparation {
  struct Outcome{bool ready,lookahead;};bool ready{true};
  std::function<Outcome()> execute;std::function<bool(const Outcome&)> publish;

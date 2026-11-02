@@ -18,12 +18,24 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#40875"
-@@ -26095,3 +26095,11 @@
+@@ -26099,3 +26099,23 @@
  msgid "Switch when sustained rendering headroom is insufficient. Off keeps Master Reference strict."
  msgstr ""
  
 +msgctxt "#40971"
 +msgid "Source pixels unchanged. HDR10+ curve and saturation are not translated. Requires full-source analysis."
++msgstr ""
++
++msgctxt "#41012"
++msgid "HDR10+ playback"
++msgstr ""
++
++msgctxt "#41013"
++msgid "Remember the HDR10+ playback mode. Automatic fallback does not change this choice."
++msgstr ""
++
++msgctxt "#41014"
++msgid "HDR10+ native"
 +msgstr ""
 +
 +msgctxt "#40970"
@@ -33,14 +45,20 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -7,6 +7,7 @@
-           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+@@ -8,6 +8,13 @@
            <constraints><options>
              <option label="40867">1</option><option label="40868">2</option>
-+            <option label="40970">3</option>
              <option label="40866">0</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40970">3</option><option label="41014">0</option>
            </options></constraints>
            <control type="list" format="string"><usedetails>true</usedetails></control>
+         </setting>
 diff --git a/xbmc/cores/DataCacheCore.cpp b/xbmc/cores/DataCacheCore.cpp
 --- a/xbmc/cores/DataCacheCore.cpp
 +++ b/xbmc/cores/DataCacheCore.cpp
@@ -102,12 +120,13 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        picture.doviSourcePts != AV_NOPTS_VALUE)
      picture.doviSourceBinding = m_dvSourceOwner.NextPicture();
  }
-@@ -1839,10 +1844,12 @@
+@@ -1839,10 +1844,13 @@
  
  unsigned CDVDVideoCodecFFmpeg::GetHDR10AIBufferCount() const
  {
 -  const bool hdr10 = m_hints.hdrType == StreamHdrType::HDR_TYPE_HDR10 &&
-+  const auto mode = DVBRIDGE::hdr10PlaybackMode.load();
++  const auto mode = m_hints.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS ?
++      DVBRIDGE::hdr10PlusPlaybackMode.load() : DVBRIDGE::hdr10PlaybackMode.load();
 +  const bool hdr10 = DVBRIDGE::IsHDR10AIInput(
 +      m_hints.hdrType, mode == DVBRIDGE::HDR10SourceMode::HDR10PlusDV) &&
        !m_hints.dovi.rpu_present_flag;
@@ -120,21 +139,26 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -24,6 +24,10 @@
+@@ -23,8 +23,13 @@
+     return {OutputRoute::Vanilla, {}, OutputReason::SourceIneligible};
    if (caps.sourceKnown && caps.isHDR10 && !caps.isDV)
    {
-     if (preferences.hdr10Source == HDR10SourceMode::Native) return result;
-+    if (caps.hdr10PlusSource && preferences.hdr10Source != HDR10SourceMode::HDR10PlusDV)
+-    if (preferences.hdr10Source == HDR10SourceMode::Native) return result;
+-    auto policy = preferences.HDR10Policy();
++    const auto source = preferences.HDR10Mode(caps.hdr10PlusSource);
++    if (source == HDR10SourceMode::Native) return result;
++    if (caps.hdr10PlusSource && source != HDR10SourceMode::HDR10PlusDV)
 +      return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
-+    if (preferences.hdr10Source == HDR10SourceMode::HDR10PlusDV && !caps.isHDR10Plus)
++    if (source == HDR10SourceMode::HDR10PlusDV && !caps.isHDR10Plus)
 +      return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
-     auto policy = preferences.HDR10Policy();
++    auto policy = preferences.HDR10Policy(caps.hdr10PlusSource);
      if (policy.mode == DVBRIDGE_MODE_DISABLED)
        return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
+     if (policy.mode != DVBRIDGE_MODE_STANDARD && !preferences.ProfileValid())
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -17,7 +17,7 @@
+@@ -17,11 +17,12 @@
  namespace DVBRIDGE
  {
  enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5 };
@@ -143,25 +167,80 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
  
  // Decoder ingress sees the last complete frame-boundary preference snapshot.
  inline std::atomic<OutputMode> playbackMode{OutputMode::Standard};
-@@ -99,7 +99,8 @@
+ inline std::atomic<HDR10SourceMode> hdr10PlaybackMode{HDR10SourceMode::Native};
++inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Native};
+ 
+ #ifdef HAVE_DVBRIDGE
+ inline int PolicyCode(const dvbridge_policy& policy)
+@@ -35,6 +36,7 @@
+ {
+   OutputMode output{OutputMode::Standard};
+   HDR10SourceMode hdr10Source{HDR10SourceMode::Native};
++  HDR10SourceMode hdr10PlusSource{HDR10SourceMode::Native};
+   int method{0}, panel{0}, gamut{0};
+   double peak{0};
+   bool optimizedDV{true};
+@@ -52,7 +54,8 @@
+ 
+   bool SameValues(const OutputPreferences& other) const
+   {
+-    return output == other.output && hdr10Source == other.hdr10Source && method == other.method &&
++    return output == other.output && hdr10Source == other.hdr10Source &&
++        hdr10PlusSource == other.hdr10PlusSource && method == other.method &&
+         panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
+         masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
+         disableL2Trims == other.disableL2Trims &&
+@@ -94,13 +97,19 @@
+       result.tv = {peak, static_cast<dvbridge_panel>(panel), static_cast<dvbridge_gamut>(gamut)};
+     return result;
+   }
+-  dvbridge_policy HDR10Policy() const
++  HDR10SourceMode HDR10Mode(bool hdr10Plus) const
++  {
++    return hdr10Plus ? hdr10PlusSource : hdr10Source;
++  }
++  dvbridge_policy HDR10Policy(bool hdr10Plus = false) const
+   {
      auto result = Policy();
      result.adaptive=DVBRIDGE_ADAPTIVE_A;
      result.master_ipt=false;
 -    result.mode = hdr10Source == HDR10SourceMode::ReferenceDV ? DVBRIDGE_MODE_STANDARD :
-+    result.mode = hdr10Source == HDR10SourceMode::ReferenceDV ||
-+        hdr10Source == HDR10SourceMode::HDR10PlusDV ? DVBRIDGE_MODE_STANDARD :
-         hdr10Source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
+-        hdr10Source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
++    const auto source = HDR10Mode(hdr10Plus);
++    result.mode = source == HDR10SourceMode::ReferenceDV ||
++        source == HDR10SourceMode::HDR10PlusDV ? DVBRIDGE_MODE_STANDARD :
++        source == HDR10SourceMode::EnhancedDV ? DVBRIDGE_MODE_ENHANCED_DV : DVBRIDGE_MODE_DISABLED;
      result.tv = result.mode == DVBRIDGE_MODE_ENHANCED_DV ?
          dvbridge_tv_profile{peak,static_cast<dvbridge_panel>(panel),static_cast<dvbridge_gamut>(gamut)} : dvbridge_tv_profile{};
-@@ -135,7 +136,7 @@
-   if (settings)
-   {
+     return result;
+@@ -119,7 +128,7 @@
+ inline uint64_t hdr10Reselection{};
+ #endif
+ 
+-inline OutputPreferences FrameOutputSettings()
++inline OutputPreferences FrameOutputSettings(bool hdr10Plus = false)
+ {
+   static OutputPreferences previous;
+ #ifdef CB1_HAS_HDR10_AI
+@@ -137,6 +146,8 @@
      const int hdr10 = settings->GetInt("dvbridge.hdr10source");
--    next.hdr10Source = hdr10 >= 0 && hdr10 <= 2 ?
-+    next.hdr10Source = hdr10 >= 0 && hdr10 <= 3 ?
+     next.hdr10Source = hdr10 >= 0 && hdr10 <= 2 ?
          static_cast<HDR10SourceMode>(hdr10) : HDR10SourceMode::Native;
++    next.hdr10PlusSource = settings->GetInt("dvbridge.hdr10plussource") == 3 ?
++        HDR10SourceMode::HDR10PlusDV : HDR10SourceMode::Native;
      next.method = settings->GetInt("dvbridge.hdr10method");
      next.peak = settings->GetNumber("dvbridge.tvpeak");
+     next.panel = settings->GetInt("dvbridge.tvpanel");
+@@ -158,6 +169,9 @@
+   previous = next;
+   playbackMode.store(next.output);
+   hdr10PlaybackMode.store(next.hdr10Source);
++  hdr10PlusPlaybackMode.store(next.hdr10PlusSource);
++  // Resolve only the returned copy; alternating inputs must not churn revisions.
++  if (hdr10Plus) next.hdr10Source = next.hdr10PlusSource;
+   return next;
+ }
+ 
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
@@ -500,6 +579,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
            acceptedOutput.effective == 7 ? "reconstructed-picture-statistics" :
            acceptedOutput.flags & CDVPlaybackInfo::HDR10 ? (acceptedOutput.effective>=3 ? "manual-tv-profile" :
                acceptedOutput.level6 ? "source-L6" : "reference-default") : "source-RPU");
+@@ -2445,7 +2513,8 @@
+   m_submission = {};
+ #ifdef CB1_HAS_HDR10_AI
+   // The accepted page owns its immutable current fence; future commands follow it.
+-  if (m_aiFrame) m_context->AdvanceNextHDR10AI(m_committedBinding,DVBRIDGE::FrameOutputSettings());
++  if (m_aiFrame) m_context->AdvanceNextHDR10AI(m_committedBinding,
++      DVBRIDGE::FrameOutputSettings(m_requested.hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV));
+ #endif
+   return true;
+ }
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
@@ -627,7 +716,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
  }
  #include <optional>
  
-@@ -21,7 +22,12 @@
+@@ -21,7 +22,13 @@
    // Called only after the owning context's retirement fence has completed.
    void ReleaseRetired();
    cb1_ai_status Begin(pl_gpu gpu, const char* bundle, const DVBRIDGE::OutputPreferences& preferences,
@@ -635,13 +724,14 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
 +      DVBRIDGE::SourceBinding binding, double pts, uint64_t now, bool buffered = true,
 +      bool metadataOnly = false);
 +  bool MetadataOnly() const { return m_metadataOnly; }
++  bool HDR10Plus() const { return m_preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV; }
 +  Decision DescribeHDR10Plus(DVBRIDGE::SourceBinding binding,
 +      std::shared_ptr<const AVDynamicHDRPlus> source, double pts, uint64_t now,
 +      cb1_ai_result* result);
    cb1_ai_status Submit(const pl_frame* frame, DVBRIDGE::SourceBinding binding, double pts,
        double headPts, std::shared_ptr<void> lease);
    cb1_ai_status Seal(double pts);
-@@ -39,6 +45,12 @@
+@@ -39,6 +46,12 @@
    {
      return Matches(binding) && preferences.revision == m_preferences.revision &&
          preferences.SameValues(m_preferences);
@@ -654,7 +744,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h b/xbmc/cores/
    }
    uint64_t LastSubmitted() const { return m_lastSubmitted; }
    void SetPresentationDeadline(uint64_t deadline) { m_activation.SetPresentationDeadline(deadline); }
-@@ -79,10 +91,12 @@
+@@ -79,10 +92,12 @@
    cb1_ai_identity m_jobIdentity{};
    std::shared_ptr<void> m_lease;
    std::optional<cb1_ai_result> m_prepared, m_committed;
@@ -745,7 +835,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
  #ifdef CB1_HAS_HDR10_AI
 -  hdr10 = source.hdrType == StreamHdrType::HDR_TYPE_HDR10 &&
 +  hdr10 = DVBRIDGE::IsHDR10AIInput(source.hdrType,
-+      DVBRIDGE::FrameOutputSettings().hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV) &&
++      DVBRIDGE::FrameOutputSettings(source.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS).hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV) &&
        source.doviSourceBinding.Valid() && !source.doviSourceInfo.profile;
  #endif
    if (!hdr10 && (!buffer.doviMetadata.Data() || buffer.doviPts == DVD_NOPTS_VALUE))
@@ -758,7 +848,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
    layer.chromaLocation = source.chroma_position;
    if (hdr10)
    {
-@@ -319,6 +325,7 @@
+@@ -319,13 +325,14 @@
      CDVBridgeGLES::Layer layer{};
      if (!BuildDVBridgeLayer(idx,layer)) break;
      layers.push_back(std::move(layer));
@@ -766,19 +856,57 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
      if (layers.back().pts >= horizon - 1e-9) break;
    }
    // Future imports must not replace the current picture's admission identity.
+   if (!UploadTexture(queue.front())) return {false, {}, {}};
+   const auto index = queue.front();
+   const auto binding = head->doviSourceBinding;
+-  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  const auto preferences = DVBRIDGE::FrameOutputSettings(head->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
+   // A mode switch can reuse the decoded pool without another Configure().
+   m_aiOutputPending |=
+       (preferences.hdr10Source != DVBRIDGE::HDR10SourceMode::Native) != m_dvRequested;
+@@ -348,7 +355,7 @@
+       },
+       [this,index,binding,preferences](const HDR10AIQueuePreparation::Outcome& outcome) {
+         const auto& current = m_buffers[index].doviSourcePicture;
+-        const auto settings = DVBRIDGE::FrameOutputSettings();
++        const auto settings = DVBRIDGE::FrameOutputSettings(current && current->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
+         if (!current || !(current->doviSourceBinding == binding) ||
+             settings.revision != preferences.revision || !settings.SameValues(preferences))
+           return false;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -220,7 +220,7 @@
+ 
+ #ifdef CB1_HAS_HDR10_AI
+   m_aiOutputPending = HDR10AILookahead() &&
+-      DVBRIDGE::FrameOutputSettings().hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
++      DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS).hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
+   if (m_aiOutputPending)
+   {
+     // Keep the GUI output until AI preparation selects DV or native HDR10.
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
-@@ -1563,7 +1563,8 @@
+@@ -1562,11 +1562,13 @@
+ 
  #ifdef CB1_HAS_HDR10_AI
    if (physicalPhase && completionAge && m_fps > 0 &&
-       frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead() &&
+-      frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead() &&
 -      DVBRIDGE::FrameOutputSettings().hdr10Source == DVBRIDGE::HDR10SourceMode::ReferenceDV)
-+      (DVBRIDGE::FrameOutputSettings().hdr10Source == DVBRIDGE::HDR10SourceMode::ReferenceDV ||
-+       DVBRIDGE::FrameOutputSettings().hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV))
-   {
-     // Select on the physical refresh phase, not an interpolated mid-refresh clock.
-     renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
+-  {
+-    // Select on the physical refresh phase, not an interpolated mid-refresh clock.
+-    renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
++      frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead())
++  {
++    const auto source = DVBRIDGE::FrameOutputSettings(
++        m_picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS).hdr10Source;
++    if (source == DVBRIDGE::HDR10SourceMode::ReferenceDV || source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV)
++      // Select on the physical refresh phase, not an interpolated mid-refresh clock.
++      renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
+   }
+ #endif
+ 
 diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
 --- a/xbmc/cores/VideoProcessingInfo.h
 +++ b/xbmc/cores/VideoProcessingInfo.h
@@ -821,11 +949,12 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  }
  
  bool CDVPlaybackModes::ConfigureProfile()
-@@ -91,11 +104,13 @@
+@@ -91,20 +104,26 @@
    constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
        {5,0,40914},
        {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922}};
 +  const auto nativeSource=SourceType();
++  const bool hdr10PlusSource=nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
 +  const bool hdr10Source=nativeSource==StreamHdrType::HDR_TYPE_HDR10 ||
 +                         nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
 +  if (!hdr10Source && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
@@ -833,12 +962,28 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 -  if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
 -  const bool hdr10Source=source.isHDR10 && !source.isDV;
  #ifdef CB1_HAS_HDR10_AI
--  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866}};
-+  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866},{3,0,40970}};
+   constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866}};
++  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014}};
  #else
    constexpr Choice hdr10Choices[]={{0,0,40866}};
++  constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
  #endif
-@@ -117,8 +132,8 @@
+-  const Choice* choices=hdr10Source ? hdr10Choices : dvChoices;
+-  const int count=hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
+-  const auto choiceSetting=std::make_shared<CSettingInt>(hdr10Source ?
+-      "dvbridge.hdr10playbackchoice" : "dvbridge.playbackchoice");
++  const Choice* choices=hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
++  const int count=hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
++  const char* sourceSetting=hdr10PlusSource ? "dvbridge.hdr10plussource" : "dvbridge.hdr10source";
++  const auto choiceSetting=std::make_shared<CSettingInt>(hdr10PlusSource ? "dvbridge.hdr10plusplaybackchoice" :
++      hdr10Source ? "dvbridge.hdr10playbackchoice" : "dvbridge.playbackchoice");
+   {
+-    const auto preferences=DVBRIDGE::FrameOutputSettings();
++    const auto preferences=DVBRIDGE::FrameOutputSettings(hdr10PlusSource);
+     std::vector<IntegerSettingOption> options;
+     int current=-1;
+     for(int i=0;i<count;++i)
+@@ -117,11 +136,11 @@
      }
      CSettingConditions::DVOutputOptions(choiceSetting,options);
      DVBRIDGE::DiagnosticLog(LOGINFO,
@@ -848,8 +993,12 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +        int(nativeSource), source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
          int(preferences.output), int(preferences.hdr10Source));
      dialog->Reset();
-     dialog->SetHeading(StringUtils::Format(strings.Get(40876), hdr10Source ? "HDR10" : "Dolby Vision"));
-@@ -142,6 +157,7 @@
+-    dialog->SetHeading(StringUtils::Format(strings.Get(40876), hdr10Source ? "HDR10" : "Dolby Vision"));
++    dialog->SetHeading(StringUtils::Format(strings.Get(40876), hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
+     dialog->SetUseDetails(true);
+     for(const auto& option : options)
+     {
+@@ -142,6 +161,7 @@
      const int selected=dialog->GetSelectedItem();
      if (selected<0 || selected>=count) return true;
      // Admission may change during the dialog's nested event loop.
@@ -857,6 +1006,24 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
      CSettingConditions::DVOutputOptions(choiceSetting,options);
      for(const auto& [name,value] : options[selected].properties)
        if (name=="disabled" && value.asBoolean()) return true;
+@@ -149,14 +169,14 @@
+     {
+       std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+       const int priorOutput=settings->GetInt("dvbridge.outputmode");
+-      const int priorHDR10=settings->GetInt("dvbridge.hdr10source");
++      const int priorHDR10=settings->GetInt(sourceSetting);
+       const int priorMethod=settings->GetInt("dvbridge.hdr10method");
+-      if (!(hdr10Source ? settings->SetInt("dvbridge.hdr10source",choice.output) :
++      if (!(hdr10Source ? settings->SetInt(sourceSetting,choice.output) :
+           (settings->SetInt("dvbridge.outputmode",choice.output) &&
+            settings->SetInt("dvbridge.hdr10method",choice.method))))
+       {
+         settings->SetInt("dvbridge.outputmode",priorOutput);
+-        settings->SetInt("dvbridge.hdr10source",priorHDR10);
++        settings->SetInt(sourceSetting,priorHDR10);
+         settings->SetInt("dvbridge.hdr10method",priorMethod);
+         return true;
+       }
 diff --git a/xbmc/dialogs/DVPlaybackModes.h b/xbmc/dialogs/DVPlaybackModes.h
 --- a/xbmc/dialogs/DVPlaybackModes.h
 +++ b/xbmc/dialogs/DVPlaybackModes.h
@@ -917,37 +1084,53 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
  #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
  #include "resources/LocalizeStrings.h"
-@@ -528,26 +529,34 @@
+@@ -508,7 +509,8 @@
+ {
+   // Availability never substitutes or saves a different requested preference.
    const bool menu=setting->GetId()=="dvbridge.playbackchoice";
-   const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
-   const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
-+  const bool nativeHDR10Plus=CDVPlaybackModes::SourceType()==StreamHdrType::HDR_TYPE_HDR10PLUS;
+-  const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
++  const bool hdr10PlusMenu=setting->GetId()=="dvbridge.hdr10plusplaybackchoice";
++  const bool hdr10Menu=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10playbackchoice";
+   const auto preferences=DVBRIDGE::FrameOutputSettings();
+   const auto data=DVBRIDGE::StreamTelemetry::Read();
+   auto caps=data.transaction.capabilities;
+@@ -529,27 +531,39 @@
+   }
+   const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+   const bool method=setting->GetId()=="dvbridge.hdr10method";
+-  const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
++  const bool hdr10PlusSource=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10plussource";
++  const bool hdr10Source=hdr10Menu || hdr10PlusSource || setting->GetId()=="dvbridge.hdr10source";
++  const bool nativeHDR10Plus=hdr10PlusMenu;
 +  // A preference can be deferred while paused; only the renderer admits a frame.
 +  const bool pendingHDR10Plus=nativeHDR10Plus && !caps.sourceKnown && !data.transaction.identity.Valid();
    const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
    constexpr int menuModes[]{1,5,
        4,0,2,3,6};
  #ifdef CB1_HAS_HDR10_AI
--  constexpr int hdr10MenuModes[]{1,4,0};
-+  constexpr int hdr10MenuModes[]{1,4,0,1};
+   constexpr int hdr10MenuModes[]{1,4,0};
++  constexpr int hdr10PlusMenuModes[]{1,0};
  #else
    constexpr int hdr10MenuModes[]{0};
++  constexpr int hdr10PlusMenuModes[]{0};
  #endif
    for(auto& option : list)
    {
-     const int mode=hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
+-    const int mode=hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
 -        hdr10Source ? (option.value==1 ? 1 : option.value==2 ? 4 : 0) :
++    const int mode=hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
++        hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
 +        hdr10Source ? (option.value==1 || option.value==3 ? 1 : option.value==2 ? 4 : 0) :
          menu ? (option.value>=0 && option.value<int(std::size(menuModes)) ? menuModes[option.value] : 0) :
          method ? (option.value==0 ? 2 : option.value==1 ? 3 : option.value==2 ? 6 : 0) :
          (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
      auto reason=DVBRIDGE::OutputReason::None;
-+    const bool guided = hdr10Source && option.value==3;
++    const bool guided = hdr10PlusSource && (hdr10PlusMenu ? option.value==0 : option.value==3);
      if (mode)
      {
        const bool dv=mode==1 || mode==4 || mode==5;
 -      if (!(dv ? caps.nativeDV : caps.hdr10))
-+      if (guided && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
++      if (guided && hdr10Menu && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
 +      else if (hdr10Source && (nativeHDR10Plus || caps.hdr10PlusSource) && !guided)
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
@@ -955,7 +1138,7 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
          reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
        else if (mode==6 && !caps.hdr10plus) reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
        else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::NoGPUProcessing;
-@@ -566,7 +575,7 @@
+@@ -568,7 +582,7 @@
      if (reasonId && reason!=DVBRIDGE::OutputReason::TVProfileRequired)
        option.label+=" / "+localizer.Get(40851);
      option.label2=reasonId ? localizer.Get(reasonId) :
@@ -964,6 +1147,57 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
      // Settings must allow selection before the required profile controls appear.
      const bool configure=reason==DVBRIDGE::OutputReason::TVProfileRequired && !menu && !hdr10Menu;
      option.properties.emplace_back("disabled",reasonId!=0 && !configure);
+diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -219,17 +219,34 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+   std::unique_ptr<TiXmlElement> migrated;
++  bool hasHDR10PlusPreference = false;
++  for (const auto* setting = root->FirstChildElement("setting"); setting;
++       setting = setting->NextSiblingElement("setting"))
++    if (setting->Attribute("id") &&
++        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
++      hasHDR10PlusPreference = true;
+   for (const auto* setting = root->FirstChildElement("setting"); setting;
+        setting = setting->NextSiblingElement("setting"))
+   {
+     const char* id = setting->Attribute("id");
+     const char* value = setting->GetText();
+     if (!id || !value) continue;
+-    const auto legacy = std::string_view(id) == "dvbridge.outputmode" &&
++    const bool legacyHDR10Plus = std::string_view(id) == "dvbridge.hdr10source" &&
++                               std::string_view(value) == "3";
++    const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
++            std::string_view(id) == "dvbridge.outputmode" &&
+             (std::string_view(value) == "3" || std::string_view(value) == "6") ?
+             std::optional<int>{5} : std::nullopt;
+     if (!legacy) continue;
+     if (!migrated) migrated.reset(root->Clone()->ToElement());
++    if (legacyHDR10Plus && !hasHDR10PlusPreference)
++    {
++      auto* preference = new TiXmlElement("setting");
++      preference->SetAttribute("id", "dvbridge.hdr10plussource");
++      preference->LinkEndChild(new TiXmlText("3"));
++      migrated->LinkEndChild(preference);
++      hasHDR10PlusPreference = true;
++    }
+     for (auto* element = migrated->FirstChildElement("setting"); element;
+          element = element->NextSiblingElement("setting"))
+       if (element->Attribute("id") && std::string_view(element->Attribute("id")) == id)
+diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/windows/GUIControlSettings.cpp
+--- a/xbmc/settings/windows/GUIControlSettings.cpp
++++ b/xbmc/settings/windows/GUIControlSettings.cpp
+@@ -180,7 +180,7 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+   if (setting->GetId()=="dvbridge.outputmode" || setting->GetId()=="dvbridge.hdr10method" ||
+-      setting->GetId()=="dvbridge.hdr10source")
++      setting->GetId()=="dvbridge.hdr10source" || setting->GetId()=="dvbridge.hdr10plussource")
+     CSettingConditions::DVOutputOptions(setting,options);
+ #endif
+   switch (pSettingInt->GetOptionsSort())
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
@@ -997,20 +1231,32 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      for (auto& mode : caps.processing)
        if (!valid) mode = {false,DVBRIDGE::OutputReason::SourceIneligible};
  #endif
+@@ -1415,7 +1422,7 @@
+ 
+ DVBRIDGE::OutputSelection CWinSystemGbmGLESContext::SelectedDVOutput(const VideoPicture* picture) const
+ {
+-  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  const auto preferences = DVBRIDGE::FrameOutputSettings(picture && picture->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
+   auto caps = GetDVOutputCapabilities(picture, preferences);
+   return SelectedDVOutput(picture, preferences, caps);
+ }
 @@ -1453,7 +1460,9 @@
      std::lock_guard lock(m_dvCapabilityMutex);
      if (!m_aiReady || m_aiFallback || binding.stream != m_aiActivation.stream ||
          binding.revision != m_aiActivation.revision || preferences.revision != m_aiPolicy)
 -      result = {};
 +      result = {DVBRIDGE::OutputRoute::Vanilla, {},
-+          preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV ?
++          preferences.HDR10Mode(caps.hdr10PlusSource) == DVBRIDGE::HDR10SourceMode::HDR10PlusDV ?
 +              result.reason : DVBRIDGE::OutputReason::None};
    }
  #endif
    if (reason != DVBRIDGE::OutputReason::None) result.reason = reason;
-@@ -1476,22 +1485,32 @@
+@@ -1474,24 +1483,34 @@
+     std::span<const CDVBridgeGLES::Layer> queue, bool end, bool paused,
+     uint64_t presentationDeadline)
  {
-   const auto preferences = DVBRIDGE::FrameOutputSettings();
+-  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  const auto preferences = DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
    const auto caps = GetDVOutputCapabilities(&picture, preferences);
 +  const auto binding = picture.doviSourceBinding;
    if (!caps.isHDR10 ||
@@ -1054,6 +1300,15 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (queue.empty() || !(queue.front().binding == binding)) return false;
    {
      std::lock_guard lock(m_dvCapabilityMutex);
+@@ -1966,7 +1984,7 @@
+   if (m_dvOrdinaryFrame && HasPendingDVOutputSurface())
+     return deferred("output-await-previous-scanout");
+   ResetDVActivation(&picture);
+-  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  const auto preferences = DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
+   const auto capabilities = GetDVOutputCapabilities(&picture, preferences);
+ #ifdef CB1_HAS_HDR10_AI
+   if ((!capabilities.isHDR10 || preferences.hdr10Source==DVBRIDGE::HDR10SourceMode::Native) &&
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
@@ -1065,3 +1320,13 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    bool HDR10AISelectionPending() const
    {
      const auto preferences = DVBRIDGE::FrameOutputSettings();
+@@ -104,7 +105,8 @@
+   bool HDR10AIFrameCommitted() const
+   {
+     return m_dvBridge && m_dvContext &&
+-        m_dvContext->HDR10AI().Current(m_aiActivation,DVBRIDGE::FrameOutputSettings()) &&
++        m_dvContext->HDR10AI().Current(m_aiActivation,
++            DVBRIDGE::FrameOutputSettings(m_dvContext->HDR10AI().HDR10Plus())) &&
+         m_dvBridge->CommittedHDR10AI().has_value();
+   }
+   bool PrepareHDR10AIQueue(const VideoPicture& picture,

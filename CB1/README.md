@@ -34,7 +34,7 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | HDR10+ | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
 | HDR10 | Dolby Vision Reference (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
 | HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
-| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and AI only when they are incomplete |
+| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels, translate compatible source peaks and estimate missing minimum/mean PQ |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 

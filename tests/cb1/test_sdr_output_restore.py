@@ -7,7 +7,7 @@ from test_native_video_source import TREE, body
 
 
 class SDRRestoreTests(unittest.TestCase):
-    def test_stop_successor_survives_rejection_and_idle_gui_retries(self):
+    def test_stop_successor_survives_resize_rejection_and_idle_gui_retries(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
         wake = present[1:present.index('#ifdef HAVE_DVBRIDGE')]
@@ -15,6 +15,9 @@ class SDRRestoreTests(unittest.TestCase):
                            present.index('  if (m_hdrConversion)')]
         stage = body(source, 'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(')
         stop = body(source, 'bool CWinSystemGbmGLESContext::StopDVBridgePlayback()')
+        destroy = body(source, 'bool CWinSystemGbmGLESContext::DestroyWindow()')
+        retry = next(line for line in present.splitlines()
+                     if 'm_dvStopPending && !m_dvOrdinaryFrame && !StopDVBridgePlayback()' in line)
         program = r'''
 #include <cassert>
 #include <memory>
@@ -22,7 +25,7 @@ class SDRRestoreTests(unittest.TestCase):
 #include <cstdint>
 #include <mutex>
 struct CModeChangeHold {enum class Kind{NONE,STOP};Kind Holding(){return Kind::NONE;}
- bool Commits(uint64_t){return true;}};
+ bool Commits(uint64_t){return true;}void Cancel(){}};
 struct VideoPicture{int color_transfer=16;};
 struct Services {unsigned dirty=0;Services& GetWindowManager(){return *this;}
  void MarkDirty(){++dirty;}};
@@ -50,7 +53,10 @@ struct Surface{
  void* LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
  void EndTransactionalMode(){}
 };
-struct CWinSystemGbmGLESContext{
+struct CWinSystemGbmEGLContext{
+ bool destroyOK=true;bool DestroyWindow(){return destroyOK;}
+};
+struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
  bool m_dvOrdinaryFrame=true,m_dvStopPending=true,rollback=false;
  unsigned rejects=0,gui=0,swaps=0;
  unsigned colorClears=0,hdrClears=0;
@@ -66,7 +72,10 @@ struct CWinSystemGbmGLESContext{
  unsigned m_hdr10SessionStream=1;int m_videoSourceSideData=0;
  struct Bridge{void Reset(){}};std::unique_ptr<Bridge> m_dvBridge;
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
- bool CompleteDVOutputSurface(bool){return true;}void PublishVideoSource(bool,int){}
+ bool surfacePending=false,surfaceOK=true,endOK=true,retireOK=true;
+ unsigned outputRefused=0;
+ bool CompleteDVOutputSurface(bool){if(!surfaceOK)return false;surfacePending=false;return true;}
+ void PublishVideoSource(bool,int){}
  bool FlipDVBridgePage(CDVBridgeState&,bool,bool,bool,void*){return false;}
  void SetColorimetry(const VideoPicture* picture){if(!picture)++colorClears;}
  bool SetHDR(const VideoPicture* picture){if(!picture){++hdrClears;
@@ -74,10 +83,15 @@ struct CWinSystemGbmGLESContext{
  void SetGuiCompositing(int value){gui=value;}
  bool RejectDVOutputSurface(){++rejects;rollback=true;return false;}
  bool StageOrdinaryDVOutput(const VideoPicture* picture) STAGE
- bool HoldCB1Stop(){return false;}bool HasPendingDVOutputSurface(){return false;}
- bool SetVideoOutput(const VideoPicture*){m_dvState.captured=false;return true;}
+ bool HoldCB1Stop(){return false;}bool HasPendingDVOutputSurface(){return surfacePending;}
+ bool SetVideoOutput(const VideoPicture*){if(outputRefused){--outputRefused;return false;}m_dvState.captured=false;return true;}
  bool StopDVBridgePlayback() @STOP_BODY@
- void Present(bool rendered){WAKE ORDINARY}
+ // GPU/EGL retirement does not itself perform the native SDR request.
+ bool EndDVBridge(){if(!endOK)return false;m_dvState.Restored();return true;}
+ bool RetireDVContext(){return retireOK;}
+ void ObserveDVImport(int,int,bool){}
+ bool DestroyWindow() @DESTROY_BODY@
+ void Present(bool rendered){WAKE @RETRY_BODY@ ORDINARY}
 };
 int main(){
  CWinSystemGbmGLESContext window;
@@ -106,8 +120,49 @@ int main(){
  assert(recovered.StopDVBridgePlayback());
  assert(!recovered.m_dvState.Captured() && !recovered.m_dvStopPending);
  assert(rd->pending && recovered.gui==0 && recovered.colorClears==1 && recovered.hdrClears==1);
+
+ // A delayed stop survives replacement of the drawable before its next GUI frame.
+ CWinSystemGbmGLESContext resized;
+ resized.m_dvOrdinaryFrame=resized.m_dvStopPending=false;
+ auto resizedDRM=std::dynamic_pointer_cast<CDRMAtomic>(resized.m_DRM);
+ resizedDRM->pending=false;resized.outputRefused=1;
+ assert(!resized.StopDVBridgePlayback() && resized.m_dvStopPending);
+ assert(resized.DestroyWindow());
+ assert(resized.m_dvStopPending && "Window recreation discarded an unfinished SDR stop");
+ resized.Present(false);
+ assert(!resized.m_dvStopPending && resized.hdrClears==1 && resized.colorClears==1);
+ assert(resizedDRM->pending);
+ const auto beforeWake=CServiceBroker::GetGUI()->dirty;resized.Present(false);
+ assert(CServiceBroker::GetGUI()->dirty==beforeWake+1);
+
+ // Cancelling a staged successor on resize also retains the original stop.
+ CWinSystemGbmGLESContext successor;
+ successor.surfacePending=true;successor.surfaceOK=false;
+ assert(!successor.DestroyWindow() && successor.m_dvStopPending);
+ successor.surfaceOK=true;assert(successor.DestroyWindow());
+ assert(!successor.m_dvOrdinaryFrame && successor.m_dvStopPending);
+ successor.Present(false);
+ assert(successor.hdrClears==1 && successor.colorClears==1 && !successor.m_dvStopPending);
+
+ // Failed teardown is retryable; successful active-video resize is not a stop.
+ for(int failure=0;failure<3;++failure){
+  CWinSystemGbmGLESContext failed;
+  failed.m_dvOrdinaryFrame=false;
+  if(failure==0)failed.endOK=false;
+  if(failure==1)failed.retireOK=false;
+  if(failure==2)failed.destroyOK=false;
+  assert(!failed.DestroyWindow() && failed.m_dvStopPending);
+  failed.endOK=failed.retireOK=failed.destroyOK=true;
+  assert(failed.DestroyWindow() && failed.m_dvStopPending);
+  failed.Present(false);assert(failed.hdrClears==1 && !failed.m_dvStopPending);
+ }
+ CWinSystemGbmGLESContext activeResize;
+ activeResize.m_dvOrdinaryFrame=activeResize.m_dvStopPending=false;
+ std::dynamic_pointer_cast<CDRMAtomic>(activeResize.m_DRM)->pending=false;
+ assert(activeResize.DestroyWindow() && !activeResize.m_dvStopPending);
+ activeResize.Present(false);assert(!activeResize.hdrClears && !activeResize.colorClears);
 }
-'''.replace('STAGE', stage).replace('WAKE', wake).replace('ORDINARY', ordinary).replace('@STOP_BODY@', stop)
+'''.replace('STAGE', stage).replace('WAKE', wake).replace('ORDINARY', ordinary).replace('@STOP_BODY@', stop).replace('@DESTROY_BODY@', destroy).replace('@RETRY_BODY@', retry)
         with tempfile.TemporaryDirectory(prefix='sdr-stop-') as temporary:
             root = Path(temporary)
             code, binary = root / 'check.cpp', root / 'check'

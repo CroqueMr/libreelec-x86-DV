@@ -36,9 +36,10 @@ enum class OutputRoute {Vanilla,NativeDV,HDR10};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputPreferences prefs;
-OutputPreferences FrameOutputSettings(){return prefs;}
+OutputPreferences FrameOutputSettings(bool plus=false){auto value=prefs;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
 }
-struct Picture {DVBRIDGE::SourceBinding doviSourceBinding;};
+enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+struct Picture {DVBRIDGE::SourceBinding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;};
 struct Context {unsigned stops{};bool StopHDR10AI(){++stops;return true;}};
 struct Window {
  DVBRIDGE::OutputCapabilities caps;
@@ -51,7 +52,7 @@ struct Window {
 };
 int main(){
  using namespace DVBRIDGE;Window w;Picture p{{7,14,11}};
- prefs.hdr10Source=HDR10SourceMode::HDR10PlusDV;prefs.revision=9;
+ prefs.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;prefs.revision=9;
  w.caps.sourceKnown=w.caps.isHDR10=w.caps.hdr10PlusSource=w.caps.nativeDV=true;
  w.m_aiActivation=p.doviSourceBinding;w.m_aiPolicy=prefs.revision;
  w.m_aiActive=w.m_aiReady=true;
@@ -235,12 +236,13 @@ int main(){
  OutputPreferences p;OutputCapabilities c;
  c.sourceKnown=c.isHDR10=c.processingKnown=c.nativeDV=c.hdr10=true;
  for(auto& v:c.processing)v={true,OutputReason::None};
- p.hdr10Source=static_cast<HDR10SourceMode>(3);source_plus(c,true);
+ p.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;source_plus(c,true);
  auto selected=select(p,c);
  assert(selected.route==OutputRoute::NativeDV && selected.policy.mode==DVBRIDGE_MODE_STANDARD);
  assert(!selected.policy.master_ipt && selected.policy.adaptive==DVBRIDGE_ADAPTIVE_A);
- p.hdr10Source=HDR10SourceMode::ReferenceDV;
+ p.hdr10PlusSource=HDR10SourceMode::Native;
  assert(select(p,c).route==OutputRoute::Vanilla);
+ p.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;
  p.hdr10Source=static_cast<HDR10SourceMode>(3);
  assert(HDR10AIBuffers::Count(true,p.hdr10Source,24,false)>HDR10AIBuffers::Native);
  assert(HDR10AIBuffers::Count(true,p.hdr10Source,24,true)==HDR10AIBuffers::Native);
@@ -357,24 +359,25 @@ int main(){
  using namespace DVBRIDGE;OutputPreferences p;OutputCapabilities c;
  c.sourceKnown=c.isHDR10=c.processingKnown=c.nativeDV=c.hdr10=true;
  for(auto& v:c.processing)v={true,OutputReason::None};
- p.hdr10Source=HDR10SourceMode::HDR10PlusDV;
+ p.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;c.hdr10PlusSource=true;
  assert(gated(p,c,false).reason==OutputReason::SourceIneligible);
  c.isHDR10Plus=true;c.nativeDV=false;
  assert(gated(p,c,false).reason==OutputReason::NoDVTransport);
  c.nativeDV=true;assert(gated(p,c,true).route==OutputRoute::NativeDV);
- p.hdr10Source=HDR10SourceMode::ReferenceDV;
+ c.hdr10PlusSource=false;p.hdr10Source=HDR10SourceMode::ReferenceDV;
  assert(gated(p,c,false).route==OutputRoute::Vanilla && gated(p,c,false).reason==OutputReason::None);
 }
 '''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('SELECTOR',selector).replace('GATE',gate))
 
-    def test_settings_and_quick_menu_refuse_guided_for_plain_hdr10(self):
+    def test_quick_menu_refuses_guided_for_plain_hdr10(self):
         settings = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         options = body((TREE/'xbmc/settings/SettingConditions.cpp').read_text(),
                        'void CSettingConditions::DVOutputOptions(')
         # External service lookups precede this native per-option admission loop.
-        admission = options[options.index('  const bool method='):options.rindex('}')]
+        context = options[options.index('  const bool menu='):options.index('  const auto preferences=')]
+        admission = context + options[options.index('  const bool method='):options.rindex('}')]
         admission = admission.replace('!data.transaction.identity.Valid()', 'pending')
         self.compile_run(r'''
 #define HAVE_DVBRIDGE
@@ -407,20 +410,19 @@ int main(){
  caps.sourceKnown=caps.isHDR10=caps.processingKnown=caps.nativeDV=caps.hdr10=true;
  for(auto& p:caps.processing)p={true,DVBRIDGE::OutputReason::None};
  for(auto& p:caps.hdr10Processing)p={true,DVBRIDGE::OutputReason::None};
- for(const char* id:{"dvbridge.hdr10source","dvbridge.hdr10playbackchoice"}){
-  auto setting=std::make_shared<Setting>(id);
+ {
   for(bool plus:{false,true}){
+   auto setting=std::make_shared<Setting>(plus ? "dvbridge.hdr10plusplaybackchoice" : "dvbridge.hdr10playbackchoice");
    caps.isHDR10Plus=plus;caps.hdr10PlusSource=plus;
-   std::vector<Option> list;for(int i=0;i<4;++i)list.emplace_back(i);
+   std::vector<Option> list;for(int i=0;i<(plus?2:3);++i)list.emplace_back(i);
    admit(setting,list,caps);
-   assert(list[3].properties.back().second==!plus);
-   const int native=setting->id=="dvbridge.hdr10source"?0:2;
+   const int native=plus?1:2;
    assert(!list[native].properties.back().second);
    if(plus){
-    const int reference=setting->id=="dvbridge.hdr10source"?1:0;
-    assert(list[reference].properties.back().second);
+    const int reference=0;
+    assert(!list[reference].properties.back().second);
    }
-   if(plus)assert(list[3].label2=="40971");
+   if(plus)assert(list[0].label2=="40971");
   }
  }
 }
@@ -618,7 +620,8 @@ PREFERENCES
 BUDGET
 inline OutputPreferences current;
 inline std::atomic<HDR10SourceMode> hdr10PlaybackMode{HDR10SourceMode::Native};
-OutputPreferences FrameOutputSettings(){return current;}
+inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Native};
+OutputPreferences FrameOutputSettings(bool plus=false){auto value=current;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
 enum class OutputRoute {Vanilla,NativeDV,HDR10};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
@@ -705,17 +708,17 @@ int main(){
  decoder.Observe(picture,frame);
  assert(decoder.m_hints.hdrType==StreamHdrType::HDR_TYPE_HDR10PLUS);
  unsigned buffers=decoder.GetHDR10AIBufferCount();assert(buffers==HDR10AIBuffers::Native);
- current.hdr10Source=HDR10SourceMode::HDR10PlusDV;hdr10PlaybackMode.store(current.hdr10Source);
+ current.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;hdr10PlusPlaybackMode.store(current.hdr10PlusSource);
  assert(LayerEligible(picture) && select(current,caps).route==OutputRoute::NativeDV);
  assert(decoder.GetHDR10AIBufferCount()==27);
  assert(Check(&context,buffers)==CDVDVideoCodec::VC_REOPEN && decoder.m_decoderState==Decoder::STATE_NONE);
  buffers=decoder.GetHDR10AIBufferCount();assert(Check(&context,buffers)==CDVDVideoCodec::VC_NONE);
  for(auto mode:{HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
-  current.hdr10Source=mode;hdr10PlaybackMode.store(mode);assert(!LayerEligible(picture));
+  current.hdr10PlusSource=mode;hdr10PlusPlaybackMode.store(mode);assert(!LayerEligible(picture));
   assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);
   assert(select(current,caps).route==OutputRoute::Vanilla);
  }
- current.hdr10Source=HDR10SourceMode::Native;hdr10PlaybackMode.store(current.hdr10Source);
+ current.hdr10PlusSource=HDR10SourceMode::Native;hdr10PlusPlaybackMode.store(current.hdr10PlusSource);
  assert(Check(&context,buffers)==CDVDVideoCodec::VC_REOPEN);
  assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);
  assert(select(current,caps).route==OutputRoute::Vanilla && !LayerEligible(picture));

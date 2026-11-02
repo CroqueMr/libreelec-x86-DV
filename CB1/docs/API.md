@@ -11,9 +11,6 @@ CB1 is an in-process C library. The current consumer is Kodi's GBM/GLES path.
 | `cb1_hdr10_ai.h` | Optional asynchronous HDR10 analysis and inference |
 | `cb1_circuit.h` | Engine and circuit version identifiers |
 | `cb1_master_reference.h` | Validated raw integer reference descriptor |
-| `cb1_hdr10plus_dovi.h` | HDR10+ source statistics and explicitly estimated DV descriptors |
-| `cb1_dv_hdr10plus.h` | Reconstructed-source HDR10+ statistics and representable creative guidance |
-| `cb1_cmv40.h` | Optional CM4 output blocks and append-selection rules |
 
 The caller binds the stream, picture, policy revision and timestamp to each
 input. It owns the graphics context and output surfaces. Prepared output becomes
@@ -29,7 +26,7 @@ CB1 does not control audio, input devices, player menus or HDMI connectors.
 `dvbridge_render_master_reference` prepares the explicit reference circuit.
 `CB1_MASTER_READY` means prepared, not presented. Retain source leases and use
 the normal render candidate, presentation commit and GPU retirement. A null
-target or unqualified colour-converted route is unsupported, not Reference.
+target or unqualified colour-converted route is unsupported, not Standard.
 The raw descriptor is copied into dispatch variables before this call returns.
 See [Master Reference](MASTER-REFERENCE.md) for admission and output contracts.
 
@@ -67,11 +64,17 @@ source representations or GUI composition use canonical RGB output.
 Admission is automatic; no separate player setting is required. HDR10
 conversion and AI output retain their existing routing.
 
-Each circuit owns one fixed input-chroma recipe. Reference and conversion entry
+Each circuit owns one fixed input-chroma recipe. Standard and conversion entry
 points use their qualified linear chroma filter; Master entry points retain the
 exact reference filter. There is no mutable Fast preference or renderer setter.
 FEL enlargement, metadata and luma retain their circuit-specific contracts.
 Native Kodi and vanilla fallback do not use these CB1 recipes.
+
+`dvbridge_renderer_set_fel_filter` selects default sampling, GPU bilinear or
+Reference GPU enlargement for matched active FEL only. The Reference choice
+reuses Master EL filters without enabling Master reconstruction. Master ignores
+this preference. Filter API generation 2 requires matched libplacebo headers and
+library; old Nearest-specific setters are removed.
 
 ## Overlay visibility
 

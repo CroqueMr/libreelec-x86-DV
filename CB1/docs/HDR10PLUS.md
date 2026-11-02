@@ -1,12 +1,11 @@
-# HDR10+ playback and conversion
+# HDR10+ output
 
-Supported: native HDR10+ playback, Dolby Vision-to-HDR10+ conversion and explicit
-metadata-guided HDR10+-to-Dolby Vision conversion.
+Supported: native HDR10+ playback and Dolby Vision-to-HDR10+ conversion.
 
 | Source | Output | Processing |
 | --- | --- | --- |
 | HDR10+ | HDR10+ | Original pixels and frame-owned FFmpeg metadata. |
-| HDR10+ | Dolby Vision, explicit metadata-guided mode | Source pixels retained; compatible source statistics preferred, AI only for incomplete statistics. Authored curves and saturation maps are not translated. |
+| HDR10+ | Dolby Vision, explicit metadata-guided mode | Source pixels retained; representable MaxSCL guidance plus labeled L1/L3 AI estimates. Authored curves and saturation maps are not translated. |
 | Dolby Vision | HDR10+ | BL/EL/RPU reconstruction, image statistics and representable luminous trims. |
 | Unsupported transport | HDR10 | Dynamic metadata cleared; fallback reported. |
 
@@ -18,9 +17,6 @@ selection of the metadata-guided mode and an admitted Dolby Vision output.
 [Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
 ## Metadata conversion
-
-This section describes **Dolby Vision to HDR10+**. The reverse direction is
-described [below](#hdr10-to-dolby-vision).
 
 - Analyze every pixel in the active film area before GUI composition or mapping.
 - Measure linear-light channel maxima, average maxRGB and a 256-bin histogram.
@@ -46,20 +42,6 @@ for the additional system fields.
 Native V1 also accepts its Y99 luminance and Y100nit percentage fields. The latter
 is transmitted without luminance quantization; values 101..254 remain rejected.
 Changing receiver version cancels pending conversion metadata before reuse.
-
-## HDR10+ to Dolby Vision
-
-- Use validated single-window MaxSCL for the source peak, not the HDR10+ target display peak.
-- With a complete valid distribution, estimate mean PQ from that distribution and AverageMaxRGB; content minimum is zero and no GPU/AI analysis is needed.
-- With valid sparse statistics, retain compatible source values and use the existing CB1-L1L3 LightGBM estimates for missing values.
-- Fold estimated L3 once and emit neutral output L3. Preserve known mastering minimum separately from content minimum.
-- Keep decoded pixels without an enhancement grade. The existing DV transport conversion and quantization still apply.
-- Do not translate authored Bezier curves, saturation operations or multiple spatial windows into invented DV trims.
-
-Source snapshots and generated metadata belong to the same presented picture.
-Invalid or missing metadata after activation retains native fallback until a
-source/mode reset, without carrying a previous scene's RPU.
-[Full algorithm](ALGORITHMS.md#hdr10-metadata-guided-reference-output).
 
 ## Verification
 

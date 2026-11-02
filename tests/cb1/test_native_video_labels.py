@@ -48,6 +48,18 @@ int main() {
  assert(registeredLabel("videooutputhdrtype",info,value) && value=="hdr10");
  assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM4 source");
  assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVPARSEDBLOCKS,info,value) && value=="L1");
+ info.cm4=false;info.output.flags=CDVPlaybackInfo::HDMI;info.output.effective=1;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM2.9 -> CM4: Off");
+ info.output.flags|=CDVPlaybackInfo::CM4;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM2.9 -> CM4: On");
+ info.output.flags=CDVPlaybackInfo::HDMI;info.output.effective=5;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM2.9 -> CM4: Off");
+ info.output.flags|=CDVPlaybackInfo::CM4;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM2.9 -> CM4: On");
+ info.output.flags=CDVPlaybackInfo::HDR10;info.output.effective=3;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM2.9 source");
+ info.cm4=true;
+ assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value=="CM4 source");
  info.profile=0; info.metadata=false; info.output.hdr10AI=true; info.outputType=VideoOutputType::DolbyVision;
  assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE,info,value) && value=="dolbyvision");
  assert(VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_VIDEODVCMVERSION,info,value) && value.empty());

@@ -8187,7 +8187,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,299 @@
+@@ -25795,3 +25795,303 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -8432,11 +8432,15 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#40908"
-+msgid "Choose FEL upscaling: VAAPI or nearest neighbour on the GPU. If VAAPI is unavailable, nearest neighbour is used."
++msgid "FEL upscaling: VAAPI, GPU bilinear or Reference GPU. Master Reference always uses Reference GPU. If VAAPI is unavailable, GPU bilinear is used."
 +msgstr ""
 +
 +msgctxt "#40909"
-+msgid "Nearest neighbour (GPU)"
++msgid "Bilinear (GPU)"
++msgstr ""
++
++msgctxt "#40995"
++msgid "Reference (GPU)"
 +msgstr ""
 +
 +msgctxt "#40911"
@@ -8595,7 +8599,7 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +        </setting>
 +        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
-+          <constraints><options><option label="40910">0</option><option label="40909">1</option></options></constraints>
++          <constraints><options><option label="40910">0</option><option label="40909">1</option><option label="40995">2</option></options></constraints>
 +          <control type="list" format="string" />
 +        </setting>
 +      </group>
@@ -9723,7 +9727,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +    next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
 +  }
 +  if (next.method < 0 || next.method > 1) next.method = 0;
-+  if (next.felUpscaling < 0 || next.felUpscaling > 1) next.felUpscaling = 0;
++  if (next.felUpscaling < 0 || next.felUpscaling > 2) next.felUpscaling = 0;
 +  next.revision = previous.revision;
 +  bool changed = !next.SameValues(previous);
 +#ifdef CB1_HAS_HDR10_AI
@@ -12571,7 +12575,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  policy.revision = revision;
 +  dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
 +  dvbridge_renderer_set_fast_chroma(m_renderer,preferences.EffectiveFastChroma(policy.mode));
-+  dvbridge_renderer_set_fel_nearest(m_renderer,preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416));
++  dvbridge_renderer_set_fel_filter(m_renderer, preferences.felUpscaling == 2 ? DVBRIDGE_FEL_REFERENCE : preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416) ? DVBRIDGE_FEL_BILINEAR : DVBRIDGE_FEL_DEFAULT);
 +  dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
 +  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
 +  m_fallback = fallback;
@@ -12916,8 +12920,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      return FrameStatus::Failed;
 +    if (m_hardwareFELFilter != effectiveFilter)
 +      DVBRIDGE::DiagnosticLog(LOGINFO,"CB1 FEL filter selection: requested={} backend={}",
-+          master ? "reference" : preferences.felUpscaling == 1 ? "nearest" : "vaapi",
-+          master ? "reference-gpu" : preferences.felUpscaling == 1 ? "shader" : "vaapi-vpp");
++          master || preferences.felUpscaling == 2 ? "reference" : preferences.felUpscaling == 1 ? "bilinear" : "vaapi",
++          master || preferences.felUpscaling == 2 ? "reference-gpu" : preferences.felUpscaling == 1 ? "shader" : "vaapi-vpp");
 +    if (m_felVppStream != base.binding.stream)
 +    {
 +      m_rawELCache.clear();
@@ -12971,7 +12975,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      else if (status == DVBRIDGE_VPP_FAILED)
 +      {
 +        m_felVppEnabled = false;
-+        DVBRIDGE::DiagnosticLog(LOGINFO,"CB1 FEL upscaling: VAAPI unavailable, using nearest GPU reconstruction");
++        DVBRIDGE::DiagnosticLog(LOGINFO,"CB1 FEL upscaling: VAAPI unavailable, using bilinear GPU reconstruction");
 +      }
 +    }
 +    if (!imported->scaled)
@@ -13225,8 +13229,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      DVBRIDGE::DiagnosticLog(LOGINFO,
 +          "CB1 FEL presented: applicable={} requested={} executed={} backend={}",
 +          submission.felBackend != 0,
-+          submission.felFilter < 0 ? "not-applicable" : submission.felFilter == 1 ? "nearest" : "vaapi",
-+          submission.felBackend == 3 ? "reference" : submission.felBackend == 0 ? "not-applicable" : submission.felBackend == 2 ? "vaapi" : "nearest",
++          submission.felFilter < 0 ? "not-applicable" : submission.felFilter == 2 ? "reference" : submission.felFilter == 1 ? "bilinear" : "vaapi",
++          submission.felBackend == 3 ? "reference" : submission.felBackend == 0 ? "not-applicable" : submission.felBackend == 2 ? "vaapi" : "bilinear",
 +          submission.felBackend == 3 ? "reference-gpu" : submission.felBackend == 2 ? "vaapi-vpp" : submission.felBackend == 1 ? "shader" : "not-applicable"))
 +  {
 +    m_reportedFELStream=submission.identity.stream;
@@ -13747,13 +13751,13 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
 +    SetProperty("DV.AppliedBlocks", metadata ? CDVPlaybackInfo::Blocks(applied) : "");
 +    SetProperty("DV.TransmittedBlocks", active & CDVPlaybackInfo::HDMI ? CDVPlaybackInfo::Blocks(data.TransmittedBlocks())+
 +        (data.output.authoredLegacy ? " (authored)" : "") : "");
-+    SetProperty("DV.UnappliedBlocks", metadata ? CDVPlaybackInfo::Blocks(data.blocks & ~applied) : "");
++    SetProperty("DV.UnappliedBlocks", metadata ? CDVPlaybackInfo::Blocks(data.blocks & ~(applied | data.TransmittedBlocks())) : "");
 +    SetProperty("DV.RPU", data.profile ? yesno(data.rpu) : "N/A");
 +    SetProperty("DV.BL", data.profile ? yesno(data.bl) : "N/A");
 +    SetProperty("DV.EL", data.profile ? yesno(data.el) : "N/A");
 +    SetProperty("DV.FEL", active ? (active & CDVPlaybackInfo::FEL ? "Full FEL" : "No FEL") : "");
 +    SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
-+        (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Nearest neighbour (GPU)" : "") : "");
++        (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
 +    SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
 +    SetProperty("DV.FastRendering", active ?
 +        std::string(data.output.fastChroma ? "On" : "Off") +
@@ -14096,7 +14100,7 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
  #endif
  #ifdef HAS_GL
    m_simpleConditions.emplace("has_gl");
-@@ -488,6 +502,76 @@
+@@ -488,6 +502,78 @@
    m_complexConditions.try_emplace("lte", LessThanOrEqual);
  }
  
@@ -14105,12 +14109,16 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
 +                                         std::vector<IntegerSettingOption>& list)
 +{
 +  // Availability never substitutes or saves a different requested preference.
++  const bool menu=setting->GetId()=="dvbridge.playbackchoice";
++  const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
 +  const auto preferences=DVBRIDGE::FrameOutputSettings();
 +  const auto data=DVBRIDGE::StreamTelemetry::Read();
 +  auto caps=data.transaction.capabilities;
 +  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
 +  const auto available=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
-+  if (!caps.sourceKnown && !data.transaction.identity.Valid())
++  // Global preferences use hardware capabilities, not the current or previous film.
++  if ((!menu && !hdr10Menu) ||
++      (!caps.sourceKnown && !data.transaction.identity.Valid()))
 +    caps=available;
 +  // A failed frame or disabled import does not remove reusable output capabilities.
 +  caps.nativeDV=available.nativeDV;
@@ -14122,8 +14130,6 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
 +  }
 +  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
 +  const bool method=setting->GetId()=="dvbridge.hdr10method";
-+  const bool menu=setting->GetId()=="dvbridge.playbackchoice";
-+  const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
 +  const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
 +  const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
 +  constexpr int menuModes[]{1,5,
@@ -16548,8 +16554,8 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +  }
 +  if (!PollRejectedDVSurface()) return deferred("output-await-rejected-scanout");
 +  // A format match cannot carry a fixed target across original source streams.
-+  if (m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 && m_hdr10Session &&
-+      m_hdr10SessionStream != picture.doviMetadata.Binding().stream)
++  if (m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 && m_hdrConversion &&
++      m_hdr10Session && m_hdr10SessionStream != picture.doviMetadata.Binding().stream)
 +    return ConfigureHDR10Conversion(picture);
 +  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)
 +  {
@@ -17322,10 +17328,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +{
 +  m_modeHold.Cancel();
 +  if (!EndDVBridge() || !RetireDVContext()) return false;
-+  // A resize can precede presentation of the ordinary successor surface.
++  // Drawable retirement must not discard deferred playback/SDR cleanup.
 +  if (HasPendingDVOutputSurface() &&
 +      (!m_dvOrdinaryFrame || !CompleteDVOutputSurface(false))) return false;
-+  m_dvOrdinaryFrame = m_dvStopPending = false;
++  m_dvOrdinaryFrame = false;
 +  if (!CWinSystemGbmEGLContext::DestroyWindow()) return false;
 +  ObserveDVImport({}, {}, false);
 +  return true;

@@ -155,7 +155,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
    }
 -  if (next.method < 0 || next.method > 1) next.method = 0;
 +  if (next.method < 0 || next.method > 2) next.method = 0;
-   if (next.felUpscaling < 0 || next.felUpscaling > 1) next.felUpscaling = 0;
+   if (next.felUpscaling < 0 || next.felUpscaling > 2) next.felUpscaling = 0;
    next.revision = previous.revision;
    bool changed = !next.SameValues(previous);
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
@@ -814,7 +814,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    policy.revision = revision;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
 -  dvbridge_renderer_set_fast_chroma(m_renderer,preferences.EffectiveFastChroma(policy.mode));
-   dvbridge_renderer_set_fel_nearest(m_renderer,preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416));
+   dvbridge_renderer_set_fel_filter(m_renderer, preferences.felUpscaling == 2 ? DVBRIDGE_FEL_REFERENCE : preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416) ? DVBRIDGE_FEL_BILINEAR : DVBRIDGE_FEL_DEFAULT);
    dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
    dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
 @@ -1259,6 +1461,8 @@
@@ -1166,7 +1166,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
    Submission CaptureSubmission() const
    {
 @@ -147,8 +153,23 @@
-     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ? 3 :
+     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE || m_requested.felUpscaling == 2 ? 3 :
          m_hardwareBinding == m_pendingBinding &&
          m_hardwareFELFilter == m_requested.felUpscaling && m_hardwareFELVpp ? 2 : 1) : 0;
 +    if (m_effectiveMode == DVBRIDGE_MODE_HDR10PLUS && m_prepared && m_hdr10plusMetadata)
@@ -1310,7 +1310,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 @@ -142,9 +142,6 @@
      SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
-         (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Nearest neighbour (GPU)" : "") : "");
+         (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
      SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
 -    SetProperty("DV.FastRendering", active ?
 -        std::string(data.output.fastChroma ? "On" : "Off") +

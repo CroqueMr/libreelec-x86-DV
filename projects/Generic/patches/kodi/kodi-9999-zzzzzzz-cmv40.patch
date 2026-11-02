@@ -170,7 +170,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/co
 +      next.cmv40Trigger != 4000 && next.cmv40Trigger != 10000) next.cmv40Trigger = 0;
 +  if (next.cmv40Headroom < 0 || next.cmv40Headroom > 50) next.cmv40Headroom = 20;
    if (next.method < 0 || next.method > 2) next.method = 0;
-   if (next.felUpscaling < 0 || next.felUpscaling > 1) next.felUpscaling = 0;
+   if (next.felUpscaling < 0 || next.felUpscaling > 2) next.felUpscaling = 0;
    next.revision = previous.revision;
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
@@ -207,7 +207,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +    submission.cmv40Status=dvbridge_renderer_cmv40_status(m_renderer);
      const bool fel=(m_pendingInfo & CDVPlaybackInfo::FEL) != 0;
      submission.felFilter=fel ? m_requested.felUpscaling : -1;
-     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ? 3 :
+     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE || m_requested.felUpscaling == 2 ? 3 :
 @@ -284,6 +286,8 @@
    DVBRIDGE::DiagnosticFailures m_failures;
    DVBRIDGE::DiagnosticFailures m_auditRequested,m_auditPrepared,m_auditCommitted;
@@ -250,3 +250,43 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
    output.l2TrimsDisabled = m_requested.L2TrimsDisabled(m_effectiveMode
  #ifdef CB1_HAS_HDR10_AI
        , m_aiFrame
+diff --git a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+--- a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
++++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+@@ -9,6 +9,15 @@
+ 
+ struct VideoProcessingInfoGUI
+ {
++  static std::string CMVersion(const VideoProcessingInfo& info)
++  {
++    if (!info.metadata) return "";
++    if (info.cm4) return "CM4 source";
++    if ((info.output.flags & CDVPlaybackInfo::HDMI) && !info.output.hdr10AI &&
++        !info.output.authoredLegacy && (info.output.effective==1 || info.output.effective==5))
++      return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 -> CM4: On" : "CM2.9 -> CM4: Off";
++    return "CM2.9 source";
++  }
+   static std::string Mode(const VideoProcessingInfo& info)
+   {
+     if (!info.output.flags) return "";
+@@ -42,7 +51,7 @@
+           value=CDVPlaybackInfo::Reason(static_cast<DVBRIDGE::OutputReason>(info.output.reason));
+         break;
+       case PLAYER_PROCESS_VIDEODVCMVERSION:
+-        if (info.metadata) value=info.cm4 ? "CM4 source" : "CM2.9 source";
++        value=CMVersion(info);
+         break;
+       case PLAYER_PROCESS_VIDEODVPARSEDBLOCKS:
+         if (info.metadata) value=CDVPlaybackInfo::Blocks(info.blocks);
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -128,7 +128,7 @@
+     SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
+     SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
+     SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
+-    SetProperty("DV.CM", metadata ? (data.cm4 ? "CM4 source" : "CM2.9 source") : "");
++    SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
+     const auto applied=data.AppliedBlocks();
+     SetProperty("DV.ParsedBlocks", metadata ? CDVPlaybackInfo::Blocks(data.blocks) : "");
+     SetProperty("DV.AppliedBlocks", metadata ? CDVPlaybackInfo::Blocks(applied) : "");

@@ -224,7 +224,9 @@ struct TiXmlText {std::string value;explicit TiXmlText(const char* text):value(t
 struct TiXmlElement:TiXmlNode {
  std::string id,text;bool hasDefault=true;TiXmlElement* next{};
  std::vector<std::unique_ptr<TiXmlElement>> children;
- TiXmlElement()=default;TiXmlElement(std::string key,std::string value):id(key),text(value){}
+ TiXmlElement()=default;explicit TiXmlElement(const char*){};
+ TiXmlElement(std::string key,std::string value):id(key),text(value){}
+ void SetAttribute(const char*,const char* value){id=value;}
  const char* Attribute(const char* key)const{return std::string(key)=="id"?id.c_str():nullptr;}
  const char* GetText()const{return text.c_str();}
  TiXmlElement* FirstChildElement(const char*)const{return children.empty()?nullptr:children.front().get();}
@@ -236,6 +238,8 @@ struct TiXmlElement:TiXmlNode {
   if(!children.empty())children.back()->next=child.get();children.push_back(std::move(child));}
  void Clear(){text.clear();}
  void LinkEndChild(TiXmlText* value){text=value->value;delete value;}
+ void LinkEndChild(TiXmlElement* child){if(!children.empty())children.back()->next=child;
+  children.emplace_back(child);}
  void RemoveAttribute(const char*){hasDefault=false;}
 };
 struct CSettingsBase {inline static std::map<std::string,std::string> loaded;

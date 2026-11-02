@@ -1411,7 +1411,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 +    submission.informationGeneration=m_pendingSourceInfo.informationGeneration;
 +    const bool fel=(m_pendingInfo & CDVPlaybackInfo::FEL) != 0;
 +    submission.felFilter=fel ? m_requested.felUpscaling : -1;
-+    submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE ? 3 :
++    submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE || m_requested.felUpscaling == 2 ? 3 :
 +        m_hardwareBinding == m_pendingBinding &&
 +        m_hardwareFELFilter == m_requested.felUpscaling && m_hardwareFELVpp ? 2 : 1) : 0;
 +    return submission;

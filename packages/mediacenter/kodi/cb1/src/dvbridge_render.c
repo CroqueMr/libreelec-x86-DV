@@ -140,7 +140,7 @@ struct dvbridge_renderer {
     GLuint ai_enhanced_native_texture;
     pl_tex ai_enhanced_native, ai_enhanced_packed;
     bool processing_optimizations;
-    bool fel_nearest;
+    enum dvbridge_fel_filter fel_filter;
     uint32_t processing_failed_groups;
     struct cb1_processing processing;
     struct pl_color_space reconstructed_color;
@@ -1310,9 +1310,9 @@ enum cb1_cmv40_status dvbridge_renderer_cmv40_status(const struct dvbridge_rende
     return r && r->ready?r->cmv40_status:CB1_CMV40_OFF;
 }
 
-void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *r, bool enabled)
+void dvbridge_renderer_set_fel_filter(struct dvbridge_renderer *r, enum dvbridge_fel_filter filter)
 {
-    if (r) r->fel_nearest = enabled;
+    if (r) r->fel_filter = filter>=DVBRIDGE_FEL_DEFAULT && filter<=DVBRIDGE_FEL_REFERENCE ? filter : DVBRIDGE_FEL_DEFAULT;
 }
 
 void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *r, bool enabled)
@@ -1628,7 +1628,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     struct pl_render_params params = pl_render_default_params;
     params.cb1_dovi_reference=master;
     params.cb1_fast_chroma = master ? p5_standard : true;
-    params.cb1_fel_nearest = !master && r->fel_nearest && paired && mapped.dovi.nlq_active;
+    params.cb1_fel_filter = !master && paired && mapped.dovi.nlq_active ? r->fel_filter : 0;
     uint32_t processing=master?0:r->processing_optimizations?CB1_PROCESSING_ALL:
         enhanced_reconstruction?CB1_PROCESSING_COLOUR:0;
     /* Analytic PQ avoids decoder lookups in authored FEL reconstruction. */

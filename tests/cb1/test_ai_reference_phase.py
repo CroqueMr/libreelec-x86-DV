@@ -64,7 +64,8 @@ namespace DVBRIDGE {
 HDR10_SOURCE_MODE
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;
-inline Preferences FrameOutputSettings(){return prefs;}
+inline Preferences plusPrefs{HDR10SourceMode::HDR10PlusDV};
+inline Preferences FrameOutputSettings(bool plus=false){return plus?plusPrefs:prefs;}
 }
 struct Clock {
  double now=4625876.598333334;
@@ -91,6 +92,9 @@ struct Renderer {bool lookahead=true;bool HDR10AILookahead(){return lookahead;}
 struct Port {void UpdateRenderBuffers(size_t,size_t,size_t){}};
 struct Event {void notifyAll(){}};
 struct CRenderManager {
+ enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ struct ConfigPicture {StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;} m_picture;
+ ConfigPicture* m_pConfigPicture=nullptr; // Configure has retired its temporary picture.
  Renderer renderer;Renderer* m_pRenderer=&renderer;
  Port port;Port* m_playerPort=&port;
  Clock m_dvdClock;
@@ -117,13 +121,21 @@ int main(){
  boundary.PrepareNextRender();
  assert(boundary.m_presentstep==PRESENT_FLIP);
  assert(boundary.m_presentsource==2);
- DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::HDR10PlusDV;
- window.age=8387.119;CRenderManager guidedHalfway;
- guidedHalfway.PrepareNextRender();
- assert(guidedHalfway.m_presentstep==PRESENT_READY && guidedHalfway.m_queued.front()==2);
- window.age=16666.666666666668;CRenderManager guidedBoundary;
- guidedBoundary.m_dvdClock.now+=8279.547666666668;guidedBoundary.PrepareNextRender();
- assert(guidedBoundary.m_presentstep==PRESENT_FLIP && guidedBoundary.m_presentsource==2);
+ // Retained HDR10+ source stays phase-aligned after Configure releases its picture,
+ // independently of all three plain-HDR10 choices.
+ for(auto plain:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::ReferenceDV,
+                 DVBRIDGE::HDR10SourceMode::EnhancedDV}){
+  DVBRIDGE::prefs.hdr10Source=plain;
+  window.age=8387.119;CRenderManager guidedHalfway;
+  guidedHalfway.m_picture.hdrType=CRenderManager::StreamHdrType::HDR_TYPE_HDR10PLUS;
+  assert(!guidedHalfway.m_pConfigPicture);
+  guidedHalfway.PrepareNextRender();
+  assert(guidedHalfway.m_presentstep==PRESENT_READY && guidedHalfway.m_queued.front()==2);
+  window.age=16666.666666666668;CRenderManager guidedBoundary;
+  guidedBoundary.m_picture.hdrType=CRenderManager::StreamHdrType::HDR_TYPE_HDR10PLUS;
+  guidedBoundary.m_dvdClock.now+=8279.547666666668;guidedBoundary.PrepareNextRender();
+  assert(guidedBoundary.m_presentstep==PRESENT_FLIP && guidedBoundary.m_presentsource==2);
+ }
  // Other source modes, matched refresh, missing anchors and pause retain selection.
  window.age=8387.119;
  for(auto mode:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
