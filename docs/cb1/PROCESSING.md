@@ -221,7 +221,7 @@ Each circuit owns its input-chroma recipe. Async prepares at most one future
 picture without changing native Kodi/fallback playback scheduling.
 Master keeps its Reference GPU FEL filters. From RC3, other applicable modes
 select VAAPI, Bilinear (GPU) or Reference (GPU).
-[Compare FEL upscalers](FEL-UPSCALING.md), including the Nearest method removed
+[Compare FEL upscalers](FEL-UPSCALING.md), including the Nearest neighbour method removed
 in RC3. [Settings](PLAYBACK.md).
 
 Dolby Vision uses an RGB8 byte tunnel carrying higher-precision video and
