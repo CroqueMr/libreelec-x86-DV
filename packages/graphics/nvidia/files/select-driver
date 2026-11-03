@@ -2,6 +2,52 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Called before systemd/udev from LibreELEC's native kernel-overlay setup.
 
+enable_nvidia_boot_diagnostics() {
+  local sys="$1" proc="$2" dev="$3" run="$4" storage="$5" pci gpu=
+  for pci in "${sys}/bus/pci/devices/"*; do
+    [ "$(cat "${pci}/vendor" 2>/dev/null)" = 0x10de ] || continue
+    case "$(cat "${pci}/class" 2>/dev/null)" in 0x03????) gpu="${pci##*/}"; break ;; esac
+  done
+  [ -n "${gpu}" ] || return 0
+
+  # Diagnostics must not prevent an otherwise valid driver stack from booting.
+  echo 8 >"${proc}/sys/kernel/printk" 2>/dev/null || :
+  mkdir -p "${run}" 2>/dev/null || return 0
+  touch "${run}/nvidia-boot-diagnostics" 2>/dev/null || return 0
+  NVIDIA_BOOT_CONSOLE="${dev}/console"
+  NVIDIA_BOOT_LOG="${storage}/.cache/log/nvidia-boot/early.log"
+  mkdir -p "${storage}/.cache/log/nvidia-boot" 2>/dev/null || :
+  [ ! -f "${NVIDIA_BOOT_LOG}" ] || mv -f "${NVIDIA_BOOT_LOG}" "${NVIDIA_BOOT_LOG}.old" 2>/dev/null || :
+  dmesg >"${NVIDIA_BOOT_LOG}" 2>/dev/null || :
+  if [ -e "${NVIDIA_BOOT_CONSOLE}" ]; then
+    cat "${NVIDIA_BOOT_LOG}" >"${NVIDIA_BOOT_CONSOLE}" 2>/dev/null || :
+  fi
+  log "NVIDIA boot diagnostics: GPU ${gpu}; enabling console and persistent journal"
+
+  mkdir -p "${run}/systemd/journald.conf.d" \
+    "${run}/systemd/system/var-log.mount.d" \
+    "${run}/systemd/system/local-fs.target.wants" \
+    "${run}/systemd/system/kodi.service.d" 2>/dev/null || return 0
+  cat >"${run}/systemd/journald.conf.d/90-nvidia-boot.conf" <<EOF || return 0
+[Journal]
+Storage=persistent
+SystemMaxUse=10M
+SyncIntervalSec=1s
+EOF
+  cat >"${run}/systemd/system/var-log.mount.d/90-nvidia-boot.conf" <<EOF || return 0
+[Unit]
+ConditionPathExists=|/run/nvidia-boot-diagnostics
+EOF
+  ln -sf /usr/lib/systemd/system/var-log.mount \
+    "${run}/systemd/system/local-fs.target.wants/var-log.mount" 2>/dev/null || :
+  cat >"${run}/systemd/system/kodi.service.d/90-nvidia-boot.conf" <<EOF || return 0
+[Service]
+ExecStartPre=-/bin/sh -c 'echo "NVIDIA boot: starting Kodi" > /dev/console'
+ExecStopPost=-/bin/sh -c 'journalctl -b -u kodi --no-pager -n 40 > /dev/console'
+EOF
+  return 0
+}
+
 nvidia_overlay_conflicts() {
   local modules
   [ -d "$1/lib/modules" ] || return 1

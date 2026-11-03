@@ -14,6 +14,11 @@ set(CMAKE_REQUIRED_INCLUDES ${DVPlacebo_INCLUDE_DIRS})
 check_c_source_compiles("#include <libplacebo/renderer.h>\nint main(void) { struct pl_render_params p = {0}; p.cb1_nearest_identity = 1; return !p.cb1_nearest_identity; }" CB1_POLICY_SAMPLING_FIELD)
 check_c_source_compiles("#include <libplacebo/shaders/colorspace.h>\nint main(void) { struct pl_color_map_params p = {0}; p.cb1_fp32_tone_lut = 1; return !p.cb1_fp32_tone_lut; }" CB1_POLICY_TONE_FIELD)
 set(CMAKE_REQUIRED_LIBRARIES PkgConfig::DVPlacebo)
+unset(CB1_EXPERT_TONE_ABI CACHE)
+check_c_source_compiles("#include <libplacebo/shaders/colorspace.h>\nint main(void) { struct pl_color_map_args a = {0}; a.cb1_tone_map = 0; return pl_cb1_expert_tone_abi() != PL_CB1_EXPERT_TONE_ABI; }" CB1_EXPERT_TONE_ABI)
+if(NOT CB1_EXPERT_TONE_ABI)
+  message(FATAL_ERROR "Matched CB1 Expert tone headers/library required")
+endif()
 unset(CB1_PROCESSING_ABI CACHE)
 check_c_source_compiles("#include <libplacebo/renderer.h>\n#include <libplacebo/shaders/colorspace.h>\n_Static_assert(PL_HAVE_CB1_PROCESSING == 10, \"CB1 processing version\");\nint main(void) { struct pl_render_params p = {0}; struct pl_color_decode_args a = {0}; struct pl_color_map_params m = {0}; p.cb1_processing = a.cb1_processing; p.cb1_dovi_linear = a.cb1_dovi_linear; m.cb1_neutral_cm29 = 1; m.cb1_neutral_cm29_peak = 1000; pl_shader_dovi_reconstruct_ex(0, 0, 0, p.cb1_processing); return pl_cb1_processing_abi() != PL_CB1_PROCESSING_ABI || pl_cb1_dovi_reference_abi() != PL_CB1_DOVI_REFERENCE_ABI || pl_cb1_dovi_reference_frame_supported(0,10); }" CB1_PROCESSING_ABI)
 if(NOT CB1_PROCESSING_ABI)
@@ -25,7 +30,7 @@ if(NOT CB1_CHROMA_FILTER_ABI)
   message(FATAL_ERROR "Matched CB1 chroma-filter libplacebo headers/library required")
 endif()
 unset(CB1_FEL_FILTER_ABI CACHE)
-check_c_source_compiles("#include <libplacebo/renderer.h>\nint main(void) { struct pl_render_params p = {0}; p.cb1_fel_nearest = 1; return pl_cb1_fel_filter_abi() != PL_CB1_FEL_FILTER_API; }" CB1_FEL_FILTER_ABI)
+check_c_source_compiles("#include <libplacebo/renderer.h>\n_Static_assert(PL_CB1_FEL_FILTER_API == 2, \"FEL selector ABI\");\nint main(void) { struct pl_render_params p = {0}; p.cb1_fel_filter = 2; return pl_cb1_fel_filter_abi() != PL_CB1_FEL_FILTER_API; }" CB1_FEL_FILTER_ABI)
 if(NOT CB1_FEL_FILTER_ABI)
   message(FATAL_ERROR "Matched CB1 FEL-filter libplacebo headers/library required")
 endif()
@@ -44,7 +49,7 @@ pkg_check_modules(DVDrm REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(DVVa REQUIRED IMPORTED_TARGET libva)
 add_library(dvbridge_core STATIC dvbridge_core.c dvbridge_placebo.c dvbridge_render.c dvbridge_cache.c
                                 dvbridge_gl_frame.c dvbridge_gl_pack.c dvbridge_fel.c dvbridge_dmabuf.c dvbridge_fel_vpp.c
-                                dvbridge_policy.c cb1_circuit.c cb1_master_reference.c cb1_master_ipt.c dvbridge_creative.c cb1_dv_enhanced.c cb1_processing.c
+                                dvbridge_policy.c cb1_circuit.c cb1_master_reference.c cb1_master_ipt.c dvbridge_creative.c cb1_hdr10_expert.c cb1_dv_enhanced.c cb1_processing.c
                                 cb1_hdr10plus.c cb1_hdr10plus_analysis.c cb1_hdr10plus_curve.c cb1_dv_hdr10plus.c cb1_hdr10plus_dovi.c cb1_cmv40.c)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/pack_gles300.vert"

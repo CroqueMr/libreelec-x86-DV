@@ -1,0 +1,3160 @@
+Subject: [PATCH] CB1 native Kodi interface integration
+
+Consolidated from the RC2/RC3 patch stack; every native path has one owner.
+Original source copyright and license headers are retained.
+See config/cb1-patch-index.json for per-file provenance and responsibilities.
+
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -14486,7 +14486,7 @@
+ #: xbmc/playlists/SmartPlayList.cpp
+ #: addons/skin.estuary/xml/DialogPlayerProcessInfo.xml
+ msgctxt "#20478"
+-msgid "DV profile"
++msgid "Dolby Vision profile"
+ msgstr ""
+ 
+ #. Used in the smart playlist editor to define a watched mode
+@@ -25795,3 +25795,526 @@
+ msgctxt "#40804"
+ msgid "{0:.1f} dB"
+ msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40810"
++msgid "CB1 - Dolby Vision engine"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40811"
++msgid "Dolby Vision playback"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40812"
++msgid "Dolby Vision Reference"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40813"
++msgid "HDR10 / HDR10+ conversion"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40814"
++msgid "Kodi default"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40815"
++msgid "Choose playback for Dolby Vision sources: Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering or Kodi default. Kodi default bypasses CB1 processing. Changes apply at a video frame boundary."
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40816"
++msgid "Enhanced player information"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40817"
++msgid "Use enhanced player information when pressing O. Disable to use Kodi's original information panel."
++msgstr ""
++
++#: addons/skin.estuary/xml/IncludesDVProcessInfo.xml
++msgctxt "#40818"
++msgid "Player information"
++msgstr ""
++
++#: system/settings/settings.xml
++msgctxt "#40819"
++msgid "Dolby Vision Adaptive HDR Mapping"
++msgstr ""
++
++msgctxt "#40820"
++msgid "HDR10 conversion method"
++msgstr ""
++
++msgctxt "#40821"
++msgid "HDR10 Rendering uses source metadata. HDR10 Rendering Reference maps to the configured display peak, black level and gamut. HDR10+ sends picture statistics and representable trims to a compatible display."
++msgstr ""
++
++msgctxt "#40922"
++msgid "HDR10+ Rendering"
++msgstr ""
++
++msgctxt "#40923"
++msgid "HDR10+ output requires a supported HDMI driver and display."
++msgstr ""
++
++msgctxt "#40925"
++msgid "Disable L2 trims"
++msgstr ""
++
++msgctxt "#40926"
++msgid "Reference and Master Reference only. L8 trims remain active."
++msgstr ""
++
++msgctxt "#40822"
++msgid "HDR10 Rendering"
++msgstr ""
++
++msgctxt "#40823"
++msgid "HDR10 Rendering Reference"
++msgstr ""
++
++msgctxt "#40829"
++msgid "TV peak luminance (nits)"
++msgstr ""
++
++msgctxt "#40830"
++msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. HDR10 Rendering Reference has its own display calibration settings."
++msgstr ""
++
++msgctxt "#40831"
++msgid "TV panel type"
++msgstr ""
++
++msgctxt "#40832"
++msgid "Optional TV panel type. Peak luminance and color gamut define the manual profile."
++msgstr ""
++
++msgctxt "#40833"
++msgid "Unset"
++msgstr ""
++
++msgctxt "#40834"
++msgid "OLED"
++msgstr ""
++
++msgctxt "#40835"
++msgid "LCD"
++msgstr ""
++
++msgctxt "#40836"
++msgid "TV color gamut"
++msgstr ""
++
++msgctxt "#40837"
++msgid "Use P3-D65 for most HDR TVs; choose a known alternative when appropriate. This selects gamut, not a separate whitepoint or measured calibration."
++msgstr ""
++
++msgctxt "#40838"
++msgid "BT709"
++msgstr ""
++
++msgctxt "#40839"
++msgid "P3-D65"
++msgstr ""
++
++msgctxt "#40840"
++msgid "BT2020"
++msgstr ""
++
++msgctxt "#40841"
++msgid "Dolby Vision output not supported"
++msgstr ""
++
++msgctxt "#40842"
++msgid "HDR10 output not supported"
++msgstr ""
++
++msgctxt "#40843"
++msgid "GPU processing unavailable"
++msgstr ""
++
++msgctxt "#40844"
++msgid "Source cannot use this processing mode"
++msgstr ""
++
++msgctxt "#40845"
++msgid "Configure the TV profile"
++msgstr ""
++
++msgctxt "#40846"
++msgid "Output activation failed"
++msgstr ""
++
++msgctxt "#40847"
++msgid "Display restoration failed"
++msgstr ""
++
++msgctxt "#40848"
++msgid "Link minimum"
++msgstr ""
++
++msgctxt "#40849"
++msgid "Output availability"
++msgstr ""
++
++msgctxt "#40850"
++msgid "Atomic output result"
++msgstr ""
++
++msgctxt "#40851"
++msgid "Unavailable"
++msgstr ""
++
++#. Driver-validated minimum link precision, not a measured link depth
++msgctxt "#40852"
++msgid "{}-bit minimum"
++msgstr ""
++
++msgctxt "#40853"
++msgid "Configure TV profile"
++msgstr ""
++
++msgctxt "#40854"
++msgid "Set peak and gamut for Expert or Adaptive HDR Mapping."
++msgstr ""
++
++msgctxt "#40857"
++msgid "Show playback mode at start"
++msgstr ""
++
++msgctxt "#40900"
++msgid "Asynchronous frame preparation"
++msgstr ""
++
++msgctxt "#40901"
++msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
++msgstr ""
++
++msgctxt "#40858"
++msgid "Show the accepted playback mode once when a video starts."
++msgstr ""
++
++msgctxt "#40863"
++msgid "Playback mode"
++msgstr ""
++
++msgctxt "#40864"
++msgid "Disable TV dynamic tone mapping"
++msgstr ""
++
++msgctxt "#40865"
++msgid "HDR10 playback"
++msgstr ""
++
++msgctxt "#40866"
++msgid "Kodi default"
++msgstr ""
++
++msgctxt "#40867"
++msgid "Dolby Vision Rendering"
++msgstr ""
++
++msgctxt "#40868"
++msgid "Dolby Vision Adaptive HDR Mapping (AI)"
++msgstr ""
++
++msgctxt "#40870"
++msgid "Remember playback for HDR10 sources: Dolby Vision Rendering with AI, Adaptive HDR Mapping with AI or Kodi default. Kodi default bypasses CB1 processing. Adaptive requires a TV profile. Automatic fallback does not change this choice."
++msgstr ""
++
++msgctxt "#40875"
++msgid "HDR10 conversion unavailable. Using native HDR10."
++msgstr ""
++
++msgctxt "#40876"
++msgid "Playback modes | Source: {0}"
++msgstr ""
++
++msgctxt "#40907"
++msgid "FEL upscaling"
++msgstr ""
++
++msgctxt "#40908"
++msgid "FEL upscaling: VAAPI, GPU bilinear or Reference GPU. Master Reference always uses Reference GPU. If VAAPI is unavailable, GPU bilinear is used."
++msgstr ""
++
++msgctxt "#40909"
++msgid "Bilinear (GPU)"
++msgstr ""
++
++msgctxt "#40995"
++msgid "Reference (GPU)"
++msgstr ""
++
++msgctxt "#40911"
++msgid "Configure TV peak brightness (nits)"
++msgstr ""
++
++msgctxt "#40912"
++msgid "Configure TV color gamut"
++msgstr ""
++
++msgctxt "#40910"
++msgid "VAAPI"
++msgstr ""
++
++msgctxt "#40913"
++msgid "Dolby Vision Master Reference"
++msgstr ""
++
++msgctxt "#40914"
++msgid "Dolby Vision Adaptive HDR Mapping"
++msgstr ""
++
++msgctxt "#40915"
++msgid "Insufficient rendering headroom. Switching to Dolby Vision Reference."
++msgstr ""
++
++msgctxt "#40916"
++msgid "Master Reference output"
++msgstr ""
++
++msgctxt "#40917"
++msgid "Preferred TV-Led transport. Profile 5 remains direct IPT."
++msgstr ""
++
++msgctxt "#40918"
++msgid "YCbCr"
++msgstr ""
++
++msgctxt "#40919"
++msgid "IPT-PQc2"
++msgstr ""
++
++msgctxt "#40920"
++msgid "Allow Master Reference to switch to Reference"
++msgstr ""
++
++msgctxt "#40921"
++msgid "Switch when sustained rendering headroom is insufficient. Off keeps Master Reference strict."
++msgstr ""
++
++msgctxt "#40971"
++msgid "Source pixels unchanged. HDR10+ curve and saturation are not translated. Requires full-source analysis."
++msgstr ""
++
++msgctxt "#41012"
++msgid "HDR10+ playback"
++msgstr ""
++
++msgctxt "#41013"
++msgid "Remember playback for HDR10+ sources: Dolby Vision Rendering or Kodi default. Kodi default bypasses CB1 processing. Automatic fallback does not change this choice."
++msgstr ""
++
++msgctxt "#41014"
++msgid "Kodi default"
++msgstr ""
++
++msgctxt "#40970"
++msgid "Dolby Vision Rendering"
++msgstr ""
++
++msgctxt "#40940"
++msgid "Bitmap subtitles (PGS/DVB)"
++msgstr ""
++
++msgctxt "#40941"
++msgid "Bitmap subtitle authoring"
++msgstr ""
++
++msgctxt "#40942"
++msgid "Auto keeps native interpretation. Choose SDR or PQ when needed. Reselect the subtitle track or reopen playback to apply. Disc menus are excluded."
++msgstr ""
++
++msgctxt "#40943"
++msgid "Auto (native interpretation)"
++msgstr ""
++
++msgctxt "#40944"
++msgid "SDR (BT.709)"
++msgstr ""
++
++msgctxt "#40945"
++msgid "HDR PQ (BT.2020)"
++msgstr ""
++
++msgctxt "#40946"
++msgid "Bitmap subtitle position"
++msgstr ""
++
++msgctxt "#40947"
++msgid "Move the complete bitmap subtitle block relative to native video or screen geometry. Text subtitles and disc menu graphics are unchanged."
++msgstr ""
++
++msgctxt "#40948"
++msgid "Original placement"
++msgstr ""
++
++msgctxt "#40949"
++msgid "Bottom of video"
++msgstr ""
++
++msgctxt "#40950"
++msgid "Top of video"
++msgstr ""
++
++msgctxt "#40951"
++msgid "Bottom of screen"
++msgstr ""
++
++msgctxt "#40952"
++msgid "Top of screen"
++msgstr ""
++
++msgctxt "#40953"
++msgid "Manual offset"
++msgstr ""
++
++msgctxt "#40954"
++msgid "Bitmap subtitle vertical offset"
++msgstr ""
++
++msgctxt "#40955"
++msgid "Positive values move bitmap subtitles upwards. The complete block stays within the screen. Zero preserves the chosen position."
++msgstr ""
++
++msgctxt "#40956"
++msgid "Bitmap subtitle size"
++msgstr ""
++
++msgctxt "#40957"
++msgid "100% preserves original size. Multiline bitmaps scale as one block; oversized blocks are limited to fit the screen."
++msgstr ""
++
++msgctxt "#40958"
++msgid "SDR-authored bitmap brightness"
++msgstr ""
++
++msgctxt "#40959"
++msgid "SDR-authored bitmap saturation"
++msgstr ""
++
++msgctxt "#40960"
++msgid "PQ-authored bitmap brightness"
++msgstr ""
++
++msgctxt "#40961"
++msgid "PQ-authored bitmap saturation"
++msgstr ""
++
++msgctxt "#40962"
++msgid "Adjust only bitmap subtitles in their authoring domain before composition. 100% preserves original colours. Changes apply while paused too. Text subtitles, disc menus and movie pixels are unchanged."
++msgstr ""
++
++msgctxt "#40980"
++msgid "Add CM4.0 metadata"
++msgstr ""
++
++msgctxt "#40981"
++msgid "Adds CM4 metadata without changing video pixels or removing L2 trims. TV rendering may change. Reference and Master only."
++msgstr ""
++
++msgctxt "#40982"
++msgid "Only if source has no L2 trims"
++msgstr ""
++
++msgctxt "#40983"
++msgid "Always"
++msgstr ""
++
++msgctxt "#40984"
++msgid "Auto"
++msgstr ""
++
++msgctxt "#40985"
++msgid "Auto 2"
++msgstr ""
++
++msgctxt "#40986"
++msgid "CM4.0 Auto trigger"
++msgstr ""
++
++msgctxt "#40987"
++msgid "Source: append when the TV peak covers the mastering peak. Other choices use a fixed mastering limit. Sources without L2 always qualify."
++msgstr ""
++
++msgctxt "#40988"
++msgid "Source"
++msgstr ""
++
++msgctxt "#40989"
++msgid "1000 nits"
++msgstr ""
++
++msgctxt "#40990"
++msgid "2000 nits"
++msgstr ""
++
++msgctxt "#40991"
++msgid "4000 nits"
++msgstr ""
++
++msgctxt "#40992"
++msgid "10000 nits"
++msgstr ""
++
++msgctxt "#40993"
++msgid "CM4.0 Auto 2 headroom (%)"
++msgstr ""
++
++msgctxt "#40994"
++msgid "Append while L1 peak fits the TV peak plus this margin. Requires TV peak brightness. Sources without L2 always qualify."
++msgstr ""
++
++msgctxt "#41030"
++msgid "HDR10 Rendering Reference peak brightness (nits)"
++msgstr ""
++
++msgctxt "#41031"
++msgid "Enter the measured peak manually: 50 to 10000 nits, in 0.1-nit steps. Zero means not configured. Disable additional tone mapping on the display when comparing this player-led mapping."
++msgstr ""
++
++msgctxt "#41032"
++msgid "HDR10 Rendering Reference display black level"
++msgstr ""
++
++msgctxt "#41033"
++msgid "Estimated display black floor. Custom overrides the estimate without changing peak brightness or gamut."
++msgstr ""
++
++msgctxt "#41034"
++msgid "OLED (0 nits)"
++msgstr ""
++
++msgctxt "#41035"
++msgid "LCD / Mini-LED (0.005 nits)"
++msgstr ""
++
++msgctxt "#41036"
++msgid "Projector (0.05 nits)"
++msgstr ""
++
++msgctxt "#41037"
++msgid "Custom"
++msgstr ""
++
++msgctxt "#41038"
++msgid "HDR10 Rendering Reference custom black level (nits)"
++msgstr ""
++
++msgctxt "#41039"
++msgid "0 to 0.5 nit, in 0.0001-nit steps. This value is remembered independently of the selected black-level preset."
++msgstr ""
++
++msgctxt "#41040"
++msgid "HDR10 Rendering Reference target color gamut"
++msgstr ""
++
++msgctxt "#41041"
++msgid "Nominal rendering volume. HDMI output remains BT.2020 PQ. Selecting BT.2020 does not imply that the display covers the entire gamut."
++msgstr ""
+--- a/system/keymaps/keyboard.xml
++++ b/system/keymaps/keyboard.xml
+@@ -727,6 +727,11 @@
+       <backspace mod="longpress">ActivateWindow(Home)</backspace>
+     </keyboard>
+   </MovieInformation>
++  <SelectDialog>
++    <keyboard>
++      <o>PlayerProcessInfo</o>
++    </keyboard>
++  </SelectDialog>
+   <PictureInfo>
+     <keyboard>
+       <period>NextPicture</period>
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -2,6 +2,188 @@
+ <settings version="1">
+   <section id="player" label="14200" help="38100">
+     <category id="videoplayer" label="14215" help="38103">
++      <group id="99" label="40810">
++        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40867">1</option><option label="40868">2</option>
++            <option label="40866">0</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40970">3</option><option label="41014">0</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.playback" type="action" label="40811" help="40815">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><visible>false</visible>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="40812">0</option>
++              <option label="40913">4</option>
++              <option label="40914">5</option>
++              <option label="40814">2</option>
++              <option label="40813">1</option>
++            </options>
++          </constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10method" type="integer" label="40820" help="40821">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default><visible>false</visible>
++          <constraints><options>
++            <option label="40822">0</option><option label="40823">1</option><option label="40922">2</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.expertpeak" type="number" label="41030" help="41031">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>10000</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.expertblack" type="integer" label="41032" help="41033">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><options><option label="41034">0</option><option label="41035">1</option><option label="41036">2</option><option label="41037">3</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.expertblackcustom" type="number" label="41038" help="41039">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition><condition setting="dvbridge.expertblack" operator="is">3</condition></and></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>0.5</maximum><step>0.0001</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.expertblackcustomset" type="boolean">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default><visible>false</visible>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.expertgamut" type="integer" label="41040" help="41041">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><options><option label="40839">2</option><option label="40840">3</option><option label="40838">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><or>
++            <and><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or><or><condition setting="dvbridge.cmv40" operator="is">4</condition><and><condition setting="dvbridge.cmv40" operator="is">3</condition><condition setting="dvbridge.cmv40trigger" operator="is">0</condition></and></or></and>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>10000</maximum><step>1</step></constraints>
++          <control type="edit" format="number" />
++        </setting>
++        <setting id="dvbridge.tvpanel" type="integer" label="40831" help="40832">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default>
++          <visible>false</visible>
++          <constraints><options><option label="40833">0</option><option label="40834">1</option><option label="40835">2</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>2</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <constraints><options><option label="40833">0</option><option label="40838">1</option><option label="40839">2</option><option label="40840">3</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level>
++          <default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition>
++          </or></dependency></dependencies>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.cmv40" type="integer" label="40980" help="40981">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition>
++          </or></dependency></dependencies>
++          <constraints><options>
++            <option label="231">0</option><option label="40982">1</option>
++            <option label="40983">2</option><option label="40984">3</option><option label="40985">4</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40trigger" type="integer" label="40986" help="40987" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">3</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or></dependency>
++          </dependencies>
++          <constraints><options>
++            <option label="40988">0</option><option label="40989">1000</option>
++            <option label="40990">2000</option><option label="40991">4000</option><option label="40992">10000</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40headroom" type="integer" label="40993" help="40994" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>20</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">4</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or></dependency>
++          </dependencies>
++          <constraints><minimum>0</minimum><maximum>50</maximum><step>1</step></constraints>
++          <control type="edit" format="integer" />
++        </setting>
++        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <constraints><options><option label="40910">0</option><option label="40909">1</option><option label="40995">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++      </group>
+       <group id="1" label="14230">
+         <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
+           <constraints>
+@@ -649,6 +831,48 @@
+       </group>
+     </category>
+     <category id="subtitles" label="287" help="37033">
++      <group id="99" label="40940">
++        <setting id="subtitles.bitmapauthoring" type="integer" label="40941" help="40942">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <constraints><options><option label="40943">0</option><option label="40944">1</option><option label="40945">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="subtitles.bitmapplacement" type="integer" label="40946" help="40947">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>0</default>
++          <constraints><options><option label="40948">0</option><option label="40949">1</option><option label="40950">2</option><option label="40951">3</option><option label="40952">4</option><option label="40953">5</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="subtitles.bitmapoffset" type="integer" label="40954" help="40955">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>0</default>
++          <constraints><minimum>-60</minimum><step>1</step><maximum>60</maximum></constraints>
++          <control type="spinner" format="integer" />
++        </setting>
++        <setting id="subtitles.bitmapzoom" type="integer" label="40956" help="40957">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
++          <constraints><minimum>10</minimum><step>5</step><maximum>200</maximum></constraints>
++          <control type="spinner" format="string"><format>{}%</format></control>
++        </setting>
++        <setting id="subtitles.bitmapsdrbrightness" type="integer" label="40958" help="40962">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
++          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
++          <control type="spinner" format="string"><format>{}%</format></control>
++        </setting>
++        <setting id="subtitles.bitmapsdrsaturation" type="integer" label="40959" help="40962">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
++          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
++          <control type="spinner" format="string"><format>{}%</format></control>
++        </setting>
++        <setting id="subtitles.bitmaphdrbrightness" type="integer" label="40960" help="40962">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
++          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
++          <control type="spinner" format="string"><format>{}%</format></control>
++        </setting>
++        <setting id="subtitles.bitmaphdrsaturation" type="integer" label="40961" help="40962">
++          <requirement>HAVE_DVBRIDGE</requirement><level>1</level><default>100</default>
++          <constraints><minimum>0</minimum><step>5</step><maximum>200</maximum></constraints>
++          <control type="spinner" format="string"><format>{}%</format></control>
++        </setting>
++      </group>
+       <group id="1" label="39186">
+         <setting id="subtitles.align" type="integer" label="21460" help="36192">
+           <level>2</level>
+--- a/system/shaders/GLES/2.0/gles_convolution-4x4.frag
++++ b/system/shaders/GLES/2.0/gles_convolution-4x4.frag
+@@ -73,6 +73,9 @@
+ 
+   rgb.a = m_alpha;
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   gl_FragColor = rgb;
+ }
+ 
+--- a/system/shaders/GLES/2.0/gles_convolution-6x6.frag
++++ b/system/shaders/GLES/2.0/gles_convolution-6x6.frag
+@@ -84,6 +84,9 @@
+ 
+   rgb.a = m_alpha;
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   gl_FragColor = rgb;
+ }
+ 
+--- a/system/shaders/GLES/2.0/gles_gui_composite.frag
++++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
+@@ -15,6 +15,7 @@
+ uniform sampler2D u_lutTF;      // linear -> PQ LUT (1024 entries, sdrPeak baked in)
+ uniform float u_ootfGamma;      // HLG: OOTF gamma (1.2 for BT.2100 1000-nit ref)
+                                 // PQ: 0.0 (use LUT path instead)
++uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
+ 
+ // BT.709 -> BT.2020 color space conversion matrix (applied in linear light)
+ const mat3 bt709_to_bt2020 = mat3(
+@@ -33,6 +34,12 @@
+   if (gui.a == 0.0)
+     discard;
+ 
++  if (u_inputPQ)
++  {
++    gl_FragColor = gui;
++    return;
++  }
++
+   // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
+   vec3 linear = vec3(
+     texture2D(u_lutDegamma, vec2(gui.r, 0.5)).r,
+--- a/system/shaders/GLES/2.0/gles_videofilter.frag
++++ b/system/shaders/GLES/2.0/gles_videofilter.frag
+@@ -8,4 +8,7 @@
+ void main()
+ {
+   gl_FragColor = texture2D(img, cord);
+-}
+\ No newline at end of file
++#if defined(KODI_CLAMP_OUTPUT)
++  gl_FragColor = clamp(gl_FragColor, 0.0, 1.0);
++#endif
++}
+--- a/system/shaders/GLES/2.0/gles_yuv2rgb_basic.frag
++++ b/system/shaders/GLES/2.0/gles_yuv2rgb_basic.frag
+@@ -149,7 +149,14 @@
+ 
+ #if defined(KODI_TONE_MAPPING_REINHARD)
+   float luma = dot(rgb.rgb, m_coefsDst);
++#if defined(KODI_CLAMP_OUTPUT)
++  // 0/0 for a black pixel is no number. A fixed-point output stores it as 0; a floating-point
++  // one keeps it, and what clamp() makes of it is not defined. A black pixel stays black.
++  if (luma > 0.0)
++    rgb.rgb *= reinhard(luma) / luma;
++#else
+   rgb.rgb *= reinhard(luma) / luma;
++#endif
+ 
+ #elif defined(KODI_TONE_MAPPING_ACES)
+   rgb.rgb = inversePQ(rgb.rgb);
+@@ -168,6 +175,9 @@
+ 
+ #endif
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   gl_FragColor = rgb;
+ }
+ 
+--- a/system/shaders/GLES/2.0/gles_yuv2rgb_bob.frag
++++ b/system/shaders/GLES/2.0/gles_yuv2rgb_bob.frag
+@@ -90,7 +90,14 @@
+ 
+ #if defined(KODI_TONE_MAPPING_REINHARD)
+   float luma = dot(rgb.rgb, m_coefsDst);
++#if defined(KODI_CLAMP_OUTPUT)
++  // 0/0 for a black pixel is no number. A fixed-point output stores it as 0; a floating-point
++  // one keeps it, and what clamp() makes of it is not defined. A black pixel stays black.
++  if (luma > 0.0)
++    rgb.rgb *= reinhard(luma) / luma;
++#else
+   rgb.rgb *= reinhard(luma) / luma;
++#endif
+ 
+ #elif defined(KODI_TONE_MAPPING_ACES)
+   rgb.rgb = inversePQ(rgb.rgb);
+@@ -109,5 +116,8 @@
+ 
+ #endif
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   gl_FragColor = rgb;
+ }
+--- a/system/shaders/GLES/3.1/gles310_yuv2rgb_filter.frag
++++ b/system/shaders/GLES/3.1/gles310_yuv2rgb_filter.frag
+@@ -106,7 +106,14 @@
+ 
+ #if defined(KODI_TONE_MAPPING_REINHARD)
+   float luma = dot(rgb.rgb, m_coefsDst);
++#if defined(KODI_CLAMP_OUTPUT)
++  // 0/0 for a black pixel is no number. A fixed-point output stores it as 0; a floating-point
++  // one keeps it, and what clamp() makes of it is not defined. A black pixel stays black.
++  if (luma > 0.0)
++    rgb.rgb *= reinhard(luma) / luma;
++#else
+   rgb.rgb *= reinhard(luma) / luma;
++#endif
+ 
+ #elif defined(KODI_TONE_MAPPING_ACES)
+   rgb.rgb = inversePQ(rgb.rgb);
+@@ -125,5 +132,8 @@
+ 
+ #endif
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   fragColor = rgb;
+ }
+--- a/xbmc/GUIInfoManager.cpp
++++ b/xbmc/GUIInfoManager.cpp
+@@ -1233,7 +1233,7 @@
+ ///
+ /// -----------------------------------------------------------------------------
+ // clang-format off
+-constexpr std::array<InfoMap, 20> player_process = {{
++constexpr std::array<InfoMap, 51> player_process = {{
+     {"videodecoder",        PLAYER_PROCESS_VIDEODECODER},
+     {"deintmethod",         PLAYER_PROCESS_DEINTMETHOD},
+     {"pixformat",           PLAYER_PROCESS_PIXELFORMAT},
+@@ -1254,6 +1254,36 @@
+     {"videoqueuedatalevel", PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL},
+     {"videoscantype",       PLAYER_PROCESS_VIDEOSCANTYPE},
+     {"subtitledecoder",     PLAYER_PROCESS_SUBTITLEDECODER},
++    {"videooutputhdrtype", PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE},
++    {"videoprocessingmode", PLAYER_PROCESS_VIDEOPROCESSINGMODE},
++    {"videoprocessingengine", PLAYER_PROCESS_VIDEOPROCESSINGENGINE},
++    {"videoprocessingcircuit", PLAYER_PROCESS_VIDEOPROCESSINGCIRCUIT},
++    {"videoprocessingfallback", PLAYER_PROCESS_VIDEOPROCESSINGFALLBACK},
++    {"videodvcmversion", PLAYER_PROCESS_VIDEODVCMVERSION},
++    {"videodvparsedblocks", PLAYER_PROCESS_VIDEODVPARSEDBLOCKS},
++    {"videodvappliedblocks", PLAYER_PROCESS_VIDEODVAPPLIEDBLOCKS},
++    {"videodvtransmittedblocks", PLAYER_PROCESS_VIDEODVTRANSMITTEDBLOCKS},
++    {"videosourcebits", PLAYER_PROCESS_VIDEOSOURCEBITS},
++    {"videodvprofile", PLAYER_PROCESS_VIDEODVPROFILE},
++    {"videodvlevel", PLAYER_PROCESS_VIDEODVLEVEL},
++    {"videodvversion", PLAYER_PROCESS_VIDEODVVERSION},
++    {"videodvlayers", PLAYER_PROCESS_VIDEODVLAYERS},
++    {"videooutputformat", PLAYER_PROCESS_VIDEOOUTPUTFORMAT},
++    {"videooutputbits", PLAYER_PROCESS_VIDEOOUTPUTBITS},
++    {"video.sidedata", PLAYER_PROCESS_VIDEOSIDEDATA},
++    {"audiosourcetitle", PLAYER_PROCESS_AUDIOSOURCETITLE},
++    {"audiosourceformat", PLAYER_PROCESS_AUDIOSOURCEFORMAT},
++    {"audiosourcechannels", PLAYER_PROCESS_AUDIOSOURCECHANNELS},
++    {"audiobedobjectslabel", PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL},
++    {"audiobedobjects", PLAYER_PROCESS_AUDIOBEDOBJECTS},
++    {"audiopresentation", PLAYER_PROCESS_AUDIOPRESENTATION},
++    {"audiodialnorm", PLAYER_PROCESS_AUDIODIALNORM},
++    {"audiosourcelanguage", PLAYER_PROCESS_AUDIOSOURCELANGUAGE},
++    {"audiosourcebitrate", PLAYER_PROCESS_AUDIOSOURCEBITRATE},
++    {"audiooutputtransport", PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT},
++    {"audiooutputcodec", PLAYER_PROCESS_AUDIOOUTPUTCODEC},
++    {"audiooutputdata", PLAYER_PROCESS_AUDIOOUTPUTDATA},
++    {"audiooutputchannels", PLAYER_PROCESS_AUDIOOUTPUTCHANNELS},
+ }};
+ // clang-format on
+ 
+@@ -11226,6 +11256,8 @@
+     }
+     else if (cat.Name() == "system")
+     {
++      if (prop.Name() == "cputemperature" && prop.num_params() == 1 && prop.param() == "dual")
++        return AddMultiInfo(CGUIInfo(SYSTEM_CPU_TEMPERATURE, 1));
+       for (const auto& system_label : system_labels)
+       {
+         if (prop.Name() == system_label.str)
+--- a/xbmc/dialogs/CMakeLists.txt
++++ b/xbmc/dialogs/CMakeLists.txt
+@@ -66,4 +66,11 @@
+   list(APPEND HEADERS GUIDialogPlayEject.h)
+ endif()
+ 
++if(ENABLE_DVBRIDGE)
++  list(APPEND SOURCES DVPlaybackModes.cpp)
++  list(APPEND HEADERS DVPlaybackModes.h)
++endif()
+ core_add_library(dialogs)
++if(ENABLE_DVBRIDGE)
++  target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
++endif()
+--- /dev/null
++++ b/xbmc/dialogs/DVPixelFormat.h
+@@ -0,0 +1,29 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++#include <string>
++extern "C"
++{
++#include <libavutil/pixdesc.h>
++}
++
++namespace DVBRIDGE
++{
++// Describe the decoded source, never the opaque hardware surface or HDMI tunnel.
++inline std::string SourcePixelFormat(AVPixelFormat format)
++{
++  const auto* desc = av_pix_fmt_desc_get(format);
++  if (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL))
++    return {};
++  if (desc->flags & AV_PIX_FMT_FLAG_RGB)
++    return "RGB 4:4:4";
++  if (desc->nb_components < 3)
++    return "Grayscale";
++  if (desc->log2_chroma_w == 1 && desc->log2_chroma_h == 1)
++    return "YUV 4:2:0";
++  if (desc->log2_chroma_w == 1 && desc->log2_chroma_h == 0)
++    return "YUV 4:2:2";
++  if (desc->log2_chroma_w == 0 && desc->log2_chroma_h == 0)
++    return "YUV 4:4:4";
++  return desc->name ? desc->name : "";
++}
++}
+--- /dev/null
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -0,0 +1,262 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#include "DVPlaybackModes.h"
++#ifdef HAVE_DVBRIDGE
++#include "FileItem.h"
++#include "ServiceBroker.h"
++#include "application/ApplicationComponents.h"
++#include "application/ApplicationPlayer.h"
++#include "cores/VideoPlayer/Interface/StreamInfo.h"
++#include "GUIDialogNumeric.h"
++#include "guilib/GUIKeyboardFactory.h"
++#include "GUIDialogKaiToast.h"
++#include "GUIDialogSelect.h"
++#include "GUIDialogBusy.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
++#include "resources/LocalizeStrings.h"
++#include "resources/ResourcesComponent.h"
++#include "settings/SettingConditions.h"
++#include "settings/Settings.h"
++#include "settings/SettingsComponent.h"
++#include "settings/lib/Setting.h"
++#include "settings/lib/SettingDefinitions.h"
++#include "utils/StringUtils.h"
++#include "utils/JSONVariantParser.h"
++#include "utils/Variant.h"
++#include "utils/DVBridgeDiagnosticLog.h"
++#include "utils/log.h"
++#include "threads/IRunnable.h"
++#include <cstdio>
++
++namespace
++{
++struct Choice { int output,method,label; };
++constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
++    {5,0,40914},
++    {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922}};
++}
++
++CDVPlaybackModes& CDVPlaybackModes::GetInstance()
++{
++  static CDVPlaybackModes instance;
++  return instance;
++}
++
++void CDVPlaybackModes::OnSettingsLoaded()
++{
++  const auto settings=CServiceBroker::GetSettingsComponent()->GetSettings();
++  m_expertBlackPreset=settings->GetInt("dvbridge.expertblack");
++}
++
++void CDVPlaybackModes::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
++{
++  if(!setting)return;
++  const auto settings=CServiceBroker::GetSettingsComponent()->GetSettings();
++  if(setting->GetId()=="dvbridge.expertblackcustom")
++    settings->SetBool("dvbridge.expertblackcustomset",true);
++  else if(setting->GetId()=="dvbridge.expertblack")
++  {
++    const int mode=settings->GetInt("dvbridge.expertblack");
++    if(mode==3 && !settings->GetBool("dvbridge.expertblackcustomset"))
++    {
++      settings->SetNumber("dvbridge.expertblackcustom",
++          m_expertBlackPreset==1 ? 0.005 : m_expertBlackPreset==2 ? 0.05 : 0);
++      settings->SetBool("dvbridge.expertblackcustomset",true);
++    }
++    if(mode!=3)m_expertBlackPreset=mode;
++  }
++}
++
++bool CDVPlaybackModes::MenuEnabled()
++{
++  return DVBRIDGE::PlaybackMenuEnabled();
++}
++
++StreamHdrType CDVPlaybackModes::SourceType()
++{
++  const auto player=CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
++  VideoStreamInfo source;
++  if (player->IsPlayingVideo()) player->GetVideoStreamInfo(CURRENT_STREAM,source);
++  if (!source.valid || (!source.stereoMode.empty() && source.stereoMode!="mono"))
++    return StreamHdrType::HDR_TYPE_NONE;
++  return source.hdrType;
++}
++
++bool CDVPlaybackModes::ConfigureProfile()
++{
++  const auto component=CServiceBroker::GetSettingsComponent();
++  const auto settings=component ? component->GetSettings() : nullptr;
++  auto* dialog=CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
++  if (!settings || !dialog) return false;
++  const auto preferences=DVBRIDGE::FrameOutputSettings();
++  const bool expert=preferences.output==DVBRIDGE::OutputMode::HDR10 && preferences.method==1;
++  const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  std::string peak=StringUtils::Format("{:g}",expert?preferences.expertPeak:preferences.peak);
++  if (expert ? !CGUIKeyboardFactory::ShowAndGetInput(peak,strings.Get(41030),false) :
++               !CGUIDialogNumeric::ShowAndGetNumber(peak,strings.Get(40829))) return false;
++  double value{};
++  try
++  {
++    size_t length{};
++    value=std::stod(peak,&length);
++    if (length!=peak.size() || !std::isfinite(value) || value<(expert?50:0.000001) || value>10000) return false;
++  }
++  catch (const std::exception&) { return false; }
++  dialog->Reset(); dialog->SetHeading(40836);
++  for(int id : {40838,40839,40840}) dialog->Add(strings.Get(id));
++  const int currentGamut=expert?preferences.expertGamut:preferences.gamut;
++  dialog->SetSelected(currentGamut>0 ? currentGamut-1 : 1);
++  dialog->Open();
++  if (!dialog->IsConfirmed()) return false;
++  const int gamut=dialog->GetSelectedItem()+1;
++  auto profile=preferences;
++  if(expert){profile.expertPeak=value;profile.expertGamut=gamut;}
++  else{profile.peak=value;profile.gamut=gamut;}
++  if (!(expert?profile.ExpertProfileValid():profile.ProfileValid())) return false;
++  {
++    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++    const char* peakKey=expert?"dvbridge.expertpeak":"dvbridge.tvpeak";
++    const char* gamutKey=expert?"dvbridge.expertgamut":"dvbridge.tvgamut";
++    if (!settings->SetNumber(peakKey,value) || !settings->SetInt(gamutKey,gamut))
++    {
++      settings->SetNumber(peakKey,expert?preferences.expertPeak:preferences.peak);
++      settings->SetInt(gamutKey,currentGamut);
++      return false;
++    }
++  }
++  settings->Save();
++  return true;
++}
++
++bool CDVPlaybackModes::ShowMenu(bool settingsMenu)
++{
++  if (!settingsMenu && !MenuEnabled()) return false;
++  auto* dialog=CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
++  if (!dialog) return false;
++  const auto settings=CServiceBroker::GetSettingsComponent()->GetSettings();
++  const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const auto nativeSource=settingsMenu ? StreamHdrType::HDR_TYPE_DOLBYVISION : SourceType();
++  const bool hdr10PlusSource=nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
++  const bool hdr10Source=nativeSource==StreamHdrType::HDR_TYPE_HDR10 ||
++                         nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
++  if (!hdr10Source && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
++  const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
++#ifdef CB1_HAS_HDR10_AI
++  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866}};
++  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014}};
++#else
++  constexpr Choice hdr10Choices[]={{0,0,40866}};
++  constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
++#endif
++  const Choice* choices=hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
++  const int count=hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
++  const char* sourceSetting=hdr10PlusSource ? "dvbridge.hdr10plussource" : "dvbridge.hdr10source";
++  const auto choiceSetting=std::make_shared<CSettingInt>(settingsMenu ? "dvbridge.playback" : hdr10PlusSource ? "dvbridge.hdr10plusplaybackchoice" :
++      hdr10Source ? "dvbridge.hdr10playbackchoice" : "dvbridge.playbackchoice");
++  {
++    const auto preferences=DVBRIDGE::FrameOutputSettings(hdr10PlusSource);
++    std::vector<IntegerSettingOption> options;
++    int current=-1;
++    for(int i=0;i<count;++i)
++    {
++      options.emplace_back(strings.Get(choices[i].label),i);
++      const auto& choice=choices[i];
++      if (hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
++          (int(preferences.output)==choice.output &&
++          (choice.output!=1 || preferences.method==choice.method))) current=i;
++    }
++    CSettingConditions::DVOutputOptions(choiceSetting,options);
++    DVBRIDGE::DiagnosticLog(LOGINFO,
++        "Playback mode menu: native_source={} source_known={} dv={} hdr10={} hdr10plus={} processing_known={} requested={} hdr10source={}",
++        int(nativeSource), source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
++        int(preferences.output), int(preferences.hdr10Source));
++    dialog->Reset();
++    dialog->SetHeading(settingsMenu ? strings.Get(40811) :
++        StringUtils::Format(strings.Get(40876), hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
++    dialog->SetUseDetails(!settingsMenu);
++    for(const auto& option : options)
++    {
++      DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
++          option.value, option.label, option.label2);
++      CFileItem item(option.label);
++      item.SetLabel2(option.label2);
++      for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
++      item.SetProperty("CB1.TextColor", item.GetProperty("disabled").asBoolean() ?
++                                      "FFA0A0A0" : "FFF0F0F0");
++      dialog->Add(item);
++    }
++    dialog->SetSelected(current);
++    if (!settingsMenu) dialog->SetProperty("CB1.PlaybackModes",true);
++    dialog->Open();
++    dialog->SetProperty("CB1.PlaybackModes", CVariant{});
++    if (!dialog->IsConfirmed()) return true;
++    const int selected=dialog->GetSelectedItem();
++    if (selected<0 || selected>=count) return true;
++    // Admission may change during the dialog's nested event loop.
++    if (!settingsMenu && SourceType()!=nativeSource) return true;
++    CSettingConditions::DVOutputOptions(choiceSetting,options);
++    for(const auto& [name,value] : options[selected].properties)
++      if (name=="disabled" && value.asBoolean()) return true;
++    const auto& choice=choices[selected];
++    {
++      std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++      const int priorOutput=settings->GetInt("dvbridge.outputmode");
++      const int priorHDR10=settings->GetInt(sourceSetting);
++      const int priorMethod=settings->GetInt("dvbridge.hdr10method");
++      if (!(hdr10Source ? settings->SetInt(sourceSetting,choice.output) :
++          (settings->SetInt("dvbridge.outputmode",choice.output) &&
++           settings->SetInt("dvbridge.hdr10method",choice.method))))
++      {
++        settings->SetInt("dvbridge.outputmode",priorOutput);
++        settings->SetInt(sourceSetting,priorHDR10);
++        settings->SetInt("dvbridge.hdr10method",priorMethod);
++        return true;
++      }
++#ifdef CB1_HAS_HDR10_AI
++      if (hdr10Source && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
++#endif
++    }
++    settings->Save();
++    return true;
++  }
++}
++
++void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
++{
++  if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
++  else if (setting && setting->GetId()=="dvbridge.playback") ShowMenu(true);
++}
++
++
++
++
++void DVBRIDGE::PlaybackNotification::Emit(const std::string& text)
++{
++  const auto component=CServiceBroker::GetSettingsComponent();
++  const auto settings=component ? component->GetSettings() : nullptr;
++  if (settings && settings->GetBool("dvbridge.startupmode"))
++    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
++        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40863),text,3000,false);
++}
++void DVBRIDGE::PlaybackNotification::EmitAI(int mode)
++{
++  if (mode!=1 && mode!=4) return;
++  const int label=mode==1 ? 40867 : 40868;
++  Emit(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(label));
++}
++void DVBRIDGE::PlaybackNotification::HDR10Recovery()
++{
++  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
++      localizer.Get(40863),localizer.Get(40875),3000,false);
++}
++void DVBRIDGE::PlaybackNotification::EmitMasterRecovery()
++{
++  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
++      localizer.Get(40863),localizer.Get(40915),3000,false);
++}
++#endif
+--- /dev/null
++++ b/xbmc/dialogs/DVPlaybackModes.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++#ifdef HAVE_DVBRIDGE
++#include "settings/lib/ISettingCallback.h"
++#include "settings/lib/ISettingsHandler.h"
++enum class StreamHdrType;
++
++class CDVPlaybackModes : public ISettingCallback, public ISettingsHandler
++{
++public:
++  static CDVPlaybackModes& GetInstance();
++  static bool MenuEnabled();
++  static StreamHdrType SourceType();
++  static bool ShowMenu(bool settingsMenu = false);
++  static bool ConfigureProfile();
++  void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
++  void OnSettingsLoaded() override;
++  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
++private:
++  int m_expertBlackPreset{};
++};
++#endif
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -10,6 +10,26 @@
+ 
+ #include "input/actions/Action.h"
+ #include "input/actions/ActionIDs.h"
++#ifdef HAVE_DVBRIDGE
++#include "DVPlaybackModes.h"
++#include "DVPixelFormat.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
++#include "cores/DataCacheCore.h"
++#include "guilib/guiinfo/VideoProcessingInfoGUI.h"
++#include "utils/StringUtils.h"
++#include "utils/Variant.h"
++#include "utils/CPUInfo.h"
++#include "resources/LocalizeStrings.h"
++#include "resources/ResourcesComponent.h"
++#include "guilib/GUIMessage.h"
++#include "guilib/GUIControlGroupList.h"
++#include "guilib/GUIFontManager.h"
++#include "windowing/WinSystem.h"
++#include "windowing/GraphicContext.h"
++#include <algorithm>
++#include <cmath>
++#endif
+ 
+ CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
+     : CGUIDialog(WINDOW_DIALOG_PLAYER_PROCESS_INFO, "DialogPlayerProcessInfo.xml")
+@@ -19,11 +39,283 @@
+ 
+ CGUIDialogPlayerProcessInfo::~CGUIDialogPlayerProcessInfo(void) = default;
+ 
++bool CGUIDialogPlayerProcessInfo::OnMessage(CGUIMessage& message)
++{
++#ifdef HAVE_DVBRIDGE
++  if (message.GetMessage() == GUI_MSG_WINDOW_INIT)
++  {
++    const bool enhanced = DVBRIDGE::EnhancedInfoEnabled();
++    const std::string file = enhanced ?
++        "special://xbmc/media/cb1/DialogPlayerProcessInfo.xml" :
++        "DialogPlayerProcessInfo.xml";
++    if (GetProperty("xmlfile").asString() != file)
++    {
++      FreeResources(true);
++      SetProperty("xmlfile", file);
++    }
++    if (enhanced)
++    {
++      const RESOLUTION_INFO resolution(1920, 1080);
++      SetCoordsRes(resolution);
++      g_fontManager.LoadTTF("CB1.InfoBody", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff4f6f6, 0, 18, 0, false, 1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff4f6f6, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoTitle", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff4f6f6, 0, 28, 1, false, 1.0f, 1.0f, &resolution);
++    }
++  }
++#endif
++  return CGUIDialog::OnMessage(message);
++}
++
++void CGUIDialogPlayerProcessInfo::OnInitWindow()
++{
++#ifdef HAVE_DVBRIDGE
++  const bool enhanced = DVBRIDGE::EnhancedInfoEnabled();
++  SetProperty("DV.Enhanced", enhanced);
++  m_nextRefresh = 0;
++  m_renderUsage.Reset();
++  SetProperty("DV.GPUAvailable", false);
++  SetProperty("DV.GPURender", "N/A");
++  if (enhanced)
++    RefreshInfo();
++#endif
++  CGUIDialog::OnInitWindow();
++}
++
++void CGUIDialogPlayerProcessInfo::OnDeinitWindow(int nextWindowID)
++{
++#ifdef HAVE_DVBRIDGE
++  m_renderUsage.Reset();
++#endif
++  CGUIDialog::OnDeinitWindow(nextWindowID);
++}
++
++#ifdef HAVE_DVBRIDGE
++void CGUIDialogPlayerProcessInfo::RefreshInfo()
++{
++    const auto render = m_renderUsage.Sample();
++    SetProperty("DV.GPUAvailable", render.has_value());
++    SetProperty("DV.GPURender", render ? StringUtils::Format("{:.0f} %", *render) : "N/A");
++    SetProperty("DV.GPURenderPercent", render ? StringUtils::Format("{:.1f}", *render) : "0");
++    for (const int gauge : {9400, 9401})
++    {
++      CGUIMessage usage(GUI_MSG_ITEM_SELECT, GetID(), gauge, render ? std::lround(*render) : 0);
++      OnMessage(usage);
++    }
++    const auto data = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
++    SetProperty("DV.SourcePixelFormat", DVBRIDGE::SourcePixelFormat(static_cast<AVPixelFormat>(data.sourceFormat)));
++    SetProperty("DV.SourceBits", data.sourceBits ? StringUtils::Format("{}-bit", data.sourceBits) : "N/A");
++    const auto active = data.output.flags;
++    const bool hdr10 = active & CDVPlaybackInfo::HDR10;
++    const bool metadata = active && data.metadata;
++    const auto yesno = [](bool value) { return value ? "Yes" : "No"; };
++    const auto resolution = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
++    SetProperty("DV.Display", StringUtils::Format("{}x{} / {:.3f} Hz",
++        resolution.iScreenWidth, resolution.iScreenHeight, resolution.fRefreshRate));
++    if (active && data.output.width && data.output.height && data.output.refresh>0)
++      SetProperty("DV.Display", StringUtils::Format("{}x{} / {:.3f} Hz",
++          data.output.width,data.output.height,data.output.refresh));
++    const auto cpu = CServiceBroker::GetCPUInfo();
++    SetProperty("DV.CPU", cpu ? StringUtils::Format("{} %", cpu->GetUsedPercentage()) : "N/A");
++    SetProperty("DV.DroppedSkipped", data.counters ?
++        StringUtils::Format("{} / {}", data.dropped, data.skipped) : "N/A");
++    SetProperty("DV.SourceMastering", data.sourceMastering ?
++        StringUtils::Format("{:.0f} / {:.4f} nits", data.sourceMax, data.sourceMin) : "N/A");
++    SetProperty("DV.SourceLight", data.sourceLight ?
++        StringUtils::Format("{} / {} nits", data.sourceCLL, data.sourceFALL) : "N/A");
++    SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
++    SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
++    SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
++    SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
++    const auto applied=data.AppliedBlocks();
++    SetProperty("DV.ParsedBlocks", metadata ? CDVPlaybackInfo::Blocks(data.blocks) : "");
++    SetProperty("DV.AppliedBlocks", metadata ? CDVPlaybackInfo::Blocks(applied | (active & CDVPlaybackInfo::HDR10PLUS ? data.blocks & std::bitset<256>(data.output.creativeEdited) : std::bitset<256>{})) : "");
++    SetProperty("DV.TransmittedBlocks", active & CDVPlaybackInfo::HDMI ? CDVPlaybackInfo::Blocks(data.TransmittedBlocks())+
++        (data.output.authoredLegacy ? " (authored)" : "") : "");
++    SetProperty("DV.UnappliedBlocks", metadata ? CDVPlaybackInfo::Blocks(data.blocks & ~(applied | data.TransmittedBlocks())) : "");
++    SetProperty("DV.RPU", data.profile ? yesno(data.rpu) : "N/A");
++    SetProperty("DV.BL", data.profile ? yesno(data.bl) : "N/A");
++    SetProperty("DV.EL", data.profile ? yesno(data.el) : "N/A");
++    SetProperty("DV.FEL", active ? (active & CDVPlaybackInfo::FEL ? "Full FEL" : "No FEL") : "");
++    SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
++        (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
++    SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
++    SetProperty("DV.Engine", data.output.engine);
++    SetProperty("DV.Circuit", data.output.circuit);
++    SetProperty("DV.Reconstruction", "");
++    SetProperty("DV.AIModel", "");
++    SetProperty("DV.BeforeAI", "");
++    SetProperty("DV.AIL1", "");
++    SetProperty("DV.AIL3", "");
++    SetProperty("DV.OutputL1", "");
++    SetProperty("DV.PartialBlocks", hdr10 && data.output.effective==3 && metadata ?
++        std::string(data.blocks[1] ? "L1 max/avg" : "")+
++        (data.blocks[3] ? (data.blocks[1] ? "; L3 max/avg" : "L3 max/avg") : "") : "");
++    SetProperty("DV.ActivePolicy", active ? std::string(CDVPlaybackInfo::RequestedPolicy(data.output.effective)) : "Kodi default");
++    if (active && data.output.hdr10AI)
++    {
++      const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++      const int label=data.output.hdr10PlusDV ? 40970 : data.output.effective==1 ? 40867 : 40868;
++      SetProperty("DV.Mode", localizer.Get(label));
++      SetProperty("DV.ActivePolicy", localizer.Get(label));
++      const bool ai=!data.output.aiModel.empty();
++      SetProperty("DV.Reconstruction", "AI-generated L1/L3");
++      if (ai)
++      {
++        SetProperty("DV.AIModel", data.output.aiModel);
++        const auto& base=data.output.aiBaseline;
++        SetProperty("DV.BeforeAI", StringUtils::Format("{} | {} | {}",base[0],base[1],base[2]));
++      }
++      if (data.output.hdr10PlusDV)
++        SetProperty("DV.Reconstruction", std::string(data.output.guidedSourceFields & 4u ?
++            "Max/avg: HDR10+; min: estimated" : data.output.guidedSourceFields & 2u ?
++            (ai ? "Max: HDR10+; min/avg: AI" : "Max: HDR10+; min/avg: estimated") :
++            (ai ? "Min/max/avg: AI" : "Min/max/avg: estimated")) +
++            (data.output.untranslatedCurve ? "; authored curve not translated" : "") +
++            (data.output.untranslatedSaturation ? "; authored saturation not translated" : ""));
++      SetProperty("DV.Profile", "");
++      SetProperty("DV.Level", "");
++      SetProperty("DV.Version", "");
++      const auto& raw=data.output.aiL1L3;
++      SetProperty("DV.AIL1", StringUtils::Format("{} | {} | {}",raw[0],raw[1],raw[2]));
++      SetProperty("DV.AIL3", StringUtils::Format("{} | {} | {}",raw[3],raw[4],raw[5]));
++      if (data.output.emittedL1Known)
++        SetProperty("DV.OutputL1", StringUtils::Format("{} | {} | {}",
++            data.output.emittedL1[0],data.output.emittedL1[1],data.output.emittedL1[2]));
++    }
++    const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++    const auto reasonText=[&](VideoProcessingReason reason) {
++      const int id=CDVPlaybackInfo::ReasonLabel(static_cast<DVBRIDGE::OutputReason>(reason));
++      return id ? localizer.Get(id) : std::string{};
++    };
++    SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) : "");
++    SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
++        StringUtils::Format(localizer.Get(40852),data.output.minimumLinkBits) : "");
++    SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
++    SetProperty("DV.SignalIntent", active & CDVPlaybackInfo::HDMI ?
++        (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
++        active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
++        hdr10 ? "PQ / BT.2020" : "");
++    SetProperty("DV.Committed", active && data.output.stream ? StringUtils::Format("{} / {} / {}",
++        data.output.stream,data.output.picture,data.output.revision) : "");
++    // Next-picture preparation is not an output-mode transition.
++    const bool transaction=data.transaction.identity.Valid() &&
++        std::string_view(data.transaction.stage)!="Committed" &&
++        (data.transaction.atomicError ||
++         data.transaction.reason==VideoProcessingReason::ActivationFailed ||
++         data.transaction.reason==VideoProcessingReason::RestoreFailed ||
++         std::string_view(data.transaction.stage)=="Failed commit" ||
++         (active ? (
++          data.transaction.identity.stream!=data.output.stream ||
++          data.transaction.requested!=data.output.requested ||
++          data.transaction.effective!=data.output.effective ||
++          data.transaction.reason!=data.output.reason) :
++          (data.transaction.requested || data.transaction.reason!=VideoProcessingReason::None)));
++    SetProperty("DV.ProcessingVisible", bool(active) || transaction);
++    SetProperty("DV.RequestedPolicy", transaction ? std::string(CDVPlaybackInfo::RequestedPolicy(data.transaction.requested,
++        data.transaction.hdr10AI)) :
++        active ? CDVPlaybackInfo::RequestedPolicy(data.output.requested,data.output.hdr10AI) : "");
++    SetProperty("DV.AdmissionReason", transaction ? reasonText(data.transaction.reason) : "");
++    SetProperty("DV.AtomicResult", transaction && data.transaction.atomicError ?
++        StringUtils::Format("errno={} / failures={} / restored={}",data.transaction.atomicError,
++            data.transaction.retryCount,yesno(data.transaction.restored)) : "");
++    SetProperty("DV.OutputStage", transaction ?
++        std::string(data.transaction.stage)+" (not committed)" : "");
++    SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
++    SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
++        StringUtils::Format("{} / {:g} nits",
++            data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
++            data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
++    SetProperty("DV.DisplayBlack", hdr10 && data.output.effective==3 ?
++        StringUtils::Format("{:g} nits", data.output.displayBlack) : "");
++    SetProperty("DV.HDR10Policy", hdr10 ? CDVPlaybackInfo::Policy(data.output) : "");
++    SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
++    SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
++        data.output.effective==7 ? "Curve reference" : "Mapping target") : "");
++    SetProperty("DV.CreativeTrims", active ? (data.output.creativeKnown ?
++        (data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Invalid) ||
++         data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Unsupported) ?
++            "Treatment unavailable" :
++         data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Neutral) ?
++            "Neutral" :
++         hdr10 ? (data.output.creativeApplied & ((1u<<2)|(1u<<8)) ?
++            "Applied locally" : "No compatible trims") :
++          data.output.creativeApplied ? "Metadata-guided expansion" :
++          data.output.creativeEdited ? "Metadata adjusted for TV" : "Original metadata") :
++        data.output.authoredLegacy || hdr10 ? "Not applied" : "Forwarded to TV") : "");
++    if (active && data.output.effective==7)
++      SetProperty("DV.CreativeTrims", !(active & CDVPlaybackInfo::HDR10PLUS) ? "HDR10 fallback" :
++          data.output.creativeEdited & (1u<<8) ? "HDR10+ curve from L8" :
++          data.output.creativeEdited & (1u<<2) ? "HDR10+ curve from L2" :
++          data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
++    SetProperty("DV.Precision", active ? StringUtils::Format("{}-bit framebuffer", data.output.bits) : "N/A");
++    SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
++    const auto nits = [](unsigned pq) {
++      const double p = std::pow(pq / 4095.0, 32.0 / 2523.0);
++      return 10000.0 * std::pow(std::max(p - 3424.0 / 4096.0, 0.0) /
++          (2413.0 / 128.0 - 2392.0 / 128.0 * p), 16384.0 / 2610.0);
++    };
++    SetProperty("DV.L1Nits", metadata && data.l1 ? StringUtils::Format("{:.1f} | {:.1f} | {:.1f} nits",
++        nits(data.pq[0]), nits(data.pq[1]), nits(data.pq[2])) : "N/A");
++    SetProperty("DV.L5", metadata && data.l5 ? StringUtils::Format("{} | {} | {} | {}",
++        data.area[0], data.area[1], data.area[2], data.area[3]) : "N/A");
++    SetProperty("DV.Mastering", metadata && data.l6 ? StringUtils::Format("{} | {:.4f} nits",
++        data.maxMaster, data.minMaster / 10000.0) : "N/A");
++    SetProperty("DV.CLL", metadata && data.l6 ? StringUtils::Format("{} | {} nits", data.maxCLL, data.maxFALL) : "N/A");
++}
++#endif
++
++void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegionList& dirtyregions)
++{
++#ifdef HAVE_DVBRIDGE
++  const bool refresh = DVBRIDGE::EnhancedInfoEnabled() && currentTime >= m_nextRefresh;
++  if (refresh)
++  {
++    m_nextRefresh = currentTime + 500;
++    RefreshInfo();
++  }
++#endif
++  CGUIDialog::Process(currentTime, dirtyregions);
++#ifdef HAVE_DVBRIDGE
++  if (refresh)
++  {
++    // Measure native grouplists after hidden rows have collapsed.
++    for (int layout = 0; layout < 2; ++layout)
++    {
++      auto* panel = GetControl(9600 + layout);
++      auto* surface = GetControl(9610 + layout);
++      if (!panel || !surface)
++        continue;
++      float content = 0.0f;
++      for (int column = 0; column < 3; ++column)
++        if (const auto* list = dynamic_cast<const CGUIControlGroupList*>(
++                GetControl(9620 + layout * 10 + column)))
++          content = std::max(content, list->GetTotalSize());
++      if (content <= 0.0f)
++        continue;
++      const float height = 108.0f + content + 16.0f;
++      panel->SetHeight(height);
++      panel->SetPosition(panel->GetXPosition(), GetCoordsRes().iHeight - 24.0f - height);
++      surface->SetHeight(height + 40.0f);
++    }
++  }
++#endif
++}
++
+ bool CGUIDialogPlayerProcessInfo::OnAction(const CAction &action)
+ {
+   if (action.GetID() == ACTION_PLAYER_PROCESS_INFO)
+   {
++#ifdef HAVE_DVBRIDGE
++    const bool showMenu = CDVPlaybackModes::MenuEnabled();
++    Close(showMenu);
++    if (showMenu)
++      CDVPlaybackModes::ShowMenu();
++#else
+     Close();
++#endif
+     return true;
+   }
+   return CGUIDialog::OnAction(action);
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.h
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.h
+@@ -9,6 +9,9 @@
+ #pragma once
+ 
+ #include "guilib/GUIDialog.h"
++#ifdef HAVE_DVBRIDGE
++#include "utils/DVRenderUsage.h"
++#endif
+ 
+ class CGUIDialogPlayerProcessInfo : public CGUIDialog
+ {
+@@ -17,4 +20,15 @@
+   ~CGUIDialogPlayerProcessInfo(void) override;
+ 
+   bool OnAction(const CAction &action) override;
++  bool OnMessage(CGUIMessage& message) override;
++  void OnInitWindow() override;
++  void OnDeinitWindow(int nextWindowID) override;
++  void Process(unsigned int currentTime, CDirtyRegionList& dirtyregions) override;
++
++private:
++#ifdef HAVE_DVBRIDGE
++  void RefreshInfo();
++  DVBRIDGE::RenderUsage m_renderUsage;
++#endif
++  unsigned int m_nextRefresh{0};
+ };
+--- a/xbmc/dialogs/GUIDialogSelect.cpp
++++ b/xbmc/dialogs/GUIDialogSelect.cpp
+@@ -12,11 +12,18 @@
+ #include "FileItemList.h"
+ #include "ServiceBroker.h"
+ #include "guilib/GUIMessage.h"
++#include "input/actions/Action.h"
+ #include "input/actions/ActionIDs.h"
+ #include "resources/LocalizeStrings.h"
+ #include "resources/ResourcesComponent.h"
+ #include "utils/StringUtils.h"
++#ifdef HAVE_DVBRIDGE
++#include "guilib/GUIFontManager.h"
++#include "guilib/GUIIncludes.h"
++#include "windowing/GraphicContext.h"
++#endif
+ 
++#include <algorithm>
+ #include <memory>
+ 
+ #define CONTROL_HEADING         1
+@@ -45,6 +52,41 @@
+ 
+ CGUIDialogSelect::~CGUIDialogSelect(void) = default;
+ 
++#ifdef HAVE_DVBRIDGE
++std::unique_ptr<TiXmlElement> CGUIDialogSelect::Prepare(
++    const std::unique_ptr<TiXmlElement>& rootElement)
++{
++  if (!GetProperty("CB1.PlaybackModes").asBoolean())
++    return CGUIDialogBoxBase::Prepare(rootElement);
++  if (!rootElement)
++    return nullptr;
++
++  // This closed app include graph has no conditional includes or skin defaults.
++  auto preparedRoot = std::make_unique<TiXmlElement>(*rootElement);
++  CGUIIncludes includes;
++  includes.Load("special://xbmc/media/cb1/IncludesDVProcessInfo.xml");
++  includes.Resolve(preparedRoot.get());
++  return preparedRoot;
++}
++#endif
++
++bool CGUIDialogSelect::OnAction(const CAction& action)
++{
++#ifdef HAVE_DVBRIDGE
++  if (action.GetID() == ACTION_PLAYER_PROCESS_INFO)
++  {
++    if (GetProperty("CB1.PlaybackModes").asBoolean())
++    {
++      m_bConfirmed = false;
++      Close(true);
++    }
++    // Keep the shared O key from opening information over an ordinary selector.
++    return true;
++  }
++#endif
++  return CGUIDialogBoxBase::OnAction(action);
++}
++
+ bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
+ {
+   switch (message.GetMessage())
+@@ -78,6 +120,25 @@
+ 
+   case GUI_MSG_WINDOW_INIT:
+     {
++#ifdef HAVE_DVBRIDGE
++      const bool playback = GetProperty("CB1.PlaybackModes").asBoolean();
++      const std::string file = playback ?
++          "special://xbmc/media/cb1/DialogPlaybackModes.xml" : "DialogSelect.xml";
++      if (GetProperty("xmlfile").asString() != file)
++      {
++        FreeResources(true);
++        SetProperty("xmlfile", file);
++      }
++      if (playback)
++      {
++        const RESOLUTION_INFO resolution(1920, 1080);
++        SetCoordsRes(resolution);
++        g_fontManager.LoadTTF("CB1.SwitchBody", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff0f0f0, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
++        g_fontManager.LoadTTF("CB1.SwitchHelp", "special://xbmc/media/Fonts/arial.ttf",
++                            0xffa0a0a0, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
++      }
++#endif
+       m_bButtonPressed = false;
+       m_bButton2Pressed = false;
+       m_bConfirmed = false;
+@@ -99,6 +160,8 @@
+           if (iSelected >= 0 && iSelected < m_vecList->Size())
+           {
+             CFileItemPtr item(m_vecList->Get(iSelected));
++            if (item->GetProperty("disabled").asBoolean())
++              return true;
+             if (m_multiSelection)
+               item->Select(!item->IsSelected());
+             else
+@@ -342,6 +405,24 @@
+ 
+ void CGUIDialogSelect::OnInitWindow()
+ {
++#ifdef HAVE_DVBRIDGE
++  if (GetProperty("CB1.PlaybackModes").asBoolean())
++  {
++    const int maxRows = std::max(1, (GetCoordsRes().iHeight - 80 - 112) / 50);
++    const float rowsHeight = 50.0f * std::clamp(m_vecList->Size(), 1, maxRows);
++    const float height = 112.0f + rowsHeight;
++    if (auto* group = GetControl(9100))
++    {
++      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
++      group->SetHeight(height);
++    }
++    if (auto* background = GetControl(9101)) background->SetHeight(height);
++    for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
++      if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
++    if (auto* help = GetControl(9102))
++      help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
++  }
++#endif
+   m_viewControl.SetItems(*m_vecList);
+   m_selectedItems.clear();
+   for(int i = 0 ; i < m_vecList->Size(); i++)
+--- a/xbmc/dialogs/GUIDialogSelect.h
++++ b/xbmc/dialogs/GUIDialogSelect.h
+@@ -23,6 +23,7 @@
+   CGUIDialogSelect();
+   explicit CGUIDialogSelect(int windowid);
+   ~CGUIDialogSelect(void) override;
++  bool OnAction(const CAction& action) override;
+   bool OnMessage(CGUIMessage& message) override;
+   bool OnBack(int actionID) override;
+ 
+@@ -49,6 +50,9 @@
+   void SetButtonFocus(bool buttonFocus);
+ 
+ protected:
++#ifdef HAVE_DVBRIDGE
++  std::unique_ptr<TiXmlElement> Prepare(const std::unique_ptr<TiXmlElement>& rootElement) override;
++#endif
+   CGUIControl *GetFirstFocusableControl(int id) override;
+   void OnWindowLoaded() override;
+   void OnInitWindow() override;
+--- a/xbmc/guilib/GUIFadeLabelControl.cpp
++++ b/xbmc/guilib/GUIFadeLabelControl.cpp
+@@ -255,6 +255,7 @@
+ {
+   CGUIControl::AssignDepth();
+   m_fadeDepth = m_cachedTransform.depth;
++  m_fadeMatrix.depth = m_fadeDepth;
+ }
+ 
+ std::string CGUIFadeLabelControl::GetDescription() const
+--- a/xbmc/guilib/GUIFontTTFGLES.cpp
++++ b/xbmc/guilib/GUIFontTTFGLES.cpp
+@@ -284,7 +284,6 @@
+         CRenderSystemBase::m_GUIElementCount++;
+       }
+ 
+-      glMatrixModview.Pop();
+     }
+     // Restore the original scissor rectangle
+     if (m_scissorClip)
+--- a/xbmc/guilib/StereoscopicsManager.cpp
++++ b/xbmc/guilib/StereoscopicsManager.cpp
+@@ -19,6 +19,8 @@
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "cores/DataCacheCore.h"
++#include "cores/IPlayer.h"
++#include "cores/VideoPlayer/Interface/StreamInfo.h"
+ #include "dialogs/GUIDialogKaiToast.h"
+ #include "dialogs/GUIDialogSelect.h"
+ #include "guilib/GUIWindowManager.h"
+@@ -37,6 +39,7 @@
+ #include "utils/StringUtils.h"
+ #include "utils/Variant.h"
+ #include "utils/log.h"
++#include "windowing/Resolution.h"
+ #include "windowing/WinSystem.h"
+ 
+ #include <stdlib.h>
+@@ -66,6 +69,53 @@
+     {"block_rl", RenderStereoMode::OFF}, // unsupported
+     {}};
+ 
++namespace
++{
++
++//! @brief The split arrangement to output, given the one @p mode asks for.
++//!
++//! Which of the two the source uses is not what decides this - the renderer crops the
++//! correct eye either way - and neither is the viewer's taste: a split arrangement is
++//! signalled to the sink, so it has to be one the sink can receive. A side-by-side
++//! source on a display whose only 3D mode at this timing is frame packed has to go out
++//! top-and-bottom, or the resolution search finds no 3D mode and the display stays 2D.
++//! The stream parameters the display modes are matched against come from the player,
++//! so with nothing playing the arrangement is left as asked for. So it is with refresh
++//! rate adjusting turned off: Kodi may not change the display mode then, the mode is
++//! whatever was picked by hand in videoscreen.resolution, and overriding the
++//! arrangement would only split the frame the way a mode nobody is going to switch to
++//! wants it.
++RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
++{
++  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL)
++    return mode;
++
++  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
++          CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
++    return mode;
++
++  const auto& components = CServiceBroker::GetAppComponents();
++  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
++  if (!appPlayer || !appPlayer->IsPlaying())
++    return mode;
++
++  VideoStreamInfo info;
++  appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
++  if (!info.valid || info.fpsRate == 0 || info.fpsScale == 0)
++    return mode;
++
++  const float fps = static_cast<float>(info.fpsRate) / static_cast<float>(info.fpsScale);
++  const RenderStereoMode arrangement =
++      CResolutionUtils::ChooseStereoArrangement(mode, fps, info.width, info.height);
++
++  // A display mode the renderer cannot fill is worse than none: SetStereoMode() applies
++  // nothing at all for an unsupported arrangement, which would leave a viewer with no
++  // 3D rather than the arrangement they asked for.
++  return CServiceBroker::GetRenderSystem()->SupportsStereo(arrangement) ? arrangement : mode;
++}
++
++} // namespace
++
+ static const struct StereoModeMap StringToGuiModeMap[] = {
+     {"off", RenderStereoMode::OFF},
+     {"split_vertical", RenderStereoMode::SPLIT_VERTICAL},
+@@ -131,6 +181,8 @@
+   if (mode == RenderStereoMode::AUTO)
+     applyMode = GetStereoModeOfPlayingVideo();
+ 
++  applyMode = ArrangementForDisplay(applyMode);
++
+   if (applyMode != currentMode && applyMode >= RenderStereoMode::OFF)
+   {
+     if (CServiceBroker::GetRenderSystem()->SupportsStereo(applyMode))
+@@ -404,6 +456,11 @@
+ {
+   switch (message.GetMessage())
+   {
++  case GUI_MSG_PLAYBACK_STARTED:
++    // A new item has nothing settled about it. Not OnPlaybackStopped(): the stereo mode is
++    // deliberately kept from one item of a playlist to the next.
++    m_stereoModeSettled = false;
++    break;
+   case GUI_MSG_PLAYBACK_STOPPED:
+   case GUI_MSG_PLAYLISTPLAYER_STOPPED:
+     OnPlaybackStopped();
+@@ -496,22 +553,75 @@
+   return false;
+ }
+ 
++RESOLUTION CStereoscopicsManager::GetResolutionForPlayingVideo(RenderStereoMode mode) const
++{
++  // Only where playback is allowed to change the display mode at all: with refresh rate
++  // adjusting off it is the one picked by hand in videoscreen.resolution.
++  if (m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) ==
++      ADJUST_REFRESHRATE_OFF)
++    return RES_INVALID;
++
++  const auto& components = CServiceBroker::GetAppComponents();
++  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
++  if (!appPlayer || !appPlayer->IsPlaying())
++    return RES_INVALID;
++
++  VideoStreamInfo info;
++  appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
++  if (!info.valid || info.fpsRate == 0 || info.fpsScale == 0)
++    return RES_INVALID;
++
++  const std::string stereoMode{CServiceBroker::GetDataCacheCore().GetVideoStereoMode()};
++  const bool is3D{!stereoMode.empty() && stereoMode != "mono"};
++
++  return CResolutionUtils::ChooseBestResolution(static_cast<float>(info.fpsRate) /
++                                                    static_cast<float>(info.fpsScale),
++                                                info.width, info.height, is3D, mode);
++}
++
+ void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool notify)
+ {
+-  RenderStereoMode currentMode = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
++  // The arrangement already asked for, which is not the one in use until the next flip.
++  // Two arrangements chosen for the same title arrive within a frame of each other - the
++  // outgoing one being cleared, then the incoming one being detected - and comparing
++  // against the arrangement in use would read the second as a no-op and leave the first
++  // one queued.
++  const RenderStereoMode currentMode{
++      CServiceBroker::GetWinSystem()->GetGfxContext().GetNextStereoMode()};
+   CLog::Log(LOGDEBUG,
+             "StereoscopicsManager::ApplyStereoMode: trying to apply stereo mode. Current: {} | "
+             "Target: {}",
+             ConvertGuiStereoModeToString(currentMode), ConvertGuiStereoModeToString(mode));
+   if (currentMode != mode)
+   {
++    // The display mode the arrangement needs is chosen as the mode is applied, in
++    // CGraphicContext::Flip() on the render thread, so that the display is reconfigured
++    // once rather than twice: applying a stereo mode re-applies the display mode by itself,
++    // and a mode change arriving a frame later would re-apply it again.
+     CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(mode);
+     CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode changed to {}",
+               ConvertGuiStereoModeToString(mode));
+     {
+-      const auto& components = CServiceBroker::GetAppComponents();
++      auto& components = CServiceBroker::GetAppComponents();
+       const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+-      if (appPlayer && !appPlayer->IsPlaying())
++      if (appPlayer && appPlayer->IsPlaying())
++      {
++        // A hardware 3D display mode is only correct while the GUI is in the
++        // matching split mode, so the mode has to be re-chosen for the new output
++        // arrangement mid-playback too. Left in place for "Play as 2D" the sink
++        // keeps signalling 3D, and a half 3D mode's doubled fPixelRatio is no
++        // longer compensated for by GetResInfo() once the GUI leaves the split
++        // mode, which squeezes the single eye into half the screen width. The mode it
++        // settles on is the one just applied above, so this changes nothing further; it
++        // is what keeps the display latency and the player's own parameters in step.
++        appPlayer->TriggerUpdateResolution();
++      }
++      // With nothing playing there is no search to trigger, so run it here - but only
++      // where playback would be allowed to: with refresh rate adjusting off the display
++      // mode is the one picked by hand in videoscreen.resolution, and choosing another
++      // would discard that.
++      else if (appPlayer && m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) !=
++                                ADJUST_REFRESHRATE_OFF)
+       {
+         const RESOLUTION_INFO curInfo =
+             CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
+@@ -542,6 +652,14 @@
+   return playerMode;
+ }
+ 
++bool CStereoscopicsManager::IsPlayerInMenu()
++{
++  const auto& components = CServiceBroker::GetAppComponents();
++  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
++
++  return appPlayer && appPlayer->IsInMenu();
++}
++
+ bool CStereoscopicsManager::IsVideoStereoscopic() const
+ {
+   std::string mode = GetVideoStereoMode();
+@@ -550,6 +668,34 @@
+ 
+ void CStereoscopicsManager::OnStreamChange()
+ {
++  UpdateStereoModeForStream();
++
++  // The display mode a stereoscopic source needs follows from the stereo mode, so the
++  // search for it is left until that mode is known - which is now. Where the decision
++  // above changed the mode, applying it has already re-run the search; where it left the
++  // mode as it was, nothing else will, and the source would keep whatever mode the last
++  // one left behind.
++  auto& components = CServiceBroker::GetAppComponents();
++  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
++  // Not settled until the source is known to be stereoscopic: a stream change that
++  // arrives before the player has said what it is playing has decided nothing, and
++  // taking it for a decision leaves the display mode to be chosen against a stereo mode
++  // that has not been applied yet.
++  if (m_stereoModeSettled || !appPlayer || !appPlayer->IsPlaying() || !IsVideoStereoscopic())
++    return;
++
++  m_stereoModeSettled = true;
++
++  // Where the decision above changed the stereo mode, applying it chose the display mode
++  // to go with it; where it left the mode alone, nothing has, and a stereoscopic source
++  // would keep whatever mode the title before it left behind. Ask for the search that was
++  // left until now - once, since servicing it is announced as another stream change and
++  // asking again on that would not end.
++  appPlayer->TriggerUpdateResolution();
++}
++
++void CStereoscopicsManager::UpdateStereoModeForStream()
++{
+   STEREOSCOPIC_PLAYBACK_MODE playbackMode = static_cast<STEREOSCOPIC_PLAYBACK_MODE>(m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE));
+   RenderStereoMode mode = GetStereoMode();
+ 
+@@ -561,7 +707,12 @@
+   {
+     // exit stereo mode if started item is not stereoscopic
+     // and if user prefers to stop 3D playback when movie is finished
+-    if (mode != RenderStereoMode::OFF &&
++    //
++    // Not for a disc menu. Its pages come and go as play items, only some of them 3D, and
++    // each arrives as a stream change of its own - so following them means reconfiguring the
++    // display both ways for every page, which one menu can do several times over while it
++    // loads. What the menu leads to decides the mode instead.
++    if (!IsPlayerInMenu() && mode != RenderStereoMode::OFF &&
+         m_settings->GetBool(CSettings::SETTING_VIDEOPLAYER_QUITSTEREOMODEONSTOP))
+       SetStereoMode(RenderStereoMode::OFF);
+     return;
+@@ -586,8 +737,13 @@
+     if (m_settings->GetBool(CSettings::SETTING_VIDEOPLAYER_QUITSTEREOMODEONSTOP) == false)
+       return;
+ 
+-    // only change to new stereo mode if not yet in preferred stereo mode
+-    if (mode == preferred || (preferred == RenderStereoMode::AUTO && mode == playing))
++    // only change to new stereo mode if not yet in preferred stereo mode, comparing
++    // against the arrangement the display can carry, since that is what would be applied.
++    // A mode that suits the source but not the display - side by side where the display
++    // offers only top and bottom, which is how a stream whose geometry was not yet known
++    // ends up - is not a mode to settle for, and nothing else would revisit it.
++    if (mode == ArrangementForDisplay(preferred) ||
++        (preferred == RenderStereoMode::AUTO && mode == ArrangementForDisplay(playing)))
+       return;
+   }
+ 
+@@ -659,6 +815,8 @@
+       mode != RenderStereoMode::OFF)
+     SetStereoMode(RenderStereoMode::OFF);
+ 
++  m_stereoModeSettled = false;
++
+   // reset user modes on playback end to start over new on next playback and not end up in a probably unwanted mode
+   if (m_stereoModeSetByUser != RenderStereoMode::OFF)
+     m_lastStereoModeSetByUser = m_stereoModeSetByUser;
+--- a/xbmc/guilib/StereoscopicsManager.h
++++ b/xbmc/guilib/StereoscopicsManager.h
+@@ -16,7 +16,9 @@
+ #include "guilib/IMsgTargetCallback.h"
+ #include "rendering/RenderSystemTypes.h"
+ #include "settings/lib/ISettingCallback.h"
++#include "windowing/Resolution.h"
+ 
++#include <atomic>
+ #include <stdlib.h>
+ 
+ class CAction;
+@@ -61,6 +63,30 @@
+ 
+   void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
+   void OnStreamChange();
++
++  /*!
++   * \brief Whether the stereo mode of the stream being played has been settled.
++   *
++   * A stereoscopic source's display mode follows from its stereo mode, so until this is
++   * true there is nothing to choose one against and the choice is left alone. Settled
++   * the moment the stream is announced, which is well before its first picture.
++   */
++  bool IsStereoModeSettled() const { return m_stereoModeSettled; }
++
++  /*!
++   * \brief The display mode the video being played needs in a given arrangement.
++   *
++   * Asked by CGraphicContext::Flip() as it applies a stereo mode, so that the display is
++   * reconfigured once for both.
++   *
++   * \param mode the stereo output arrangement about to be applied
++   * \return the display mode, or RES_INVALID when nothing is playing or playback is not
++   *         allowed to change the display mode
++   */
++  RESOLUTION GetResolutionForPlayingVideo(RenderStereoMode mode) const;
++
++  //! \brief Choose and apply the stereo mode the stream that just started calls for.
++  void UpdateStereoModeForStream();
+   bool OnMessage(CGUIMessage &message) override;
+   /*!
+    * @brief Handle 3D specific cActions
+@@ -78,8 +104,15 @@
+   std::string GetVideoStereoMode() const;
+   bool IsVideoStereoscopic() const;
+ 
++  //! \brief Whether what is playing is showing a disc menu.
++  static bool IsPlayerInMenu();
++
+   void SetStereoModeByUser(const RenderStereoMode mode);
+ 
++  /*! Whether the stereo mode of the stream being played has been settled - see
++      IsStereoModeSettled(). Set from the player's event thread, read on the render thread. */
++  std::atomic<bool> m_stereoModeSettled{false};
++
+   void ApplyStereoMode(const RenderStereoMode mode, bool notify = true);
+   void OnPlaybackStopped(void);
+ 
+--- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
++++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h
+@@ -818,6 +818,36 @@
+ constexpr uint32_t PLAYER_PROCESS_AUDIO_QUEUE_DATA_LEVEL = PLAYER_PROCESS_START + 17;
+ constexpr uint32_t PLAYER_PROCESS_VIDEO_QUEUE_LEVEL  = PLAYER_PROCESS_START + 18;
+ constexpr uint32_t PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL = PLAYER_PROCESS_START + 19;
++constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE = PLAYER_PROCESS_START + 20;
++constexpr uint32_t PLAYER_PROCESS_VIDEOPROCESSINGMODE = PLAYER_PROCESS_START + 21;
++constexpr uint32_t PLAYER_PROCESS_VIDEOPROCESSINGENGINE = PLAYER_PROCESS_START + 22;
++constexpr uint32_t PLAYER_PROCESS_VIDEOPROCESSINGCIRCUIT = PLAYER_PROCESS_START + 23;
++constexpr uint32_t PLAYER_PROCESS_VIDEOPROCESSINGFALLBACK = PLAYER_PROCESS_START + 24;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVCMVERSION = PLAYER_PROCESS_START + 25;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVPARSEDBLOCKS = PLAYER_PROCESS_START + 26;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVAPPLIEDBLOCKS = PLAYER_PROCESS_START + 27;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVTRANSMITTEDBLOCKS = PLAYER_PROCESS_START + 28;
++constexpr uint32_t PLAYER_PROCESS_VIDEOSOURCEBITS = PLAYER_PROCESS_START + 29;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVPROFILE = PLAYER_PROCESS_START + 30;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVLEVEL = PLAYER_PROCESS_START + 31;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVVERSION = PLAYER_PROCESS_START + 32;
++constexpr uint32_t PLAYER_PROCESS_VIDEODVLAYERS = PLAYER_PROCESS_START + 33;
++constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTFORMAT = PLAYER_PROCESS_START + 35;
++constexpr uint32_t PLAYER_PROCESS_VIDEOOUTPUTBITS = PLAYER_PROCESS_START + 36;
++constexpr uint32_t PLAYER_PROCESS_VIDEOSIDEDATA = PLAYER_PROCESS_START + 37;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCETITLE = PLAYER_PROCESS_START + 38;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCEFORMAT = PLAYER_PROCESS_START + 39;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCECHANNELS = PLAYER_PROCESS_START + 40;
++constexpr uint32_t PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL = PLAYER_PROCESS_START + 41;
++constexpr uint32_t PLAYER_PROCESS_AUDIOBEDOBJECTS = PLAYER_PROCESS_START + 42;
++constexpr uint32_t PLAYER_PROCESS_AUDIOPRESENTATION = PLAYER_PROCESS_START + 43;
++constexpr uint32_t PLAYER_PROCESS_AUDIODIALNORM = PLAYER_PROCESS_START + 44;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCELANGUAGE = PLAYER_PROCESS_START + 45;
++constexpr uint32_t PLAYER_PROCESS_AUDIOSOURCEBITRATE = PLAYER_PROCESS_START + 46;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT = PLAYER_PROCESS_START + 47;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTCODEC = PLAYER_PROCESS_START + 48;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTDATA = PLAYER_PROCESS_START + 49;
++constexpr uint32_t PLAYER_PROCESS_AUDIOOUTPUTCHANNELS = PLAYER_PROCESS_START + 50;
+ 
+ constexpr uint32_t ADDON_INFOS_START                 = 1600;
+ constexpr uint32_t ADDON_SETTING_STRING              = ADDON_INFOS_START;
+--- a/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
++++ b/xbmc/guilib/guiinfo/PlayerGUIInfo.cpp
+@@ -17,15 +17,18 @@
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "application/ApplicationVolumeHandling.h"
++#include "cores/AudioEngine/Interfaces/AE.h"
+ #include "cores/AudioEngine/Utils/AEUtil.h"
+ #include "cores/DataCacheCore.h"
+ #include "cores/EdlEdit.h"
++#include "cores/VideoPlayer/Interface/StreamInfo.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIDialog.h"
+ #include "guilib/GUIWindowManager.h"
+ #include "guilib/guiinfo/GUIInfo.h"
+ #include "guilib/guiinfo/GUIInfoHelper.h"
+ #include "guilib/guiinfo/GUIInfoLabels.h"
++#include "guilib/guiinfo/VideoProcessingInfoGUI.h"
+ #include "resources/LocalizeStrings.h"
+ #include "resources/ResourcesComponent.h"
+ #include "utils/StringUtils.h"
+@@ -167,6 +170,16 @@
+                               const CGUIInfo& info,
+                               std::string* fallback) const
+ {
++  const auto processingId=static_cast<uint32_t>(info.GetInfo());
++  if (processingId == PLAYER_PROCESS_VIDEOSIDEDATA)
++  {
++    value = CServiceBroker::GetDataCacheCore().GetVideoSourceSideData();
++    return true;
++  }
++  if (processingId >= PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE &&
++      processingId <= PLAYER_PROCESS_VIDEOOUTPUTBITS)
++    return VideoProcessingInfoGUI::GetLabel(processingId,
++        CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo(), value);
+   switch (info.GetInfo())
+   {
+     ///////////////////////////////////////////////////////////////////////////////////////////////
+@@ -340,14 +353,133 @@
+       value = StringUtils::Format("{:.2f}", CServiceBroker::GetDataCacheCore().GetVideoDAR());
+       return true;
+     case PLAYER_PROCESS_VIDEOWIDTH:
+-      value = StringUtils::FormatNumber(CServiceBroker::GetDataCacheCore().GetVideoWidth());
++      value = std::to_string(CServiceBroker::GetDataCacheCore().GetVideoWidth());
+       return true;
+     case PLAYER_PROCESS_VIDEOHEIGHT:
+-      value = StringUtils::FormatNumber(CServiceBroker::GetDataCacheCore().GetVideoHeight());
++      value = std::to_string(CServiceBroker::GetDataCacheCore().GetVideoHeight());
+       return true;
+     case PLAYER_PROCESS_VIDEOSCANTYPE:
+       value = CServiceBroker::GetDataCacheCore().IsVideoInterlaced() ? "i" : "p";
+       return true;
++    case PLAYER_PROCESS_AUDIOSOURCETITLE:
++    case PLAYER_PROCESS_AUDIOSOURCEFORMAT:
++    case PLAYER_PROCESS_AUDIOSOURCECHANNELS:
++    case PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL:
++    case PLAYER_PROCESS_AUDIOBEDOBJECTS:
++    case PLAYER_PROCESS_AUDIOPRESENTATION:
++    case PLAYER_PROCESS_AUDIODIALNORM:
++    case PLAYER_PROCESS_AUDIOSOURCELANGUAGE:
++    case PLAYER_PROCESS_AUDIOSOURCEBITRATE:
++    case PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT:
++    case PLAYER_PROCESS_AUDIOOUTPUTCODEC:
++    case PLAYER_PROCESS_AUDIOOUTPUTDATA:
++    case PLAYER_PROCESS_AUDIOOUTPUTCHANNELS:
++    {
++      if (!m_appPlayer->IsPlaying() || !m_appPlayer->HasAudio())
++        return false;
++      AudioStreamInfo stream;
++      m_appPlayer->GetAudioStreamInfo(CURRENT_STREAM, stream);
++      const auto& source = stream.source;
++      if (!stream.valid || !source.valid)
++        return false;
++      switch (info.GetInfo())
++      {
++        case PLAYER_PROCESS_AUDIOSOURCETITLE:
++          value = AE::SourceTitle(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCEFORMAT:
++          value = AE::SourceFormat(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCECHANNELS:
++          value = AE::SourceChannels(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOBEDOBJECTSLABEL:
++          value = AE::BedObjectsLabel(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOBEDOBJECTS:
++          value = AE::BedObjects(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOPRESENTATION:
++          value = AE::Presentation(source);
++          return true;
++        case PLAYER_PROCESS_AUDIODIALNORM:
++          value = AE::Dialnorm(source);
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCELANGUAGE:
++          value = stream.language.GetEnglishName();
++          if (!value.empty() && (stream.flags & FLAG_COMMENT))
++            value += " (commentary)";
++          if (!value.empty() && (stream.flags & FLAG_VISUAL_IMPAIRED))
++            value += " (audio description)";
++          return true;
++        case PLAYER_PROCESS_AUDIOSOURCEBITRATE:
++        {
++          const auto observed = CServiceBroker::GetDataCacheCore().GetAudioSourceInfo();
++          const bool current = observed.valid && observed.uniqueId == source.uniqueId &&
++                               observed.demuxerId == source.demuxerId && observed.codec == source.codec;
++          const int measured = current ? CServiceBroker::GetDataCacheCore().GetAudioLiveBitRate() : 0;
++          const int bitrate = measured > 0 ? measured : stream.bitrate;
++          if (bitrate > 0)
++          {
++            value = bitrate >= 1000000 ? StringUtils::Format("{:.1f} Mb/s", bitrate / 1000000.0)
++                                       : StringUtils::Format("{:.0f} Kb/s", bitrate / 1000.0);
++            if (measured <= 0)
++              value += " (stream)";
++          }
++          return true;
++        }
++      }
++      auto* engine = CServiceBroker::GetActiveAE();
++      AE::SinkInfo sink;
++      if (!engine || !engine->GetCurrentSinkInfo(sink))
++        return false;
++      const bool raw = sink.mode == AE::SinkMode::Passthrough || sink.mode == AE::SinkMode::Transcoded;
++      const auto& format = sink.format;
++      if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTTRANSPORT)
++      {
++        value = sink.mode == AE::SinkMode::Passthrough ? "Passthrough"
++                : sink.mode == AE::SinkMode::Transcoded ? "Transcoded"
++                : AE::IsNativePCM(source.codec) ? "Native PCM" : "PCM decoded";
++      }
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTDATA)
++      {
++        if (raw)
++          value = "RAW";
++        else
++        {
++          const auto bits = CAEUtil::DataFormatToUsedBits(format.m_dataFormat);
++          if (bits > 0)
++            value = StringUtils::Format("{}-bit{}", bits,
++                format.m_dataFormat == AE_FMT_FLOAT || format.m_dataFormat == AE_FMT_FLOATP ? " float" : "");
++          const auto rate = AE::FormatSampleRate(format.m_sampleRate);
++          if (!rate.empty())
++            value += (value.empty() ? "" : " / ") + rate;
++        }
++      }
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTCHANNELS && !raw)
++        value = AE::FormatChannels(CAEUtil::GetAVChannelLayout(format.m_channelLayout),
++                                   format.m_channelLayout.Count());
++      else if (info.GetInfo() == PLAYER_PROCESS_AUDIOOUTPUTCODEC && raw)
++      {
++        switch (format.m_streamInfo.m_type)
++        {
++          case CAEStreamInfo::STREAM_TYPE_AC3: value = "Dolby Digital"; break;
++          case CAEStreamInfo::STREAM_TYPE_EAC3: value = "Dolby Digital Plus"; break;
++          case CAEStreamInfo::STREAM_TYPE_TRUEHD: value = "TrueHD"; break;
++          case CAEStreamInfo::STREAM_TYPE_MLP: value = "MLP"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD_MA: value = "DTS-HD MA"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD: value = "DTS-HD HRA"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTSHD_CORE: value = "DTS core"; break;
++          case CAEStreamInfo::STREAM_TYPE_DTS_512:
++          case CAEStreamInfo::STREAM_TYPE_DTS_1024:
++          case CAEStreamInfo::STREAM_TYPE_DTS_2048: value = "DTS"; break;
++          default: break;
++        }
++        if (sink.mode == AE::SinkMode::Passthrough && value == AE::SourceCodec(source))
++          value.clear();
++      }
++      return true;
++    }
+     case PLAYER_PROCESS_AUDIODECODER:
+       value = CServiceBroker::GetDataCacheCore().GetAudioDecoderName();
+       return true;
+--- a/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
++++ b/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
+@@ -55,7 +55,7 @@
+ {
+ }
+ 
+-std::string CSystemGUIInfo::GetSystemHeatInfo(int info) const
++std::string CSystemGUIInfo::GetSystemHeatInfo(int info, bool dualUnits) const
+ {
+   if (CTimeUtils::GetFrameTime() - m_lastSysHeatInfoTime >= SYSTEM_HEAT_UPDATE_INTERVAL)
+   {
+@@ -71,6 +71,11 @@
+   switch (info)
+   {
+     case SYSTEM_CPU_TEMPERATURE:
++      if (dualUnits)
++        return m_cpuTemp.IsValid()
++                   ? StringUtils::Format("{:.0f}\u00b0F / {:.0f}\u00b0C", m_cpuTemp.ToFahrenheit(),
++                                         m_cpuTemp.ToCelsius())
++                   : "";
+       return m_cpuTemp.IsValid() ? g_langInfo.GetTemperatureAsString(m_cpuTemp)
+                                  : CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+                                        10005); // Not available
+@@ -150,7 +155,7 @@
+     case SYSTEM_GPU_TEMPERATURE:
+     case SYSTEM_FAN_SPEED:
+     case SYSTEM_CPU_USAGE:
+-      value = GetSystemHeatInfo(info.GetInfo());
++      value = GetSystemHeatInfo(info.GetInfo(), info.GetData1() == 1);
+       return true;
+     case SYSTEM_VIDEO_ENCODER_INFO:
+     case NETWORK_IP_ADDRESS:
+--- a/xbmc/guilib/guiinfo/SystemGUIInfo.h
++++ b/xbmc/guilib/guiinfo/SystemGUIInfo.h
+@@ -45,7 +45,7 @@
+   void UpdateFPS();
+ 
+ private:
+-  std::string GetSystemHeatInfo(int info) const;
++  std::string GetSystemHeatInfo(int info, bool dualUnits = false) const;
+ 
+   std::unique_ptr<CGPUInfo> m_gpuInfo;
+ 
+--- /dev/null
++++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+@@ -0,0 +1,90 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++#include "GUIInfoLabels.h"
++#include "cores/VideoProcessingInfo.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
++#include "ServiceBroker.h"
++#include "resources/LocalizeStrings.h"
++#include "resources/ResourcesComponent.h"
++
++struct VideoProcessingInfoGUI
++{
++  static std::string CMVersion(const VideoProcessingInfo& info)
++  {
++    if (!info.metadata) return "";
++    if (info.cm4) return "CM4.0 (original)";
++    if ((info.output.flags & CDVPlaybackInfo::HDMI) && !info.output.hdr10AI &&
++        !info.output.authoredLegacy && (info.output.effective==1 || info.output.effective==5))
++      return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 (CM4 added)" : "CM2.9 (CM4 not added)";
++    return "CM2.9";
++  }
++  static std::string Mode(const VideoProcessingInfo& info)
++  {
++    if (!info.output.flags) return "";
++    if (CDVPlaybackInfo::IsHDR10PlusDV(info.output)) return CDVPlaybackInfo::Mode(info.output);
++    if (info.output.hdr10AI)
++      return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
++          info.output.effective==1 ? 40867 : 40868);
++    return CDVPlaybackInfo::Mode(info.output);
++  }
++  static bool GetLabel(uint32_t id, const VideoProcessingInfo& info, std::string& value)
++  {
++    value.clear();
++    switch (id)
++    {
++      case PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE:
++        if (info.outputType)
++          switch (*info.outputType)
++          {
++            case VideoOutputType::SDR: value="sdr"; break;
++            case VideoOutputType::HDR10: value="hdr10"; break;
++            case VideoOutputType::HDR10Plus: value="hdr10plus"; break;
++            case VideoOutputType::HLG: value="hlg"; break;
++            case VideoOutputType::DolbyVision: value="dolbyvision"; break;
++          }
++        break;
++      case PLAYER_PROCESS_VIDEOPROCESSINGMODE: value=Mode(info); break;
++      case PLAYER_PROCESS_VIDEOPROCESSINGENGINE: value=info.output.engine; break;
++      case PLAYER_PROCESS_VIDEOPROCESSINGCIRCUIT: value=info.output.circuit; break;
++      case PLAYER_PROCESS_VIDEOPROCESSINGFALLBACK:
++        if (info.output.fallback)
++          value=CDVPlaybackInfo::Reason(static_cast<DVBRIDGE::OutputReason>(info.output.reason));
++        break;
++      case PLAYER_PROCESS_VIDEODVCMVERSION:
++        value=CMVersion(info);
++        break;
++      case PLAYER_PROCESS_VIDEODVPARSEDBLOCKS:
++        if (info.metadata) value=CDVPlaybackInfo::Blocks(info.blocks);
++        break;
++      case PLAYER_PROCESS_VIDEODVAPPLIEDBLOCKS:
++        if (info.metadata) value=CDVPlaybackInfo::Blocks(info.appliedBlocks);
++        break;
++      case PLAYER_PROCESS_VIDEODVTRANSMITTEDBLOCKS:
++        value=CDVPlaybackInfo::Blocks(info.transmittedBlocks);
++        break;
++      case PLAYER_PROCESS_VIDEOSOURCEBITS:
++        if (info.sourceBits) value=std::to_string(info.sourceBits)+"-bit";
++        break;
++      case PLAYER_PROCESS_VIDEODVPROFILE:
++        if (info.profile) value=std::to_string(info.profile);
++        break;
++      case PLAYER_PROCESS_VIDEODVLEVEL:
++        if (info.profile) value=std::to_string(info.level);
++        break;
++      case PLAYER_PROCESS_VIDEODVVERSION:
++        if (info.profile) value=std::to_string(info.major)+"."+std::to_string(info.minor);
++        break;
++      case PLAYER_PROCESS_VIDEODVLAYERS:
++        if (info.profile) value=info.fel ? "FEL" : info.el ? "MEL" : "BL";
++        break;
++      case PLAYER_PROCESS_VIDEOOUTPUTFORMAT:
++        if (info.output.flags) value=CDVPlaybackInfo::Transport(info.output.format);
++        break;
++      case PLAYER_PROCESS_VIDEOOUTPUTBITS:
++        if (info.output.bits) value=std::to_string(info.output.bits)+"-bit";
++        break;
++      default: return false;
++    }
++    return true;
++  }
++};
+--- a/xbmc/settings/AdvancedSettings.cpp
++++ b/xbmc/settings/AdvancedSettings.cpp
+@@ -530,6 +530,7 @@
+   m_stereoscopicregex_3d = "[-. _]3d[-. _]";
+   m_stereoscopicregex_sbs = "[-. _]h?sbs[-. _]";
+   m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
++  m_stereoscopicPreferFramePacking = true;
+ 
+   m_logLevelHint = m_logLevel = LOG_LEVEL_NORMAL;
+ 
+@@ -681,6 +682,8 @@
+     XMLUtils::GetString(pElement, "stereoscopicregex3d", m_stereoscopicregex_3d);
+     XMLUtils::GetString(pElement, "stereoscopicregexsbs", m_stereoscopicregex_sbs);
+     XMLUtils::GetString(pElement, "stereoscopicregextab", m_stereoscopicregex_tab);
++    XMLUtils::GetBoolean(pElement, "stereoscopicpreferframepacking",
++                         m_stereoscopicPreferFramePacking);
+     XMLUtils::GetFloat(pElement, "subsdelayrange", m_videoSubsDelayRange, 10, 600);
+     XMLUtils::GetFloat(pElement, "subsdelaystep", m_videoSubsDelayStep, 0, 1.0f);
+     XMLUtils::GetFloat(pElement, "audiodelayrange", m_videoAudioDelayRange, 10, 600);
+--- a/xbmc/settings/AdvancedSettings.h
++++ b/xbmc/settings/AdvancedSettings.h
+@@ -423,6 +423,11 @@
+     std::string m_stereoscopicregex_sbs;
+     std::string m_stereoscopicregex_tab;
+ 
++    //! Prefer a frame-packing display mode over a half-resolution 3D mode of the same
++    //! timing. Turn off to exercise the half modes, which are otherwise unreachable on
++    //! a display offering frame packing at every timing that has one.
++    bool m_stereoscopicPreferFramePacking;
++
+     bool m_openGlDebugging;
+ 
+     std::string m_userAgent;
+--- a/xbmc/settings/CMakeLists.txt
++++ b/xbmc/settings/CMakeLists.txt
+@@ -53,3 +53,7 @@
+ endif()
+ 
+ core_add_library(settings)
++
++if(ENABLE_DVBRIDGE)
++  target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
++endif()
+--- a/xbmc/settings/DisplaySettings.cpp
++++ b/xbmc/settings/DisplaySettings.cpp
+@@ -35,6 +35,7 @@
+ #include <float.h>
+ #include <mutex>
+ #include <string>
++#include <string_view>
+ #include <utility>
+ #include <vector>
+ 
+@@ -81,6 +82,15 @@
+   return res;
+ }
+ 
++//! @brief The height a mode is identified by: the per-eye height for a frame-packing mode,
++//!        whose packed frame (1920x2205) is not a resolution anyone would look for.
++int ModeIdentifierHeight(const RESOLUTION_INFO& info)
++{
++  if (info.iBlanking > 0)
++    return (info.iScreenHeight - info.iBlanking) / 2;
++  return info.iScreenHeight;
++}
++
+ // True when this mode is uncalibrated. Only works for live modes; dead or stale modes are
+ // considered non-default always.
+ bool IsDefaultCalibration(const RESOLUTION_INFO& info)
+@@ -644,7 +654,13 @@
+   return DM_FULLSCREEN;
+ }
+ 
+-RESOLUTION CDisplaySettings::FindBestMatchingResolution(const std::map<RESOLUTION, RESOLUTION_INFO> &resolutionInfos, int width, int height, float refreshrate, unsigned flags)
++RESOLUTION CDisplaySettings::FindBestMatchingResolution(
++    const std::map<RESOLUTION, RESOLUTION_INFO>& resolutionInfos,
++    int width,
++    int height,
++    float refreshrate,
++    unsigned flags,
++    bool framePacked /* = false */)
+ {
+   // find the closest match to these in our res vector.  If we have the screen, we score the res
+   RESOLUTION bestRes = RES_DESKTOP;
+@@ -658,8 +674,13 @@
+     if ((info.dwFlags & D3DPRESENTFLAG_MODEMASK) != flags)
+       continue;
+ 
++    // A frame-packing mode carries the top-and-bottom flag too; only iBlanking tells
++    // them apart, and its identifier names the per-eye height, not the packed one.
++    if ((info.iBlanking > 0) != framePacked)
++      continue;
++
+     float score = 10 * (square_error((float)info.iScreenWidth, (float)width) +
+-                  square_error((float)info.iScreenHeight, (float)height) +
++                  square_error((float)ModeIdentifierHeight(info), (float)height) +
+                   square_error(info.fRefreshRate, refreshrate));
+     if (score < bestScore)
+     {
+@@ -698,12 +719,15 @@
+     else if(StringUtils::Mid(strResolution, 20,3) == "tab")
+       flags |= D3DPRESENTFLAG_MODE3DTB;
+ 
++    // "ptabfrp": frame packing, the identifier CoreELEC uses for the same mode
++    const bool framePacked = StringUtils::Mid(strResolution, 23, 3) == "frp";
++
+     std::map<RESOLUTION, RESOLUTION_INFO> resolutionInfos;
+     for (size_t resolution = RES_DESKTOP; resolution < CDisplaySettings::GetInstance().ResolutionInfoSize(); resolution++)
+       resolutionInfos.try_emplace(static_cast<RESOLUTION>(resolution),
+                                   CDisplaySettings::GetInstance().GetResolutionInfo(resolution));
+ 
+-    return FindBestMatchingResolution(resolutionInfos, width, height, refresh, flags);
++    return FindBestMatchingResolution(resolutionInfos, width, height, refresh, flags, framePacked);
+   }
+ 
+   return RES_DESKTOP;
+@@ -721,9 +745,11 @@
+     // also handle RES_DESKTOP resolutions with non-default refresh rates
+     if (resolution != RES_DESKTOP || (refreshrate > 0.0f && refreshrate != info.fRefreshRate))
+     {
+-      return StringUtils::Format("{:05}{:05}{:09.5f}{}", info.iScreenWidth, info.iScreenHeight,
++      return StringUtils::Format("{:05}{:05}{:09.5f}{}{}", info.iScreenWidth,
++                                 ModeIdentifierHeight(info),
+                                  refreshrate > 0.0f ? refreshrate : info.fRefreshRate,
+-                                 ModeFlagsToString(info.dwFlags, true));
++                                 ModeFlagsToString(info.dwFlags, true),
++                                 info.iBlanking > 0 ? "frp" : "");
+     }
+   }
+ 
+@@ -743,6 +769,11 @@
+                                                  std::vector<StringSettingOption>& list,
+                                                  std::string& current)
+ {
++  // The 3D variants of a timing are listed alongside it, as CoreELEC does, so a viewer
++  // can whitelist exactly the layouts the display handles (this projector: frame
++  // packing and top-and-bottom at 1080p24, not side-by-side). Whitelisting one licenses
++  // that timing for stereoscopic playback; a frame-packing mode is shown by its per-eye
++  // geometry, since its packed frame (1920x2205) is no resolution the display has.
+   for (auto index = static_cast<unsigned int>(RES_CUSTOM);
+        index < CDisplaySettings::GetInstance().ResolutionInfoSize(); ++index)
+   {
+@@ -753,10 +784,11 @@
+       const std::string screenmode =
+           GetStringFromResolution(static_cast<RESOLUTION>(index), mode.fRefreshRate);
+ 
+-      list.emplace_back(
+-          StringUtils::Format("{}x{}{} {:0.2f}Hz", mode.iScreenWidth, mode.iScreenHeight,
+-                              ModeFlagsToString(mode.dwFlags, false), mode.fRefreshRate),
+-          screenmode);
++      list.emplace_back(StringUtils::Format("{}x{}{}{} {:0.2f}Hz", mode.iScreenWidth,
++                                            ModeIdentifierHeight(mode),
++                                            mode.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "p",
++                                            mode.StereoLayoutTag(), mode.fRefreshRate),
++                        screenmode);
+     }
+   }
+ 
+--- a/xbmc/settings/DisplaySettings.h
++++ b/xbmc/settings/DisplaySettings.h
+@@ -146,7 +146,13 @@
+   static std::string GetStringFromResolution(RESOLUTION resolution, float refreshrate = 0.0f);
+   static RESOLUTION GetResolutionForScreen();
+ 
+-  static RESOLUTION FindBestMatchingResolution(const std::map<RESOLUTION, RESOLUTION_INFO> &resolutionInfos, int width, int height, float refreshrate, unsigned int flags);
++  static RESOLUTION FindBestMatchingResolution(
++      const std::map<RESOLUTION, RESOLUTION_INFO>& resolutionInfos,
++      int width,
++      int height,
++      float refreshrate,
++      unsigned int flags,
++      bool framePacked = false);
+ 
+ private:
+   // holds the real gui resolution
+--- a/xbmc/settings/MediaSettings.cpp
++++ b/xbmc/settings/MediaSettings.cpp
+@@ -69,7 +69,7 @@
+       scalingMethod = (int)VS_SCALINGMETHOD_LINEAR;
+     m_defaultVideoSettings.m_ScalingMethod = (ESCALINGMETHOD)scalingMethod;
+ 
+-    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeZoom110Width);
++    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeAuto);
+     if (!XMLUtils::GetFloat(pElement, "zoomamount", m_defaultVideoSettings.m_CustomZoomAmount, 0.5f, 2.0f))
+       m_defaultVideoSettings.m_CustomZoomAmount = 1.0f;
+     if (!XMLUtils::GetFloat(pElement, "pixelratio", m_defaultVideoSettings.m_CustomPixelRatio, 0.5f, 2.0f))
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -26,6 +26,15 @@
+ #include "utils/FontUtils.h"
+ #include "utils/StringUtils.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "dialogs/DVPlaybackModes.h"
++#include "cores/VideoPlayer/Interface/StreamInfo.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
++#include "resources/LocalizeStrings.h"
++#include "resources/ResourcesComponent.h"
++#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#endif
+ 
+ namespace
+ {
+@@ -367,6 +376,12 @@
+ #ifdef HAVE_GBM
+   m_simpleConditions.emplace("have_gbm");
+ #endif
++#ifdef HAVE_DVBRIDGE
++  m_simpleConditions.emplace("have_dvbridge");
++#endif
++#ifdef CB1_HAS_HDR10_AI
++  m_simpleConditions.emplace("have_cb1_hdr10_ai");
++#endif
+ #ifdef HAS_GL
+   m_simpleConditions.emplace("has_gl");
+ #endif
+@@ -488,6 +503,98 @@
+   m_complexConditions.try_emplace("lte", LessThanOrEqual);
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
++                                         std::vector<IntegerSettingOption>& list)
++{
++  // Availability never substitutes or saves a different requested preference.
++  const bool menu=setting->GetId()=="dvbridge.playbackchoice";
++  const bool playback=setting->GetId()=="dvbridge.playback";
++  const bool hdr10PlusMenu=setting->GetId()=="dvbridge.hdr10plusplaybackchoice";
++  const bool hdr10Menu=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10playbackchoice";
++  const auto preferences=DVBRIDGE::FrameOutputSettings();
++  const auto data=DVBRIDGE::StreamTelemetry::Read();
++  auto caps=data.transaction.capabilities;
++  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++  const auto available=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
++  // Global preferences use hardware capabilities, not the current or previous film.
++  if ((!menu && !hdr10Menu) ||
++      (!caps.sourceKnown && !data.transaction.identity.Valid()))
++    caps=available;
++  // A failed frame or disabled import does not remove reusable output capabilities.
++  caps.nativeDV=available.nativeDV;
++  caps.hdr10=available.hdr10;
++  caps.hdr10plus=available.hdr10plus;
++  if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
++  {
++    caps.processingKnown=available.processingKnown;
++    caps.processing=available.processing;
++  }
++  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const bool method=setting->GetId()=="dvbridge.hdr10method";
++  const bool hdr10PlusSource=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10plussource";
++  const bool hdr10Source=hdr10Menu || hdr10PlusSource || setting->GetId()=="dvbridge.hdr10source";
++  const bool nativeHDR10Plus=hdr10PlusMenu;
++  // A preference can be deferred while paused; only the renderer admits a frame.
++  const bool pendingHDR10Plus=nativeHDR10Plus && !caps.sourceKnown && !data.transaction.identity.Valid();
++  const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
++  constexpr int menuModes[]{1,5,
++      4,0,2,3,6};
++#ifdef CB1_HAS_HDR10_AI
++  constexpr int hdr10MenuModes[]{1,4,0};
++  constexpr int hdr10PlusMenuModes[]{1,0};
++#else
++  constexpr int hdr10MenuModes[]{0};
++  constexpr int hdr10PlusMenuModes[]{0};
++#endif
++  for(auto& option : list)
++  {
++    const int mode=hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
++        hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
++        hdr10Source ? (option.value==1 || option.value==3 ? 1 : option.value==2 ? 4 : 0) :
++        (menu || playback) ? (option.value>=0 && option.value<int(std::size(menuModes)) ? menuModes[option.value] : 0) :
++        method ? (option.value==0 ? 2 : option.value==1 ? 3 : option.value==2 ? 6 : 0) :
++        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
++    auto reason=DVBRIDGE::OutputReason::None;
++    const bool guided = hdr10PlusSource && (hdr10PlusMenu ? option.value==0 : option.value==3);
++    if (mode)
++    {
++      const bool dv=mode==1 || mode==4 || mode==5;
++      if (guided && hdr10Menu && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
++        reason=DVBRIDGE::OutputReason::SourceIneligible;
++      else if (hdr10Source && (nativeHDR10Plus || caps.hdr10PlusSource) && !guided)
++        reason=DVBRIDGE::OutputReason::SourceIneligible;
++      else if (!(dv ? caps.nativeDV : caps.hdr10))
++        reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
++      else if (mode==6 && !caps.hdr10plus) reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
++      else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::NoGPUProcessing;
++      else if (caps.sourceKnown && !(hdr10Source ? (caps.isHDR10 && !caps.isDV) : caps.isDV))
++        reason=DVBRIDGE::OutputReason::SourceIneligible;
++      else if (!processing[mode].usable)
++        reason=processing[mode].reason==DVBRIDGE::OutputReason::None ?
++            DVBRIDGE::OutputReason::NoGPUProcessing : processing[mode].reason;
++      else if ((mode==3 || mode==4) && !preferences.ProfileValid(static_cast<dvbridge_mode>(mode)))
++        reason=DVBRIDGE::OutputReason::TVProfileRequired;
++    }
++    int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
++    if (reason==DVBRIDGE::OutputReason::TVProfileRequired)
++    {
++      const double peak=mode==3?preferences.expertPeak:preferences.peak;
++      const int gamut=mode==3?preferences.expertGamut:preferences.gamut;
++      reasonId=!std::isfinite(peak) || peak<(mode==3?50:0.000001) || peak>10000 ? 40911 :
++          gamut<1 || gamut>3 ? 40912 : 40845;
++    }
++    if (reasonId && reason!=DVBRIDGE::OutputReason::TVProfileRequired)
++      option.label+=" / "+localizer.Get(40851);
++    option.label2=reasonId ? localizer.Get(reasonId) :
++        guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
++    // Settings must allow selection before the required profile controls appear.
++    const bool configure=reason==DVBRIDGE::OutputReason::TVProfileRequired && !menu && !hdr10Menu;
++    option.properties.emplace_back("disabled",reasonId!=0 && !configure);
++  }
++}
++#endif
++
+ void CSettingConditions::Deinitialize()
+ {
+   m_profileManager = nullptr;
+--- a/xbmc/settings/SettingConditions.h
++++ b/xbmc/settings/SettingConditions.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "settings/lib/SettingConditions.h"
++#include "settings/lib/SettingDefinitions.h"
+ 
+ #include <set>
+ #include <string>
+@@ -21,6 +22,10 @@
+ public:
+   static void Initialize();
+   static void Deinitialize();
++#ifdef HAVE_DVBRIDGE
++  static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
++                              std::vector<IntegerSettingOption>& list);
++#endif
+ 
+   static const CProfile& GetCurrentProfile();
+ 
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -7,6 +7,12 @@
+  */
+ 
+ #include "Settings.h"
++#ifdef HAVE_DVBRIDGE
++#include <optional>
++#endif
++#ifdef HAVE_DVBRIDGE
++#include "dialogs/DVPlaybackModes.h"
++#endif
+ 
+ #include "Autorun.h"
+ #include "GUIPassword.h"
+@@ -211,8 +217,83 @@
+   if (!root)
+     return false;
+ 
++#ifdef HAVE_DVBRIDGE
++  std::unique_ptr<TiXmlElement> migrated;
++  bool hasHDR10PlusPreference = false;
++  for (const auto* setting = root->FirstChildElement("setting"); setting;
++       setting = setting->NextSiblingElement("setting"))
++    if (setting->Attribute("id") &&
++        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
++      hasHDR10PlusPreference = true;
++  for (const auto* setting = root->FirstChildElement("setting"); setting;
++       setting = setting->NextSiblingElement("setting"))
++  {
++    const char* id = setting->Attribute("id");
++    const char* value = setting->GetText();
++    if (!id || !value) continue;
++    const bool legacyHDR10Plus = std::string_view(id) == "dvbridge.hdr10source" &&
++                               std::string_view(value) == "3";
++    const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
++            std::string_view(id) == "dvbridge.outputmode" &&
++            (std::string_view(value) == "3" || std::string_view(value) == "6") ?
++            std::optional<int>{5} : std::nullopt;
++    if (!legacy) continue;
++    if (!migrated) migrated.reset(root->Clone()->ToElement());
++    if (legacyHDR10Plus && !hasHDR10PlusPreference)
++    {
++      auto* preference = new TiXmlElement("setting");
++      preference->SetAttribute("id", "dvbridge.hdr10plussource");
++      preference->LinkEndChild(new TiXmlText("3"));
++      migrated->LinkEndChild(preference);
++      hasHDR10PlusPreference = true;
++    }
++    for (auto* element = migrated->FirstChildElement("setting"); element;
++         element = element->NextSiblingElement("setting"))
++      if (element->Attribute("id") && std::string_view(element->Attribute("id")) == id)
++      {
++        element->Clear();
++        element->LinkEndChild(new TiXmlText(std::to_string(*legacy).c_str()));
++        element->RemoveAttribute("default");
++        break;
++      }
++  }
++  // Copy an explicitly stored legacy calibration once. Do not rename/delete
++  // it: Adaptive and CM4 continue to own the original TV preferences.
++  bool hasExpertPeak=false;
++  bool hasExpertGamut=false;
++  const TiXmlElement* legacyPeak=nullptr;
++  const TiXmlElement* legacyGamut=nullptr;
++  for(const auto* setting=root->FirstChildElement("setting");setting;
++      setting=setting->NextSiblingElement("setting"))
++  {
++    const char* id=setting->Attribute("id");
++    if(!id)continue;
++    if(std::string_view(id)=="dvbridge.expertpeak")hasExpertPeak=true;
++    if(std::string_view(id)=="dvbridge.expertgamut")hasExpertGamut=true;
++    if(std::string_view(id)=="dvbridge.tvpeak")legacyPeak=setting;
++    if(std::string_view(id)=="dvbridge.tvgamut")legacyGamut=setting;
++  }
++  if(!hasExpertPeak && legacyPeak && legacyPeak->GetText() &&
++     (!legacyPeak->Attribute("default") || std::string_view(legacyPeak->Attribute("default"))!="true"))
++  {
++    if(!migrated)migrated.reset(root->Clone()->ToElement());
++    for(const auto& entry : {std::pair{legacyPeak,"dvbridge.expertpeak"},
++                            std::pair{legacyGamut,"dvbridge.expertgamut"}})
++    {
++      if(!entry.first || (entry.first==legacyGamut && hasExpertGamut))continue;
++      auto* copy=entry.first->Clone()->ToElement();
++      copy->SetAttribute("id",entry.second);copy->RemoveAttribute("default");
++      migrated->LinkEndChild(copy);
++    }
++  }
++  if (migrated) root = migrated.get();
++#endif
++
+   if (!CSettingsBase::LoadValuesFromXml(root, updated))
+     return false;
++#ifdef HAVE_DVBRIDGE
++  updated |= bool(migrated);
++#endif
+ 
+   return Load(static_cast<const TiXmlNode*>(root));
+ }
+@@ -535,6 +616,9 @@
+ 
+ void CSettings::InitializeISettingsHandlers()
+ {
++#ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->RegisterSettingsHandler(&CDVPlaybackModes::GetInstance());
++#endif
+   // register ISettingsHandler implementations
+   // The order of these matters! Handlers are processed in the order they were registered.
+   GetSettingsManager()->RegisterSettingsHandler(&CMediaSourceSettings::GetInstance());
+@@ -549,6 +633,9 @@
+ 
+ void CSettings::UninitializeISettingsHandlers()
+ {
++#ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->UnregisterSettingsHandler(&CDVPlaybackModes::GetInstance());
++#endif
+   // unregister ISettingsHandler implementations
+   GetSettingsManager()->UnregisterSettingsHandler(&CMediaSettings::GetInstance());
+   GetSettingsManager()->UnregisterSettingsHandler(&g_langInfo);
+@@ -582,6 +669,11 @@
+ 
+ void CSettings::InitializeISettingCallbacks()
+ {
++#ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
++      {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
++       "dvbridge.playback"});
++#endif
+   // register any ISettingCallback implementations
+   GetSettingsManager()->RegisterCallback(
+       &CMediaSettings::GetInstance(),
+@@ -644,6 +736,9 @@
+ 
+ void CSettings::UninitializeISettingCallbacks()
+ {
++#ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->UnregisterCallback(&CDVPlaybackModes::GetInstance());
++#endif
+   GetSettingsManager()->UnregisterCallback(&CMediaSettings::GetInstance());
+   GetSettingsManager()->UnregisterCallback(&CDisplaySettings::GetInstance());
+   GetSettingsManager()->UnregisterCallback(&g_charsetConverter);
+--- a/xbmc/settings/SubtitlesSettings.cpp
++++ b/xbmc/settings/SubtitlesSettings.cpp
+@@ -40,7 +40,10 @@
+        CSettings::SETTING_SUBTITLES_LANGUAGES,      CSettings::SETTING_SUBTITLES_STORAGEMODE,
+        CSettings::SETTING_SUBTITLES_CUSTOMPATH,     CSettings::SETTING_SUBTITLES_PAUSEONSEARCH,
+        CSettings::SETTING_SUBTITLES_DOWNLOADFIRST,  CSettings::SETTING_SUBTITLES_TV,
+-       CSettings::SETTING_SUBTITLES_MOVIE,          CSettings::SETTING_SUBTITLES_LINE_SPACING});
++       CSettings::SETTING_SUBTITLES_MOVIE,          CSettings::SETTING_SUBTITLES_LINE_SPACING,
++       "subtitles.bitmapauthoring", "subtitles.bitmapplacement", "subtitles.bitmapoffset",
++       "subtitles.bitmapzoom", "subtitles.bitmapsdrbrightness", "subtitles.bitmapsdrsaturation",
++       "subtitles.bitmaphdrbrightness", "subtitles.bitmaphdrsaturation"});
+ }
+ 
+ CSubtitlesSettings::~CSubtitlesSettings()
+@@ -67,6 +70,26 @@
+   return static_cast<Align>(m_settings->GetInt(CSettings::SETTING_SUBTITLES_ALIGN));
+ }
+ 
++BitmapOptions CSubtitlesSettings::GetBitmapOptions() const
++{
++  BitmapOptions options;
++#ifdef HAVE_DVBRIDGE
++  const auto read = [this](const char* id, int fallback)
++  {
++    return m_settings->GetSetting(id) ? m_settings->GetInt(id) : fallback;
++  };
++  options.authoring = read("subtitles.bitmapauthoring", options.authoring);
++  options.placement = read("subtitles.bitmapplacement", options.placement);
++  options.offset = read("subtitles.bitmapoffset", options.offset);
++  options.zoom = read("subtitles.bitmapzoom", options.zoom);
++  options.sdrBrightness = read("subtitles.bitmapsdrbrightness", options.sdrBrightness);
++  options.sdrSaturation = read("subtitles.bitmapsdrsaturation", options.sdrSaturation);
++  options.hdrBrightness = read("subtitles.bitmaphdrbrightness", options.hdrBrightness);
++  options.hdrSaturation = read("subtitles.bitmaphdrsaturation", options.hdrSaturation);
++#endif
++  return options;
++}
++
+ void CSubtitlesSettings::SetAlignment(Align align) const
+ {
+   m_settings->SetInt(CSettings::SETTING_SUBTITLES_ALIGN, static_cast<int>(align));
+--- a/xbmc/settings/SubtitlesSettings.h
++++ b/xbmc/settings/SubtitlesSettings.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "settings/lib/ISettingCallback.h"
++#include "cores/VideoPlayer/DVDSubtitles/BitmapSubtitles.h"
+ #include "utils/ColorUtils.h"
+ #include "utils/Observer.h"
+ 
+@@ -202,6 +203,8 @@
+    */
+   float GetVerticalMarginPerc() const;
+ 
++  BitmapOptions GetBitmapOptions() const;
++
+   static void SettingOptionsSubtitleFontsFiller(const std::shared_ptr<const CSetting>& setting,
+                                                 std::vector<StringSettingOption>& list,
+                                                 std::string& current);
+--- a/xbmc/settings/windows/GUIControlSettings.cpp
++++ b/xbmc/settings/windows/GUIControlSettings.cpp
+@@ -35,6 +35,9 @@
+ #include "settings/MediaSourceSettings.h"
+ #include "settings/SettingAddon.h"
+ #include "settings/SettingControl.h"
++#ifdef HAVE_DVBRIDGE
++#include "settings/SettingConditions.h"
++#endif
+ #include "settings/SettingDateTime.h"
+ #include "settings/SettingPath.h"
+ #include "settings/SettingUtils.h"
+@@ -175,6 +178,11 @@
+     }
+   }
+ 
++#ifdef HAVE_DVBRIDGE
++  if (setting->GetId()=="dvbridge.outputmode" || setting->GetId()=="dvbridge.hdr10method" ||
++      setting->GetId()=="dvbridge.hdr10source" || setting->GetId()=="dvbridge.hdr10plussource")
++    CSettingConditions::DVOutputOptions(setting,options);
++#endif
+   switch (pSettingInt->GetOptionsSort())
+   {
+     case SettingOptionsSort::Ascending:
+--- a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
++++ b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
+@@ -11,6 +11,8 @@
+ #include "GUIPassword.h"
+ #include "GUIUserMessages.h"
+ #include "ServiceBroker.h"
++#include "application/ApplicationComponents.h"
++#include "application/ApplicationPlayer.h"
+ #include "input/actions/Action.h"
+ #include "input/actions/ActionIDs.h"
+ #include "settings/DisplaySettings.h"
+@@ -107,7 +109,11 @@
+     {
+       if (message.GetParam1() == GUI_MSG_WINDOW_RESIZE)
+       {
+-        if (IsActive() && CDisplaySettings::GetInstance().GetCurrentResolution() != CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution())
++        // Playback timing is temporary; retain the desktop return resolution.
++        if (IsActive() &&
++            !CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->IsPlaying() &&
++            CDisplaySettings::GetInstance().GetCurrentResolution() !=
++                CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution())
+         {
+           CDisplaySettings::GetInstance().SetCurrentResolution(CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution(), true);
+           CreateSettings();
+--- a/xbmc/video/PlayerController.cpp
++++ b/xbmc/video/PlayerController.cpp
+@@ -14,6 +14,9 @@
+ #include "cores/IPlayer.h"
+ #include "dialogs/GUIDialogKaiToast.h"
+ #include "dialogs/GUIDialogSelect.h"
++#ifdef HAVE_DVBRIDGE
++#include "dialogs/DVPlaybackModes.h"
++#endif
+ #include "dialogs/GUIDialogSlider.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUISliderControl.h"
+@@ -69,6 +72,10 @@
+   {
+     switch (action.GetID())
+     {
++#ifdef HAVE_DVBRIDGE
++      case ACTION_PLAYBACK_MODE_MENU:
++        return CDVPlaybackModes::ShowMenu();
++#endif
+       case ACTION_SHOW_SUBTITLES:
+       {
+         //! @todo combine processing of ACTION_SHOW_SUBTITLES with ACTION_NEXT_SUBTITLE and the other stream actions
+--- a/xbmc/video/ViewModeSettings.cpp
++++ b/xbmc/video/ViewModeSettings.cpp
+@@ -29,6 +29,7 @@
+ static const ViewModeProperties viewModes[] =
+ {
+   { 630,   ViewModeNormal },
++  { 16316, ViewModeAuto },
+   { 631,   ViewModeZoom },
+   { 39008, ViewModeZoom120Width },
+   { 39009, ViewModeZoom110Width },
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -14,6 +14,9 @@
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "dialogs/GUIDialogYesNo.h"
++#ifdef HAVE_DVBRIDGE
++#include "dialogs/DVPlaybackModes.h"
++#endif
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIWindowManager.h"
+ #include "profiles/ProfileManager.h"
+@@ -216,6 +219,14 @@
+   CGUIDialogSettingsManualBase::OnSettingChanged(setting);
+ 
+   const std::string &settingId = setting->GetId();
++#ifdef HAVE_DVBRIDGE
++  if (settingId=="dvbridge.playbackchoice")
++  {
++    CDVPlaybackModes::ShowMenu();
++    return;
++  }
++  else
++#endif
+   if (settingId == SETTING_VIDEO_CALIBRATION)
+   {
+     const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
+@@ -464,6 +475,10 @@
+   AddToggle(groupStereoscopic, SETTING_VIDEO_STEREOSCOPICINVERT, 36536, SettingLevel::Basic, videoSettings.m_StereoInvert);
+ 
+   // general settings
++#ifdef HAVE_DVBRIDGE
++  if (CDVPlaybackModes::MenuEnabled())
++    AddButton(groupSaveAsDefault,"dvbridge.playbackchoice",40855,SettingLevel::Basic);
++#endif
+   AddButton(groupSaveAsDefault, SETTING_VIDEO_MAKE_DEFAULT, 12376, SettingLevel::Basic);
+   AddButton(groupSaveAsDefault, SETTING_VIDEO_CALIBRATION, 214, SettingLevel::Basic);
+ }

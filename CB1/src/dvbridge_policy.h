@@ -32,6 +32,12 @@ struct dvbridge_policy {
     struct dvbridge_tv_profile tv;
     enum dvbridge_adaptive_variant adaptive;
     bool master_ipt;
+    /* Expert only; other modes do not consume display-black calibration. */
+    double expert_black_nits;
+    /* Known scanout grid reserves the film ceiling before GUI composition.
+     * Zero requests a floating PQ intermediate, with no transport-grid claim. */
+    unsigned expert_output_bits;
+    bool expert_output_limited;
 };
 struct dvbridge_identity { uint64_t stream, picture, revision; };
 enum dvbridge_policy_status {

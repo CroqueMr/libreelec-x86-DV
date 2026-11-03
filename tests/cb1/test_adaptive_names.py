@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class AdaptiveNamesTests(unittest.TestCase):
-    def test_authored_variant_and_precision_do_not_leak_into_ai_policy(self):
+    def test_ai_adaptive_uses_the_shared_scene_curve_without_changing_reference(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         enums = source.split('enum class OutputMode',1)[1].split('// Decoder ingress',1)[0]
@@ -36,7 +36,19 @@ int main() {
   a.output=OutputMode::EnhancedDV;
   assert(a.Policy().adaptive==DVBRIDGE_ADAPTIVE_B_FP16);
   a.hdr10Source=HDR10SourceMode::EnhancedDV;
-  assert(a.HDR10Policy().adaptive==DVBRIDGE_ADAPTIVE_A && a.HDR10Policy().mode==DVBRIDGE_MODE_ENHANCED_DV);
+  assert(a.HDR10Policy().adaptive==a.Policy().adaptive && a.HDR10Policy().mode==DVBRIDGE_MODE_ENHANCED_DV);
+  for(auto output:{OutputMode::Disabled,OutputMode::Standard,OutputMode::HDR10,
+                   OutputMode::EnhancedDV,OutputMode::MasterReference,OutputMode::AdaptiveB}){
+    a.output=output;
+    assert(a.HDR10Policy().adaptive==DVBRIDGE_ADAPTIVE_B_FP16);
+    assert(a.HDR10Policy().tv.peak_nits==2500);
+    a.hdr10Source=HDR10SourceMode::ReferenceDV;
+    assert(a.HDR10Policy().adaptive==DVBRIDGE_ADAPTIVE_A && a.HDR10Policy().mode==DVBRIDGE_MODE_STANDARD);
+    a.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;
+    assert(a.HDR10Policy(true).adaptive==DVBRIDGE_ADAPTIVE_A && a.HDR10Policy(true).mode==DVBRIDGE_MODE_STANDARD);
+    a.hdr10Source=HDR10SourceMode::EnhancedDV;
+  }
+  a.output=OutputMode::EnhancedDV;
   const auto& preferences=a;
   auto probe=[&](int mode){@@PROBE@@ return policy;};
   assert(probe(DVBRIDGE_MODE_HDR10_EXPERT).adaptive==DVBRIDGE_ADAPTIVE_A);
@@ -76,11 +88,11 @@ int main() {
   saved.flags=0;
   assert(CDVPlaybackInfo::Mode(saved) == "Kodi default");
   saved={3,CDVPlaybackInfo::HDR10,false};
-  assert(CDVPlaybackInfo::Mode(saved) == "HDR10 Reference Expert");
+  assert(CDVPlaybackInfo::Mode(saved) == "HDR10 Rendering Reference");
   saved={1,CDVPlaybackInfo::HDMI,false};
   assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Reference");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision Reference");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision Reference (AI)");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision Rendering");
   assert(std::string(CDVPlaybackInfo::RequestedPolicy(4, true)) == "Dolby Vision Adaptive HDR Mapping (AI)");
 }
 '''
@@ -191,7 +203,7 @@ struct NativeOutput @@NATIVE@@;
 std::string label(VideoProcessingInfo data){bool transaction=true,active=true;return @@REQUESTED@@;}
 int main(){VideoProcessingInfo data;data.transaction.requested=1;
  assert(label(data)=="Dolby Vision Reference");
- data.transaction.hdr10AI=true;assert(label(data)=="Dolby Vision Reference (AI)");
+ data.transaction.hdr10AI=true;assert(label(data)=="Dolby Vision Rendering");
  data.transaction.requested=4;assert(label(data)=="Dolby Vision Adaptive HDR Mapping (AI)");
  assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
  assert(CDVPlaybackInfo::IsHDR10AI(data.output));}
@@ -224,7 +236,9 @@ struct TiXmlText {std::string value;explicit TiXmlText(const char* text):value(t
 struct TiXmlElement:TiXmlNode {
  std::string id,text;bool hasDefault=true;TiXmlElement* next{};
  std::vector<std::unique_ptr<TiXmlElement>> children;
- TiXmlElement()=default;TiXmlElement(std::string key,std::string value):id(key),text(value){}
+ TiXmlElement()=default;explicit TiXmlElement(const char*){};
+ TiXmlElement(std::string key,std::string value):id(key),text(value){}
+ void SetAttribute(const char*,const char* value){id=value;}
  const char* Attribute(const char* key)const{return std::string(key)=="id"?id.c_str():nullptr;}
  const char* GetText()const{return text.c_str();}
  TiXmlElement* FirstChildElement(const char*)const{return children.empty()?nullptr:children.front().get();}
@@ -236,6 +250,8 @@ struct TiXmlElement:TiXmlNode {
   if(!children.empty())children.back()->next=child.get();children.push_back(std::move(child));}
  void Clear(){text.clear();}
  void LinkEndChild(TiXmlText* value){text=value->value;delete value;}
+ void LinkEndChild(TiXmlElement* child){if(!children.empty())children.back()->next=child;
+  children.emplace_back(child);}
  void RemoveAttribute(const char*){hasDefault=false;}
 };
 struct CSettingsBase {inline static std::map<std::string,std::string> loaded;

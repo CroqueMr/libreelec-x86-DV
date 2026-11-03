@@ -58,6 +58,20 @@ int main() {
   }
   assert(join.TakePrerollCount()==3 && !join.Pending());
 
+  // A seek can start both layers before their first shared independent anchor.
+  // Neither queue head is that anchor; retire both proven orphan prefixes.
+  join.Reset(true);
+  push(join, false, 11, 0, 10, 21);
+  push(join, false, 12, 1, 11);
+  push(join, false, 20, 2, 12, 21);
+  push(join, true, 10, 0, 100);
+  push(join, true, 13, 1, 101);
+  push(join, true, 20, 3, 102, 21);
+  assert(join.Take(out)==0 && "Recover a common IRAP behind both seek prefixes");
+  assert(out->pts==20 && out->dts==2 && out->data[5]==12 && out->data[14]==102);
+  assert(join.TakePrerollCount()==4 && !join.Pending());
+  av_packet_unref(out);
+
   // A timestamp match is insufficient: retain references without both IRAPs,
   // monotone per-layer decode clocks, and proof that each retired RPU is orphaned.
   for (int refusal=0; refusal<5; ++refusal) {

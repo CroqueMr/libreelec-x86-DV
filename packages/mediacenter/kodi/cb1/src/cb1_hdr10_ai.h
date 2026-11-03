@@ -11,7 +11,12 @@ enum cb1_source_description_flags {
     CB1_SOURCE_HDR10PLUS=1, CB1_SOURCE_SCENE_REFRESH=2, CB1_SOURCE_STATISTICS=4
 };
 /* Zero preserves the AI authoring contract. HDR10+ describes its original source. */
-struct cb1_ai_result { struct cb1_ai_identity id;struct cb1_l1l3 raw;double pts;unsigned source_flags; };
+struct cb1_ai_result {
+    struct cb1_ai_identity id;struct cb1_l1l3 raw;double pts;unsigned source_flags;
+    /* Accepted model input, min/avg/max PQ codes; not authored Dolby Vision trims.
+     * model is static storage, NULL for metadata-only descriptions. */
+    uint16_t base[3];const char *model;
+};
 /* Submission wall time and asynchronous completion latency, not GPU utilization. */
 struct cb1_hdr10_ai_metrics {
     uint64_t pictures,readback_bytes,inferences;

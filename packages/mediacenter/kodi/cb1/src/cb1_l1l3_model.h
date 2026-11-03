@@ -3,6 +3,7 @@
 #define CB1_L1L3_MODEL_H
 #include <stddef.h>
 #include <stdint.h>
+#define CB1_L1L3_MODEL_VERSION "0.1"
 #ifdef __cplusplus
 extern "C" {
 #endif

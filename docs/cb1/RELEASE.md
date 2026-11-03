@@ -1,68 +1,65 @@
-# R1.0.0 RC2 - Stability improvement, HDR10+ fixes, BD-J Menu experimental support
+# R1.0.0 RC3 - HDR rendering, FEL recovery and Blu-ray menus
 
-Changes since R1.0.0-RC1, including the RC1.1 Debug fixes. CB1 **0.5**.
+Changes since **R1.0.0 RC2**. CB1 **0.5**. GPL-2.0-compatible release.
 
 ## Dolby Vision
 
-- Renamed **Dolby Vision Standard** to **Dolby Vision Reference** to reflect its precision-oriented output rather than an entry-level mode. The optimized processing path is retained.
-- Added optional **CM2.9 to CM4.0** controls, including Auto/Auto 2 and independent L2-trim suppression. Selection rules adapted from [avdvplus](https://github.com/avdvplus/xbmc); neutral blocks and PQ formulas from [quietvoid/dovi_tool](https://github.com/quietvoid/dovi_tool).
-- Fixed Master Reference startup readiness and per-file failure counters for YCbCr and IPT output.
-- Fixed HDR10 Expert startup when the required TV profile is incomplete.
-- Corrected tiny or misplaced OSD during HDR10-to-Dolby Vision playback.
-- Fixed in-band MP4 FEL headers, BL/EL seek recovery in M2TS/ISO and valid duplicate luma pivots in the reported Transformers FEL sample.
-- Reduced intermediate storage and redundant processing in HDR10 Basic/Expert and source analysis.
+- Added **GPU bilinear FEL upscaling** alongside **Reference GPU**. Master Reference retains its reference reconstruction filters.
+- Fixed playback freezing on the reported Saving Private Ryan FEL sample. The enhancement decoder now recovers forward after damaged data, preserves already decoded exact pairs and resumes at a verified random-access picture instead of waiting indefinitely.
+- Improved BL/EL pairing after Blu-ray seeks when both tracks contain unmatched preroll. Missing or ambiguous enhancement pictures are never replaced with neighbouring frames.
+- Aligned HDR10-to-Dolby Vision Adaptive processing with the DV-source Adaptive logic while retaining its AI-derived source statistics.
+- Kept independent playback preferences for **Dolby Vision**, **HDR10** and **HDR10+** sources. Automatic fallback no longer replaces the user's saved choice for the next file.
+- Added **Kodi default** consistently to the three playback selectors, leaving normal playback to Kodi without CB1 image processing.
+
+## HDR10 rendering
+
+- Reworked **HDR10 Rendering Reference** around explicit display mapping: manually entered peak brightness, OLED/LCD/projector black presets or a custom black level, and output gamut selection.
+- Corrected near-black handling and creative-trim application to preserve shadow steps rather than applying a linear RGB offset that can crush them.
+- Added bounded highlight/gamut handling and coherent output metadata, including targets above the source mastering peak.
+- Improved HDR10 Rendering startup, resource ownership and transitions back from Dolby Vision; corrected the contrast-state issue reported during live switching.
 
 ## HDR10+
 
-- Added **HDR10+ to Dolby Vision**: preserve decoded film pixels and use compatible source metadata, with AI assistance when source statistics are incomplete. Distribution estimation and scene comparison adapted from [Hades](https://github.com/hadesdevls/LibreELEC-Hades).
-- Corrected native HDR10+ V1 metadata validation and HEVC/Matroska metadata handling.
-- Improved Dolby Vision-to-HDR10+ metadata generation and creative-control handling, with targeted packet-progression diagnostics.
+- Improved **HDR10+ to Dolby Vision Rendering** metadata mapping with weighted source-distribution estimates, bounded handling of incomplete statistics and continuous scene/seek state. Source video pixels remain unchanged by this metadata conversion.
+- Improved conversion startup and playback/seek recovery, with source metadata kept separate from estimated values.
+- Retained native HDR10+ playback through **Kodi default**, without activating the conversion pipeline.
 
-## Playback and stability
+## Blu-ray and BD-J menus
 
-- Improved return to SDR after playback stops or fails, without artificial audio/video offsets.
-- Improved native resolution and refresh-rate selection for cropped and nonstandard source dimensions.
-- Added an **Auto** view mode that avoids unnecessary near-native UHD enlargement while retaining normal Kodi scaling for smaller sources.
-- Integrated [Christian Hewitt's libplacebo shader-stage correction](https://github.com/chewitt/libplacebo/commit/b776078bef9a7d8ffd1da4001a29457544c5b890). Retained the shared rendering optimizations contributed by [dangerouslaser](https://github.com/dangerouslaser).
+- Bundled the Java runtime and the BD-J JAR pair matching the native **libbluray 1.5.0**, avoiding the mismatch with older add-on JARs.
+- Fixed UHD menu video dimensions, missing/unknown video-size handling, audio/subtitle language selection and component inventories. Shared Java control fixes adapted from [SamuriHL's CoreELEC work](https://github.com/SamuriHL/CoreELEC/tree/bd95c331afe287a23f1851aab685fb2c6aa4907b/packages/multimedia/libbluray/patches).
+- Improved direct-title stream inventory and BL/EL resynchronization without disc-name-specific workarounds.
 
-## Blu-ray menus, subtitles and 3D
+## Playback, HDMI and hardware
 
-- Add experimental **HDMV and BD-J menus** support
-- Added **PGS/DVB subtitle controls** for brightness, saturation, size, placement and vertical offset, adapted from [avdvplus](https://github.com/avdvplus/xbmc).
-- Fixed PGS subtitle size and colour defaults, and restored the bitmap size/brightness controls in native Kodi settings.
-- Improved AMD HDMI 3D mode entry, switching and return to 2D, building on the work of [CinemaOne](https://github.com/cinema-ONE) and [popcornmix](https://github.com/popcornmix).
+- Improved return to SDR, live connector-state checks and output recovery after failed playback or mode changes.
+- Retained pending HDMI modesets until the requested timing is actually committed, including when Kodi temporarily reuses its last working configuration.
+- Improved AI frame/pool retirement, re-entry and paused-output resizing, without changing native Kodi scaling filters.
+- Added earlier NVIDIA driver-selection and boot diagnostics to distinguish driver initialization, connector selection and damaged boot media.
+- Corrected audio channel-map handling and retry state without adding artificial audio/video offsets.
 
-## GPU and HDMI support
+## Interface and Player information
 
-- Added **AMD DCN4 / RX9000** admission and improved Vega M colour-state preservation.
-- Improved **NVIDIA R615/R580** HDR/SDR packet handling, extended EDID ownership and native-TMDS detection; corrected the Pascal return-thunk build contract, adapted from [Hades](https://github.com/hadesdevls/LibreELEC-Hades).
-- Improved Intel EDID ownership, BT.2020 YUV signalling, neutral tunnel checks and advertised-CTA HDR10+ selection.
-- Added bounded **Intel Display9 Skylake/Kaby Lake** HDR handling, retaining native output-depth and bandwidth checks. Other Display9/LSPCON restrictions remain unchanged.
+- Renamed **Dolby Vision output** to **Dolby Vision playback**, using the same compact native chooser as HDR10 and HDR10+.
+- Clarified **file metadata**, **metadata used by CB1** and **metadata sent to the TV**. Forwarded metadata is no longer misleadingly described as unused merely because CB1 does not apply it locally.
+- Clarified CM2.9/CM4 processing status, including live Auto/Auto 2 decisions.
+- Reduced text size and shortened crowded fields; removed scrolling text and empty detail rows where information is unavailable.
+- Display CPU temperature as **°F / °C** in Player information, independently of Kodi's regional unit setting.
 
-## Interface and diagnostics
+## Maintenance
 
-- Kept the compact **Quick Switch** independent of the active skin while retaining native Kodi controls.
-- Fixed Quick Switch availability during paused HDR10+ / Dolby Vision transitions, using native source identity separately from per-picture output validation.
-- Shortened some player information labels.
-- Added bounded diagnostics for decoder stalls, BL/EL imports, HDR10+ progression, audio settings and HDMI transitions.
-
-## Player information and audio
-
-- Expanded audio source information: codec/immersive format, source format and channels, declared bed/objects, presentation, dialnorm, bitrate and language, when available.
-- Separated source audio from actual Kodi output: passthrough/RAW, decoded or native PCM, transcode and effective output format/channels. Read-only metadata parsing adapted from [avdvplus](https://github.com/avdvplus/xbmc).
-- Compact Video/Audio headings, readable labels across the panel, slightly smaller text and video dimensions without thousands separators.
+- Consolidated overlapping Kodi changes into five component-owned patches and removed unused code. The representation-only cleanup was checked against the complete resulting native source tree.
+- Expanded regression coverage for playback preferences, HDMI recovery, FEL corruption/seek handling and actual bundled BD-J classes.
 
 ## Known issues
 
-- RX7600 FEL vertical-detail loss and repeated DV-to-HDR10+ packets remain under investigation.
-- Arc B570 black-screen transitions, RTX4070 HDR10 reception and GTX1000 boot compatibility still require confirmation on affected hardware.
-- Some disc-specific MP4/BDMV and authored menu paths remain unverified.
-- HDR10+ target curves, colour controls and multiple spatial windows cannot all be translated directly into Dolby Vision metadata, work is ongoing to improve current algorithm.
+- GTX 10-series startup still needs confirmation on affected machines. Some new reports contain boot-media read errors rather than a demonstrated NVIDIA driver failure.
+- Damaged FEL files can lose unavailable pictures; playback is stopped if an exact BL/EL association cannot be established safely.
+- Disc-specific Java applications and repeated-disc memory behaviour are not universally qualified. Original reporter discs that were not available locally remain unconfirmed.
+- Some Intel Arc and NVIDIA RTX 50-series compatibility reports still require affected-hardware validation.
 
 ## Next focuses
 
-- Bug fixing following new issues
-- Improve HDR10+ support and processing
-- Improve hardware support
-- Improve BD-J support
-- Improve Player Information pannel UI
+- Bug fixing following new issues.
+- Continue HDR10/HDR10+ and affected-GPU compatibility qualification.
+- Extend Blu-ray menu coverage with further authored discs and logs.

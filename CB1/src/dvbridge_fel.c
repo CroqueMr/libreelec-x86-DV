@@ -53,14 +53,16 @@ struct dvbridge_fel {
     AVFrame *frames[QUEUE_MAX];
     unsigned num_packets, num_frames;
     size_t packet_bytes;
-    bool opened, failed, draining, sent_eof, eof;
+    bool opened, failed, draining, sent_eof, eof, recovering, harvesting;
     struct picture_order base_order, enhancement_order;
     int64_t packet_order[QUEUE_MAX];
-    struct { int64_t order, pts; } times[MAP_MAX];
+    bool packet_key[QUEUE_MAX];
+    struct { int64_t order, pts; bool key; } times[MAP_MAX];
     unsigned num_times;
     bool synchronizing;
     int64_t anchor_pts;
     unsigned preroll_packets;
+    int64_t output_order;
 };
 
 static enum AVPixelFormat hardware_format(AVCodecContext *ctx, const enum AVPixelFormat *formats)
@@ -94,8 +96,9 @@ static void clear_queues(struct dvbridge_fel *f)
         av_frame_free(&f->frames[i]);
     f->num_packets = f->num_frames = 0;
     f->packet_bytes = 0;
-    f->failed = f->draining = f->sent_eof = f->eof = false;
+    f->failed = f->draining = f->sent_eof = f->eof = f->recovering = f->harvesting = false;
     f->num_times = 0;
+    f->output_order = AV_NOPTS_VALUE;
 }
 
 void dvbridge_fel_reset(struct dvbridge_fel *f)
@@ -150,6 +153,7 @@ struct dvbridge_fel *dvbridge_fel_create(const AVCodecParameters *p, AVRational 
         return NULL;
     f->synchronizing = true;
     f->anchor_pts = AV_NOPTS_VALUE;
+    f->output_order = AV_NOPTS_VALUE;
     if (av_bsf_list_parse_str("dovi_split=mode=el", &f->split) < 0 ||
         avcodec_parameters_copy(f->split->par_in, p) < 0)
         goto fail;
@@ -162,6 +166,7 @@ struct dvbridge_fel *dvbridge_fel_create(const AVCodecParameters *p, AVRational 
     f->decoder->pkt_timebase = time_base;
     f->decoder->get_format = hardware_format;
     f->decoder->thread_count = 1;
+    f->decoder->err_recognition |= AV_EF_EXPLODE;
     struct picture_order *orders[] = {&f->base_order, &f->enhancement_order};
     const AVCodecParameters *parameters[] = {p, f->split->par_out};
     for (unsigned i = 0; i < 2; ++i) {
@@ -178,6 +183,19 @@ fail:
     return NULL;
 }
 
+/* Continuous recovery preserves parser history and ready exact pairs. */
+static void recover(struct dvbridge_fel *f)
+{
+    if (!f->recovering)
+        av_log(f->decoder, AV_LOG_WARNING,
+               "FEL decode: damaged enhancement data; waiting for a shared random-access picture\n");
+    f->recovering = true;
+    f->anchor_pts = AV_NOPTS_VALUE;
+    f->harvesting = true;
+    f->sent_eof = false;
+    f->eof = false;
+}
+
 static bool receive_frames(struct dvbridge_fel *f)
 {
     while (f->num_frames < QUEUE_MAX) {
@@ -187,18 +205,43 @@ static bool receive_frames(struct dvbridge_fel *f)
         int result = avcodec_receive_frame(f->decoder, frame);
         if (result < 0) {
             av_frame_free(&frame);
+            if (result == AVERROR_INVALIDDATA && !f->harvesting) {
+                recover(f);
+                return !f->failed;
+            }
             if (result == AVERROR_EOF)
                 f->eof = true;
             return result == AVERROR(EAGAIN) || result == AVERROR_EOF;
         }
-        /* This timestamp was mapped from HEVC picture order before decoding,
-         * not borrowed from the BL packet carrying this EL access unit. */
+        if (frame->flags & AV_FRAME_FLAG_CORRUPT) {
+            av_frame_free(&frame);
+            if (f->harvesting)
+                continue;
+            recover(f);
+            return !f->failed;
+        }
+        /* The private decoder timestamp is the stable HEVC identity. Restore
+         * the exact original BL time only after native POC reordering. */
         if (frame->pts == AV_NOPTS_VALUE)
             frame->pts = frame->best_effort_timestamp;
         if (frame->format != AV_PIX_FMT_VAAPI || frame->pts == AV_NOPTS_VALUE) {
             av_frame_free(&frame);
             return false;
         }
+        unsigned match = 0;
+        while (match < f->num_times && f->times[match].order != frame->pts)
+            ++match;
+        if (match == f->num_times ||
+            (f->output_order != AV_NOPTS_VALUE && frame->pts <= f->output_order)) {
+            av_frame_free(&frame);
+            return false;
+        }
+        f->output_order = frame->pts;
+        frame->pts = f->times[match].pts;
+        frame->best_effort_timestamp = frame->pts;
+        --f->num_times;
+        memmove(f->times + match, f->times + match + 1,
+                (f->num_times - match) * sizeof(*f->times));
         for (unsigned i = 0; i < f->num_frames; ++i) {
             if (f->frames[i]->pts == frame->pts) {
                 av_frame_free(&frame);
@@ -206,6 +249,34 @@ static bool receive_frames(struct dvbridge_fel *f)
             }
         }
         f->frames[f->num_frames++] = frame;
+    }
+    return true;
+}
+
+/* Preserve native DPB output through EAGAIN and a full ready array. Recovery
+ * flushes only after decoder EOF, never merely after the queue has filled. */
+static bool harvest(struct dvbridge_fel *f)
+{
+    while (f->harvesting && f->num_frames < QUEUE_MAX) {
+        if (!f->sent_eof) {
+            int result = avcodec_send_packet(f->decoder, NULL);
+            if (result == AVERROR(EAGAIN)) {
+                unsigned before = f->num_frames;
+                if (!receive_frames(f) || f->num_frames == before)
+                    return false; /* Native send/receive must make progress. */
+                continue;
+            }
+            if (result < 0 && result != AVERROR_EOF)
+                return false;
+            f->sent_eof = true;
+        }
+        if (!receive_frames(f))
+            return false;
+        if (f->eof) {
+            avcodec_flush_buffers(f->decoder);
+            f->harvesting = f->sent_eof = f->eof = false;
+        } else if (f->num_frames < QUEUE_MAX)
+            return false; /* Accepted drain must end in EOF, not EAGAIN. */
     }
     return true;
 }
@@ -218,33 +289,96 @@ static bool pump(struct dvbridge_fel *f)
         return true;
     if (!receive_frames(f))
         goto fail;
+    if (!harvest(f))
+        goto fail;
+    if (f->harvesting)
+        return true;
     while (f->num_packets && f->num_frames < QUEUE_MAX) {
         AVPacket *packet = f->packets[0];
         unsigned match = 0;
         while (match < f->num_times && f->times[match].order != f->packet_order[0])
             ++match;
+        /* With reordered BL, an EL epoch starting on a nonkey BL is ambiguous:
+         * a lost terminal EL AU can make its max+1 counter one picture early.
+         * Non-reordered independently coded IDRs keep their existing admission.
+         * Never decode an ambiguous IDR into a previous BL's exact-time slot. */
+        if (f->packet_key[0] && match < f->num_times && !f->times[match].key &&
+            f->base_order.context->has_b_frames > 0) {
+            av_log(f->decoder, AV_LOG_ERROR,
+                   "FEL decode: ambiguous enhancement epoch at picture %lld; refusing an unproven pair\n",
+                   (long long)f->packet_order[0]);
+            goto fail;
+        }
+        if (f->recovering) {
+            if (f->packet_key[0] && match == f->num_times && !f->draining)
+                break; /* Independent EL IDR can precede the matching BL key. */
+            if (!f->packet_key[0] || match == f->num_times || !f->times[match].key) {
+                if (match < f->num_times) {
+                    --f->num_times;
+                    memmove(f->times + match, f->times + match + 1,
+                            (f->num_times - match) * sizeof(*f->times));
+                }
+                f->packet_bytes -= packet->size;
+                av_packet_free(&packet);
+                --f->num_packets;
+                memmove(f->packets, f->packets + 1, f->num_packets * sizeof(*f->packets));
+                memmove(f->packet_order, f->packet_order + 1,
+                        f->num_packets * sizeof(*f->packet_order));
+                memmove(f->packet_key, f->packet_key + 1,
+                        f->num_packets * sizeof(*f->packet_key));
+                continue;
+            }
+            f->anchor_pts = f->times[match].pts;
+            int64_t anchor_order = f->times[match].order;
+            for (unsigned i = 0; i < f->num_times;) {
+                if (f->times[i].order >= anchor_order) {
+                    ++i;
+                    continue;
+                }
+                --f->num_times;
+                memmove(f->times + i, f->times + i + 1,
+                        (f->num_times - i) * sizeof(*f->times));
+            }
+            match = 0;
+            while (f->times[match].order != anchor_order)
+                ++match;
+            f->recovering = false;
+            av_log(f->decoder, AV_LOG_INFO,
+                   "FEL decode: resumed exact pairing at picture %lld, source PTS %lld\n",
+                   (long long)anchor_order, (long long)f->anchor_pts);
+        }
         if (match == f->num_times) {
             if (f->draining)
                 goto fail;
             break; /* A reference EL picture can precede its corresponding BL. */
         }
-        packet->pts = f->times[match].pts;
+        packet->pts = f->packet_order[0];
         packet->dts = AV_NOPTS_VALUE;
         int result = avcodec_send_packet(f->decoder, packet);
         if (result == AVERROR(EAGAIN))
             break;
-        if (result < 0)
+        if (result < 0 && result != AVERROR_INVALIDDATA)
             goto fail;
-        --f->num_times;
-        memmove(f->times + match, f->times + match + 1,
-                (f->num_times - match) * sizeof(*f->times));
         f->packet_bytes -= packet->size;
         av_packet_free(&packet);
         --f->num_packets;
         memmove(f->packets, f->packets + 1, f->num_packets * sizeof(*f->packets));
         memmove(f->packet_order, f->packet_order + 1, f->num_packets * sizeof(*f->packet_order));
+        memmove(f->packet_key, f->packet_key + 1, f->num_packets * sizeof(*f->packet_key));
+        if (result == AVERROR_INVALIDDATA) {
+            recover(f);
+            if (!harvest(f))
+                goto fail;
+            if (f->harvesting)
+                return true;
+            continue;
+        }
         if (!receive_frames(f))
             goto fail;
+        if (!harvest(f))
+            goto fail;
+        if (f->harvesting)
+            return true;
     }
     if (f->draining && !f->num_packets && !f->sent_eof && f->num_frames < QUEUE_MAX) {
         int result = avcodec_send_packet(f->decoder, NULL);
@@ -295,6 +429,7 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
         if (f->times[i].order == base_identity)
             goto fail;
     f->times[f->num_times].order = base_identity;
+    f->times[f->num_times].key = f->base_order.parser->key_frame == 1;
     f->times[f->num_times++].pts = packet->pts;
     AVPacket *copy = av_packet_clone(packet);
     if (!copy)
@@ -342,6 +477,7 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
             f->anchor_pts = packet->pts;
             f->synchronizing = false;
         }
+        f->packet_key[f->num_packets] = f->enhancement_order.parser->key_frame == 1;
         f->packet_bytes += copy->size;
         f->packets[f->num_packets++] = copy;
     }
@@ -386,17 +522,43 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 {
     if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || f->failed)
         return -1;
-    if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
-        return 2; /* Preroll before a recoverable EL picture, not a substitute. */
     /* Return available work before submitting future enhancement pictures. */
     if (take_ready(f, pts, frame))
         return 1;
+    if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
+        return 2; /* Preroll before a recoverable EL picture, not a substitute. */
     if (!pump(f))
         return -1;
     if (take_ready(f, pts, frame))
         return 1;
-    /* A later decoded EL frame does not prove the requested one is missing.
-     * Keep bounded lookahead and never substitute a neighbouring surface. */
+    if ((f->recovering && !f->harvesting) ||
+        (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts)) {
+        /* Retain possible independent common-key anchors, not discarded BL
+         * nonkeys whose EL cannot be used during this recovery interval. */
+        for (unsigned i = 0; i < f->num_times; ++i) {
+            if (f->times[i].pts == pts && !f->times[i].key) {
+                --f->num_times;
+                memmove(f->times + i, f->times + i + 1,
+                        (f->num_times - i) * sizeof(*f->times));
+                break;
+            }
+        }
+        return 2;
+    }
+    /* Native HEVC outputs in POC order. An absent identity behind that frontier
+     * cannot become a later valid picture; a future *packet* proves nothing. */
+    for (unsigned i = 0; i < f->num_times; ++i) {
+        if (f->times[i].pts == pts && f->times[i].order < f->output_order) {
+            av_log(f->decoder, AV_LOG_WARNING,
+                   "FEL decode: absent enhancement picture %lld at source PTS %lld; no replacement\n",
+                   (long long)f->times[i].order, (long long)pts);
+            --f->num_times;
+            memmove(f->times + i, f->times + i + 1,
+                    (f->num_times - i) * sizeof(*f->times));
+            return 2;
+        }
+    }
+    /* Future packets alone cannot prove a missing picture or justify substitution. */
     return f->eof || f->num_frames == QUEUE_MAX ? -1 : 0;
 }
 

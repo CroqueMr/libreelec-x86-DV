@@ -34,7 +34,7 @@ struct Binding {uint64_t stream=1,picture=1,revision=1;bool Valid()const{return 
 struct OutputPreferences {uint64_t revision=1;OutputMode output=OutputMode::MasterReference;
  bool valid=true;dvbridge_mode mode=DVBRIDGE_MODE_MASTER_REFERENCE;
  dvbridge_policy Policy()const{return {.revision=revision,.mode=mode};}
- bool ProfileValid()const{return valid;}};
+ bool ProfileValid(int=0)const{return valid;}};
 inline std::string stage;
 inline std::vector<std::string> messages;
 template<class...T>void ObserveDiagnostic(T...){}

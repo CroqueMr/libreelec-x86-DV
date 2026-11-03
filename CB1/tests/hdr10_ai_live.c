@@ -85,6 +85,8 @@ int main(int argc,char **argv)
     }
     uint16_t base[3];double peak;
     assert(cb1_hdr10_baseline(descriptors,25,NAN,base,&peak));
+    assert(actual.model && !strcmp(actual.model,"CB1-L1L3 " CB1_L1L3_MODEL_VERSION));
+    assert(!memcmp(actual.base,base,sizeof(base)));
     float prefix[222];double features[222];
     assert(cb1_hdr10_prefix(descriptors,25,base,true,true,prefix));
     for(unsigned i=0;i<222;++i)features[i]=prefix[i];

@@ -28,10 +28,10 @@ constexpr int DVBRIDGE_DV_IDLE=0;
 constexpr int LOGWARNING=1;
 struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
 struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
-enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_DOLBYVISION};
+enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG,HDR_TYPE_DOLBYVISION};
 struct Binding {unsigned stream=0,picture=0,revision=0; bool Valid() const {return stream!=0;}};
 struct VideoPicture {
- Binding doviSourceBinding; struct {::Binding Binding() const {return {};}} doviMetadata;
+ Binding doviSourceBinding; struct {::Binding value;::Binding Binding() const {return value;}} doviMetadata;
  struct {int profile=0,compatibility=0;bool el=false;unsigned informationGeneration=0;} doviSourceInfo;
  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_NONE; std::string strDVELType;
  bool doviEnhancement=false; int color_transfer=0;double pts=0;
@@ -43,7 +43,7 @@ namespace DVBRIDGE {
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
    double peak=1000;int panel=0,gamut=2;
    ::DVBRIDGE::Policy Policy()const{return {};}};
- Preferences FrameOutputSettings(){return {};}
+ Preferences FrameOutputSettings(bool=false){return {};}
  bool DiagnosticsEnabled(){return false;}
  std::string lastStage;
  void DiagnosticStage(const char* stage){lastStage=stage;}
@@ -86,10 +86,12 @@ struct GBM {int lifetime=0; GBM& GetDevice(){return *this;}
  void UseDVOutputLifetime(){++lifetime;}};
 struct CWinSystemGbmEGLContext {
  bool transaction=false,pending=false,baseOK=true,formatChanges=true; int native=0,stages=0;
+ int depth=8,targetDepth=8;
  void UseDVOutputSurfaceTransaction(bool value){transaction=value;}
  bool HasPendingDVOutputSurface(){return pending;}
  bool SetVideoOutput(const VideoPicture*) {
-  ++native;if(transaction){++stages;pending=formatChanges;} return baseOK;
+  ++native;if(!baseOK)return false;
+  if(transaction){++stages;pending=formatChanges;} depth=targetDepth;return true;
  }
 };
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
@@ -139,7 +141,12 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool StageOrdinaryDVOutput(const VideoPicture*);
  bool RetireDVContext();
  bool PrepareDVOutputFrame(const VideoPicture&);
- bool ConfigureHDR10Conversion(const VideoPicture&){m_hdrConversion=true;return true;}
+ int hdrConfigurations=0;
+ bool ConfigureHDR10Conversion(const VideoPicture& p){
+  ++hdrConfigurations;if(depth<10)return false;
+  m_hdrConversion=true;m_hdr10Session=1;m_hdr10SessionStream=p.doviMetadata.Binding().stream;
+  return true;
+ }
  bool BeginDVBridge(){m_dvState.captured=true;return true;}
 };
 METHODS
@@ -203,6 +210,28 @@ int main(){
   window.m_hdrConversion=route==DVBRIDGE::OutputRoute::HDR10;
   expect(window.SetVideoOutput(&picture) && window.m_modeAnnouncement.Pending()==CHeldModeAnnouncement::Step::NONE,
          "stable transport does not announce a metadata/policy-only update");
+ }
+ // A successful session can outlive a rejected surface: rollback restores the
+ // ordinary 8-bit drawable and ownership, not the cached session's stream.
+ for(int history=0;history<4;++history) {
+  CWinSystemGbmGLESContext window;VideoPicture next;
+  window.requested=true;window.capabilities.isDV=true;next.doviSourceInfo.profile=8;
+  next.doviMetadata.value.stream=2;window.m_hdr10Session=1;window.m_hdr10SessionStream=1;
+  window.m_dvSelection.route=DVBRIDGE::OutputRoute::HDR10;
+  window.targetDepth=10;
+  if(history==1){window.m_hdrConversion=true;window.depth=10;}
+  if(history==2){window.m_dvContext=std::make_shared<CDVBridgeGLES::Context>();window.m_dvContext->ready=false;}
+  if(history==3)window.baseOK=false;
+  const bool ready=window.PrepareDVOutputFrame(next);
+  if(history==0)
+   expect(ready && window.depth==10 && window.stages==1 && window.hdrConfigurations==1 &&
+          window.m_hdr10SessionStream==2,"rejected HDR session stages native 10-bit output before reconfiguration");
+  else if(history==1)
+   expect(ready && window.native==0 && window.hdrConfigurations==1 && window.m_hdr10SessionStream==2,
+          "live HDR transport refreshes the source session without replacing its surface");
+  else
+   expect(!ready && window.hdrConfigurations==0,
+          "stale session cannot bypass GPU retirement or failed native surface setup history="+std::to_string(history));
  }
  for(auto hdr : {StreamHdrType::HDR_TYPE_NONE,StreamHdrType::HDR_TYPE_HDR10,StreamHdrType::HDR_TYPE_HLG}) {
   for(int history=0;history<2;++history) {

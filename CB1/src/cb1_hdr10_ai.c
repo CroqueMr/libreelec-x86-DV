@@ -202,9 +202,11 @@ enum cb1_ai_status cb1_hdr10_ai_poll(struct cb1_hdr10_ai *c,struct cb1_ai_identi
         c->metrics.inference_ns+=elapsed_ns(inference);
         memcpy(c->calibration,temporal.calibration,sizeof(c->calibration));c->residual_valid=true;++c->metrics.inferences;
     }
-    struct cb1_ai_result result={.id=id,.pts=temporal.pts};
+    struct cb1_ai_result result={.id=id,.pts=temporal.pts,
+        .model="CB1-L1L3 " CB1_L1L3_MODEL_VERSION};
     status=cb1_l1l3_project(temporal.base,c->residual,temporal.peak,&result.raw);
     if(status!=CB1_AI_READY)return status;
+    memcpy(result.base,temporal.base,sizeof(result.base));
     c->result=result;c->result_valid=true;*out=result;return CB1_AI_READY;
 }
 void cb1_hdr10_ai_metrics(const struct cb1_hdr10_ai *c,struct cb1_hdr10_ai_metrics *out)

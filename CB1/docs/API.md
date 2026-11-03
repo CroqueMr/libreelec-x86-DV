@@ -8,12 +8,10 @@ CB1 is an in-process C library. The current consumer is Kodi's GBM/GLES path.
 | `dvbridge_policy.h` | Output mode and manual display profile |
 | `dvbridge_render.h` | Frame-bound processing and presentation transactions |
 | `dvbridge_creative.h` | CM2.9/CM4 processing and metadata coverage |
+| `cb1_hdr10_expert.h` | Frame-owned Expert target, native tone curve and L2 compatibility |
 | `cb1_hdr10_ai.h` | Optional asynchronous HDR10 analysis and inference |
 | `cb1_circuit.h` | Engine and circuit version identifiers |
 | `cb1_master_reference.h` | Validated raw integer reference descriptor |
-| `cb1_hdr10plus_dovi.h` | HDR10+ source statistics and explicitly estimated DV descriptors |
-| `cb1_dv_hdr10plus.h` | Reconstructed-source HDR10+ statistics and representable creative guidance |
-| `cb1_cmv40.h` | Optional CM4 output blocks and append-selection rules |
 
 The caller binds the stream, picture, policy revision and timestamp to each
 input. It owns the graphics context and output surfaces. Prepared output becomes
@@ -26,10 +24,21 @@ CB1 lock. Other players require a native adapter.
 
 CB1 does not control audio, input devices, player menus or HDMI connectors.
 
+Expert requires matched `PL_CB1_EXPERT_TONE_ABI` libplacebo headers/library and
+rebuilt consumers. Its policy owns a separate manual peak, black level and gamut.
+`pl_color_map_args.cb1_tone_shape` carries three signed Expert curve controls,
+copied into the native LUT payload and cache identity. Zero is neutral; no
+external curve callback, pixel shader SOP or second scene mapper is added.
+`expert_output_bits` and `expert_output_limited` reserve the final movie code
+ceiling before GUI composition; they are transport facts, not user controls.
+Zero output bits describe an unquantized intermediate. A prepared quantized
+output must not be resolved with a different bit depth/range. The final quantizer
+does not apply the movie's luminance ceiling to overlays.
+
 `dvbridge_render_master_reference` prepares the explicit reference circuit.
 `CB1_MASTER_READY` means prepared, not presented. Retain source leases and use
 the normal render candidate, presentation commit and GPU retirement. A null
-target or unqualified colour-converted route is unsupported, not Reference.
+target or unqualified colour-converted route is unsupported, not Standard.
 The raw descriptor is copied into dispatch variables before this call returns.
 See [Master Reference](MASTER-REFERENCE.md) for admission and output contracts.
 
@@ -67,11 +76,17 @@ source representations or GUI composition use canonical RGB output.
 Admission is automatic; no separate player setting is required. HDR10
 conversion and AI output retain their existing routing.
 
-Each circuit owns one fixed input-chroma recipe. Reference and conversion entry
+Each circuit owns one fixed input-chroma recipe. Standard and conversion entry
 points use their qualified linear chroma filter; Master entry points retain the
 exact reference filter. There is no mutable Fast preference or renderer setter.
 FEL enlargement, metadata and luma retain their circuit-specific contracts.
 Native Kodi and vanilla fallback do not use these CB1 recipes.
+
+`dvbridge_renderer_set_fel_filter` selects default sampling, GPU bilinear or
+Reference GPU enlargement for matched active FEL only. The Reference choice
+reuses Master EL filters without enabling Master reconstruction. Master ignores
+this preference. Filter API generation 2 requires matched libplacebo headers and
+library; old Nearest-specific setters are removed.
 
 ## Overlay visibility
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include "dvbridge_fel.h"
+#include "dvbridge_fel.c"
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_vaapi.h>
 #include <assert.h>
@@ -10,7 +10,7 @@
 /* Real FFmpeg splitter and ownership; deterministic decoder replaces VAAPI ioctls. */
 static int64_t ready[64];
 static unsigned count, submissions;
-static bool end, bad_pts, send_error;
+static bool end, bad_pts, send_error, invalid_send_once, invalid_receive_once;
 static int native_pool, initialized_pool = -1;
 int __wrap_avcodec_get_hw_frames_parameters(AVCodecContext *ctx, AVBufferRef *device,
                                            enum AVPixelFormat format, AVBufferRef **frames)
@@ -45,7 +45,11 @@ int __wrap_avcodec_send_packet(AVCodecContext *ctx, const AVPacket *packet)
     (void)ctx;
     ++submissions;
     if (send_error)
+        return AVERROR(ENOMEM);
+    if (invalid_send_once) {
+        invalid_send_once = false;
         return AVERROR_INVALIDDATA;
+    }
     if (!packet) {
         end = true;
         return 0;
@@ -59,6 +63,10 @@ int __wrap_avcodec_send_packet(AVCodecContext *ctx, const AVPacket *packet)
 int __wrap_avcodec_receive_frame(AVCodecContext *ctx, AVFrame *frame)
 {
     (void)ctx;
+    if (invalid_receive_once) {
+        invalid_receive_once = false;
+        return AVERROR_INVALIDDATA;
+    }
     if (!count)
         return end ? AVERROR_EOF : AVERROR(EAGAIN);
     frame->format = AV_PIX_FMT_VAAPI;
@@ -226,6 +234,78 @@ int main(void)
     dvbridge_fel_reset(f);
     assert(dvbridge_fel_submit(f, p));
     dvbridge_fel_destroy(f);
+
+    /* Corrupt EL input must consume forward, not leave Kodi retrying forever.
+     * Ready exact pairs survive; recovery never substitutes a neighbouring EL. */
+    parameters = avcodec_parameters_alloc();
+    assert(parameters);
+    parameters->codec_type = AVMEDIA_TYPE_VIDEO;
+    parameters->codec_id = AV_CODEC_ID_HEVC;
+    parameters->width = 3840;
+    parameters->height = 2160;
+    f = dvbridge_fel_create(parameters, (AVRational){1,1000000});
+    avcodec_parameters_free(&parameters);
+    assert(f && dvbridge_fel_device(f, device));
+    for (int i=0; i<3; ++i) {
+        p->pts=p->dts=100*i;
+        assert(dvbridge_fel_submit(f,p));
+    }
+    assert(dvbridge_fel_take(f,0,&frame)==1 && frame->pts==0);
+    av_frame_free(&frame);
+    p->pts=p->dts=300;
+    assert(dvbridge_fel_submit(f,p));
+    invalid_send_once=true;
+    assert(dvbridge_fel_take(f,1,&frame)==2 && !frame && !dvbridge_fel_failed(f));
+    for (int i=1; i<3; ++i) {
+        assert(dvbridge_fel_take(f,100*i,&frame)==1 && frame->pts==100*i);
+        av_frame_free(&frame);
+    }
+    p->pts=p->dts=400;
+    assert(dvbridge_fel_submit(f,p));
+    assert(dvbridge_fel_take(f,300,&frame)==2 && !frame);
+    assert(dvbridge_fel_take(f,400,&frame)==1 && frame->pts==400);
+    av_frame_free(&frame);
+    p->pts=p->dts=500;
+    assert(dvbridge_fel_submit(f,p));
+    invalid_receive_once=true;
+    assert(dvbridge_fel_take(f,500,&frame)==1 && frame->pts==500);
+    av_frame_free(&frame);
+    assert(!dvbridge_fel_failed(f));
+    dvbridge_fel_destroy(f);
+    /* Authored epoch-loss witness: the absent last EL AU leaves its next IDR
+     * at identity 31, although BL's next epoch starts at 32. It must never be
+     * attached to nonkey BL31 merely because the inherited counters agree. */
+    for (int variant=0; variant<3; ++variant) {
+        parameters=avcodec_parameters_alloc();
+        parameters->codec_type=AVMEDIA_TYPE_VIDEO;
+        parameters->codec_id=AV_CODEC_ID_HEVC;
+        parameters->width=3840;parameters->height=2160;
+        f=dvbridge_fel_create(parameters,(AVRational){1,1000000});
+        avcodec_parameters_free(&parameters);
+        assert(f && dvbridge_fel_device(f,device));
+        p->pts=p->dts=0;assert(dvbridge_fel_submit(f,p));
+        f->base_order.maximum=31;f->base_order.seen=true;
+        f->enhancement_order.maximum=30;f->enhancement_order.seen=true;
+        int64_t bl,el;
+        assert(picture_identity(&f->base_order,p,&bl) && bl==32);
+        assert(picture_identity(&f->enhancement_order,p,&el) && el==31);
+        f->packet_order[0]=el;
+        f->times[0].order=31;f->times[0].pts=3100;
+        f->times[0].key=variant==2;
+        f->base_order.context->has_b_frames=variant!=1;
+        unsigned sent=submissions;
+        int result=dvbridge_fel_take(f,3100,&frame);
+        if(variant==0) {
+            assert(result==-1 && !frame && dvbridge_fel_failed(f));
+            assert(submissions==sent); /* Do not send ambiguous pixels at all. */
+        } else {
+            /* Healthy asymmetric IDR with a non-reordered BL, and a shared
+             * key with reordered BL, retain their exact existing admission. */
+            assert(result==1 && frame->pts==3100 && !dvbridge_fel_failed(f));
+            av_frame_free(&frame);
+        }
+        dvbridge_fel_destroy(f);
+    }
     av_buffer_unref(&device);
     av_packet_free(&p);
     puts("PASS: real EL split, immutable input, bounded queue, exact PTS, reset, EOF and errors");

@@ -130,7 +130,7 @@ Window window;
 bool Window::DVBridgeRequested(const VideoPicture*){return window.requested;}
 struct CServiceBroker {static WindowBase* GetWinSystem(){return &window;}};
 struct CLinuxRendererGLES {
- bool m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false,m_bConfigured=true;
+ bool m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false,m_bConfigured=true,m_reloadShaders=false;
  bool ConfigureVideoOutput(const VideoPicture& picture) @@CONFIGURE@@
 };
 int main(){

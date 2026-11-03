@@ -60,6 +60,7 @@ struct FBO {
 struct CWinSystemGbmGLESContext:CRenderSystemGLES {
  int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160;
  FBO m_guiFbo,m_dvPQSubtitleFbo;
+ void* m_dvContext=nullptr;
  bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false,m_hdrConversion=false;
  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_cb1FramePending=false,m_dvFrame=false;
  bool m_dvPQSubtitleCleared=false,m_dvNativeGui=false;
@@ -112,6 +113,17 @@ int main(){
   assert(DVBRIDGE::lines.size()==2);
   window.m_guiCompositing=false;glViewport(0,0,19,11);
   assert(!window.BeginGuiComposite(true) && viewport[2]==19);
+  // The first AI passes run before DV has captured its output and GUI FBO.
+  // Native/direct GUI rendering must not inherit their tiny viewport either.
+  window.m_dvContext=&window;DVBRIDGE::enabled=false;
+  glViewport(0,0,128,72);
+  assert(!window.BeginGuiComposite(true));
+  assert(viewport==expected && "AI priming shrank the GUI before DV activation");
+  assert(scissor==expectedClip && "AI priming lost Kodi's logical clip");
+  glViewport(0,0,64,36);
+  assert(!window.BeginGuiComposite(false) && viewport[2]==64); // No GUI drawing.
+  window.m_guiCompositing=true;
+  assert(window.BeginGuiComposite(true) && viewport==expected);
  }
 }
 '''

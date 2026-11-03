@@ -29,16 +29,16 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | Dolby Vision Reference | Dolby Vision, TV-Led | Prioritize performance with small reconstruction differences and final TV mapping |
 | Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
 | Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
-| Dolby Vision | HDR10 Reference Basic | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
-| Dolby Vision | HDR10 Reference Expert | HDR10 | Match HDR10 conversion to the display's peak and gamut, using available creative controls |
+| Dolby Vision | HDR10 Rendering | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
+| Dolby Vision | HDR10 Rendering Reference | HDR10 | Map to the display's peak, black level and gamut, using compatible creative controls |
 | Dolby Vision | HDR10+ | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
 | HDR10 | Dolby Vision Reference (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
 | HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
-| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and AI only when they are incomplete |
+| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels, translate compatible source peaks and estimate missing minimum/mean PQ |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 
-Expert and Adaptive HDR Mapping require a manual display profile. AI conversion uses the
+HDR10 Rendering Reference and Adaptive HDR Mapping require display configuration. AI conversion uses the
 included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
 Native HDR10, HLG and SDR remain the player's responsibility.
 Native HDR10+ preserves the source picture and its authored dynamic metadata

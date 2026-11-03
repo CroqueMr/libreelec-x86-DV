@@ -12,8 +12,7 @@ class PendingInfoTests(unittest.TestCase):
     def test_pending_transition_and_failure_are_distinct_from_next_frame(self):
         code=shipped_code('xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp')
         block=code.split('    const bool transaction=',1)[1].split('    SetProperty("DV.ReferenceWarning"',1)[0]
-        metadata=(ROOT/'projects/Generic/patches/kodi/kodi-9990-native-dv.patch').read_text()
-        additions='\n'.join(line[1:] for line in metadata.splitlines() if line.startswith('+') and not line.startswith('+++'))
+        additions=shipped_code('xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h')
         binding='struct SourceBinding'+additions.split('struct SourceBinding',1)[1].split('struct SourceInfo',1)[0]
         program=r'''
 #include <cassert>

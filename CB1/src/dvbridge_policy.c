@@ -21,6 +21,12 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
             DVBRIDGE_POLICY_TV_PROFILE_REQUIRED : DVBRIDGE_POLICY_VALID;
     if (tv->gamut == DVBRIDGE_GAMUT_UNSET)
         return DVBRIDGE_POLICY_TV_PROFILE_REQUIRED;
+    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
+       (tv->peak_nits<50 || !isfinite(policy->expert_black_nits) ||
+        policy->expert_black_nits<0 || policy->expert_black_nits>.5 ||
+        policy->expert_black_nits>=tv->peak_nits ||
+        (policy->expert_output_bits && (policy->expert_output_bits<10 || policy->expert_output_bits>16))))
+        return DVBRIDGE_POLICY_INVALID_VALUE;
     return tv->peak_nits > 0 ? DVBRIDGE_POLICY_VALID : DVBRIDGE_POLICY_INVALID_VALUE;
 }
 

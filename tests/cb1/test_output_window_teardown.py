@@ -52,7 +52,8 @@ int main() {
  CWinSystemGbmGLESContext ordinary;
  ordinary.pending=ordinary.m_dvOrdinaryFrame=ordinary.m_dvStopPending=true;
  assert(ordinary.DestroyWindow());
- assert(ordinary.destroyed==1 && ordinary.rollbacks==1 && !ordinary.m_dvOrdinaryFrame && !ordinary.m_dvStopPending);
+ // Drawable rollback does not complete the stopped movie's SDR cleanup.
+ assert(ordinary.destroyed==1 && ordinary.rollbacks==1 && !ordinary.m_dvOrdinaryFrame && ordinary.m_dvStopPending);
  CWinSystemGbmGLESContext failed;
  failed.pending=failed.m_dvOrdinaryFrame=true; failed.rollbackOK=false;
  assert(!failed.DestroyWindow() && failed.destroyed==0 && failed.pending);

@@ -29,3 +29,29 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dfontconfig=enabled \
                        -Dfreetype=enabled \
                        -Dlibxml2=enabled"
+
+if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+  PKG_DEPENDS_UNPACK+=" jdk-${MACHINE_HARDWARE_NAME}-zulu"
+fi
+
+configure_package() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    PKG_DEPENDS_TARGET+=" apache-ant:host"
+    PKG_MESON_OPTS_TARGET="${PKG_MESON_OPTS_TARGET/bdj_jar=disabled/bdj_jar=enabled}"
+  fi
+}
+
+pre_configure_target() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    export JAVA_HOME="$(get_build_dir jdk-${MACHINE_HARDWARE_NAME}-zulu)"
+    export PATH+=":${JAVA_HOME}/bin"
+    PKG_MESON_OPTS_TARGET+=" -Djdk_home=${JAVA_HOME}"
+  fi
+}
+
+post_makeinstall_target() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    test -s "${INSTALL}/usr/share/java/libbluray-j2se-${PKG_VERSION}.jar"
+    test -s "${INSTALL}/usr/share/java/libbluray-awt-j2se-${PKG_VERSION}.jar"
+  fi
+}

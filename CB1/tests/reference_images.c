@@ -113,6 +113,9 @@ int main(int argc,char **argv)
     free(pixels);free(el_pixels);
     struct pl_frame f=reference_frame(input,sw,sh),ef=reference_frame(el,sw,sh);if(fel)f.enhancement_layer=&ef;
     struct dvbridge_policy policy=reference_policy();policy.tv.peak_nits=peak;policy.tv.gamut=gamut;
+#ifndef CB1_DV_TEST
+    policy.expert_output_bits=bits;policy.expert_output_limited=limited;
+#endif
 #ifdef CB1_DV_TEST
     policy.mode=DVBRIDGE_MODE_ENHANCED_DV;
     if(argc>=2 && (!strcmp(argv[1],"Natural") || !strcmp(argv[1],"Intense"))) {

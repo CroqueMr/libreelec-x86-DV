@@ -16,9 +16,7 @@ class MasterFallbackTests(unittest.TestCase):
         name='xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp'
         cpp=(Path(root)/name).read_text() if root else shipped_code(name)
         assignment=re.search(r'm_masterFramePeriodNs=.*?;',cpp,re.S).group()
-        patch=(ROOT/'projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch').read_text()
-        section=patch.split('+++ b/xbmc/utils/DVBridgePresentation.h\n',1)[1].split('\ndiff --git ',1)[0]
-        header='\n'.join(line[1:] for line in section.splitlines() if line.startswith('+'))+'\n'
+        header=shipped_code('xbmc/utils/DVBridgePresentation.h')
         program=r'''
 #include <cassert>
 #include "DVBridgePresentation.h"
@@ -133,9 +131,7 @@ int main()
 '''
         with tempfile.TemporaryDirectory() as temporary:
             source, binary = Path(temporary) / 'check.cpp', Path(temporary) / 'check'
-            patch = (ROOT / 'projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch').read_text()
-            section = patch.split('+++ b/xbmc/utils/DVBridgePresentation.h\n', 1)[1].split('\n--- ', 1)[0]
-            header = '\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')) + '\n'
+            header = shipped_code('xbmc/utils/DVBridgePresentation.h')
             (Path(temporary) / 'DVBridgePresentation.h').write_text(header)
             source.write_text(program)
             result = subprocess.run(['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror',

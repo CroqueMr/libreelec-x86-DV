@@ -48,7 +48,8 @@ static void statistics(const char *mode)
     /* Recovery must not retain static descriptors or another scene's analysis. */
     m->num_ext_blocks=2;*av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={0,3000,1500}};
     assert(dvbridge_reference_map(&colour,&target,&signal,&p,m,bytes,false));
-    assert(fabs(colour.color.hdr.max_pq_y-3000/4095.0)<1e-7);
+    /* PQ scene analysis now has its own explicit curve contract, not CIE-Y. */
+    assert(!colour.color.hdr.max_pq_y && !colour.color.hdr.avg_pq_y);
     memcpy(m,copy,bytes);
     /* Existing non-Expert admission stays strict. */
     p.mode=DVBRIDGE_MODE_ENHANCED_DV;

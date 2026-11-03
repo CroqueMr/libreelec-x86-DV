@@ -13,7 +13,7 @@ extern enum cb1_dv_enhanced_status cb1_dv_enhanced_build_ai(
 int main(int argc,char **argv)
 {
     assert(cb1_dv_enhanced_build_ai && "AI must use the shared Enhanced plan");
-    assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_ADAPTIVE),"CB1-HDR10DVA.0.7"));
+    assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_ADAPTIVE),"CB1-HDR10DVA.0.8"));
     assert(!strcmp(cb1_circuit_version(CB1_HDR10_DV_REFERENCE),"CB1-HDR10DVR.0.1.3"));
     struct cb1_dv_enhanced_source s={.master=1000,.l1_present=true,.analysis={0,3080,1463}};
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
@@ -63,6 +63,26 @@ int main(int argc,char **argv)
         assert(cb1_dv_enhanced_pixel(&p,(double[3]){500,500,500},out));
         assert(out[0]>500 && out[0]<=fmax(500,policy.tv.peak_nits));
         assert(cb1_dv_enhanced_pixel(&p,shadow,out) && !memcmp(shadow,out,sizeof(out)));
+        // Equal guidance must produce equal expansion, including saturated colors.
+        for(unsigned k=0;k<7;k++){
+            double rgb[3],dv[3];
+            for(unsigned j=0;j<3;j++)rgb[j]=samples[k][j]*(k<2?1:s.master);
+            assert(cb1_dv_enhanced_pixel(&p,rgb,out));
+            assert(cb1_dv_enhanced_pixel(&authored,rgb,dv));
+            assert(!memcmp(out,dv,sizeof(out)));
+            double ceiling=fmax(policy.tv.peak_nits,fmax(rgb[0],fmax(rgb[1],rgb[2])));
+            for(unsigned j=0;j<3;j++)assert(isfinite(out[j]) && out[j]>=rgb[j] && out[j]<=ceiling+1e-7);
+        }
+        struct cb1_dv_enhanced_plan old=p;
+        s.analysis[1]=2771;s.analysis[2]=1000;
+        assert(cb1_dv_enhanced_build_ai(&p,&s,&policy)!=CB1_DVE_INVALID);
+        assert(cb1_dv_enhanced_build(&authored,&s,&policy)==p.status);
+        cb1_dv_enhanced_transition(&p,&old,1.0/30,false);
+        cb1_dv_enhanced_transition(&authored,&old,1.0/30,false);
+        assert(!memcmp(p.extra,authored.extra,sizeof(p.extra)));
+        assert(cb1_dv_enhanced_analysis(&p,a) && cb1_dv_enhanced_analysis(&authored,b));
+        assert(!memcmp(a,b,sizeof(a)));
+        s.analysis[1]=3080;s.analysis[2]=1463;
     }
     if(!json)puts("PASS shared Adaptive DV/AI curves, analysis, neutral guidance, bounds and shadows");
 }

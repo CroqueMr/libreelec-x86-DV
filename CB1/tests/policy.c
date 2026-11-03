@@ -33,7 +33,8 @@ int main(void)
                     p.tv = (struct dvbridge_tv_profile){10000, panel, gamut};
                     assert(dvbridge_policy_validate(&p) == DVBRIDGE_POLICY_VALID);
                     p.tv.peak_nits = 0.001;
-                    assert(dvbridge_policy_validate(&p) == DVBRIDGE_POLICY_VALID);
+                    assert(dvbridge_policy_validate(&p) == (mode==DVBRIDGE_MODE_HDR10_EXPERT ?
+                        DVBRIDGE_POLICY_INVALID_VALUE : DVBRIDGE_POLICY_VALID));
                 }
             p.tv = (struct dvbridge_tv_profile){NAN, 0, 0};
             assert(dvbridge_policy_validate(&p) == DVBRIDGE_POLICY_INVALID_VALUE);

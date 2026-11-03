@@ -57,11 +57,11 @@ display peak or an output brightness cap.
 | --- | --- | --- | --- |
 | RPU reconstruction data | Reconstruct source pixels | Reconstruct before conversion | Same reconstruction as Reference |
 | L1 min/max/average | Transport | Maximum/average guide scene mapping; minimum validated and retained | Guide expansion; transform authored scene descriptors through the applied curve |
-| L3 offsets | Transport | Expert applies to effective L1 once | Fold once; emit neutral offsets when the block is present |
+| L3 offsets | Transport | Retained, not executed | Fold once; emit neutral offsets when the block is present |
 | L2 CM2.9 trims | Transport | Expert applies eligible controls | Guide luminance retention and color protection |
 | L5 active area | Transport and mask borders | Preserve active-area geometry | Output geometry; full-raster signalling while overlays are visible |
 | L6 HDR mastering | Transport | Basic reference and static HDR descriptors | Retained if present; not relabelled as measured output |
-| L8 CM4 trims | Transport | Expert uses the independent CM4 operator | Guide luminance retention and color protection |
+| L8 CM4 trims | Transport | Retained; available L2 compatibility only | Guide luminance retention and color protection |
 | L9 mastering primaries | Transport | Expert resolves source mastering gamut | Retained; no output signal-gamut override |
 | L10 target descriptions | Transport | Resolve compatible custom CM4 anchors | Resolve source anchors; retained if present |
 
@@ -70,10 +70,9 @@ block length, not whether the value is nonzero. Unknown targets are not assigned
 invented peak, black-level or transfer values. Duplicate or inconsistent data
 is not presented as valid processing.
 
-L1-only authored DV does not acquire fabricated L2/L8 trims. The selected Adaptive
-path can expand it using neutral trim retention. Missing usable scene analysis
-still preserves the source image/metadata pair; missing optional creative trims
-alone does not disable reconstruction or expansion.
+L1-only authored DV does not acquire fabricated L2/L8 trims. Its Adaptive HDR Mapping
+treatment can therefore remain unchanged. Missing optional creative metadata
+does not imply that source reconstruction is missing.
 
 ## Dolby Vision Reference
 
@@ -96,9 +95,9 @@ ordinary 8-bit SDR. Scanout must preserve the packed bytes; color transforms,
 range changes and dithering cannot be applied to that container as ordinary RGB.
 The TV performs final TV-Led display mapping.
 
-## Dolby Vision to HDR10: Reference Basic
+## Dolby Vision to HDR10 Rendering
 
-Basic reconstructs the source, then uses libplacebo's spline tone mapper and
+HDR10 Rendering reconstructs the source, then uses libplacebo's spline tone mapper and
 perceptual gamut mapper. Valid L1 maximum/average values guide scene processing;
 otherwise the mapper uses static HDR descriptors. The reference derives from
 valid source mastering metadata, not a manual TV peak.
@@ -118,114 +117,98 @@ Source MaxCLL/MaxFALL are not relabeled as measured output statistics.
 
 These are rendering coefficients, not user calibration measurements.
 
-## Dolby Vision to HDR10: Reference Expert
+## Dolby Vision to HDR10 Rendering Reference
 
-Expert uses the manual display reference `T` and gamut, selected from BT.709,
-P3-D65 or BT.2020. Reconstruction precedes target mapping and creative controls.
-The working-domain hook owns tone mapping; later stages perform gamut conversion
-and PQ encoding, not a second scene tone map.
+The frame-owned plan binds reconstruction, source descriptors, the explicit
+native tone curve, target gamut, compatible trims and HDR10 signaling. Invalid
+metadata cannot partially replace it. Required FEL must be paired; source RPU
+bytes remain immutable.
 
-Basic and Expert can write directly to the player's final HDR10 target without
-an intermediate resolve when composition is unnecessary. GUI and capture retain
-float composition. Final storage is 10-bit-or-higher UNORM or FP32; the fixed
-4096-entry R32F PQ encoder uses fourth-root coordinates near black.
+User inputs are independent from the profiles consumed by other circuits:
 
-Effective normalized PQ is `L1/4095 + (L3-2048)/2048` where L3 is present.
-Derived L1 descriptors are rounded once to 12-bit codes. Ordering and
-range are checked before use. Maximum and average guide mapping; minimum is
-validated and retained, not substituted for measured display black.
+| Input | Domain |
+| --- | --- |
+| Manual peak T | 50�10000 nits, 0.1-nit entry; no peak presets |
+| Estimated black B | OLED 0; LCD/MiniLED 0.005; projector 0.05; custom 0�0.5 nit |
+| Target gamut | P3-D65, BT.2020 or BT.709 |
 
-Expert uses valid static source descriptors when L1 is absent, zero or
-inconsistent, including unusable computed L1/L3. It retains the requested TV
-reference and compatible trims. No scene statistics are synthesized or carried
-from another picture. Malformed storage/raw blocks and duplicates remain invalid.
-Source metadata stays immutable; other circuits retain their previous admission.
+Custom black is remembered separately and initially takes the previous preset.
+A genuinely stored legacy peak/gamut is copied once; other mode settings are not
+rewritten. The TV's own dynamic tone mapping is assumed disabled.
 
-### CM2.9
+### Native curve and color domain
 
-Compatible trim anchors are selected around the display reference. Between
-anchors, interpolation uses PQ distance rather than linear-nit distance:
+Reconstruction precedes one native intensity/chroma/gamut mapping. Expert uses
+raw valid L1 maximum/average in their PQ domain, without adding L3. L1 minimum is
+validated/descriptive, not a physical-black anchor. All-black L1 remains valid;
+missing/unusable analysis uses valid static source descriptors from this frame.
+Scene PQ values are not relabelled as CIE-Y metadata. Malformed storage,
+contradictions and duplicates are rejected through the existing validation.
+
+The explicit native ST2094-10 curve compresses when the scene exceeds T. Otherwise
+the native clip curve avoids inverse expansion. Both curve families use the same
+display-adapted minimum PQ(B), so compression tends continuously to max(L,B).
+This is a mapping-domain bound, not authored source minimum metadata. Maximum is
+PQ(T). LUTs are FP32: 1024 entries for compression,4096 for clip.
+B constrains the curve, not a uniform RGB offset after mapping.
+The gamut mapper's minimum is known zero, not B or an inferred physical epsilon.
+
+### L2 compatibility
+
+Compatible L2 anchors bracket T and interpolate by PQ distance. With no upper
+anchor the existing resolver can use a neutral mastering anchor. With no usable
+L2, base mapping remains active. Expert uses a public shadow-protecting curve
+interpretation, not the previous linear RGB SOP or a proprietary Dolby operator.
+For the native LUT output q, normalize x=(q-PQ(B))/(PQ(T)-PQ(B)). Controls are:
 
 ```text
-w = clamp((P(T) - P(Tlow)) / (P(Thigh) - P(Tlow)))
-control = low + w * (high - low)
-```
+s = (c0-2048)/2048
+o = (c1-2048)/2048
+g = (c2-2048)/2048
+F(x) = x + x*x*(1-x)*(1-x) * (o*(1-x) + s*x - 4*g*x*(1-x))
+q' = PQ(B) + (PQ(T)-PQ(B))*F(x)
 
-With no upper authored anchor, the CM2.9 resolver can use a neutral mastering
-anchor. With no usable trim anchor, Expert retains its non-creative mapping.
-
-For primary control words `c0..c4`:
-
-```text
-slope = c0/4096 + 0.5
-offset = c1/4096 - 0.5
-power = c2/4096 + 0.5
 chroma = c3/4096 - 0.5
 gain = c4/4096 - 0.5
-v[i] = T * clamp(input[i]/T * slope + offset)^power
-Y = 0.22897*v[R] + 0.69174*v[G] + 0.07929*v[B]
-output[i] = v[i] * ((1+chroma)*v[i]/Y)^gain
+v = clamp(target_linear_RGB,0,T)
+Y = dot(v,target_gamut_luminance_weights)
+output[i] = clamp(v[i]*((1+chroma)*v[i]/Y)^gain,0,T)
 ```
 
-The color step is skipped for zero luminance/components or neutral gain. Word
-2048 is neutral. CM2.9 spatial `ms_weight` is preserved, not claimed as applied.
-The fixed CM2.9 luminance weights are implementation coefficients. CM4 instead
-derives luminance weights from the selected gamut's RGB-to-XYZ matrix.
+The signed curve controls are baked into the existing tone LUT on the CPU,
+before native gamut handling. No RGB SOP remains. F fixes both endpoints and
+their unit tangents. For controls in[-1,1], its derivative is at least
+1-2/(3*sqrt(3))-6/16 >0.24: this operator adds no plateau, reversal or endpoint
+overshoot in real arithmetic. Neutral controls bypass it exactly. This does not
+undo plateaus caused by the base curve, estimated display black or quantization.
+The native cache compares/copies all three controls, including return to neutral.
 
-Eligible direct 4K FEL Expert output with neutral or positive chroma gain caches the chroma operator, final gamut map
-and PQ encoder in a 160-cubed FP32 table. First mapping and authored SOP still
-run per picture. Coordinates use `phi(x)=0.5*P(10000*x)+0.5*x`; lookup uses two
-bilinear slices and blue-axis interpolation. Changes to baked mapping inputs
-invalidate the table. Allocation or dispatch failure retries the same picture
-once through the dense map before publication. This interpolation is a bounded
-conversion approximation, not bit-identical rendering. It does not apply to
-Native Dolby Vision, Adaptive HDR Mapping, AI, GUI composition or spatial CM4 processing.
-Negative chroma gain retains the dense map to avoid amplified low-channel
-interpolation errors. Authored controls are not clamped or rewritten.
+Only chroma executes in linear target-gamut RGB, with weights derived from its
+RGB-to-XYZ matrix. Its bounded input domain does not depend on neutral luminance
+controls. Zero channels/luminance are guarded; neutral chroma is compiled out.
+CM4 uses available L2 compatibility only: L3/L8 are not stacked on the explicit
+curve. L8-only sources do not claim a full CM4 creative render. Spatial and
+secondary CM4 controls remain unexecuted in this runtime. The independent CM4
+operator/API remains for qualification and other explicitly selected consumers.
 
-### CM4
+### Output and cost
 
-The independent `cb1-cm4-v1` operator resolves L8 against preset or custom L10
-targets. Only compatible gamut/transfer anchors participate. Gamut matching uses
-the producer's signed 16-bit coordinate precision. Known incompatible transfers
-are excluded; a custom L10 transfer remains explicitly unknown.
-In Expert only, unrelated unknown targets do not erase compatible known anchors.
+The source-sized working hook emits linear target-gamut RGB. Existing native
+Kodi scaling and the final BT.2020/PQ carrier adapter remain in place, without
+another scene tone map. No new frame queue or intermediate surface is added.
+The obsolete Expert atlas/cache and local CM4 spatial runtime are removed.
 
-Decoded coefficients, rather than encoded words, are interpolated with `w`.
-Absent controls stay neutral; absent target black levels stay absent.
+The movie ceiling is rounded down to a representable output code before GUI
+composition. The final 10/12-bit full/limited-range quantizer does not clip GUI
+brightness to the movie target. Without a known integer target, only the floating
+PQ ceiling is claimed. L5 bands retain nominal black; the new signed curve
+controls preserve the image's black endpoint, including for positive offset.
 
-| Control | Decode |
-| --- | --- |
-| Slope / offset / power | Same primary decoding as CM2.9 |
-| Chroma base | `2^((c3-2048)/4096)` |
-| Saturation gain | `2^((c4-2048)/4096)` |
-| Spatial detail weight | `0.30*(c5-2048)/2048` |
-| Midtone exponent `m` | `2^((mid-2048)/2048)` |
-| Highlight clip strength `k` | `0.25*(clip-2048)/2048` |
-| Six-color saturation | `2^((sat[i]-128)/256)` |
-| Six-color rotation | `(pi/12)*(hue[i]-128)/128` radians |
-
-After the primary SOP operation, with `x=clamp(Y/T)`:
-
-```text
-midtone Y' = T * x^m / (x^m + (1-x)^m)
-clip Y' = T * clamp(x + k*x*H((x-0.5)/0.5))
-```
-
-RGB scales by `Y'/Y` while preserving exact neutral gray. Color controls operate
-in IPT/PQ using libplacebo's gamut matrices. With normalized intensity `z`, the
-primary chroma multiplier is `saturation_gain * chroma_base^(2*z-1)`.
-The generic offline six-color operator uses smooth hue weights
-`exp(4*(cos(hue-center[i])-1))`, normalized to sum to one. Saturation blends in
-log space; rotation blends in angle space.
-HDR10 Expert preserves these SDR-only secondary fields without execution.
-Its primary SOP, chroma/saturation, midtone, clipping and spatial equations are
-unchanged. This is a domain correction, not a claim of Dolby mapper equivalence.
-
-Spatial detail uses the native libplacebo base/detail path only when the input
-peak exceeds the output reference and the weight is nonzero. Otherwise it is
-retained but not reported as applied. L2 compatibility and L8 are never stacked
-as two creative passes.
+HDR10 metadata describes the virtual target gamut/peak/black. Unknown MaxCLL/FALL
+are zero, not invented measurements of the transformed picture. A target above
+the source does not by itself brighten the entire film to that target.
+This is an open player-led mapping, not the proprietary Dolby content mapper
+or a claim of certified LLDV equivalence.
 
 ## Authored Dolby Vision Adaptive HDR Mapping
 
@@ -233,8 +216,8 @@ as two creative passes.
 scene L1/L5. Kodi and the engine expose one Adaptive HDR Mapping mode.
 The equations here describe the supported metadata-guided expansion model,
 not the licensed Dolby mapper. Native and HDR10 conversion
-retain their separate contracts; AI Adaptive reuses the executor with the
-different guidance and curve specified below.
+retain their separate contracts; AI Adaptive reuses the same curve with
+predicted scene guidance and no authored trims, as specified below.
 
 ### Source guidance
 
@@ -293,9 +276,8 @@ The pixel shader linearly interpolates this table at
 `u=clamp((Y-10)/(M-10),0,1)`. Highlights can expand when the display peak is
 below the mastering bound but above the authored scene peak.
 Dark scenes do not automatically reach T.
-Missing usable L1 preserves the original image/metadata pair. With valid L1 and
-no creative anchors, retention is one and trim-derived color restraint is neutral.
-HDR10 AI uses its separate expansion contract.
+Missing L1 preserves the original image/metadata pair. Missing usable creative
+anchors keeps neutral retention rather than disabling the scene-guided curve.
 
 Two global color coefficients and 65 circular hue samples restrain expansion
 using original trim magnitudes and target-domain hue centers. An IPT/PQ chroma
@@ -389,8 +371,7 @@ unsupported formats retain analytic PQ. Pixel/statistic differences are qualifie
 to one logical 12-bit PQ code. A 0.001-nit tolerance protects the 10-nit shadow
 boundary from lookup roundoff.
 Identity-size 4K reconstruction stays linear through expansion, normalized to
-10000 nits. The selected Adaptive recipe uses an FP16 reconstruction intermediate
-and FP32 expansion calculations. This removes the intermediate PQ encode/decode pair.
+10000 nits in FP32 storage. This removes the intermediate PQ encode/decode pair.
 Explicit intermediate luminance prevents SDR inference. A bound rejection alone
 re-encodes the unexpanded image. PQ recovery and protected-shadow re-encoding
 are qualified within one logical 12-bit code, not byte-for-byte PQ identity.
@@ -405,8 +386,8 @@ visibility signaling. Unresolved Adaptive HDR Mapping frames accept updated GUI 
 without restarting content analysis. Visibility changes refresh the outgoing L5
 candidate, including source-bound identity output.
 
-The GPU uses compact reductions, bounded reconstruction/output resources and
-asynchronous completion. Both RGB and packed preparation may return Pending. No image buffer
+The GPU uses one retained FP32 output, compact reductions and asynchronous
+completion. Both RGB and packed preparation may return Pending. No image buffer
 is downloaded to the CPU. This numerical qualification does not establish TV
 appearance, Dolby equivalence or Intel/AMD hardware throughput.
 
@@ -465,17 +446,15 @@ invented or applied. The model, feature extraction and calibration are unchanged
 
 Source reference M is the valid HDR10 mastering maximum, not MaxCLL or the
 configured display reference T. Unknown mastering remains unknown, using a
-conservative 10000-nit internal envelope. The exposed profile uses retention
-one, cubic accumulation and no midtone term:
+conservative 10000-nit internal envelope. The exposed profile uses the same
+scene-guided exponent, normalization, highlight expansion and midtone term
+described for DV above, with retention one and color severity zero. `T<=M`
+does not disable expansion when scene highlights have headroom below T.
 
-```text
-C[k] = (k/256)^3
-extra[k] = S * max(T-M,0) * C[k]
-```
-
-The 257 knots are linearly interpolated per pixel. Unlike the authored-DV path,
-this profile selects identity when `T<=M`. It preserves <=10-nit luminance and
-uses the same common-channel shoulder. No creative trims are fabricated.
+The same 257 knots are linearly interpolated per pixel. It preserves <=10-nit
+luminance and uses the same common-channel shoulder and temporal slew limit.
+No creative trims are fabricated. Equal effective scene guidance gives the
+same curve as DV without trims, not a claim that AI recovers an authored grade.
 
 HDR10 uses the Reference path's native BT.2020 PQ conversion, without synthetic
 Dolby reshaping or the former spline/display-mapping pass. The shared executor
@@ -486,27 +465,24 @@ use half-float. The directly packed movie does not pass through those caches.
 Movie-only direct output retains native recovery but omits the expanded GUI
 cache. Metadata insertion then updates only covered transport rows in place.
 Transformed output is analyzed before overlays;
-fresh L1/L5 replaces input L3. Identity retains the original AI image/metadata
+L1 transformed through the scene curve and fresh L5 replace input L3. Identity retains the original AI image/metadata
 pair. A source-bound rejection applies to the whole frame, not individual
 pixels. Final display mapping remains TV-Led.
 
-### HDR10+ metadata-guided Reference output
+### HDR10+ Dolby Vision Rendering
 
 The selected picture supplies an immutable, validated single-window HDR10+
 snapshot. Its maximum MaxSCL channel is normalized linear light, with 1 equal
 to 10000 nits. Convert that value through ST.2084 and quantize to 12-bit L1 max.
 Targeted-system-display luminance is not a source peak.
 
-HDR10+ AverageMaxRGB is not mean PQ. With complete valid statistics, the
-distribution estimator uses the percentiles and AverageMaxRGB to estimate mean
-PQ; it does not treat PQ(mean linear light) as mean PQ. Content minimum defaults
-to zero, known mastering minimum stays separate, and GPU/AI analysis is skipped.
-
-Valid sparse statistics use the existing AI estimates for missing values, with
-signed L3 applied once and bounds checked against the source peak. Output L3 is
-neutral after this fold. A zero MaxSCL retains the qualified estimate and is
-reported as estimated, not source-translated. These estimates are not authored
-Dolby scene analysis or recovered creative trims.
+HDR10+ AverageMaxRGB is not mean PQ. Valid percentiles estimate mean PQ by
+weighted PQ trapezoids adapted from AVDVPlus HistogramPlus. Linear AverageMaxRGB
+validates distribution consistency; it is not fitted as if the distribution
+were fully known. With missing/unusable percentiles, supplied AI estimates keep
+priority, with signed L3 folded once; otherwise PQ(AverageMaxRGB) is a labeled
+estimate. Minimum defaults to zero without analysis. Output L3 is neutral after
+this fold. Zero MaxSCL requires a supplied AI estimate; it is not source-translated.
 
 Authored Bezier curves and saturation mappings remain untranslated; no extra
 pixel pass is added. Multi-window, invalid or mismatched source snapshots are

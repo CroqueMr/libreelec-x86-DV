@@ -19,7 +19,15 @@ mkdir -p "${FIRMWARE_DIR}"
 
 log() {
   echo "kernel-overlays-setup: $@" >/dev/kmsg
+  if [ -n "${NVIDIA_BOOT_LOG}" ]; then
+    echo "kernel-overlays-setup: $@" >>"${NVIDIA_BOOT_LOG}" 2>/dev/null || :
+    if [ -e "${NVIDIA_BOOT_CONSOLE}" ]; then
+      echo "kernel-overlays-setup: $@" >"${NVIDIA_BOOT_CONSOLE}" 2>/dev/null || :
+    fi
+  fi
 }
+
+[ ! -f "${NVIDIA_SELECTOR}" ] || enable_nvidia_boot_diagnostics /sys /proc /dev /run /storage
 
 apply_overlay() {
   case "$1" in

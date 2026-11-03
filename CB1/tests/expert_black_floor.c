@@ -85,6 +85,91 @@ int main(void)
         assert(dvbridge_reference_map(&mapped,&target,&signal,&other,metadata,bytes,false));
         assert(fabs(mapped.color.hdr.min_luma-minima[i]/10000.0)<1e-8);
     }
+    const double peaks[]={50,600,1000,2000,10000},blacks[]={0,.0001,.005,.05,.5};
+    unsigned cases=0;
+    double maximum_reversal=0,maximum_identity=0;
+    metadata->num_ext_blocks=1;
+    for(unsigned pi=0;pi<5;pi++)for(unsigned bi=0;bi<5;bi++)
+        for(int gamut=DVBRIDGE_GAMUT_BT709;gamut<=DVBRIDGE_GAMUT_BT2020;gamut++){
+            policy.tv.peak_nits=peaks[pi];policy.expert_black_nits=blacks[bi];policy.tv.gamut=gamut;
+            struct dvbridge_identity identity={2,++cases,policy.revision};
+            assert(dvbridge_render_hdr10_policy_rgb(renderer,&policy,&identity,&frame,metadata,bytes,0,0,
+                (struct dvbridge_geometry){16,1,0,0,16,1}));
+            pl_tex result=dvbridge_render_texture(renderer);
+            GLuint fbo;glGenFramebuffers(1,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,
+                pl_opengl_unwrap(gl->gpu,result,NULL,NULL,NULL),0);
+            float actual[64];glReadPixels(0,0,16,1,GL_RGBA,GL_FLOAT,actual);assert(glGetError()==GL_NO_ERROR);
+            glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&fbo);
+            for(unsigned c=0;c<3;c++){
+                assert(fabs(actual[c]-(blacks[bi]?st2084(blacks[bi]):0))<2e-4);
+                for(unsigned i=0;i<16;i++){
+                    assert(isfinite(actual[4*i+c]) && actual[4*i+c]>=0);
+                    assert(actual[4*i+c]<=st2084(peaks[pi])+1e-6);
+                    if(i){
+                        maximum_reversal=fmax(maximum_reversal,actual[4*(i-1)+c]-actual[4*i+c]);
+                        assert(actual[4*i+c]+1.0/4095>=actual[4*(i-1)+c]);
+                    }
+                    if(peaks[pi]>1001){
+                        double expected=st2084(fmax(nits[i],blacks[bi]));
+                        maximum_identity=fmax(maximum_identity,fabs(actual[4*i+c]-expected));
+                        if(fabs(actual[4*i+c]-expected)>=1.0/4095)
+                            fprintf(stderr,"sourcefits P=%g B=%g G=%d input=%g actualPQ=%.9g expectedPQ=%.9g\n",
+                                peaks[pi],blacks[bi],gamut,nits[i],actual[4*i+c],expected);
+                        assert(fabs(actual[4*i+c]-expected)<1.0/4095);
+                    }
+                }
+            }
+            const struct dvbridge_hdr10_policy_output *output=dvbridge_render_policy_output(renderer);
+            assert(output && output->hdr10.min_luminance==lround(blacks[bi]*10000));
+            assert(output->hdr10.max_luminance==ceil(peaks[pi]) && !output->hdr10.max_cll && !output->hdr10.max_fall);
+        }
+    /* Signed creative controls must not introduce a shadow plateau or move
+     * the black endpoint. This fails against the former linear RGB SOP. */
+    metadata->num_ext_blocks=2;
+    av_dovi_get_ext(metadata,0)->l1.max_pq=3078;
+    policy.tv.peak_nits=2000;policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;policy.expert_black_nits=0;
+    const unsigned signed_words[][3]={
+        {2048,2048,2048},{2048,2045,2048},{2048,2062,2048},
+        {0,0,0},{0,0,4095},{0,4095,0},{0,4095,4095},
+        {4095,0,0},{4095,0,4095},{4095,4095,0},{4095,4095,4095},
+        {2048,2048,2048},{0,0,0}};
+    /* Independently calculated PQ values at100 nits for the public anchored
+     * polynomial, P2000/B0. Also catches stale LUTs when only a trim changes. */
+    const double expected_pq100[]={.508078421517,.508052147629,.508201032996,
+        .505660541171,.417572026141,.541524398588,.453435883558,
+        .562719778871,.474631263841,.598583636288,.510495121258,
+        .508078421517,.505660541171};
+    for(unsigned t=0;t<sizeof(signed_words)/sizeof(*signed_words);t++){
+        *av_dovi_get_ext(metadata,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3389,
+            .trim_slope=signed_words[t][0],.trim_offset=signed_words[t][1],
+            .trim_power=signed_words[t][2],.trim_chroma_weight=2048,
+            .trim_saturation_gain=2048,.ms_weight=-1}};
+        struct dvbridge_identity identity={3,t+1,1};
+        assert(dvbridge_render_hdr10_policy_rgb(renderer,&policy,&identity,&frame,metadata,bytes,0,0,
+            (struct dvbridge_geometry){16,1,0,0,16,1}));
+        GLuint fbo;glGenFramebuffers(1,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,
+            pl_opengl_unwrap(gl->gpu,dvbridge_render_texture(renderer),NULL,NULL,NULL),0);
+        float actual[64];glReadPixels(0,0,16,1,GL_RGBA,GL_FLOAT,actual);assert(glGetError()==GL_NO_ERROR);
+        glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&fbo);
+        for(unsigned c=0;c<3;c++){
+            if(actual[c]!=0)fprintf(stderr,"Expert signed trim %u moves black to PQ %.9g\n",t,actual[c]);
+            assert(actual[c]==0);
+            if(fabs(actual[4*14+c]-expected_pq100[t])*4095>=1)
+                fprintf(stderr,"Expert curve/cache trim=%u q100=%.9g expected=%.9g\n",t,actual[4*14+c],expected_pq100[t]);
+            assert(fabs(actual[4*14+c]-expected_pq100[t])*4095<1);
+            for(unsigned i=1;i<16;i++){
+                if(actual[4*i+c]<=0)fprintf(stderr,"Expert signed trim %u loses shadow at %.9g nits\n",t,nits[i]);
+                assert(isfinite(actual[4*i+c]) && actual[4*i+c]>0);
+                assert(actual[4*i+c]+1.0/4095>=actual[4*(i-1)+c]);
+                assert(actual[4*i+c]<=st2084(2000));
+            }
+        }
+    }
+    puts("PASS signed Expert curves keep black fixed and sampled shadows positive, bounded, monotone within1PQ12");
+    printf("PASS %u runtime peak/physical-black/gamut plans; max rounding reversal %.9g PQ12, identity error %.9g PQ12; bounded\n",
+        cases,maximum_reversal*4095,maximum_identity*4095);
     av_free(metadata);pl_tex_destroy(gl->gpu,&texture);dvbridge_renderer_destroy(renderer);pl_opengl_destroy(&gl);
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);eglTerminate(display);

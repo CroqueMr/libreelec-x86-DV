@@ -95,17 +95,18 @@ criteria. The reference is not a complete TV mapper or a panel measurement.
 
 ## Rendering boundary
 
-Expert reconstructs BL and matched applicable EL once. A libplacebo color-map
-hook maps to target linear nits, applies the resolved CM2.9 SOP/color controls,
-then performs output gamut conversion and PQ encoding. The remaining tone
-operation is clip, not a second scene tone map. Neutral/no-anchor controls keep
-the previous Expert mapping. L3 changes the effective L1 descriptors once,
-including pictures without a trim anchor. Source metadata is never rewritten.
+Expert reconstructs BL and matched applicable EL once. Its native color-map hook
+uses raw L1 PQ guidance and an explicit forward curve. L2 luminance controls now
+shape that same PQ LUT with fixed black/peak endpoints; the old linear RGB SOP
+and Expert atlas are removed. Chroma uses target-gamut RGB-to-XYZ weights before
+final BT.2020/PQ encoding. No second scene mapper or renderer surface is added.
+L3/L8 are not stacked on this compatibility curve. Source metadata is immutable.
+See the Expert section in ALGORITHMS.md for the public equations and bounds.
+The standalone scalar/CM4 operators and Adaptive/HDR10+ consumers keep their
+existing contracts. This Expert policy does not claim a licensed Dolby grade.
 
-CM4 Expert applies the independent primary, midtone, clipping and compatible
-chroma/saturation controls, with conditional native spatial detail. SDR-only
-six-color hue/saturation fields are preserved, not executed in HDR10 Expert.
-Adaptive HDR Mapping
+CM4 Expert uses compatible L2 anchors, not the offline CM4 scalar/spatial
+operators. It preserves the source L8 fields without executing them. Adaptive HDR Mapping
 expands reconstructed pixels using the original metadata and emits consistent
 output descriptors. Unknown target descriptions remain unsupported and preserve
 coherent source metadata. Panel type does not infer display capabilities. The TV retains its TV-Led
@@ -143,9 +144,9 @@ must pass the same raw/parsed bounds and primaries validation as other custom ta
 The target resolver selects nearest anchors matching the manual gamut at
 signed 16-bit coordinate precision and matching transfer, with a bounded
 PQ-distance weight. Known incompatible transfers are excluded; custom targets
-retain their unknown transfer without inferring PQ. Expert interpolates decoded
-CM4 coefficients between eligible anchors. Unknown descriptions are skipped in
-Expert when other eligible anchors remain. Ambiguous equal-peak anchors have
+retain their unknown transfer without inferring PQ. The shared CM4 resolver
+interpolates decoded coefficients between eligible anchors. Unknown descriptions
+are skipped when other eligible anchors remain. Ambiguous equal-peak anchors have
 separate statuses and no selected controls. Ambiguity is evaluated at the final
 nearest peaks, independently of metadata block order. Preset L10 overrides, invalid PQ
 ordering, duplicate IDs and contradictions with parsed fields are rejected.
@@ -157,7 +158,8 @@ DoViBaker reference processes L2, not these complete CM4 operations. The
 describes creative intent, not a complete numerical mapper. Independent CM4
 reference outputs and tolerances qualify this project's numerical contract only.
 
-HDR10 Expert implements the independent CM4 scalar/spatial reference.
+The independent CM4 scalar/spatial reference remains an offline operator;
+HDR10 Expert does not execute it.
 Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1`; the older `cb1-dve-v7`
 fitter remains an offline numerical reference, not the selected playback path.
 Unsupported guidance preserves a coherent native pair rather than a partial edit.
@@ -173,8 +175,10 @@ processing from quantization error; they do not establish Dolby equivalence.
 
 See [algorithms and metadata](ALGORITHMS.md) for the current equations.
 
-Expert missing, zero or inconsistent L1/L3 statistics use valid source static
-luminance descriptors. Source metadata remains unchanged and image samples are
+Expert uses raw valid L1 statistics with compatible L2 trims, without double
+L3/L8 processing. Missing or inconsistent L1 uses valid source static
+luminance descriptors; all-zero valid L1 remains all-black analysis.
+Source metadata remains unchanged and image samples are
 not forced to black. Structural/raw corruption remains invalid. This admission
 change is confined to Expert.
 

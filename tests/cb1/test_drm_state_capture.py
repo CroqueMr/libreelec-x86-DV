@@ -14,10 +14,7 @@ def source(relative):
     override = os.environ.get('CB1_DRM_STATE_SOURCE')
     if override:
         return (Path(override) / relative).read_text()
-    patch = (ROOT / 'projects/Generic/patches/kodi/kodi-9990-native-dv.patch').read_text()
-    section = patch.split('+++ b/' + relative + '\n', 1)[1]
-    section = re.split(r'\n(?:diff --git |--- )', section, maxsplit=1)[0]
-    return '\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')) + '\n'
+    return shipped_code(relative)
 
 
 DRM_BOUNDARY = r'''

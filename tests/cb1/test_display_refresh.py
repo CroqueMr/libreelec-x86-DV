@@ -7,6 +7,74 @@ from test_native_video_source import TREE, body
 
 
 class DisplayRefreshTests(unittest.TestCase):
+    def test_live_edid_lookup_does_not_force_another_hardware_probe(self):
+        source=(TREE/'xbmc/windowing/gbm/drm/DRMConnector.cpp').read_text()
+        method=body(source,'std::vector<uint8_t> CDRMConnector::GetEDID(')
+        program=r'''
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
+constexpr int LOGDEBUG=0;
+struct CLog {template<class... T> static void LogF(T&&...) {}};
+struct drmModeConnector {uint32_t connector_id=7;int count_props=2;
+ uint32_t props[2]={19,42};uint64_t prop_values[2]={0,22};};
+struct Blob {uint32_t length;void* data;};using drmModePropertyBlobPtr=Blob*;
+static unsigned probes,queries,freed_connectors,freed_blobs;
+static bool kernel_dv=true,query_fails,blob_fails;
+static uint32_t blob_length=2;static bool null_data;
+static uint8_t old_data[]={1,2},new_data[]={3,4};
+static drmModeConnector live;
+static Blob blob;
+static drmModeConnector* drmModeGetConnector(int,uint32_t){
+ ++probes;kernel_dv=false;live.prop_values[1]=0;return &live;
+}
+static drmModeConnector* drmModeGetConnectorCurrent(int,uint32_t){
+ ++queries;return query_fails?nullptr:&live;
+}
+static void drmModeFreeConnector(drmModeConnector*){++freed_connectors;}
+static Blob* drmModeGetPropertyBlob(int,uint64_t id){
+ if(blob_fails)return nullptr;
+ blob={blob_length,null_data?nullptr:id==11?old_data:new_data};return &blob;
+}
+static void drmModeFreePropertyBlob(Blob*){++freed_blobs;}
+struct CDRMConnector {
+ int m_fd=5;std::unique_ptr<drmModeConnector> m_connector=std::make_unique<drmModeConnector>();
+ std::optional<uint64_t> GetPropertyValue(const char*) const{return 11;}
+ uint32_t GetPropertyId(const char*) const{return 42;}
+ std::vector<uint8_t> GetEDID(bool refresh=false)const METHOD
+};
+int main(){
+ CDRMConnector c;
+ assert((c.GetEDID()==std::vector<uint8_t>{1,2}));
+ assert(!probes && !queries && freed_blobs==1);
+ assert((c.GetEDID(true)==std::vector<uint8_t>{3,4}));
+ assert(!probes && queries==1 && kernel_dv);
+ assert(freed_connectors==1 && freed_blobs==2);
+ live.prop_values[1]=0;assert(c.GetEDID(true).empty());
+ assert(!probes && freed_connectors==2 && freed_blobs==2);
+ live.count_props=0;live.prop_values[1]=22;assert(c.GetEDID(true).empty());
+ assert(freed_connectors==3 && freed_blobs==2);
+ query_fails=true;assert(c.GetEDID(true).empty());
+ assert(freed_connectors==3 && freed_blobs==2);
+ query_fails=false;live.count_props=2;blob_fails=true;assert(c.GetEDID(true).empty());
+ assert(freed_connectors==4 && freed_blobs==2 && !probes && kernel_dv);
+ blob_fails=false;null_data=true;assert(c.GetEDID(true).empty());
+ null_data=false;blob_length=0;assert(c.GetEDID(true).empty());
+ blob_length=32769;assert(c.GetEDID(true).empty());
+ assert(freed_connectors==7 && freed_blobs==5 && !probes && kernel_dv);
+ assert(c.m_connector->connector_id==7); // Native connector/mode ownership is untouched.
+}
+'''.replace('METHOD',method)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined','-no-pie',
+                str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_actual_refresh_preserves_valid_information(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
         self.assertIn('bool CWinSystemGbm::RefreshDisplayInfoForVideo()', source,

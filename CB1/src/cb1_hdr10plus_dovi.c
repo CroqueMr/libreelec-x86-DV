@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Weighted-percentile adaptation: Copyright (C) 2024 Team Kodi. */
 #include "cb1_hdr10plus_dovi.h"
 #include <math.h>
 #include <string.h>
 
-/* HDR10+ statistics/scene comparison adapted from Hades, GPL-2.0-or-later
- * under its additional license offer; see LICENSES/Hades-HDR10Plus.txt. */
+/* Scene comparison adapted from Hades under its GPL-2.0-or-later offer.
+ * Weighted PQ percentiles adapted from AVDVPlus HistogramPlus, generalized to
+ * validated percentile counts with constant endpoint tails. See LICENSES/. */
 struct hdr10plus_l1 { unsigned max_measured, avg_measured; };
 
 /* SMPTE ST 2084, on light in [0, 1] of 10000 cd/m2 */
@@ -21,14 +23,6 @@ static double pq_from_linear(double y)
     return pow((PQ_C1 + PQ_C2 * p) / (1 + PQ_C3 * p), PQ_M2);
 }
 
-static double linear_from_pq(double e)
-{
-    e = e < 0 ? 0 : e > 1 ? 1 : e;
-    const double p = pow(e, 1 / PQ_M2);
-    const double n = p - PQ_C1;
-    return n <= 0 ? 0 : pow(n / (PQ_C2 - PQ_C3 * p), 1 / PQ_M1);
-}
-
 static unsigned code12(double e)
 {
     const double c = floor(e * 4095 + 0.5);
@@ -42,36 +36,6 @@ static bool value(AVRational q, double *v)
         return false;
     *v = av_q2d(q);
     return *v <= 1.0;
-}
-
-/* The points of t over a segment of the quantile function: 91 to 0.9, then 400 nearer to 1 by powers, then 1
- * (the high end is where t^k with a large k does all its rising). */
-#define GRID_POINTS 492
-static void make_grid(double t[GRID_POINTS])
-{
-    int n = 0;
-    for (int i = 0; i <= 90; ++i)
-        t[n++] = 0.9 * i / 90;
-    for (int i = 0; i < 400; ++i)
-        t[n++] = 1 - 0.1 * pow(1e-6, i / 399.0);
-    t[n++] = 1;
-}
-
-/* the mean of PQ and of light over a segment of p of width w, where e(t) = e0 + (e1 - e0) t^k */
-static void segment(const double *t, double e0, double e1, double k, double w, double *pq, double *light)
-{
-    double sp = 0, sl = 0, ep = e0, lp = linear_from_pq(e0);
-    for (int i = 1; i < GRID_POINTS; ++i) {
-        const double e = e0 + (e1 - e0) * (k == 1 ? t[i] : pow(t[i], k));
-        const double l = linear_from_pq(e);
-        const double dt = t[i] - t[i - 1];
-        sp += (e + ep) / 2 * dt;
-        sl += (l + lp) / 2 * dt;
-        ep = e;
-        lp = l;
-    }
-    *pq += sp * w;
-    *light += sl * w;
 }
 
 #define MAX_KNOTS 17
@@ -129,8 +93,8 @@ static bool metadata_statistics(const AVDynamicHDRPlus *m, struct hdr10plus_l1 *
     vs[k] = peak > vs[k - 1] ? peak : vs[k - 1];
     ++k;
 
-    /* Quantiles bound the linear mean independently of the interpolation model.
-     * Allow one source quantization step, not physically contradictory statistics. */
+    /* Reject contradictory distributions, independently of the PQ estimator.
+     * One source quantization step is allowed. */
     double minimum_mean = 0, maximum_mean = 0;
     for (unsigned i = 0; i + 1 < k; ++i) {
         const double width = ps[i + 1] - ps[i];
@@ -140,48 +104,17 @@ static bool metadata_statistics(const AVDynamicHDRPlus *m, struct hdr10plus_l1 *
     if (average + 0.00001 < minimum_mean || average > maximum_mean + 0.00001)
         return false;
 
-    double t[GRID_POINTS], es[MAX_KNOTS];
-    make_grid(t);
+    double es[MAX_KNOTS];
     for (unsigned i = 0; i < k; ++i)
         es[i] = pq_from_linear(vs[i]);
-    /* the segments below the top two, linear in PQ */
-    double fixed_pq = 0, fixed_light = 0;
-    for (unsigned i = 0; i + 3 < k; ++i)
-        if (ps[i + 1] > ps[i])
-            segment(t, es[i], es[i + 1], 1, ps[i + 1] - ps[i], &fixed_pq, &fixed_light);
-    /* the top two, shaped as t^k (k > 1 lowers them, k < 1 raises them), k found by halving its logarithm */
-    double top_pq, top_light, lo = 1.0 / 64, hi = 65536.0, chosen;
-#define TOP(kk)                                                                                       \
-    do {                                                                                              \
-        top_pq = fixed_pq;                                                                            \
-        top_light = fixed_light;                                                                      \
-        for (unsigned i = k - 3; i + 1 < k; ++i)                                                      \
-            if (ps[i + 1] > ps[i])                                                                    \
-                segment(t, es[i], es[i + 1], (kk), ps[i + 1] - ps[i], &top_pq, &top_light);           \
-    } while (0)
-    TOP(lo);
-    if (top_light <= average)
-        chosen = lo;
-    else {
-        TOP(hi);
-        if (top_light >= average)
-            chosen = hi;
-        else {
-            for (int i = 0; i < 40; ++i) {
-                const double mid = sqrt(lo * hi);
-                TOP(mid);
-                if (top_light > average)
-                    lo = mid;
-                else
-                    hi = mid;
-            }
-            chosen = sqrt(lo * hi);
-        }
-    }
-    TOP(chosen);
-#undef TOP
+    /* MaxSCL bounds the unseen tail for validation, but does not describe its
+     * distribution. Keep that tail constant in the PQ mean estimate. */
+    es[k - 1] = es[k - 2];
+    double mean_pq = 0;
+    for (unsigned i = 0; i + 1 < k; ++i)
+        mean_pq += (ps[i + 1] - ps[i]) * (es[i] + es[i + 1]) / 2;
     l1->max_measured = code12(pq_from_linear(peak));
-    l1->avg_measured = code12(top_pq);
+    l1->avg_measured = code12(mean_pq);
     return true;
 }
 
@@ -278,16 +211,19 @@ enum cb1_hdr10plus_dovi_status cb1_hdr10plus_dovi_describe(
             return CB1_HDR10PLUS_DOVI_OK;
         }
     }
-    if(!estimate)return CB1_HDR10PLUS_DOVI_UNSUPPORTED;
-    r.metadata=*estimate;
+    if(!estimate && !peak_code)return CB1_HDR10PLUS_DOVI_UNSUPPORTED;
+    r.metadata=estimate ? *estimate : (struct cb1_l1l3){0};
     if(peak_code){
         /* MaxSCL is normalized linear light with 1 == 10000 nits. */
         double x=pow(peak_code/100000.0,2610.0/16384);
         unsigned maximum=(unsigned)lround(4095*pow((3424.0/4096+2413.0/128*x)/
             (1+2392.0/128*x),2523.0/32));
         if(!maximum)return CB1_HDR10PLUS_DOVI_UNSUPPORTED;
-        unsigned minimum=effective(estimate->l1_min,estimate->l3_min);
-        unsigned average=effective(estimate->l1_avg,estimate->l3_avg);
+        unsigned minimum=estimate ? effective(estimate->l1_min,estimate->l3_min) : 0;
+        /* AVDVPlus continuation for an unusable histogram. This is an estimate,
+         * not mean(PQ) reconstructed from the authored distribution. */
+        unsigned average=estimate ? effective(estimate->l1_avg,estimate->l3_avg) :
+            code12(pq_from_linear(av_q2d(source->params[0].average_maxrgb)));
         if(average>maximum)average=maximum;
         if(minimum>average)minimum=average;
         r.metadata=(struct cb1_l1l3){minimum,maximum,average,2048,2048,2048};

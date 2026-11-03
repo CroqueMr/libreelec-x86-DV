@@ -3,8 +3,64 @@
 #include <string.h>
 #include "cb1_hdr10plus_dovi.h"
 
+static void histogram_plus(void)
+{
+    AVDynamicHDRPlus s={.itu_t_t35_country_code=0xb5,.application_version=1,.num_windows=1};
+    AVHDRPlusColorTransformParams *w=&s.params[0];
+    const unsigned points[]={1,5,10,25,50,75,90,95,99};
+    const unsigned values[]={10,0,255,100,500,1000,4000,7000,10000};
+    w->num_distribution_maxrgb_percentiles=9;
+    for(unsigned i=0;i<9;i++){
+        w->distribution_maxrgb[i].percentage=points[i];
+        w->distribution_maxrgb[i].percentile=(AVRational){values[i],100000};
+    }
+    for(unsigned i=0;i<3;i++)w->maxscl[i]=(AVRational){1,10};
+    w->average_maxrgb=(AVRational){1,100};
+    struct cb1_hdr10plus_dovi_result r;
+    /* Independently integrated PQ trapezoids, including constant endpoint tails.
+     * The v1 entries at 5/10 describe system fields, not 0/25.5-nit quantiles. */
+    assert(cb1_hdr10plus_dovi_describe(&r,&s,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(r.metadata.l1_max==3079 && r.metadata.l1_avg==1738);
+    assert(r.source_fields==(CB1_HDR10PLUS_DOVI_MAX|CB1_HDR10PLUS_DOVI_AVG));
+    /* Sparse upper tail: keep the estimated histogram constant, do not invent
+     * a ramp to MaxSCL. MaxSCL still independently describes the source peak. */
+    AVDynamicHDRPlus tail=s;
+    const unsigned tail_points[]={1,50,90};
+    tail.params[0].num_distribution_maxrgb_percentiles=3;
+    for(unsigned i=0;i<3;i++){
+        tail.params[0].distribution_maxrgb[i].percentage=tail_points[i];
+        tail.params[0].distribution_maxrgb[i].percentile=(AVRational){1,100};
+    }
+    assert(cb1_hdr10plus_dovi_describe(&r,&tail,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(r.metadata.l1_max==3079 && r.metadata.l1_avg==2081);
+    /* An identical v0 legacy pattern excludes the same two reserved entries. */
+    s.application_version=0;
+    assert(cb1_hdr10plus_dovi_describe(&r,&s,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(r.metadata.l1_avg==1738);
+    /* Sparse statistics continue without GPU analysis, with an estimated mean.
+     * Do not pretend PQ(linear average) is an original Dolby mean(PQ). */
+    w->num_distribution_maxrgb_percentiles=0;
+    assert(cb1_hdr10plus_dovi_describe(&r,&s,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(r.metadata.l1_max==3079 && r.metadata.l1_avg==2081);
+    assert(r.source_fields==CB1_HDR10PLUS_DOVI_MAX);
+    assert(r.estimated_fields==(CB1_HDR10PLUS_DOVI_MIN|CB1_HDR10PLUS_DOVI_AVG));
+    /* Reporter-type contradictory distribution: mean 40.6 nits, P25=3000.
+     * Reject that distribution, not the valid peak/mean and the whole DV path. */
+    s.application_version=1;w->num_distribution_maxrgb_percentiles=9;
+    for(unsigned i=3;i<9;i++)w->distribution_maxrgb[i].percentile=(AVRational){30000+(i-3)*2000,100000};
+    for(unsigned i=0;i<3;i++)w->maxscl[i]=(AVRational){2,5};
+    w->average_maxrgb=(AVRational){406,100000};
+    AVDynamicHDRPlus before=s;
+    assert(cb1_hdr10plus_dovi_describe(&r,&s,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(r.metadata.l1_max==3696 && r.metadata.l1_avg==1723);
+    assert(r.source_fields==CB1_HDR10PLUS_DOVI_MAX &&
+        r.estimated_fields==(CB1_HDR10PLUS_DOVI_MIN|CB1_HDR10PLUS_DOVI_AVG));
+    assert(!memcmp(&s,&before,sizeof(s)));
+}
+
 int main(void)
 {
+    histogram_plus();
     AVDynamicHDRPlus source={.itu_t_t35_country_code=0xb5,.application_version=1,.num_windows=1};
     source.params[0].maxscl[0]=(AVRational){1,10}; /* 1000 nits */
     source.params[0].maxscl[1]=(AVRational){1,100};
@@ -81,11 +137,13 @@ int main(void)
     assert(result.metadata.l1_min==0 && result.metadata.l1_max==2081 && result.metadata.l1_avg==2081);
     assert(result.source_fields==(CB1_HDR10PLUS_DOVI_MAX|CB1_HDR10PLUS_DOVI_AVG));
     assert(result.estimated_fields==CB1_HDR10PLUS_DOVI_MIN);
-    /* A100-nit constant distribution cannot have a zero linear mean. */
+    /* A contradictory histogram is not used as statistics; a valid zero mean
+     * can still describe a conservative DV continuation without GPU work. */
     saved=result;
     source.params[0].average_maxrgb=(AVRational){0,1};
-    assert(cb1_hdr10plus_dovi_describe(&result,&source,NULL)==CB1_HDR10PLUS_DOVI_UNSUPPORTED);
-    assert(!memcmp(&saved,&result,sizeof(result)));
+    assert(cb1_hdr10plus_dovi_describe(&result,&source,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(result.metadata.l1_avg==0 && result.metadata.l1_max==2081);
+    assert(result.source_fields==CB1_HDR10PLUS_DOVI_MAX);
     source.params[0].average_maxrgb=(AVRational){1,100};
     /* Keep the actual low peak; do not apply a 100-nit CM2.9 floor. */
     /* A nonconstant distribution has a feasible mean, fitted without an AI estimate. */
@@ -114,11 +172,12 @@ int main(void)
     source.params[0].distribution_maxrgb[2].percentile=(AVRational){255,100000};
     assert(cb1_hdr10plus_dovi_describe(&result,&source,NULL)==CB1_HDR10PLUS_DOVI_OK);
     assert(result.metadata.l1_max==614 && result.metadata.l1_avg==614);
-    /* Coded but inconsistent quantiles retain existing AI support, not stale statistics. */
+    /* Coded but inconsistent quantiles use a conservative metadata estimate,
+     * or the supplied AI estimate, never stale histogram statistics. */
     source.params[0].distribution_maxrgb[4].percentile=(AVRational){1,10};
     saved=result;
-    assert(cb1_hdr10plus_dovi_describe(&result,&source,NULL)==CB1_HDR10PLUS_DOVI_UNSUPPORTED);
-    assert(!memcmp(&saved,&result,sizeof(result)));
+    assert(cb1_hdr10plus_dovi_describe(&result,&source,NULL)==CB1_HDR10PLUS_DOVI_OK);
+    assert(result.source_fields==CB1_HDR10PLUS_DOVI_MAX && result.metadata.l1_avg==614);
     assert(cb1_hdr10plus_dovi_describe(&result,&source,&estimate)==CB1_HDR10PLUS_DOVI_OK);
     assert(result.source_fields==CB1_HDR10PLUS_DOVI_MAX);
     source.params[0].distribution_maxrgb[4].percentile=(AVRational){1,10000};
