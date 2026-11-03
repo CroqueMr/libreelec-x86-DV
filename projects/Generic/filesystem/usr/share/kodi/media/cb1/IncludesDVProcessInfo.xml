@@ -82,7 +82,7 @@
         </control>
       </control>
       <include content="DVInfoRow"><param name="label" value="CPU"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CPU)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.CPU)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CPU),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Temperature"/><param name="value" value="$INFO[System.CPUTemperature(dual)]"/><param name="visible" value="!String.IsEmpty(System.CPUTemperature(dual))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Temperature"/><param name="value" value="$INFO[System.CPUTemperature]"/><param name="visible" value="!String.IsEmpty(System.CPUTemperature)"/></include>
       <include content="DVInfoRow"><param name="label" value="Memory"/><param name="value" value="$INFO[System.Memory(used.percent)]"/><param name="visible" value="true"/></include>
       <include content="DVInfoRow"><param name="label" value="Drop / skip"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.DroppedSkipped)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.DroppedSkipped)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DroppedSkipped),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Player cache"/><param name="value" value="$INFO[Player.CacheLevel] %"/><param name="visible" value="true"/></include>

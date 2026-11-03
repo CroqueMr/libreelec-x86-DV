@@ -998,8 +998,6 @@
       "xbmc/guilib/StereoscopicsManager.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/guilib/guiinfo/GUIInfoLabels.h": "Reserve native source and processing information labels.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/guilib/guiinfo/PlayerGUIInfo.cpp": "Read processing labels from the native Kodi cache.; Native source facts and actual sink reporting; no audio processing changes.",
-      "xbmc/guilib/guiinfo/SystemGUIInfo.cpp": "Native interface integration; preserved source attribution.",
-      "xbmc/guilib/guiinfo/SystemGUIInfo.h": "Native interface integration; preserved source attribution.",
       "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Format native processing facts for registered Kodi information labels.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
       "xbmc/settings/AdvancedSettings.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/settings/AdvancedSettings.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",

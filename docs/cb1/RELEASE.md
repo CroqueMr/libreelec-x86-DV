@@ -1,6 +1,6 @@
-# R1.0.0 RC3 - HDR rendering, FEL recovery and Blu-ray menus
+# R1.0.0 RC3 - Stability and hardware support improvement
 
-Changes since **R1.0.0 RC2**. CB1 **0.5**. GPL-2.0-compatible release.
+Changes since **R1.0.0 RC2**. CB1 **0.5**.
 
 ## Dolby Vision
 
@@ -20,7 +20,7 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**. GPL-2.0-compatible release.
 
 ## HDR10+
 
-- Improved **HDR10+ to Dolby Vision Rendering** metadata mapping with weighted source-distribution estimates, bounded handling of incomplete statistics and continuous scene/seek state. Source video pixels remain unchanged by this metadata conversion.
+- Improved **HDR10+ to Dolby Vision Rendering** metadata mapping with weighted source-distribution estimates, bounded handling of incomplete statistics and continuous scene/seek state. Source video pixels remain unchanged by this metadata conversion. Weighted-percentile estimation adapted from [AVDVPlus HistogramPlus](https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp).
 - Improved conversion startup and playback/seek recovery, with source metadata kept separate from estimated values.
 - Retained native HDR10+ playback through **Kodi default**, without activating the conversion pipeline.
 
@@ -44,22 +44,15 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**. GPL-2.0-compatible release.
 - Clarified **file metadata**, **metadata used by CB1** and **metadata sent to the TV**. Forwarded metadata is no longer misleadingly described as unused merely because CB1 does not apply it locally.
 - Clarified CM2.9/CM4 processing status, including live Auto/Auto 2 decisions.
 - Reduced text size and shortened crowded fields; removed scrolling text and empty detail rows where information is unavailable.
-- Display CPU temperature as **°F / °C** in Player information, independently of Kodi's regional unit setting.
-
-## Maintenance
-
-- Consolidated overlapping Kodi changes into five component-owned patches and removed unused code. The representation-only cleanup was checked against the complete resulting native source tree.
-- Expanded regression coverage for playback preferences, HDMI recovery, FEL corruption/seek handling and actual bundled BD-J classes.
-
 ## Known issues
 
-- GTX 10-series startup still needs confirmation on affected machines. Some new reports contain boot-media read errors rather than a demonstrated NVIDIA driver failure.
-- Damaged FEL files can lose unavailable pictures; playback is stopped if an exact BL/EL association cannot be established safely.
-- Disc-specific Java applications and repeated-disc memory behaviour are not universally qualified. Original reporter discs that were not available locally remain unconfirmed.
-- Some Intel Arc and NVIDIA RTX 50-series compatibility reports still require affected-hardware validation.
+- Disc-specific Java applications and repeated-disc memory behaviour are not universally qualified.
+- Some GTX 10-series , Intel Arc and NVIDIA RTX 50-series compatibility reports.
+- DV to HDR10+ need to be refined
 
 ## Next focuses
 
 - Bug fixing following new issues.
 - Continue HDR10/HDR10+ and affected-GPU compatibility qualification.
 - Extend Blu-ray menu coverage with further authored discs and logs.
+- Improve GUI performances

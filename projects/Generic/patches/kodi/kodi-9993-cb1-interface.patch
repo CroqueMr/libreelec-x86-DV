@@ -982,15 +982,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }};
  // clang-format on
  
-@@ -11226,6 +11256,8 @@
-     }
-     else if (cat.Name() == "system")
-     {
-+      if (prop.Name() == "cputemperature" && prop.num_params() == 1 && prop.param() == "dual")
-+        return AddMultiInfo(CGUIInfo(SYSTEM_CPU_TEMPERATURE, 1));
-       for (const auto& system_label : system_labels)
-       {
-         if (prop.Name() == system_label.str)
 --- a/xbmc/dialogs/CMakeLists.txt
 +++ b/xbmc/dialogs/CMakeLists.txt
 @@ -66,4 +66,11 @@
@@ -2365,49 +2356,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      case PLAYER_PROCESS_AUDIODECODER:
        value = CServiceBroker::GetDataCacheCore().GetAudioDecoderName();
        return true;
---- a/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
-+++ b/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
-@@ -55,7 +55,7 @@
- {
- }
- 
--std::string CSystemGUIInfo::GetSystemHeatInfo(int info) const
-+std::string CSystemGUIInfo::GetSystemHeatInfo(int info, bool dualUnits) const
- {
-   if (CTimeUtils::GetFrameTime() - m_lastSysHeatInfoTime >= SYSTEM_HEAT_UPDATE_INTERVAL)
-   {
-@@ -71,6 +71,11 @@
-   switch (info)
-   {
-     case SYSTEM_CPU_TEMPERATURE:
-+      if (dualUnits)
-+        return m_cpuTemp.IsValid()
-+                   ? StringUtils::Format("{:.0f}\u00b0F / {:.0f}\u00b0C", m_cpuTemp.ToFahrenheit(),
-+                                         m_cpuTemp.ToCelsius())
-+                   : "";
-       return m_cpuTemp.IsValid() ? g_langInfo.GetTemperatureAsString(m_cpuTemp)
-                                  : CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
-                                        10005); // Not available
-@@ -150,7 +155,7 @@
-     case SYSTEM_GPU_TEMPERATURE:
-     case SYSTEM_FAN_SPEED:
-     case SYSTEM_CPU_USAGE:
--      value = GetSystemHeatInfo(info.GetInfo());
-+      value = GetSystemHeatInfo(info.GetInfo(), info.GetData1() == 1);
-       return true;
-     case SYSTEM_VIDEO_ENCODER_INFO:
-     case NETWORK_IP_ADDRESS:
---- a/xbmc/guilib/guiinfo/SystemGUIInfo.h
-+++ b/xbmc/guilib/guiinfo/SystemGUIInfo.h
-@@ -45,7 +45,7 @@
-   void UpdateFPS();
- 
- private:
--  std::string GetSystemHeatInfo(int info) const;
-+  std::string GetSystemHeatInfo(int info, bool dualUnits = false) const;
- 
-   std::unique_ptr<CGPUInfo> m_gpuInfo;
- 
 --- /dev/null
 +++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
 @@ -0,0 +1,90 @@
