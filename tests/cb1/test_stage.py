@@ -12,6 +12,20 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/cb1-stage.py"
 
 
 class StagingTests(unittest.TestCase):
+    def test_kodi_patch_inventory_matches_its_owners(self):
+        tree = SCRIPT.parents[1]
+        owners = json.loads((tree / 'config/cb1-patch-index.json').read_text())
+        prefix = 'projects/Generic/patches/kodi/'
+        actual = {p.relative_to(tree).as_posix() for p in (tree / prefix).rglob('*.patch')}
+        self.assertEqual(actual, {name for name in owners if name.startswith(prefix)})
+
+    def test_staged_adapter_has_no_obsolete_source_files(self):
+        tree = SCRIPT.parents[1]
+        lock = json.loads((tree / 'config/cb1-source-lock.json').read_text())
+        prefix = 'packages/mediacenter/kodi/cb1/src/'
+        actual = {p.relative_to(tree).as_posix() for p in (tree / prefix).rglob('*') if p.is_file()}
+        self.assertEqual(actual, {name for name in lock['staging'] if name.startswith(prefix)})
+
     def test_hdr10plus_helpers_are_staged_with_matching_receipts(self):
         tree = SCRIPT.parents[1]
         lock = json.loads((tree / "config/cb1-source-lock.json").read_text())
