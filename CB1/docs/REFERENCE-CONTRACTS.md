@@ -1,6 +1,6 @@
 # Archived CB1 numerical contracts
 
-Historical design and offline experiments. Current RC2 processing is defined in
+Historical design and offline experiments. Current release processing is defined in
 [Algorithms](ALGORITHMS.md), [Circuits](CIRCUITS.md) and
 [Master Reference](MASTER-REFERENCE.md). This record does not describe current
 menu choices, qualification status or performance.

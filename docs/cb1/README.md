@@ -1,6 +1,6 @@
-# R1.0.0 RC2 documentation
+# R1.0.0 RC3 documentation
 
-Current release: **R1.0.0 RC2**, **CB1 0.5**.
+Current release: **R1.0.0 RC3**, **CB1 0.5**.
 
 ## Playback
 
@@ -8,7 +8,7 @@ Current release: **R1.0.0 RC2**, **CB1 0.5**.
 | --- | --- |
 | [Features and downloads](../../README.md) | Profiles, rendering modes, captures and installation |
 | [Hardware](HARDWARE.md) | Supported Intel, AMD and NVIDIA GPU families |
-| [Performance benchmarks](BENCHMARKS.md) | RC3 Preview on Intel N100 and AMD Ryzen 3 3200U, with and without GUI |
+| [Performance benchmarks](BENCHMARKS.md) | RC3 on Intel N100 and AMD Ryzen 5 7430U, without the playback GUI |
 | [Driver/output matrix](DRIVER-COVERAGE.md) | Dolby Vision V1/V2, HDR10/HLG and HDR10+ by driver |
 | [AMD HDMI 3D](3D.md) | MVC, frame packing, SBS/TAB and native Kodi setup |
 | [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |
@@ -16,7 +16,7 @@ Current release: **R1.0.0 RC2**, **CB1 0.5**.
 | [Audio information](AUDIO-INFORMATION.md) | Source codec/Atmos details and actual PCM, passthrough or transcoded output |
 | [CM2.9 to CM4 controls](../../CB1/docs/CM4-APPEND.md) | Optional metadata conversion, Auto/Auto 2 and independent L2 removal |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |
-| [RC2 release notes](RELEASE.md) | Dolby Vision, HDR10+, playback, menus, hardware and audio changes |
+| [RC3 release notes](RELEASE.md) | Dolby Vision, HDR10+, playback, menus, hardware and audio changes |
 
 ## Engine and integration
 
@@ -47,4 +47,4 @@ Current release: **R1.0.0 RC2**, **CB1 0.5**.
 [Archived numerical contracts](../../CB1/docs/REFERENCE-CONTRACTS.md) retain earlier
 experiments; they do not define the current playback menu.
 
-Archived release notes: [Beta5](RELEASE-BETA5.md) · [Beta4](RELEASE-BETA4.md).
+Archived release notes: [RC2](RELEASE-RC2.md) · [Beta5](RELEASE-BETA5.md) · [Beta4](RELEASE-BETA4.md).

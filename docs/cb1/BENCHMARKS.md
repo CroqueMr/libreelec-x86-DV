@@ -1,45 +1,46 @@
-# Performance benchmarks
+# RC3 playback benchmark
 
-## R1.0.0 DV RC3 Preview
+Intel N100 and AMD Ryzen 5 7430U running the same published **R1.0.0 RC3** image.
+Measured on 4 November 2026, with the GUI closed.
 
-Intel N100 and AMD Ryzen 3 3200U, measured on 1 November 2026.
-The two tables compare the CPUs side by side, without GUI first, then with
-Kodi's playback OSD open.
+[Download the two-page PDF](../reports/rc3/comparison.pdf) · [Measurements](../reports/rc3/measurements.json)
 
-- Sources: Dolby Vision Profile 8.1, Profile 7 FEL, Profile 7 MEL and HDR10.
-- Modes: Master Reference YCbCr, Master Reference IPT, HDR10 Expert,
-  DV Adaptive HDR, HDR10 to DV AI and HDR10 to Adaptive HDR AI.
-- Metrics: presentation rate, rendering-engine load, total/busiest-core CPU load,
-  headroom mean/P05 and missed frames.
+## Dolby Vision sources
 
-### Without GUI
+![Dolby Vision playback on Intel N100 and Ryzen 5 7430U](../reports/rc3/without-gui.png)
 
-[![R1.0.0 DV RC3 Preview: Intel N100 and AMD 3200U without GUI](../reports/rc3-preview/without-gui.png)](../reports/rc3-preview/without-gui.png)
+## HDR10 and HDR10+ sources
 
-### With GUI ON
+![HDR10 and HDR10+ to Dolby Vision on Intel N100 and Ryzen 5 7430U](../reports/rc3/hdr-conversions.png)
 
-[![R1.0.0 DV RC3 Preview: Intel N100 and AMD 3200U with GUI](../reports/rc3-preview/with-gui.png)](../reports/rc3-preview/with-gui.png)
+## Reading the results
 
-### Reading the results
+- **FPS:** HDMI/KMS presentations per second, not a count of distinct film frames.
+- **GPU:** mean render-engine occupancy. Driver counters differ between Intel and AMD; this is not a directly comparable measure of total GPU work.
+- **CPU All / core:** mean whole-system utilization across all logical CPUs, followed by the busiest logical CPU. These are not Kodi process percentages.
+- **Headroom Mean / P05:** submission-deadline reserve in milliseconds, including asynchronous queue lead. It is **not spare GPU execution time**. P05 is the fifth percentile; negative values indicate late readiness.
+- **Missed Est. / D+S:** estimated missed presentation slots and Kodi's drop-plus-skip counter delta. These overlap and must not be added together.
+- **Fail:** the requested Dolby Vision circuit was not retained. An HDR10 fallback is not counted as successful Dolby Vision playback.
 
-**Red** marks missed presentation slots, nonzero Kodi drop/skip counters or
-**Fail**. Fail means the requested mode was not active at the measurement
-checkpoint; it does not necessarily mean Kodi crashed.
+All 18 requested states ran at their expected cadence on the 7430U during the
+measured windows. On N100, Master IPT and Adaptive were below the Gemini Man
+59.94 fps cadence; the two HDR10 4K60 AI routes did not retain Dolby Vision.
+These limitations are included rather than omitted from the report.
 
-Estimated missed slots and Kodi's drop + skip total are separate, overlapping
-indicators. Do not add them together. Presentation rate is HDMI/KMS updates per
-second, not a count of unique movie frames. Headroom includes asynchronous
-queue lead and is not unused GPU execution time.
+## Conditions and limits
 
-The approximately 12-second windows describe these passages, not long-term
-zero-drop guarantees. Missing internal fence observations are marked `n/a`.
+The sources are 3840×2160, with 4K HDMI output at source cadence. Each case uses
+the same source bytes on both machines and an eight-second observation window
+after a common source-time gate. Async preparation is enabled; Master-to-Reference
+fallback is disabled. Zoom and pixel ratio are 100%, subtitles are off, and
+display-dependent modes use a 2300-nit target. Clocks remain automatic.
 
-### Settings
+The FEL preference is VAAPI, with GPU bilinear when unavailable. Master uses its
+Reference GPU filters. The Gemini Man sample reports Profile 7 MEL, not FEL.
+HDR10+ → Dolby Vision is tested; native HDR10+ output and Dolby Vision → HDR10+
+output are not qualified here because the connected TV does not support HDR10+.
 
-- 4K HDMI output at the source cadence; zoom and pixel ratio 100%.
-- Async preparation on; enriched diagnostics and global debug off.
-- FEL upscaling: GPU bilinear outside Master Reference. Both Master Reference
-  YCbCr and IPT retain the reference GPU filter.
-- GPU clocks remain automatic. Gemini Man reports Profile 7 MEL in this sample.
-
-[Hardware support](HARDWARE.md)
+Short windows reveal observed cadence and failures; they do not establish
+whole-film stability, long-term thermal behavior or a universal zero-drop guarantee.
+The downloadable measurements include source hashes, effective circuits and
+outputs, CPU/GPU samples and deadline-margin samples.

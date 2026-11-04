@@ -30,15 +30,16 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
 | Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
 | Dolby Vision | HDR10 Rendering | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
-| Dolby Vision | HDR10 Rendering Reference | HDR10 | Map to the display's peak, black level and gamut, using compatible creative controls |
-| Dolby Vision | HDR10+ | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
-| HDR10 | Dolby Vision Reference (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
+| Dolby Vision | HDR10 Rendering Reference | HDR10 | Map to the display's peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | HDR10+ Rendering | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
+| HDR10 | Dolby Vision Rendering (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
 | HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
-| HDR10+ | Metadata-guided Dolby Vision Reference | Dolby Vision, TV-Led | Preserve source pixels, translate compatible source peaks and estimate missing minimum/mean PQ |
+| HDR10+ | Dolby Vision Rendering | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and labelled estimates when incomplete |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 
-HDR10 Rendering Reference and Adaptive HDR Mapping require display configuration. AI conversion uses the
+HDR10 Rendering Reference uses separate manual peak, black-floor and gamut settings.
+Adaptive HDR Mapping requires a manual display profile. AI conversion uses the
 included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
 Native HDR10, HLG and SDR remain the player's responsibility.
 Native HDR10+ preserves the source picture and its authored dynamic metadata
@@ -83,7 +84,7 @@ repository with the exact CPU/GPU, display, connection chain and build version.
 
 - Visible menus and heavy conversions can exceed the capacity of lower-powered GPUs.
 - Adaptive HDR Mapping remains subject to visual refinement.
-- Master Reference screenshots are unavailable on the current Dolby Vision path.
+- Interface screenshots do not establish HDR/Dolby Vision HDMI output fidelity.
 
 See the integration [release notes](../docs/cb1/RELEASE.md) and
 [issues](https://github.com/CroqueMr/libreelec-x86-DV/issues) for current playback reports.

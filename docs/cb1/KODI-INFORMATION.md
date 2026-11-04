@@ -1,8 +1,12 @@
 # Kodi video information
 
-The RC2 Player information panel uses these native source/output facts and the
+The RC3 Player information panel uses these native source/output facts and the
 [AudioEngine source and sink report](AUDIO-INFORMATION.md). Source format is
 shown in the Video heading; accepted rendering mode identifies the output.
+
+The panel distinguishes file metadata, metadata used by CB1 and metadata sent to
+the TV. Forwarded metadata is not described as unused solely because CB1 does
+not apply it locally. CM2.9/CM4 status includes the live Auto/Auto 2 decision.
 
 Source and output are separate facts. Existing `VideoPlayer.HdrType/HdrDetail`
 and `ListItem.HdrType/HdrDetail` describe the original source. HDR10 converted

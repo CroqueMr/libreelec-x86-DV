@@ -3,7 +3,11 @@
 This series separates reconstructed video, creative controls and output transport.
 It does not implement or claim the complete licensed Dolby display mapper.
 
-## Metadata operations
+## Scalar/reference metadata operations
+
+This table describes the retained scalar/reference API. Published RC3 HDR10
+Rendering Reference uses raw L1 without L3, and compatible L2 controls in its
+native PQ curve; it does not execute the full L8 operator described below.
 
 | Input | Operation | Domain |
 | --- | --- | --- |
@@ -12,7 +16,7 @@ It does not implement or claim the complete licensed Dolby display mapper.
 | L2 target | Select exact, lower/upper, or master-neutral anchor | Interpolate in normalized PQ, not nits |
 | L2 slope, offset, power | Decode `code/4096 + 0.5`, `code/4096 - 0.5`, `code/4096 + 0.5` | Neutral code 2048 |
 | L2 chroma, saturation | Decode `code/4096 - 0.5` | Neutral code 2048 |
-| L2 `ms_weight` | Resolve selected Expert metadata; preserve without execution | Signed sentinel `-1` distinct; no qualified spatial implementation |
+| L2 `ms_weight` | Resolve selected HDR10 Rendering Reference metadata; preserve without execution | Signed sentinel `-1` distinct; no qualified spatial implementation |
 | L8 | Resolve typed primary/optional fields and compare parsed/raw values | Independent CM4 scalar/spatial reference; original block length preserved |
 | L10 | Resolve and validate custom target bounds/primaries against raw bytes | No guessed unknown IDs or preset overrides |
 | L9 | Use Display P3, BT.709, BT.2020 or validated custom mastering primaries | Distinct from BT.2020 transport primaries |
@@ -24,7 +28,7 @@ Present primary, midtone, clipping, saturation and hue groups use masks
 The CM2.9 compatibility path may consume L2 on a CM4 source, but is labelled
 compatibility, not complete CM4 processing. It never adds L8 a second time.
 
-### Expert L2 detail resolution
+### L2 detail resolution
 
 `creative.l2_detail` retains the real selected L2 anchor codes, target PQs,
 their count and the upper PQ-distance weight. Its `level=2` identifies the
@@ -37,10 +41,10 @@ It does not establish a Dolby spatial strength. `SENTINEL` retains authored
 `-1`, never normalized into a negative weight. Mixed contributing sentinel
 and numeric anchors remain `UNRESOLVED`. Single-sided numeric anchors are
 retained but unresolved; no neutral MS anchor is invented at the master.
-Only contributing selected anchors affect the Expert unqualified-detail
+Only contributing selected anchors affect the unqualified-detail
 reason. No epsilon is added to the existing L2 target selection.
 
-Expert L2 coverage describes the selected plan: bit 5 records detail
+L2 coverage describes the selected plan: bit 5 records detail
 present/preserved, while bits 0-4 retain their existing punctual-control
 application. `executed=false` and bit 5 never applied accurately report the
 missing qualified spatial operator, including a resolved code of 2048.
@@ -95,18 +99,15 @@ criteria. The reference is not a complete TV mapper or a panel measurement.
 
 ## Rendering boundary
 
-Expert reconstructs BL and matched applicable EL once. Its native color-map hook
-uses raw L1 PQ guidance and an explicit forward curve. L2 luminance controls now
-shape that same PQ LUT with fixed black/peak endpoints; the old linear RGB SOP
-and Expert atlas are removed. Chroma uses target-gamut RGB-to-XYZ weights before
-final BT.2020/PQ encoding. No second scene mapper or renderer surface is added.
-L3/L8 are not stacked on this compatibility curve. Source metadata is immutable.
-See the Expert section in ALGORITHMS.md for the public equations and bounds.
-The standalone scalar/CM4 operators and Adaptive/HDR10+ consumers keep their
-existing contracts. This Expert policy does not claim a licensed Dolby grade.
+RC3 HDR10 Rendering Reference reconstructs BL and matched applicable EL once,
+then maps raw L1 scene guidance through its explicit player-led PQ curve.
+Compatible L2 primary controls shape that tone LUT with protected endpoints;
+chroma executes in bounded target-gamut RGB. L3 offsets and a full L8 creative
+operator are not added to this runtime. Final BT.2020/PQ encoding and Kodi
+scaling do not add a second scene tone map. Source metadata is immutable.
+[Runtime equations](ALGORITHMS.md#dolby-vision-to-hdr10-rendering-reference).
 
-CM4 Expert uses compatible L2 anchors, not the offline CM4 scalar/spatial
-operators. It preserves the source L8 fields without executing them. Adaptive HDR Mapping
+Adaptive HDR Mapping
 expands reconstructed pixels using the original metadata and emits consistent
 output descriptors. Unknown target descriptions remain unsupported and preserve
 coherent source metadata. Panel type does not infer display capabilities. The TV retains its TV-Led
@@ -144,9 +145,9 @@ must pass the same raw/parsed bounds and primaries validation as other custom ta
 The target resolver selects nearest anchors matching the manual gamut at
 signed 16-bit coordinate precision and matching transfer, with a bounded
 PQ-distance weight. Known incompatible transfers are excluded; custom targets
-retain their unknown transfer without inferring PQ. The shared CM4 resolver
-interpolates decoded coefficients between eligible anchors. Unknown descriptions
-are skipped when other eligible anchors remain. Ambiguous equal-peak anchors have
+retain their unknown transfer without inferring PQ. The scalar/reference API
+interpolates decoded CM4 coefficients between eligible anchors. Unknown
+descriptions are skipped when other eligible anchors remain. Ambiguous equal-peak anchors have
 separate statuses and no selected controls. Ambiguity is evaluated at the final
 nearest peaks, independently of metadata block order. Preset L10 overrides, invalid PQ
 ordering, duplicate IDs and contradictions with parsed fields are rejected.
@@ -158,8 +159,9 @@ DoViBaker reference processes L2, not these complete CM4 operations. The
 describes creative intent, not a complete numerical mapper. Independent CM4
 reference outputs and tolerances qualify this project's numerical contract only.
 
-The independent CM4 scalar/spatial reference remains an offline operator;
-HDR10 Expert does not execute it.
+The independent CM4 scalar/spatial reference is retained for numerical/API
+qualification. Published RC3 HDR10 Rendering Reference uses explicit PQ mapping
+and available L2 compatibility instead; it does not execute a full L8 creative pass.
 Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1`; the older `cb1-dve-v7`
 fitter remains an offline numerical reference, not the selected playback path.
 Unsupported guidance preserves a coherent native pair rather than a partial edit.
@@ -175,14 +177,12 @@ processing from quantization error; they do not establish Dolby equivalence.
 
 See [algorithms and metadata](ALGORITHMS.md) for the current equations.
 
-Expert uses raw valid L1 statistics with compatible L2 trims, without double
-L3/L8 processing. Missing or inconsistent L1 uses valid source static
-luminance descriptors; all-zero valid L1 remains all-black analysis.
-Source metadata remains unchanged and image samples are
-not forced to black. Structural/raw corruption remains invalid. This admission
-change is confined to Expert.
+RC3 HDR10 Rendering Reference uses raw L1 statistics, without folding L3. Missing
+or unusable L1 uses valid static source descriptors from the same frame. All-black
+L1 remains valid. Source metadata is immutable and structural/raw corruption
+remains invalid. This runtime is separate from the scalar/spatial reference.
 
 The Dolby [trim-controls guide](https://professionalsupport.dolby.com/s/article/The-Dolby-Vision-Trim-Controls)
-limits secondary six-vector trims to SDR generation. Expert preserves their
+limits secondary six-vector trims to SDR generation. HDR10 Rendering Reference preserves their
 presence and raw values but does not execute them in HDR10. Generic offline
 operators and Adaptive guidance retain their existing behavior.

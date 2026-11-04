@@ -33,16 +33,16 @@ shared direct IPT path in both Master variants.
 
 ## Metadata use
 
-| Metadata | Reference / Master | HDR10 Basic | HDR10 Expert | Adaptive |
+| Metadata | Reference / Master | HDR10 Rendering | HDR10 Rendering Reference | Adaptive |
 | --- | --- | --- | --- | --- |
 | RPU mapping / residual | Reconstruct source | Reconstruct source | Reconstruct source | Reconstruct source |
 | L1 scene min/max/average | Forward to TV | Scene guidance | Scene guidance | Expansion strength and output scene descriptors |
-| L3 offsets | Forward to TV | No Expert trim pass | Apply once with valid L1 | Apply once before curve construction |
+| L3 offsets | Forward to TV | No creative trim pass | Retained, not executed | Apply once before curve construction |
 | L2 CM2.9 trims | Forward to TV | Not applied | Compatible creative controls | Guide added light and color restraint |
 | L5 active area | Preserve picture/borders | Preserve picture/borders | Preserve picture/borders | Exclude borders from expansion/analysis |
 | L6 mastering / light levels | Forward when applicable | Source reference / HDR10 signaling | Static fallback / signaling | Source descriptors |
-| L8 CM4 trims | Forward to TV | Not applied | Compatible HDR controls | Target responses and color restraint |
-| L9 / L10 | Forward when applicable | No creative anchor selection | Resolve gamut / target anchors | Resolve compatible creative anchors |
+| L8 CM4 trims | Forward to TV | Not applied | Retained; available L2 compatibility only | Target responses and color restraint |
+| L9 / L10 | Forward when applicable | No creative anchor selection | Source mastering gamut; no full L8 render | Resolve compatible creative anchors |
 
 Visible menus and subtitles use full-raster output L5 signaling so the TV does
 not hide them in the black bars. This does not expand the source picture.
@@ -58,9 +58,9 @@ scene luminance = E(L1_code / 4095)
 `M` is the source mastering/reference maximum. `T` is the configured display
 peak. Neither is a direct measurement of the current scene or the physical TV.
 
-## Dolby Vision to HDR10 Basic
+## Dolby Vision to HDR10 Rendering
 
-Basic uses source mastering information and valid scene statistics. It reconstructs
+HDR10 Rendering uses source mastering information and valid scene statistics. It reconstructs
 the Dolby Vision image, applies scene-guided spline tone mapping and perceptual
 gamut mapping, then encodes BT.2020/PQ HDR10.
 
@@ -72,37 +72,31 @@ gamut mapping, then encodes BT.2020/PQ HDR10.
 Dynamic Dolby Vision metadata cannot be transported as dynamic metadata in a
 standard HDR10 signal. Its contribution must be reflected in pixels before output.
 
-## Dolby Vision to HDR10 Expert
+## Dolby Vision to HDR10 Rendering Reference
 
-Expert maps to `T` and the configured gamut. P3-D65 is the default. Disable the
-TV's dynamic tone mapping for this mode to avoid a second dynamic mapper.
+HDR10 Rendering Reference maps to its separately configured display peak `T`,
+black floor and gamut. Enter the peak manually and choose an OLED/LCD/projector
+black preset or a custom black level. Presets are estimates, not measurements.
+P3-D65 is the default gamut. Disable the TV's dynamic tone mapping for this mode
+to avoid a second dynamic mapper.
 
-Effective scene statistics include L3 once:
+Valid raw L1 maximum/average guide the explicit PQ-domain curve. L3 offsets are
+not added in this runtime. L1 minimum is descriptive, not a physical display-black
+measurement. Missing or unusable L1 uses valid static descriptors from this frame;
+corrupt or contradictory metadata remains guarded.
 
-```text
-effective_L1 = round(L1 + (L3 - 2048) * 4095 / 2048)
-```
+The native ST2094-10 curve compresses scenes above the target; the native clip
+curve avoids inverse expansion otherwise. Both use the configured black floor
+and display peak. Compatible L2 primary controls shape the tone LUT with protected
+black/peak endpoints, rather than a linear RGB offset. Chroma processing is bounded
+in the target gamut. L8-only sources do not receive a full CM4 creative render;
+L8 spatial and secondary controls remain unexecuted.
 
-Compatible creative anchors are selected in their target domain and interpolated
-by PQ distance. L2 and L8 are not stacked as two separate creative grades.
-
-| Controls | Expert processing |
-| --- | --- |
-| Slope / offset / power | Decode and apply compatible primary controls |
-| Chroma / saturation | Apply the compatible HDR color operation |
-| CM4 midtone / clipping | Apply the decoded luminance controls |
-| CM4 six-color saturation / hue | Preserve but do not execute SDR-only commands in HDR10 Expert |
-| Spatial detail | Use the existing detail path when peak compression is active |
-
-Missing or unusable L1 uses valid static source descriptors without leaving
-Expert or retaining the previous scene's statistics. Unknown extra L8 targets
-do not discard other usable anchors. Corrupt or contradictory metadata remains
-guarded.
-
-The creative output performs tone mapping once. Final gamut conversion and PQ
-encoding do not add another scene tone map. BT.2020 out-of-volume colors are
-limited even when no creative anchor is available. A higher configured peak does
-not by itself multiply the whole film to that brightness.
+Mapping is applied once. The final BT.2020/PQ output and scaling do not add a
+second scene tone map. Output HDR10 metadata describes the virtual rendering
+target; unknown MaxCLL/MaxFALL remain zero rather than invented measurements.
+A target above the source mastering peak does not automatically brighten the
+whole film to that target.
 
 ## Adaptive HDR Mapping from Dolby Vision
 
@@ -184,17 +178,16 @@ is not a promise of bit-identical HDR10 storage.
 
 AI L1/L3 guide the shared expansion executor. There are no authored L2/L8
 anchors, so retention is neutral and trim-derived color restraint is absent.
-The currently wired AI policy uses a cubic curve without the authored-DV
-midtone term:
+RC3 uses the same scene-guided expansion logic as authored-Dolby Vision Adaptive,
+including its bounded midtone term, with neutral trim retention and no invented
+creative anchors. Shadows at or below 10 nits stay protected. Expansion depends
+on scene guidance and display headroom, not just whether the display peak exceeds
+the source mastering maximum.
 
-```text
-extra(u) = S * max(T-M, 0) * u^3
-```
-
-The GPU interpolates the curve's 257 knots. Shadows at or below 10 nits stay
-protected; `T<=M` selects identity. Output L1 is measured after processing and
-L3 is not applied twice. A missing mastering maximum uses a conservative
-internal bound, not a fabricated mastering claim.
+Output L1 follows the applied scene curve, while measured output statistics
+validate the bounds; L3 is not applied twice. Unknown
+mastering remains unknown; a conservative internal envelope is not exposed as
+a fabricated mastering claim.
 
 Reference AI and Adaptive AI therefore share the model, but do not apply the
 same pixel treatment. No claim of equivalence to authored Dolby Vision is made.
@@ -203,11 +196,11 @@ same pixel treatment. No claim of equivalence to authored Dolby Vision is made.
 
 This mode preserves the decoded picture and uses the existing Reference output.
 For a complete single-window source, MaxSCL supplies the scene peak and the
-percentile distribution plus AverageMaxRGB estimate mean PQ. Known mastering
+weighted percentile distribution plus AverageMaxRGB estimate mean PQ. Known mastering
 minimum is preserved separately; content minimum defaults to zero.
 
-Complete source statistics avoid GPU image analysis. Valid sparse statistics
-retain the existing AI estimates. Scene descriptions are committed only with
+Complete source statistics avoid GPU image analysis. Incomplete statistics use
+bounded estimates, with source-translated and estimated values kept separate. Scene descriptions are committed only with
 their matching presented picture. Invalid or missing metadata after activation
 keeps native fallback until a source or mode reset, avoiding repeated switching.
 

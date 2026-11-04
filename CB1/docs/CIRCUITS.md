@@ -1,6 +1,6 @@
 # Engine and circuits
 
-Engine: **CB1 0.5**. Each end-to-end rendering circuit has its own version.
+Published RC3 engine: **CB1 0.5**. Each end-to-end rendering circuit has its own version.
 
 | Circuit | Version |
 | --- | --- |
@@ -32,22 +32,18 @@ qualified performance filters; Master retains its exact reconstruction. Optional
 Master-to-Reference recovery is off by default. Transport, GUI and supported FEL
 upscaling optimizations are automatic.
 
-HDR10 Adaptive uses the same scene-guided expansion curve and temporal slew limit as DV Adaptive.
+HDR10 Adaptive uses the same scene-guided expansion curve and temporal limit as DV Adaptive.
 Predicted L1, adjusted by predicted L3, guides the curve without invented creative
 trims. Output L1 follows that curve rather than instantaneous frame extrema.
 The inference model and HDR10 Reference AI circuit are unchanged.
 
-HDR10+ Dolby Vision Rendering preserves the source picture and uses compatible
-single-window MaxSCL and distribution statistics for outgoing descriptive values.
-Unavailable statistics are explicitly estimated; usable metadata does not require AI. HDR10+ target
+HDR10+ Dolby Vision Rendering preserves source pixels. Single-window MaxSCL and
+weighted PQ percentiles provide descriptive statistics without GPU analysis when
+usable. Missing statistics use explicitly labelled estimates; content minimum
+is zero without image analysis. HDR10+ target
 display luminance is not the source peak. Authored tone curves and saturation
 adjustments are not translated or applied to pixels. Unsupported source metadata
 does not reuse an earlier frame's RPU.
-
-Player information shows the committed AI model version when its prediction is
-used, the statistical PQ baseline before inference, generated DV L1/L3 and emitted
-L1. These are descriptive values, not authored creative trims. Metadata-only
-HDR10+ descriptions do not display a model or a pre-AI baseline.
 
 HDR10 Rendering, HDR10 Rendering Reference and Adaptive process the source-sized picture before final
 enlargement. Reconstruction, creative guidance and intermediate precision follow

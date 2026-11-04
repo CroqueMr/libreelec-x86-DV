@@ -1,11 +1,12 @@
-# HDR10+ output
+# HDR10+ playback and conversion
 
-Supported: native HDR10+ playback and Dolby Vision-to-HDR10+ conversion.
+Supported: native HDR10+ playback, Dolby Vision-to-HDR10+ conversion and explicit
+metadata-guided HDR10+-to-Dolby Vision conversion.
 
 | Source | Output | Processing |
 | --- | --- | --- |
 | HDR10+ | HDR10+ | Original pixels and frame-owned FFmpeg metadata. |
-| HDR10+ | Dolby Vision, explicit metadata-guided mode | Source pixels retained; MaxSCL peak and weighted PQ percentiles, with labeled estimates for missing statistics. Authored curves and saturation maps are not translated. |
+| HDR10+ | Dolby Vision Rendering, explicit metadata-guided mode | Source pixels retained; MaxSCL and weighted PQ percentiles, with labelled estimates for missing statistics. Authored curves and saturation maps are not translated. |
 | Dolby Vision | HDR10+ | BL/EL/RPU reconstruction, image statistics and representable luminous trims. |
 | Unsupported transport | HDR10 | Dynamic metadata cleared; fallback reported. |
 
@@ -16,28 +17,10 @@ a saved general HDR10 AI preference. Dolby Vision conversion requires explicit
 selection of the metadata-guided mode and an admitted Dolby Vision output.
 [Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
-## HDR10+ to Dolby Vision statistics
-
-The CPU estimator adapts [AVDVPlus HistogramPlus](https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp):
-convert valid luminance percentiles to PQ and integrate weighted trapezoids.
-Unlike that fixed nine-entry layout, validated percentile counts share one
-implementation, with endpoint tails and reserved version-1 system fields
-excluded. MaxSCL remains the source peak; mastering black is not substituted
-for measured image minimum. No CM2.9 brightness floors are added by this adapter.
-
-When the histogram is contradictory or absent, valid peak/mean statistics can
-still produce a description: prefer a supplied per-picture AI estimate,
-otherwise label PQ(linear average) as an estimated mean, not mean(PQ). This avoids
-rejecting an otherwise usable description just because its histogram is bad.
-Minimum is conservatively zero without an image estimate. These are synthesized
-DV statistics, not original Dolby analysis or a complete translation of HDR10+
-creative controls. Input metadata is immutable.
-
-This estimator does not change activation error handling: missing whole
-snapshots, unsupported windows and fatal preparation failures can still trigger
-the existing native fallback. Strict DV-only continuity remains a separate gate.
-
 ## Metadata conversion
+
+This section describes **Dolby Vision to HDR10+**. The reverse direction is
+described [below](#hdr10-to-dolby-vision).
 
 - Analyze every pixel in the active film area before GUI composition or mapping.
 - Measure linear-light channel maxima, average maxRGB and a 256-bin histogram.
@@ -63,6 +46,20 @@ for the additional system fields.
 Native V1 also accepts its Y99 luminance and Y100nit percentage fields. The latter
 is transmitted without luminance quantization; values 101..254 remain rejected.
 Changing receiver version cancels pending conversion metadata before reuse.
+
+## HDR10+ to Dolby Vision
+
+- Use validated single-window MaxSCL for the source peak, not the HDR10+ target display peak.
+- Estimate mean PQ from weighted PQ-percentile trapezoids, adapted from [AVDVPlus HistogramPlus](https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp). Linear AverageMaxRGB validates consistency; PQ(mean linear light) is not treated as mean PQ.
+- Missing or unusable percentiles retain supplied per-picture AI estimates; otherwise PQ(AverageMaxRGB) is explicitly labelled as estimated. Content minimum is zero without image analysis. Zero MaxSCL requires a supplied estimate.
+- Fold estimated L3 once and emit neutral output L3. Preserve known mastering minimum separately from content minimum.
+- Keep decoded pixels without an enhancement grade. The existing DV transport conversion and quantization still apply.
+- Do not translate authored Bezier curves, saturation operations or multiple spatial windows into invented DV trims.
+
+Source snapshots and generated metadata belong to the same presented picture.
+Invalid or missing metadata after activation retains native fallback until a
+source/mode reset, without carrying a previous scene's RPU.
+[Full algorithm](ALGORITHMS.md#hdr10-dolby-vision-rendering).
 
 ## Verification
 

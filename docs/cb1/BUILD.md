@@ -1,9 +1,11 @@
-# R1.0.0 RC2 build
+# R1.0.0 RC3 build
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
-Default image identity: `DV-R1.0.0-RC2`. Source configuration uses the logical
-release ID `R1.0.0-RC2`; use the published [RC2 release](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414)
+Published image identity: `DV-R1.0.0-RC3`. Rebuild the published image from a clean
+checkout of `R1.0.0-RC3` (`6797dfb4c7c2669a1d9ccb021fffae91375380f6`), not an
+arbitrary default-branch snapshot. The release source configuration uses the
+logical ID `R1.0.0-RC3`; use the published [RC3 release](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-RC3)
 for its attached image and corresponding-source archives.
 
 ```sh

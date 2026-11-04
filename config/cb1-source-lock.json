@@ -10,7 +10,7 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "tests/cb1/test_rendering_labels.py": "eef4200ad4b5535263e745f829796be0ff9f496db46aa7f115e7d862b77e0921",
-    "docs/cb1/PLAYBACK.md": "9c3f731b56c2cae80c92ed6d63a316bb95a6b12751b597c1333f06a4e206ee2d",
+    "docs/cb1/PLAYBACK.md": "79ae0555415b74fb3d03d41c590a8776ad0467c97bc4cdd2d0a65301df356fe5",
     "packages/multimedia/bdj-runtime/package.mk": "1c0e1163651be3f08d75c1524bea594f6ab8bd8b11849cfa141e8018a18d8638",
     "packages/multimedia/bdj-runtime/profile.d/90-bdj.conf": "a1328b1ad9daf6f7710b53cc10686e7b6329cdb497d3fabb6f7b7585a1924a56",
     "packages/multimedia/libbluray/package.mk": "09e7c3604ddb5623300d05fe9e57fe771b32124139e83b364696a59948dbee91",

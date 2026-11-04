@@ -3,7 +3,7 @@
 Historical Beta5 source-migration decisions and differential tests. Current
 runtime contracts are in [Player integration](API.md); current component and
 combined-build terms are in [Licensing](LICENSING.md). The historical tests below
-do not qualify every RC2 GPU or display route.
+do not qualify every GPU or display route.
 
 | Portion | Migration decision | Preserved contract |
 | --- | --- | --- |

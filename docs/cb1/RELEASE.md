@@ -62,12 +62,13 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**.
 ## Known issues
 
 - Disc-specific Java applications and repeated-disc memory behaviour are not universally qualified.
-- Some GTX 10-series , Intel Arc and NVIDIA RTX 50-series compatibility reports.
-- DV to HDR10+ need to be refined
+- Some GeForce GTX 10, Intel Arc and NVIDIA RTX 50 setups still have compatibility reports.
+- Dolby Vision-to-HDR10+ conversion needs further refinement.
 
 ## Next focuses
 
 - Bug fixing following new issues.
 - Continue HDR10/HDR10+ and affected-GPU compatibility qualification.
 - Extend Blu-ray menu coverage with further authored discs and logs.
-- Improve GUI performances
+- Improve GUI performance.
+
