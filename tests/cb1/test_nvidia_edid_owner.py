@@ -9,6 +9,7 @@ from test_hdr10_transport import function
 import test_nvidia_native_hdr as native_hdr
 
 
+@unittest.skipUnless(os.environ.get('CB1_KERNEL_SOURCE'), 'matched patched kernel required')
 class NvidiaEdidOwner(unittest.TestCase):
     sources = native_hdr.NvidiaNativeHdr.sources
 

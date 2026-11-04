@@ -116,7 +116,7 @@
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9006-infoframe-wire-length.patch": "10080d9c1c69717009c7ddcc003bdbe66689acffaa77a895d68167dbc5699a48",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9004-infoframe-wire-length.patch": "10080d9c1c69717009c7ddcc003bdbe66689acffaa77a895d68167dbc5699a48",
     "tests/cb1/test_nvidia_hdmi_vic.py": "d05f6216037107266c9f55b0ccc1f09ac347125bbc31051a526e517ed6fe5c93",
-    "tests/cb1/test_nvidia_edid_owner.py": "b0cb3d2e6fd956ef14c998939f5ed6261b31e94828304fa14f01f60ca440765b",
+    "tests/cb1/test_nvidia_edid_owner.py": "80b6502cc95134404e44063c820e82f53523e350b3769c9d2664150cdf99fffb",
     "tests/cb1/test_nvidia_return_thunk.py": "f51db2e0898dfcddc4f9cce7a2e7e04f04d218fc57dde34dc30857d71416f17f",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9005-return-thunk.patch": "1509c960f94fb8842dbf523e541f9eedf8e52bbcdeb2f65fd6ab2ca39993ba20",
     "tests/cb1/test_nvidia_dual_mode.py": "ac7f3d8a90207f28a0b61ba19d775e84f920ff702c68f0093e54b5c3ece90f15",
