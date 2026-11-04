@@ -21,7 +21,7 @@ namespace DVBRIDGE {enum class OutputMode {Standard,HDR10,MasterReference};}
 struct TestPolicy {int mode=6,tv=1,adaptive=1;};
 struct Preferences {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::HDR10;
  bool allowMasterFallback=false,valid=true;TestPolicy requested;
- TestPolicy Policy()const{return requested;}bool ProfileValid()const{return valid;}};
+ TestPolicy Policy()const{return requested;}bool ProfileValid(int=0)const{return valid;}};
 bool internalFallback(const Preferences& preferences,const TestPolicy* selected){
  BODY
  return fallback;

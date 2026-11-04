@@ -110,12 +110,12 @@ packet. Kodi rejects native HDR10+ staging if its actual drawable falls below
 | Source / circuit | Required transport |
 | --- | --- |
 | DV Reference / Master Reference / Adaptive | Admitted DV V1/V2 TV-Led link |
-| HDR10 to DV Reference AI / Adaptive AI | Same admitted DV link |
+| HDR10 to DV Rendering (AI) / Adaptive AI | Same admitted DV link |
 | HDR10+ to DV, metadata-guided | Same admitted DV link; native HDR10+ remains the default source path |
-| DV to HDR10 Basic / Expert | Native PQ output, actual depth at least 10 bits |
+| DV to HDR10 Rendering / HDR10 Rendering Reference | Native PQ output, actual depth at least 10 bits |
 | DV to HDR10+ | PQ deep output plus frame-owned HDR10+ metadata |
 | Native HDR10+ | Same HDR10+ transport, original authored metadata |
-| Native SDR / HDR10 / HLG, DV disabled and 3D | Native Kodi and driver path |
+| Kodi default for DV / HDR10 / HDR10+, native SDR / HLG and 3D | Native Kodi and driver path |
 
 The driver transports do not implement reconstruction or tone mapping.
 HDR10+ to Dolby Vision is a separate engine circuit using the admitted DV route,

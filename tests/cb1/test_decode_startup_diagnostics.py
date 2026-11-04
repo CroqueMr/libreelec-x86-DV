@@ -23,7 +23,7 @@ class DecodeStartupDiagnostics(unittest.TestCase):
 #include <string>
 #include <vector>
 #define HAVE_DVBRIDGE 1
-constexpr int LOGINFO=1,LOGWARNING=2,DVD_CODEC_CTRL_DRAIN=128;
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3,DVD_CODEC_CTRL_DRAIN=128,DVD_CODEC_CTRL_POLL=256;
 constexpr int64_t AV_NOPTS_VALUE=INT64_MIN;
 struct CLog{template<class...T>static void Log(T...) {}};
 namespace DVBRIDGE{
@@ -52,7 +52,7 @@ struct VideoPicture{
  struct Metadata{int Binding()const{return 17;}}doviMetadata;
  void Reset(){*this={};}void CopyRef(const VideoPicture& p){*this=p;}
 };
-struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE};};
+struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  std::shared_ptr<Fel> m_dvFel;std::deque<std::shared_ptr<VideoPicture>>m_dvPending;
  unsigned m_dvStartupReported{};uint64_t m_dvDiagnosticGeneration=1;

@@ -11,61 +11,6 @@ enum { W=8, H=8, FW=3, FH=3 };
 static pl_log renderer_log;
 static bool require_effective_domain;
 static unsigned carrier_roundtrips;
-static bool track_detail, fail_detail_alloc, fail_detail_dispatch;
-static unsigned detail_extracts, detail_passes;
-static unsigned detail_textures;
-static int detail_active_w,detail_active_h;
-static struct dvbridge_geometry spatial_geometry={W,H,0,0,W,H};
-extern void __real_pl_shader_extract_features(pl_shader,struct pl_color_space);
-void __wrap_pl_shader_extract_features(pl_shader sh,struct pl_color_space color)
-{
-    if(track_detail)detail_extracts++;
-    __real_pl_shader_extract_features(sh,color);
-}
-static float detail_input[W*H*4];
-struct detail_proxy { const struct pl_hook *hook;const struct pl_hook_params *params; };
-static pl_tex detail_get_tex(void *priv,int w,int h)
-{
-    struct detail_proxy *proxy=priv;
-    if(track_detail && !detail_textures++){detail_active_w=w;detail_active_h=h;}
-    if(fail_detail_alloc && w==FW && h==FH){fail_detail_alloc=false;return NULL;}
-    return proxy->params->get_tex(proxy->params->priv,w,h);
-}
-static struct pl_hook_res detail_hook(void *priv,const struct pl_hook_params *p)
-{
-    struct detail_proxy *proxy=priv;struct detail_proxy allocation={.params=p};
-    struct pl_hook_params changed=*p;changed.get_tex=detail_get_tex;changed.priv=&allocation;
-    if(track_detail && p->tex->params.w==W && p->tex->params.h==H)
-        reference_read(p->gpu,p->tex,0,0,W,H,detail_input);
-    return proxy->hook->hook(proxy->hook->priv,&changed);
-}
-extern bool __real_pl_render_image(pl_renderer,const struct pl_frame *,const struct pl_frame *,const struct pl_render_params *);
-bool __wrap_pl_render_image(pl_renderer rr,const struct pl_frame *src,const struct pl_frame *dst,const struct pl_render_params *p)
-{
-    struct pl_hook hooks[2];const struct pl_hook *list[2];struct detail_proxy proxies[2];
-    struct pl_render_params copy=*p;assert(p->num_hooks<=2);
-    for(int i=0;i<p->num_hooks;i++){
-        hooks[i]=*p->hooks[i];proxies[i].hook=p->hooks[i];
-        if(hooks[i].input==PL_HOOK_SIG_TEX && hooks[i].stages==PL_HOOK_SCALED){
-            hooks[i].hook=detail_hook;hooks[i].priv=&proxies[i];
-        }
-        list[i]=&hooks[i];
-    }
-    copy.hooks=list;return __real_pl_render_image(rr,src,dst,&copy);
-}
-extern bool __real_pl_dispatch_finish(pl_dispatch,const struct pl_dispatch_params *);
-bool __wrap_pl_dispatch_finish(pl_dispatch dp,const struct pl_dispatch_params *p)
-{
-    if(track_detail && p->target && p->target->params.w<=W && p->target->params.h<=H){
-        pl_fmt fmt=p->target->params.format;
-        assert(fmt->type==PL_FMT_FLOAT && fmt->component_depth[0]==32);
-        detail_passes++;
-        if(fail_detail_dispatch && p->target->params.w==FW && p->target->params.h==FH){
-            fail_detail_dispatch=false;pl_dispatch_abort(dp,p->shader);return false;
-        }
-    }
-    return __real_pl_dispatch_finish(dp,p);
-}
 extern void __real_pl_shader_color_map(pl_shader,const struct pl_color_map_params *,
     struct pl_color_space,struct pl_color_space,pl_shader_obj *,bool);
 void __wrap_pl_shader_color_map(pl_shader sh,const struct pl_color_map_params *params,
@@ -77,11 +22,6 @@ void __wrap_pl_shader_color_map(pl_shader sh,const struct pl_color_map_params *p
     __real_pl_shader_color_map(sh,params,src,dst,state,linear);
 }
 extern pl_renderer __real_pl_renderer_create(pl_log,pl_gpu);
-pl_renderer __wrap_pl_renderer_create(pl_log log,pl_gpu gpu)
-{
-    return __real_pl_renderer_create(renderer_log?renderer_log:log,gpu);
-}
-
 static void finish(pl_dispatch dp,pl_shader *sh,pl_tex target)
 {
     assert(pl_dispatch_finish(dp,pl_dispatch_params(.shader=sh,.target=target)));
@@ -304,9 +244,9 @@ static AVDOVIDmData wire_controls(const struct dvbridge_cm4_controls *c,unsigned
     memcpy(e.dvbridge_original_bytes+19,c->hue,6);memcpy(e.l8.hue_vector_field,c->hue,6);
     return e;
 }
-static void full_gpu(pl_gpu gpu,bool colour)
+static void compatibility_gpu(pl_gpu gpu,bool colour)
 {
-    float source[W*H*4],output[W*H*4];
+    float source[W*H*4],output[W*H*4],baseline[W*H*4];
     input_pixels(source,colour);
     pl_tex input=reference_texture(gpu,W,H,source);struct pl_frame frame=reference_frame(input,W,H);
     struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
@@ -315,7 +255,6 @@ static void full_gpu(pl_gpu gpu,bool colour)
     *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=av_dovi_get_color(m)->source_max_pq}};
     puts("{\"full\":[");bool comma=false;
     for(unsigned gamut=0;gamut<2;gamut++)for(unsigned control=0;control<12;control++){
-        if(control==6)continue;
         struct dvbridge_creative_plan p=test_plan(control,gamut);
         p.policy.revision=1;p.policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;
         *av_dovi_get_ext(m,1)=wire_controls(&p.cm4_lower.controls,gamut?48:49);
@@ -323,11 +262,14 @@ static void full_gpu(pl_gpu gpu,bool colour)
         assert(dvbridge_render_hdr10_policy_rgb(r,&p.policy,&id,&frame,m,bytes,0,0,
             (struct dvbridge_geometry){W,H,0,0,W,H}));
         const struct dvbridge_hdr10_policy_output *pending=dvbridge_render_policy_output(r);
-        assert(pending && pending->creative.backend==DVBRIDGE_CREATIVE_CM4);
-        assert(pending->creative.l8_coverage.applied==(1023u&~((1u<<5)|(3u<<8))));
-        assert((pending->creative.l8_coverage.preserved&(3u<<8))==(3u<<8));
+        assert(pending && pending->creative.backend==DVBRIDGE_CREATIVE_NONE);
+        assert(!pending->creative.l8_coverage.applied && !(pending->creative.applied_levels&(1u<<8)));
+        assert(pending->creative.l8_coverage.preserved==pending->creative.l8_coverage.present);
         assert(!(pending->creative.applied_levels&(1u<<2)));
         reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,output);
+        if(!control)memcpy(baseline,output,sizeof(baseline));
+        else assert(!memcmp(baseline,output,sizeof(baseline)) &&
+            "Public Expert without L2 must not claim or apply local CM4 controls");
         printf("%s{\"gamut\":%u,\"control\":%u,\"pq\":[",comma?",":"",gamut,control);comma=true;
         for(int i=0;i<W*H;i++)printf("%s[%.17g,%.17g,%.17g]",i?",":"",output[i*4],output[i*4+1],output[i*4+2]);
         puts("]}");
@@ -337,200 +279,13 @@ static void full_gpu(pl_gpu gpu,bool colour)
     dvbridge_renderer_destroy(r);av_free(m);pl_tex_destroy(gpu,&input);
 }
 
-static bool spatial_render(struct dvbridge_renderer *r,const struct pl_frame *frame,
-    AVDOVIMetadata *m,size_t bytes,unsigned ms,uint64_t picture)
-{
-    struct dvbridge_creative_plan p=test_plan(0,0);p.cm4_lower.controls.primary[5]=ms;
-    *av_dovi_get_ext(m,1)=wire_controls(&p.cm4_lower.controls,49);
-    p.policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;p.policy.revision=1;
-    struct dvbridge_identity id={1,picture,1};
-    detail_extracts=detail_passes=detail_textures=0;track_detail=true;
-    bool ok=dvbridge_render_hdr10_policy_rgb(r,&p.policy,&id,frame,m,bytes,0,0,
-        spatial_geometry);
-    track_detail=false;return ok;
-}
-static void spatial_failure(pl_gpu gpu,const struct pl_frame *frame,AVDOVIMetadata *m,size_t bytes,bool dispatch)
-{
-    struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
-    assert(spatial_render(r,frame,m,bytes,2048,1));
-    pl_tex target=reference_texture(gpu,3840,2160,NULL);
-    assert(dvbridge_render_hdr10_policy_resolve(r,target,false,false,12));
-    const struct dvbridge_identity id={1,1,1};assert(dvbridge_render_policy_commit(r,&id,target));
-    struct dvbridge_hdr10_policy_output before,after;
-    assert(dvbridge_render_policy_committed(r,&before));
-    float original[W*H*4],preserved[W*H*4];reference_read(gpu,target,0,0,W,H,original);
-    fail_detail_alloc=!dispatch;fail_detail_dispatch=dispatch;
-    assert(!spatial_render(r,frame,m,bytes,4095,2));
-    assert(!fail_detail_alloc && !fail_detail_dispatch);
-    assert(!dvbridge_render_policy_output(r) && dvbridge_render_policy_committed(r,&after));
-    assert(!memcmp(&before,&after,sizeof(before)));
-    reference_read(gpu,target,0,0,W,H,preserved);assert(!memcmp(original,preserved,sizeof(original)));
-    dvbridge_renderer_destroy(r);pl_tex_destroy(gpu,&target);
-}
-static void spatial_gpu(pl_gpu gpu)
-{
-    float input[W*H*4],neutral[W*H*4],positive[W*H*4],negative[W*H*4];
-    input_pixels(input,false);
-    pl_tex tex=reference_texture(gpu,W,H,input);struct pl_frame frame=reference_frame(tex,W,H);
-    struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
-    size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
-    unsigned maximum=lround(pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,4000)*4095);
-    av_dovi_get_color(m)->source_max_pq=maximum;
-    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=maximum}};
-    assert(spatial_render(r,&frame,m,bytes,2048,1));
-    assert(!detail_extracts && !detail_passes);reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,neutral);
-    assert(spatial_render(r,&frame,m,bytes,4095,2) && "CM4 spatial detail is not implemented");
-    assert(detail_extracts==1 && detail_passes==3);
-    const struct dvbridge_hdr10_policy_output *out=dvbridge_render_policy_output(r);
-    assert(out && (out->creative.l8_coverage.applied&(1u<<5)));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,positive);
-    assert(spatial_render(r,&frame,m,bytes,0,3));
-    assert(detail_extracts==1 && detail_passes==3);
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,negative);
-    assert(memcmp(positive,neutral,sizeof(neutral)) && memcmp(negative,neutral,sizeof(neutral)));
-    for(unsigned i=0;i<W*H*4;i++)assert(isfinite(positive[i]) && isfinite(negative[i]));
-    /* Exact active-edge mirror: changing only L5 pixels must not change content. */
-    m->num_ext_blocks=3;*av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=5,.l5={1,1,1,1}};
-    assert(spatial_render(r,&frame,m,bytes,4095,4));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,positive);
-    float scaled[W*H*4];memcpy(scaled,detail_input,sizeof(scaled));
-    float changed[W*H*4];memcpy(changed,input,sizeof(changed));
-    for(int y=0;y<H;y++)for(int x=0;x<W;x++)if(!x || !y || x==W-1 || y==H-1)
-        for(int c=0;c<3;c++)changed[(y*W+x)*4+c]=c==1?1:0;
-    pl_tex border=reference_texture(gpu,W,H,changed);frame=reference_frame(border,W,H);
-    assert(spatial_render(r,&frame,m,bytes,4095,5));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,negative);
-    for(unsigned i=0;i<W*H*4;i++)if(i/4%W && i/4%W<W-1 && i/4/W && i/4/W<H-1 && scaled[i]!=detail_input[i])
-        fprintf(stderr,"Scaled difference %u: %.9g -> %.9g\n",i,scaled[i],detail_input[i]);
-    for(unsigned i=0;i<W*H*4;i++)if(positive[i]!=negative[i])
-        fprintf(stderr,"L5 difference %u: %.9g -> %.9g\n",i,positive[i],negative[i]);
-    assert(!memcmp(positive,negative,sizeof(positive)));
-    spatial_geometry=(struct dvbridge_geometry){W,H,0,0,W-1,H-1};
-    assert(spatial_render(r,&frame,m,bytes,4095,11));
-    assert(detail_active_w==6 && detail_active_h==6 && "L5 detail filtering precedes the final picture resize");
-    spatial_geometry=(struct dvbridge_geometry){W,H,0,0,W,H};
-    for(int y=0;y<H;y++)for(int x=0;x<W;x++)if(!x || !y || x==W-1 || y==H-1)
-        for(int c=0;c<3;c++)assert(negative[(y*W+x)*4+c]==0);
-    frame=reference_frame(tex,W,H);m->num_ext_blocks=2;
-    assert(spatial_render(r,&frame,m,bytes,4095,6));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,positive);
-    memset(changed,0,sizeof(changed));for(unsigned i=3;i<W*H*4;i+=4)changed[i]=1;
-    pl_tex black=reference_texture(gpu,W,H,changed);frame=reference_frame(black,W,H);
-    assert(spatial_render(r,&frame,m,bytes,4095,7));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,negative);
-    for(unsigned i=0;i<W*H*4;i++)if(i%4!=3)assert(negative[i]==0);
-    frame=reference_frame(tex,W,H);assert(spatial_render(r,&frame,m,bytes,4095,8));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,negative);
-    assert(!memcmp(positive,negative,sizeof(positive)));
-    spatial_failure(gpu,&frame,m,bytes,false);spatial_failure(gpu,&frame,m,bytes,true);
-    for(unsigned i=0;i<W*H*4;i++)changed[i]=i%4==3?1:pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,300);
-    pl_tex flat=reference_texture(gpu,W,H,changed);frame=reference_frame(flat,W,H);
-    assert(spatial_render(r,&frame,m,bytes,4095,9));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,positive);
-    assert(spatial_render(r,&frame,m,bytes,0,10));
-    reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,negative);
-    for(unsigned i=0;i<W*H*4;i++)assert(fabs(positive[i]-negative[i])<=2e-5);
-    maximum=lround(pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,500)*4095);
-    av_dovi_get_color(m)->source_max_pq=maximum;av_dovi_get_ext(m,0)->l1.max_pq=maximum;
-    assert(spatial_render(r,&frame,m,bytes,4095,4));assert(!detail_extracts && !detail_passes);
-    out=dvbridge_render_policy_output(r);assert(out && !(out->creative.l8_coverage.applied&(1u<<5)) &&
-        out->creative.reason==DVBRIDGE_CREATIVE_DETAIL_NO_COMPRESSION);
-    dvbridge_render_policy_cancel(r);assert(!dvbridge_render_policy_output(r));
-    assert(!dvbridge_render_policy_commit(r,&(struct dvbridge_identity){1,4,1},NULL));
-    dvbridge_renderer_destroy(r);pl_tex_destroy(gpu,&tex);pl_tex_destroy(gpu,&border);pl_tex_destroy(gpu,&black);
-    pl_tex_destroy(gpu,&flat);av_free(m);
-    puts("PASS neutral/no-compression bypass, signed detail, active-edge mirror, FP32, current picture, failure preservation and cancellation");
-}
-
-/* Independent graph: CPU crop is test-only and cannot sample L5 pixels. */
-static void spatial_oracle(pl_gpu gpu,pl_dispatch dp,const AVDOVIMetadata *m,unsigned gamut,
-    unsigned ms,unsigned border,float output[W*H*4])
-{
-    struct pl_color_space from;struct pl_color_repr repr;struct pl_dovi_metadata dovi;
-    pl_map_avdovi_metadata(&from,&repr,&dovi,m);
-    from.hdr.prim=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
-    from.hdr.max_pq_y=av_dovi_get_ext(m,0)->l1.max_pq/4095.0f;
-    from.hdr.avg_pq_y=0;from.hdr.max_cll=from.hdr.max_fall=0;
-    enum pl_color_primaries prim=gamut?PL_COLOR_PRIM_DISPLAY_P3:PL_COLOR_PRIM_BT_2020;
-    struct pl_color_space to={.primaries=prim,.transfer=PL_COLOR_TRC_LINEAR,
-        .hdr={.min_luma=PL_COLOR_HDR_BLACK,.max_luma=1000,.prim=*pl_raw_primaries_get(prim)}};
-    float cropped[W*H*4];int aw=W-2*border,ah=H-2*border;
-    for(int y=0;y<ah;y++)for(int x=0;x<aw;x++)
-        memcpy(cropped+(y*aw+x)*4,detail_input+((y+border)*W+x+border)*4,4*sizeof(float));
-    pl_tex source=reference_texture(gpu,W,H,detail_input),active=reference_texture(gpu,aw,ah,cropped);
-    pl_tex full=reference_texture(gpu,aw,ah,NULL),vertical=reference_texture(gpu,W,FH,NULL);
-    pl_tex feature=reference_texture(gpu,FW,FH,NULL),target=reference_texture(gpu,W,H,NULL);
-    pl_shader sh=pl_dispatch_begin(dp);assert(pl_shader_sample_nearest(sh,pl_sample_src(.tex=active)));
-    pl_shader_extract_features(sh,from);finish(dp,&sh,full);
-    pl_shader_obj lut[2]={0},state=NULL;
-    for(int axis=0;axis<2;axis++){
-        sh=pl_dispatch_begin(dp);pl_tex input=axis?vertical:full,output=axis?feature:vertical;
-        struct pl_sample_src sample={.tex=input,.components=1,.address_mode=PL_TEX_ADDRESS_MIRROR,
-            .rect=axis?(pl_rect2df){0,0,W,FH}:(pl_rect2df){-(int)border,-(int)border,W-border,H-border},
-            .new_w=output->params.w,.new_h=output->params.h};
-        struct pl_sample_filter_params filter={.filter=pl_filter_bicubic,
-            .lut=&lut[axis],.no_compute=true,.cb1_fp32_lut=true};
-        assert(pl_shader_sample_ortho2(sh,&sample,&filter));finish(dp,&sh,output);
-    }
-    struct pl_color_map_params params={.gamut_mapping=&pl_gamut_map_clip,
-        .tone_mapping_function=&pl_tone_map_spline,
-        .tone_constants={.knee_adaptation=.4f,.knee_minimum=.1f,.knee_maximum=.8f,.knee_default=.4f,
-            .knee_offset=1,.slope_tuning=1.5f,.slope_offset=.2f,.spline_contrast=.5f,
-            .reinhard_contrast=.5f,.linear_knee=.3f,.exposure=1},
-        .lut_size=256,.metadata=PL_HDR_METADATA_CIE_Y,.cb1_fp32_tone_lut=true,
-        .contrast_recovery=.30*((int)ms-2048)/2048,.contrast_smoothness=3.5f};
-    sh=pl_dispatch_begin(dp);assert(pl_shader_sample_nearest(sh,pl_sample_src(.tex=source)));
-    pl_shader_color_map_ex(sh,&params,pl_color_map_args(.src=from,.dst=to,.state=&state,.feature_map=feature));
-    finish(dp,&sh,target);reference_read(gpu,target,0,0,W,H,output);
-    for(int i=0;i<2;i++)pl_shader_obj_destroy(&lut[i]);pl_shader_obj_destroy(&state);
-    pl_tex textures[]={source,active,full,vertical,feature,target};
-    for(unsigned i=0;i<sizeof(textures)/sizeof(*textures);i++)pl_tex_destroy(gpu,&textures[i]);
-}
-
-static void spatial_numeric(pl_gpu gpu,pl_dispatch dp)
-{
-    float input[W*H*4],output[W*H*4],base[W*H*4];input_pixels(input,true);
-    pl_tex tex=reference_texture(gpu,W,H,input);struct pl_frame frame=reference_frame(tex,W,H);
-    struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
-    size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);
-    unsigned maximum=lround(pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,4000)*4095);
-    av_dovi_get_color(m)->source_max_pq=maximum;
-    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=maximum}};
-    puts("{\"spatial\":[");bool comma=false;unsigned picture=1;
-    for(unsigned gamut=0;gamut<2;gamut++)for(unsigned combination=0;combination<2;combination++)
-    for(unsigned sign=0;sign<2;sign++)for(unsigned border=0;border<2;border++){
-        unsigned control=combination?11:0,ms=sign?4095:0;
-        struct dvbridge_creative_plan p=test_plan(control,gamut);p.cm4_lower.controls.primary[5]=ms;
-        p.policy.mode=DVBRIDGE_MODE_HDR10_EXPERT;p.policy.revision=1;
-        m->num_ext_blocks=border?3:2;*av_dovi_get_ext(m,1)=wire_controls(&p.cm4_lower.controls,gamut?48:49);
-        if(border)*av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=5,.l5={1,1,1,1}};
-        struct dvbridge_identity id={1,picture++,1};track_detail=true;
-        assert(dvbridge_render_hdr10_policy_rgb(r,&p.policy,&id,&frame,m,bytes,0,0,
-            (struct dvbridge_geometry){W,H,0,0,W,H}));track_detail=false;
-        reference_read(gpu,dvbridge_render_texture(r),0,0,W,H,output);
-        pl_dispatch_mark_cb1_stable_pq(dp,true);spatial_oracle(gpu,dp,m,gamut,ms,border,base);
-        printf("%s{\"gamut\":%u,\"control\":%u,\"ms\":%u,\"border\":%u,\"native\":[",comma?",":"",gamut,control,ms,border);comma=true;
-        for(int i=0;i<W*H;i++)printf("%s[%.17g,%.17g,%.17g]",i?",":"",base[i*4],base[i*4+1],base[i*4+2]);
-        printf("],\"pq\":[");
-        for(int i=0;i<W*H;i++)printf("%s[%.17g,%.17g,%.17g]",i?",":"",output[i*4],output[i*4+1],output[i*4+2]);
-        puts("]}");
-    }
-    puts("]}");dvbridge_renderer_destroy(r);pl_tex_destroy(gpu,&tex);av_free(m);
-}
-
 int main(int argc,char **argv)
 {
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
     renderer_log=g.log;
     pl_dispatch dp=pl_dispatch_create(NULL,gpu);assert(dp);
-    if(argc==2 && !strcmp(argv[1],"--spatial")){
-        spatial_gpu(gpu);pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
-    }
-    if(argc==2 && !strcmp(argv[1],"--spatial-numeric")){
-        spatial_numeric(gpu,dp);pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
-    }
     if(argc==2 && !strcmp(argv[1],"--domain")){
-        require_effective_domain=true;full_gpu(gpu,true);pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
+        require_effective_domain=true;compatibility_gpu(gpu,true);pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
     }
     if(argc==2 && (!strcmp(argv[1],"--envelope-oracle") || !strcmp(argv[1],"--colour-oracle"))){
         envelope_oracle(gpu,dp,!strcmp(argv[1],"--colour-oracle"));pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
@@ -541,8 +296,8 @@ int main(int argc,char **argv)
     if(argc==2 && !strcmp(argv[1],"--gpu")){
         scalar_gpu(gpu,dp);pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
     }
-    if(argc==2 && (!strcmp(argv[1],"--full") || !strcmp(argv[1],"--full-colour"))){
-        full_gpu(gpu,!strcmp(argv[1],"--full-colour"));pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
+    if(argc==2 && (!strcmp(argv[1],"--compat") || !strcmp(argv[1],"--compat-colour"))){
+        compatibility_gpu(gpu,!strcmp(argv[1],"--compat-colour"));pl_dispatch_destroy(&dp);reference_gpu_destroy(&g);return 0;
     }
     float source[W*H*4],output[W*H*4],base[W*H*4];
     for(int y=0;y<H;y++)for(int x=0;x<W;x++){

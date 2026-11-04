@@ -27,6 +27,7 @@ struct CDRMAtomic {
  std::optional<std::array<uint8_t,31>> m_hdr10plusPacket=std::array<uint8_t,31>{};
  void ResetCB1PresentationTime(){};
  bool DrmAtomicCommit(int,int,bool,bool){assert(false);return false;}
+ bool IsSelectedModeCommitted() const {assert(false);return false;}
  void FlipPage(gbm_bo* bo,bool rendered,bool videoLayer,bool async) FLIP
  void DestroyDrm() DESTROY
 };

@@ -1,15 +1,15 @@
 # Interface screenshots
 
 Native captures illustrate the interface, not HDR/Dolby Vision image fidelity or
-sustained performance. Current pages use the two **RC2 1920x1080 sRGB previews**
-below. Their BT.2020/PQ captures are converted for normal SDR browsers, without
-changing playback processing or replacing labels.
+sustained performance. Current pages use the two **RC3 sRGB previews** below,
+captured on an Intel N100 running the published RC3 image. Their BT.2020/PQ
+captures are converted for SDR browsers without replacing labels or changing
+playback processing.
 
 | File | Content |
 | --- | --- |
-| `quick-switch-rc2-sdr.png` | Current Quick Switch on Avatar, Dolby Vision Reference selected; 1920x1080 sRGB |
-| `player-information-rc2-sdr.png` | Current Player information; separate audio source and actual Kodi output; 1920x1080 sRGB |
-| `player-information-rc2.png` | RC2; native 3840x2160 capture; Avatar Profile8 in Master Reference, Dolby Digital Plus Atmos source decoded to stereo PCM |
+| `player-information-rc3.png` | Player information with Dolby Vision Master Reference, CB1 0.5, CM2.9/CM4 status and separate audio source/actual Kodi output |
+| `quick-switch-rc3.png` | Quick Switch with the source-compatible RC3 playback choices |
 
 ## Archived captures
 
@@ -18,6 +18,9 @@ current playback menu.
 
 | File | Content |
 | --- | --- |
+| `quick-switch-rc2-sdr.png` | RC2 Quick Switch on Avatar; 1920x1080 sRGB preview |
+| `player-information-rc2-sdr.png` | RC2 Player information; 1920x1080 sRGB preview |
+| `player-information-rc2.png` | RC2 native 3840x2160 capture; Avatar Profile8 in Master Reference, Dolby Digital Plus Atmos source decoded to stereo PCM |
 | `rc1-quick-rendering-menu.png` | RC1; Avatar; compact automatic-height panel with all seven Dolby Vision source choices |
 | `beta4-quick-rendering-menu.png` | Avatar; six rendering choices, Master Reference active |
 | `quick-display-hdr10.png` | HDR10 source; AI Reference, Adaptive AI and native HDR10 |

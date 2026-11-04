@@ -12,7 +12,9 @@ int main(void)
 {
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
     struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
-    float pixels[16]={.25,.3,.4,1,.3,.4,.5,1,.4,.5,.6,1,.5,.6,.7,1};
+    /* Neutral grays isolate the intensity curve from the gamut/chroma
+     * mapper, whose independent colored oracle is expert_chroma. */
+    float pixels[16]={.25,.25,.25,1,.4,.4,.4,1,.6,.6,.6,1,.8,.8,.8,1};
     pl_tex input=reference_texture(gpu,2,2,pixels);struct pl_frame f=reference_frame(input,2,2);
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=2;
     AVDOVIDmData *l1=av_dovi_get_ext(m,0);l1->level=1;l1->l1.max_pq=3079;l1->l1.avg_pq=1667;
@@ -34,11 +36,11 @@ int main(void)
     printf("],\"trimmed\":[");
     for(int i=0;i<4;i++)printf("%s[%.17g,%.17g,%.17g]",i?",":"",trimmed[i*4],trimmed[i*4+1],trimmed[i*4+2]);
     puts("]}");
-    // Source offset can deliberately lift content black; borders are separate.
+    // Signed curve controls preserve content black as well as borders.
     memset(pixels,0,sizeof(pixels));for(int i=3;i<16;i+=4)pixels[i]=1;
     pl_tex black=reference_texture(gpu,2,2,pixels);f=reference_frame(black,2,2);
     l2->l2.trim_power=2048;l2->l2.trim_offset=2200;image(r,gpu,&f,m,bytes,&p,trimmed);
-    assert(trimmed[0]>0 && trimmed[1]>0 && trimmed[2]>0);
+    assert(trimmed[0]==0 && trimmed[1]==0 && trimmed[2]==0);
     dvbridge_renderer_destroy(r);pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&black);av_free(m);reference_gpu_destroy(&g);
-    puts("PASS real creative pixel effect, Basic invariance, intentional content-black offset");
+    puts("PASS real creative curve effect, Basic invariance, fixed content black");
 }

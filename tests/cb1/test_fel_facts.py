@@ -89,7 +89,7 @@ int main() {
  auto nearest=r.CaptureSubmission();assert(nearest.felFilter==1 && nearest.felBackend==1);
  assert(vpp.felFilter==0 && vpp.felBackend==2);
  DVBRIDGE::admitted=false;r.Accepted(nearest);assert(DVBRIDGE::reports==1);
- DVBRIDGE::admitted=true;r.Accepted(nearest);assert(DVBRIDGE::reports==2 && DVBRIDGE::executed=="nearest");
+ DVBRIDGE::admitted=true;r.Accepted(nearest);assert(DVBRIDGE::reports==2 && DVBRIDGE::executed=="bilinear");
  r.m_hardwareFELVpp=true;r.m_hardwareBinding.picture++;r.CaptureMetadata(metadata,true);
  assert(r.CaptureSubmission().felBackend==1);
  r.CaptureMetadata(metadata,false);auto ordinary=r.CaptureSubmission();
@@ -105,7 +105,11 @@ int main() {
  r.AIState();auto ai=r.CaptureSubmission();assert(ai.felFilter==-1 && ai.felBackend==0);
  r.m_requested.felUpscaling=0;r.m_hardwareFELVpp=false;r.CaptureMetadata(metadata,true);
  auto fallback=r.CaptureSubmission();r.Accepted(fallback);
- assert(DVBRIDGE::request=="vaapi" && DVBRIDGE::executed=="nearest" && DVBRIDGE::backend=="shader");
+ assert(DVBRIDGE::request=="vaapi" && DVBRIDGE::executed=="bilinear" && DVBRIDGE::backend=="shader");
+ r.m_requested.felUpscaling=2;
+ auto reference=r.CaptureSubmission();assert(reference.felFilter==2 && reference.felBackend==3);
+ r.Accepted(reference);assert(DVBRIDGE::request=="reference" && DVBRIDGE::executed=="reference" && DVBRIDGE::backend=="reference-gpu");
+ r.m_requested.felUpscaling=0;
  r.m_effectiveMode=DVBRIDGE_MODE_MASTER_REFERENCE;
  auto master=r.CaptureSubmission();assert(master.felBackend==3 && master.felFilter==0);
  r.Accepted(master);assert(DVBRIDGE::executed=="reference" && DVBRIDGE::backend=="reference-gpu");

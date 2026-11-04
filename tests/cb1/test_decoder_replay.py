@@ -15,6 +15,8 @@ class DecoderReplayTests(unittest.TestCase):
         retry=body(player,'      else\n      {\n        SendMessageBack')
         timeout=body(player,'else if (ret == MSGQ_TIMEOUT)')
         timeout=timeout[:timeout.index('      // if we only wanted priority messages')]+'\n}'
+        wrapper_start=player.index('  const auto processDecoderOutput =')
+        wrapper=player[wrapper_start:player.index('\n  };',wrapper_start)+len('\n  };')]
         execute(r'''
 #include <algorithm>
 #include <cassert>
@@ -28,7 +30,7 @@ using namespace std::chrono_literals;
 constexpr int LOGWARNING=0,LOGFATAL=1,OUTPUT_AGAIN=1,DVD_PLAYSPEED_PAUSE=0;constexpr double DVD_NOPTS_VALUE=1e20;
 namespace IDVDStreamPlayer{constexpr int SYNC_INSYNC=0;}
 enum MsgQueueReturnCode{MSGQ_OK=1,MSGQ_TIMEOUT=0,MSGQ_ABORT=-1,MSGQ_NOT_INITIALIZED=-2,MSGQ_INVALID_MSG=-3};
-struct CDVDMsg{enum{DEMUXER_PACKET};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
+struct CDVDMsg{enum{DEMUXER_PACKET,VIDEO_DRAIN};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
  bool IsType(int)const{return true;}};
 struct DemuxPacket{int iSize=1;};
 struct CDVDMsgDemuxerPacket:CDVDMsg{using CDVDMsg::CDVDMsg;DemuxPacket data;DemuxPacket*GetPacket(){return &data;}};
@@ -50,6 +52,7 @@ struct Queue{
 };
 auto packet(char c){return std::make_shared<CDVDMsgDemuxerPacket>(c);}
 struct Player{
+ unsigned m_drainPending=0;std::mutex m_drainMutex;
  Queue m_messageQueue;struct{void SetLevelVQ(int){}bool IsFrameAdvance(){return false;}}m_processInfo;
  int m_outputSate=0,m_speed=1,m_syncState=IDVDStreamPlayer::SYNC_INSYNC,drains=0;
  bool m_paused=false,decoderReady=false;
@@ -61,11 +64,13 @@ struct Player{
  void SendMessageBack(const std::shared_ptr<CDVDMsg>&pMsg,int priority=0) @BACK@
  void Replay(){@REPLAY@}
  void Retry(const std::shared_ptr<CDVDMsg>&pMsg,int iPriority){bool onlyPrioMsgs=false;@RETRY@ assert(onlyPrioMsgs);}
- void Drain(){double frametime=33333,pts=0;bool onlyPrioMsgs=false;for(int once=0;once<1;once++) @DRAIN_BODY@}
+ void Drain(){double frametime=33333,pts=0;bool onlyPrioMsgs=false;@DECODER_OUTPUT@
+  for(int once=0;once<1;once++) @DRAIN_BODY@}
 };
 int main(){@CHECKS@}
 '''.replace('@PUT@',put).replace('@GET@',get).replace('@SEND@',send).replace('@BACK@',back)
-           .replace('@REPLAY@',replay).replace('@RETRY@',retry).replace('@DRAIN_BODY@',timeout).replace('@CHECKS@',checks))
+           .replace('@REPLAY@',replay).replace('@RETRY@',retry).replace('@DRAIN_BODY@',timeout)
+           .replace('@DECODER_OUTPUT@',wrapper).replace('@CHECKS@',checks))
 
     def test_reopen_and_flush_prepend_fifo_prefix_before_remaining_replay(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()

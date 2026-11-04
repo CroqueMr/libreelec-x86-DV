@@ -37,8 +37,7 @@ int main(void)
     }
     assert(!memcmp(first,second,count*4*sizeof(*first)) &&
         "A repeated neutral Expert picture must not change after its first frame");
-    assert(!r->cm29_tail_atlas && cm29_gpu_map_build_count==0 &&
-        "Neutral Expert must not allocate an unused first-frame-only lattice");
+    assert(r->creative_state && "Expert reuses the native mapper's LUT state");
     assert(!memcmp(m,original,bytes));
     free(first);free(second);av_free(original);av_free(m);
     pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&el);pl_tex_destroy(gpu,&out);

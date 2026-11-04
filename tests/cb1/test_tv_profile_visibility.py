@@ -29,7 +29,7 @@ class TVProfileVisibilityTests(unittest.TestCase):
                 dependencies = node.findall('./dependencies/dependency[@type="visible"]')
                 visible = all(evaluate(d, values) for d in dependencies)
                 with self.subTest(values=values, control=key):
-                    self.assertEqual(visible, expected)
+                    self.assertEqual(visible, expected and not (output==1 and method==1))
                     if visible:
                         self.assertEqual(int(node.findtext('level')), 0)
 

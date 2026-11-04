@@ -1,44 +1,24 @@
 # CM4 processing scope
 
-HDR10 Expert uses the independent `cb1-cm4-v1` operator. Authored-Dolby Vision Adaptive HDR Mapping
-uses `cb1-dve-pixel-v1` for trim-guided expansion and fresh output analysis.
-The old `cb1-dve-v7` fitter remains a separate offline reference.
+The independent `cb1-cm4-v1` scalar/spatial operator is a numerical reference,
+not the complete **RC3 HDR10 Rendering Reference** runtime. That runtime uses
+explicit player-led PQ mapping and available L2 compatibility; it does not stack
+L3 or a full L8 creative pass onto the curve. L8 spatial and secondary controls
+remain unexecuted. [Current runtime contract](ALGORITHMS.md#dolby-vision-to-hdr10-rendering-reference).
 
-| Operation | Processing |
-| --- | --- |
-| L8 primary and optional fields | Resolve raw/parsed values with explicit presence |
-| L10 target descriptions | Validate bounds, primaries and target identity |
-| Midtone and highlight controls | Independent Expert operator |
-| Six-color hue/saturation | Generic offline IPT/PQ operator; preserved, not executed in HDR10 Expert |
-| L8 spatial detail | Conditional native libplacebo path, independent strength conversion |
-| L2 spatial detail | Selected Expert raw/PQ resolution; preserved, not executed |
-| Adaptive HDR Mapping | Metadata-guided pixel expansion; scene-curve L1 and output L5 |
+Authored-Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1` for trim-guided
+expansion and scene-curve output metadata. Compatible L8 anchors take precedence
+over L2; no missing creative controls are invented. The old `cb1-dve-v7` fitter
+remains a separate offline reference.
 
-Unknown targets and contradictory fields are not replaced with invented
-defaults. Expert retains valid anchors alongside an unrelated unknown target.
-L2 compatibility and L8 are not stacked. Optional absent controls
-remain absent.
+Raw/parsed L8 presence, L10 targets, primaries and metadata contradictions are
+validated independently. Unknown targets do not become invented default displays.
+L2 and L8 are not stacked as two creative grades.
 
-Expert missing/unusable L1 uses valid static source descriptors, without
-changing the requested display reference or rewriting source metadata. This
-does not reconstruct missing analysis. Structural corruption remains rejected.
-
-Expert now distinguishes selected L2 detail presence, numeric resolution,
-sentinel `-1`, unresolved endpoints and actual execution. An unrelated L2
-anchor cannot trigger a selected-detail warning. The five existing punctual
-controls and the independent L8 scalar/spatial equations remain unchanged.
-No L8 `.30` strength conversion is copied into L2 and no synthetic detail
-command is supplied at the master. A resolved numeric code is not a
-qualified spatial operator; L2 detail remains unexecuted and preserved.
-
-External qualification still requires raw HDR reference output with a pinned
-mapper version, target, gamut, range and encoding. Internal scalar/GPU
-agreement does not demonstrate Dolby/CoreELEC equivalence, and syntax or a
-mastering application's default values cannot supply the missing equations.
-
-Automated checks cover metadata consistency and the independent numerical
-contract. They do not establish proprietary-mapper equivalence or universal
-hardware compatibility.
+External qualification requires raw reference output with a pinned mapper,
+target, gamut, range and encoding. Internal scalar/GPU agreement does not establish
+Dolby/CoreELEC equivalence, and a mastering application's defaults cannot supply
+missing equations. Automated checks do not prove universal hardware compatibility.
 
 See [algorithms](ALGORITHMS.md), [source attribution](CREATIVE-MAPPING.md) and
 [adapter contract](CREATIVE-INTEGRATION.md).

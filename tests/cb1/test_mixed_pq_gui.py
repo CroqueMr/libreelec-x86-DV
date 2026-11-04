@@ -54,7 +54,7 @@ struct FBO{bool IsValid(){return true;}bool BeginRender(){return true;}GLuint Te
 struct Shader{const float* projection=nullptr;void SetInputPQ(bool){}void SetProjection(const float*p){projection=p;}
  int GetPosLoc(){return 0;}int GetTexLoc(){return 1;}bool Enable(){return true;}void Disable(){}};
 struct Window {
- bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_guiWillRender=true,m_hdrConversion=false;
+ bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_guiWillRender=true,m_hdrConversion=false,guiAvailable=true;
  bool m_dvPQSubtitleCleared=false,m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
  unsigned m_dvGUIContentGeneration=0,m_dvSubtitleDraws=0,m_dvPQSubtitleDraws=0,m_dvSubtitleContent=0,count=0;
  int m_guiFboWidth=8,m_guiFboHeight=6,m_nWidth=8,m_nHeight=6,m_dvPQSubtitleWidth=8,m_dvPQSubtitleHeight=6;

@@ -28,6 +28,7 @@ class FELDecodeBufferTests(unittest.TestCase):
 #define HAVE_DVBRIDGE 1
 constexpr int DVD_CODEC_CTRL_DROP_ANY=1,DVD_CODEC_CTRL_DROP=2,DVD_CODEC_CTRL_HURRY=4;
 constexpr int DVD_CODEC_CTRL_DRAIN=128;
+constexpr int DVD_CODEC_CTRL_POLL=256;
 constexpr int AVDISCARD_DEFAULT=0,AVDISCARD_NONREF=8;
 constexpr int DVP_FLAG_DROPPED=32;
 struct VideoPicture {int iFlags=0;};

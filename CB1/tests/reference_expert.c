@@ -7,6 +7,9 @@ static void final_target_precision(pl_gpu gpu, struct dvbridge_renderer *r,
     const struct pl_frame *frame, const void *metadata, size_t bytes,
     struct dvbridge_geometry geometry)
 {
+    /* This subtest injects arbitrary PQ codes to isolate storage/quantization.
+     * Use the full legal PQ domain rather than bypassing the Expert ceiling. */
+    struct dvbridge_policy full=*policy;full.tv.peak_nits=10000;policy=&full;
     struct dvbridge_hdr10_policy_output saved, snapshot;
     assert(dvbridge_render_policy_committed(r,&saved));
     const struct {const char *name; unsigned bits;} rejected[]={

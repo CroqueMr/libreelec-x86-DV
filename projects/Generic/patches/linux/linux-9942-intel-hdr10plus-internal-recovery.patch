@@ -34,4 +34,3 @@ contract can validate it. Preserve acquisition errors and the existing
 +			ret = PTR_ERR(primary_state);
  			goto out;
  		}
- 

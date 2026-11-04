@@ -1,0 +1,11 @@
+HDR10+ weighted PQ percentile estimator
+Copyright (C) 2024 Team Kodi
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Adapted from AVDVPlus HistogramPlus in:
+https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp
+
+CB1 adaptation: generalized valid percentile counts, endpoint tails, retained
+source MaxSCL peak and validation, explicitly estimated incomplete statistics.
+No Amlogic driver, RPU writer, mastering-black substitution or L1 floors copied.
+The GPL-2.0 license text is provided in GPL-2.0.txt.

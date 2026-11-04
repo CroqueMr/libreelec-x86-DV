@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Validate parsed Dolby Vision metadata before handing reshaping parameters to libplacebo. */
 #include "dvbridge_placebo.h"
+#include "cb1_hdr10_expert.h"
 #include "dvbridge_metadata.h"
 #include "dvbridge_creative.h"
 #include <libplacebo/utils/libav.h>
@@ -130,6 +131,13 @@ bool dvbridge_reference_map(struct dvbridge_color *out, struct pl_color_space *n
         (policy->mode != DVBRIDGE_MODE_HDR10_EXPERT &&
          policy->mode != DVBRIDGE_MODE_ENHANCED_DV))
         return false;
+    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
+        struct cb1_hdr10_expert_plan plan;
+        if(!cb1_hdr10_expert_prepare(&plan,policy,metadata,bytes,paired))return false;
+        *out=plan.source;out->repr.dovi=&out->dovi;
+        *nominal=plan.target;*signal=plan.signal;
+        return true;
+    }
     float peak = policy->tv.peak_nits;
     if (!isfinite(peak) || policy->tv.peak_nits <= 1e-6 || peak <= PL_COLOR_HDR_BLACK ||
         pl_hdr_rescale(PL_HDR_NITS, PL_HDR_PQ, peak) <=
@@ -148,9 +156,8 @@ bool dvbridge_reference_map(struct dvbridge_color *out, struct pl_color_space *n
         if (e->level == 1) { if (l1) return false; l1 = e; }
         if (e->level == 6) { if (l6) return false; l6 = e; }
     }
-    if (policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT &&
-        (!l1 || !l1->l1.max_pq || l1->l1.max_pq > 4095 ||
-         l1->l1.min_pq > l1->l1.avg_pq || l1->l1.avg_pq > l1->l1.max_pq))
+    if (!l1 || !l1->l1.max_pq || l1->l1.max_pq > 4095 ||
+         l1->l1.min_pq > l1->l1.avg_pq || l1->l1.avg_pq > l1->l1.max_pq)
         return false;
     if (l6) {
         float minimum = l6->l6.min_luminance / 10000.0f;
@@ -161,20 +168,6 @@ bool dvbridge_reference_map(struct dvbridge_color *out, struct pl_color_space *n
     }
     /* Explicit primaries prevent inference from inventing a source gamut. */
     mapped.color.hdr.prim = *pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
-    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
-        /* Mastering-display black is not the absolute-PQ content floor. */
-        mapped.color.hdr.min_luma=PL_COLOR_HDR_BLACK;
-        struct dvbridge_creative_plan creative;
-        enum dvbridge_creative_status status=dvbridge_creative_resolve(&creative,m,bytes,policy);
-        if(status==DVBRIDGE_CREATIVE_INVALID || status==DVBRIDGE_CREATIVE_UNSUPPORTED)return false;
-        if(creative.mastering_primaries_present)mapped.color.hdr.prim=creative.mastering_primaries;
-        if(creative.l1_present){
-            mapped.color.hdr.max_pq_y=creative.analysis[1]/4095.0f;
-            mapped.color.hdr.avg_pq_y=creative.analysis[2]/4095.0f;
-        }else{
-            mapped.color.hdr.max_pq_y=mapped.color.hdr.avg_pq_y=0;
-        }
-    }
     mapped.color.hdr.max_cll = mapped.color.hdr.max_fall = 0;
     enum pl_color_primaries prim = policy->tv.gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 :
         policy->tv.gamut == DVBRIDGE_GAMUT_P3_D65 ? PL_COLOR_PRIM_DISPLAY_P3 : PL_COLOR_PRIM_BT_2020;

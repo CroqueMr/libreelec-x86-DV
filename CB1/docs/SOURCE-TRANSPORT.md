@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Source-domain packed output | Eligible 4K single-layer and MEL Dolby Vision output, including metadata-based Adaptive HDR Mapping | Avoid source colour decoding, PQ round trips and canonical RGB re-encoding |
 | Identical MMR interval compaction | Shared libplacebo reshaping in Dolby Vision and HDR10 conversion circuits | Remove redundant per-pixel segment selection |
-| Fixed performance input-chroma recipe | Dolby Vision Reference, Adaptive HDR Mapping and eligible conversions | Avoid separate chroma convolution; each circuit owns its recipe, with no Fast On/Off/Auto selector |
+| Optional bilinear input chroma scaling | CB1 Native/Dolby Vision Adaptive HDR Mapping, DV to HDR10 and HDR10 to DV AI, including intermediate RGB, GUI and enlarged input | Avoid separate chroma convolution; Off restores the reference chroma filter without disabling other optimizations |
 | Direct spatial descriptor buffer | HDR10 to Dolby Vision AI, Reference and Adaptive | Remove the intermediate descriptor texture and framebuffer-to-buffer copy |
 | Fused AI transport with borders | HDR10 to Reference Dolby Vision AI, unscaled active pictures | Write directly into the packed output without a padded RGB intermediate |
 
@@ -28,7 +28,7 @@ preserved. Distinct intervals retain the general shader. This specialization
 is shared GLSL code, without an Intel-specific backend or CPU image processing.
 
 Each circuit fixes its input-chroma filter at the libplacebo input stage.
-Reference and conversions retain their qualified performance recipe; Master
+Standard and conversions retain their qualified performance recipe; Master
 retains its reference filter. Input-chroma filtering does not change metadata,
 the FEL luma enlargement filter or output-plane sampling. A matched renderer
 header/library pair is required.

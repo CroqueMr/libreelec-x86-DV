@@ -3,20 +3,13 @@
 #include <libplacebo/shaders/custom.h>
 static bool baseline;
 static enum pl_color_primaries nominal=PL_COLOR_PRIM_DISPLAY_P3;
-static bool cache_failure;
-static bool cache_storage;
-static bool cache_warp;
-static unsigned rejected_allocations;
 static unsigned fused_calls;
 static bool compare_conversion(pl_shader sh,const struct pl_custom_shader *params)
 {
-    if(cache_warp && !baseline && params->description &&
-       !strcmp(params->description,"Cached CM2.9 HDR10 chroma and output mapping"))
-        assert(params->num_descriptors==2 && "Reuse the PQ encoder for AMD's cache coordinates");
     if(!params->description || strcmp(params->description,
         "Expert nominal LINEAR to BT2020 PQ before caller overlays"))
         return pl_shader_custom(sh,params);
-    if(!baseline || cache_failure || cache_storage){
+    if(!baseline){
         assert(params->num_variables==3 && "Compose Expert's colour matrices before the pixel shader");
         fused_calls++;
         return pl_shader_custom(sh,params);
@@ -35,47 +28,8 @@ static bool compare_conversion(pl_shader sh,const struct pl_custom_shader *param
     return pl_shader_custom(sh,&old);
 }
 #define pl_shader_custom compare_conversion
-static bool compare_image(pl_renderer,const struct pl_frame *,const struct pl_frame *,const struct pl_render_params *);
-#define pl_render_image compare_image
-static pl_tex test_texture(pl_gpu,const struct pl_tex_params *);
-#define pl_tex_create test_texture
-#define DVBRIDGE_PQ_ENCODER_TEST 1
 #include "../src/dvbridge_render.c"
 #undef pl_shader_custom
-#undef pl_render_image
-#undef pl_tex_create
-
-static pl_tex test_texture(pl_gpu gpu,const struct pl_tex_params *p)
-{
-    if(cache_failure && !baseline && p->w==8*CM29_GPU_MAP_GRID &&
-       p->h==CM29_GPU_MAP_GRID*CM29_GPU_MAP_GRID/8){rejected_allocations++;return NULL;}
-    if(cache_storage && baseline && p->w==8*CM29_GPU_MAP_GRID &&
-       p->h==CM29_GPU_MAP_GRID*CM29_GPU_MAP_GRID/8){
-        struct pl_tex_params old=*p;
-        old.format=pl_find_fmt(gpu,PL_FMT_FLOAT,4,32,32,p->format->caps);
-        assert(old.format);return pl_tex_create(gpu,&old);
-    }
-    return pl_tex_create(gpu,p);
-}
-
-static bool compare_image(pl_renderer r,const struct pl_frame *s,const struct pl_frame *t,const struct pl_render_params *p)
-{
-    if(!baseline || cache_storage)return pl_render_image(r,s,t,p);
-    struct pl_render_params candidate=*p;struct pl_frame target=*t;
-    const struct pl_hook *hooks[4];struct pl_hook replaced;struct reference_hook copy,*original=NULL;
-    assert(p->num_hooks<=4);
-    for(int i=0;i<p->num_hooks;i++){
-        hooks[i]=p->hooks[i];
-        if(hooks[i]->hook==reference_output){
-            assert(!original);original=hooks[i]->priv;copy=*original;
-            assert(!copy.cm4);copy.gpu_map_eligible=false;copy.neutral_cm29=true;
-            if(!cache_failure)copy.neutral_target.primaries=nominal;
-            replaced=*hooks[i];replaced.priv=&copy;hooks[i]=&replaced;
-        }
-    }
-    assert(original);candidate.hooks=hooks;target.color=copy.neutral_target;
-    bool ok=pl_render_image(r,s,&target,&candidate);*original=copy;return ok;
-}
 
 /* Independent display-referred BT.2124 metric, not libplacebo's IPT mapper.
  * https://www.itu.int/rec/R-REC-BT.2124/en */
@@ -128,10 +82,7 @@ static void metric_compare(const float *candidate,const float *reference)
 
 int main(int argc,char **argv)
 {
-    cache_failure=argc==2 && !strcmp(argv[1],"cache-failure");
-    cache_storage=argc==2 && !strcmp(argv[1],"cache-storage");
-    cache_warp=argc==2 && !strcmp(argv[1],"cache-warp");
-    assert(argc==1 || argc==3 || argc==4 || cache_failure || cache_storage || cache_warp);
+    assert(argc==1 || argc==3 || argc==4);
     double peak=argc>=3?atof(argv[1]):2500;
     double master=argc==4?atof(argv[3]):4000;
     enum dvbridge_gamut gamut=argc>=3?atoi(argv[2]):DVBRIDGE_GAMUT_P3_D65;
@@ -140,7 +91,6 @@ int main(int argc,char **argv)
            (gamut==DVBRIDGE_GAMUT_P3_D65 || gamut==DVBRIDGE_GAMUT_BT709));
     if(gamut==DVBRIDGE_GAMUT_BT709)nominal=PL_COLOR_PRIM_BT_709;
     struct reference_gpu g=reference_gpu_create();pl_gpu gpu=g.gl->gpu;
-    if(cache_warp && !strstr((const char *)glGetString(GL_RENDERER),"radeonsi"))return 77;
     struct dvbridge_renderer *r=dvbridge_renderer_create(gpu);assert(r);
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);m->num_ext_blocks=3;
     unsigned source_peak=lround(dv_ideal_pq(master)*4095);
@@ -150,15 +100,6 @@ int main(int argc,char **argv)
     *av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3079,
         .trim_slope=2048,.trim_offset=2048,.trim_power=2048,
         .trim_chroma_weight=2048,.trim_saturation_gain=2048,.ms_weight=-1}};
-    if(cache_storage){
-        av_dovi_get_ext(m,2)->l2=(AVDOVIDmLevel2){.target_max_pq=3079,
-            .trim_slope=2176,.trim_offset=2016,.trim_power=1984,
-            .trim_chroma_weight=1960,.trim_saturation_gain=2304,.ms_weight=-1};
-        av_dovi_get_header(m)->disable_residual_flag=0;
-        av_dovi_get_mapping(m)->nlq_method_idc=AV_DOVI_NLQ_LINEAR_DZ;
-        for(unsigned c=0;c<3;c++)av_dovi_get_mapping(m)->nlq[c]=
-            (AVDOVINLQParams){.vdr_in_max=4096,.nlq_offset=512,.linear_deadzone_slope=1};
-    }
     void *original=av_memdup(m,bytes);assert(original);
     const size_t count=3840u*2160;float *data=malloc(count*4*sizeof(*data));assert(data);
     pl_matrix3x3 matrix={{{3.06441879,-2.16597676,.10155818},
@@ -176,21 +117,12 @@ int main(int argc,char **argv)
     pl_tex input=reference_texture(gpu,3840,2160,data);free(data);
     struct pl_frame source=reference_frame(input,3840,2160);
     pl_tex el=NULL;struct pl_frame enhancement;
-    if(cache_storage){
-        float residual[16];for(unsigned i=0;i<16;i++)residual[i]=i%4==3?1:512.0f/1023;
-        el=reference_texture(gpu,2,2,residual);enhancement=reference_frame(el,2,2);
-        source.enhancement_layer=&enhancement;
-    }
     struct dvbridge_policy p=reference_policy();p.tv.peak_nits=peak;p.tv.gamut=gamut;
     struct dvbridge_identity id={1,1,p.revision};
     pl_tex out=reference_texture(gpu,3840,2160,NULL);
     float *first=malloc(count*4*sizeof(*first)),*second=malloc(count*4*sizeof(*second));assert(first && second);
     for(unsigned pass=0;pass<2;pass++){
         baseline=pass;
-        if(cache_storage && pass){
-            assert(r->cm29_tail_atlas->params.format->type==PL_FMT_UNORM);
-            dvbridge_renderer_destroy(r);r=dvbridge_renderer_create(gpu);assert(r);
-        }
         assert(dvbridge_render_hdr10_policy_direct(r,&p,&id,&source,m,bytes,0,0,
             (struct dvbridge_geometry){3840,2160,0,0,3840,2160},out,false,false,10));
         reference_read(gpu,out,0,0,3840,2160,pass?second:first);id.picture++;
@@ -206,26 +138,14 @@ int main(int argc,char **argv)
     }
     fprintf(stderr,"Expert composed matrix max10=%.9f changed=%u\n",maximum,changed);
     assert(fused_calls && !memcmp(m,original,bytes));metric_compare(first,second);
-    if(!cache_failure && !cache_storage && peak<=2500){
+    {
         baseline=false;
         assert(dvbridge_render_hdr10_policy_direct(r,&p,&id,&source,m,bytes,0,0,
             (struct dvbridge_geometry){3840,2160,0,0,3840,2160},out,false,false,10));
         reference_read(gpu,out,0,0,3840,2160,second);
         assert(!memcmp(first,second,count*4*sizeof(*first)) &&
-               "Cold and reused neutral-cache pictures must match exactly");
+               "Cold and reused native LUT pictures must match exactly");
     }
-    if(cache_failure){
-        assert(rejected_allocations==1 && !r->cm29_tail_atlas && !r->cm29_tail_key_valid);
-        assert(!memcmp(first,second,count*4*sizeof(*first)) &&
-            "An unavailable Expert cache must restore the fused dense path exactly");
-    }else if(cache_storage){
-        assert(r->cm29_tail_key_valid && cm29_gpu_map_build_count==2 &&
-               r->cm29_tail_atlas->params.format->type==PL_FMT_FLOAT);
-    }else if(peak<=2500){
-        assert(r->cm29_tail_key_valid && cm29_gpu_map_build_count==1);
-        assert(r->cm29_tail_atlas->params.format->type==PL_FMT_UNORM &&
-               r->cm29_tail_atlas->params.format->component_depth[0]==16);
-    }else assert(!r->cm29_tail_atlas && !r->cm29_tail_key_valid);
     free(first);free(second);av_free(original);av_free(m);
     pl_tex_destroy(gpu,&input);pl_tex_destroy(gpu,&el);pl_tex_destroy(gpu,&out);
     dvbridge_renderer_destroy(r);reference_gpu_destroy(&g);

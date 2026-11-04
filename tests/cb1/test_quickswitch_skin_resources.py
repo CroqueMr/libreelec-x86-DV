@@ -120,7 +120,7 @@ int main(){
         import resource
         from test_native_video_source import body
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
-        owner = body(body(source, 'bool CDVPlaybackModes::ShowMenu()'), 'for(const auto& option : options)')
+        owner = body(body(source, 'bool CDVPlaybackModes::ShowMenu('), 'for(const auto& option : options)')
         code = r'''
 #include <cassert>
 #include <map>

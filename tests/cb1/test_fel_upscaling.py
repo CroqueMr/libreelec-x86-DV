@@ -9,17 +9,18 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class FELSettingsTests(unittest.TestCase):
-    def test_raw_fel_uses_nearest_when_vpp_did_not_supply_a_scaled_surface(self):
+    def test_raw_fel_uses_selected_shader_when_vpp_did_not_supply_a_scaled_surface(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (tree / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         setter = next(line.strip() for line in source.splitlines()
-                      if 'dvbridge_renderer_set_fel_nearest(m_renderer,' in line)
+                      if 'dvbridge_renderer_set_fel_filter(m_renderer,' in line)
         program = r'''
 #include <cassert>
 enum { DVBRIDGE_P010, DVBRIDGE_Y416 };
 struct Layer { int layout; };
-bool usedNearest;
-void dvbridge_renderer_set_fel_nearest(void*, bool enabled) { usedNearest=enabled; }
+enum { DVBRIDGE_FEL_DEFAULT, DVBRIDGE_FEL_BILINEAR, DVBRIDGE_FEL_REFERENCE };
+int usedFilter;
+void dvbridge_renderer_set_fel_filter(void*, int filter) { usedFilter=filter; }
 void prepare(int requested, const Layer* enhancement) {
   void* m_renderer=nullptr;
   struct {int felUpscaling;} preferences{requested};
@@ -27,10 +28,11 @@ void prepare(int requested, const Layer* enhancement) {
 }
 int main() {
   Layer raw{DVBRIDGE_P010}, scaled{DVBRIDGE_Y416};
-  prepare(0,&scaled); assert(!usedNearest);
-  prepare(0,&raw); assert(usedNearest); // VPP failure, busy pool or unsupported format.
-  prepare(1,&raw); assert(usedNearest);
-  prepare(0,nullptr); assert(!usedNearest); // No FEL must reset the previous selection.
+  prepare(0,&scaled); assert(usedFilter==0);
+  prepare(0,&raw); assert(usedFilter==1); // VPP failure, busy pool or unsupported format.
+  prepare(1,&raw); assert(usedFilter==1);
+  prepare(2,&raw); assert(usedFilter==2);
+  prepare(0,nullptr); assert(usedFilter==0); // Reset the previous selection.
 }
 '''.replace('SETTER', setter)
         with tempfile.TemporaryDirectory() as temporary:
@@ -42,14 +44,14 @@ int main() {
             ran = subprocess.run([str(root / 'test')], capture_output=True, text=True)
             self.assertEqual(ran.returncode, 0, ran.stderr)
 
-    def test_default_and_nearest_are_expert_persisted_frame_preferences(self):
+    def test_all_three_filters_are_expert_persisted_frame_preferences(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings = ET.parse(tree / 'system/settings/settings.xml')
         setting = settings.find(".//setting[@id='dvbridge.felupscaling']")
         self.assertIsNotNone(setting, 'Native FEL choice is missing')
         self.assertEqual(setting.findtext('level'), '3')
         self.assertEqual(setting.findtext('default'), '0')
-        self.assertEqual([node.text for node in setting.findall('constraints/options/option')], ['0', '1'])
+        self.assertEqual([node.text for node in setting.findall('constraints/options/option')], ['0', '1', '2'])
         code = (tree / 'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         code = '\n'.join(line for line in code.splitlines() if not line.startswith('#include'))
         program = r'''
@@ -83,6 +85,10 @@ int main() {
   assert(nearest.felUpscaling==1 && nearest.revision!=old.revision);
   assert(DVBRIDGE::FrameOutputSettings().revision==nearest.revision);
   assert(nearest.output==old.output);
+  stored->ints["dvbridge.felupscaling"]=2;
+  auto reference=DVBRIDGE::FrameOutputSettings();
+  assert(reference.felUpscaling==2 && reference.revision!=nearest.revision);
+  assert(DVBRIDGE::FrameOutputSettings().revision==reference.revision);
   stored->ints["dvbridge.felupscaling"]=0;
   auto reset=DVBRIDGE::FrameOutputSettings();
   assert(reset.felUpscaling==0 && reset.revision!=nearest.revision);

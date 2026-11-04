@@ -7,6 +7,8 @@
 #include "cb1_circuit.h"
 #include <libplacebo/shaders/custom.h>
 static unsigned reference_intermediates;
+static bool scaled_quad_proof;
+static bool actual_scaled_quad;
 static bool track_reference_render(pl_renderer,const struct pl_frame *,const struct pl_frame *,const struct pl_render_params *);
 #define pl_render_image track_reference_render
 #include "../src/dvbridge_render.c"
@@ -26,6 +28,8 @@ static bool track_reference_render(pl_renderer renderer,const struct pl_frame *s
     struct pl_render_params copy;
     struct pl_cb1_dovi_reference legacy;
     params=reference_test_params(params,&copy,&legacy);
+    if(scaled_quad_proof && !params->cb1_dovi_reference && params->num_hooks==1)
+        actual_scaled_quad=((const struct active_mask *)params->hooks[0]->priv)->scaled_quad;
     return pl_render_image(renderer,source,target,params);
 }
 
@@ -53,6 +57,9 @@ static const struct pl_render_params *reference_test_params(const struct pl_rend
             assert(!params->info_callback);
             *copy=*params;copy->info_callback=count_reference_pass;params=copy;
         }
+    }
+    if(scaled_quad_proof){
+        *copy=*params;copy->info_callback=count_reference_pass;params=copy;
     }
     return params;
 }
@@ -514,7 +521,7 @@ static void transport(bool lifecycle,bool rows)
         h->el_spatial_resampling_filter_flag=1;
     }
 
-    dvbridge_renderer_set_fel_nearest(renderer,true);
+    dvbridge_renderer_set_fel_filter(renderer,DVBRIDGE_FEL_BILINEAR);
     dvbridge_renderer_set_processing_optimizations(renderer,true);
     assert(dvbridge_render_master_reference(renderer,&source,m,bytes,1,lifecycle?NAN:1,geometry,output,false,NULL)==CB1_MASTER_READY);
     assert(!renderer->rgb && "Full-raster Master writes transport directly");
@@ -698,7 +705,7 @@ static void transport(bool lifecycle,bool rows)
         puts("PASS 24 complete FEL/MMR/identity carriers: L5, flip, identity+GUI, both chroma phases, residual and pivot guards");
     }
     pl_gpu_finish(g.gl->gpu);
-    assert(renderer->fel_nearest && renderer->processing_optimizations);
+    assert(renderer->fel_filter==DVBRIDGE_FEL_BILINEAR && renderer->processing_optimizations);
     dvbridge_renderer_destroy(renderer);
     for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&source.planes[p].texture);
     if(!lifecycle)for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&enhancement.planes[p].texture);
@@ -709,6 +716,13 @@ static void resolutions(bool placement)
 {
     struct reference_gpu g=reference_gpu_create();
     struct dvbridge_renderer *r=dvbridge_renderer_create(g.gl->gpu);assert(r);
+    if(scaled_quad_proof && getenv("CB1_TEST_NO_FRAGMENT_QUAD"))r->fragment_quad=false;
+    const bool fragment_quad=r->fragment_quad;
+    if(scaled_quad_proof && !fragment_quad){
+        puts("SKIP Master scaled-quad proof: fragment_quad=0, optimized_cases=0");
+        dvbridge_renderer_destroy(r);reference_gpu_destroy(&g);exit(77);
+    }
+    unsigned proof_cases=0,optimized_cases=0,reduced_passes=0;
     if(g.log){pl_renderer_destroy(&r->renderer);r->renderer=pl_renderer_create(g.log,g.gl->gpu);}
     size_t bytes;AVDOVIMetadata *m=task3_fixture(&bytes);
     av_dovi_get_header(m)->vdr_bit_depth=12;av_dovi_get_header(m)->coef_log2_denom=23;
@@ -719,12 +733,19 @@ static void resolutions(bool placement)
     for(unsigned c=0;c<3;c++)av_dovi_get_mapping(m)->curves[c].poly_coef[0][1]=1<<23;
     m->num_ext_blocks=1;*av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={.max_pq=3079,.avg_pq=1800}};
     const int sizes[][2]={{1920,1080},{3840,2020},{1920,800},{1280,720},{3840,2160},
-        {1920,1080},{3840,2020}};
+        {1920,1080},{3840,2020},{1920,1080}};
     pl_tex output=pl_tex_create(g.gl->gpu,pl_tex_params(.w=3840,.h=2160,
         .format=pl_find_named_fmt(g.gl->gpu,"rgba8"),.renderable=true));assert(output);
     size_t frame_bytes=(size_t)3840*2160*4;
-    uint8_t *upright=malloc(frame_bytes),*flipped=malloc(frame_bytes);assert(upright && flipped);
+    uint8_t *upright=malloc(frame_bytes),*flipped=malloc(frame_bytes);
+    uint8_t *control=scaled_quad_proof?malloc(frame_bytes):NULL;
+    assert(upright && flipped && (!scaled_quad_proof || control));
     for(unsigned test=0;test<sizeof(sizes)/sizeof(sizes[0]);test++){
+        m->num_ext_blocks=1;
+        if(test==7){
+            AVDOVIReshapingCurve *curve=&av_dovi_get_mapping(m)->curves[0];
+            curve->poly_order[0]=2;curve->poly_coef[0][1]=0;curve->poly_coef[0][2]=1<<23;
+        }
         int w=sizes[test][0],h=sizes[test][1],height=(int)((int64_t)h*3840/w);
         struct pl_frame source={.num_planes=2,.crop={0,0,w,h},
             .repr={.bits={.sample_depth=16,.color_depth=10,.bit_shift=6}}};
@@ -768,6 +789,22 @@ static void resolutions(bool placement)
             memcpy(overlay.rect,(float[4]){100,60,104,100},sizeof(overlay.rect));overlay.input_pq=true;
         }
         for(unsigned flip=0;flip<2;flip++){
+        unsigned baseline_passes=0,baseline_packets=0;uint32_t baseline_wire[640];
+        void *metadata=scaled_quad_proof?av_memdup(m,bytes):NULL;
+        if(scaled_quad_proof){
+            assert(metadata);
+            r->fragment_quad=false;dvbridge_renderer_reset(r);observed_reference_passes=0;actual_scaled_quad=false;
+            assert(dvbridge_render_master_reference(r,&source,m,bytes,test*2,NAN,geometry,output,flip,test==6?&overlay:NULL)==CB1_MASTER_READY);
+            assert(!actual_scaled_quad);
+            baseline_passes=observed_reference_passes;
+            const uint32_t *wire=dvbridge_packets(dvbridge_render_candidate(r),&baseline_packets);
+            assert(wire && baseline_packets<=5);memcpy(baseline_wire,wire,baseline_packets*128*sizeof(*wire));
+            unsigned fbo;pl_opengl_unwrap(g.gl->gpu,output,NULL,NULL,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+            glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,control);assert(glGetError()==GL_NO_ERROR);
+            assert(dvbridge_render_commit(r));dvbridge_renderer_reset(r);
+            assert(!memcmp(metadata,m,bytes));
+            r->fragment_quad=fragment_quad;observed_reference_passes=0;actual_scaled_quad=false;
+        }
         reference_intermediates=0;
         enum cb1_master_status status=dvbridge_render_master_reference(r,&source,m,bytes,test*2,NAN,geometry,output,flip,test==6?&overlay:NULL);
         if(status!=CB1_MASTER_READY)fprintf(stderr,"source %dx%d status %d\n",w,h,status);
@@ -778,8 +815,9 @@ static void resolutions(bool placement)
             margins[2]==geometry.y+(test==6?7:0) && margins[3]==2160-geometry.y-geometry.height+(test==6?11:0));
         unsigned fbo;pl_opengl_unwrap(g.gl->gpu,output,NULL,NULL,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
         uint8_t center[4];glReadPixels(2000,1080,1,1,GL_RGBA,GL_UNSIGNED_BYTE,center);
-        if(center[1]!=128 || (center[2]&15))fprintf(stderr,"center %dx%d RGBA %u %u %u %u\n",w,h,center[0],center[1],center[2],center[3]);
-        assert(glGetError()==GL_NO_ERROR && center[1]==128 && (center[2]&15)==0);
+        unsigned center_y=test==7?64:128;
+        if(center[1]!=center_y || (center[2]&15))fprintf(stderr,"center %dx%d RGBA %u %u %u %u\n",w,h,center[0],center[1],center[2],center[3]);
+        assert(glGetError()==GL_NO_ERROR && center[1]==center_y && (center[2]&15)==0);
         uint8_t row[3840*4];glReadPixels(0,1080,3840,1,GL_RGBA,GL_UNSIGNED_BYTE,row);
         for(unsigned x=0;x<3840;x+=2){
             unsigned cb=(row[x*4]<<4)|(row[x*4+2]>>4);
@@ -793,6 +831,21 @@ static void resolutions(bool placement)
         }
         glReadPixels(0,0,3840,2160,GL_RGBA,GL_UNSIGNED_BYTE,flip?flipped:upright);
         assert(glGetError()==GL_NO_ERROR);
+        if(scaled_quad_proof){
+            assert(!memcmp(control,flip?flipped:upright,frame_bytes));
+            assert(!memcmp(metadata,m,bytes));av_free(metadata);
+            unsigned packets;const uint32_t *wire=dvbridge_packets(dvbridge_render_candidate(r),&packets);
+            assert(packets==baseline_packets && !memcmp(wire,baseline_wire,packets*128*sizeof(*wire)));
+            bool resized=w!=geometry.width || h!=geometry.height;
+            unsigned expected_delta=resized?1:0;
+            printf("Master scaled-quad case=%u flip=%u fragment_quad=%u actual_gate=%u baseline_passes=%u optimized_passes=%u expected_delta=%u\n",
+                test,flip,(unsigned)fragment_quad,(unsigned)actual_scaled_quad,baseline_passes,observed_reference_passes,expected_delta);
+            fflush(stdout);
+            assert(actual_scaled_quad==resized);
+            assert(observed_reference_passes+expected_delta==baseline_passes);
+            proof_cases++;optimized_cases+=actual_scaled_quad;
+            reduced_passes+=baseline_passes-observed_reference_passes;
+        }
         if(test==6){
             uint8_t *pixels=flip?flipped:upright;
             assert(pixels[((size_t)(flip?2159-65:65)*3840+100)*4+1]!=16);
@@ -812,8 +865,13 @@ static void resolutions(bool placement)
         for(unsigned p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&source.planes[p].texture);
         if(test==6){pl_tex_destroy(g.gl->gpu,&overlay.texture);pl_tex_destroy(g.gl->gpu,&overlay.degamma);pl_tex_destroy(g.gl->gpu,&overlay.pq);}
     }
-    free(upright);free(flipped);
+    free(upright);free(flipped);free(control);
     dvbridge_renderer_destroy(r);pl_tex_destroy(g.gl->gpu,&output);av_free(m);reference_gpu_destroy(&g);
+    if(scaled_quad_proof){
+        assert(optimized_cases>0 && reduced_passes==optimized_cases);
+        printf("PASS Master scaled-quad: fragment_quad=1 cases=%u optimized_cases=%u removed_passes=%u; forced-off pixels/packets identical\n",
+            proof_cases,optimized_cases,reduced_passes);
+    }
     puts("PASS Master 1080p, 720p and cropped sources");
 }
 
@@ -830,6 +888,7 @@ int main(int argc,char **argv)
     if(!strcmp(argv[2],"paired")){paired_reference_contract=true;transport(false,true);return 0;}
     if(!strcmp(argv[2],"paired-quad")){expect_identity_quad=true;paired_reference_contract=true;transport(false,true);return 0;}
     if(!strcmp(argv[2],"resolutions")){resolutions(false);return 0;}
+    if(!strcmp(argv[2],"scaled-quad")){scaled_quad_proof=true;resolutions(false);return 0;}
     if(!strcmp(argv[2],"placement")){resolutions(true);return 0;}
     assert(!"Master Reference GPU route missing");
     return 1;

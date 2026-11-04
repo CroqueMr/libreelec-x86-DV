@@ -1,9 +1,7 @@
-# Project licensing migration record
+# Beta5 licensing migration
 
-This record covers project grants and replacements since Beta5. Current RC2
-component terms are in [Licensing](LICENSING.md). The combined program retains
-GPLv3 dependency conditions; compatible project additions do not make the full
-image GPLv2-only. Published Beta5 licenses are unchanged.
+Work in progress. The linked program still contains GPLv3 dependencies.
+This record does not change the licenses of published Beta5 releases.
 
 ## Grants
 
@@ -54,7 +52,7 @@ See [adapter decisions](ADAPTER-MIGRATION.md).
 | `dvbridge_metadata.h` | ETSI GS CCM 001 V1.1.1 clauses 6.2/6.3; FFmpeg's LGPL byte-order and CRC utilities; retained public frame-state API | Full payloads, packet arrays, committed frame state and diagnostics compared byte-for-byte with Beta5 |
 | `pack_gles300.frag`, metadata-only bodies in `dvbridge_gl_pack.c` | ETSI GS CCM 001 clause 6.4 bit placement, parity scrambling and repetition; retained BT.2020 code-value arithmetic | Full 4K RGBA8 frames compared with separately compiled Beta5 packer, including patch and in-place paths |
 | `cb1_trim_math.h`, scalar call sites in `dvbridge_creative.c` | Existing published numerical contract in `ALGORITHMS.md`: affine word decoding, bounded PQ interpolation, linear SOP/chroma equations | Exact scalar RGB, resolver fields, CM4 coefficients/operators, guidance and edited metadata against separately compiled normal Beta5 |
-| `cb1_trim_glsl.h`, CM2.9 GPU call sites | Same numerical SOP/chroma contract and retained float-uniform conversion | Complete FP32 output compared with separately compiled Beta5 |
+| Former `cb1_trim_glsl.h`, CM2.9 GPU call sites (retired by the RC3 Expert mapper) | Same numerical SOP/chroma contract and retained float-uniform conversion at migration time | Complete FP32 output compared with separately compiled Beta5; unused legacy header removed in RC3 |
 | `cb1_transport_glsl.h`, source/RGB/Adaptive packing call sites | ETSI clause 6.4 bit placement/parity and retained pre-quantization colour equations | Full reference/scaled transport and Adaptive compute carriers compared byte-for-byte; quad exchange requires a driver exposing the extension |
 | Kodi `DVBridgeState.cpp/.h` | Public Kodi/libdrm snapshot/atomic property APIs, NVIDIA public property types and the fixed output contract | Full capture/stage/restore API traces and payloads against separately compiled Beta5 |
 | `cb1_composite_glsl.h`, fused shader call site | Published source-space alpha contract, ST2084 equations, supplied matrices and existing GUI transfer tables | Complete reference/scaled outputs with variable alpha, SDR/PQ GUI, borders and metadata match Beta5 |

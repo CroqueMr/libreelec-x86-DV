@@ -1,7 +1,7 @@
 # R1.0.0 Beta4 - Major pipeline optimizations, Master Reference and NVIDIA support
 
 Archived release notes. Names and support status below describe Beta4, not the
-current build. [Current RC2 release notes](RELEASE.md).
+current build. [Current RC3 release notes](RELEASE.md).
 
 ## Rendering modes
 

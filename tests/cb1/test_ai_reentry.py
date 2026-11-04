@@ -16,6 +16,136 @@ def execute(program):
 
 
 class AIReentryTests(unittest.TestCase):
+    def test_retaining_display_flush_keeps_selected_ai_bootstrap(self):
+        manager=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
+        flush=body(body(manager,'bool CRenderManager::Flush('),'if (m_pRenderer)')
+        reset=body(manager,'void CRenderManager::ResetHDR10AIQueue()')
+        selection=body(manager,'bool CRenderManager::PrepareHDR10AILookahead(').split('  uint64_t deadline =')[0]
+        execute(r'''
+#include <cassert>
+#include <deque>
+#include <mutex>
+#define CB1_HAS_HDR10_AI 1
+#define HAVE_DVBRIDGE 1
+constexpr double DVD_NOPTS_VALUE=-1e20;
+constexpr int PRESENT_IDLE=0,PRESENT_FLIP=1,PRESENT_FRAME=2;
+using CCriticalSection=std::mutex;
+struct Renderer{bool retained=true;bool Flush(bool){return retained;}
+ bool HDR10AIQueueEligible(){return true;}bool HDR10AILookahead(){return true;}
+ bool HDR10AIFramePending(){return true;}bool HDR10AIFrameCommitted(){return false;}};
+struct Resource{void Flush(){}void Set(){}};
+struct Slot{struct Data{void reset(){}}sourceSideData;};
+struct CRenderManager{
+ Renderer renderer;Renderer* m_pRenderer=&renderer;
+ Resource m_overlays,m_debugRenderer,m_flushEvent;
+ struct{bool m_cb1Phase=true;double offset=12;unsigned resets=0;
+  void Reset(){m_cb1Phase=false;offset=0;++resets;}}m_clockSync;
+ struct{unsigned resets=0;void SetVsyncAdjust(int v){assert(v==0);++resets;}
+  bool IsPaused(){return true;}}m_dvdClock;
+ unsigned m_aiQueueGeneration=9;
+ bool m_aiEnd=false,m_aiQueueReady=true,m_aiFullscreenRequested=true,m_aiGuiReady=false,m_aiFullscreenWanted=false;
+ bool m_aiQueuePreparationStale=false,m_showVideo=false,m_aiStartupBuffered=false;
+ double m_aiStartPts=40000000;
+ Slot m_Queue[3];std::deque<int> m_queued,m_discard,m_free;
+ int m_presentsource=1,m_presentsourcePast=0,m_presentstep=PRESENT_FRAME,m_QueueSize=3;
+ bool m_cb1PresentPending=true;
+ std::deque<int> observed;
+ void ReleaseDiscardedBuffers(bool){}
+ bool Select(std::unique_lock<CCriticalSection>& lock) SELECTION
+ observed=queue;return true;}
+ void ResetHDR10AIQueue() RESET
+ void Flush(bool saveBuffers) FLUSH
+};
+int main(){
+ CRenderManager retained;retained.Flush(true);
+ assert(retained.m_aiQueueGeneration==9 && retained.m_aiStartPts==40000000);
+ assert(retained.m_aiFullscreenRequested && !retained.m_aiGuiReady);
+ assert(retained.m_presentstep==PRESENT_FRAME && retained.m_presentsource==1);
+ assert(retained.m_cb1PresentPending);
+ assert(!retained.m_clockSync.m_cb1Phase && retained.m_clockSync.offset==0);
+ assert(retained.m_clockSync.resets==1 && retained.m_dvdClock.resets==1);
+ std::mutex mutex;std::unique_lock lock(mutex);
+ assert(retained.Select(lock) && (retained.observed==std::deque<int>{1}));
+ CRenderManager shown;shown.m_aiGuiReady=true;shown.Flush(true);
+ assert(shown.m_aiGuiReady && shown.m_aiQueueGeneration==9);
+ for(bool requested : {false,true}){
+  CRenderManager dropped;dropped.renderer.retained=false;dropped.Flush(requested);
+  assert(dropped.m_aiQueueGeneration==10 && dropped.m_aiStartPts==DVD_NOPTS_VALUE);
+  assert(!dropped.m_aiFullscreenRequested && !dropped.m_aiGuiReady);
+  assert(dropped.m_presentstep==PRESENT_IDLE && dropped.m_presentsource==0);
+  assert((dropped.m_free==std::deque<int>{1,2}));
+  assert(dropped.m_clockSync.resets==1 && dropped.m_dvdClock.resets==1);
+  assert(!dropped.Select(lock));
+ }
+}
+'''.replace('RESET',reset).replace('FLUSH',flush).replace('SELECTION',selection))
+
+    def test_metadata_seek_retires_once_then_begins_new_epoch(self):
+        context=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        begin=body(context,'HDR10AISource::Decision CDVBridgeGLES::Context::PrepareHDR10AIQueue(')
+        begin=begin.split('  auto& source=HDR10AI();')[0]
+        stop=body(context,'bool CDVBridgeGLES::Context::StopHDR10AI()')
+        source=body(context,'HDR10AISource& CDVBridgeGLES::Context::HDR10AI()')
+        execute(r'''
+#include <cassert>
+#include <chrono>
+#include <memory>
+#include <span>
+struct AVDynamicHDRPlus{};
+struct cb1_ai_result{};struct cb1_hdr10plus_dovi_result{};
+enum {CB1_AI_READY,CB1_AI_PENDING,CB1_AI_INVALID,CB1_AI_INCOMPATIBLE};
+enum {CB1_HDR10PLUS_DOVI_OK,DVBRIDGE_DV_IDLE,DVBRIDGE_DV_BUSY,DVBRIDGE_DV_FAILED};
+struct Side {AVDynamicHDRPlus value;const auto* HDR10Plus()const{return &value;}};
+namespace DVBRIDGE {
+enum class HDR10SourceMode{Native,HDR10PlusDV};
+struct OutputPreferences{HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
+struct Binding{unsigned stream=1,revision=2,picture=3;};
+bool HDR10PlusDVSnapshotMatches(auto&&...){return true;}
+}
+int cb1_hdr10plus_dovi_describe(auto*,auto*,void*){return CB1_HDR10PLUS_DOVI_OK;}
+void glDeleteSync(void*){}
+struct HDR10AISource {
+ enum class Decision{Wait,Ignore,Native,Prepare};bool current=false;
+ void ReleaseRetired(){};void SetPaused(bool,unsigned long){}
+ bool Current(auto&&...)const{return current;}
+ bool ResetPending()const{return false;}
+ int RecordStatus(auto&&...){return CB1_AI_INCOMPATIBLE;}
+ int Begin(auto&&...){current=true;return CB1_AI_READY;}
+};
+struct Context {
+ struct Layer{double pts=40;DVBRIDGE::Binding binding;std::shared_ptr<Side> sourceSideData=std::make_shared<Side>();
+ struct{unsigned informationGeneration=1;}sourceInfo;unsigned sourceSerial=1;};
+ struct GL{void* gpu=this;};
+ struct State{std::unique_ptr<::HDR10AISource> ai=std::make_unique<::HDR10AISource>();
+ GL graphics;GL* gl=&graphics;bool aiStopping=false,aiNextFailed=false;void* aiFence=nullptr;
+ unsigned aiFencedSubmission=0;};
+ std::unique_ptr<State> m_state=std::make_unique<State>();unsigned fences=0,latency=1,busy=0;
+ void ClearNextHDR10AI(){};bool Quarantined(){return false;}
+ bool FenceLastUse(){++fences;busy=latency;return true;}
+ int Poll(){if(busy){--busy;return DVBRIDGE_DV_BUSY;}return DVBRIDGE_DV_IDLE;}
+ auto& HDR10AI() SOURCE
+ int BeginHDR10AI(auto&&...){return CB1_AI_INVALID;}
+ bool StopHDR10AI() STOP
+ ::HDR10AISource::Decision Prepare(std::span<const Layer> queue,
+ const DVBRIDGE::OutputPreferences& preferences,const char* bundle,unsigned long now,
+ bool end,cb1_ai_result* result,bool paused,unsigned long presentationDeadline)
+ BEGIN
+ return Decision::Prepare;}
+};
+int main(){for(unsigned latency : {0,1,3}) {
+ Context context;context.latency=latency;Context::Layer layer;DVBRIDGE::OutputPreferences prefs;cb1_ai_result output;
+ auto prepare=[&]{return context.Prepare({&layer,1},prefs,"",1,false,&output,false,0);};
+ for(unsigned i=0;i<latency;++i) {
+  assert(prepare()==HDR10AISource::Decision::Wait);
+  assert(context.m_state->aiStopping && context.fences==1);
+ }
+ assert(prepare()==HDR10AISource::Decision::Prepare);
+ assert(!context.m_state->aiStopping && context.m_state->ai->current && context.fences==1);
+ assert(prepare()==HDR10AISource::Decision::Prepare && context.fences==1);
+ }
+}
+'''.replace('STOP',stop).replace('BEGIN',begin).replace('SOURCE',source))
+
     def test_rejected_guided_snapshot_latches_active_source_and_retries_new_source(self):
         window=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         prepare=body(window,'bool CWinSystemGbmGLESContext::PrepareHDR10AIQueue(')
@@ -30,7 +160,7 @@ enum class HDR10SourceMode{Native,ReferenceDV,EnhancedDV,HDR10PlusDV};
 enum class OutputRoute{Vanilla,NativeDV};
 struct Preferences{unsigned revision=7;HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
 struct Caps{bool isHDR10=true,hdr10PlusSource=true,nativeDV=true,eligible=false;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 struct Selection{OutputRoute route;};
 // The real selector has separate source/admission controls; this fixture owns teardown only.
 auto SelectOutput(const Preferences&,const Caps& c){return Selection{c.eligible?OutputRoute::NativeDV:OutputRoute::Vanilla};}
@@ -40,7 +170,8 @@ struct Window{
  Context context;Context* m_dvContext=&context;DVBRIDGE::Caps caps;
  bool m_aiActive=true,m_aiReady=true,m_aiFallback=false;
  struct Binding{unsigned stream{},revision{},picture{};}m_aiActivation{11,2,17};
- struct Picture{Binding doviSourceBinding;}picture{{11,2,17}};
+ enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;}picture{{11,2,17}};
  unsigned m_aiPolicy=7,m_aiSelectionPolicy=7;mutable std::mutex m_dvCapabilityMutex;
  DVBRIDGE::Caps GetDVOutputCapabilities(const Picture*,const DVBRIDGE::Preferences&)const{return caps;}
  bool Pending()const PENDING
@@ -85,7 +216,7 @@ enum class StreamHdrType HDR_TYPES;
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 inline bool IsHDR10Family(StreamHdrType source) FAMILY
 inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
 }
@@ -262,7 +393,7 @@ namespace DVBRIDGE {
 enum class HDR10SourceMode {ReferenceDV,HDR10PlusDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;
-inline auto FrameOutputSettings(){return prefs;}
+inline auto FrameOutputSettings(bool=false){return prefs;}
 inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
 }
 struct Binding{bool Valid()const{return true;}};
@@ -322,7 +453,7 @@ struct Window{
  bool HDR10AILookaheadActive(){return false;}
 };
 struct Renderer{
- bool m_aiLookahead=true,m_aiOutputPending=true,admitted=false;
+ bool m_aiLookahead=true,m_aiOutputPending=true,m_dvRequested=false,admitted=false;
  bool ConfigureVideoOutput(int){return admitted;}
  HDR10AIQueuePreparation Capture(Window* window){
   struct{DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
@@ -374,7 +505,7 @@ struct CServiceBroker{static WindowBase* GetWinSystem(){return &window;}};
 struct CLog{template<class... T>static void Log(T...){};};
 struct Renderer{
  bool m_aiOutputPending=false,m_dvRequested=false,m_passthroughHDR=false;
- bool m_hdrFboActive=false,m_bConfigured=true;
+ bool m_hdrFboActive=false,m_bConfigured=true,m_reloadShaders=false;
  bool ConfigureVideoOutput(const VideoPicture& picture) BODY
 };
 int main(){
@@ -383,6 +514,9 @@ int main(){
  assert(!retry.ConfigureVideoOutput(dv) && !retry.m_bConfigured);
  window.output=true;assert(retry.ConfigureVideoOutput(dv) && retry.m_bConfigured);
  retry.m_bConfigured=false;assert(retry.ConfigureVideoOutput(native) && retry.m_bConfigured);
+ assert(retry.m_passthroughHDR && retry.m_reloadShaders); // Rebuild the former BT.709 bootstrap shader for native BT.2020 PQ.
+ retry.m_reloadShaders=false;
+ assert(retry.ConfigureVideoOutput(native) && retry.m_reloadShaders); // Reconfiguration must not reuse output-dependent shader state.
  Renderer ai;ai.m_aiOutputPending=true;window.bridge=false;
  assert(!ai.ConfigureVideoOutput(dv) && !ai.m_bConfigured);
  window.bridge=true;assert(ai.ConfigureVideoOutput(dv) && ai.m_bConfigured);
@@ -423,11 +557,14 @@ int main(){
 #include <optional>
 #include <mutex>
 namespace DVBRIDGE{
-enum class HDR10SourceMode{Native,ReferenceDV};
+enum class HDR10SourceMode{Native,ReferenceDV,HDR10PlusDV};
 struct Preferences{int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool plus=false){auto p=prefs;
+ if(plus)p.hdr10Source=HDR10SourceMode::HDR10PlusDV;return p;}
 }
-struct Source{bool Current(int binding,DVBRIDGE::Preferences p){return binding==7 && p.revision==1;}};
+struct Source{bool guided=false;bool MetadataOnly(){return false;}bool HDR10Plus(){return guided;}
+ bool Current(int binding,DVBRIDGE::Preferences p){return binding==7 && p.revision==1 &&
+ p.hdr10Source==(guided?DVBRIDGE::HDR10SourceMode::HDR10PlusDV:DVBRIDGE::HDR10SourceMode::ReferenceDV);}};
 struct Context{Source source;Source& HDR10AI(){return source;}};
 struct Bridge{std::optional<int> committed=1;const auto& CommittedHDR10AI(){return committed;}};
 struct Window{Context context;Context* m_dvContext=&context;Bridge bridge;Bridge* m_dvBridge=&bridge;
@@ -436,7 +573,9 @@ struct Window{Context context;Context* m_dvContext=&context;Bridge bridge;Bridge
  bool SelectionPending()const PENDING
 };
 int main(){
- Window w;assert(w.Committed());w.m_aiActivation=8;assert(!w.Committed());
+ Window w;assert(w.Committed());
+ w.context.source.guided=true;assert(w.Committed()); // Sparse HDR10+ can use AI, not metadata-only.
+ w.context.source.guided=false;w.m_aiActivation=8;assert(!w.Committed());
  w.m_aiActivation=7;DVBRIDGE::prefs.revision=2;assert(!w.Committed());DVBRIDGE::prefs.revision=1;
  w.bridge.committed.reset();assert(!w.Committed());
  assert(!w.SelectionPending());DVBRIDGE::prefs.revision=2;assert(w.SelectionPending());
@@ -534,7 +673,7 @@ int main(){
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV,HDR10PlusDV};enum class OutputRoute {Vanilla,DV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 struct Caps{bool isHDR10=true,hdr10PlusSource=false,nativeDV=true;};
 struct Selection{OutputRoute route;};
 inline Selection SelectOutput(Preferences p,Caps){return {p.hdr10Source==HDR10SourceMode::Native?OutputRoute::Vanilla:OutputRoute::DV};}
@@ -544,7 +683,8 @@ struct Window{
  std::mutex m_dvCapabilityMutex;bool m_aiActive=true;int m_aiPolicy=17,m_aiSelectionPolicy=0;
  bool m_aiReady=true,m_aiFallback=false;
  struct Binding{int stream{},revision{},picture{};}m_aiActivation{7,17,1};
- struct Picture{Binding doviSourceBinding;}picture{{7,17,1}};
+ enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;}picture{{7,17,1}};
  bool m_dvOrdinaryFrame=false,m_dvEndPending=false,m_dvStopPending=false;
  Context context;Context* m_dvContext=&context;
  auto GetDVOutputCapabilities(Picture*,DVBRIDGE::Preferences){return DVBRIDGE::Caps{};}
@@ -580,7 +720,7 @@ constexpr double DVD_NOPTS_VALUE=-1e20;
 namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV};
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::Native;};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 }
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext {
@@ -629,22 +769,24 @@ namespace DVBRIDGE {
 enum class HDR10SourceMode {Native,ReferenceDV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;
  bool SameValues(const Preferences& other)const{return hdr10Source==other.hdr10Source;}};
-inline Preferences prefs;inline auto FrameOutputSettings(){return prefs;}
+inline Preferences prefs;inline auto FrameOutputSettings(bool=false){return prefs;}
 }
 struct Binding{int stream=1,picture=1,revision=1;bool operator==(const Binding&)const=default;};
-struct Picture{Binding doviSourceBinding;};
+enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;};
 struct Preparation {
  struct Outcome{bool ready,lookahead;};bool ready{true};
  std::function<Outcome()> execute;std::function<bool(const Outcome&)> publish;
+ bool buffered=false;
 };
 using HDR10AIQueuePreparation=Preparation;
 struct Window {
- bool ready=true;
+ bool ready=true,fallback=false;
  bool PrepareHDR10AIQueue(const Picture&,const std::vector<int>&,bool,bool,unsigned long){return ready;}
- bool HDR10AILookaheadActive(){return DVBRIDGE::prefs.hdr10Source!=DVBRIDGE::HDR10SourceMode::Native;}
+ bool HDR10AILookaheadActive(){return !fallback && DVBRIDGE::prefs.hdr10Source!=DVBRIDGE::HDR10SourceMode::Native;}
 };
 struct Renderer {
- bool m_aiLookahead=false,m_aiOutputPending=false,m_dvRequested=false;int admissions=0;
+ bool m_aiLookahead=false,m_aiOutputPending=false,m_dvRequested=false,buffered=false;int admissions=0;
  struct Slot {std::shared_ptr<Picture> doviSourcePicture=std::make_shared<Picture>();} m_buffers[1];
  Window output;
  bool ConfigureVideoOutput(const Picture&){++admissions;m_dvRequested=output.HDR10AILookaheadActive();return true;}
@@ -656,7 +798,11 @@ struct Renderer {
 };
 bool run(Renderer& r){auto p=r.Capture();if(!p.execute)return p.ready;auto o=p.execute();return p.publish(o)&&o.ready;}
 int main(){
- Renderer r;r.output.ready=false;assert(!run(r));assert(r.admissions==0);
+ Renderer r;r.buffered=true;assert(r.Capture().buffered);
+ r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ assert(!r.Capture().buffered); // Guided/metadata startup keeps its existing admission.
+ r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10;r.buffered=false;
+ r.output.ready=false;assert(!run(r));assert(r.admissions==0);
  r.output.ready=true;assert(run(r));assert(r.admissions==1 && r.m_dvRequested && !r.m_aiOutputPending);
  assert(run(r));assert(r.admissions==1);
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;++DVBRIDGE::prefs.revision;
@@ -667,5 +813,10 @@ int main(){
  auto stale=r.Capture();++DVBRIDGE::prefs.revision;assert(!stale.publish(stale.execute()));
  assert(r.admissions==2 && !r.m_dvRequested);
  assert(run(r));assert(r.admissions==3 && r.m_dvRequested);
+ // A metadata rejection changes the resolved route without changing user intent.
+ r.output.fallback=true;assert(run(r));
+ assert(r.admissions==4 && !r.m_dvRequested && !r.m_aiOutputPending);
+ assert(DVBRIDGE::prefs.hdr10Source==DVBRIDGE::HDR10SourceMode::ReferenceDV);
+ assert(run(r));assert(r.admissions==4); // The latched native route is already admitted.
 }
 '''.replace('SELECTION',selection))

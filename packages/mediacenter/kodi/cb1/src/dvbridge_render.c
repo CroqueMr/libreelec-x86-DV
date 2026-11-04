@@ -6,14 +6,13 @@
 #include "cb1_hdr10plus_analysis.h"
 #include <dlfcn.h>
 #include "dvbridge_placebo.h"
+#include "cb1_hdr10_expert.h"
 #include "dvbridge_metadata.h"
 #include "dvbridge_gl_pack.h"
 #include "dvbridge_pack_sources.h"
 #include "cb1_hdr10_ai.h"
 #include "cb1_hdr10_ingress.h"
 #include "cb1_dv_enhanced.h"
-#include "cb1_trim_math.h"
-#include "cb1_trim_glsl.h"
 #include "cb1_transport_glsl.h"
 #include "cb1_master_ipt.h"
 #include "cb1_master_ipt_shader.h"
@@ -22,14 +21,6 @@
 #define CB1_DVE_GPU 1
 #include <libavutil/dovi_meta.h>
 #include <libavutil/mem.h>
-#ifndef CM29_GPU_MAP_GRID
-#define CM29_GPU_MAP_GRID 160
-#endif
-#if CM29_GPU_MAP_GRID != 160
-#error "CM2.9 HDR10 mapping requires the qualified 160-point grid"
-#endif
-#define CM29_STR_INNER(v) #v
-#define CM29_STR(v) CM29_STR_INNER(v)
 #include <libplacebo/shaders/custom.h>
 #include <libplacebo/shaders/colorspace.h>
 #include <libplacebo/shaders/sampling.h>
@@ -89,7 +80,7 @@ struct reference_resolve {
 };
 struct direct_output {
     pl_tex texture;
-    bool flip, custom_quantize, limited, early_l5_black;
+    bool flip, custom_quantize, limited;
     unsigned bits;
     struct reference_resolve quantize;
     struct pl_hook hook;
@@ -97,15 +88,6 @@ struct direct_output {
 static struct pl_hook_res reference_quantize(void *priv, const struct pl_hook_params *p);
 
 #include "cb1_processing.h"
-
-struct cm29_tail_cache_key {
-    double chroma[2], peak_nits;
-    struct pl_color_space input, output;
-    struct pl_color_map_params mapper;
-    pl_matrix3x3 to_xyz, to_bt2020;
-    pl_tex pq_encoder;
-    pl_shader_obj *gamut_state;
-};
 
 struct dvbridge_renderer {
     pl_gpu gpu;
@@ -116,11 +98,6 @@ struct dvbridge_renderer {
     void *spatial_priv;
     pl_tex rgb, ai_rgb, enhanced_rgb, enhanced_input, p5_native, native_picture;
     pl_tex ipt_pq[2];
-    pl_tex cm29_tail_atlas;
-    pl_tex cm29_tail_axis;
-    struct cm29_tail_cache_key cm29_tail_key;
-    bool cm29_tail_key_valid;
-    bool expert_warp_lookup;
     struct dvbridge_context *context;
     struct dvbridge_candidate *pending;
     bool ready, direct_output, overlay_visible;
@@ -140,7 +117,7 @@ struct dvbridge_renderer {
     GLuint ai_enhanced_native_texture;
     pl_tex ai_enhanced_native, ai_enhanced_packed;
     bool processing_optimizations;
-    bool fel_nearest;
+    enum dvbridge_fel_filter fel_filter;
     uint32_t processing_failed_groups;
     struct cb1_processing processing;
     struct pl_color_space reconstructed_color;
@@ -167,8 +144,7 @@ struct dvbridge_renderer {
     double enhanced_pts;
     bool enhanced_has_committed;
     uint64_t resolve_serial;
-    pl_shader_obj creative_state, creative_gamut_state;
-    pl_shader_obj creative_detail_lut[2];
+    pl_shader_obj creative_state;
 };
 
 static void renderer_free(struct dvbridge_renderer *r);
@@ -185,38 +161,17 @@ struct reference_hook {
     bool composed_matrix;
     pl_shader scaled_shader;
     struct reference_resolve *quantize;
-    bool early_l5_black;
     bool called, failed;
-    bool creative;
-    bool neutral_cm29;
-    bool limit_untrimmed_volume;
+    bool expert;
+    struct pl_tone_map_params expert_tone;
+    float expert_shape[3];
+    float expert_pq_cap;
     struct dvbridge_creative_plan creative_plan;
     struct pl_color_space creative_source, creative_target;
-    struct pl_color_space neutral_target;
     struct pl_color_map_params creative_mapper;
-    struct pl_color_map_params final_mapper;
     pl_shader_obj *creative_state;
-    pl_shader_obj *creative_gamut_state;
-    bool cm4;
-    struct dvbridge_cm4_coefficients cm4_coefficients;
-    pl_shader_obj *detail_lut;
-    pl_tex feature_map;
     pl_tex pq_encoder;
-    bool gpu_map_eligible, gpu_map_building, gpu_map_used;
-    pl_tex gpu_map_atlas;
-    struct pl_color_space gpu_map_container;
-    struct dvbridge_renderer *renderer;
 };
-#ifdef DVBRIDGE_PQ_ENCODER_TEST
-static unsigned cm29_gpu_map_build_count;
-#endif
-static double cm29_tail_warp_phi(double x);
-static void cm29_tail_warp_axis(float axis[CM29_GPU_MAP_GRID]);
-static bool cm29_gpu_map_build(struct reference_hook *h,const struct pl_hook_params *p,pl_tex atlas);
-static bool cm29_gpu_map_cache(struct reference_hook *h,const struct pl_hook_params *p);
-static bool cm29_add_sop(pl_shader sh,const struct reference_hook *h);
-static bool cm29_add_chroma(pl_shader sh,const struct reference_hook *h);
-
 bool dvbridge_creative_cm4_shader(pl_shader sh,const struct dvbridge_cm4_coefficients *c)
 {
     if(!sh || !c || !isfinite(c->peak_nits) || c->peak_nits<=0 || c->peak_nits>10000 ||
@@ -336,182 +291,27 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
                 "dvbridge_signal_black=all(lessThanEqual(color.rgb,vec3(0.0)));\n",
             .description="Retain exact signal black before Expert mapping"};
         h->failed = !pl_shader_custom(p->sh, &capture);
-        if (h->early_l5_black) {
-            float black=h->quantize->offset/h->quantize->maximum;
-            struct pl_shader_var vars[]={
-                {.var=pl_var_vec4("reference_early_area"),.data=h->rect,.dynamic=true},
-                {.var=pl_var_float("reference_early_black"),.data=&black,.dynamic=true},
-            };
-            struct pl_custom_shader early_black={
-                .input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-                .variables=vars,.num_variables=2,
-                .description="Early exact limited/full-range L5 black return",
-                .body="if(gl_FragCoord.x<reference_early_area.x || gl_FragCoord.y<reference_early_area.y || "
-                     "gl_FragCoord.x>=reference_early_area.z || gl_FragCoord.y>=reference_early_area.w) "
-                     "return vec4(vec3(reference_early_black),1.0);\n",
-            };
-            h->failed|=!pl_shader_custom(p->sh,&early_black);
-        }
-        if(h->creative){
-            if(h->gpu_map_building){
-                struct pl_custom_shader domain={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-                    .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),
-                    .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),.body="",
-                    .description="CM29 tail-atlas post-SOP input"};
-                h->failed|=!pl_shader_custom(p->sh,&domain);
-                return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_COLOR,.sh=p->sh,
-                    .color=h->creative_target,.repr=p->repr,.components=p->components,.rect=p->rect};
-            }
-            if(h->neutral_cm29){
-                if(p->color.transfer==PL_COLOR_TRC_LINEAR &&
-                   h->neutral_target.transfer==PL_COLOR_TRC_LINEAR){
-                    struct pl_color_map_params fused=h->creative_mapper;
-                    fused.cb1_neutral_cm29=true;
-                    fused.cb1_neutral_cm29_peak=h->creative_plan.policy.tv.peak_nits;
-                    fused.gamut_expansion=true;
-                    pl_shader_color_map_ex(p->sh,&fused,pl_color_map_args(
-                        .src=h->creative_source,.dst=h->neutral_target,.state=h->creative_state,
-                        .prelinearized=true));
-                    struct pl_custom_shader domain={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-                        .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),
-                        .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),.body="",
-                        .description="Neutral CM29 fused linear carrier domain"};
-                    h->failed|=!pl_shader_custom(p->sh,&domain);
-                    return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_COLOR,.sh=p->sh,
-                        .color=h->neutral_target,.repr=p->repr,.components=p->components,.rect=p->rect};
-                }
-            }
-            if(h->cm4){
-                struct pl_color_map_params native=h->creative_mapper;native.gamut_mapping=&pl_gamut_map_clip;
-                if(h->feature_map)native.contrast_recovery=h->cm4_coefficients.detail_mix;
-                pl_shader_color_map_ex(p->sh,&native,pl_color_map_args(
-                    .src=h->creative_source,.dst=h->creative_target,.state=h->creative_state,
-                    .prelinearized=p->color.transfer==PL_COLOR_TRC_LINEAR,.feature_map=h->feature_map));
-                h->failed|=!dvbridge_creative_cm4_shader(p->sh,&h->cm4_coefficients);
-                /* A conservative working hull enables native output clipping.
-                 * It is not a source mastering descriptor or transport metadata. */
-                struct pl_color_space working=h->creative_target;
-                working.hdr.prim=*pl_raw_primaries_get(PL_COLOR_PRIM_ACES_AP0);
-                struct pl_color_map_params gamut=h->creative_mapper;
-                gamut.tone_mapping_function=&pl_tone_map_clip;gamut.metadata=PL_HDR_METADATA_HDR10;
-                gamut.gamut_mapping=&pl_gamut_map_perceptual;
-                pl_shader_color_map(p->sh,&gamut,working,h->creative_target,h->creative_gamut_state,true);
-                struct pl_custom_shader domain={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-                    .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),.output_h=abs(p->dst_rect.y1-p->dst_rect.y0),
-                    .body="",.description="CM4 linear carrier domain"};
-                h->failed|=!pl_shader_custom(p->sh,&domain);
-                return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_COLOR,.sh=p->sh,
-                    .color=h->creative_target,.repr=p->repr,.components=p->components,.rect=p->rect};
-            }else{
-            if(h->gpu_map_eligible && !h->gpu_map_building){
-                if(!cm29_gpu_map_cache(h,p)){
-                    h->failed=true;return (struct pl_hook_res){.failed=true};
-                }
-                pl_shader_color_map(p->sh,&h->creative_mapper,h->creative_source,
-                    h->creative_target,h->creative_state,p->color.transfer==PL_COLOR_TRC_LINEAR);
-                h->failed|=!cm29_add_sop(p->sh,h);
-                float peak_scale=h->creative_plan.policy.tv.peak_nits/203.0f;
-                struct pl_shader_var var={.var=pl_var_float("cm29_tail_peak_scale"),
-                    .data=&peak_scale,.dynamic=true};
-                struct pl_shader_desc atlas={
-                    .desc={.name="cm29_tail_atlas",.type=PL_DESC_SAMPLED_TEX},
-                    .binding={.object=h->gpu_map_atlas,.sample_mode=PL_TEX_SAMPLE_LINEAR},
-                };
-                const bool warp_lookup=h->renderer->expert_warp_lookup && h->pq_encoder;
-                struct pl_shader_desc descriptors[]={atlas,{
-                    .desc={.name="cm29_warp_encoder",.type=PL_DESC_SAMPLED_TEX},
-                    .binding={.object=h->pq_encoder,.sample_mode=PL_TEX_SAMPLE_LINEAR},
-                }};
-                struct pl_custom_shader lookup={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-                    .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),
-                    .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),
-                    .variables=&var,.num_variables=1,.descriptors=descriptors,.num_descriptors=warp_lookup?2:1,
-                    .prelude=warp_lookup?"#define CB1_CM29_WARP_LOOKUP 1\n":"",
-                    .header="vec2 cm29_tail_uv(float b,vec2 rg){vec2 tile=vec2(mod(b,8.0),floor(b/8.0));"
-                            "return (tile*" CM29_STR(CM29_GPU_MAP_GRID) ".0+rg+vec2(0.5))/vec2(" CM29_STR(CM29_GPU_MAP_GRID) ".0*8.0," CM29_STR(CM29_GPU_MAP_GRID) ".0*" CM29_STR(CM29_GPU_MAP_GRID) ".0/8.0);}\n",
-                    .description="Cached CM2.9 HDR10 chroma and output mapping",
-                    .body="vec3 x=clamp(color.rgb/cm29_tail_peak_scale,0.0,1.0);\n"
-                          "bvec3 tail_zero=lessThanEqual(x,vec3(0.0));\n"
-                          "#ifdef CB1_CM29_WARP_LOOKUP\n"
-                          "vec3 u=sqrt(sqrt(x));\n"
-                          "vec3 pq=vec3(texture(cm29_warp_encoder,vec2((u.r*4095.0+0.5)/4096.0,0.5)).r,"
-                          "texture(cm29_warp_encoder,vec2((u.g*4095.0+0.5)/4096.0,0.5)).r,"
-                          "texture(cm29_warp_encoder,vec2((u.b*4095.0+0.5)/4096.0,0.5)).r);\n"
-                          "#else\n"
-                          "vec3 v=pow(x,vec3(2610.0/16384.0));\n"
-                          "v=(vec3(3424.0/4096.0)+vec3(2413.0/128.0)*v)/(vec3(1.0)+vec3(2392.0/128.0)*v);\n"
-                          "vec3 pq=clamp(pow(v,vec3(2523.0/32.0)),0.0,1.0);\n"
-                          "#endif\n"
-                          "vec3 q=(0.5*pq+0.5*x)*(" CM29_STR(CM29_GPU_MAP_GRID) ".0-1.0);\n"
-                          "q=mix(q,vec3(0.0),tail_zero);\n"
-                          "vec2 rg=q.rg;float b0=floor(q.b),b1=min(b0+1.0," CM29_STR(CM29_GPU_MAP_GRID) ".0-1.0);\n"
-                          "vec3 lo=texture(cm29_tail_atlas,cm29_tail_uv(b0,rg)).rgb;\n"
-                          "vec3 hi=texture(cm29_tail_atlas,cm29_tail_uv(b1,rg)).rgb;\n"
-                          "color.rgb=mix(lo,hi,fract(q.b));\n"};
-                h->failed|=!pl_shader_custom(p->sh,&lookup);
-                if(h->failed)return (struct pl_hook_res){.failed=true};
-                h->gpu_map_used=true;
-                return (struct pl_hook_res){.output=PL_HOOK_SIG_COLOR,.sh=p->sh,
-                    .color=h->gpu_map_container,.repr=p->repr,.components=p->components,.rect=p->rect};
-            }
-            pl_shader_color_map(p->sh,&h->creative_mapper,h->creative_source,
-                h->creative_target,h->creative_state,p->color.transfer==PL_COLOR_TRC_LINEAR);
-            h->failed|=!cm29_add_sop(p->sh,h);
-            h->failed|=!cm29_add_chroma(p->sh,h);
-            struct pl_custom_shader domain={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        if(h->expert){
+            pl_shader_color_map_ex(p->sh,&h->creative_mapper,pl_color_map_args(
+                .src=h->creative_source,.dst=h->creative_target,.state=h->creative_state,
+                .prelinearized=p->color.transfer==PL_COLOR_TRC_LINEAR,.cb1_tone_map=&h->expert_tone,
+                .cb1_tone_shape={h->expert_shape[0],h->expert_shape[1],h->expert_shape[2]}));
+            h->failed|=!cb1_hdr10_expert_trim(p->sh,&h->creative_plan,h->creative_target.primaries);
+            const struct pl_custom_shader domain={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
                 .output_w=abs(p->dst_rect.x1-p->dst_rect.x0),
-                .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),
-                .body="",.description="CM2.9 linear carrier domain"};
+                .output_h=abs(p->dst_rect.y1-p->dst_rect.y0),.body="",
+                .description="Expert linear target carrier"};
             h->failed|=!pl_shader_custom(p->sh,&domain);
             return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_COLOR,.sh=p->sh,
                 .color=h->creative_target,.repr=p->repr,.components=p->components,.rect=p->rect};
-            }
         }
         return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_NONE};
     }
     h->called = true;
-    if(p->stage==PL_HOOK_PRE_OUTPUT && h->gpu_map_used){
-        if(p->color.transfer!=PL_COLOR_TRC_PQ ||
-           p->color.primaries!=PL_COLOR_PRIM_BT_2020 || p->sh!=h->scaled_shader){
-            h->failed=true;return (struct pl_hook_res){.failed=true};
-        }
-        const int keep_black=!h->creative || h->creative_plan.codes[1]<=2048;
-        struct pl_shader_var vars[]={
-            {.var=pl_var_vec4("reference_area"),.data=h->rect,.dynamic=true},
-            {.var=pl_var_int("reference_keep_black"),.data=&keep_black,.dynamic=true},
-        };
-        struct pl_custom_shader mask={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-            .variables=vars,.num_variables=2,.description="Exact black and original-coordinate L5 mask after CM29 tail",
-            .body="if((dvbridge_signal_black && reference_keep_black!=0) || gl_FragCoord.x<reference_area.x || "
-                  "gl_FragCoord.x>=reference_area.z || gl_FragCoord.y<reference_area.y || "
-                  "gl_FragCoord.y>=reference_area.w)color=vec4(0.0,0.0,0.0,1.0);\n"};
-        h->failed=!pl_shader_custom(p->sh,&mask);
-        return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_NONE};
-    }
-    if (p->stage != PL_HOOK_PRE_OUTPUT || (!h->cm4 && p->sh != h->scaled_shader) ||
+    if (p->stage != PL_HOOK_PRE_OUTPUT || p->sh != h->scaled_shader ||
         p->color.transfer != PL_COLOR_TRC_LINEAR) {
         h->failed = true;
         return (struct pl_hook_res){.failed=true};
-    }
-    if(h->limit_untrimmed_volume){
-        float peak=h->neutral_target.hdr.max_luma/203.0f;
-        struct pl_shader_var var={.var=pl_var_float("reference_volume_peak"),.data=&peak,.dynamic=true};
-        struct pl_custom_shader begin={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-            .variables=&var,.num_variables=1,.description="Limit only out-of-volume Expert colours",
-            .header="vec3 reference_volume_original;bool reference_volume_outside;\n",
-            .body="reference_volume_original=color.rgb;\n"
-                  "reference_volume_outside=any(lessThan(color.rgb,vec3(0.0))) || "
-                  "any(greaterThan(color.rgb,vec3(reference_volume_peak)));\n"};
-        h->failed|=!pl_shader_custom(p->sh,&begin);
-        /* Reuse CM4's native gamut limiter without reapplying scene tone mapping. */
-        struct pl_color_space working=h->neutral_target;
-        working.hdr.prim=*pl_raw_primaries_get(PL_COLOR_PRIM_ACES_AP0);
-        struct pl_color_map_params gamut=h->final_mapper;
-        gamut.tone_mapping_function=&pl_tone_map_clip;gamut.metadata=PL_HDR_METADATA_HDR10;
-        pl_shader_color_map(p->sh,&gamut,working,h->neutral_target,h->creative_gamut_state,true);
-        struct pl_custom_shader end={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-            .body="if(!reference_volume_outside)color.rgb=reference_volume_original;\n"};
-        h->failed|=!pl_shader_custom(p->sh,&end);
     }
     if (h->enhanced) {
         struct pl_shader_var params={.var=pl_var_vec4("enhanced_policy"),.data=h->enhancement,.dynamic=true};
@@ -537,7 +337,10 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
                 "color.rgb=ev*enhanced_policy.x;}}\n"};
         h->failed = h->failed || !pl_shader_custom(p->sh,&enhance);
     }
-    const int keep_black=!h->creative || (h->cm4?h->cm4_coefficients.sop[1]<=0:h->creative_plan.codes[1]<=2048);
+    /* The anchored Expert curve fixes zero when B=0, for every signed trim.
+     * A configured nonzero black must not be erased by this guard. */
+    const int keep_black=h->expert ? h->expert_tone.output_min==0 :
+        true;
     struct pl_shader_var vars[] = {
         {.var=pl_var_mat3("reference_bt2020"),.data=&h->to_bt2020,.dynamic=true},
         {.var=pl_var_vec4("reference_area"),.data=h->rect,.dynamic=true},
@@ -569,270 +372,20 @@ static struct pl_hook_res reference_output(void *priv, const struct pl_hook_para
         "gl_FragCoord.y<reference_area.y || gl_FragCoord.y>=reference_area.w)color=vec4(0,0,0,1);\n";
     struct pl_custom_shader conversion = {.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .variables=vars,.num_variables=h->composed_matrix?3:4,
-        .header=h->neutral_cm29 && h->composed_matrix ? "#define CB1_REFERENCE_TRANSFORM(v) (v)\n" :
-            h->composed_matrix ? "#define CB1_REFERENCE_TRANSFORM(v) (reference_bt2020*(v))\n" :
+        .header=h->composed_matrix ? "#define CB1_REFERENCE_TRANSFORM(v) (reference_bt2020*(v))\n" :
             "#define CB1_REFERENCE_TRANSFORM(v) (reference_bt2020*(reference_xyz*(v)))\n",
         .description="Expert nominal LINEAR to BT2020 PQ before caller overlays",
         .body=conversion_body,.descriptors=h->pq_encoder?&encoder_desc:NULL,
         .num_descriptors=h->pq_encoder?1:0};
     h->failed = h->failed || !pl_shader_custom(p->sh, &conversion);
+    if(h->expert){
+        struct pl_shader_var var={.var=pl_var_float("expert_pq_ceiling"),.data=&h->expert_pq_cap,.dynamic=true};
+        const struct pl_custom_shader cap={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+            .variables=&var,.num_variables=1,.description="Expert representable PQ ceiling before overlays",
+            .body="color.rgb=clamp(color.rgb,0.0,expert_pq_ceiling);\n"};
+        h->failed|=!pl_shader_custom(p->sh,&cap);
+    }
     return (struct pl_hook_res){.failed=h->failed,.output=PL_HOOK_SIG_NONE};
-}
-
-static pl_tex detail_texture(const struct pl_hook_params *p,int w,int h)
-{
-    pl_tex tex=p->get_tex(p->priv,w,h);
-    if(!tex || tex->params.format->type!=PL_FMT_FLOAT)return NULL;
-    for(int c=0;c<tex->params.format->num_components;c++)
-        if(tex->params.format->component_depth[c]!=32)return NULL;
-    return tex;
-}
-
-static bool cm29_add_sop(pl_shader sh,const struct reference_hook *h)
-{
-    double controls[5];cb1_trim_decode(controls,h->creative_plan.codes);
-    float sop[4]={controls[0],controls[1],controls[2],
-        h->creative_plan.policy.tv.peak_nits/203};
-    struct pl_shader_var var={.var=pl_var_vec4("creative_sop"),.data=sop,.dynamic=true};
-    struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-        .variables=&var,.num_variables=1,.description="Original CM2.9 SOP before tail lookup",
-        .body=h->creative_plan.codes[0]==2048 && h->creative_plan.codes[1]==2048 &&
-            h->creative_plan.codes[2]==2048 ?
-            "color.rgb=clamp(color.rgb,0.0,creative_sop.w);\n" : CB1_TRIM_SOP_GLSL};
-    if(!pl_shader_custom(sh,&shader))return false;
-    return true;
-}
-
-static bool cm29_add_chroma(pl_shader sh,const struct reference_hook *h)
-{
-    if(h->creative_plan.codes[4]==2048)return true;
-    double controls[5];cb1_trim_decode(controls,h->creative_plan.codes);
-    float cg[2]={controls[3],controls[4]};
-    struct pl_shader_var var={.var=pl_var_vec2("creative_color"),.data=cg,.dynamic=true};
-    struct pl_custom_shader shader={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-        .variables=&var,.num_variables=1,.description="Original CM2.9 chroma controls",
-        .body=CB1_TRIM_CHROMA_GLSL};
-    return pl_shader_custom(sh,&shader);
-}
-
-static void cm29_gpu_map_make_key(struct cm29_tail_cache_key *key,const struct reference_hook *h)
-{
-    memset(key,0,sizeof(*key));
-    key->chroma[0]=h->creative_plan.codes[3];
-    key->chroma[1]=h->creative_plan.codes[4];
-    key->peak_nits=h->creative_plan.policy.tv.peak_nits;
-    memcpy(&key->input,&h->creative_target,sizeof(key->input));
-    memcpy(&key->output,&h->neutral_target,sizeof(key->output));
-    memcpy(&key->mapper,&h->final_mapper,sizeof(key->mapper));
-    memcpy(&key->to_xyz,&h->to_xyz,sizeof(key->to_xyz));
-    memcpy(&key->to_bt2020,&h->to_bt2020,sizeof(key->to_bt2020));
-    key->pq_encoder=h->pq_encoder;
-    key->gamut_state=h->creative_gamut_state;
-}
-
-static bool cm29_gpu_map_key_equal(const struct cm29_tail_cache_key *a,
-                                   const struct cm29_tail_cache_key *b)
-{
-    /* Compare colorspaces semantically; retain exact cache checks elsewhere. */
-    return !memcmp(a->chroma,b->chroma,sizeof(a->chroma)) &&
-        a->peak_nits==b->peak_nits &&
-        pl_color_space_equal(&a->input,&b->input) &&
-        pl_color_space_equal(&a->output,&b->output) &&
-        !memcmp(&a->mapper,&b->mapper,sizeof(a->mapper)) &&
-        !memcmp(&a->to_xyz,&b->to_xyz,sizeof(a->to_xyz)) &&
-        !memcmp(&a->to_bt2020,&b->to_bt2020,sizeof(a->to_bt2020)) &&
-        a->pq_encoder==b->pq_encoder && a->gamut_state==b->gamut_state;
-}
-
-static double cm29_tail_warp_phi(double x)
-{
-    const double m1=2610.0/16384.0,m2=2523.0/32.0;
-    const double c1=3424.0/4096.0,c2=2413.0/128.0,c3=2392.0/128.0;
-    double p=pow(x,m1);
-    double pq=pow((c1+c2*p)/(1.0+c3*p),m2);
-    return 0.5*pq+0.5*x;
-}
-
-static void cm29_tail_warp_axis(float axis[CM29_GPU_MAP_GRID])
-{
-    for(int i=0;i<CM29_GPU_MAP_GRID;i++){
-        double target=(double)i/(CM29_GPU_MAP_GRID-1),lo=0.0,hi=1.0;
-        if(i==0){axis[i]=0.0f;continue;}
-        if(i==CM29_GPU_MAP_GRID-1){axis[i]=1.0f;continue;}
-        for(int j=0;j<64;j++){
-            double mid=0.5*(lo+hi);
-            if(cm29_tail_warp_phi(mid)<target)lo=mid;else hi=mid;
-        }
-        axis[i]=(float)(0.5*(lo+hi));
-    }
-}
-
-static bool cm29_gpu_map_cache(struct reference_hook *h,const struct pl_hook_params *p)
-{
-    struct dvbridge_renderer *r=h->renderer;
-    if(!r)return false;
-    /* This table contains only CM2.9 chroma plus final mapping/PQ. The authored
-     * first map and SOP remain per-frame work on the reconstructed raster. */
-    struct cm29_tail_cache_key key;
-    cm29_gpu_map_make_key(&key,h);
-    if(r->cm29_tail_key_valid && r->cm29_tail_atlas && r->cm29_tail_axis &&
-       cm29_gpu_map_key_equal(&r->cm29_tail_key,&key)){
-        h->gpu_map_atlas=r->cm29_tail_atlas;
-        return true;
-    }
-
-    /* A failed replacement must never leave the previous atlas valid for this key. */
-    r->cm29_tail_key_valid=false;
-    const int n=CM29_GPU_MAP_GRID,w=8*n,height=n*n/8;
-    if(!r->cm29_tail_atlas){
-        const int caps=PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_LINEAR;
-        /* The atlas stores bounded PQ, not scene-linear HDR values. */
-        pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_UNORM,4,16,16,caps);
-        if(!fmt)return false;
-        r->cm29_tail_atlas=pl_tex_create(r->gpu,pl_tex_params(.w=w,.h=height,
-            .format=fmt,.sampleable=true,.renderable=true));
-        if(!r->cm29_tail_atlas)return false;
-    }
-    if(!cm29_gpu_map_build(h,p,r->cm29_tail_atlas))return false;
-    r->cm29_tail_key=key;
-    r->cm29_tail_key_valid=true;
-    h->gpu_map_atlas=r->cm29_tail_atlas;
-    return true;
-}
-
-static bool cm29_gpu_map_build(struct reference_hook *h,const struct pl_hook_params *p,pl_tex atlas)
-{
-    const int n=CM29_GPU_MAP_GRID,w=8*n,height=n*n/8;
-    struct dvbridge_renderer *r=h->renderer;
-    if(!atlas || atlas->params.w!=w || atlas->params.h!=height ||
-       !atlas->params.sampleable || !atlas->params.renderable ||
-       (atlas->params.format->caps&(PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_LINEAR))!=
-           (PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_LINEAR))return false;
-    if(!r)return false;
-    if(!r->cm29_tail_axis){
-        float axis[CM29_GPU_MAP_GRID];
-        cm29_tail_warp_axis(axis);
-        pl_fmt fmt=pl_find_fmt(r->gpu,PL_FMT_FLOAT,1,32,32,
-                               PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR);
-        if(!fmt)return false;
-        r->cm29_tail_axis=pl_tex_create(r->gpu,pl_tex_params(.w=n,.h=1,.format=fmt,
-            .sampleable=true,.initial_data=axis));
-        if(!r->cm29_tail_axis)return false;
-    }
-    pl_shader sh=pl_dispatch_begin(p->dispatch);
-    if(!sh)return false;
-    float peak_scale=h->creative_plan.policy.tv.peak_nits/203.0f;
-    struct pl_shader_var peak={.var=pl_var_float("tail_peak_scale"),.data=&peak_scale,.dynamic=true};
-    struct pl_shader_desc axis={
-        .desc={.name="cm29_tail_axis",.type=PL_DESC_SAMPLED_TEX},
-        .binding={.object=r->cm29_tail_axis,.sample_mode=PL_TEX_SAMPLE_NEAREST},
-    };
-    struct pl_custom_shader grid={.input=PL_SHADER_SIG_NONE,.output=PL_SHADER_SIG_COLOR,
-        .variables=&peak,.num_variables=1,.descriptors=&axis,.num_descriptors=1,
-        .description="Peak-normalized phi-warped CM29 lattice",
-        .body="vec2 xy=floor(gl_FragCoord.xy);float tx=floor(xy.x/" CM29_STR(CM29_GPU_MAP_GRID) ".0);"
-              "float ty=floor(xy.y/" CM29_STR(CM29_GPU_MAP_GRID) ".0);\n"
-              "vec3 i=vec3(mod(xy," CM29_STR(CM29_GPU_MAP_GRID) ".0),ty*8.0+tx);\n"
-              "vec3 x=vec3(texture(cm29_tail_axis,vec2((i.x+0.5)/" CM29_STR(CM29_GPU_MAP_GRID) ".0,0.5)).r,"
-              "texture(cm29_tail_axis,vec2((i.y+0.5)/" CM29_STR(CM29_GPU_MAP_GRID) ".0,0.5)).r,"
-              "texture(cm29_tail_axis,vec2((i.z+0.5)/" CM29_STR(CM29_GPU_MAP_GRID) ".0,0.5)).r);\n"
-              "color=vec4(x*tail_peak_scale,1.0);\n"};
-    if(!pl_shader_custom(sh,&grid))goto abort;
-    struct reference_hook clone=*h;
-    clone.gpu_map_building=true;clone.gpu_map_used=false;clone.gpu_map_atlas=atlas;
-    clone.failed=false;clone.called=false;clone.quantize=NULL;clone.early_l5_black=false;
-    clone.rect[0]=clone.rect[1]=0;clone.rect[2]=w;clone.rect[3]=height;
-    struct pl_hook_params synthetic=*p;
-    synthetic.stage=PL_HOOK_SCALED;synthetic.sh=sh;synthetic.tex=NULL;
-    synthetic.color=clone.creative_target;synthetic.repr=pl_color_repr_rgb;synthetic.components=3;
-    synthetic.rect=(pl_rect2df){0,0,w,height};synthetic.dst_rect=(pl_rect2d){0,0,w,height};
-    struct pl_hook_res result=reference_output(&clone,&synthetic);
-    if(result.failed || clone.failed || !cm29_add_chroma(sh,&clone))goto abort;
-    struct pl_color_map_params tail=clone.final_mapper;
-    tail.gamut_expansion=true;tail.tone_mapping_function=&pl_tone_map_clip;
-    tail.metadata=PL_HDR_METADATA_HDR10;
-    pl_shader_color_map(sh,&tail,clone.creative_target,clone.neutral_target,
-                        clone.creative_gamut_state,true);
-    synthetic.stage=PL_HOOK_PRE_OUTPUT;synthetic.color=clone.neutral_target;
-    result=reference_output(&clone,&synthetic);
-    if(result.failed || clone.failed || !pl_dispatch_finish(p->dispatch,
-            pl_dispatch_params(.shader=&sh,.target=atlas)))goto abort;
-#ifdef DVBRIDGE_PQ_ENCODER_TEST
-    cm29_gpu_map_build_count++;
-#endif
-    return true;
-abort:
-    pl_dispatch_abort(p->dispatch,&sh);
-    return false;
-}
-
-/* Native intensity and bicubic reduction, with L5 excluded before filtering. */
-static pl_tex cm4_features(struct reference_hook *h,const struct pl_hook_params *p)
-{
-    int w=abs(p->dst_rect.x1-p->dst_rect.x0),height=abs(p->dst_rect.y1-p->dst_rect.y0);
-    if(w<=0 || height<=0 || p->rect.x1<=p->rect.x0 || p->rect.y1<=p->rect.y0)return NULL;
-    float sx=(p->rect.x1-p->rect.x0)/w,sy=(p->rect.y1-p->rect.y0)/height;
-    pl_rect2df active={p->rect.x0+(h->rect[0]-p->dst_rect.x0)*sx,
-        p->rect.y0+(h->rect[1]-p->dst_rect.y0)*sy,
-        p->rect.x0+(h->rect[2]-p->dst_rect.x0)*sx,
-        p->rect.y0+(h->rect[3]-p->dst_rect.y0)*sy};
-    if(active.x0<p->rect.x0 || active.y0<p->rect.y0 || active.x1>p->rect.x1 ||
-       active.y1>p->rect.y1 || active.x1<=active.x0 || active.y1<=active.y0)return NULL;
-    /* Match the final mask's pixel-centre inclusion after scaling L5. */
-    active.x0=ceilf(active.x0-.5f);active.y0=ceilf(active.y0-.5f);
-    active.x1=ceilf(active.x1-.5f);active.y1=ceilf(active.y1-.5f);
-    if(active.x1<=active.x0 || active.y1<=active.y0)return NULL;
-    int aw=ceilf(active.x1-active.x0),ah=ceilf(active.y1-active.y0);
-    int low_w=ceilf(w/3.5f),low_h=ceilf(height/3.5f);
-    pl_tex full=detail_texture(p,aw,ah),vertical=detail_texture(p,w,low_h),low=detail_texture(p,low_w,low_h);
-    if(!full || !vertical || !low)return NULL;
-    pl_shader sh=pl_dispatch_begin(p->dispatch);
-    struct pl_sample_src crop={.tex=p->tex,.rect=active,.new_w=aw,.new_h=ah};
-    bool aligned=active.x0==floorf(active.x0) && active.y0==floorf(active.y0) &&
-        active.x1==floorf(active.x1) && active.y1==floorf(active.y1);
-    if(!(aligned?pl_shader_sample_nearest(sh,&crop):pl_shader_sample_direct(sh,&crop)))goto error;
-    struct pl_color_space csp=h->creative_source;csp.transfer=p->color.transfer;
-    pl_shader_extract_features(sh,csp);
-    if(!pl_dispatch_finish(p->dispatch,pl_dispatch_params(.shader=&sh,.target=full)))goto error;
-    float left=(active.x0-p->rect.x0)/sx,top=(active.y0-p->rect.y0)/sy;
-    for(int axis=0;axis<2;axis++){
-        sh=pl_dispatch_begin(p->dispatch);
-        pl_tex input=axis?vertical:full,output=axis?low:vertical;
-        struct pl_sample_src src={.tex=input,.components=1,.address_mode=PL_TEX_ADDRESS_MIRROR,
-            .rect=axis?(pl_rect2df){0,0,w,low_h}:(pl_rect2df){-left,-top,w-left,height-top},
-            .new_w=output->params.w,.new_h=output->params.h};
-        struct pl_sample_filter_params filter={.filter=pl_filter_bicubic,
-            .lut=&h->detail_lut[axis],.no_compute=true,.cb1_fp32_lut=true};
-        if(!pl_shader_sample_ortho2(sh,&src,&filter) ||
-           !pl_dispatch_finish(p->dispatch,pl_dispatch_params(.shader=&sh,.target=output)))goto error;
-    }
-    return low;
-error:
-    pl_dispatch_abort(p->dispatch,&sh);return NULL;
-}
-
-static struct pl_hook_res cm4_spatial_output(void *priv,const struct pl_hook_params *p)
-{
-    struct reference_hook *h=priv;
-    if(p->stage!=PL_HOOK_SCALED || !p->tex || p->components<3 ||
-       p->color.primaries!=h->creative_source.primaries ||
-       (p->color.transfer!=PL_COLOR_TRC_LINEAR && p->color.transfer!=PL_COLOR_TRC_PQ))goto error;
-    h->feature_map=cm4_features(h,p);
-    if(!h->feature_map)goto error;
-    pl_shader sh=pl_dispatch_begin(p->dispatch);
-    struct pl_sample_src src={.tex=p->tex,.rect=p->rect,
-        .new_w=abs(p->dst_rect.x1-p->dst_rect.x0),.new_h=abs(p->dst_rect.y1-p->dst_rect.y0)};
-    bool identity=p->rect.x0==floorf(p->rect.x0) && p->rect.y0==floorf(p->rect.y0) &&
-        p->rect.x1-p->rect.x0==src.new_w && p->rect.y1-p->rect.y0==src.new_h;
-    if(!(identity?pl_shader_sample_nearest(sh,&src):pl_shader_sample_direct(sh,&src))){
-        pl_dispatch_abort(p->dispatch,&sh);goto error;
-    }
-    struct pl_hook_params color=*p;color.sh=sh;
-    struct pl_hook_res result=reference_output(priv,&color);
-    if(result.failed)pl_dispatch_abort(p->dispatch,&sh);
-    return result;
-error:
-    h->failed=true;return (struct pl_hook_res){.failed=true};
 }
 
 static bool reference_area(float rect[4], const void *metadata,
@@ -849,7 +402,9 @@ static bool reference_area(float rect[4], const void *metadata,
         const AVDOVIDmData *e=av_dovi_get_ext(m,i);
         if (e->level!=5) continue;
         if (++count>1) return false;
-        l=e->l5.left_offset;r=e->l5.right_offset;t=e->l5.top_offset;b=e->l5.bottom_offset;
+        if (!g.ignore_l5) {
+            l=e->l5.left_offset;r=e->l5.right_offset;t=e->l5.top_offset;b=e->l5.bottom_offset;
+        }
     }
     if (l>=(unsigned)g.source_width || r>=(unsigned)g.source_width-l ||
         t>=(unsigned)g.source_height || b>=(unsigned)g.source_height-t) return false;
@@ -903,7 +458,8 @@ static struct dvbridge_geometry carrier_geometry(struct dvbridge_geometry source
 static struct dvbridge_geometry source_geometry(struct dvbridge_geometry source)
 {
     int width=source.source_width,height=source.source_height;
-    return (struct dvbridge_geometry){width,height,0,0,width,height,width,height};
+    return (struct dvbridge_geometry){width,height,0,0,width,height,width,height,
+        .ignore_l5=source.ignore_l5};
 }
 
 /* Allocate full-size RGB backing only for an actual consumer. */
@@ -939,7 +495,7 @@ struct active_mask {
     pl_shader native_shader;
     bool early_mask, source_domain, source_overlay, straight_overlay, linear_output;
     bool reference_transport, exact_reference, profile5_transport, scaled_quad;
-    bool ipt_quad;
+    bool ipt_quad, gui_quad;
     const struct cb1_master_ipt *ipt;
     const pl_tex *ipt_pq;
     pl_tex reference_target;
@@ -1115,13 +671,14 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .desc={.name=i?"ipt_oetf":"ipt_eotf",.type=PL_DESC_SAMPLED_TEX},
             .binding={.object=mask->ipt_pq[i],.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL CB1_MASTER_IPT_GLSL CB1_IPT_CODES_GLSL)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
         mask->source_overlay ? "#define CB1_SOURCE_OVERLAY 1\n" : "",
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
+        mask->gui_quad ? "#define CB1_GUI_QUAD 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
         mask->profile5_transport ? "#define CB1_SOURCE_BLACK 0.0\n" :
             "#define CB1_SOURCE_BLACK .0625\n",
@@ -1136,7 +693,9 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         CB1_COMPOSITE_HEADER_GLSL
     );
     struct pl_custom_shader shader = {
-        .prelude=!mask->scaled_quad && !mask->ipt_quad && (mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
+        /* Fused AI already declares extensions before its image uniforms. */
+        .prelude=!mask->scaled_quad && !mask->ipt_quad &&
+            (mask->ai_renderer || (!mask->gui_quad && mask->reference_transport)) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
                  "#extension GL_KHR_shader_subgroup_quad : require\n",
         .header=header,
         .input=mask->scaled_reference?PL_SHADER_SIG_NONE:PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
@@ -1222,7 +781,8 @@ static struct pl_hook_res mask_active_area(void *priv, const struct pl_hook_para
 struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
 {
     if (!gpu || pl_cb1_processing_abi()!=PL_CB1_PROCESSING_ABI ||
-        pl_cb1_chroma_filter_abi()!=PL_CB1_CHROMA_FILTER_API)
+        pl_cb1_chroma_filter_abi()!=PL_CB1_CHROMA_FILTER_API ||
+        pl_cb1_expert_tone_abi()!=PL_CB1_EXPERT_TONE_ABI)
         return NULL;
     struct dvbridge_renderer *r = calloc(1, sizeof(*r));
     if (!r)
@@ -1239,8 +799,6 @@ struct dvbridge_renderer *dvbridge_renderer_create(pl_gpu gpu)
         r->reuse_authored_storage=intel;
         /* Analytic P5 expansion saves work on Intel; radeonsi retains its LUT. */
         r->authored_p5_analytic=intel;
-        /* The existing encoder saves ALU work on radeonsi, not on Intel. */
-        r->expert_warp_lookup=renderer && strstr(renderer,"radeonsi");
         /* Authored FEL expansion reuses the measured radeonsi lookup recipe. */
         r->authored_fel_lookup=renderer && strstr(renderer,"radeonsi");
         /* Scalar tables retain exact samples; use them only on radeonsi. */
@@ -1272,7 +830,6 @@ void dvbridge_renderer_reset(struct dvbridge_renderer *r)
 {
     if (!r)
         return;
-    r->cm29_tail_key_valid=false;
     dvbridge_render_dv_policy_cancel(r);
     r->dv_has_committed=false;
     r->enhanced_has_committed=false;
@@ -1310,9 +867,9 @@ enum cb1_cmv40_status dvbridge_renderer_cmv40_status(const struct dvbridge_rende
     return r && r->ready?r->cmv40_status:CB1_CMV40_OFF;
 }
 
-void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *r, bool enabled)
+void dvbridge_renderer_set_fel_filter(struct dvbridge_renderer *r, enum dvbridge_fel_filter filter)
 {
-    if (r) r->fel_nearest = enabled;
+    if (r) r->fel_filter = filter>=DVBRIDGE_FEL_DEFAULT && filter<=DVBRIDGE_FEL_REFERENCE ? filter : DVBRIDGE_FEL_DEFAULT;
 }
 
 void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *r, bool enabled)
@@ -1371,12 +928,8 @@ static void renderer_free(struct dvbridge_renderer *r)
     pl_tex_destroy(r->gpu, &r->ai_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_input);
     dve_release_images(r);
-    pl_tex_destroy(r->gpu, &r->cm29_tail_atlas);
-    pl_tex_destroy(r->gpu, &r->cm29_tail_axis);
     pl_renderer_destroy(&r->renderer);
     pl_shader_obj_destroy(&r->creative_state);
-    pl_shader_obj_destroy(&r->creative_gamut_state);
-    for(int i=0;i<2;i++)pl_shader_obj_destroy(&r->creative_detail_lut[i]);
     free(r);
 }
 
@@ -1443,14 +996,11 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
         params->cb1_nearest_identity=true;
     }
     uint32_t optional=params->cb1_processing?params->cb1_processing->groups:0;
-    for(unsigned attempt=0;attempt<2;attempt++){
+    bool processing_removed=false;
+    for(unsigned attempt=0;attempt<3;attempt++){
         if(mask){mask->called=mask->failed=false;mask->native_shader=NULL;}
         if(reference){reference->called=reference->failed=false;
-            reference->scaled_shader=NULL;reference->feature_map=NULL;}
-        if(attempt && reference){
-            reference->gpu_map_eligible=false;
-            reference->gpu_map_used=false;
-        }
+            reference->scaled_shader=NULL;}
         unsigned top=active_rows?(unsigned)mask->rect[1]:0;
         unsigned bottom=active_rows?(unsigned)mask->rect[3]:0;
         bool ok=active_rows?
@@ -1461,23 +1011,21 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
         ok=ok && !errors.errors && !errors.num_disabled_hooks &&
             (reference?reference->called && !reference->failed:mask->called && !mask->failed);
         if(ok){
-            if(attempt)r->processing_failed_groups|=optional;
+            if(processing_removed)r->processing_failed_groups|=optional;
             return true;
         }
-        if(!optional || attempt || (reference && reference->gpu_map_eligible) ||
-           r->dv.quarantined || r->retired_packed.quarantined ||
+        if(r->dv.quarantined || r->retired_packed.quarantined ||
            pl_gpu_is_failed(r->gpu))return false;
         /* Same-context ordered retry, before publication. Keep every lease;
-         * the caller's completion fence covers both attempts. */
-        params->cb1_processing=NULL;
+         * the caller's completion fence covers every attempt. GUI failure
+         * alone must not alter or blacklist the movie processing contract. */
+        if(mask && mask->gui_quad)mask->gui_quad=false;
+        else if(optional && params->cb1_processing){
+            params->cb1_processing=NULL;processing_removed=true;
+        }else return false;
         pl_renderer_reset_errors(r->renderer,NULL);
     }
     return false;
-}
-
-static bool cm29_tail_gain_eligible(double gain_code)
-{
-    return gain_code >= 2048.0;
 }
 
 static struct dvbridge_candidate *prepare_picture_candidate(struct dvbridge_renderer *r,
@@ -1569,12 +1117,17 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     struct pl_color_space nominal;
     struct dvbridge_hdr10_metadata signal;
     struct dvbridge_creative_plan creative={0};
+    struct cb1_hdr10_expert_plan expert={0};
     if (policy) {
         paired = source->enhancement_layer && pts == el_pts;
+        if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
+            if(!cb1_hdr10_expert_prepare(&expert,policy,metadata,bytes,paired))return false;
+            mapped=expert.source;mapped.repr.dovi=&mapped.dovi;
+            nominal=expert.target;signal=expert.signal;creative=expert.creative;
+        }else{
         if (!dvbridge_reference_map(&mapped, &nominal, &signal, policy, metadata, bytes, paired))
             return false;
-        if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
-           dvbridge_creative_resolve(&creative,metadata,bytes,policy)==DVBRIDGE_CREATIVE_INVALID)return false;
+        }
     } else if (!dvbridge_map_color(&mapped, metadata, bytes, paired)) return false;
     // Other pipelines retain their FP32 backing; native direct transport needs none.
     if((session || policy || enhanced_reconstruction || native_stage || (!packed && !direct)) &&
@@ -1628,7 +1181,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     struct pl_render_params params = pl_render_default_params;
     params.cb1_dovi_reference=master;
     params.cb1_fast_chroma = master ? p5_standard : true;
-    params.cb1_fel_nearest = !master && r->fel_nearest && paired && mapped.dovi.nlq_active;
+    params.cb1_fel_filter = !master && paired && mapped.dovi.nlq_active ? r->fel_filter : 0;
     uint32_t processing=master?0:r->processing_optimizations?CB1_PROCESSING_ALL:
         enhanced_reconstruction?CB1_PROCESSING_COLOUR:0;
     /* Analytic PQ avoids decoder lookups in authored FEL reconstruction. */
@@ -1689,8 +1242,12 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         };
         params.color_map_params = &color_map;
     }
-    if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT && !creative.l1_present)
+    if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
         color_map.metadata=PL_HDR_METADATA_HDR10;
+        color_map.gamut_expansion=false;
+        color_map.lut_size=expert.tone.lut_size;
+        color_map.force_tone_mapping_lut=true;
+    }
     if(enhanced_reconstruction && r->enhanced_linear){
         params.cb1_nearest_identity=paired && mapped.dovi.nlq_active;
         /* Explicit luminance prevents an intermediate linear surface from
@@ -1717,6 +1274,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         mask.rect[1]=target_height-bottom;mask.rect[3]=target_height-top;
     }
     mask.overlay=overlay;
+    mask.gui_quad=overlay && overlay->optimized && !overlay->input_pq && r->fragment_quad;
     mask.reference_transport=master!=NULL;
     mask.exact_reference=master && !p5_standard;
     mask.profile5_transport=master && dvbridge_dv_profile5_transport(metadata);
@@ -1732,8 +1290,8 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         geometry.height==geometry.source_height && !(geometry.x&1);
     bool direct_reference=master && (full_transport || placed_reference);
     mask.ipt_quad=ipt && direct_reference;
-    /* P5 keeps the same FP32 scaler; exchange its neighbour before packing. */
-    mask.scaled_quad=mask.profile5_transport && !direct_reference && r->fragment_quad;
+    /* Keep the same FP32 scaler; exchange its neighbour before packing. */
+    mask.scaled_quad=master && !direct_reference && r->fragment_quad;
     mask.reference_target=placed_reference?packed:NULL;
     bool reuse_p5=mask.profile5_transport && r->fragment_quad && !direct_reference && !geometry.x && !geometry.y &&
         geometry.width==target_width && geometry.height==target_height &&
@@ -1888,136 +1446,24 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     struct reference_hook reference = {
         .to_xyz=pl_get_rgb2xyz_matrix(pl_raw_primaries_get(target.color.primaries)),
         .to_bt2020=pl_get_xyz2rgb_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020)),
-        .renderer=r,
     };
     if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT)
         reference.pq_encoder=cb1_processing_pq_encoder(&r->processing,r->gpu);
-    struct dvbridge_cm4_coefficients cm4;
-    bool use_cm4=policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
-        dvbridge_creative_cm4_coefficients(&cm4,&creative);
-    bool neutral_cm29=false;
+    params.cb1_hook_color_space=params.cb1_dovi_linear;
     if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
-        const struct pl_raw_primaries *bt2020=pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
-        struct pl_color_space first_source=mapped.color;
-        struct pl_color_space first_target={.primaries=PL_COLOR_PRIM_BT_2020,
-            .transfer=PL_COLOR_TRC_LINEAR,.hdr={.min_luma=PL_COLOR_HDR_BLACK,
-                .max_luma=nominal.hdr.max_luma,.prim=*bt2020}};
-        pl_color_space_infer_map(&first_source,&first_target);
-        const struct pl_gamut_map_function *first_function=color_map.gamut_mapping ?
-            color_map.gamut_mapping : &pl_gamut_map_clip;
-        struct pl_gamut_map_params first_gamut={.function=first_function,
-            .input_gamut=first_source.hdr.prim,.output_gamut=first_target.hdr.prim};
-        if(first_function->bidirectional &&
-           pl_primaries_compatible(&first_gamut.input_gamut,&first_gamut.output_gamut))
-            first_gamut.output_gamut=pl_primaries_clip(&first_gamut.output_gamut,
-                                                       &first_gamut.input_gamut);
-        /* Equal primaries can skip gamut mapping despite highlight compression. */
-        reference.limit_untrimmed_volume=!creative.anchor_present && !use_cm4 &&
-            nominal.primaries==PL_COLOR_PRIM_BT_2020 && pl_gamut_map_params_noop(&first_gamut);
-        if(reference.limit_untrimmed_volume){
-            reference.neutral_target=nominal;reference.final_mapper=color_map;
-            reference.creative_gamut_state=&r->creative_gamut_state;
-        }
-        neutral_cm29=creative.status==DVBRIDGE_CREATIVE_READY &&
-            (creative.backend==DVBRIDGE_CREATIVE_CM29 ||
-             creative.backend==DVBRIDGE_CREATIVE_CM29_COMPATIBILITY) && creative.anchor_present &&
-            creative.codes[0]==2048 && creative.codes[1]==2048 &&
-            creative.codes[2]==2048 && creative.codes[4]==2048 &&
-            mapped.color.primaries==PL_COLOR_PRIM_BT_2020 &&
-            params.cb1_dovi_linear &&
-            color_map.gamut_mode==PL_GAMUT_CLIP &&
-            (color_map.intent==PL_INTENT_AUTO ||
-             color_map.intent==PL_INTENT_PERCEPTUAL ||
-             color_map.intent==PL_INTENT_RELATIVE_COLORIMETRIC) &&
-            pl_gamut_map_params_noop(&first_gamut);
-    }
-    bool spatial=false;
-    params.cb1_hook_color_space=use_cm4 || params.cb1_dovi_linear;
-    if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT && (creative.anchor_present || use_cm4)){
         params.cb1_hook_color_space=true;
-        reference.creative=true;reference.creative_plan=creative;
-        reference.cm4=use_cm4;
-        if(use_cm4){
-            reference.cm4_coefficients=cm4;
-            reference.detail_lut=r->creative_detail_lut;
-            creative.backend=DVBRIDGE_CREATIVE_CM4;creative.status=DVBRIDGE_CREATIVE_READY;
-            if(creative.l1_present)creative.reason=DVBRIDGE_CREATIVE_OK;
-            creative.applied_levels&=~(1u<<2);creative.applied_levels|=1u<<8;
-            creative.l2_coverage.applied=0;creative.l2_coverage.preserved=creative.l2_coverage.present;
-            creative.l8_coverage.applied=cm4.present&~((1u<<5)|(3u<<8));
-            creative.l8_coverage.preserved=cm4.present&~creative.l8_coverage.applied;
-        }
-        reference.creative_state=&r->creative_state;reference.creative_gamut_state=&r->creative_gamut_state;
-        reference.creative_mapper=color_map;
-        reference.creative_mapper.gamut_expansion=false;
-        reference.neutral_cm29=neutral_cm29 && !use_cm4;
-        reference.neutral_target=nominal;
-        if(reference.neutral_cm29){
-            /* Keep the P3 volume constraint, not a redundant P3 pixel carrier. */
-            reference.neutral_target.primaries=target.color.primaries=PL_COLOR_PRIM_BT_2020;
-            reference.to_xyz=pl_get_rgb2xyz_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020));
-        }
-        reference.creative_source=mapped.color;
-        if(creative.l1_present){
-            reference.creative_source.hdr.max_pq_y=creative.analysis[1]/4095.0f;
-            reference.creative_source.hdr.avg_pq_y=creative.analysis[2]/4095.0f;
-        }
-        reference.creative_target=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,
-            .transfer=PL_COLOR_TRC_LINEAR,.hdr={.min_luma=PL_COLOR_HDR_BLACK,.max_luma=nominal.hdr.max_luma,
-                .prim=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020)}};
-        if(use_cm4)reference.creative_target=nominal;
-        if(use_cm4 && cm4.detail_mix!=0){
-            struct pl_color_space from=reference.creative_source,to=reference.creative_target;
-            pl_color_space_infer_map(&from,&to);
-            float in_peak=0,out_peak=0;
-            pl_color_space_nominal_luma_ex(pl_nominal_luma_params(.color=&from,
-                .metadata=reference.creative_mapper.metadata,.scaling=PL_HDR_PQ,.out_max=&in_peak));
-            pl_color_space_nominal_luma_ex(pl_nominal_luma_params(.color=&to,
-                .metadata=PL_HDR_METADATA_HDR10,.scaling=PL_HDR_PQ,.out_max=&out_peak));
-            spatial=in_peak>out_peak+1e-6f;
-            if(spatial){creative.l8_coverage.applied|=1u<<5;creative.l8_coverage.preserved&=~(1u<<5);}
-            else if(creative.l1_present)creative.reason=DVBRIDGE_CREATIVE_DETAIL_NO_COMPRESSION;
-        }
-        // The SCALED hook owns tone mapping. The remaining map only changes gamut.
-        image.color.hdr=reference.creative_target.hdr;
-        color_map.tone_mapping_function=&pl_tone_map_clip;color_map.metadata=PL_HDR_METADATA_HDR10;
-        reference.final_mapper=color_map;
+        reference.expert=true;reference.expert_tone=expert.tone;
+        memcpy(reference.expert_shape,expert.tone_shape,sizeof(reference.expert_shape));
+        reference.expert_pq_cap=cb1_hdr10_expert_ceiling(policy);
+        reference.creative_plan=creative;
+        reference.creative_source=mapped.color;reference.creative_target=nominal;
+        reference.creative_mapper=color_map;reference.creative_state=&r->creative_state;
+        /* The hook owns the only tone/gamut map. The remaining native stage is
+         * an identity carrier, followed by the existing BT2020/PQ adapter. */
+        image.color.hdr=nominal.hdr;
+        color_map.tone_mapping_function=&pl_tone_map_clip;
     }
-    bool early_l5_black=policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
-        direct && direct->custom_quantize && params.cb1_dovi_linear && !spatial &&
-        geometry.source_width==3840 && geometry.source_height==2160 &&
-        !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160 &&
-        source->num_overlays==0 &&
-        (!source->enhancement_layer || source->enhancement_layer->num_overlays==0) &&
-        (policy_area[0]>0 || policy_area[1]>0 || policy_area[2]<3840 || policy_area[3]<2160);
-    if(direct)
-        direct->early_l5_black=early_l5_black;
     reference.quantize=direct && direct->custom_quantize ? &direct->quantize : NULL;
-    reference.early_l5_black=early_l5_black;
-    /* Retain dense mapping beyond the lattice's qualified 2500-nit range. */
-    const bool cache_neutral=reference.neutral_cm29 && nominal.primaries!=PL_COLOR_PRIM_BT_2020 &&
-        nominal.hdr.max_luma<=2500.0f;
-    bool tail_scope=policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
-        cm29_tail_gain_eligible(creative.codes[4]) &&
-        !use_cm4 && creative.status==DVBRIDGE_CREATIVE_READY &&
-        creative.anchor_present &&
-        (creative.backend==DVBRIDGE_CREATIVE_CM29 ||
-         creative.backend==DVBRIDGE_CREATIVE_CM29_COMPATIBILITY) &&
-        mapped.color.transfer==PL_COLOR_TRC_PQ &&
-        mapped.color.primaries==PL_COLOR_PRIM_BT_2020 && params.cb1_dovi_linear &&
-        ((paired && mapped.dovi.nlq_active) || cache_neutral) && direct && direct->custom_quantize && !overlay &&
-        !source->num_overlays && (!el || !el->num_overlays) && !spatial &&
-        geometry.source_width==3840 && geometry.source_height==2160 &&
-        !geometry.x && !geometry.y && geometry.width==3840 && geometry.height==2160;
-    if(tail_scope && cache_neutral)reference.neutral_cm29=false;
-    reference.gpu_map_eligible=tail_scope && !reference.neutral_cm29;
-    if(reference.gpu_map_eligible){
-        const struct pl_raw_primaries *bt2020=pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
-        reference.gpu_map_container=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,
-            .transfer=PL_COLOR_TRC_PQ,.hdr={.prim=*bt2020,.min_luma=PL_COLOR_HDR_BLACK,
-                .max_luma=nominal.hdr.max_luma}};
-        target.color=reference.gpu_map_container;
-    }
     if(policy && policy->mode==DVBRIDGE_MODE_HDR10_EXPERT){
         pl_matrix3x3_mul(&reference.to_bt2020,&reference.to_xyz);
         reference.composed_matrix=true;
@@ -2029,10 +1475,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
     }
     const struct pl_hook ref_hook = {.stages=PL_HOOK_SCALED|PL_HOOK_PRE_OUTPUT,
         .input=PL_HOOK_SIG_COLOR,.priv=&reference,.hook=reference_output,.signature=0x4342315245460001ULL};
-    const struct pl_hook spatial_hook={.stages=PL_HOOK_SCALED,.input=PL_HOOK_SIG_TEX,
-        .priv=&reference,.hook=cm4_spatial_output,.signature=0x434231434d340001ULL};
-    struct pl_hook spatial_tail=ref_hook;spatial_tail.stages=PL_HOOK_PRE_OUTPUT;
-    const struct pl_hook *ref_hooks[] = {spatial?&spatial_hook:&ref_hook,&spatial_tail};
+    const struct pl_hook *ref_hooks[] = {&ref_hook};
     if (policy) {
         memcpy(reference.rect,policy_area,sizeof(policy_area));
         if(direct && direct->flip){
@@ -2053,7 +1496,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
             reference.enhancement[3]=1-.5*x*x*(3-2*x);
         }
         params.hooks=ref_hooks;
-        params.num_hooks=spatial?2:1;
+        params.num_hooks=1;
     }
     const struct pl_hook *direct_hooks[4];
     if (direct) {
@@ -2072,29 +1515,10 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         float black=direct?direct->quantize.offset/direct->quantize.maximum:0.0f;
         pl_tex_clear(r->gpu, target.planes[0].texture, (float[4]){black,black,black,1});
     }
-    for(unsigned attempt=0;attempt<2;attempt++){
-        r->ready=render_image(r,&image,&target,&params,&mask,policy?&reference:NULL,
-            mask.source_domain && mask.early_mask);
-        if(r->ready && direct && direct->custom_quantize)
-            r->ready=direct->quantize.called && !direct->quantize.failed;
-        bool early_l5_same_shader=direct && direct->quantize.scaled_shader &&
-            direct->quantize.scaled_shader==direct->quantize.output_shader;
-        if(r->ready && direct && direct->early_l5_black)
-            r->ready=early_l5_same_shader;
-        if(r->ready || attempt || !reference.gpu_map_eligible || pl_gpu_is_failed(r->gpu))
-            break;
-        /* Retry the dense map before publishing, retaining the same frame leases. */
-        target.color=reference.neutral_target;
-        reference.gpu_map_eligible=reference.gpu_map_used=false;
-        if(cache_neutral)reference.neutral_cm29=true;
-        reference.gpu_map_atlas=NULL;
-        r->cm29_tail_key_valid=false;
-        if(direct){
-            direct->quantize.called=direct->quantize.failed=false;
-            direct->quantize.scaled_shader=direct->quantize.output_shader=NULL;
-        }
-        pl_renderer_reset_errors(r->renderer,NULL);
-    }
+    r->ready=render_image(r,&image,&target,&params,&mask,policy?&reference:NULL,
+        mask.source_domain && mask.early_mask);
+    if(r->ready && direct && direct->custom_quantize)
+        r->ready=direct->quantize.called && !direct->quantize.failed;
     if (!r->ready) {
         dvbridge_candidate_destroy(r->pending);
         r->pending = NULL;
@@ -2171,7 +1595,7 @@ static bool render(struct dvbridge_renderer *r, const struct pl_frame *source,
     }
     struct active_mask mask={.rect={margins[0],margins[2],target_width-margins[1],target_height-margins[3]}};
     if(policy)memcpy(mask.rect,area,sizeof(area));
-    mask.maximum_pq=dv_ideal_pq(policy?r->policy_pending.nominal_target.hdr.max_luma:session->target.hdr.max_luma);
+    mask.maximum_pq=policy?cb1_hdr10_expert_ceiling(policy):dv_ideal_pq(session->target.hdr.max_luma);
     if(direct && direct->flip){float top=mask.rect[1];mask.rect[1]=target_height-mask.rect[3];mask.rect[3]=target_height-top;}
     const struct pl_hook blank={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
         .priv=&mask,.hook=mask_active_area,.signature=0x4342314853430001ULL};
@@ -2516,7 +1940,10 @@ bool dvbridge_render_hdr10_policy_direct(struct dvbridge_renderer *r,
        !direct_geometry_valid(geometry) || !direct_target_valid(r,target,bits))return false;
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,true);
-    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,policy,NULL,false,&direct,false,NULL,false,NULL))return false;
+    if(policy->expert_output_bits && (policy->expert_output_bits!=bits || policy->expert_output_limited!=limited))return false;
+    struct dvbridge_policy target_policy=*policy;
+    target_policy.expert_output_bits=bits;target_policy.expert_output_limited=limited;
+    if(!render(r,source,metadata,bytes,pts,el_pts,geometry,NULL,false,NULL,&target_policy,NULL,false,&direct,false,NULL,false,NULL))return false;
     r->policy_pending.identity=*identity;
     r->policy_pending.resolved=true;
     r->policy_pending.final_target=target;
@@ -2548,6 +1975,8 @@ bool dvbridge_render_hdr10_policy_resolve(struct dvbridge_renderer *r, pl_tex ou
                                          bool flip, bool limited, unsigned bits)
 {
     if (!r || !r->policy_ready || !r->ready || !direct_target_valid(r,output,bits) ||
+        (r->policy_pending.policy.expert_output_bits &&
+         (r->policy_pending.policy.expert_output_bits!=bits || r->policy_pending.policy.expert_output_limited!=limited)) ||
         !r->rgb || output->params.w!=r->rgb->params.w || output->params.h!=r->rgb->params.h) {
         dvbridge_render_policy_cancel(r); return false;
     }
@@ -3803,6 +3232,7 @@ static bool dve_pack_overlay(struct dvbridge_renderer *r,pl_tex input,pl_tex out
     const unsigned *m=r->dv.output.value.margins;
     struct active_mask mask={.rect={m[0],m[2],width-m[1],height-m[3]},.packets=packets,.count=count,
         .flip=flip,.overlay=r->dv.enhanced_overlay?&r->dv.overlay:NULL,.straight_overlay=true};
+    mask.gui_quad=mask.overlay && mask.overlay->optimized && !mask.overlay->input_pq && r->fragment_quad;
     if(!linear && (image.crop.x1-image.crop.x0!=width || image.crop.y1-image.crop.y0!=height) &&
        r->dv.enhanced_plan.status==CB1_DVE_READY)
         mask.maximum_pq=dv_ideal_pq(r->dv.enhanced_plan.envelope);
@@ -4151,6 +3581,7 @@ static bool ai_render_pixels(struct dvbridge_renderer *r,
     struct active_mask mask={.rect={g.x,g.y,g.x+g.width,g.y+g.height},.flip=flip,.source_domain=raw};
     mask.ai_renderer=fused?r:NULL;
     mask.overlay=overlay;
+    mask.gui_quad=overlay && overlay->optimized && !overlay->input_pq && r->fragment_quad;
     mask.straight_overlay=r->optimized_dv && overlay && !overlay->input_pq;
     if(packed)mask.packets=dvbridge_packets(r->pending,&mask.count);
     const uint32_t empty_packets[640]={0};

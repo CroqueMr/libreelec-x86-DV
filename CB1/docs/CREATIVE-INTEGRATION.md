@@ -1,7 +1,7 @@
 # Creative mapping integration
 
 Dependencies remain exactly those pinned in `config/dependencies.json`.
-This page describes the creative-processing API, not the complete RC2 driver,
+This page describes the creative-processing API, not the complete published RC3 driver,
 audio or player integration.
 
 ## Caller contract
@@ -36,7 +36,10 @@ audio or player integration.
 
 ## Processing scope
 
-HDR10 Expert uses the independent `cb1-cm4-v1` scalar/spatial operator.
+RC3 HDR10 Rendering Reference uses an explicit frame-owned PQ tone curve,
+separate display calibration and compatible L2 guidance. It does not execute the
+full independent `cb1-cm4-v1` scalar/spatial reference. L3/L8 are not stacked onto
+this runtime curve; L8 spatial and secondary controls remain unexecuted.
 Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1`: trim-guided expansion after reconstruction,
 protected shadows, common RGB gain and fresh output metadata. Added light is
 bounded by the display reference; existing brighter samples are not reduced.
@@ -48,9 +51,10 @@ panel measurement.
 L8 primary and present optional fields are checked against preserved raw RPU
 bytes. L10 PQ limits and present custom primaries are checked independently.
 Unknown target/primary IDs remain unsupported, without a default 100-nit target.
-Expert rejects unknown L9 mastering IDs and inconsistent custom raw/parsed
-coordinates. Reference and Basic retain their existing admission. Expert consumes
-L1/L3 maximum and average values; minimum is validated and preserved, not applied.
+HDR10 Rendering Reference rejects unknown L9 mastering IDs and inconsistent custom
+raw/parsed coordinates. Reference and HDR10 Rendering retain their existing
+admission. HDR10 Rendering Reference uses raw L1 maximum/average without folding
+L3; minimum is validated and descriptive, not a measured display-black anchor.
 Same-peak different-gamut L8 targets remain distinct; only gamut matches at the
 metadata's signed 16-bit coordinate precision participate in the anchor snapshot.
 L2 has no authored gamut; Adaptive HDR Mapping retains its scalar guidance for every display

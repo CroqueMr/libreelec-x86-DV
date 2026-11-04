@@ -104,10 +104,12 @@ bool dvbridge_frame_area(unsigned margins[4], const void *metadata, size_t bytes
         if (e->level != 5)
             continue;
         if (++levels > 1) return false;
-        offsets[0] = e->l5.left_offset;
-        offsets[1] = e->l5.right_offset;
-        offsets[2] = e->l5.top_offset;
-        offsets[3] = e->l5.bottom_offset;
+        if (!geometry.ignore_l5) {
+            offsets[0] = e->l5.left_offset;
+            offsets[1] = e->l5.right_offset;
+            offsets[2] = e->l5.top_offset;
+            offsets[3] = e->l5.bottom_offset;
+        }
     }
     unsigned computed[4];
     if(native_crop){

@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Compare the real shader with the independent absolute-nits trim reference."""
+"""Compare real Expert gray intensity with its public anchored PQ curve."""
 import json
 import subprocess
 import sys
-from creative_reference import trim_rgb
 
 
 def nits(pq):
@@ -21,9 +20,15 @@ assert result.returncode == 0, result.stderr
 data = json.loads(result.stdout.splitlines()[0])
 maximum = 0
 for before, actual in zip(data['neutral'], data['trimmed']):
-    expected = [pq(v) for v in trim_rgb([nits(v) for v in before], 800,
-                                       [2048, 2048, 2600, 2048, 2048])]
+    # Independent curve oracle, not the previous RGB SOP. Both endpoints
+    # are fixed; positive power bends the middle down without clipping black.
+    high = pq(800)
+    power = (2600-2048)/2048
+    expected = []
+    for value in before:
+        x = value/high
+        expected.append(high*(x-4*power*x**3*(1-x)**3))
     error = max(abs(a-b) for a, b in zip(actual, expected))
     maximum = max(maximum, error)
     assert error <= 1e-5, (actual, expected, error)
-print('PASS independent linear-nits SOP shader; maximum PQ error', maximum)
+print('PASS independent anchored-PQ Expert curve; maximum PQ error', maximum)

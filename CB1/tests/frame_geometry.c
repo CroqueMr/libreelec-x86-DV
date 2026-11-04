@@ -126,6 +126,19 @@ int main(void)
         rejected(m, bytes, invalid[i]);
     target_geometries(m,bytes);
     native_crop_geometries(m,bytes);
+    /* An explicit encoded-raster override must not guess from aspect ratio. */
+    m->num_ext_blocks=1;
+    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=5,.l5={.top_offset=276,.bottom_offset=276}};
+    geometry=(struct dvbridge_geometry){3840,1608,0,276,3840,1608,3840,2160,
+        {0,0,3840,1608},{0,276,3840,1884}};
+    assert(dvbridge_frame_area(margins,m,bytes,geometry));
+    assert(margins[2]==552 && margins[3]==552);
+#if DVBRIDGE_TARGET_API >= 4
+    geometry.ignore_l5=true;
+#endif
+    assert(dvbridge_frame_area(margins,m,bytes,geometry));
+    assert(margins[2]==276 && margins[3]==276);
+    assert(av_dovi_get_ext(m,0)->l5.top_offset==276);
 #if DVBRIDGE_TARGET_API >= 3
     m->num_ext_blocks=0;
     geometry=(struct dvbridge_geometry){1920,800,0,186,2560,1068,2560,1440,

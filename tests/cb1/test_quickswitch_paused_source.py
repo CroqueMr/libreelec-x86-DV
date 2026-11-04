@@ -13,7 +13,7 @@ class PausedQuickSwitch(unittest.TestCase):
     def test_native_source_opens_menu_after_output_clear_without_reviving_old_source(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (tree / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
-        gate = body(source, 'bool CDVPlaybackModes::ShowMenu()')
+        gate = body(source, 'bool CDVPlaybackModes::ShowMenu(')
         gate = gate[:gate.index('#ifdef CB1_HAS_HDR10_AI')] + '\nreturn true;\n}'
         signature = 'StreamHdrType CDVPlaybackModes::SourceType()'
         getter = signature + body(source, signature) if signature in source else ''
@@ -53,7 +53,7 @@ struct CDVPlaybackModes {
  static bool enabled;
  static bool MenuEnabled(){return enabled;}
  static StreamHdrType SourceType();
- static bool ShowMenu() GATE
+ static bool ShowMenu(bool settingsMenu=false) GATE
 };
 bool CDVPlaybackModes::enabled=true;
 GETTER
@@ -77,6 +77,8 @@ int main(){
  player->info={false,H::HDR_TYPE_DOLBYVISION,""};assert(!CDVPlaybackModes::ShowMenu());
  player->info.valid=true;player->active=false;assert(!CDVPlaybackModes::ShowMenu());
  player->active=true;CDVPlaybackModes::enabled=false;assert(!CDVPlaybackModes::ShowMenu());
+ // Global DV preferences stay available without a playing DV picture.
+ player->active=false;player->info={};assert(CDVPlaybackModes::ShowMenu(true));
 }
 '''.replace('GATE', gate).replace('GETTER', getter)
         with tempfile.TemporaryDirectory() as tmp:

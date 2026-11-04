@@ -4,17 +4,14 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from shipped_kodi import shipped_code
 
 ROOT = Path(__file__).resolve().parents[2]
-KODI_PATCH = ROOT / "projects/Generic/patches/kodi/kodi-9999-zz-beta3.patch"
 EDID_PATCH = ROOT / "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch"
 
 
 def added_source():
-    section = KODI_PATCH.read_text().split("+++ b/xbmc/windowing/Resolution.cpp\n", 1)[1]
-    section = section.split("\n--- a/", 1)[0]
-    return "\n".join(line[1:] for line in section.splitlines()
-                     if line.startswith("+") and not line.startswith("+++")) + "\n"
+    return shipped_code('xbmc/windowing/Resolution.cpp')
 
 
 def function(source, signature):

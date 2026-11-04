@@ -69,9 +69,8 @@ int main()
   }
 }
 '''
-        patch = (ROOT / 'projects/Generic/patches/kodi/kodi-9996-output-modes-and-info.patch').read_text()
-        section = patch.split('+++ b/xbmc/utils/DVRenderUsage.h\n', 1)[1].split('\ndiff --git ', 1)[0]
-        header = '\n'.join(line[1:] for line in section.splitlines() if line.startswith('+')) + '\n'
+        from shipped_kodi import shipped_code
+        header = shipped_code('xbmc/utils/DVRenderUsage.h')
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'DVRenderUsage.h').write_text(header)

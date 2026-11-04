@@ -10,6 +10,7 @@
     "LICENSES/canonical-checksums.json": "af9e09d2c8232cf42712cdb20c269fd4e20a3e882ddbacc78361fcf4be52a783",
     "models/l1l3/LICENSE.md": "bc2fd46117c2d4e48ff13a74d2bc95176d7e3e524bb41a8568af646c303bb931",
     "LICENSES/MIT-dovi-tool-cmv40.txt": "e9d76c149b1176de4aa0202cfb6a4a266a0c4cb71959f429d670c3a857f95e52",
-    "LICENSES/Hades-HDR10Plus.txt": "ac26be82e27bdd70a8fab0e3ad4732de8eade3b9500ff3f1da17350b8521042c"
+    "LICENSES/Hades-HDR10Plus.txt": "ac26be82e27bdd70a8fab0e3ad4732de8eade3b9500ff3f1da17350b8521042c",
+    "LICENSES/AVDVPlus-HDR10Plus.txt": "2f8f5bb0c6d14eec997ca7e9e71ef1ce1943a0553b88e7b0e52d651444690b64"
   }
 }

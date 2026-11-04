@@ -22,9 +22,10 @@ struct cb1_hdr10plus_dovi_result {
 /* Input must be fully validated at ingress (Kodi VideoSourceSideData::Capture).
  * This adapter validates only fields it consumes; it is not an SEI parser.
  * Single full-picture window; caller verifies frame/scene/area identity.
- * Complete distributions derive mean PQ from authored linear-light statistics.
+ * Valid distributions estimate mean PQ by weighted percentile trapezoids.
  * L1 minimum is conservatively0, not the mastering-display minimum.
- * Missing distribution may use AI estimates; NULL estimate requests source-only.
+ * Missing/unusable distribution uses AI when supplied; otherwise PQ(linear
+ * average) is a labeled estimate. NULL estimate never invokes image analysis.
  * No image processing, mastering-target inference or source mutation.
  * Zero MaxSCL supplies no usable peak to the current nonzero-peak DV transport.
  * Failure preserves out. */

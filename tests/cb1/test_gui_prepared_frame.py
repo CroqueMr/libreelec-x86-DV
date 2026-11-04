@@ -15,12 +15,17 @@ class PreparedGUI(unittest.TestCase):
         program = r'''
 #include <cassert>
 #include <iostream>
+struct CServiceBroker {
+ struct GUI {GUI&GetWindowManager(){return *this;}bool HasDirtyRegions(){return false;}};
+ static GUI*GetGUI(){static GUI value;return &value;}
+};
 struct CRenderSystemGLES {
   unsigned guiPasses=0;
   bool BeginRender() { ++guiPasses; return true; }
 };
 struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   bool m_cb1FramePending=true,m_dvFrame=true,kmsPending=true;
+  bool m_guiCacheValid=true;
   unsigned submitted=0;
   bool CompleteDVBridgePage(unsigned) { return !kmsPending; }
   void PresentFrame(bool,bool) {

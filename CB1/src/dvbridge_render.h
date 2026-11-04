@@ -128,9 +128,12 @@ void dvbridge_renderer_reset(struct dvbridge_renderer *renderer);
 #define CB1_OPTIMIZED_DV_API 1
 /* Select the next picture's DV composition. Default false; HDR10 is unchanged. */
 void dvbridge_renderer_set_optimized_dv(struct dvbridge_renderer *renderer, bool enabled);
-#define CB1_FEL_FILTER_API 1
-/* Next-picture EL enlargement only. Default false retains the existing filter. */
-void dvbridge_renderer_set_fel_nearest(struct dvbridge_renderer *renderer, bool enabled);
+#define CB1_FEL_FILTER_API 2
+enum dvbridge_fel_filter {
+    DVBRIDGE_FEL_DEFAULT, DVBRIDGE_FEL_BILINEAR, DVBRIDGE_FEL_REFERENCE
+};
+/* Next-picture EL interpolation only. Master always retains its exact filter. */
+void dvbridge_renderer_set_fel_filter(struct dvbridge_renderer *renderer, enum dvbridge_fel_filter filter);
 
 #define CB1_PROCESSING_OPTIMIZATIONS_API 1
 void dvbridge_renderer_set_processing_optimizations(struct dvbridge_renderer *renderer, bool enabled);
@@ -170,6 +173,7 @@ struct dvbridge_native_overlay {
     pl_tex texture, degamma, pq;
     float rect[4];
     bool input_pq; /* Premultiplied BT.2020 PQ; LUTs remain bound but unused. */
+    bool optimized; /* Share GUI work between neighboring lanes when supported. */
 };
 bool dvbridge_render_packed_overlay(struct dvbridge_renderer *renderer,
     const struct pl_frame *source, const void *metadata, size_t bytes,

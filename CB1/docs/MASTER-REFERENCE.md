@@ -29,7 +29,7 @@ Profile 5 retains its full-range IPT-PQ-C2 domain through integer RPU reshaping,
 chroma resampling and RGB8 tunnel packing. Its original colour matrices,
 offsets and creative metadata are transmitted for TV-Led processing. Movie
 pixels do not undergo a YCbCr/RGB/LMS conversion or a PQ/linear round trip.
-The selectable Master Reference IPT output uses this same Profile 5 path.
+The diagnostic Master Reference IPT mode uses this same Profile 5 path.
 GUI conversion is confined to the overlay footprint; the IPT black code is zero.
 
 Automatic Master-to-Reference recovery is off by default. When explicitly enabled,

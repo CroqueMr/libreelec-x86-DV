@@ -20,7 +20,7 @@ class TVProfileAdmissionTests(unittest.TestCase):
 #include <utility>
 struct Option {std::string label="Adaptive",label2;std::vector<std::pair<std::string,bool>> properties;};
 Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double peak,int gamut,bool guided=false) {
- struct {double peak;int gamut;} preferences{peak,gamut};
+ struct {double peak;int gamut;double expertPeak;int expertGamut;} preferences{peak,gamut,peak,gamut};
  struct Localizer {std::string Get(int id) {return std::to_string(id);}} localizer;
  Option option;int mode=guided?1:4;
  int reasonId=CDVPlaybackInfo::ReasonLabel(reason);

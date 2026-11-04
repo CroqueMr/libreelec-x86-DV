@@ -37,5 +37,5 @@ driver path. The selected native HDMI route, display capabilities, bandwidth
 and atomic validation must accept the output. [Driver/output matrix](DRIVER-COVERAGE.md).
 
 Patch: `projects/Generic/patches/linux/linux-9925-vegam-dv-transport.patch`.
-Included in R1.0.0 RC2 with Linux 7.2.6. NVIDIA Pascal support is included in the
+Included in R1.0.0 RC3 with Linux 7.2.6. NVIDIA Pascal support is included in the
 same Generic image through its matched R580 stack.

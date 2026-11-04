@@ -8,6 +8,7 @@ CB1 is an in-process C library. The current consumer is Kodi's GBM/GLES path.
 | `dvbridge_policy.h` | Output mode and manual display profile |
 | `dvbridge_render.h` | Frame-bound processing and presentation transactions |
 | `dvbridge_creative.h` | CM2.9/CM4 processing and metadata coverage |
+| `cb1_hdr10_expert.h` | Published RC3 frame-owned HDR10 Rendering Reference plan and L2 compatibility |
 | `cb1_hdr10_ai.h` | Optional asynchronous HDR10 analysis and inference |
 | `cb1_circuit.h` | Engine and circuit version identifiers |
 | `cb1_master_reference.h` | Validated raw integer reference descriptor |
@@ -25,6 +26,14 @@ stable binary plugin ABI. Use the dependency revisions and patches from the same
 CB1 lock. Other players require a native adapter.
 
 CB1 does not control audio, input devices, player menus or HDMI connectors.
+
+Published RC3 HDR10 Rendering Reference requires matched
+`PL_CB1_EXPERT_TONE_ABI` libplacebo headers/library and rebuilt consumers. Its policy
+owns separate peak, black floor and gamut. `cb1_tone_shape` carries three signed
+curve controls in the native LUT/cache identity. `expert_output_bits` and
+`expert_output_limited` describe the accepted output grid, not user controls;
+quantized output cannot resolve at another depth/range. GUI brightness is not
+limited to the movie ceiling.
 
 `dvbridge_render_master_reference` prepares the explicit reference circuit.
 `CB1_MASTER_READY` means prepared, not presented. Retain source leases and use
@@ -72,6 +81,11 @@ points use their qualified linear chroma filter; Master entry points retain the
 exact reference filter. There is no mutable Fast preference or renderer setter.
 FEL enlargement, metadata and luma retain their circuit-specific contracts.
 Native Kodi and vanilla fallback do not use these CB1 recipes.
+
+Published RC3 `dvbridge_renderer_set_fel_filter` selects default sampling, GPU
+bilinear or Reference GPU for matched FEL. Master ignores this preference.
+Filter API generation 2 requires matched libplacebo headers/library; the
+Nearest-specific setters are removed.
 
 ## Overlay visibility
 

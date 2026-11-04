@@ -174,6 +174,10 @@ int main() {
   auto nearest=r.submitted.lease;
   assert(run(false,false)==Status::Pending && r.submitted.lease==nearest);
   assert(!r.packed && !r.async && r.policy==&selected);
+  p.felUpscaling=2; ++p.revision;
+  assert(run()==Status::Pending && !r.m_hardwareFELVpp && scaledImages==0);
+  assert(r.filter==2 && r.submitted.layout==DVBRIDGE_P010 && r.submitted.width==32);
+  r.submitted.lease.reset();
   p.felUpscaling=0; ++p.revision;
   assert(run()==Status::Pending && r.submitted.layout==DVBRIDGE_Y416 && r.submitted.width==64);
   assert(r.submitted.lease!=nearest && importedImages==1);

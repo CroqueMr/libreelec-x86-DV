@@ -87,7 +87,8 @@ int main(){
 
     def test_native_zoom_and_fractional_placement_are_preserved(self):
         text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp").read_text()
-        geometry = body(text, "dvbridge_geometry CRendererVAAPIGLES::DVBridgeGeometry()")
+        base = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp").read_text()
+        geometry = body(base, "dvbridge_geometry CLinuxRendererGLES::DVBridgeGeometry()")
         guard = body(text, "bool CRendererVAAPIGLES::DVBridgeOrientationSupported(")
         self.run_program(r'''
 #include <algorithm>
@@ -98,7 +99,7 @@ struct CRect {float x1,y1,x2,y2;float Width()const{return x2-x1;}float Height()c
 struct Context {int GetWidth()const{return 1920;}int GetHeight()const{return 1080;}};
 struct Window {int w=3840,h=2160;Context c;int GetWidth()const{return w;}int GetHeight()const{return h;}const Context& GetGfxContext()const{return c;}} window;
 struct CServiceBroker {static Window* GetWinSystem(){return &window;}};
-struct dvbridge_geometry{int source_width,source_height,x,y,width,height,target_width,target_height;float crop[4],placement[4];};
+struct dvbridge_geometry{int source_width,source_height,x,y,width,height,target_width,target_height;float crop[4],placement[4];bool ignore_l5;};
 struct Test {int m_sourceWidth=1920,m_sourceHeight=800;struct {int m_Orientation=90;}m_videoSettings;
  CRect dest{-336,0,2256,1080};
  void GetVideoRect(CRect& s,CRect& d,CRect& v){s={0,0,float(m_sourceWidth),float(m_sourceHeight)};d=dest;v={0,0,1920,1080};}
@@ -184,21 +185,28 @@ constexpr int GL_R16F=1,GL_RGBA16F=2,GL_RGBA8=3;
 struct Texture {struct {int w,h;}params;};using pl_tex=Texture*;
 struct pl_opengl_wrap_params {unsigned texture=0;int width=0,height=0,iformat=0;};
 void pl_tex_destroy(int,pl_tex* t){delete *t;*t=nullptr;}
-pl_tex pl_opengl_wrap(int,const pl_opengl_wrap_params* p){return new Texture{{p->width,p->height}};}
+unsigned wraps=0;
+pl_tex pl_opengl_wrap(int,const pl_opengl_wrap_params* p){++wraps;return new Texture{{p->width,p->height}};}
 struct CRect {float x1,y1,x2,y2;bool IsEmpty()const{return x1==x2||y1==y2;}};
 struct Test {
  struct {int gpu=1;} gl;decltype(&gl) m_gl=&gl;
  Texture scanout{{1920,1080}};pl_tex m_scanout=&scanout;
- struct {float rect[4]{};bool input_pq=false;pl_tex texture=nullptr,degamma=nullptr,pq=nullptr;} m_nativeOverlay;
+ struct {float rect[4]{};bool input_pq=false,optimized=false;pl_tex texture=nullptr,degamma=nullptr,pq=nullptr;} m_nativeOverlay;
  bool m_nativeOverlayEnabled=false;uint64_t m_nativeOverlayRevision=0,m_nativeOverlayContent=0;
  unsigned m_nativeOverlayTextures[3]{};
- bool SetNativeOverlay(unsigned texture,unsigned degamma,unsigned pq,const CRect& bounds,uint64_t content,bool inputPQ) OVERLAY
+ bool SetNativeOverlay(unsigned texture,unsigned degamma,unsigned pq,const CRect& bounds,uint64_t content,bool inputPQ,bool optimized=false) OVERLAY
  ~Test(){pl_tex_destroy(1,&m_nativeOverlay.texture);pl_tex_destroy(1,&m_nativeOverlay.degamma);pl_tex_destroy(1,&m_nativeOverlay.pq);}
 };
 int main(){Test t;
  assert(t.SetNativeOverlay(1,2,3,{0,0,3840,2160},1,false));
  assert(t.m_nativeOverlay.texture->params.w==1920 && t.m_nativeOverlay.texture->params.h==1080);
  assert(t.m_nativeOverlay.rect[2]==1920 && t.m_nativeOverlay.rect[3]==1080);
+ auto beforeToggle=t.m_nativeOverlayRevision;auto beforeWraps=wraps;
+ assert(t.SetNativeOverlay(1,2,3,{0,0,3840,2160},1,false,true));
+ assert(t.m_nativeOverlay.optimized && t.m_nativeOverlayRevision>beforeToggle && wraps==beforeWraps);
+ beforeToggle=t.m_nativeOverlayRevision;
+ assert(t.SetNativeOverlay(1,2,3,{0,0,3840,2160},1,false,false));
+ assert(!t.m_nativeOverlay.optimized && t.m_nativeOverlayRevision>beforeToggle && wraps==beforeWraps);
  auto revision=t.m_nativeOverlayRevision;t.scanout.params={1280,720};
  assert(t.SetNativeOverlay(1,2,3,{0,0,3840,2160},1,false));
  assert(t.m_nativeOverlayRevision>revision);

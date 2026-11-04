@@ -60,9 +60,10 @@ struct OutputPreferences {
  OutputMode output=OutputMode::HDR10;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
  bool allowMasterFallback=true;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;
  double peak=1000;int panel=0,gamut=2;
- bool ProfileValid()const PROFILE
+ bool ProfileValid(int=0)const PROFILE
  dvbridge_policy Policy()const{return {.revision=1,.mode=mode};}
- dvbridge_policy HDR10Policy()const{return Policy();}
+ dvbridge_policy HDR10Policy(bool=false)const{return Policy();}
+ auto HDR10Mode(bool)const{return hdr10Source;}
 };
 using Caps=OutputCapabilities;
 OutputSelection select(const OutputPreferences& preferences,const Caps& caps) BODY
@@ -78,7 +79,7 @@ struct VideoPicture {
 namespace DVBRIDGE {bool WantsNativeOutput(const ::VideoPicture*);}
 constexpr int DVP_FLAG_INTERLACED=1,LOGWARNING=1,LOGERROR=2,LOGDEBUG=3;
 struct CLog {template<class... T>static void Log(T...) {}};
-namespace DVBRIDGE {OutputPreferences FrameOutputSettings(){return preferences;}}
+namespace DVBRIDGE {OutputPreferences FrameOutputSettings(bool=false){return preferences;}}
 bool NativeDVEligible(bool,bool,bool,bool){return true;}
 struct Window {virtual ~Window()=default;};
 namespace KODI::WINDOWING::GBM {
@@ -100,7 +101,7 @@ CWinSystemGbmGLESContext window;
 struct CServiceBroker {static auto* GetWinSystem(){return &window;}};
 bool DVBRIDGE::WantsNativeOutput(const ::VideoPicture* picture) WANTS
 struct CLinuxRendererGLES {
- bool m_bConfigured=false,m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false;
+ bool m_bConfigured=false,m_dvRequested=false,m_passthroughHDR=false,m_hdrFboActive=false,m_reloadShaders=false;
  bool ConfigureVideoOutput(const ::VideoPicture& picture) CONFIGURE
 };
 int main(){

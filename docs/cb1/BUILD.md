@@ -1,12 +1,20 @@
-# R1.0.0 RC2 build
+# R1.0.0 RC3 build
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 
-Default image identity: `DV-R1.0.0-RC2`. Source configuration uses the logical
-release ID `R1.0.0-RC2`; use the published [RC2 release](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/untagged-27906d2c4291ba113414)
-for its attached image and corresponding-source archives.
+Published image identity: `DV-R1.0.0-RC3`. Use the synchronized RC3 sources at
+`02463f318c083a585fa8b72f5a17a57fd0a477f0` for a pinned build. They retain the
+published image's active sources and remove obsolete patches accidentally included
+in the original source export. The original release tag and binary assets are
+unchanged. The source configuration uses the logical ID `R1.0.0-RC3`.
+
+The published [RC3 release](https://github.com/CroqueMr/libreelec-x86-DV/releases/tag/R1.0.0-RC3)
+provides ready-to-install images and corresponding-source archives. When building
+from an older source download, use the synchronized checkout above rather than
+reapplying the superseded patches.
 
 ```sh
+git checkout 02463f318c083a585fa8b72f5a17a57fd0a477f0
 python3 CB1/tools/verify.py
 python3 scripts/cb1-stage.py
 CB1_HDR10_AI=yes PROJECT=Generic ARCH=x86_64 OFFICIAL=no make image

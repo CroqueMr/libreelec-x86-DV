@@ -228,6 +228,38 @@ int main(int argc,char **argv)
         for(unsigned c=0;c<3;c++)assert(sample[c]==0);
         retire(r);
     }
+    /* The admitted scene-guided plan expands below the mastering peak and
+     * describes that same transform in the outgoing scene metadata. */
+    policy.adaptive=DVBRIDGE_ADAPTIVE_B_FP16;
+    source.color.hdr.max_luma=4000;prediction.raw.l1_max=2771;
+    for(unsigned t=0;t<3;t++){
+        const double targets[]={600,1000,2300};policy.tv.peak_nits=targets[t];
+        prediction.id.picture++;
+        struct cb1_ai_result before=prediction;
+        struct pl_frame source_before=source;
+        assert(dvbridge_render_hdr10_ai_rgb(r,&policy,&prediction,&source,&geometry));
+        assert(finish(r)==DVBRIDGE_DV_READY);
+        const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out);
+        assert(out->value.measured && out->value.expansion_reason==CB1_DVE_ACTIVE);
+        assert(!strcmp(out->value.analysis_model,"cb1-ai-scene-curve-v1"));
+        const AVDOVIDmData *l1=av_dovi_find_level(out->output_metadata,1);assert(l1);
+        uint16_t analysis[3];assert(cb1_dv_enhanced_analysis(&r->dv.enhanced_plan,analysis));
+        assert(l1->l1.min_pq==analysis[0] && l1->l1.max_pq==analysis[1] && l1->l1.avg_pq==analysis[2]);
+        assert(l1->l1.min_pq==0 && l1->l1.max_pq>2771);
+        assert(av_dovi_get_color(out->output_metadata)->source_max_pq>=l1->l1.max_pq);
+        for(unsigned level=2;level<=8;level++)if(level!=5)
+            assert(!av_dovi_find_level(out->output_metadata,level)); // No fabricated creative trims.
+        assert(!memcmp(&before,&prediction,sizeof(before)) && !memcmp(&source_before,&source,sizeof(source)));
+        float sample[4];reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1200,900,1,1,sample);
+        double light=pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,sample[0]);
+        assert(light>500 && light<=targets[t]+1);
+        for(unsigned c=1;c<3;c++)assert(fabs(sample[c]-sample[0])*4095<1);
+        reference_read(gpu.gl->gpu,dvbridge_render_dv_policy_rgb(r),1000,10,1,1,sample);
+        for(unsigned c=0;c<3;c++)assert(sample[c]==0);
+        retire(r);
+    }
+    policy.adaptive=DVBRIDGE_ADAPTIVE_A;policy.tv.peak_nits=2300;
+    source.color.hdr.max_luma=1000;prediction.raw.l1_max=3080;
     /* Direct transport agrees with the retained intermediate route, including
      * a late overlay and both scanout orientations. */
     pl_tex direct_target=pl_tex_create(gpu.gl->gpu,pl_tex_params(.w=3840,.h=2160,

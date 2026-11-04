@@ -26,6 +26,8 @@ struct CDVPlaybackInfo { enum {HDMI=1,FEL=2,CM4=4,HDR10=8,HDR10PLUS=16}; };
 namespace DVBRIDGE { using ::SourceBinding; using ::OutputCapabilities; using ::OutputReason; struct StreamSnapshot SNAPSHOT }
 #include "DVProcessingInfo.h"
 int main() {
+ DVBRIDGE::StreamSnapshot::Output basic{1,8,1000,false};
+ assert(basic.aiModel.empty());
  DVBRIDGE::StreamSnapshot s; s.profile=7; s.metadata=true; s.l1=true; s.blocks[1]=true; s.blocks[5]=true;
  s.output.flags=CDVPlaybackInfo::HDR10|CDVPlaybackInfo::FEL; s.output.effective=3;
  s.output.felUpscaling=1;
@@ -43,18 +45,21 @@ int main() {
  assert(DVBRIDGE::NativeProcessingInfo(s).outputType==VideoOutputType::HDR10Plus);
  s.profile=0; s.output.flags=CDVPlaybackInfo::HDMI; s.output.effective=1;
  s.output.hdr10AI=true; s.output.aiL1L3={1,2000,1000,2,3,4};
+ s.output.aiModel="CB1-L1L3 0.1";s.output.aiBaseline={0,1900,900};
  info=DVBRIDGE::NativeProcessingInfo(s);
  assert(info.outputType==VideoOutputType::DolbyVision && !info.metadata && info.blocks.none());
  assert(info.appliedBlocks.none() && info.profile==0 && info.output.hdr10AI);
  assert(info.transmittedBlocks[1] && info.transmittedBlocks[5]);
  assert(info.output.aiL1L3[1]==2000 && !info.output.engine.empty());
+ assert(info.output.aiModel=="CB1-L1L3 0.1" && info.output.aiBaseline[1]==1900);
  assert(info.output.circuit=="CB1-HDR10DVR.0.1.3" && info.output.engine=="CB1 0.5");
  s.output.hdr10PlusDV=true;s.output.guidedSourceFields=2;s.output.guidedEstimatedFields=5;
  info=DVBRIDGE::NativeProcessingInfo(s);
- assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.0.1");
+ assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.0.2");
  assert(info.output.guidedSourceFields==2 && info.output.guidedEstimatedFields==5);
  s={}; info=DVBRIDGE::NativeProcessingInfo(s);
  assert(!info.outputType.has_value() && info.output.engine.empty());
+ assert(info.output.aiModel.empty() && info.output.aiBaseline[1]==0);
  assert(info.output.felUpscaling==-1);
  s.profile=7;s.metadata=true;s.blocks[2]=true;s.blocks[8]=true;
  s.output.flags=CDVPlaybackInfo::HDMI;
@@ -75,7 +80,7 @@ int main() {
             compiled=subprocess.run(['cc','-std=c11','-I'+str(core),'-c',str(core/'cb1_circuit.c'),
                 '-o',str(circuit)],capture_output=True,text=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)
-            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),'-I'+str(TREE/'xbmc/cores'),
+            build=subprocess.run(['c++','-std=c++20','-Werror=missing-field-initializers','-I'+str(TREE/'xbmc'),'-I'+str(TREE/'xbmc/cores'),
                 '-I'+str(helper.parent),'-I'+str(core),str(root/'test.cpp'),str(circuit),'-o',str(root/'test')],
                 capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)

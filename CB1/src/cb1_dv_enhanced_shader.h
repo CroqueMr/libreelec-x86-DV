@@ -125,6 +125,7 @@ static const char dve_shader[] =
 CB1_CARRIER_GLSL CB1_RGB_CODES_GLSL
 "vec3 compose(vec3 q,vec2 p){if(gui_visible&&p.x>=gui_rect.x&&p.y>=gui_rect.y&&p.x<gui_rect.z&&p.y<gui_rect.w){"
 "vec4 g=texture(gui,vec2(p.x/3840.0,1.0-p.y/2160.0));"
+"if(g.a==0.0)return clamp(q,0.0,1.0);"
 "if(!gui_is_pq){vec3 straight=g.a>0.0?clamp(g.rgb/g.a,0.0,1.0):vec3(0);"
 "vec3 lin=vec3(texture(gui_degamma,vec2(straight.r,.5)).r,texture(gui_degamma,vec2(straight.g,.5)).r,texture(gui_degamma,vec2(straight.b,.5)).r);"
 "lin=mat3(.6274,.0691,.0164,.3293,.9195,.0880,.0433,.0114,.8956)*lin;"
