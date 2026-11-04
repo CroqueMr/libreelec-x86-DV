@@ -402,7 +402,9 @@ static bool reference_area(float rect[4], const void *metadata,
         const AVDOVIDmData *e=av_dovi_get_ext(m,i);
         if (e->level!=5) continue;
         if (++count>1) return false;
-        l=e->l5.left_offset;r=e->l5.right_offset;t=e->l5.top_offset;b=e->l5.bottom_offset;
+        if (!g.ignore_l5) {
+            l=e->l5.left_offset;r=e->l5.right_offset;t=e->l5.top_offset;b=e->l5.bottom_offset;
+        }
     }
     if (l>=(unsigned)g.source_width || r>=(unsigned)g.source_width-l ||
         t>=(unsigned)g.source_height || b>=(unsigned)g.source_height-t) return false;
@@ -456,7 +458,8 @@ static struct dvbridge_geometry carrier_geometry(struct dvbridge_geometry source
 static struct dvbridge_geometry source_geometry(struct dvbridge_geometry source)
 {
     int width=source.source_width,height=source.source_height;
-    return (struct dvbridge_geometry){width,height,0,0,width,height,width,height};
+    return (struct dvbridge_geometry){width,height,0,0,width,height,width,height,
+        .ignore_l5=source.ignore_l5};
 }
 
 /* Allocate full-size RGB backing only for an actual consumer. */
@@ -492,7 +495,7 @@ struct active_mask {
     pl_shader native_shader;
     bool early_mask, source_domain, source_overlay, straight_overlay, linear_output;
     bool reference_transport, exact_reference, profile5_transport, scaled_quad;
-    bool ipt_quad;
+    bool ipt_quad, gui_quad;
     const struct cb1_master_ipt *ipt;
     const pl_tex *ipt_pq;
     pl_tex reference_target;
@@ -668,13 +671,14 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
             .desc={.name=i?"ipt_oetf":"ipt_eotf",.type=PL_DESC_SAMPLED_TEX},
             .binding={.object=mask->ipt_pq[i],.sample_mode=PL_TEX_SAMPLE_NEAREST}};
     char header[sizeof(CB1_CARRIER_GLSL CB1_PACKET_GLSL CB1_SOURCE_CODES_GLSL CB1_RGB_PIXEL_GLSL CB1_COMPOSITE_HEADER_GLSL CB1_MASTER_IPT_GLSL CB1_IPT_CODES_GLSL)+512];
-    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+    snprintf(header,sizeof(header),"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
         mask->source_domain ? "#define CB1_SOURCE_DOMAIN 1\n" : "",
         mask->overlay ? "#define CB1_NATIVE_OVERLAY 1\n" : "",
         mask->overlay && mask->overlay->input_pq ? "#define CB1_OVERLAY_PQ 1\n" : "",
         mask->source_overlay ? "#define CB1_SOURCE_OVERLAY 1\n" : "",
         mask->straight_overlay ? "#define CB1_STRAIGHT_OVERLAY 1\n" : "",
         mask->reference_transport ? "#define CB1_REFERENCE_TRANSPORT 1\n" : "",
+        mask->gui_quad ? "#define CB1_GUI_QUAD 1\n" : "",
         mask->scaled_reference ? "#define CB1_SCALED_REFERENCE 1\n" : "",
         mask->profile5_transport ? "#define CB1_SOURCE_BLACK 0.0\n" :
             "#define CB1_SOURCE_BLACK .0625\n",
@@ -689,7 +693,9 @@ static struct pl_hook_res pack_active_area(void *priv, const struct pl_hook_para
         CB1_COMPOSITE_HEADER_GLSL
     );
     struct pl_custom_shader shader = {
-        .prelude=!mask->scaled_quad && !mask->ipt_quad && (mask->ai_renderer || mask->reference_transport) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
+        /* Fused AI already declares extensions before its image uniforms. */
+        .prelude=!mask->scaled_quad && !mask->ipt_quad &&
+            (mask->ai_renderer || (!mask->gui_quad && mask->reference_transport)) ? NULL : "#extension GL_KHR_shader_subgroup_basic : require\n"
                  "#extension GL_KHR_shader_subgroup_quad : require\n",
         .header=header,
         .input=mask->scaled_reference?PL_SHADER_SIG_NONE:PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR,
@@ -990,7 +996,8 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
         params->cb1_nearest_identity=true;
     }
     uint32_t optional=params->cb1_processing?params->cb1_processing->groups:0;
-    for(unsigned attempt=0;attempt<2;attempt++){
+    bool processing_removed=false;
+    for(unsigned attempt=0;attempt<3;attempt++){
         if(mask){mask->called=mask->failed=false;mask->native_shader=NULL;}
         if(reference){reference->called=reference->failed=false;
             reference->scaled_shader=NULL;}
@@ -1004,15 +1011,18 @@ static bool render_image(struct dvbridge_renderer *r,const struct pl_frame *imag
         ok=ok && !errors.errors && !errors.num_disabled_hooks &&
             (reference?reference->called && !reference->failed:mask->called && !mask->failed);
         if(ok){
-            if(attempt)r->processing_failed_groups|=optional;
+            if(processing_removed)r->processing_failed_groups|=optional;
             return true;
         }
-        if(!optional || attempt ||
-           r->dv.quarantined || r->retired_packed.quarantined ||
+        if(r->dv.quarantined || r->retired_packed.quarantined ||
            pl_gpu_is_failed(r->gpu))return false;
         /* Same-context ordered retry, before publication. Keep every lease;
-         * the caller's completion fence covers both attempts. */
-        params->cb1_processing=NULL;
+         * the caller's completion fence covers every attempt. GUI failure
+         * alone must not alter or blacklist the movie processing contract. */
+        if(mask && mask->gui_quad)mask->gui_quad=false;
+        else if(optional && params->cb1_processing){
+            params->cb1_processing=NULL;processing_removed=true;
+        }else return false;
         pl_renderer_reset_errors(r->renderer,NULL);
     }
     return false;
@@ -1264,6 +1274,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         mask.rect[1]=target_height-bottom;mask.rect[3]=target_height-top;
     }
     mask.overlay=overlay;
+    mask.gui_quad=overlay && overlay->optimized && !overlay->input_pq && r->fragment_quad;
     mask.reference_transport=master!=NULL;
     mask.exact_reference=master && !p5_standard;
     mask.profile5_transport=master && dvbridge_dv_profile5_transport(metadata);
@@ -3221,6 +3232,7 @@ static bool dve_pack_overlay(struct dvbridge_renderer *r,pl_tex input,pl_tex out
     const unsigned *m=r->dv.output.value.margins;
     struct active_mask mask={.rect={m[0],m[2],width-m[1],height-m[3]},.packets=packets,.count=count,
         .flip=flip,.overlay=r->dv.enhanced_overlay?&r->dv.overlay:NULL,.straight_overlay=true};
+    mask.gui_quad=mask.overlay && mask.overlay->optimized && !mask.overlay->input_pq && r->fragment_quad;
     if(!linear && (image.crop.x1-image.crop.x0!=width || image.crop.y1-image.crop.y0!=height) &&
        r->dv.enhanced_plan.status==CB1_DVE_READY)
         mask.maximum_pq=dv_ideal_pq(r->dv.enhanced_plan.envelope);
@@ -3569,6 +3581,7 @@ static bool ai_render_pixels(struct dvbridge_renderer *r,
     struct active_mask mask={.rect={g.x,g.y,g.x+g.width,g.y+g.height},.flip=flip,.source_domain=raw};
     mask.ai_renderer=fused?r:NULL;
     mask.overlay=overlay;
+    mask.gui_quad=overlay && overlay->optimized && !overlay->input_pq && r->fragment_quad;
     mask.straight_overlay=r->optimized_dv && overlay && !overlay->input_pq;
     if(packed)mask.packets=dvbridge_packets(r->pending,&mask.count);
     const uint32_t empty_packets[640]={0};

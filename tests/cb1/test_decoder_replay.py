@@ -28,7 +28,7 @@ using namespace std::chrono_literals;
 constexpr int LOGWARNING=0,LOGFATAL=1,OUTPUT_AGAIN=1,DVD_PLAYSPEED_PAUSE=0;constexpr double DVD_NOPTS_VALUE=1e20;
 namespace IDVDStreamPlayer{constexpr int SYNC_INSYNC=0;}
 enum MsgQueueReturnCode{MSGQ_OK=1,MSGQ_TIMEOUT=0,MSGQ_ABORT=-1,MSGQ_NOT_INITIALIZED=-2,MSGQ_INVALID_MSG=-3};
-struct CDVDMsg{enum{DEMUXER_PACKET};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
+struct CDVDMsg{enum{DEMUXER_PACKET,VIDEO_DRAIN};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
  bool IsType(int)const{return true;}};
 struct DemuxPacket{int iSize=1;};
 struct CDVDMsgDemuxerPacket:CDVDMsg{using CDVDMsg::CDVDMsg;DemuxPacket data;DemuxPacket*GetPacket(){return &data;}};
@@ -50,6 +50,7 @@ struct Queue{
 };
 auto packet(char c){return std::make_shared<CDVDMsgDemuxerPacket>(c);}
 struct Player{
+ unsigned m_drainPending=0;std::mutex m_drainMutex;
  Queue m_messageQueue;struct{void SetLevelVQ(int){}bool IsFrameAdvance(){return false;}}m_processInfo;
  int m_outputSate=0,m_speed=1,m_syncState=IDVDStreamPlayer::SYNC_INSYNC,drains=0;
  bool m_paused=false,decoderReady=false;

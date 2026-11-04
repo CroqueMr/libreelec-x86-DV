@@ -15,7 +15,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,526 @@
+@@ -25795,3 +25795,542 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -542,6 +542,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgctxt "#41041"
 +msgid "Nominal rendering volume. HDMI output remains BT.2020 PQ. Selecting BT.2020 does not imply that the display covers the entire gamut."
 +msgstr ""
++
++msgctxt "#41100"
++msgid "Optimized GUI rendering"
++msgstr ""
++
++msgctxt "#41101"
++msgid "Reduce GUI compositing work during Dolby Vision playback on supported GPUs. Movie pixels and metadata are unchanged; very small GUI differences are possible. Off retains the existing rendering path."
++msgstr ""
++
++msgctxt "#41120"
++msgid "Use encoded frame as Dolby Vision active area"
++msgstr ""
++
++msgctxt "#41121"
++msgid "Ignore Level 5 margins only for files already cropped without matching metadata. Kodi zoom and placement still apply. Off preserves the authored active area; no automatic aspect-ratio correction is performed."
++msgstr ""
 --- a/system/keymaps/keyboard.xml
 +++ b/system/keymaps/keyboard.xml
 @@ -727,6 +727,11 @@
@@ -558,7 +574,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <period>NextPicture</period>
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -2,6 +2,188 @@
+@@ -2,6 +2,196 @@
  <settings version="1">
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
@@ -686,6 +702,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
 +          <control type="toggle" />
 +        </setting>
++        <setting id="dvbridge.optimizedgui" type="boolean" label="41100" help="41101">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
++          <control type="toggle" />
++        </setting>
 +        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
 +          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
@@ -695,6 +715,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
 +          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.encodedactivearea" type="boolean" label="41120" help="41121">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
 +          <control type="toggle" />
 +        </setting>
 +        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
@@ -747,7 +771,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <group id="1" label="14230">
          <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
            <constraints>
-@@ -649,6 +831,48 @@
+@@ -649,6 +839,48 @@
        </group>
      </category>
      <category id="subtitles" label="287" help="37033">
@@ -830,19 +854,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  // BT.709 -> BT.2020 color space conversion matrix (applied in linear light)
  const mat3 bt709_to_bt2020 = mat3(
-@@ -33,6 +34,12 @@
+@@ -32,6 +33,12 @@
+   // and avoids the tone-map math, BO read and BO write for those pixels.
    if (gui.a == 0.0)
      discard;
- 
++
 +  if (u_inputPQ)
 +  {
 +    gl_FragColor = gui;
 +    return;
 +  }
-+
+ 
    // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
    vec3 linear = vec3(
-     texture2D(u_lutDegamma, vec2(gui.r, 0.5)).r,
 --- a/system/shaders/GLES/2.0/gles_videofilter.frag
 +++ b/system/shaders/GLES/2.0/gles_videofilter.frag
 @@ -8,4 +8,7 @@
@@ -1670,12 +1694,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "resources/LocalizeStrings.h"
  #include "resources/ResourcesComponent.h"
  #include "utils/StringUtils.h"
+-
 +#ifdef HAVE_DVBRIDGE
 +#include "guilib/GUIFontManager.h"
 +#include "guilib/GUIIncludes.h"
 +#include "windowing/GraphicContext.h"
 +#endif
- 
++
 +#include <algorithm>
  #include <memory>
  
@@ -1895,15 +1920,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  static const struct StereoModeMap StringToGuiModeMap[] = {
      {"off", RenderStereoMode::OFF},
      {"split_vertical", RenderStereoMode::SPLIT_VERTICAL},
-@@ -131,6 +181,8 @@
+@@ -130,6 +180,8 @@
+   // resolve automatic mode before applying
    if (mode == RenderStereoMode::AUTO)
      applyMode = GetStereoModeOfPlayingVideo();
- 
-+  applyMode = ArrangementForDisplay(applyMode);
 +
++  applyMode = ArrangementForDisplay(applyMode);
+ 
    if (applyMode != currentMode && applyMode >= RenderStereoMode::OFF)
    {
-     if (CServiceBroker::GetRenderSystem()->SupportsStereo(applyMode))
 @@ -404,6 +456,11 @@
  {
    switch (message.GetMessage())
@@ -2010,10 +2035,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CStereoscopicsManager::IsVideoStereoscopic() const
  {
    std::string mode = GetVideoStereoMode();
-@@ -550,6 +668,34 @@
+@@ -549,6 +667,34 @@
+ }
  
  void CStereoscopicsManager::OnStreamChange()
- {
++{
 +  UpdateStereoModeForStream();
 +
 +  // The display mode a stereoscopic source needs follows from the stereo mode, so the
@@ -2041,10 +2067,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 +
 +void CStereoscopicsManager::UpdateStereoModeForStream()
-+{
+ {
    STEREOSCOPIC_PLAYBACK_MODE playbackMode = static_cast<STEREOSCOPIC_PLAYBACK_MODE>(m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE));
    RenderStereoMode mode = GetStereoMode();
- 
 @@ -561,7 +707,12 @@
    {
      // exit stereo mode if started item is not stereoscopic
@@ -2127,7 +2152,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool OnMessage(CGUIMessage &message) override;
    /*!
     * @brief Handle 3D specific cActions
-@@ -78,8 +104,15 @@
+@@ -78,7 +104,14 @@
    std::string GetVideoStereoMode() const;
    bool IsVideoStereoscopic() const;
  
@@ -2135,14 +2160,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  static bool IsPlayerInMenu();
 +
    void SetStereoModeByUser(const RenderStereoMode mode);
- 
++
 +  /*! Whether the stereo mode of the stream being played has been settled - see
 +      IsStereoModeSettled(). Set from the player's event thread, read on the render thread. */
 +  std::atomic<bool> m_stereoModeSettled{false};
-+
+ 
    void ApplyStereoMode(const RenderStereoMode mode, bool notify = true);
    void OnPlaybackStopped(void);
- 
 --- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
 +++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h
 @@ -818,6 +818,36 @@
@@ -2502,10 +2526,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <utility>
  #include <vector>
  
-@@ -81,6 +82,15 @@
+@@ -79,6 +80,15 @@
+   else if(identifier)
+     res += "std";
    return res;
- }
- 
++}
++
 +//! @brief The height a mode is identified by: the per-eye height for a frame-packing mode,
 +//!        whose packed frame (1920x2205) is not a resolution anyone would look for.
 +int ModeIdentifierHeight(const RESOLUTION_INFO& info)
@@ -2513,11 +2539,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (info.iBlanking > 0)
 +    return (info.iScreenHeight - info.iBlanking) / 2;
 +  return info.iScreenHeight;
-+}
-+
+ }
+ 
  // True when this mode is uncalibrated. Only works for live modes; dead or stale modes are
- // considered non-default always.
- bool IsDefaultCalibration(const RESOLUTION_INFO& info)
 @@ -644,7 +654,13 @@
    return DM_FULLSCREEN;
  }
@@ -2653,19 +2677,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  namespace
  {
-@@ -367,6 +376,12 @@
+@@ -366,6 +375,12 @@
+ #endif
  #ifdef HAVE_GBM
    m_simpleConditions.emplace("have_gbm");
- #endif
++#endif
 +#ifdef HAVE_DVBRIDGE
 +  m_simpleConditions.emplace("have_dvbridge");
 +#endif
 +#ifdef CB1_HAS_HDR10_AI
 +  m_simpleConditions.emplace("have_cb1_hdr10_ai");
-+#endif
+ #endif
  #ifdef HAS_GL
    m_simpleConditions.emplace("has_gl");
- #endif
 @@ -488,6 +503,98 @@
    m_complexConditions.try_emplace("lte", LessThanOrEqual);
  }
@@ -2941,10 +2965,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  CSubtitlesSettings::~CSubtitlesSettings()
-@@ -67,6 +70,26 @@
+@@ -65,6 +68,26 @@
+ Align CSubtitlesSettings::GetAlignment() const
+ {
    return static_cast<Align>(m_settings->GetInt(CSettings::SETTING_SUBTITLES_ALIGN));
- }
- 
++}
++
 +BitmapOptions CSubtitlesSettings::GetBitmapOptions() const
 +{
 +  BitmapOptions options;
@@ -2963,11 +2989,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  options.hdrSaturation = read("subtitles.bitmaphdrsaturation", options.hdrSaturation);
 +#endif
 +  return options;
-+}
-+
+ }
+ 
  void CSubtitlesSettings::SetAlignment(Align align) const
- {
-   m_settings->SetInt(CSettings::SETTING_SUBTITLES_ALIGN, static_cast<int>(align));
 --- a/xbmc/settings/SubtitlesSettings.h
 +++ b/xbmc/settings/SubtitlesSettings.h
 @@ -9,6 +9,7 @@

@@ -1,0 +1,36 @@
+From: lessbones <8473322+lessbones@users.noreply.github.com>
+Subject: [PATCH] drm/i915: include the primary frame in internal modesets
+
+Internal link recovery adds CRTC state before committing. The HDR10+ frame
+contract captures the supplied primary-plane mask before helper expansion,
+so recovery with active HDR10+ metadata fails with -EINVAL even though the
+existing primary framebuffer is valid.
+
+Acquire the existing primary-plane state before commit so the normal
+contract can validate it. Preserve acquisition errors and the existing
+-EDEADLK retry path; do not bypass HDR10+ admission.
+
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -5752,11 +5752,22 @@
+ 	to_intel_atomic_state(state)->internal = true;
+ 
+ 	for_each_intel_crtc_in_pipe_mask(display, crtc, pipe_mask) {
++		struct drm_plane_state *primary_state;
+ 		struct intel_crtc_state *crtc_state =
+ 			intel_atomic_get_crtc_state(state, crtc);
+ 
+ 		if (IS_ERR(crtc_state)) {
+ 			ret = PTR_ERR(crtc_state);
++			goto out;
++		}
++
++		/*
++		 * Include the current primary frame before atomic_check snapshots the
++		 * HDR10+ frame mask. Adding it during helper expansion is too late.
++		 */
++		primary_state = drm_atomic_get_plane_state(state, crtc->base.primary);
++		if (IS_ERR(primary_state)) {
++			ret = PTR_ERR(primary_state);
+ 			goto out;
+ 		}

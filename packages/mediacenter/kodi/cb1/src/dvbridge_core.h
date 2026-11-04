@@ -12,13 +12,14 @@ struct dvbridge_context;
 struct dvbridge_candidate;
 /* Render-thread confined. Destroy all candidates before their owning context. */
 
-#define DVBRIDGE_TARGET_API 3
+#define DVBRIDGE_TARGET_API 4
 struct dvbridge_geometry {
     int source_width, source_height;
     int x, y, width, height;
     int target_width, target_height;
     float crop[4]; /* Native visible source rect; all zero keeps the full source. */
     float placement[4]; /* Native physical destination; zero keeps integer bounds. */
+    bool ignore_l5; /* Explicit encoded-raster active-area override. */
 };
 
 /* Zero/zero retains the legacy UHD C-call contract. Native adapters must supply

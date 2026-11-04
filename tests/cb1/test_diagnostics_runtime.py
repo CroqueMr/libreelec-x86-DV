@@ -172,7 +172,7 @@ int main(){
  Layer el{960,540,2,{{1024,544},{512,272},{0,0}},1};const Layer* enhancement=&el;
  base.planes[0].texture=11;base.planes[1].texture=12;
  el.planes[0].texture=21;el.planes[1].texture=22;
- struct {int width=3840,height=2160,x=0,y=0;} geometry;
+ struct {int width=3840,height=2160,x=0,y=0;bool ignore_l5=false;} geometry;
  int m_pendingInfo=3;bool m_direct=true,m_fallback=false;
  int revision=7;Preferences preferences;ReturnedPolicy policy;
  FIRST
@@ -186,7 +186,7 @@ int main(){
  for(auto key:{"bl_texture_ids=11,12","el_texture_ids=21,22"})
   assert(frame.find(key)!=std::string::npos);
  const auto& settings=CLog::lines[1];
- for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1"})
+ for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1","encoded_active_area=false"})
   assert(settings.find(key)!=std::string::npos);
  enhancement=nullptr;
  FIRST

@@ -53,7 +53,7 @@ struct dvbridge_fel {
     AVFrame *frames[QUEUE_MAX];
     unsigned num_packets, num_frames;
     size_t packet_bytes;
-    bool opened, failed, draining, sent_eof, eof, recovering, harvesting;
+    bool opened, failed, draining, sent_eof, eof, recovering, harvesting, epoch_uncertain;
     struct picture_order base_order, enhancement_order;
     int64_t packet_order[QUEUE_MAX];
     bool packet_key[QUEUE_MAX];
@@ -97,6 +97,7 @@ static void clear_queues(struct dvbridge_fel *f)
     f->num_packets = f->num_frames = 0;
     f->packet_bytes = 0;
     f->failed = f->draining = f->sent_eof = f->eof = f->recovering = f->harvesting = false;
+    f->epoch_uncertain = false;
     f->num_times = 0;
     f->output_order = AV_NOPTS_VALUE;
 }
@@ -438,6 +439,7 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
     av_packet_free(&copy);
     if (result < 0)
         goto fail;
+    bool received_enhancement = false;
     while (true) {
         copy = av_packet_alloc();
         if (!copy)
@@ -445,8 +447,10 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
         result = av_bsf_receive_packet(f->split, copy);
         if (result < 0) {
             av_packet_free(&copy);
-            if (result == AVERROR(EAGAIN))
+            if (result == AVERROR(EAGAIN)) {
+                if (!received_enhancement)f->epoch_uncertain = true;
                 return true; /* Submit EL when a decoded BL requests its matching picture. */
+            }
             goto fail;
         }
         if (f->num_packets == QUEUE_MAX || copy->size <= 0 ||
@@ -455,15 +459,38 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
             av_packet_free(&copy);
             goto fail;
         }
+        /* Reordered layers cannot corroborate an epoch with independent
+         * max+1 counters. A common key AU proves the new offset even if an
+         * entire enhancement GOP was absent. Never bind it to a stale BL key. */
+        const AVCodecParserContext *bp = f->base_order.parser;
+        const AVCodecParserContext *ep = f->enhancement_order.parser;
+        bool common_key = bp->key_frame == 1 && ep->key_frame == 1 &&
+                          bp->output_picture_number == ep->output_picture_number;
+        bool el_idr = ep->key_frame == 1 && ep->output_picture_number == 0 &&
+                      f->base_order.context->has_b_frames == 0;
+        /* Complete AU input preserves the earlier independent-key counter
+         * proof. A real missing EL AU invalidates it until a verified anchor. */
+        if (ep->key_frame == 1 && f->epoch_uncertain && !common_key && !el_idr) {
+            av_log(f->decoder, AV_LOG_WARNING,
+                   "FEL decode: missing enhancement AU makes this key ambiguous; waiting for a shared key\n");
+            av_packet_free(&copy);
+            recover(f);
+            received_enhancement = true;
+            continue;
+        }
+        if (common_key || el_idr) {
+            if (f->packet_order[f->num_packets] != base_identity)
+                av_log(f->decoder, AV_LOG_WARNING,
+                       "FEL decode: verified key reanchors enhancement picture %lld to base %lld\n",
+                       (long long)f->packet_order[f->num_packets], (long long)base_identity);
+            f->enhancement_order.offset = base_identity - ep->output_picture_number;
+            f->enhancement_order.maximum = base_identity;
+            f->packet_order[f->num_packets] = base_identity;
+            f->epoch_uncertain = false;
+        }
         if (f->synchronizing) {
-            const AVCodecParserContext *bp = f->base_order.parser;
-            const AVCodecParserContext *ep = f->enhancement_order.parser;
-            bool common_key = bp->key_frame == 1 && ep->key_frame == 1 &&
-                              bp->output_picture_number == ep->output_picture_number;
             /* A non-reordered BL gives the IDR packet an unambiguous display
              * time. Never use this shortcut for a BL with reordered pictures. */
-            bool el_idr = ep->key_frame == 1 && ep->output_picture_number == 0 &&
-                          f->base_order.context->has_b_frames == 0;
             if (!common_key && !el_idr) {
                 av_packet_free(&copy);
                 f->num_times = 0;
@@ -471,13 +498,11 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
                     goto fail;
                 continue;
             }
-            f->enhancement_order.offset = base_identity - ep->output_picture_number;
-            f->enhancement_order.maximum = base_identity;
-            f->packet_order[f->num_packets] = base_identity;
             f->anchor_pts = packet->pts;
             f->synchronizing = false;
         }
         f->packet_key[f->num_packets] = f->enhancement_order.parser->key_frame == 1;
+        received_enhancement = true;
         f->packet_bytes += copy->size;
         f->packets[f->num_packets++] = copy;
     }
@@ -520,17 +545,20 @@ static int take_ready(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 
 int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 {
-    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || f->failed)
+    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE)
         return -1;
     /* Return available work before submitting future enhancement pictures. */
     if (take_ready(f, pts, frame))
         return 1;
+    if (f->failed || (f->eof && f->recovering))
+        return -1;
     if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
         return 2; /* Preroll before a recoverable EL picture, not a substitute. */
-    if (!pump(f))
-        return -1;
+    bool ok = pump(f);
     if (take_ready(f, pts, frame))
         return 1;
+    if (!ok || (f->eof && f->recovering))
+        return -1;
     if ((f->recovering && !f->harvesting) ||
         (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts)) {
         /* Retain possible independent common-key anchors, not discarded BL

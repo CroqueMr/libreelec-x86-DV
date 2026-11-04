@@ -173,6 +173,7 @@ struct dvbridge_native_overlay {
     pl_tex texture, degamma, pq;
     float rect[4];
     bool input_pq; /* Premultiplied BT.2020 PQ; LUTs remain bound but unused. */
+    bool optimized; /* Share GUI work between neighboring lanes when supported. */
 };
 bool dvbridge_render_packed_overlay(struct dvbridge_renderer *renderer,
     const struct pl_frame *source, const void *metadata, size_t bytes,

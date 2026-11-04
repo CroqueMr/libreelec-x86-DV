@@ -157,7 +157,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    std::unique_lock lock(m_audioPlayerSection);
 --- a/xbmc/cores/DataCacheCore.h
 +++ b/xbmc/cores/DataCacheCore.h
-@@ -9,13 +9,18 @@
+@@ -9,12 +9,17 @@
  #pragma once
  
  #include "EdlEdit.h"
@@ -170,12 +170,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <string>
 +#include <memory>
  #include <vector>
- 
-+class VideoSourceSideData;
 +
++class VideoSourceSideData;
+ 
  class CDataCacheCore
  {
- public:
 @@ -28,6 +33,13 @@
    void SignalVideoInfoChange();
    void SignalAudioInfoChange();
@@ -219,18 +218,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      int sampleRate;
 --- a/xbmc/cores/FFmpeg.h
 +++ b/xbmc/cores/FFmpeg.h
-@@ -22,6 +22,11 @@
+@@ -21,6 +21,11 @@
+ }
  
  #include <tuple>
- 
++
 +// Multiview (MV-HEVC "spatial video") needs the hevc decoder's view_ids option,
 +// AV_STEREO3D_UNSPEC and AV_FRAME_DATA_VIEW_ID, all of which landed in FFmpeg
 +// 7.1, while a system ffmpeg is still accepted from 7.0.
 +#define FFMPEG_HAVE_MULTIVIEW (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(59, 38, 100))
-+
+ 
  namespace FFMPEG_HELP_TOOLS
  {
- 
 --- a/xbmc/cores/VideoPlayer/Buffers/VideoBuffer.h
 +++ b/xbmc/cores/VideoPlayer/Buffers/VideoBuffer.h
 @@ -93,6 +93,11 @@
@@ -524,7 +523,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    bool hasDisplayMetadata = false;
    AVMasteringDisplayMetadata displayMetadata;
-@@ -115,6 +126,11 @@
+@@ -99,6 +110,7 @@
+ #define DVD_CODEC_CTRL_DROP         0x08000000  //< drop in decoder or set DVP_FLAG_DROPPED, no render of frame
+ #define DVD_CODEC_CTRL_DROP_ANY     0x10000000  //< drop some non-reference frame
+ #define DVD_CODEC_CTRL_DRAIN        0x20000000  //< squeeze out pictured without feeding new packets
++#define DVD_CODEC_CTRL_POLL         0x00800000  //< temporary/retiring drain, not source EOF
+ #define DVD_CODEC_CTRL_ROTATE       0x40000000  //< rotate if renderer does not support it
+ 
+ // DVP_FLAG 0x00000100 - 0x00000f00 is in use by libmpeg2!
+@@ -115,6 +127,11 @@
  class CDVDVideoCodec
  {
  public:
@@ -536,7 +543,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    enum VCReturn
    {
-@@ -247,6 +263,8 @@
+@@ -247,6 +264,8 @@
  
  protected:
    CProcessInfo &m_processInfo;
@@ -545,15 +552,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  };
  
  // callback interface for ffmpeg hw accelerators
-@@ -272,4 +290,8 @@
+@@ -272,4 +291,8 @@
    virtual ~ICallbackHWAccel() = default;
    virtual IHardwareDecoder* GetHWAccel() = 0;
    virtual bool GetPictureCommon(VideoPicture* pVideoPicture) = 0;
+-};
 +#ifdef CB1_HAS_HDR10_AI
 +  virtual unsigned GetHDR10AIBufferCount() const { return 6; }
 +  virtual void PrepareHDR10AIReopen() {}
 +#endif
- };
++};
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
 @@ -7,6 +7,11 @@
@@ -735,7 +743,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -655,8 +764,101 @@
+@@ -655,7 +764,96 @@
    return true;
  }
  
@@ -750,19 +758,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#endif
 +
  CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPicture)
- {
++{
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvFel)
 +  {
-+    if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
-+      return VC_ERROR;
 +    auto emit = [&]() -> VCReturn
 +    {
 +      if (m_dvPending.empty())
 +        return VC_NONE;
 +      auto& base = m_dvPending.front();
 +      if (base->doviSourcePts == AV_NOPTS_VALUE)
-+        return VC_ERROR;
++        return VC_FATAL;
 +      AVFrame* enhancement = nullptr;
 +      int result = dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts,
 +                                     &enhancement);
@@ -773,15 +779,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      }
 +      if (result < 0)
 +      {
-+        if (dvbridge_fel_exhausted(m_dvFel.get()))
-+        {
-+          CLog::Log(LOGWARNING, "DV FEL: enhancement EOF with {} unpaired base pictures; "
-+                               "ending video without substituting enhancement frames",
-+                    m_dvPending.size());
-+          m_dvPending.clear();
-+          return VC_EOF;
-+        }
-+        return VC_ERROR;
++        CLog::Log(LOGERROR, "DV FEL: cannot pair {} pending base pictures; stopping without substitution",
++                  m_dvPending.size());
++        return VC_FATAL;
 +      }
 +      if (!result)
 +        return VC_NONE;
@@ -797,8 +797,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    VCReturn paired = emit();
 +    if (paired != VC_NONE)
 +      return paired;
++    if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
++      return VC_FATAL;
++    if (m_codecControlFlags & DVD_CODEC_CTRL_POLL)
++      return VC_BUFFER;
 +    if (m_dvPending.size() >= DVEnhancementPendingPictures)
-+      return VC_ERROR;
++      return VC_FATAL;
 +    auto base = std::make_shared<VideoPicture>();
 +    base->Reset();
 +    VCReturn result = GetBasePicture(base.get());
@@ -806,7 +810,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    {
 +      auto* frames = reinterpret_cast<AVHWFramesContext*>(m_pCodecContext->hw_frames_ctx->data);
 +      if (!dvbridge_fel_device(m_dvFel.get(), frames->device_ref))
-+        return VC_ERROR;
++        return VC_FATAL;
 +    }
 +    if (result == VC_PICTURE)
 +    {
@@ -815,12 +819,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    }
 +    if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
 +      if (!dvbridge_fel_drain(m_dvFel.get()))
-+        return VC_ERROR;
++        return VC_FATAL;
 +    paired = emit();
 +    if (paired != VC_NONE)
 +      return paired;
 +    if (result == VC_EOF && !m_dvPending.empty())
-+      return VC_ERROR;
++      return VC_FATAL;
 +    return result == VC_PICTURE ? VC_BUFFER : result;
 +  }
 +#endif
@@ -833,11 +837,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 +
 +CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(VideoPicture* pVideoPicture)
-+{
+ {
    if (!m_startedInput)
    {
-     return VC_BUFFER;
-@@ -671,6 +873,9 @@
+@@ -671,6 +869,9 @@
    {
      int flags = m_codecControlFlags;
      flags &= ~DVD_CODEC_CTRL_DRAIN;
@@ -847,7 +850,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pHardware->SetCodecControl(flags);
      CDVDVideoCodec::VCReturn ret = m_pHardware->Decode(m_pCodecContext, nullptr);
      if (ret == VC_PICTURE)
-@@ -739,6 +944,9 @@
+@@ -739,6 +940,9 @@
      {
        int flags = m_codecControlFlags;
        flags |= DVD_CODEC_CTRL_DRAIN;
@@ -857,7 +860,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        m_pHardware->SetCodecControl(flags);
        int ret = m_pHardware->Decode(m_pCodecContext, nullptr);
        if (ret == VC_PICTURE)
-@@ -793,21 +1001,8 @@
+@@ -793,21 +997,8 @@
    }
  
    // here we got a frame
@@ -881,7 +884,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +1030,9 @@
+@@ -835,6 +1026,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -891,7 +894,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1094,13 @@
+@@ -896,8 +1090,13 @@
          need_reopen = true;
      }
  
@@ -906,7 +909,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1129,22 @@
+@@ -926,6 +1125,22 @@
    return VC_NONE;
  }
  
@@ -929,7 +932,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1173,14 @@
+@@ -954,6 +1169,14 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -944,7 +947,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1196,7 @@
+@@ -969,6 +1192,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -952,7 +955,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1220,48 @@
+@@ -992,8 +1216,48 @@
    return VC_REOPEN;
  }
  
@@ -1001,7 +1004,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1313,10 @@
+@@ -1045,6 +1309,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -1012,7 +1015,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1370,9 @@
+@@ -1098,6 +1366,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
@@ -1022,15 +1025,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1409,23 @@
+@@ -1134,7 +1405,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
+-  }
 +#ifdef HAVE_DVBRIDGE
 +    m_dvStreamDisplayMetadata = pVideoPicture->displayMetadata;
 +    m_dvHasStreamDisplayMetadata = true;
 +#endif
-   }
++  }
 +#ifdef HAVE_DVBRIDGE
 +  // HDR10 static metadata describes the whole stream, but encoders may carry
 +  // its SEI only on the first IRAP. Without it a later frame compares as a
@@ -1046,10 +1050,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,35 +1436,89 @@
+@@ -1145,35 +1432,89 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
+-  }
 +#ifdef HAVE_DVBRIDGE
 +    m_dvStreamLightMetadata = pVideoPicture->lightMetadata;
 +    m_dvHasStreamLightMetadata = true;
@@ -1060,7 +1065,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    pVideoPicture->lightMetadata = m_dvStreamLightMetadata;
 +    pVideoPicture->hasLightMetadata = true;
-   }
++  }
 +#endif
    else if (m_hints.contentLightMetadata)
    {
@@ -1150,7 +1155,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            }
          }
        }
-@@ -1187,12 +1532,19 @@
+@@ -1187,12 +1528,19 @@
      if (sd)
      {
        if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10)
@@ -1170,7 +1175,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1596,7 @@
+@@ -1244,7 +1592,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -1179,7 +1184,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1654,20 @@
+@@ -1302,7 +1650,20 @@
      return result;
    }
  
@@ -1201,7 +1206,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1682,22 @@
+@@ -1317,7 +1678,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -1225,7 +1230,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1733,8 @@
+@@ -1353,6 +1729,8 @@
      return result;
    }
  
@@ -1234,7 +1239,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1751,8 @@
+@@ -1369,6 +1747,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -1243,7 +1248,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1760,7 @@
+@@ -1376,6 +1756,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -1251,7 +1256,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1771,14 @@
+@@ -1386,7 +1767,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -1267,7 +1272,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1803,18 @@
+@@ -1411,6 +1799,18 @@
      return VC_ERROR;
    }
  
@@ -1286,10 +1291,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1422,6 +1826,34 @@
+@@ -1421,6 +1821,34 @@
+ {
    return m_iLastKeyframe;
  }
- 
++
 +#ifdef CB1_HAS_HDR10_AI
 +void CDVDVideoCodecFFmpeg::BindHDR10AISource(VideoPicture& picture)
 +{
@@ -1317,14 +1323,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return DVBRIDGE::HDR10AIBuffers::Count(hdr10,mode,fps,m_interlaced);
 +}
 +#endif
-+
+ 
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-   if(m_pHardware)
-@@ -1455,6 +1887,11 @@
+@@ -1454,7 +1882,17 @@
+ 
  void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)
  {
++#ifdef HAVE_DVBRIDGE
++  if (m_dvFel && (flags & DVD_CODEC_CTRL_POLL))
++    flags &= ~DVD_CODEC_CTRL_DRAIN;
++#endif
    m_codecControlFlags = flags;
++  flags &= ~DVD_CODEC_CTRL_POLL;
 +#ifdef HAVE_DVBRIDGE
 +  // Keep the native drop request on the picture, not either layer's decoder.
 +  if (m_dvFel)
@@ -1333,7 +1344,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pCodecContext)
    {
-@@ -1497,4 +1934,3 @@
+@@ -1497,4 +1935,3 @@
  {
    return m_pHardware;
  }
@@ -1407,7 +1418,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    bool HasHardware() { return m_pHardware != nullptr; }
    void SetHardware(IHardwareDecoder *hardware);
-@@ -71,11 +109,17 @@
+@@ -71,10 +109,16 @@
    std::string m_filters_next;
    AVFilterGraph* m_pFilterGraph = nullptr;
    AVFilterContext* m_pFilterIn = nullptr;
@@ -1416,15 +1427,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    AVFrame* m_pFilterFrame = nullptr;;
    bool m_filterEof = false;
    bool m_eof = false;
- 
++
 +  //! Eyes are coded as separate views and are packed side by side by the filter graph.
 +  bool m_multiview = false;
 +  CMultiviewFramePairer m_multiviewPairer; //!< routes the views to the graph's two inputs
 +  std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
-+
+ 
    std::unique_ptr<IDVDVideoPP> m_postProc;
  
-   int m_iPictureWidth = 0;
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h
 @@ -0,0 +1,93 @@
@@ -1624,7 +1634,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#endif
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,254 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1670,8 +1680,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  double expertPeak{}, expertBlack{};
 +  int expertGamut{};
 +  bool optimizedDV{true};
++  bool optimizedGUI{false};
 +  bool masterIPT{false}, allowMasterFallback{false};
 +  bool disableL2Trims{false};
++  bool encodedActiveArea{false};
 +  int cmv40Mode{}, cmv40Trigger{}, cmv40Headroom{20};
 +  int felUpscaling{0};
 +  bool processingOptimizations{false};
@@ -1695,8 +1707,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return output == other.output && hdr10Source == other.hdr10Source &&
 +        hdr10PlusSource == other.hdr10PlusSource && method == other.method &&
 +        panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
++        optimizedGUI == other.optimizedGUI &&
 +        masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
-+        disableL2Trims == other.disableL2Trims &&
++        disableL2Trims == other.disableL2Trims && encodedActiveArea == other.encodedActiveArea &&
 +        cmv40Mode == other.cmv40Mode && cmv40Trigger == other.cmv40Trigger &&
 +        cmv40Headroom == other.cmv40Headroom &&
 +        felUpscaling == other.felUpscaling &&
@@ -1822,6 +1835,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
 +    next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
 +    next.disableL2Trims = settings->GetBool("dvbridge.disablel2");
++    next.encodedActiveArea = settings->GetBool("dvbridge.encodedactivearea");
++    next.optimizedGUI = settings->GetBool("dvbridge.optimizedgui");
 +    next.cmv40Mode = settings->GetInt("dvbridge.cmv40");
 +    next.cmv40Trigger = settings->GetInt("dvbridge.cmv40trigger");
 +    next.cmv40Headroom = settings->GetInt("dvbridge.cmv40headroom");
@@ -3270,9 +3285,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  {
 -  CVaapiRenderPicture *pic;
 -  for (unsigned int i = 0; i < NUM_RENDER_PICS; i++)
-+  for (auto* pic : allRenderPics)
-   {
+-  {
 -    pic = allRenderPics[i];
++  for (auto* pic : allRenderPics)
++  {
 +    av_frame_free(&pic->avFrame);
      delete pic;
    }
@@ -3282,8 +3298,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
 -void CVaapiBufferPool::Init()
+-{
 +void CVaapiBufferPool::Init(unsigned count)
- {
++{
 +  count = std::clamp(count, unsigned(NUM_RENDER_PICS), 64u);
 +  while (allRenderPics.size() < count)
 +  {
@@ -5180,7 +5197,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool skipCreateStreams = false;
    bool isBluray = pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
  
-@@ -569,12 +597,23 @@
+@@ -569,11 +597,22 @@
    // Live/realtime excluded: the full probe would stall playback start by seconds.
    bool forceFullAnalysis = skipTsOptimization && !pInput->IsRealtime();
  
@@ -5193,7 +5210,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
      m_checkTransportStream = true;
      skipCreateStreams = true;
-   }
++  }
 +  else if (noParse)
 +  {
 +    // Such a stream cannot be decoded on its own, so analysing it would only spend the whole
@@ -5201,10 +5218,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    // caller, who asked for it unparsed, already knows. Take the streams straight from the
 +    // program map.
 +    m_streaminfo = false;
-+  }
+   }
    else if (!isMpegTs || forceFullAnalysis)
    {
-     m_streaminfo = true;
 @@ -621,7 +660,7 @@
        ResetVideoStreams();
      }
@@ -5259,7 +5275,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_timeout.SetInfinite();
        }
  
-@@ -1142,8 +1197,32 @@
+@@ -1142,7 +1197,31 @@
                           0);
  
            // update streams
@@ -5267,7 +5283,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          const bool wasJoined = bool(m_blurayDovi);
 +#endif
            CreateStreams(m_program);
- 
++
 +#ifdef HAVE_DVBRIDGE
 +          if (!wasJoined && m_blurayDovi)
 +          {
@@ -5288,10 +5304,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +            }
 +          }
 +#endif
-+
+ 
            pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
            pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
-           pPacket->demuxerId = GetDemuxerId();
 @@ -1292,6 +1371,13 @@
        return pPacket;
      }
@@ -5475,11 +5490,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          if (!stereoMode.empty())
 +        {
            st->stereo_mode = stereoMode;
+-
 +          st->multiview = multiview;
 +        }
 +        if (multiview && pStream->codecpar->codec_id == AV_CODEC_ID_H264)
 +          ConfigureOffsetMetadata(pStream, st);
- 
++
 +#ifdef HAVE_LIBBLURAY
 +        // A base-eye fallback retains the selected item's stereo-source identity.
 +        if (st->stereo_mode.empty() && m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
@@ -6046,10 +6062,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  protected:
    CDVDDemuxFFmpeg* m_parent;
    AVStream* m_stream = nullptr;
-@@ -116,6 +123,23 @@
+@@ -115,6 +122,23 @@
+   bool IsStreaming() const override;
  
    bool Aborted();
- 
++
 +  /*!
 +   * \brief Whether the decoder for this codec can decode and output every view
 +   *        of a multiview stream, i.e. carries the view_ids option.
@@ -6066,11 +6083,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    return m_offsetMetadata;
 +  }
-+
+ 
    AVFormatContext* m_pFormatContext;
    std::shared_ptr<CDVDInputStream> m_pInput;
- 
-@@ -142,6 +166,11 @@
+@@ -142,12 +166,26 @@
    unsigned int HLSSelectProgram();
  
    std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
@@ -6082,10 +6098,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    std::string ConvertCodecToInternalStereoMode(const std::string& mode, const StereoModeConversionMap* conversionMap);
  
    void GetL16Parameters(int& channels, int& samplerate);
-@@ -149,6 +178,15 @@
+   double SelectAspect(AVStream* st, bool& forced);
  
    StreamHdrType DetermineHdrType(AVStream* pStream);
- 
++
 +#ifdef HAVE_DVBRIDGE
 +  void InitBlurayDovi(unsigned int program);
 +  int ReadBlurayDovi(AVPacket* packet);
@@ -6094,10 +6110,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  unsigned m_doviGroups{0};
 +  bool m_blurayAwaitBase{false};
 +#endif
-+
+ 
    CCriticalSection m_critSection;
    std::map<int, CDemuxStream*> m_streams;
-   std::map<int, std::unique_ptr<CDemuxParserFFmpeg>> m_parsers;
 @@ -166,6 +204,16 @@
    unsigned int m_initialProgramNumber;
    int m_seekStream;
@@ -6125,10 +6140,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <locale>
  #include <sstream>
  
-@@ -85,6 +86,33 @@
-   return pPacket;
- }
+@@ -83,6 +84,33 @@
+   }
  
+   return pPacket;
++}
++
 +bool CDVDDemuxUtils::AppendData(DemuxPacket* pPacket, const uint8_t* data, int size)
 +{
 +  if (!pPacket || size < 0 || (size > 0 && !data))
@@ -6154,11 +6171,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  pPacket->iSize = newSize;
 +
 +  return true;
-+}
-+
+ }
+ 
  DemuxPacket* CDVDDemuxUtils::AllocateDemuxPacket(unsigned int iDataSize, unsigned int encryptedSubsampleCount)
- {
-   DemuxPacket *ret(AllocateDemuxPacket(iDataSize));
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h
 @@ -38,6 +38,12 @@
@@ -6176,10 +6191,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDFactoryDemuxer.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDFactoryDemuxer.cpp
-@@ -17,6 +17,15 @@
+@@ -16,6 +16,15 @@
+ #include "DemuxMultiSource.h"
  #include "utils/URIUtils.h"
  #include "utils/log.h"
- 
++
 +#ifdef HAVE_LIBBLURAY
 +#include "DVDDemuxBluray3D.h"
 +#include "DVDInputStreams/DVDInputStreamBluray.h"
@@ -6188,10 +6204,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#include "settings/Settings.h"
 +#include "settings/SettingsComponent.h"
 +#endif
-+
+ 
  CDVDDemux* CDVDFactoryDemuxer::CreateDemuxer(const std::shared_ptr<CDVDInputStream>& pInputStream,
                                               bool fileinfo)
- {
 @@ -71,6 +80,31 @@
        return NULL;
    }
@@ -6565,15 +6580,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // root should not have trailing slash
    URIUtils::RemoveSlashAtEnd(root);
  
-@@ -288,6 +304,8 @@
+@@ -287,6 +303,8 @@
+     CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - bd_get_disc_info() failed");
      return false;
    }
- 
-+  m_stereoscopicDisc = disc_info->content_exist_3D != 0;
 +
++  m_stereoscopicDisc = disc_info->content_exist_3D != 0;
+ 
    if (disc_info->bluray_detected)
    {
- #if (BLURAY_VERSION > BLURAY_VERSION_CODE(1,0,0))
 @@ -407,6 +425,14 @@
    while (bd_get_event(m_bd, &m_event))
      ProcessEvent();
@@ -7417,20 +7432,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          // There can be multiple overlays queued at same start point.
          // Skip them to find a new start point.
          if (pOverlay2->bForced && pOverlay2->iPTSStartTime <= pts)
-@@ -120,6 +131,13 @@
+@@ -118,6 +129,13 @@
+ {
+   std::unique_lock lock(*this);
    m_overlays.clear();
- }
- 
++}
++
 +void CDVDOverlayContainer::Clear(DVDOverlaySource source)
 +{
 +  std::unique_lock lock(*this);
 +  std::erase_if(m_overlays, [source](const std::shared_ptr<CDVDOverlay>& ov)
 +                { return ov->GetSource() == source; });
-+}
-+
+ }
+ 
  size_t CDVDOverlayContainer::GetSize()
- {
-   return m_overlays.size();
 --- a/xbmc/cores/VideoPlayer/DVDOverlayContainer.h
 +++ b/xbmc/cores/VideoPlayer/DVDOverlayContainer.h
 @@ -40,6 +40,11 @@
@@ -7447,10 +7462,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
     */
 --- a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
-@@ -13,6 +13,21 @@
+@@ -12,6 +12,21 @@
+ #include "cores/VideoPlayer/Interface/DemuxCrypto.h"
  
  #include <cstring>
- 
++
 +AE::AudioSourceInfo CDVDStreamInfo::GetAudioSourceInfo() const
 +{
 +  AE::AudioSourceInfo source;
@@ -7465,10 +7481,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  source.channelMask = channellayout;
 +  return source;
 +}
-+
+ 
  CDVDStreamInfo::CDVDStreamInfo() : extradata{}
  {
-   Clear();
 @@ -68,7 +83,11 @@
    masteringMetadata = nullptr;
    contentLightMetadata = nullptr;
@@ -7886,10 +7901,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_clock.Reset();
    m_dvd.Clear();
  
-@@ -1012,6 +1057,16 @@
+@@ -1010,6 +1055,16 @@
+   {
+     CLog::Log(LOGERROR, "{} - Error creating demuxer", __FUNCTION__);
      return false;
-   }
- 
++  }
++
 +  // A matroska remux of a 3D disc carries the same plane offsets in its dependent view.
 +  // The Blu-ray input stream's store wins when there is one; otherwise the demuxer's is
 +  // the one to read
@@ -7898,11 +7915,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    std::unique_lock lock(m_offsetMetadataSection);
 +    if (const auto* ffmpeg = dynamic_cast<CDVDDemuxFFmpeg*>(m_pDemuxer.get()))
 +      m_offsetMetadata = ffmpeg->GetOffsetMetadata();
-+  }
-+
+   }
+ 
    m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_DEMUX);
-   m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_NAV);
-   m_SelectionStreams.Update(m_pInputStream, m_pDemuxer.get());
 @@ -1042,6 +1097,14 @@
  
  void CVideoPlayer::CloseDemuxer()
@@ -8011,10 +8026,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      }
    }
  
-@@ -4513,6 +4616,60 @@
-   return true;
- }
+@@ -4511,6 +4614,60 @@
+   }
  
+   return true;
++}
++
 +bool CVideoPlayer::IsBlurayInput() const
 +{
 +#if defined(HAVE_LIBBLURAY)
@@ -8067,11 +8084,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  // The store is keyed by the demuxer's timestamps and this is a presentation time, which
 +  // ReadPacket() has already had m_offset_pts taken off (see UpdateCorrection).
 +  return m_offsetMetadata->GetOffset(pts + m_offset_pts, static_cast<unsigned int>(sequence));
-+}
-+
+ }
+ 
  bool CVideoPlayer::OpenSubtitleStream(const CDVDStreamInfo& hint)
- {
-   IDVDStreamPlayer* player = GetStreamPlayer(m_CurrentSubtitle.player);
 @@ -6255,6 +6412,9 @@
    info.stereoMode = s.stereo_mode;
    info.flags = s.flags;
@@ -8276,7 +8291,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      audioframe.hasDownmix = false;
  
-@@ -513,35 +543,46 @@
+@@ -513,34 +543,45 @@
      if (m_streaminfo.codec == AV_CODEC_ID_FLAC && m_streaminfo.channellayout)
        audioframe.format.m_channelLayout = CAEUtil::GetAEChannelLayout(m_streaminfo.channellayout);
  
@@ -8285,63 +8300,65 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -    {
 -      if (m_speed)
 -        m_audioSink.Drain();
-+    // downmix
-+    double clev = audioframe.hasDownmix ? audioframe.centerMixLevel : M_SQRT1_2;
-+    double curDB = 20 * log10(clev);
-+    audioframe.centerMixLevel = pow(10, (curDB + m_processInfo.GetVideoSettings().m_CenterMixLevel) / 20);
-+    audioframe.hasDownmix = true;
-+  }
- 
+-
 -      m_audioSink.Destroy(false);
+-
+-      if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_synctype == SYNC_RESAMPLE))
+-        CLog::Log(LOGERROR, "{} - failed to create audio renderer", __FUNCTION__);
+-
+-      m_prevsynctype = -1;
+-
+-      if (m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
+-        m_audioSink.Resume();
+-    }
+-
+-    m_audioSink.SetDynamicRangeCompression(
+-        static_cast<long>(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
+-
+-    SetSyncType(audioframe.passthrough);
+-
+     // downmix
+     double clev = audioframe.hasDownmix ? audioframe.centerMixLevel : M_SQRT1_2;
+     double curDB = 20 * log10(clev);
+     audioframe.centerMixLevel = pow(10, (curDB + m_processInfo.GetVideoSettings().m_CenterMixLevel) / 20);
+     audioframe.hasDownmix = true;
+   }
++
 +  // A display reset can temporarily reject a stream. Retain this frame for retry.
 +  if (!m_audioSink.IsValidFormat(audioframe))
 +  {
 +    if (!newFrame && CServiceBroker::GetActiveAE()->IsSuspended())
 +      return true;
- 
--      if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_synctype == SYNC_RESAMPLE))
--        CLog::Log(LOGERROR, "{} - failed to create audio renderer", __FUNCTION__);
++
 +    if (m_speed)
 +      m_audioSink.Drain();
- 
--      m_prevsynctype = -1;
++
 +    m_audioSink.Destroy(false);
- 
--      if (m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
--        m_audioSink.Resume();
++
 +    if (!m_audioSink.Create(audioframe, m_streaminfo.codec, m_synctype == SYNC_RESAMPLE))
 +    {
 +      if (newFrame)
 +        CLog::Log(LOGERROR, "{} - failed to create audio renderer; decoded frame retained for retry",
 +                  __FUNCTION__);
 +      return true;
-     }
- 
--    m_audioSink.SetDynamicRangeCompression(
--        static_cast<long>(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
++    }
++
 +    if (!newFrame)
 +      CLog::Log(LOGINFO, "{} - audio renderer recovered with pending decoded frame", __FUNCTION__);
- 
--    SetSyncType(audioframe.passthrough);
++
 +    m_prevsynctype = -1;
- 
--    // downmix
--    double clev = audioframe.hasDownmix ? audioframe.centerMixLevel : M_SQRT1_2;
--    double curDB = 20 * log10(clev);
--    audioframe.centerMixLevel = pow(10, (curDB + m_processInfo.GetVideoSettings().m_CenterMixLevel) / 20);
--    audioframe.hasDownmix = true;
++
 +    if (m_syncState == IDVDStreamPlayer::SYNC_INSYNC)
 +      m_audioSink.Resume();
-   }
- 
++  }
++
 +  m_audioSink.SetDynamicRangeCompression(
 +      static_cast<long>(m_processInfo.GetVideoSettings().m_VolumeAmplification * 100));
 +
 +  SetSyncType(audioframe.passthrough);
-+
+ 
    if (m_synctype == SYNC_DISCON)
    {
-     double syncerror = m_audioSink.GetSyncError();
 --- a/xbmc/cores/VideoPlayer/VideoPlayerAudio.h
 +++ b/xbmc/cores/VideoPlayer/VideoPlayerAudio.h
 @@ -87,6 +87,8 @@
@@ -8400,7 +8417,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "cores/VideoPlayer/Interface/DemuxPacket.h"
  #include "cores/VideoPlayer/Interface/TimingConstants.h"
  #include "settings/AdvancedSettings.h"
-@@ -24,7 +34,9 @@
+@@ -24,13 +34,27 @@
  #include "windowing/WinSystem.h"
  
  #include <iomanip>
@@ -8410,10 +8427,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <memory>
  #include <mutex>
  #include <numeric>
-@@ -32,6 +44,18 @@
+ #include <sstream>
  
  using namespace std::chrono_literals;
- 
++
 +namespace
 +{
 +std::string SwapStereoscopicEyes(const std::string& mode)
@@ -8425,11 +8442,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return it == swapped.end() ? mode : it->second;
 +}
 +}
-+
+ 
  class CDVDMsgVideoCodecChange : public CDVDMsg
  {
- public:
-@@ -167,6 +191,15 @@
+@@ -88,6 +112,7 @@
+ {
+   m_bAbortOutput = true;
+   StopThread();
++
+ }
+ 
+ double CVideoPlayerVideo::GetOutputDelay()
+@@ -167,6 +192,15 @@
  
  void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVideoCodec> codec)
  {
@@ -8445,7 +8469,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CLog::Log(LOGDEBUG, "CVideoPlayerVideo::OpenStream - open stream with codec: {}",
              avcodec_get_name(hint.codec));
  
-@@ -231,7 +264,16 @@
+@@ -231,7 +265,16 @@
    }
  
    m_pVideoCodec = std::move(codec);
@@ -8462,10 +8486,56 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
    m_rewindStalled = false;
    m_packets.clear();
-@@ -311,6 +353,22 @@
-   return ret;
+@@ -256,6 +299,8 @@
+   m_bAbortOutput = true;
+   StopThread();
+ 
++  m_drainPending = 0;
++
+   m_messageQueue.End();
+ 
+   CLog::Log(LOGINFO, "deleting video codec");
+@@ -276,7 +321,8 @@
+ 
+ bool CVideoPlayerVideo::HasData() const
+ {
+-  return m_messageQueue.GetDataSize() > 0;
++  return m_drainPending || m_messageQueue.GetDataSize() > 0 ||
++      m_messageParent.GetPacketCount(CDVDMsg::PLAYER_ABORT) > 0;
  }
  
+ bool CVideoPlayerVideo::IsInited() const
+@@ -286,7 +332,14 @@
+ 
+ inline void CVideoPlayerVideo::SendMessage(std::shared_ptr<CDVDMsg> pMsg, int priority)
+ {
+-  m_messageQueue.Put(pMsg, priority);
++  if (pMsg->IsType(CDVDMsg::VIDEO_DRAIN))
++  {
++    std::scoped_lock lock(m_drainMutex);
++    ++m_drainPending;
++    m_messageQueue.Put(pMsg, priority);
++  }
++  else
++    m_messageQueue.Put(pMsg, priority);
+   m_processInfo.SetLevelVQ(m_messageQueue.GetLevel());
+ }
+ 
+@@ -298,7 +351,9 @@
+ 
+ inline void CVideoPlayerVideo::FlushMessages()
+ {
++  std::scoped_lock lock(m_drainMutex);
+   m_messageQueue.Flush();
++  m_drainPending = 0;
+   m_processInfo.SetLevelVQ(m_messageQueue.GetLevel());
+ }
+ 
+@@ -310,6 +365,22 @@
+   m_processInfo.SetLevelVQ(m_messageQueue.GetLevel());
+   return ret;
+ }
++
 +#ifdef CB1_HAS_HDR10_AI
 +void CVideoPlayerVideo::TryStartHDR10AI()
 +{
@@ -8481,11 +8551,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  m_messageParent.Put(std::make_shared<CDVDMsgType<SStartMsg>>(CDVDMsg::PLAYER_STARTED,msg));
 +}
 +#endif
-+
+ 
  void CVideoPlayerVideo::Process()
  {
-   CLog::Log(LOGINFO, "running thread: video_thread");
-@@ -330,6 +388,9 @@
+@@ -330,6 +401,9 @@
  
    while (!m_bStop)
    {
@@ -8495,10 +8564,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
          std::chrono::duration<double, std::micro>(m_stalled ? frametime : frametime * 10));
      int iPriority = 0;
-@@ -351,6 +412,15 @@
+@@ -350,6 +424,15 @@
+     MsgQueueReturnCode ret = GetMessage(pMsg, timeout, iPriority);
  
      onlyPrioMsgs = false;
- 
++
 +#ifdef HAVE_DVBRIDGE
 +    if (pMsg && (pMsg->IsType(CDVDMsg::GENERAL_RESYNC) ||
 +                 pMsg->IsType(CDVDMsg::GENERAL_RESET) ||
@@ -8507,11 +8577,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +                 pMsg->IsType(CDVDMsg::PLAYER_SETSPEED)))
 +      ++m_diagnosticTransitions;
 +#endif
-+
+ 
      if (MSGQ_IS_ERROR(ret))
      {
-       if (!m_messageQueue.ReceivedAbortRequest())
-@@ -372,6 +442,9 @@
+@@ -372,6 +455,9 @@
        }
        // don't ask for a new frame if we can't deliver it to renderer
        else if ((m_speed != DVD_PLAYSPEED_PAUSE ||
@@ -8521,7 +8590,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
                  m_processInfo.IsFrameAdvance() ||
                  m_syncState != IDVDStreamPlayer::SYNC_INSYNC) && !m_paused)
        {
-@@ -442,6 +515,8 @@
+@@ -392,7 +478,7 @@
+         // squeeze pictures out
+         while (!m_bStop && m_pVideoCodec)
+         {
+-          m_pVideoCodec->SetCodecControl(DVD_CODEC_CTRL_DRAIN);
++          m_pVideoCodec->SetCodecControl(DVD_CODEC_CTRL_DRAIN | DVD_CODEC_CTRL_POLL);
+           if (!ProcessDecoderOutput(frametime, pts))
+             break;
+         }
+@@ -442,6 +528,8 @@
      }
      else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
      {
@@ -8530,7 +8608,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        if(m_pVideoCodec)
          m_pVideoCodec->Reset();
  
-@@ -458,6 +533,8 @@
+@@ -458,6 +546,8 @@
      }
      else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)) // private message sent by (CVideoPlayerVideo::Flush())
      {
@@ -8539,7 +8617,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
        if(m_pVideoCodec)
          m_pVideoCodec->Reset();
-@@ -529,6 +606,10 @@
+@@ -501,7 +591,7 @@
+ 
+       while (!m_bStop && m_pVideoCodec)
+       {
+-        m_pVideoCodec->SetCodecControl(DVD_CODEC_CTRL_DRAIN);
++        m_pVideoCodec->SetCodecControl(DVD_CODEC_CTRL_DRAIN | DVD_CODEC_CTRL_POLL);
+         bool cont = ProcessDecoderOutput(frametime, pts);
+ 
+         if (!cont)
+@@ -524,11 +614,16 @@
+         if (!ProcessDecoderOutput(frametime, pts))
+           break;
+       }
++      --m_drainPending;
+     }
+     else if (pMsg->IsType(CDVDMsg::GENERAL_PAUSE))
      {
        m_paused = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
        CLog::Log(LOGDEBUG, "CVideoPlayerVideo - CDVDMsg::GENERAL_PAUSE: {}", m_paused);
@@ -8550,7 +8643,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      }
      else if (pMsg->IsType(CDVDMsg::PLAYER_REQUEST_STATE))
      {
-@@ -622,8 +703,19 @@
+@@ -622,10 +717,32 @@
  
  bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
  {
@@ -8569,26 +8662,42 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
    if (decoderState == CDVDVideoCodec::VC_BUFFER)
    {
++    return false;
++  }
++
++  if (decoderState == CDVDVideoCodec::VC_FATAL)
++  {
++    if (!m_messageQueue.ReceivedAbortRequest())
++    {
++      CLog::Log(LOGERROR, "CVideoPlayerVideo - non-recoverable video decoder failure, stopping playback");
++      m_messageParent.Put(std::make_shared<CDVDMsgBool>(CDVDMsg::PLAYER_ABORT, true));
++      m_messageQueue.Abort();
++    }
      return false;
-@@ -635,12 +727,14 @@
+   }
+ 
+@@ -635,12 +752,14 @@
      CLog::Log(LOGDEBUG, "CVideoPlayerVideo - video decoder was flushed");
      while (!m_packets.empty())
      {
 -      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.front().message);
 -      m_packets.pop_front();
+-
+-      SendMessage(msg, 10);
+-    }
+-
 +      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.back().message);
 +      m_packets.pop_back();
- 
--      SendMessage(msg, 10);
++
 +      SendMessageBack(msg);
-     }
- 
++    }
++
 +    m_pVideoCodec->SetVideoProcessingGeneration(
 +        CServiceBroker::GetDataCacheCore().ResetVideoProcessingInfo());
      m_pVideoCodec->Reset();
      m_packets.clear();
      //picture.iFlags &= ~DVP_FLAG_ALLOCATED;
-@@ -650,13 +744,22 @@
+@@ -650,13 +769,22 @@
  
    if (decoderState == CDVDVideoCodec::VC_REOPEN)
    {
@@ -8604,17 +8713,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.front().message);
 -      m_packets.pop_front();
 -      SendMessage(msg, 10);
+-    }
+-
 +      auto msg = std::static_pointer_cast<CDVDMsgDemuxerPacket>(m_packets.back().message);
 +      m_packets.pop_back();
 +      SendMessageBack(msg);
-     }
- 
++    }
++
 +    m_pVideoCodec->SetVideoProcessingGeneration(
 +        CServiceBroker::GetDataCacheCore().ResetVideoProcessingInfo());
      m_pVideoCodec->Reopen();
      m_packets.clear();
      m_renderManager.DiscardBuffer();
-@@ -672,6 +775,14 @@
+@@ -672,6 +800,14 @@
  
    if (decoderState == CDVDVideoCodec::VC_EOF)
    {
@@ -8629,7 +8740,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_syncState == IDVDStreamPlayer::SYNC_STARTING)
      {
        SStartMsg msg;
-@@ -722,24 +833,25 @@
+@@ -722,23 +858,24 @@
        {
          case RenderStereoMode::SPLIT_VERTICAL:
            stereoMode = "left_right";
@@ -8651,16 +8762,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_picture.stereoMode = stereoMode;
        }
      }
- 
++
 +    // A stream that states its own layout can state it wrongly, and a viewer looking at
 +    // swapped eyes has nothing else to correct it with.
 +    if (m_processInfo.GetVideoSettings().m_StereoInvert)
 +      m_picture.stereoMode = SwapStereoscopicEyes(m_picture.stereoMode);
-+
+ 
      // if frame has a pts (usually originating from demux packet), use that
      if (m_picture.pts != DVD_NOPTS_VALUE)
-     {
-@@ -775,6 +887,9 @@
+@@ -775,6 +912,9 @@
      }
  
      if (m_syncState == IDVDStreamPlayer::SYNC_STARTING &&
@@ -8670,7 +8780,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_outputSate != OUTPUT_DROPPED &&
          !(m_picture.iFlags & DVP_FLAG_DROPPED))
      {
-@@ -858,8 +973,62 @@
+@@ -858,8 +998,62 @@
    }
  }
  
@@ -8733,7 +8843,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bAbortOutput = false;
  
    if (m_processInfo.GetVideoStereoMode() != pPicture->stereoMode)
-@@ -927,7 +1096,25 @@
+@@ -927,7 +1121,25 @@
      }
    }
  
@@ -8760,7 +8870,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
      CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);
-@@ -944,6 +1131,9 @@
+@@ -944,6 +1156,9 @@
    int buffer = m_renderManager.WaitForBuffer(m_bAbortOutput, maxWaitTime);
    if (buffer < 0)
    {
@@ -8772,17 +8882,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      // Drop the picture to let the renderer naturally drain the pool and make room for next iteration.
 --- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.h
 +++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.h
-@@ -20,6 +20,9 @@
+@@ -20,6 +20,10 @@
  #include "utils/BitstreamStats.h"
  
  #include <atomic>
++#include <mutex>
 +#ifdef HAVE_DVBRIDGE
 +#include "utils/DVRenderUsage.h"
 +#endif
  
  #define DROP_DROPPED 1
  #define DROP_VERYLATE 2
-@@ -99,6 +102,12 @@
+@@ -99,6 +103,12 @@
                                  int& priority);
  
    EOutputState OutputPicture(const VideoPicture* src);
@@ -8795,7 +8906,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void ProcessOverlays(const VideoPicture* pSource, double pts);
    void OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVideoCodec> codec);
  
-@@ -124,6 +133,12 @@
+@@ -124,7 +134,15 @@
    bool m_bRenderSubs;
    float m_fForcedAspectRatio;
    int m_speed;
@@ -8806,9 +8917,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  unsigned m_diagnosticTransitions{0};
 +#endif
    std::atomic_bool m_stalled = false;
++  std::atomic_uint m_drainPending = 0;
++  std::mutex m_drainMutex;
    std::atomic_bool m_rewindStalled;
    bool m_paused;
-@@ -141,6 +156,9 @@
+   IDVDStreamPlayer::ESyncState m_syncState;
+@@ -141,6 +159,9 @@
    CDroppingStats m_droppingStats;
    CRenderManager& m_renderManager;
    VideoPicture m_picture;
@@ -8861,10 +8975,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      isRotated = true;
  
    float newWidth;
-@@ -168,6 +173,30 @@
-     }
-   }
- 
+@@ -165,6 +170,30 @@
+     {
+       newWidth = std::min(width, height);
+       newHeight = newWidth * outputFrameRatio;
++    }
++  }
++
 +  if (m_videoSettings.m_ViewMode == ViewModeAuto && zoomAmount == 1.0f)
 +  {
 +    float sourceWidth = m_sourceRect.Width() > 0 ? m_sourceRect.Width() : m_sourceWidth;
@@ -8886,13 +9003,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        newWidth /= scale;
 +        newHeight /= scale;
 +      }
-+    }
-+  }
-+
-   // Scale the movie up by set zoom amount
-   newWidth *= zoomAmount;
-   newHeight *= zoomAmount;
-@@ -348,12 +377,34 @@
+     }
+   }
+ 
+@@ -348,10 +377,32 @@
        break;
    }
  
@@ -8906,8 +9020,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +                           CDisplaySettings::GetInstance().GetPixelRatio(),
                         CDisplaySettings::GetInstance().GetZoomAmount(),
                         CDisplaySettings::GetInstance().GetVerticalShift());
- }
- 
++}
++
 +float CBaseRenderer::GetPerEyeAspectRatio() const
 +{
 +  const float ratio = GetAspectRatio();
@@ -8923,11 +9037,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    default:
 +      return ratio;
 +  }
-+}
-+
+ }
+ 
  EShaderFormat CBaseRenderer::GetShaderFormat()
- {
-   EShaderFormat ret = SHADER_NONE;
 @@ -399,7 +450,7 @@
  
  void CBaseRenderer::SetViewMode(int viewMode)
@@ -8968,10 +9080,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  class CSetting;
  struct IntegerSettingOption;
-@@ -44,6 +53,18 @@
+@@ -43,6 +52,18 @@
+ };
  
  struct VideoPicture;
- 
++
 +#ifdef CB1_HAS_HDR10_AI
 +// Capture reads renderer slots under the presentation lock. Only execute may
 +// run unlocked on the GUI/GL owner; publish validates the head under that lock.
@@ -8983,10 +9096,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::function<bool(const Outcome&)> publish;
 +};
 +#endif
-+
+ 
  namespace KODI::RENDERING::CAPTURE
  {
- struct CaptureSpec;
 @@ -66,6 +87,9 @@
    virtual void SetBufferSize(int numBuffers) { }
    virtual void ReleaseBuffer(int idx) { }
@@ -9078,7 +9190,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2551 @@
+@@ -0,0 +1,2554 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -10198,7 +10310,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 +
 +bool CDVBridgeGLES::SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
-+                                    const CRect& bounds, uint64_t content, bool inputPQ)
++                                    const CRect& bounds, uint64_t content, bool inputPQ, bool optimized)
 +{
 +  const int width = m_scanout ? m_scanout->params.w : 0;
 +  const int height = m_scanout ? m_scanout->params.h : 0;
@@ -10218,6 +10330,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const bool layoutChanged = m_nativeOverlayEnabled != enabled || (enabled &&
 +      (texture != m_nativeOverlayTextures[0] || degamma != m_nativeOverlayTextures[1] ||
 +       pq != m_nativeOverlayTextures[2] || formatChanged || sizeChanged ||
++       optimized != m_nativeOverlay.optimized ||
 +       !std::equal(std::begin(nextRect),std::end(nextRect),std::begin(m_nativeOverlay.rect))));
 +  if (layoutChanged || (enabled && content != m_nativeOverlayContent))
 +    ++m_nativeOverlayRevision;
@@ -10226,6 +10339,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!enabled)
 +    return false;
 +  m_nativeOverlay.input_pq = inputPQ;
++  m_nativeOverlay.optimized = optimized;
 +  std::copy(std::begin(nextRect),std::end(nextRect),std::begin(m_nativeOverlay.rect));
 +  const unsigned ids[]{texture, degamma, pq};
 +  pl_tex* wrapped[]{&m_nativeOverlay.texture, &m_nativeOverlay.degamma, &m_nativeOverlay.pq};
@@ -10541,6 +10655,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
 +      policy.mode);
 +  const bool sameGeometry = geometry.source_width == m_sourceGeometry.source_width &&
++      geometry.ignore_l5 == m_sourceGeometry.ignore_l5 &&
 +      geometry.source_height == m_sourceGeometry.source_height &&
 +      geometry.x == m_sourceGeometry.x && geometry.y == m_sourceGeometry.y &&
 +      geometry.width == m_sourceGeometry.width && geometry.height == m_sourceGeometry.height &&
@@ -10658,10 +10773,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      m_auditRequested.Record(DVBRIDGE::DiagnosticNowMs(),"requested",m_auditSerial))
 +  {
 +    m_auditRequestedSerial=m_auditSerial;
-+    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge policy requested: source={}/{}/{} policy={} requested={} effective={} eligible={} fallback={} l2_trims_disabled={} method={} tv_peak={} tv_panel={} tv_gamut={} tv_profile_valid={}",
++    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge policy requested: source={}/{}/{} policy={} requested={} effective={} eligible={} fallback={} l2_trims_disabled={} method={} tv_peak={} tv_panel={} tv_gamut={} tv_profile_valid={} encoded_active_area={}",
 +        base.binding.stream,base.binding.picture,base.binding.revision,revision,
 +        int(preferences.Policy().mode),int(policy.mode),!m_fallback,m_fallback,preferences.L2TrimsDisabled(policy.mode),
-+        preferences.method,preferences.peak,preferences.panel,preferences.gamut,preferences.ProfileValid());
++        preferences.method,preferences.peak,preferences.panel,preferences.gamut,preferences.ProfileValid(),geometry.ignore_l5);
 +    const auto admission=DVBRIDGE::StreamTelemetry::Read().transaction;
 +    DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge output admission: generation={} source_known={} gpu_known={} native_dv={} hdr10={} requested={} effective={} reason={}",
 +        admission.capabilities.generation,admission.capabilities.sourceKnown,admission.capabilities.processingKnown,
@@ -11819,7 +11934,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool Fallback() const { return m_fallback; }
 +  bool Advanced() const { return m_advanced; }
 +  bool SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
-+                        const CRect& bounds, uint64_t content, bool inputPQ);
++                        const CRect& bounds, uint64_t content, bool inputPQ, bool optimized = false);
 +  bool NativeOverlayComposed() const { return m_direct && m_nativeOverlayEnabled; }
 +  bool NativeOverlayPrimed() const { return m_nativeOverlayPrimed; }
 +  // GUI or subtitles will cover the next picture: send a full-raster L5.
@@ -12755,7 +12870,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
        (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
      return true;
-@@ -171,6 +217,217 @@
+@@ -171,6 +217,187 @@
    return false;
  }
  
@@ -12918,36 +13033,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 +#endif
 +
-+dvbridge_geometry CRendererVAAPIGLES::DVBridgeGeometry()
-+{
-+  auto* window = CServiceBroker::GetWinSystem();
-+  CRect source, dest, view;
-+  GetVideoRect(source, dest, view);
-+  const int width = window->GetWidth(), height = window->GetHeight();
-+  const auto& context = window->GetGfxContext();
-+  if (width <= 0 || height <= 0 || context.GetWidth() <= 0 || context.GetHeight() <= 0)
-+    return {};
-+  const CRect original = dest;
-+  dest.Intersect(CRect(0, 0, context.GetWidth(), context.GetHeight()));
-+  if (dest.Width() <= 0 || dest.Height() <= 0 || original.Width() <= 0 || original.Height() <= 0)
-+    return {};
-+  const float sourceX = source.Width() / original.Width();
-+  const float sourceY = source.Height() / original.Height();
-+  source.x1 += (dest.x1 - original.x1) * sourceX;
-+  source.x2 += (dest.x2 - original.x2) * sourceX;
-+  source.y1 += (dest.y1 - original.y1) * sourceY;
-+  source.y2 += (dest.y2 - original.y2) * sourceY;
-+  const float sx = float(width) / context.GetWidth();
-+  const float sy = float(height) / context.GetHeight();
-+  const float left = dest.x1 * sx, top = dest.y1 * sy;
-+  const float right = dest.x2 * sx, bottom = dest.y2 * sy;
-+  const int x = std::floor(left), y = std::floor(top);
-+  return {static_cast<int>(m_sourceWidth), static_cast<int>(m_sourceHeight),
-+          x, y, static_cast<int>(std::ceil(right)) - x,
-+          static_cast<int>(std::ceil(bottom)) - y, width, height,
-+          {source.x1, source.y1, source.x2, source.y2}, {left, top, right, bottom}};
-+}
-+
 +void CRendererVAAPIGLES::SetDVBridgeFELSuccessor(int index)
 +{
 +  m_felSuccessor = {};
@@ -12973,7 +13058,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CRendererVAAPIGLES::CreateTexture(int index)
  {
    if (!m_isVAAPIBuffer)
-@@ -237,6 +494,11 @@
+@@ -237,6 +464,11 @@
  
  bool CRendererVAAPIGLES::UploadTexture(int index)
  {
@@ -12985,7 +13070,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_isVAAPIBuffer)
    {
      CPictureBuffer& buf = m_buffers[index];
-@@ -315,6 +577,18 @@
+@@ -315,6 +547,18 @@
    }
  
    CalculateTextureSourceRects(index, 3);
@@ -13016,7 +13101,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include <array>
  #include <memory>
-@@ -43,12 +46,34 @@
+@@ -43,12 +46,33 @@
  
    // Player functions
    bool ConfigChanged(const VideoPicture &picture) override;
@@ -13043,15 +13128,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool RenderHook(int idx) override;
 +#ifdef HAVE_DVBRIDGE
 +  bool RenderDVBridge(int idx) override;
-+  bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
++  bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer) override;
 +  CDVBridgeGLES::FELSuccessor m_felSuccessor;
-+  dvbridge_geometry DVBridgeGeometry();
 +  bool DVBridgeOrientationSupported(unsigned int orientation) const;
 +#endif
    void AfterRenderHook(int idx) override;
  
    // textures
-@@ -59,13 +84,13 @@
+@@ -59,13 +83,13 @@
    EShaderFormat GetShaderFormat() override;
  
    bool m_isVAAPIBuffer = true;
@@ -13074,6 +13158,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  {
    if (m_imported)
      return true;
+-
 +  VADRMPRIMESurfaceDescriptor surface{};
 +  const VAStatus status = vaExportSurfaceHandle(pic->vadsp, pic->procPic.videoSurface,
 +      VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
@@ -13088,7 +13173,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    drmFDs[i].attach(surface.objects[i].fd);
 +  return Import(pic, surface);
 +}
- 
++
 +bool CVaapi2Texture::Import(CVaapiRenderPicture* pic, const VADRMPRIMESurfaceDescriptor& surface)
 +{
 +  if (m_imported)
@@ -13100,7 +13185,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return false;
    };
 -
--  VAStatus status;
++  if (!surface.num_objects || surface.num_objects > 4 || !surface.num_layers || surface.num_layers > 4)
++    return failImport();
+   VAStatus status;
 -
 -  VADRMPRIMESurfaceDescriptor surface;
 -
@@ -13113,8 +13200,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -  {
 -    CLog::Log(LOGWARNING, "CVaapi2Texture::Import: vaExportSurfaceHandle failed - Error: {} ({})",
 -              vaErrorStr(status), status);
-+  if (!surface.num_objects || surface.num_objects > 4 || !surface.num_layers || surface.num_layers > 4)
-     return failImport();
+-    return failImport();
 -  }
 -
 -  // EGL takes its own dma-buf reference at import; the fds need not outlive this function
@@ -13123,7 +13209,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -    drmFDs[object].attach(surface.objects[object].fd);
 -
 -  status = vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
-+  VAStatus status;
 +  status = pic->decodeCompleted ? VA_STATUS_SUCCESS : vaSyncSurface(pic->vadsp, pic->procPic.videoSurface);
    if (status != VA_STATUS_SUCCESS)
    {
@@ -13192,7 +13277,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        protect.push_back(static_cast<uint32_t>(slot) + 1);
    }
  
-@@ -337,15 +341,18 @@
+@@ -337,13 +341,16 @@
  void CVaapiTexturePool::ReleaseAll()
  {
    m_cache.TakeAll();
@@ -13204,18 +13289,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  // Foreign DV leases defer Reset until their real source-read completion.
    m_entries.clear();
    m_free.clear();
- }
- 
++}
++
 +std::shared_ptr<void> CVaapiTexturePool::Retain(CVaapiTexture* texture) const
 +{
 +  for (const auto& entry : m_entries)
 +    if (entry.get() == texture) return entry;
 +  return {};
-+}
-+
+ }
+ 
  bool CVaapi2Texture::TestEsh(VADisplay vaDpy, EGLDisplay eglDisplay, std::uint32_t rtFormat, std::int32_t pixelFormat)
- {
-   int width = 1920;
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 @@ -18,6 +18,7 @@
@@ -13313,13 +13396,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 -  m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
 -  m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+-}
 +  bool prepared=m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
 +  prepared &= m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
 +  (void)prepared;
 +#ifdef HAVE_DVBRIDGE
 +  m_planePrepared=prepared;
 +#endif
- }
++}
 +
 +#ifdef HAVE_DVBRIDGE
 +uint64_t CVideoLayerBridgeDRMPRIME::PreparedPlaybackGeneration() const
@@ -13429,7 +13513,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_srcPrimaries = picture.color_primaries;
    m_srcColorBits = picture.colorBits;
    m_srcFullRange = picture.color_range == 1;
-@@ -207,11 +218,74 @@
+@@ -207,10 +218,73 @@
    // frame is loaded after every call to Configure().
    m_bValidated = false;
  
@@ -13478,7 +13562,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
  
    CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
- 
++
 +#ifdef HAVE_DVBRIDGE
 +  m_dvRequested = KODI::WINDOWING::GBM::CWinSystemGbmGLESContext::DVBridgeRequested(&picture);
 +  if (m_dvRequested)
@@ -13500,10 +13584,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return true;
 +  }
 +#endif
-+
+ 
    m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
    CLog::Log(LOGDEBUG, "LinuxRendererGLES::Configure: HDR passthrough: {}",
-             m_passthroughHDR ? "on" : "off");
 @@ -222,6 +296,9 @@
      CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: HDR passthrough active but GUI "
                            "compositing not supported by windowing system");
@@ -13594,7 +13677,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_bConfigured)
      return;
  
-@@ -688,13 +801,49 @@
+@@ -688,66 +801,31 @@
        m_pYUVBobShader->SetAlpha(1.0f);
    }
  
@@ -13611,84 +13694,131 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    glEnable(GL_BLEND);
  }
  
+-void CLinuxRendererGLES::UpdateVideoFilter()
+-{
+-  CRect srcRect;
+-  CRect dstRect;
+-  CRect viewRect;
+-  GetVideoRect(srcRect, dstRect, viewRect);
+-
+-  // TODO: ValidateRenderTarget runs before the display resolution is established
+-  // (the WHITELIST/resolution ADJUST happens ~500ms after the first RenderUpdate).
+-  // This causes UpdateVideoFilter to be called with a 0x0 viewport. The proper fix
+-  // is in CRenderManager to defer rendering until the resolution is ready.
+-  if (viewRect.Height() == 0 || viewRect.Width() == 0)
+-    return;
+-
+-  // TODO: GL also checks nonLinStretchChanged and cmsChanged in the early exit
+-  // and the reload check below. Add when non-linear stretch and CMS are ported to GLES.
+-  if (m_scalingMethodGui == m_videoSettings.m_ScalingMethod &&
+-      viewRect.Height() == m_lastViewRect.Height() && viewRect.Width() == m_lastViewRect.Width() &&
+-      srcRect.Height() == m_lastSourceRect.Height() && srcRect.Width() == m_lastSourceRect.Width())
+-  {
+-    return;
+-  }
+-
+-  // Viewport-only change doesn't need shader reload -- only method changes do
+-  if (m_scalingMethod != m_videoSettings.m_ScalingMethod)
+-    m_reloadShaders = true;
+-
+-  const ESCALINGMETHOD previousMethod = m_scalingMethod;
+-  m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
+-  m_scalingMethod = m_scalingMethodGui;
+-  m_lastViewRect = viewRect;
+-  m_lastSourceRect = srcRect;
+-
+-  if(!Supports(m_scalingMethod))
 +ESCALINGMETHOD CLinuxRendererGLES::SelectScalingMethod() const
 +{
 +  auto method = m_videoSettings.m_ScalingMethod;
 +  if(!Supports(method))
-+  {
-+    CLog::Log(LOGWARNING,
-+              "CLinuxRendererGLES::UpdateVideoFilter - chosen scaling method {}, is not supported "
-+              "by renderer",
+   {
+     CLog::Log(LOGWARNING,
+               "CLinuxRendererGLES::UpdateVideoFilter - chosen scaling method {}, is not supported "
+               "by renderer",
+-              m_scalingMethod);
+-    m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+-  }
+-
+-  if (m_pVideoFilterShader)
+-  {
+-    delete m_pVideoFilterShader;
+-    m_pVideoFilterShader = nullptr;
+-  }
+-
+-  m_fbo.fbo.Cleanup();
+-
+-  VerifyGLState();
+-
+-  if (m_scalingMethod == VS_SCALINGMETHOD_AUTO)
 +              method);
 +    method = VS_SCALINGMETHOD_LINEAR;
 +  }
 +
 +  if (method == VS_SCALINGMETHOD_AUTO)
-+  {
-+    bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
-+    bool scaleUp =
-+        (int)m_sourceHeight < m_viewRect.Height() && (int)m_sourceWidth < m_viewRect.Width();
-+    bool scaleFps =
-+        m_fps <
-+        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoAutoScaleMaxFps +
-+            0.01f;
-+
-+    if (Supports(VS_SCALINGMETHOD_LANCZOS3_FAST) && scaleSD && scaleUp && scaleFps)
+   {
+     bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
+     bool scaleUp =
+@@ -758,10 +836,56 @@
+             0.01f;
+ 
+     if (Supports(VS_SCALINGMETHOD_LANCZOS3_FAST) && scaleSD && scaleUp && scaleFps)
+-      m_scalingMethod = VS_SCALINGMETHOD_LANCZOS3_FAST;
 +      method = VS_SCALINGMETHOD_LANCZOS3_FAST;
-+    else
+     else
+-      m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+-  }
 +      method = VS_SCALINGMETHOD_LINEAR;
 +  }
 +
 +  return method;
 +}
 +
- void CLinuxRendererGLES::UpdateVideoFilter()
- {
-   CRect srcRect;
-@@ -724,19 +873,10 @@
- 
-   const ESCALINGMETHOD previousMethod = m_scalingMethod;
-   m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
--  m_scalingMethod = m_scalingMethodGui;
++void CLinuxRendererGLES::UpdateVideoFilter()
++{
++  CRect srcRect;
++  CRect dstRect;
++  CRect viewRect;
++  GetVideoRect(srcRect, dstRect, viewRect);
++
++  // TODO: ValidateRenderTarget runs before the display resolution is established
++  // (the WHITELIST/resolution ADJUST happens ~500ms after the first RenderUpdate).
++  // This causes UpdateVideoFilter to be called with a 0x0 viewport. The proper fix
++  // is in CRenderManager to defer rendering until the resolution is ready.
++  if (viewRect.Height() == 0 || viewRect.Width() == 0)
++    return;
++
++  // TODO: GL also checks nonLinStretchChanged and cmsChanged in the early exit
++  // and the reload check below. Add when non-linear stretch and CMS are ported to GLES.
++  if (m_scalingMethodGui == m_videoSettings.m_ScalingMethod &&
++      viewRect.Height() == m_lastViewRect.Height() && viewRect.Width() == m_lastViewRect.Width() &&
++      srcRect.Height() == m_lastSourceRect.Height() && srcRect.Width() == m_lastSourceRect.Width())
++  {
++    return;
++  }
++
++  // Viewport-only change doesn't need shader reload -- only method changes do
++  if (m_scalingMethod != m_videoSettings.m_ScalingMethod)
++    m_reloadShaders = true;
++
++  const ESCALINGMETHOD previousMethod = m_scalingMethod;
++  m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
 +  m_scalingMethod = SelectScalingMethod();
-   m_lastViewRect = viewRect;
-   m_lastSourceRect = srcRect;
++  m_lastViewRect = viewRect;
++  m_lastSourceRect = srcRect;
++
++  if (m_pVideoFilterShader)
++  {
++    delete m_pVideoFilterShader;
++    m_pVideoFilterShader = nullptr;
++  }
++
++  m_fbo.fbo.Cleanup();
++
++  VerifyGLState();
  
--  if(!Supports(m_scalingMethod))
--  {
--    CLog::Log(LOGWARNING,
--              "CLinuxRendererGLES::UpdateVideoFilter - chosen scaling method {}, is not supported "
--              "by renderer",
--              m_scalingMethod);
--    m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
--  }
--
-   if (m_pVideoFilterShader)
-   {
-     delete m_pVideoFilterShader;
-@@ -747,22 +887,6 @@
- 
-   VerifyGLState();
- 
--  if (m_scalingMethod == VS_SCALINGMETHOD_AUTO)
--  {
--    bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
--    bool scaleUp =
--        (int)m_sourceHeight < m_viewRect.Height() && (int)m_sourceWidth < m_viewRect.Width();
--    bool scaleFps =
--        m_fps <
--        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoAutoScaleMaxFps +
--            0.01f;
--
--    if (Supports(VS_SCALINGMETHOD_LANCZOS3_FAST) && scaleSD && scaleUp && scaleFps)
--      m_scalingMethod = VS_SCALINGMETHOD_LANCZOS3_FAST;
--    else
--      m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
--  }
--
    if (m_scalingMethod != previousMethod)
      m_reloadShaders = true;
- 
 @@ -1065,8 +1189,24 @@
  
    glFinish();
@@ -13734,7 +13864,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    // cleanup framebuffer object if it was in use
-@@ -1116,34 +1259,39 @@
+@@ -1116,38 +1259,130 @@
      return false;
    }
  
@@ -13742,18 +13872,35 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -  {
 -    return true;
 -  }
-+  bool ret{true};
- 
+-
 -  bool ret{false};
+-
+-  YuvImage &dst = m_buffers[index].image;
+-  m_buffers[index].videoBuffer->GetPlanes(dst.plane);
+-  m_buffers[index].videoBuffer->GetStrides(dst.stride);
+-
+-  if (m_format == AV_PIX_FMT_NV12)
+-  {
+-    ret = UploadNV12Texture(index);
+-  }
+-  else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
+-  {
+-    ret = UploadPackedYUVTexture(index);
+-  }
+-  else
+-  {
+-    // default to planar YUV texture handlers
+-    ret = UploadPlanarYUVTexture(index);
+-  }
+-
++  bool ret{true};
++
 +  if (!m_buffers[index].loaded)
 +  {
 +    YuvImage& dst = m_buffers[index].image;
 +    m_buffers[index].videoBuffer->GetPlanes(dst.plane);
 +    m_buffers[index].videoBuffer->GetStrides(dst.stride);
- 
--  YuvImage &dst = m_buffers[index].image;
--  m_buffers[index].videoBuffer->GetPlanes(dst.plane);
--  m_buffers[index].videoBuffer->GetStrides(dst.stride);
++
 +    if (m_format == AV_PIX_FMT_NV12)
 +    {
 +      ret = UploadNV12Texture(index);
@@ -13767,35 +13914,116 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      // default to planar YUV texture handlers
 +      ret = UploadPlanarYUVTexture(index);
 +    }
- 
--  if (m_format == AV_PIX_FMT_NV12)
--  {
--    ret = UploadNV12Texture(index);
--  }
--  else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
--  {
--    ret = UploadPackedYUVTexture(index);
--  }
--  else
--  {
--    // default to planar YUV texture handlers
--    ret = UploadPlanarYUVTexture(index);
++
 +    if (ret)
 +    {
 +      m_buffers[index].loaded = true;
 +    }
-   }
- 
++  }
++
 +  // recalculate on every render, not just on upload: ManageRenderArea() moves
 +  // m_sourceRect between the two eyes of a stereoscopic source
    if (ret)
    {
 -    m_buffers[index].loaded = true;
+-  }
+-
 +    CalculateTextureSourceRects(index, 3);
-   }
- 
++  }
++#ifdef HAVE_DVBRIDGE
++  if (auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++  {
++    CDVBridgeGLES::Layer layer{};
++    const bool usable=ret && BuildDVBridgeLayer(index,layer);
++    const auto& buffer=m_buffers[index];
++    const auto binding=buffer.doviSourcePicture && buffer.doviSourcePicture->doviSourceBinding.Valid() ?
++        buffer.doviSourcePicture->doviSourceBinding : buffer.doviMetadata.Binding();
++    window->ObserveDVImport(binding,DVBridgeGeometry(),usable);
++  }
++#endif
    return ret;
-@@ -1171,6 +1319,26 @@
+ }
++
++#ifdef HAVE_DVBRIDGE
++bool CLinuxRendererGLES::BuildDVBridgeLayer(int index, CDVBridgeGLES::Layer& layer)
++{
++  auto& buffer=m_buffers[index];
++  if (!buffer.doviSourcePicture || !buffer.doviMetadata.Data() ||
++      buffer.doviPts==DVD_NOPTS_VALUE || !std::isfinite(buffer.doviPts) ||
++      m_textureTarget!=GL_TEXTURE_2D || m_renderOrientation!=0)
++    return false;
++  if (m_sourceWidth<=0 || m_sourceWidth>3840 || m_sourceHeight<=0 || m_sourceHeight>2160)
++    return false;
++  switch (m_format)
++  {
++    case AV_PIX_FMT_YUV420P10LE: layer.layout=DVBRIDGE_YUV420P10; break;
++    case AV_PIX_FMT_YUV444P10LE: layer.layout=DVBRIDGE_YUV444P10; break;
++    default: return false;
++  }
++  layer.width=m_sourceWidth; layer.height=m_sourceHeight;
++  layer.scalingMethod=SelectScalingMethod();
++  layer.pts=buffer.doviPts;
++  layer.binding=buffer.doviMetadata.Binding();
++  layer.lease=buffer.doviSourcePicture;
++  layer.sourceInfo=buffer.doviSourcePicture->doviSourceInfo;
++  layer.sourceSideData=buffer.doviSourcePicture->sourceSideData;
++  layer.chromaLocation=buffer.doviSourcePicture->chroma_position;
++  for (int p=0;p<3;++p)
++  {
++    const auto& plane=buffer.fields[FIELD_FULL][p];
++    const bool subsampled=p && m_format==AV_PIX_FMT_YUV420P10LE;
++    const unsigned width=subsampled ? (m_sourceWidth+1)/2 : m_sourceWidth;
++    const unsigned height=subsampled ? (m_sourceHeight+1)/2 : m_sourceHeight;
++    if (!plane.id || plane.texwidth!=width || plane.texheight!=height) return false;
++    layer.planes[p]={plane.id,static_cast<int>(plane.texwidth),static_cast<int>(plane.texheight)};
++  }
++  return layer.binding.Valid();
++}
++
++bool CLinuxRendererGLES::RenderDVBridge(int index)
++{
++  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++  CDVBridgeGLES::Layer layer{};
++  if (!window || !BuildDVBridgeLayer(index,layer)) return false;
++  const auto& buffer=m_buffers[index];
++  return window->RenderDVBridge(layer,buffer.doviEnhancement,buffer.doviEnhancementBinding,
++      buffer.doviMetadata,DVBridgeGeometry());
++}
++
++dvbridge_geometry CLinuxRendererGLES::DVBridgeGeometry()
++{
++  auto* window = CServiceBroker::GetWinSystem();
++  CRect source, dest, view;
++  GetVideoRect(source, dest, view);
++  const int width = window->GetWidth(), height = window->GetHeight();
++  const auto& context = window->GetGfxContext();
++  if (width <= 0 || height <= 0 || context.GetWidth() <= 0 || context.GetHeight() <= 0)
++    return {};
++  const CRect original = dest;
++  dest.Intersect(CRect(0, 0, context.GetWidth(), context.GetHeight()));
++  if (dest.Width() <= 0 || dest.Height() <= 0 || original.Width() <= 0 || original.Height() <= 0)
++    return {};
++  const float sourceX = source.Width() / original.Width();
++  const float sourceY = source.Height() / original.Height();
++  source.x1 += (dest.x1 - original.x1) * sourceX;
++  source.x2 += (dest.x2 - original.x2) * sourceX;
++  source.y1 += (dest.y1 - original.y1) * sourceY;
++  source.y2 += (dest.y2 - original.y2) * sourceY;
++  const float sx = float(width) / context.GetWidth();
++  const float sy = float(height) / context.GetHeight();
++  const float left = dest.x1 * sx, top = dest.y1 * sy;
++  const float right = dest.x2 * sx, bottom = dest.y2 * sy;
++  const int x = std::floor(left), y = std::floor(top);
++  return {static_cast<int>(m_sourceWidth), static_cast<int>(m_sourceHeight),
++          x, y, static_cast<int>(std::ceil(right)) - x,
++          static_cast<int>(std::ceil(bottom)) - y, width, height,
++          {source.x1, source.y1, source.x2, source.y2}, {left, top, right, bottom}, false};
++}
++#endif
+ 
+ bool CLinuxRendererGLES::Render(unsigned int flags, int index)
+ {
+@@ -1171,6 +1406,26 @@
      return false;
    }
  
@@ -13822,7 +14050,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (RenderHook(index))
    {
      ;
-@@ -1204,6 +1372,10 @@
+@@ -1204,6 +1459,10 @@
    }
  
    AfterRenderHook(index);
@@ -13833,7 +14061,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -1617,8 +1789,6 @@
+@@ -1616,8 +1875,6 @@
+   }
+ 
+   VerifyGLState();
+-
+-  CalculateTextureSourceRects(source, 3);
+ 
+   return true;
+ }
+@@ -1822,8 +2079,6 @@
  
    VerifyGLState();
  
@@ -13842,27 +14079,28 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -1822,8 +1992,6 @@
+@@ -1978,8 +2233,6 @@
+             im->bpp, im->plane[0]);
  
    VerifyGLState();
- 
--  CalculateTextureSourceRects(source, 3);
 -
+-  CalculateTextureSourceRects(source, 3);
+ 
    return true;
  }
- 
-@@ -1979,8 +2147,6 @@
- 
-   VerifyGLState();
- 
--  CalculateTextureSourceRects(source, 3);
--
-   return true;
- }
- 
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
-@@ -75,9 +75,13 @@
+@@ -13,6 +13,9 @@
+ #include "system_gl.h"
+ 
+ #include "BaseRenderer.h"
++#ifdef HAVE_DVBRIDGE
++#include "DVBridgeGLES.h"
++#endif
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
+ #include "cores/VideoSettings.h"
+ #include "FrameBufferObject.h"
+@@ -75,9 +78,13 @@
    bool VideoBypassesFramebuffer() override { return false; }
    void ReleaseBuffer(int idx) override;
    void RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha) override;
@@ -13876,7 +14114,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // Feature support
    bool SupportsMultiPassRendering() override;
-@@ -85,6 +89,12 @@
+@@ -85,6 +92,12 @@
    bool Supports(ESCALINGMETHOD method) const override;
  
  protected:
@@ -13889,7 +14127,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // Returns 0 if scaling is below hqscalers threshold.
    // Otherwise returns the scale factor: < 1.0 = downscale, > 1.0 = upscale.
    float ScalingAboveThreshold() const;
-@@ -100,6 +110,7 @@
+@@ -100,6 +113,7 @@
    virtual void LoadShaders(int field=FIELD_FULL);
    virtual void ReleaseShaders();
    void SetTextureFilter(GLenum method);
@@ -13897,19 +14135,21 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void UpdateVideoFilter();
    void CheckVideoParameters(int index);
    AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
-@@ -132,6 +143,11 @@
+@@ -132,6 +146,13 @@
    // hooks for HwDec rendering
    virtual bool LoadShadersHook() { return false; }
    virtual bool RenderHook(int idx) { return false; }
 +#ifdef HAVE_DVBRIDGE
 +  // Failure is terminal for this frame: never silently use the ordinary shader.
-+  virtual bool RenderDVBridge(int idx) { return false; }
++  virtual bool RenderDVBridge(int idx);
++  virtual bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
++  dvbridge_geometry DVBridgeGeometry();
 +  bool m_dvRequested{false};
 +#endif
    virtual void AfterRenderHook(int idx) {}
  
    struct
-@@ -199,11 +215,18 @@
+@@ -199,11 +220,18 @@
      AVMasteringDisplayMetadata displayMetadata;
      bool hasLightMetadata{false};
      AVContentLightMetadata lightMetadata;
@@ -13949,10 +14189,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // during HDR composite the m_isHDROverlay overlays render via
    // RenderHDROverlays instead
-@@ -172,9 +176,19 @@
+@@ -172,8 +176,18 @@
  
        if (!(hdrComposite && o->m_isHDROverlay))
          Render(o.get());
+-    }
+-  }
 +#ifdef HAVE_DVBRIDGE
 +      else if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
 +                   CServiceBroker::GetWinSystem()); window && window->BeginDVPQSubtitle())
@@ -13961,14 +14203,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        window->EndDVPQSubtitle();
 +      }
 +#endif
-     }
-   }
- 
-+  m_lastDrawnPlaneOffset = m_subtitlePlaneOffset;
++    }
++  }
 +
++  m_lastDrawnPlaneOffset = m_subtitlePlaneOffset;
+ 
    ReleaseUnused();
  }
- 
 @@ -184,8 +198,15 @@
  {
    if (!CServiceBroker::GetWinSystem()->IsHdrComposite())
@@ -14091,7 +14332,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -  if (idx < 0 || idx >= NUM_BUFFERS)
 +  if (idx < 0 || idx >= MAX_RENDER_BUFFERS)
      return;
- 
++
 +  if (m_bitmapSettingsChanged.exchange(false))
 +  {
 +    auto options = CServiceBroker::GetSettingsComponent()->GetSubtitlesSettings()->GetBitmapOptions();
@@ -14116,7 +14357,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      MarkDirty();
 +    }
 +  }
-+
+ 
    bool doMarkDirty = false;
    bool hasImageSpu = false;
 +  bool hasVisible = false;
@@ -14300,10 +14541,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include <cmath>
  
-@@ -34,6 +38,15 @@
+@@ -33,6 +37,15 @@
+ #define USE_PREMULTIPLIED_ALPHA 1
  
  using namespace OVERLAY;
- 
++
 +static void RecordSubtitleBounds(const CRect& rect, unsigned texture)
 +{
 +#ifdef HAVE_DVBRIDGE
@@ -14312,10 +14554,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    window->RecordDVSubtitle(rect, texture);
 +#endif
 +}
-+
+ 
  static void LoadTexture(GLenum target,
                          GLsizei width,
-                         GLsizei height,
 @@ -146,6 +159,7 @@
  COverlayTextureGLES::COverlayTextureGLES(const CDVDOverlayImage& o, CRect& rSource)
  {
@@ -14741,6 +14982,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
    {
      std::unique_lock lock2(m_presentlock);
+-
+-    if (m_queued.empty())
 +#ifdef HAVE_DVBRIDGE
 +    if (m_cb1PresentPending)
 +    {
@@ -14773,8 +15016,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      if (m_aiQueuePreparationStale) return;
 +    }
 +#endif
- 
--    if (m_queued.empty())
++
 +    if (m_queued.empty()
 +#ifdef HAVE_DVBRIDGE
 +        && !m_cb1PresentPending
@@ -15152,7 +15394,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // While the clock is paused, frameOnScreen does not advance, so adding the display
    // latency would pick a frame ahead of the one actually shown. That only holds for
-@@ -1072,28 +1507,85 @@
+@@ -1072,27 +1507,84 @@
    const double nextFramePts =
        m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
  
@@ -15196,6 +15438,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -      m_clockSync.m_syncOffset = average;
 -      m_clockSync.m_error = 0;
 -      m_clockSync.m_errCount = 0;
+-
+-      m_dvdClock.SetVsyncAdjust(-average);
 +    // Calibrate once per physical segment; missing anchors never contribute CPU phase.
 +    if (!physicalPhase || (completionAge && m_clockSync.m_errCount <= 30))
 +    {
@@ -15215,8 +15459,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        m_clockSync.m_syncOffset = average;
 +        m_clockSync.m_error = 0;
 +        m_clockSync.m_errCount = physicalPhase ? 31 : 0;
- 
--      m_dvdClock.SetVsyncAdjust(-average);
++
 +        m_dvdClock.SetVsyncAdjust(-average);
 +      }
      }
@@ -15233,7 +15476,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_dvdClock.SetVsyncAdjust(0);
    }
- 
++
 +#ifdef CB1_HAS_HDR10_AI
 +  if (physicalPhase && completionAge && m_fps > 0 &&
 +      frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead())
@@ -15245,10 +15488,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
 +  }
 +#endif
-+
+ 
    CLog::LogFC(LOGDEBUG, LOGAVTIMING,
                "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
-               "forceNext: {}",
 @@ -1114,14 +1606,17 @@
      auto iter = m_queued.begin();
      int idx = *iter;
@@ -15431,7 +15673,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  };
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp
-@@ -15,12 +15,24 @@
+@@ -15,11 +15,23 @@
  #include "rendering/gles/RenderSystemGLES.h"
  #include "utils/GLUtils.h"
  #include "utils/log.h"
@@ -15441,7 +15683,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <string>
  
  using namespace Shaders::GLES;
- 
++
 +namespace
 +{
 +// A floating-point output keeps what a fixed-point one clamps away: values outside [0, 1] (the
@@ -15452,10 +15694,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return winSystem && winSystem->HasFloatOutput() ? "#define KODI_CLAMP_OUTPUT\n" : "";
 +}
 +} // unnamed namespace
-+
+ 
  //////////////////////////////////////////////////////////////////////
  // BaseVideoFilterShader - base class for video filter shaders
- //////////////////////////////////////////////////////////////////////
 @@ -37,7 +49,7 @@
  
    VertexShader()->LoadSource("gles_videofilter.vert");
