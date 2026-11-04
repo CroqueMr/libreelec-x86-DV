@@ -1667,6 +1667,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    virtual bool MoveWindow(int topLeft, int topRight){return false;}
    virtual void FinishModeChange(RESOLUTION res){}
    virtual void FinishWindowResize(int newWidth, int newHeight) {ResizeWindow(newWidth, newHeight, -1, -1);}
+@@ -271,6 +272,7 @@
+   // When false, implementations should skip FBO bind/clear since no GUI
+   // draws will land in the FBO this frame.
+   virtual bool BeginGuiComposite(bool guiWillRender) { return false; }
++  virtual bool CanReuseGuiComposite() const { return false; }
+   virtual void EndGuiComposite() {}
+   virtual void CompositeGui() {}
+ 
 --- a/xbmc/windowing/gbm/CMakeLists.txt
 +++ b/xbmc/windowing/gbm/CMakeLists.txt
 @@ -24,3 +24,7 @@
@@ -3124,7 +3132,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  #include "utils/BufferObjectFactory.h"
  #include "utils/DMAHeapBufferObject.h"
-@@ -35,14 +47,80 @@
+@@ -35,14 +47,83 @@
  #include "utils/XTimeUtils.h"
  #include "utils/log.h"
  #include "windowing/WindowSystemFactory.h"
@@ -3148,7 +3156,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#include "application/ApplicationPlayer.h"
 +#include "guilib/GUIComponent.h"
 +#include "guilib/GUIWindowManager.h"
++#include "guilib/IDirtyRegionSolver.h"
 +#include "rendering/capture/CaptureService.h"
++#include "settings/AdvancedSettings.h"
++#include "settings/SettingsComponent.h"
 +#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
 +#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
 +#include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
@@ -3205,7 +3216,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  CWinSystemGbmGLESContext::CWinSystemGbmGLESContext()
    : CWinSystemGbmEGLContext(EGL_PLATFORM_GBM_MESA, "EGL_MESA_platform_gbm")
-@@ -52,6 +130,19 @@
+@@ -52,6 +133,19 @@
  void CWinSystemGbmGLESContext::Register()
  {
    CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem, "gbm");
@@ -3225,7 +3236,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  std::unique_ptr<CWinSystemBase> CWinSystemGbmGLESContext::CreateWinSystem()
-@@ -111,15 +202,65 @@
+@@ -111,15 +205,65 @@
    return true;
  }
  
@@ -3292,7 +3303,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +269,333 @@
+@@ -128,16 +272,335 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -3405,6 +3416,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  // A prepared picture already includes its GUI; wait before drawing it again.
 +  if (m_cb1FramePending && m_dvFrame)
 +  {
++    if (CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions())
++      m_guiCacheValid = false;
 +    PresentFrame(false, true);
 +    return false;
 +  }
@@ -3627,7 +3640,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (rendered || videoLayer)
    {
-@@ -175,24 +633,130 @@
+@@ -175,27 +638,134 @@
  #endif
      }
  
@@ -3769,7 +3782,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
  {
-@@ -203,7 +767,11 @@
++  m_guiCacheValid = false;
+   m_guiCompositing = (colorTransfer != 0);
+ 
+   if (m_guiCompositing)
+@@ -203,7 +773,11 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -3782,7 +3799,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -225,6 +793,13 @@
+@@ -225,6 +799,13 @@
    }
    else
    {
@@ -3796,8 +3813,36 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -236,6 +811,38 @@
+@@ -234,8 +815,66 @@
+   return m_guiCompositing;
+ }
  
++bool CWinSystemGbmGLESContext::CanReuseGuiComposite() const
++{
++#ifdef HAVE_DVBRIDGE
++  const auto advanced = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings();
++  const int dirtyAlgorithm = advanced->m_guiAlgorithmDirtyRegions;
++  // A live redraw clears the entire GUI FBO; partial-scissor damage cannot repopulate it.
++  if (advanced->m_guiVisualizeDirtyRegions ||
++      (dirtyAlgorithm != DIRTYREGION_SOLVER_FILL_VIEWPORT_ALWAYS &&
++       dirtyAlgorithm != DIRTYREGION_SOLVER_FILL_VIEWPORT_ON_CHANGE))
++    return false;
++  if (!(m_dvState.Captured() || m_hdrConversion) || !GetGfxContext().IsFullScreenVideo() ||
++      !DVBRIDGE::FrameOutputSettings().optimizedGUI || !m_guiCompositing || !m_guiCacheValid ||
++      !m_guiFbo.IsValid() || !m_guiFbo.IsBound() || !m_compositeShader ||
++      m_guiFboWidth != m_nWidth || m_guiFboHeight != m_nHeight ||
++      m_dvOverlays || m_dvSubtitleDraws || m_dvPQSubtitleDraws)
++    return false;
++  const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
++  if (player && player->HasVisibleOverlay()) return false;
++  const auto capture = CServiceBroker::GetCaptureService();
++  return !capture || (capture->TakeActive(KODI::RENDERING::CAPTURE::CaptureContent::COMPOSITE).empty() &&
++                      capture->TakeActive(KODI::RENDERING::CAPTURE::CaptureContent::VIDEO).empty());
++#else
++  return false;
++#endif
++}
++
  bool CWinSystemGbmGLESContext::BeginGuiComposite(bool guiWillRender)
  {
 +#ifdef HAVE_DVBRIDGE
@@ -3835,10 +3880,40 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_guiCompositing)
      return false;
  
-@@ -290,8 +897,22 @@
-   if (!guiWillRender)
-     return true;
+@@ -274,24 +913,43 @@
  
+     m_guiFboWidth = width;
+     m_guiFboHeight = height;
++    m_guiCacheValid = false;
+     m_guiFboClean = false; // fresh FBO is undefined, force a clear
+     CLog::Log(LOGDEBUG, "CWinSystemGbmGLESContext: created GUI FBO {}x{}", width, height);
+   }
+ 
+-  // When GUI render is being skipped, leave the FBO bind/clear out: nothing
+-  // will draw into it this frame. The FBO's prior sRGB GUI content is
+-  // implicitly preserved across the skipped frame as a side effect.
+-  //! @todo The preserved sRGB FBO is currently not leveraged: D2P reuses the
+-  //! post-PQ GUI plane back buffer directly via display HW, and single-plane
+-  //! never reaches !guiWillRender (the dirty-driven skip is gated on
+-  //! IsRenderingVideoLayer). Future single-plane "gate, don't move" work
+-  //! lets the GUI walk skip while CompositeGui still runs each video frame,
+-  //! re-using this cached sRGB FBO as the composite source.
++#ifdef HAVE_DVBRIDGE
++  if ((m_dvState.Captured() || m_hdrConversion) && std::getenv("CB1_PRESENTATION_AUDIT"))
++  {
++    static unsigned redraws = 0, cached = 0;
++    ++(guiWillRender ? redraws : cached);
++    if ((redraws + cached) % 120 == 0)
++      DVBRIDGE::DiagnosticLog(LOGINFO, "CB1 GUI cache: redraws={} cached={}", redraws, cached);
++  }
++#endif
++  // Reuse only GUI content; RenderEx still prepares the current movie picture.
+   if (!guiWillRender)
++  {
++    m_GUIElementCount = m_guiCachedElementCount;
+     return true;
++  }
++
 +#ifdef HAVE_DVBRIDGE
 +  m_dvPQGuiMergeAttempted = m_dvPQGuiComposed = false;
 +  m_dvSubtitleBounds = {};
@@ -3851,14 +3926,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!m_cb1FramePending || !m_dvFrame)
 +    m_dvNativeGui = false;
 +#endif
-+
+ 
    if (!m_guiFbo.BeginRender())
      return false;
 +
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +921,11 @@
+@@ -300,6 +958,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -3870,10 +3945,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -308,6 +934,11 @@
+@@ -307,7 +970,16 @@
+ void CWinSystemGbmGLESContext::EndGuiComposite()
  {
    if (m_guiWillRender)
++  {
      m_guiFbo.EndRender();
++    m_guiCachedElementCount = GetGUIElementCount();
++    m_guiCacheValid = true;
++  }
 +
 +#ifdef HAVE_DVBRIDGE
 +  // CB1 overwrites the full scanout raster, including exact black borders.
@@ -3882,7 +3962,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +971,32 @@
+@@ -340,17 +1012,32 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -3918,7 +3998,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +1006,27 @@
+@@ -360,6 +1047,35 @@
    if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
        m_DRM->GetGuiPlane() != nullptr)
      return;
@@ -3927,15 +4007,23 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  GLint previousFramebuffer = 0;
 +  GLint previousViewport[4]{};
 +  const bool dvComposite = m_dvState.Captured() || m_hdrConversion;
++  bool directHDR10 = false;
 +  if (dvComposite)
 +  {
 +    if (!m_dvFrame || !m_dvBridge)
 +      return;
-+    const auto target = m_dvBridge->GetPQFramebuffer();
-+    if (!target)
++    unsigned target = 0, bits = 0;
++    directHDR10 = m_hdrConversion && m_dvBridge->GetHDR10OutputTarget(target, bits);
++    if (!directHDR10 && !(target = m_dvBridge->GetPQFramebuffer()))
 +    {
 +      m_dvFrame = false;
 +      return;
++    }
++    if (directHDR10 && UseLimitedColor())
++    {
++      const float maximum = (1u << bits) - 1;
++      m_compositeShader->SetOutputRange((219u << (bits - 8)) / maximum,
++                                      (16u << (bits - 8)) / maximum);
 +    }
 +    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
 +    glGetIntegerv(GL_VIEWPORT, previousViewport);
@@ -3946,14 +4034,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +1047,21 @@
+@@ -380,11 +1096,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
 +  // BEGIN GUI target projection (also exercised by the GPU orientation regression).
    GLfloat proj[16] = {2.0f / w, 0, 0, 0, 0, -2.0f / h, 0, 0, 0, 0, -1, 0, -1.0f, 1.0f, 0, 1};
 +#ifdef HAVE_DVBRIDGE
-+  if (dvComposite)
++  if (dvComposite && !directHDR10)
 +  {
 +    // libplacebo's PQ texture stores logical top at row zero. The final HDMI
 +    // packing pass reverses it for EGL scanout. Compose the GUI in that same
@@ -3970,7 +4058,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1074,1808 @@
+@@ -397,13 +1123,1813 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4006,6 +4094,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_compositeShader->Disable();
 +  }
 +  m_compositeShader->SetInputPQ(false);
++  m_compositeShader->SetOutputRange(1.0f, 0.0f);
  
    glDisableVertexAttribArray(posLoc);
    glDisableVertexAttribArray(texLoc);
@@ -4017,6 +4106,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
 +    glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
++    // A delayed handoff owns this finished surface, including its GUI.
++    m_dvNativeGui = directHDR10;
 +  }
 +#endif
 +}
@@ -5171,8 +5262,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      KODI::RENDERING::CAPTURE::CaptureContent::COMPOSITE).empty();
 +  const bool masterCapture=capturing && m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE;
 +  if (masterCapture) m_dvBridge->InvalidateScreenshot();
++  const bool guiAvailable = m_guiWillRender || CanReuseGuiComposite();
 +  const bool overlayFree = (!capturing || masterCapture) &&
-+      (!m_guiWillRender || GetGUIElementCount() == 0) && !m_dvOverlays;
++      (!guiAvailable || GetGUIElementCount() == 0) && !m_dvOverlays;
 +  const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
 +  m_continuousFrameEligible = !capturing && overlayFree && player && player->GetPlaySpeed() == 1 &&
 +      m_previousSourceStream == layer.binding.stream &&
@@ -5208,19 +5300,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  m_preparedSourcePts = layer.pts;
 +  geometry.ignore_l5=metadata.Data() && preferences.encodedActiveArea;
 +  const bool mergedPQGUI = ComposeDVPQGUI();
-+  const bool subtitlesOnly = !capturing && m_guiWillRender && m_guiFbo.IsValid() &&
++  const bool subtitlesOnly = !capturing && guiAvailable && m_guiFbo.IsValid() &&
 +      m_guiFboWidth == m_nWidth && m_guiFboHeight == m_nHeight && m_compositeShader &&
 +      m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
 +      (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
 +  const bool pqSubtitles = (subtitlesOnly || mergedPQGUI) && m_dvPQSubtitleDraws;
 +  const bool enhancedSubtitles = subtitlesOnly && metadata.Data() &&
 +      m_dvSelection.policy.mode == DVBRIDGE_MODE_ENHANCED_DV;
-+  const bool fullGUI = m_guiWillRender && GetGUIElementCount() &&
++  const bool fullGUI = guiAvailable && GetGUIElementCount() &&
 +      (mergedPQGUI || CDVBridgeGLES::CanComposeSDRGUI(preferences.optimizedDV ||
 +          m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE,m_hdrConversion,capturing && !masterCapture,
 +          m_guiFboWidth,m_guiFboHeight,m_dvPQSubtitleDraws));
 +  // The TV masks L5 margins. Keep controls/subtitles in letterbox bars visible.
-+  m_dvBridge->SetOverlayVisible((m_guiWillRender && GetGUIElementCount()) || m_dvOverlays);
++  m_dvBridge->SetOverlayVisible((guiAvailable && GetGUIElementCount()) || m_dvOverlays);
 +  // Prime the subtitle shader once; empty frames retain the lean native shader.
 +  const bool nativeOverlay = !m_hdrConversion &&
 +      (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
@@ -5262,7 +5354,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          prediction, policy, allowAsync, overlayFree || (preferences.optimizedDV && nativeSubtitles));
 +#endif
 +    return m_dvBridge->PrepareHardwareFrame(layer, enhancement, enhancementBinding,
-+        metadata, geometry, preferences, overlayFree || nativeSubtitles, &policy, allowAsync);
++        metadata, geometry, preferences,
++        overlayFree || nativeSubtitles || (preferences.optimizedGUI && m_hdrConversion && !capturing), &policy, allowAsync);
 +  };
 +  const double refresh = m_DRM->GetCurrentMode().fRefreshRate;
 +  const auto interval = std::chrono::duration<double>(refresh >= 10 ? 1.0 / refresh : 0.02);
@@ -5782,7 +5875,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +2889,16 @@
+@@ -417,5 +2943,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -5834,7 +5927,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,6 +53,16 @@
+@@ -41,20 +53,135 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -5851,7 +5944,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // GUI compositing for HDR
    bool SetGuiCompositing(int colorTransfer) override;
-@@ -48,13 +70,117 @@
+   bool BeginGuiComposite(bool guiWillRender) override;
++  bool CanReuseGuiComposite() const override;
    void EndGuiComposite() override;
    void CompositeGui() override;
    bool IsHdrComposite() const override { return m_guiCompositing; }
@@ -5969,8 +6063,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -65,6 +191,86 @@
+@@ -63,8 +190,90 @@
+   bool m_guiFboClean{false};
+   // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
++  bool m_guiCacheValid{false};
++  unsigned m_guiCachedElementCount{0};
  
    std::unique_ptr<CGuiCompositeShaderGLES> m_compositeShader;
 +#ifdef HAVE_DVBRIDGE

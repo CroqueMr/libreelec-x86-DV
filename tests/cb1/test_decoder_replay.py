@@ -15,6 +15,8 @@ class DecoderReplayTests(unittest.TestCase):
         retry=body(player,'      else\n      {\n        SendMessageBack')
         timeout=body(player,'else if (ret == MSGQ_TIMEOUT)')
         timeout=timeout[:timeout.index('      // if we only wanted priority messages')]+'\n}'
+        wrapper_start=player.index('  const auto processDecoderOutput =')
+        wrapper=player[wrapper_start:player.index('\n  };',wrapper_start)+len('\n  };')]
         execute(r'''
 #include <algorithm>
 #include <cassert>
@@ -62,11 +64,13 @@ struct Player{
  void SendMessageBack(const std::shared_ptr<CDVDMsg>&pMsg,int priority=0) @BACK@
  void Replay(){@REPLAY@}
  void Retry(const std::shared_ptr<CDVDMsg>&pMsg,int iPriority){bool onlyPrioMsgs=false;@RETRY@ assert(onlyPrioMsgs);}
- void Drain(){double frametime=33333,pts=0;bool onlyPrioMsgs=false;for(int once=0;once<1;once++) @DRAIN_BODY@}
+ void Drain(){double frametime=33333,pts=0;bool onlyPrioMsgs=false;@DECODER_OUTPUT@
+  for(int once=0;once<1;once++) @DRAIN_BODY@}
 };
 int main(){@CHECKS@}
 '''.replace('@PUT@',put).replace('@GET@',get).replace('@SEND@',send).replace('@BACK@',back)
-           .replace('@REPLAY@',replay).replace('@RETRY@',retry).replace('@DRAIN_BODY@',timeout).replace('@CHECKS@',checks))
+           .replace('@REPLAY@',replay).replace('@RETRY@',retry).replace('@DRAIN_BODY@',timeout)
+           .replace('@DECODER_OUTPUT@',wrapper).replace('@CHECKS@',checks))
 
     def test_reopen_and_flush_prepend_fifo_prefix_before_remaining_replay(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()

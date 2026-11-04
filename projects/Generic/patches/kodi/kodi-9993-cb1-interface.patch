@@ -846,27 +846,35 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- a/system/shaders/GLES/2.0/gles_gui_composite.frag
 +++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
-@@ -15,6 +15,7 @@
+@@ -15,6 +15,8 @@
  uniform sampler2D u_lutTF;      // linear -> PQ LUT (1024 entries, sdrPeak baked in)
  uniform float u_ootfGamma;      // HLG: OOTF gamma (1.2 for BT.2100 1000-nit ref)
                                  // PQ: 0.0 (use LUT path instead)
 +uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
++uniform highp vec2 u_outputRange; // CB1 final HDR target: exact bit-depth scale and black code.
  
  // BT.709 -> BT.2020 color space conversion matrix (applied in linear light)
  const mat3 bt709_to_bt2020 = mat3(
-@@ -32,6 +33,12 @@
+@@ -32,6 +34,12 @@
    // and avoids the tone-map math, BO read and BO write for those pixels.
    if (gui.a == 0.0)
      discard;
 +
 +  if (u_inputPQ)
 +  {
-+    gl_FragColor = gui;
++    gl_FragColor = vec4(gui.rgb * u_outputRange.x + gui.a * u_outputRange.y, gui.a);
 +    return;
 +  }
  
    // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
    vec3 linear = vec3(
+@@ -85,5 +93,5 @@
+   result = result * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
+ #endif
+ 
+-  gl_FragColor = vec4(result, gui.a);
++  gl_FragColor = vec4(result * u_outputRange.x + u_outputRange.y, gui.a);
+ }
 --- a/system/shaders/GLES/2.0/gles_videofilter.frag
 +++ b/system/shaders/GLES/2.0/gles_videofilter.frag
 @@ -8,4 +8,7 @@

@@ -44,7 +44,7 @@ struct CRenderManager{
   bool IsPaused(){return true;}}m_dvdClock;
  unsigned m_aiQueueGeneration=9;
  bool m_aiEnd=false,m_aiQueueReady=true,m_aiFullscreenRequested=true,m_aiGuiReady=false,m_aiFullscreenWanted=false;
- bool m_aiQueuePreparationStale=false,m_showVideo=false;
+ bool m_aiQueuePreparationStale=false,m_showVideo=false,m_aiStartupBuffered=false;
  double m_aiStartPts=40000000;
  Slot m_Queue[3];std::deque<int> m_queued,m_discard,m_free;
  int m_presentsource=1,m_presentsourcePast=0,m_presentstep=PRESENT_FRAME,m_QueueSize=3;
@@ -777,6 +777,7 @@ struct Picture{Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HD
 struct Preparation {
  struct Outcome{bool ready,lookahead;};bool ready{true};
  std::function<Outcome()> execute;std::function<bool(const Outcome&)> publish;
+ bool buffered=false;
 };
 using HDR10AIQueuePreparation=Preparation;
 struct Window {
@@ -785,7 +786,7 @@ struct Window {
  bool HDR10AILookaheadActive(){return !fallback && DVBRIDGE::prefs.hdr10Source!=DVBRIDGE::HDR10SourceMode::Native;}
 };
 struct Renderer {
- bool m_aiLookahead=false,m_aiOutputPending=false,m_dvRequested=false;int admissions=0;
+ bool m_aiLookahead=false,m_aiOutputPending=false,m_dvRequested=false,buffered=false;int admissions=0;
  struct Slot {std::shared_ptr<Picture> doviSourcePicture=std::make_shared<Picture>();} m_buffers[1];
  Window output;
  bool ConfigureVideoOutput(const Picture&){++admissions;m_dvRequested=output.HDR10AILookaheadActive();return true;}
@@ -797,7 +798,11 @@ struct Renderer {
 };
 bool run(Renderer& r){auto p=r.Capture();if(!p.execute)return p.ready;auto o=p.execute();return p.publish(o)&&o.ready;}
 int main(){
- Renderer r;r.output.ready=false;assert(!run(r));assert(r.admissions==0);
+ Renderer r;r.buffered=true;assert(r.Capture().buffered);
+ r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ assert(!r.Capture().buffered); // Guided/metadata startup keeps its existing admission.
+ r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10;r.buffered=false;
+ r.output.ready=false;assert(!run(r));assert(r.admissions==0);
  r.output.ready=true;assert(run(r));assert(r.admissions==1 && r.m_dvRequested && !r.m_aiOutputPending);
  assert(run(r));assert(r.admissions==1);
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;++DVBRIDGE::prefs.revision;

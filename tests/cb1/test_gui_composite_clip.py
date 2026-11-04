@@ -16,6 +16,7 @@ class GUICompositeClip(unittest.TestCase):
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #define HAVE_DVBRIDGE 1
 using GLint=int;
 namespace DVBRIDGE {
@@ -37,6 +38,7 @@ void glClearColor(float,float,float,float) {}
 void glClear(int) {bottomCleared=rawClip.contains(1900,1950);}
 struct CLog {template<class... T> static void Log(T...) {}};
 struct CRenderSystemGLES {
+  inline static unsigned m_GUIElementCount=0;
   static void SetScissors(const CRect& r) {rawClip=r;}
   static void GetViewPort(CRect& r) {r={0,0,3840,2160};}
   static void SetViewPort(const CRect& r) {rawClip=r;}
@@ -58,6 +60,7 @@ struct FBO {
 struct DVState {bool captured=true;bool Captured() const {return captured;}};
 struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false;
+  bool m_guiCacheValid=false;unsigned m_guiCachedElementCount=0;
   int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160;
   FBO m_guiFbo,m_dvPQSubtitleFbo;
   void* m_dvContext=nullptr;

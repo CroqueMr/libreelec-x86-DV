@@ -6,10 +6,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -5,6 +5,21 @@
+@@ -4,6 +4,21 @@
+ endif()
  
  project(kodi LANGUAGES CXX C ASM)
- 
++
 +option(ENABLE_DVBRIDGE "Build experimental native DV bridge (requires patched dependencies)" OFF)
 +option(CB1_ENABLE_HDR10_AI "Build matched native HDR10 AI circuits" OFF)
 +set(DVBRIDGE_SOURCE_DIR "" CACHE PATH "DVBridge common source directory")
@@ -24,10 +25,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    include_directories("${DVBRIDGE_SOURCE_DIR}")
 +  endif()
 +endif()
-+
+ 
  if(POLICY CMP0069)
    set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
-   cmake_policy(SET CMP0069 NEW)
 --- /dev/null
 +++ b/LICENSES/GPL-3.0-or-later
 @@ -0,0 +1,674 @@
@@ -707,18 +707,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +<https://www.gnu.org/licenses/why-not-lgpl.html>.
 --- a/LICENSES/README.md
 +++ b/LICENSES/README.md
-@@ -3,6 +3,11 @@
+@@ -2,6 +2,11 @@
+ 
  # Kodi's licensing rules
  Kodi is provided under the terms of the GNU General Public License v2.0 or later, as provided in **[LICENSES/GPL-2.0-or-later](GPL-2.0-or-later)**.
- 
++
 +CB1 additions and metadata validation use GPL-2.0-or-later, including when
 +`ENABLE_DVBRIDGE` is disabled. The selected dependency combination retains its
 +own license conditions. Existing files retain their
 +original notices. Disabling the adapter does not exclude shared validation.
-+
+ 
  This file provides a description of how each source file should be annotated to make its license clear and unambiguous. **It doesn't replace Kodi's license**.
  
- The license described in the **[LICENSE](../LICENSE.md)** file applies to **Kodi's source as a whole**, though individual source files can have a different license which is required to be compatible with the **GPL-2.0**. Aside from that, individual files can be provided under a dual license, e.g. one of the compatible GPL variants and alternatively under a permissive license like BSD, MIT etc.
 @@ -73,4 +78,3 @@
  * **[Unlicense](Unlicense)**: Unlicense (Public Domain)
  
@@ -736,6 +736,30 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_resolutions.empty())
      return ""; // invalid skin
  
+--- a/xbmc/application/Application.cpp
++++ b/xbmc/application/Application.cpp
+@@ -909,6 +909,11 @@
+     return;
+ 
+   // render gui layer
++  // Subtitle/input invalidations can arrive in player FrameMove after the first dirty check.
++  if (m_skipGuiRender && !appPlayer->IsRenderingVideoLayer() &&
++      (!CServiceBroker::GetWinSystem()->CanReuseGuiComposite() ||
++       CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions()))
++    m_skipGuiRender = false;
+   const bool guiWillRender = appPower->GetRenderGUI() && !m_skipGuiRender;
+   bool compositing = CServiceBroker::GetWinSystem()->BeginGuiComposite(guiWillRender);
+ 
+@@ -1627,7 +1632,8 @@
+     // Dirty-driven skip: on paths with a persistent framebuffer (D2P plane or
+     // HDR GUI compositing FBO), skip Render when no controls dirtied themselves
+     // this frame. The persistence keeps the previous OSD on screen for free.
+-    if (!m_skipGuiRender && appPlayer->IsRenderingVideoLayer() &&
++    if (!m_skipGuiRender && (appPlayer->IsRenderingVideoLayer() ||
++        CServiceBroker::GetWinSystem()->CanReuseGuiComposite()) &&
+         !CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions())
+       m_skipGuiRender = true;
+     CServiceBroker::GetGUI()->GetWindowManager().FrameMove();
 --- a/xbmc/filesystem/BlurayDirectory.cpp
 +++ b/xbmc/filesystem/BlurayDirectory.cpp
 @@ -208,23 +208,57 @@
@@ -780,16 +804,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        const size_t drop{iIs3D ? j : i};
 +        const size_t keep{iIs3D ? i : j};
 +        duplicatePlaylists.try_emplace(playlists[drop].playlist, playlists[keep].playlist);
-+      }
+       }
+-    }
+-  }
+-  std::erase_if(playlists, [&duplicatePlaylists](const PlaylistInformation& p)
+-                { return duplicatePlaylists.contains(p.playlist); });
 +      else
 +      {
 +        const auto [lower, higher]{std::minmax(playlists[i].playlist, playlists[j].playlist)};
 +        duplicatePlaylists.try_emplace(higher, lower);
-       }
-     }
-   }
--  std::erase_if(playlists, [&duplicatePlaylists](const PlaylistInformation& p)
--                { return duplicatePlaylists.contains(p.playlist); });
++      }
++    }
++  }
 +
 +  std::erase_if(playlists,
 +                [&duplicatePlaylists](const PlaylistInformation& p)
@@ -832,10 +858,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (a.pgStreams.size() != b.pgStreams.size())
 --- a/xbmc/filesystem/DiscDirectoryHelper.h
 +++ b/xbmc/filesystem/DiscDirectoryHelper.h
-@@ -124,6 +124,14 @@
+@@ -123,6 +123,14 @@
+   std::vector<AudioStreamInfo> audioStreams;
    std::vector<SubtitleStreamInfo> pgStreams;
    std::string languages;
- 
++
 +  //! Clips holding the MVC dependent view, one for each play item that has one. Empty
 +  //! unless the playlist is a stereoscopic presentation.
 +  std::vector<unsigned int> dependentViewClips;
@@ -843,11 +870,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  //! Whether the playlist calls its base view the right eye (MVC_Base_view_R_flag). Only
 +  //! means anything alongside dependentViewClips.
 +  bool baseViewIsRightEye{false};
-+
+ 
    //! Whether the playlist carries a secondary video stream, ie. it presents the content
    //! picture-in-picture (see IsPictureInPicturePresentation)
-   bool hasSecondaryVideo{false};
-@@ -139,10 +147,32 @@
+@@ -139,9 +147,31 @@
      audioStreams.clear();
      pgStreams.clear();
      languages.clear();
@@ -856,7 +882,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      hasSecondaryVideo = false;
    }
  };
- 
++
 +/*!
 + * \brief Whether two playlists of the same content present it differently in 3D.
 + *
@@ -876,10 +902,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return a.dependentViewClips != b.dependentViewClips ||
 +         a.baseViewIsRightEye != b.baseViewIsRightEye;
 +}
-+
+ 
  struct ClipInfo
  {
-   std::chrono::milliseconds duration{0ms};
 --- a/xbmc/filesystem/bluray/MPLSParser.cpp
 +++ b/xbmc/filesystem/bluray/MPLSParser.cpp
 @@ -701,6 +701,12 @@
@@ -1017,16 +1042,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    offset = playlistPosition;
 --- a/xbmc/filesystem/bluray/MPLSParser.h
 +++ b/xbmc/filesystem/bluray/MPLSParser.h
-@@ -89,6 +89,9 @@
+@@ -88,6 +88,9 @@
+   PICTURE_IN_PICTURE_SUBTITLE_STREAM,
    DOLBY_VISION_STREAM
  };
- 
++
 +//! A stream whose plane follows no offset sequence, which is every stream of a 2D playlist.
 +inline constexpr unsigned int NO_OFFSET_SEQUENCE{0xff};
-+
+ 
  struct StreamInformation
  {
-   BLURAY_STREAM_TYPE type{0};
 @@ -109,6 +112,8 @@
    std::vector<unsigned int> secondaryAudio_audioReferences;
    std::vector<unsigned int> secondaryVideo_audioReferences;
@@ -1093,10 +1118,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return info;
  }
  
-@@ -228,6 +230,93 @@
-   EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{800u, 803u}));
- }
+@@ -226,6 +228,93 @@
  
+   EXPECT_TRUE(FilterPlaylists(playlists));
+   EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{800u, 803u}));
++}
++
 +// A 3D Blu-ray carries both presentations of its feature, alike in everything the comparison
 +// looks at bar the dependent view. The stereoscopic one is kept whichever way round the disc
 +// numbers them - its base view is the 2D presentation, so nothing is lost, and it is usually
@@ -1182,11 +1209,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +  EXPECT_TRUE(FilterPlaylists(playlists));
 +  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{801u});
-+}
-+
+ }
+ 
  // What a playlist offers has to survive being recorded, or the movie and episode searches decide
- // on a playlist described differently to the one the disc holds
- TEST_F(TestBlurayDirectory, ProcessPlaylist_CarriesThePlaylistThrough)
 --- a/xbmc/filesystem/test/TestDiscDirectoryHelper.cpp
 +++ b/xbmc/filesystem/test/TestDiscDirectoryHelper.cpp
 @@ -4643,6 +4643,100 @@
@@ -1292,10 +1317,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  TEST_F(TestDiscDirectoryHelper, GetMoviePlaylists_KeepsPlaylistsSharingNoClip)
 --- a/xbmc/filesystem/test/TestStreamParser.cpp
 +++ b/xbmc/filesystem/test/TestStreamParser.cpp
-@@ -74,6 +74,19 @@
-   return info;
- }
+@@ -72,6 +72,19 @@
+   info.clips.emplace_back(MakeClip(clip));
  
+   return info;
++}
++
 +// Give the playlist a stereoscopic sub-path, naming the clip that holds the dependent view of
 +// each play item.
 +void AddDependentView(BlurayPlaylistInformation& info, const std::vector<unsigned int>& clips)
@@ -1307,11 +1334,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    subPlayItem.clips.emplace_back(clips[i], "M2TS");
 +    info.extensionSubPlayItems.emplace_back(std::move(subPlayItem));
 +  }
-+}
-+
+ }
+ 
  std::vector<std::string> AudioLanguagesOf(const PlaylistInformation& p)
- {
-   std::vector<std::string> languages;
 @@ -236,3 +249,46 @@
    ASSERT_EQ(unsignalled.videoStreams.size(), 1U);
    EXPECT_FLOAT_EQ(unsignalled.videoStreams[0].videoAspectRatio, 16.0f / 9.0f);
@@ -1461,7 +1486,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #if defined(HAS_GL) || defined(HAS_GLES)
  #include "system_gl.h"
-@@ -75,18 +77,35 @@
+@@ -75,17 +77,34 @@
        avFormat = AV_PIX_FMT_RGBA64LE;
        rowBytes = width * 8;
      }
@@ -1487,42 +1512,44 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      CLog::LogF(LOGWARNING, "capture readback: glReadPixels failed");
      return false;
-   }
++  }
 +  if (floats)
 +  {
 +    auto* values = reinterpret_cast<uint16_t*>(out.pixels.get());
 +    for (size_t i = 0; i < samples; ++i)
 +      values[i] = std::isfinite(floats[i]) ? static_cast<uint16_t>(
 +          std::lround(std::clamp(floats[i], 0.0f, 1.0f) * 65535.0f)) : 0;
-+  }
+   }
  
    out.width = width;
-   out.height = height;
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
-@@ -63,6 +63,7 @@
+@@ -63,6 +63,8 @@
    m_hLutTF = glGetUniformLocation(ProgramHandle(), "u_lutTF");
    m_hProj = glGetUniformLocation(ProgramHandle(), "u_proj");
    m_hOotfGamma = glGetUniformLocation(ProgramHandle(), "u_ootfGamma");
 +  m_hInputPQ = glGetUniformLocation(ProgramHandle(), "u_inputPQ");
++  m_hOutputRange = glGetUniformLocation(ProgramHandle(), "u_outputRange");
    glUseProgram(ProgramHandle());
    glUniform1i(m_hSamp, 0);
    glUniform1i(m_hLutDegamma, 1);
-@@ -76,6 +77,7 @@
+@@ -76,6 +78,8 @@
      glUniformMatrix4fv(m_hProj, 1, GL_FALSE, m_proj);
  
    glUniform1f(m_hOotfGamma, m_ootfGamma);
 +  glUniform1i(m_hInputPQ, m_inputPQ);
++  glUniform2f(m_hOutputRange, m_outputScale, m_outputOffset);
  
    glActiveTexture(GL_TEXTURE1);
    glBindTexture(GL_TEXTURE_2D, m_lutDegammaTexId);
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.h
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.h
-@@ -20,11 +20,14 @@
+@@ -20,11 +20,15 @@
    ~CGuiCompositeShaderGLES() override;
  
    void SetProjection(const GLfloat* proj) { m_proj = proj; }
 +  void SetInputPQ(bool value) { m_inputPQ = value; }
++  void SetOutputRange(float scale, float offset) { m_outputScale = scale; m_outputOffset = offset; }
  
    bool CreateLUTs(int colorTransfer);
  
@@ -1533,19 +1560,21 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  protected:
    void OnCompiledAndLinked() override;
-@@ -44,6 +47,7 @@
+@@ -44,6 +48,8 @@
    GLuint m_lutDegammaTexId{0};
    GLuint m_lutTFTexId{0};
    float m_ootfGamma{0.0f};
 +  bool m_inputPQ{false};
++  float m_outputScale{1.0f}, m_outputOffset{0.0f};
  
    GLint m_hPos{-1};
    GLint m_hTex{-1};
-@@ -52,4 +56,5 @@
+@@ -52,4 +58,6 @@
    GLint m_hLutTF{-1};
    GLint m_hProj{-1};
    GLint m_hOotfGamma{-1};
 +  GLint m_hInputPQ{-1};
++  GLint m_hOutputRange{-1};
  };
 --- a/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
 +++ b/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
@@ -1838,11 +1867,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
                 {EGL_RENDERABLE_TYPE, renderableType}});
  
    EGLConfig* currentConfig(hdr ? &m_eglHDRConfig : &m_eglConfig);
+-
+-  if (hdr)
 +  const EGLConfig previousConfig = *currentConfig;
 +  if (floating && !CEGLUtils::HasExtension(m_eglDisplay, "EGL_EXT_pixel_format_float"))
 +    return false;
- 
--  if (hdr)
++
 +  if (hdr || floating)
  #if EGL_EXT_pixel_format_float
      attribs.Add({{EGL_COLOR_COMPONENT_TYPE_EXT, EGL_COLOR_COMPONENT_TYPE_FLOAT_EXT}});
@@ -1865,10 +1895,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      CLog::Log(LOGDEBUG, "failed to find EGL config with EGL_NATIVE_VISUAL_ID={}", visualId);
      return false;
    }
-@@ -534,6 +540,96 @@
-   return true;
- }
+@@ -531,6 +537,96 @@
  
+   SurfaceAttrib();
+ 
++  return true;
++}
++
 +bool CEGLContextUtils::BeginOutputSurface()
 +{
 +  if (m_outputSurfaceTransaction || m_eglSurface == EGL_NO_SURFACE ||
@@ -1956,12 +1989,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    }
 +  if (!eglTerminate(state.display)) return false;
 +  state.display = EGL_NO_DISPLAY;
-+  return true;
-+}
-+
- void CEGLContextUtils::Destroy()
- {
-   DestroyContext();
+   return true;
+ }
+ 
 --- a/xbmc/utils/EGLUtils.h
 +++ b/xbmc/utils/EGLUtils.h
 @@ -195,8 +195,23 @@
@@ -1999,3 +2029,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    mutable CCriticalSection m_textureUploadLock;
  
    PFNEGLSETDAMAGEREGIONKHRPROC m_eglSetDamageRegionKHR{nullptr};
+--- a/xbmc/video/windows/GUIWindowFullScreen.cpp
++++ b/xbmc/video/windows/GUIWindowFullScreen.cpp
+@@ -382,7 +382,9 @@
+   // Single-plane: MarkDirtyRegion every frame so the render pass keeps
+   // running and draws the next video frame. D2P video plane updates
+   // independently.
+-  if (!appPlayer->IsRenderingVideoLayer())
++  // CB1's persistent GUI FBO also leaves movie updates to RenderEx.
++  if (!appPlayer->IsRenderingVideoLayer() &&
++      !CServiceBroker::GetWinSystem()->CanReuseGuiComposite())
+     MarkDirtyRegion();
+ 
+   m_controlStats->Reset();

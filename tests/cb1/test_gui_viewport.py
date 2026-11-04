@@ -19,6 +19,7 @@ class GUIViewportTests(unittest.TestCase):
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <fmt/format.h>
 #include <string>
 #include <vector>
@@ -46,6 +47,7 @@ struct CRect {float x1=0,y1=0,x2=0,y2=0;
 struct CLog {template<class... T>static void Log(T...){}};
 namespace MathUtils {int round_int(double value){return int(std::lround(value));}}
 struct CRenderSystemGLES {
+ inline static unsigned m_GUIElementCount=0;
  bool m_bRenderCreated=true;int m_height=2160,m_viewPort[4]{0,0,3840,2160};
  void GetViewPort(CRect& viewPort) @GET@
  void SetViewPort(const CRect& viewPort) @SET@
@@ -62,6 +64,7 @@ struct CWinSystemGbmGLESContext:CRenderSystemGLES {
  FBO m_guiFbo,m_dvPQSubtitleFbo;
  void* m_dvContext=nullptr;
  bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false,m_hdrConversion=false;
+ bool m_guiCacheValid=false;unsigned m_guiCachedElementCount=0;
  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_cb1FramePending=false,m_dvFrame=false;
  bool m_dvPQSubtitleCleared=false,m_dvNativeGui=false;
  unsigned m_dvGUIContentGeneration=0,m_dvSubtitleDraws=0,m_dvSubtitleContent=0,m_dvPQSubtitleDraws=0;

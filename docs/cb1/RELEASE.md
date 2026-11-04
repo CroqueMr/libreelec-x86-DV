@@ -4,6 +4,8 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**.
 
 ## Dolby Vision
 
+- Improved scaled Master Reference rendering by removing a redundant full-resolution intermediate pass, without changing movie pixels, metadata or Kodi scaling filters.
+
 - Added software-decoded 10-bit AV1 Dolby Vision input using Kodi's existing uploaded textures. [#85](https://github.com/CroqueMr/libreelec-x86-DV/issues/85)
 - Added an explicit active-area override for already-cropped files retaining incorrect L5 margins. Authored margins remain the default. [#84](https://github.com/CroqueMr/libreelec-x86-DV/issues/84)
 
@@ -35,6 +37,10 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**.
 
 ## Playback, HDMI and hardware
 
+- Intel HDMI now identifies the source as a media player rather than a PC, avoiding LG automatic PC-mode selection ([#86](https://github.com/CroqueMr/libreelec-x86-DV/issues/86)). A driver override retains PC identification if required. Based on **big-fella**, via **dangerouslaser**.
+
+- Fixed an HDR10-to-Dolby Vision AI startup wait after fallback/re-entry by correcting the existing preparation order.
+
 - Fixed Intel HDMI link recovery with active HDR10+ metadata, retaining normal output validation. Contributed by [lessbones](https://github.com/lessbones) in [#83](https://github.com/CroqueMr/libreelec-x86-DV/pull/83).
 
 - Improved return to SDR, live connector-state checks and output recovery after failed playback or mode changes.
@@ -44,6 +50,8 @@ Changes since **R1.0.0 RC2**. CB1 **0.5**.
 - Corrected audio channel-map handling and retry state without adding artificial audio/video offsets.
 
 ## Interface and Player information
+
+- Reduced GUI overhead through native dirty-region reuse and direct HDR composition; unchanged movie pixels and metadata.
 
 - Added optional optimized GUI compositing for compatible Dolby Vision output paths; movie pixels and metadata are unchanged.
 

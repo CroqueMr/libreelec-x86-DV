@@ -30,7 +30,7 @@ struct Clock {bool IsPaused(){return true;}};
 struct CRenderManager {
  Renderer renderer; Renderer* m_pRenderer=&renderer; Clock m_dvdClock;
  bool m_aiQueuePreparationStale=false,m_aiQueueReady=true,m_aiGuiReady=false;
- bool m_showVideo=true,m_cb1PresentPending=false;
+ bool m_showVideo=true,m_cb1PresentPending=false,m_aiStartupBuffered=false;
  double m_aiStartPts=DVD_NOPTS_VALUE;
  int m_presentstep=PRESENT_FRAME,m_presentsource=1;
  std::deque<int> m_queued{2,3},observed;

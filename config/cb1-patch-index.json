@@ -121,7 +121,7 @@
     "summary": "Connect Intel HDMI negotiation to Dolby Vision output",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Native HDMI packet owners, detected DV snapshot, advertised CTA admission and documented Gen9 GMP HDR path.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Native HDMI packet owners, detected DV snapshot, CTA/Gen9 GMP HDR admission and reversible media-player SPD source identification shared by i915/xe.",
       "drivers/gpu/drm/i915/display/intel_hdmi.h": "Native HDMI transport, packet and Gen9 GMP route declarations."
     }
   },
@@ -1051,7 +1051,9 @@
       "xbmc/utils/DisplayInfo.cpp": "Derive native DV eligibility from the shared EDID validation result.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/utils/DisplayInfo.h": "Retain the validated sink capabilities alongside native display information.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/utils/EGLUtils.cpp": "Stage output drawables and retain the exact EGL tuple until transactional rollback or GPU retirement permits destruction.",
-      "xbmc/utils/EGLUtils.h": "Declare explicit output-surface transactions and transferable native EGL retirement ownership."
+      "xbmc/utils/EGLUtils.h": "Declare explicit output-surface transactions and transferable native EGL retirement ownership.",
+      "xbmc/application/Application.cpp": "Reuse clean fullscreen CB1 GUI content through native dirty-region admission, rechecking late player invalidations.",
+      "xbmc/video/windows/GUIWindowFullScreen.cpp": "Preserve native dirty controls without forcing a whole-video GUI redraw when the persistent CB1 composite is reusable."
     }
   }
 }

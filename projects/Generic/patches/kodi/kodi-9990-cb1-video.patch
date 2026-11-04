@@ -8554,8 +8554,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  void CVideoPlayerVideo::Process()
  {
-@@ -330,6 +401,9 @@
+@@ -328,8 +399,20 @@
+   m_rewindStalled = false;
+   m_outputSate = OUTPUT_NORMAL;
  
++  const auto processDecoderOutput = [&]() {
++#ifdef CB1_HAS_HDR10_AI
++    if ((m_syncState == IDVDStreamPlayer::SYNC_STARTING || m_syncState == IDVDStreamPlayer::SYNC_WAITSYNC) &&
++        m_renderManager.HDR10AIStartupBuffered())
++      return true;
++#endif
++    return ProcessDecoderOutput(frametime, pts);
++  };
++
    while (!m_bStop)
    {
 +#ifdef CB1_HAS_HDR10_AI
@@ -8564,7 +8575,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
          std::chrono::duration<double, std::micro>(m_stalled ? frametime : frametime * 10));
      int iPriority = 0;
-@@ -350,6 +424,15 @@
+@@ -350,6 +433,15 @@
      MsgQueueReturnCode ret = GetMessage(pMsg, timeout, iPriority);
  
      onlyPrioMsgs = false;
@@ -8580,7 +8591,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (MSGQ_IS_ERROR(ret))
      {
-@@ -372,6 +455,9 @@
+@@ -372,10 +464,13 @@
        }
        // don't ask for a new frame if we can't deliver it to renderer
        else if ((m_speed != DVD_PLAYSPEED_PAUSE ||
@@ -8590,7 +8601,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
                  m_processInfo.IsFrameAdvance() ||
                  m_syncState != IDVDStreamPlayer::SYNC_INSYNC) && !m_paused)
        {
-@@ -392,7 +478,7 @@
+-        if (ProcessDecoderOutput(frametime, pts))
++        if (processDecoderOutput())
+         {
+           onlyPrioMsgs = true;
+           continue;
+@@ -392,7 +487,7 @@
          // squeeze pictures out
          while (!m_bStop && m_pVideoCodec)
          {
@@ -8599,7 +8615,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            if (!ProcessDecoderOutput(frametime, pts))
              break;
          }
-@@ -442,6 +528,8 @@
+@@ -442,6 +537,8 @@
      }
      else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
      {
@@ -8608,7 +8624,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        if(m_pVideoCodec)
          m_pVideoCodec->Reset();
  
-@@ -458,6 +546,8 @@
+@@ -458,6 +555,8 @@
      }
      else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)) // private message sent by (CVideoPlayerVideo::Flush())
      {
@@ -8617,7 +8633,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
        if(m_pVideoCodec)
          m_pVideoCodec->Reset();
-@@ -501,7 +591,7 @@
+@@ -501,7 +600,7 @@
  
        while (!m_bStop && m_pVideoCodec)
        {
@@ -8626,7 +8642,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          bool cont = ProcessDecoderOutput(frametime, pts);
  
          if (!cont)
-@@ -524,11 +614,16 @@
+@@ -524,11 +623,16 @@
          if (!ProcessDecoderOutput(frametime, pts))
            break;
        }
@@ -8643,7 +8659,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      }
      else if (pMsg->IsType(CDVDMsg::PLAYER_REQUEST_STATE))
      {
-@@ -622,10 +717,32 @@
+@@ -599,7 +703,7 @@
+         m_videoStats.AddSampleBytes(pPacket->iSize);
+         UpdatePlayerInfo();
+ 
+-        if (ProcessDecoderOutput(frametime, pts))
++        if (processDecoderOutput())
+         {
+           onlyPrioMsgs = true;
+         }
+@@ -622,10 +726,32 @@
  
  bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
  {
@@ -8676,7 +8701,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return false;
    }
  
-@@ -635,12 +752,14 @@
+@@ -635,12 +761,14 @@
      CLog::Log(LOGDEBUG, "CVideoPlayerVideo - video decoder was flushed");
      while (!m_packets.empty())
      {
@@ -8697,7 +8722,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pVideoCodec->Reset();
      m_packets.clear();
      //picture.iFlags &= ~DVP_FLAG_ALLOCATED;
-@@ -650,13 +769,22 @@
+@@ -650,13 +778,22 @@
  
    if (decoderState == CDVDVideoCodec::VC_REOPEN)
    {
@@ -8725,7 +8750,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pVideoCodec->Reopen();
      m_packets.clear();
      m_renderManager.DiscardBuffer();
-@@ -672,6 +800,14 @@
+@@ -672,6 +809,14 @@
  
    if (decoderState == CDVDVideoCodec::VC_EOF)
    {
@@ -8740,7 +8765,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_syncState == IDVDStreamPlayer::SYNC_STARTING)
      {
        SStartMsg msg;
-@@ -722,23 +858,24 @@
+@@ -722,23 +867,24 @@
        {
          case RenderStereoMode::SPLIT_VERTICAL:
            stereoMode = "left_right";
@@ -8770,7 +8795,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      // if frame has a pts (usually originating from demux packet), use that
      if (m_picture.pts != DVD_NOPTS_VALUE)
-@@ -775,6 +912,9 @@
+@@ -775,6 +921,9 @@
      }
  
      if (m_syncState == IDVDStreamPlayer::SYNC_STARTING &&
@@ -8780,7 +8805,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_outputSate != OUTPUT_DROPPED &&
          !(m_picture.iFlags & DVP_FLAG_DROPPED))
      {
-@@ -858,8 +998,62 @@
+@@ -858,8 +1007,62 @@
    }
  }
  
@@ -8843,7 +8868,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bAbortOutput = false;
  
    if (m_processInfo.GetVideoStereoMode() != pPicture->stereoMode)
-@@ -927,7 +1121,25 @@
+@@ -927,7 +1130,25 @@
      }
    }
  
@@ -8870,7 +8895,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
      CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);
-@@ -944,6 +1156,9 @@
+@@ -944,6 +1165,9 @@
    int buffer = m_renderManager.WaitForBuffer(m_bAbortOutput, maxWaitTime);
    if (buffer < 0)
    {
@@ -9080,7 +9105,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  class CSetting;
  struct IntegerSettingOption;
-@@ -43,6 +52,18 @@
+@@ -43,6 +52,19 @@
  };
  
  struct VideoPicture;
@@ -9094,12 +9119,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool ready{true};
 +  std::function<Outcome()> execute;
 +  std::function<bool(const Outcome&)> publish;
++  bool buffered{false}; // Valid owned startup horizon, available before execute.
 +};
 +#endif
  
  namespace KODI::RENDERING::CAPTURE
  {
-@@ -66,6 +87,9 @@
+@@ -66,6 +88,9 @@
    virtual void SetBufferSize(int numBuffers) { }
    virtual void ReleaseBuffer(int idx) { }
    virtual bool NeedBuffer(int idx) { return false; }
@@ -9109,7 +9135,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    virtual bool IsGuiLayer() { return true; }
    //! True when video never reaches the framebuffer: a DRM plane, an Android
    //! SurfaceView, the Amlogic video layer. Such a renderer must produce its
-@@ -81,9 +105,23 @@
+@@ -81,9 +106,23 @@
    }
    // Render info, can be called before configure
    virtual CRenderInfo GetRenderInfo() { return CRenderInfo(); }
@@ -9133,7 +9159,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    virtual bool ConfigChanged(const VideoPicture &picture) = 0;
  
    // Feature support
-@@ -122,10 +160,23 @@
+@@ -122,10 +161,23 @@
                      float inputFrameRatio,
                      float zoomAmount,
                      float verticalShift,
@@ -11747,7 +11773,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -0,0 +1,321 @@
+@@ -0,0 +1,330 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -11964,6 +11990,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +                       const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked = false);
 +  unsigned int GetPQTexture() const;
 +  unsigned int GetPQFramebuffer();
++  bool GetHDR10OutputTarget(unsigned& framebuffer, unsigned& bits)
++  {
++    if (!m_hdr10 || !m_prepared || !m_direct || !m_scanout) return false;
++    framebuffer = m_scanoutFramebuffer;
++    bits = m_outputBits;
++    // As with GetPQFramebuffer, redraw film before another equal-PTS GUI blend.
++    if (m_live) m_guiComposed = true;
++    return true;
++  }
 +  bool Pack(unsigned int framebuffer, int width, int height, bool flipY);
 +  bool ResolveHDR10(bool limited);
 +  bool Presented(bool success);
@@ -12782,7 +12817,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_hdrFboActive{false};
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
-@@ -16,6 +16,13 @@
+@@ -16,6 +16,14 @@
  #include "utils/EGLFence.h"
  #include "utils/GLUtils.h"
  #include "utils/log.h"
@@ -12792,11 +12827,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#include "cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h"
 +#include "windowing/gbm/WinSystemGbmGLESContext.h"
 +#include <cmath>
++#include <algorithm>
 +#endif
  
  #include <memory>
  
-@@ -72,7 +79,7 @@
+@@ -72,7 +80,7 @@
  
  CRendererVAAPIGLES::~CRendererVAAPIGLES()
  {
@@ -12805,7 +12841,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      DeleteTexture(i);
    }
-@@ -89,6 +96,12 @@
+@@ -89,6 +97,12 @@
      m_isVAAPIBuffer = false;
  
    m_vaapiFourcc = pic->procPic.fourcc;
@@ -12818,7 +12854,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_isVAAPIBuffer)
    {
-@@ -101,7 +114,16 @@
+@@ -101,7 +115,16 @@
      interop.eglDisplay = m_pWinSystem->GetEGLDisplay();
  
      m_texturePool.ReleaseAll();
@@ -12836,7 +12872,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      for (auto& tex : m_vaapiTextures)
        tex = nullptr;
  
-@@ -114,9 +136,33 @@
+@@ -114,9 +137,33 @@
    return CLinuxRendererGLES::Configure(picture, fps, orientation);
  }
  
@@ -12870,7 +12906,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
        (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
      return true;
-@@ -171,6 +217,187 @@
+@@ -171,6 +218,193 @@
    return false;
  }
  
@@ -12989,6 +13025,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!UploadTexture(queue.front())) return {false, {}, {}};
 +  const auto index = queue.front();
 +  const auto binding = head->doviSourceBinding;
++  const bool buffered = !layers.empty() &&
++      std::all_of(layers.begin(), layers.end(), [&](const auto& layer) {
++        return layer.lease && layer.binding.Valid() && std::isfinite(layer.pts) &&
++            layer.binding.stream == binding.stream && layer.binding.revision == binding.revision;
++      }) && ((end && layers.size() == queue.size()) ||
++             layers.back().pts >= layers.front().pts + 1.0 - 1e-9);
 +  const auto preferences = DVBRIDGE::FrameOutputSettings(head->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
 +  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
 +  {
@@ -13023,7 +13065,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          m_aiOutputPending = false;
 +        }
 +        return true;
-+      }};
++      }, buffered && head->hdrType == StreamHdrType::HDR_TYPE_HDR10};
 +}
 +
 +bool CRendererVAAPIGLES::HDR10AIFrameCommitted() const
@@ -13058,7 +13100,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CRendererVAAPIGLES::CreateTexture(int index)
  {
    if (!m_isVAAPIBuffer)
-@@ -237,6 +464,11 @@
+@@ -237,6 +471,11 @@
  
  bool CRendererVAAPIGLES::UploadTexture(int index)
  {
@@ -13070,7 +13112,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_isVAAPIBuffer)
    {
      CPictureBuffer& buf = m_buffers[index];
-@@ -315,6 +547,18 @@
+@@ -315,6 +554,18 @@
    }
  
    CalculateTextureSourceRects(index, 3);
@@ -14750,7 +14792,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    m_pConfigPicture.reset();
  
-@@ -287,6 +314,217 @@
+@@ -287,6 +314,229 @@
      return false;
  }
  
@@ -14759,6 +14801,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +  if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible())
 +  {
++    m_aiStartupBuffered = false;
 +    m_aiQueuePreparationStale = false;
 +    return m_aiQueueReady = true;
 +  }
@@ -14784,7 +14827,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  // A seek can retain the old scanout, but only the new queue may prime AI.
 +  if (m_aiStartPts != DVD_NOPTS_VALUE && (paused || pending || selected))
 +    queue.push_front(m_presentsource);
-+  if (queue.empty()) return false;
++  if (queue.empty()) { m_aiStartupBuffered = false; return false; }
 +  uint64_t deadline = 0;
 +  if (m_pRenderer->HDR10AILookahead() && m_aiStartPts != DVD_NOPTS_VALUE)
 +  {
@@ -14834,6 +14877,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const auto generation = m_aiQueueGeneration;
 +  const double startPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
 +  auto preparation = renderer->CaptureHDR10AIQueue(queue,m_aiEnd,paused,deadline);
++  m_aiStartupBuffered = preparation.buffered;
 +  if (preparation.execute)
 +  {
 +    m_aiGUIOwnsRenderer = true;
@@ -14842,12 +14886,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    lock.unlock();
 +    HDR10AIQueuePreparation::Outcome outcome{};
 +    try { outcome = preparation.execute(); }
-+    catch (...) { lock.lock(); throw; }
++    catch (...) { lock.lock(); m_aiStartupBuffered = false; throw; }
 +    lock.lock();
 +    if (generation != m_aiQueueGeneration || renderer != m_pRenderer ||
 +        !preparation.publish || !preparation.publish(outcome))
 +    {
 +      m_aiQueuePreparationStale = true;
++      m_aiStartupBuffered = false;
 +      // Reject only unsubmitted output; accepted KMS work keeps its owner.
 +#ifdef HAVE_DVBRIDGE
 +      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
@@ -14859,6 +14904,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      m_presentstep = m_queued.empty() ? PRESENT_IDLE : PRESENT_READY;
 +      return m_aiQueueReady = false;
 +    }
++    m_aiStartupBuffered = preparation.buffered && outcome.lookahead;
 +    // After rejection, fresh pending analysis is not yet a new selected frame.
 +    if (outcome.lookahead && !lookahead)
 +    {
@@ -14944,6 +14990,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      m_aiFullscreenRequested && !m_aiGuiReady;
 +}
 +
++bool CRenderManager::HDR10AIStartupBuffered()
++{
++  std::unique_lock lock(m_presentlock);
++  return m_pRenderer && m_pRenderer->HDR10AIQueueEligible() && m_pRenderer->HDR10AILookahead() &&
++      !m_showVideo && m_aiFullscreenRequested && m_aiStartupBuffered;
++}
++
 +void CRenderManager::EndHDR10AIQueue()
 +{
 +  std::unique_lock lock(m_presentlock);
@@ -14953,6 +15006,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +void CRenderManager::ResetHDR10AIQueue()
 +{
 +  ++m_aiQueueGeneration;
++  m_aiStartupBuffered = false;
 +  if (m_clockSync.m_cb1Phase)
 +  {
 +    m_clockSync.Reset();
@@ -14968,7 +15022,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::FrameMove()
  {
    bool firstFrame = false;
-@@ -302,6 +540,9 @@
+@@ -302,6 +552,9 @@
        lock.unlock();
        if (!Configure())
          return;
@@ -14978,7 +15032,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        UpdateLatencyTweak();
        firstFrame = true;
        FrameWait(50ms);
-@@ -311,8 +552,47 @@
+@@ -311,8 +564,47 @@
    }
    {
      std::unique_lock lock2(m_presentlock);
@@ -15028,7 +15082,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        m_presentstep = PRESENT_IDLE;
      }
-@@ -321,22 +601,43 @@
+@@ -321,22 +613,43 @@
        m_presentTimer.Set(1000ms);
      }
  
@@ -15073,7 +15127,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_overlays.Release(*it);
          m_free.push_back(*it);
          it = m_discard.erase(it);
-@@ -344,6 +645,7 @@
+@@ -344,6 +657,7 @@
        else
          ++it;
      }
@@ -15081,7 +15135,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
      m_bRenderGUI = true;
-@@ -352,9 +654,14 @@
+@@ -352,9 +666,14 @@
    m_playerPort->UpdateGuiRender(IsGuiLayer() || !m_pRenderer->VideoBypassesFramebuffer() ||
                                  firstFrame);
  
@@ -15097,7 +15151,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_overlays.PrepareOverlays(m_presentsource);
  }
  
-@@ -388,6 +695,9 @@
+@@ -388,6 +707,9 @@
    m_QueueSize   = 2;
    m_QueueSkip   = 0;
    m_presentstep = PRESENT_IDLE;
@@ -15107,7 +15161,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bRenderGUI = true;
  
    m_initEvent.Set();
-@@ -397,12 +707,20 @@
+@@ -397,12 +719,20 @@
  {
    if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
    {
@@ -15128,7 +15182,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    std::unique_lock lock(m_statelock);
-@@ -415,6 +733,7 @@
+@@ -415,6 +745,7 @@
  
    m_renderState = STATE_UNCONFIGURED;
    m_picture.Reset();
@@ -15136,7 +15190,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bRenderGUI = false;
  
    m_initEvent.Set();
-@@ -442,15 +761,30 @@
+@@ -442,15 +773,30 @@
      {
        m_overlays.Flush();
        m_debugRenderer.Flush();
@@ -15167,7 +15221,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          for (int i = 1; i < m_QueueSize; i++)
            m_free.push_back(i);
        }
-@@ -509,6 +843,13 @@
+@@ -509,6 +855,13 @@
      delete m_pRenderer;
      m_pRenderer = NULL;
    }
@@ -15181,7 +15235,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  void CRenderManager::ServiceVideoCaptures()
-@@ -598,8 +939,10 @@
+@@ -598,8 +951,10 @@
      return res;
  
    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
@@ -15192,7 +15246,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return res;
  }
-@@ -617,9 +960,22 @@
+@@ -617,9 +972,22 @@
    if (!gui && m_pRenderer->IsGuiLayer())
      return;
  
@@ -15215,7 +15269,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      SPresent& m = m_Queue[m_presentsource];
  
      if( m.presentmethod == PRESENT_METHOD_BOB )
-@@ -634,7 +990,15 @@
+@@ -634,7 +1002,15 @@
  
    // the just-presented region is video-only: OSD, GUI and subtitles come later
    if (presented)
@@ -15231,7 +15285,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (presented && !gui)
    {
-@@ -694,6 +1058,19 @@
+@@ -694,6 +1070,19 @@
  
    {
      std::unique_lock lock(m_presentlock);
@@ -15251,7 +15305,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (m_presentstep == PRESENT_FRAME)
      {
-@@ -784,6 +1161,15 @@
+@@ -784,6 +1173,15 @@
    }
  }
  
@@ -15267,7 +15321,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::UpdateLatencyTweak()
  {
    float fps = CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS();
-@@ -797,6 +1183,15 @@
+@@ -797,6 +1195,15 @@
                                                                                       isHDREnabled));
  }
  
@@ -15283,7 +15337,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::UpdateResolution()
  {
    if (m_bTriggerUpdateResolution)
-@@ -807,7 +1202,23 @@
+@@ -807,7 +1214,23 @@
        {
          RESOLUTION res = CResolutionUtils::ChooseBestResolution(
              m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());
@@ -15307,7 +15361,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          UpdateLatencyTweak();
          if (m_pRenderer)
            m_pRenderer->Update();
-@@ -818,10 +1229,14 @@
+@@ -818,10 +1241,14 @@
    }
  }
  
@@ -15323,7 +15377,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_fps = fps;
      m_picture.iWidth = width;
      m_picture.iHeight = height;
-@@ -920,9 +1335,14 @@
+@@ -920,9 +1347,14 @@
  
  
    SPresent& m = m_Queue[index];
@@ -15338,7 +15392,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_queued.push_back(m_free.front());
    m_free.pop_front();
    m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
-@@ -1019,6 +1439,11 @@
+@@ -1019,6 +1451,11 @@
    XbmcThreads::EndTime<> endtime{timeout};
    while(m_free.empty())
    {
@@ -15350,7 +15404,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_presentevent.wait(lock, std::min(50ms, timeout));
      if (endtime.IsTimePast() || bStop)
      {
-@@ -1035,6 +1460,12 @@
+@@ -1035,6 +1472,12 @@
  
  void CRenderManager::PrepareNextRender()
  {
@@ -15363,7 +15417,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_queued.empty())
    {
      CLog::Log(LOGERROR, "CRenderManager::PrepareNextRender - asked to prepare with nothing available");
-@@ -1043,19 +1474,23 @@
+@@ -1043,19 +1486,23 @@
      return;
    }
  
@@ -15394,7 +15448,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // While the clock is paused, frameOnScreen does not advance, so adding the display
    // latency would pick a frame ahead of the one actually shown. That only holds for
-@@ -1072,27 +1507,84 @@
+@@ -1072,27 +1519,84 @@
    const double nextFramePts =
        m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
  
@@ -15491,7 +15545,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    CLog::LogFC(LOGDEBUG, LOGAVTIMING,
                "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
-@@ -1114,14 +1606,17 @@
+@@ -1114,14 +1618,17 @@
      auto iter = m_queued.begin();
      int idx = *iter;
      ++iter;
@@ -15511,7 +15565,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          break;
        idx = *iter;
        ++iter;
-@@ -1139,7 +1634,11 @@
+@@ -1139,7 +1646,11 @@
        m_queued.pop_front();
      }
  
@@ -15524,7 +15578,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
                                              static_cast<double>(m_fps / DVD_TIME_BASE));
      if (lateframes)
        m_lateframes += lateframes;
-@@ -1155,7 +1654,8 @@
+@@ -1155,7 +1666,8 @@
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
    }
@@ -15534,7 +15588,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_lateframes = 0;
      m_presentstep = PRESENT_FLIP;
-@@ -1170,6 +1670,9 @@
+@@ -1170,6 +1682,9 @@
  void CRenderManager::DiscardBuffer()
  {
    std::unique_lock lock2(m_presentlock);
@@ -15584,7 +15638,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void SetViewMode(int iViewMode);
    void PreInit();
    void UnInit();
-@@ -105,6 +120,14 @@
+@@ -105,6 +120,15 @@
    bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
    void AddOverlay(std::shared_ptr<CDVDOverlay> o, double pts);
    void ShowVideo(bool enable);
@@ -15593,13 +15647,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool GetHDR10AIStartTime(double& pts);
 +  bool PrepareHDR10AIStartup(bool fullscreen);
 +  bool HDR10AIPriming();
++  bool HDR10AIStartupBuffered();
 +  void EndHDR10AIQueue();
 +  void ResetHDR10AIQueue();
 +#endif
  
    /*!
     * \brief True if any subtitle/overlay is visible on the current presented
-@@ -148,6 +171,20 @@
+@@ -148,6 +172,21 @@
    void PresentBlend(bool clear, DWORD flags, DWORD alpha);
  
    void PrepareNextRender();
@@ -15614,13 +15669,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::atomic_bool m_aiGUIOwnsRenderer{false};
 +  bool m_aiQueueReady{true},m_aiEnd{};
 +  bool m_aiQueuePreparationStale{};
++  bool m_aiStartupBuffered{};
 +  bool m_aiFullscreenRequested{},m_aiGuiReady{},m_aiFullscreenWanted{};
 +  double m_aiStartPts{DVD_NOPTS_VALUE};
 +#endif
    bool IsPresenting();
    bool IsGuiLayer();
  
-@@ -170,6 +207,7 @@
+@@ -170,6 +209,7 @@
    CCriticalSection m_presentlock;
    CCriticalSection m_datalock;
    bool m_bTriggerUpdateResolution = false;
@@ -15628,7 +15684,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_bRenderGUI = true;
    bool m_renderedDebugOverlay = false;
    bool m_renderDebug = false;
-@@ -205,7 +243,7 @@
+@@ -205,7 +245,7 @@
    /// Display latency tweak value from AdvancedSettings for the current refresh rate
    /// in milliseconds
    double m_latencyTweak = 0.0;
@@ -15637,7 +15693,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    double m_displayLatency = 0.0;
    std::atomic_int m_videoDelay = {};
  
-@@ -214,10 +252,14 @@
+@@ -214,10 +254,14 @@
  
    struct SPresent
    {
@@ -15653,7 +15709,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    std::deque<int> m_free;
    std::deque<int> m_queued;
-@@ -233,6 +275,9 @@
+@@ -233,6 +277,9 @@
    int m_lateframes = -1;
    double m_presentpts = 0.0;
    EPRESENTSTEP m_presentstep = PRESENT_IDLE;
@@ -15663,7 +15719,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    XbmcThreads::EndTime<> m_presentTimer;
    bool m_forceNext = false;
    int m_presentsource = 0;
-@@ -250,6 +295,7 @@
+@@ -250,6 +297,7 @@
      int m_errCount;
      double m_syncOffset;
      bool m_enabled;

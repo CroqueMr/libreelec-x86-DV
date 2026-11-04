@@ -1290,8 +1290,8 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         geometry.height==geometry.source_height && !(geometry.x&1);
     bool direct_reference=master && (full_transport || placed_reference);
     mask.ipt_quad=ipt && direct_reference;
-    /* P5 keeps the same FP32 scaler; exchange its neighbour before packing. */
-    mask.scaled_quad=mask.profile5_transport && !direct_reference && r->fragment_quad;
+    /* Keep the same FP32 scaler; exchange its neighbour before packing. */
+    mask.scaled_quad=master && !direct_reference && r->fragment_quad;
     mask.reference_target=placed_reference?packed:NULL;
     bool reuse_p5=mask.profile5_transport && r->fragment_quad && !direct_reference && !geometry.x && !geometry.y &&
         geometry.width==target_width && geometry.height==target_height &&
