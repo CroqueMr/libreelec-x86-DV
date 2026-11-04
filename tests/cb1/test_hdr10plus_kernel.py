@@ -69,8 +69,11 @@ class HDR10PlusKernelTests(unittest.TestCase):
             for test in ('connector', 'packet', 'amd', 'infoframe', 'intel', 'frame_mask'):
                 with self.subTest(contract=test):
                     binary = root / test
+                    # Keep ASan's executable mapping fixed: default PIE binaries
+                    # can crash during sanitizer startup on WSL hosts.
                     compiled = subprocess.run(['cc', '-Wall', '-Wextra', '-Werror',
                         '-Wno-unused-function', '-Wno-pointer-sign', '-fsanitize=address,undefined',
+                        '-fno-pie', '-no-pie',
                         '-I' + str(root), '-I' + str(kernel / 'include/drm'),
                         str(ROOT / 'tests/cb1' / ('hdr10plus_' + test + '.c')),
                         '-o', str(binary)], capture_output=True, text=True)
