@@ -27,18 +27,28 @@ static int64_t dvbridge_fel_seek_point_at(AVFormatContext *format, int video, in
             group->streams[el]->codecpar->codec_id == AV_CODEC_ID_HEVC)
             enhancement = group->streams[el]->index;
     }
-    const int windows[] = {0, 2, 8, 32, 128};
+    const int windows[] = {0, -1, 2, 8, 32, 128};
     int64_t deadline = av_gettime_relative() + 3000000;
     size_t bytes = 0;
     int64_t found = AV_NOPTS_VALUE;
     int64_t found_position = -1;
+    int64_t prefix_anchor = AV_NOPTS_VALUE, prefix_position = -1;
     const AVRational seconds = {1,1};
     for (unsigned attempt = 0; attempt < sizeof(windows)/sizeof(*windows); ++attempt) {
-        int64_t start = target - av_rescale_q(windows[attempt], seconds, stream->time_base);
+        const bool prefix = windows[attempt] < 0;
+        int64_t start = prefix ? (stream->start_time == AV_NOPTS_VALUE ? 0 : stream->start_time) :
+            target - av_rescale_q(windows[attempt], seconds, stream->time_base);
         if (stream->start_time != AV_NOPTS_VALUE && start < stream->start_time)
             start = stream->start_time;
-        if (av_seek_frame(format, video, start, AVSEEK_FLAG_BACKWARD) < 0)
+        if (av_seek_frame(format, video, start, AVSEEK_FLAG_BACKWARD) < 0) {
+            if (prefix) continue;
             break;
+        }
+        /* Preserve the fast local attempt. A short optional prefix proof supplies
+         * sparse-key files without a cache, bigger queues or larger probe budget. */
+        const size_t prefix_bytes = bytes + 32u*1024u*1024u;
+        int64_t window_deadline = av_gettime_relative() + 375000;
+        if (!prefix || window_deadline > deadline) window_deadline = deadline;
         AVBSFContext *split = NULL, *base = NULL;
         AVCodecParserContext *bp = av_parser_init(AV_CODEC_ID_HEVC);
         AVCodecParserContext *ep = av_parser_init(AV_CODEC_ID_HEVC);
@@ -66,8 +76,8 @@ static int64_t dvbridge_fel_seek_point_at(AVFormatContext *format, int video, in
         if (avcodec_parameters_to_context(bc, base ? base->par_out : stream->codecpar) < 0)
             goto cleanup;
         bp->flags = ep->flags = PARSER_FLAG_COMPLETE_FRAMES;
-        for (unsigned count = 0; count < 12000 && bytes < 256u*1024u*1024u &&
-             av_gettime_relative() < deadline; ++count) {
+        for (unsigned count = 0; count < (prefix ? 1500u : 12000u) && bytes < 256u*1024u*1024u &&
+             (!prefix || bytes < prefix_bytes) && av_gettime_relative() < window_deadline; ++count) {
             if (av_read_frame(format, packet) < 0)
                 break;
             bytes += packet->size > 0 ? packet->size : 0;
@@ -95,7 +105,7 @@ static int64_t dvbridge_fel_seek_point_at(AVFormatContext *format, int video, in
                     }
                     av_packet_unref(el);
                 }
-                if (passed == 3) break;
+                if (passed == 3 || (prefix && found != AV_NOPTS_VALUE)) break;
                 continue;
             }
             if (packet->stream_index != video) { av_packet_unref(packet); continue; }
@@ -122,14 +132,24 @@ static int64_t dvbridge_fel_seek_point_at(AVFormatContext *format, int video, in
                 av_packet_unref(el);
             }
             av_packet_unref(packet);
-            if (windows[attempt] == 0 || pts == target) break;
+            if (windows[attempt] == 0 || pts == target || (prefix && found != AV_NOPTS_VALUE)) break;
         }
 cleanup:
         av_packet_free(&packet); av_packet_free(&el);
         av_parser_close(bp); av_parser_close(ep);
         avcodec_free_context(&bc); avcodec_free_context(&ec); av_bsf_free(&split); av_bsf_free(&base);
+        if (prefix) {
+            prefix_anchor = found;
+            prefix_position = found_position;
+            found = AV_NOPTS_VALUE;
+            found_position = -1;
+        }
         if (found != AV_NOPTS_VALUE || av_gettime_relative() >= deadline || bytes >= 256u*1024u*1024u)
             break;
+    }
+    if (found == AV_NOPTS_VALUE) {
+        found = prefix_anchor;
+        found_position = prefix_position;
     }
     if (position) *position = found_position;
     return found;

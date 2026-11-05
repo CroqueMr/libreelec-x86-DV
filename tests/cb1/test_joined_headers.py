@@ -25,6 +25,7 @@ class JoinedHeaders(unittest.TestCase):
         program=r'''
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
 #include <climits>
 #include <string>
@@ -48,6 +49,8 @@ struct CDemuxParserFFmpeg {
 struct CDVDDemuxFFmpeg {
  AVFormatContext* m_pFormatContext{};bool m_bMatroska{};Input input;Input* m_pInput{&input};
  std::unique_ptr<CBlurayDovi> m_blurayDovi;int m_blurayBase{-1},m_blurayEnhancement{-1};
+ DemuxPacket::DoviLayerTimes m_blurayTiming;
+ uint64_t m_blurayEpoch{};
  unsigned m_doviGroups=0;bool m_blurayAwaitBase=false;
  std::map<int,std::unique_ptr<CDemuxParserFFmpeg>> m_parsers;
  std::map<int,CDemuxStream> streams;

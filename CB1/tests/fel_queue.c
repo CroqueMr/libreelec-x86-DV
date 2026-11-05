@@ -12,6 +12,36 @@ static int64_t ready[64];
 static unsigned count, submissions;
 static bool end, bad_pts, send_error, invalid_send_once, invalid_receive_once;
 static int native_pool, initialized_pool = -1;
+/* Owned synthetic HEVC: nonkey BL prefix and a present EL CRA before its IDR. */
+static const uint8_t seek_config[] = {0,0,0,1,64,1,12,1,255,255,1,96,0,0,3,0,144,0,0,3,0,0,3,0,30,146,128,144,0,0,0,1,66,1,1,1,96,0,0,3,0,144,0,0,3,0,0,3,0,30,160,16,32,32,89,100,169,36,202,240,22,128,128,0,0,3,0,128,0,0,12,4,0,0,0,1,68,1,193,114,180,34,64};
+static const uint8_t seek_base[][17] = {{0,0,1,2,1,208,9,126,16,198,59,249,139,232,0},
+    {0,0,1,2,1,208,17,255,212,67,6,57,249,139,232,0},
+    {0,0,1,2,1,208,24,159,253,196,48,24,228,249,139,232,0}};
+static const uint8_t seek_el_cra[] = {0,0,0,1,126,1,64,1,12,1,255,255,1,96,0,0,3,0,144,0,0,3,0,0,3,0,30,146,128,144,0,0,0,1,126,1,66,1,1,1,96,0,0,3,0,144,0,0,3,0,0,3,0,30,160,16,32,32,89,100,169,36,202,240,22,128,128,0,0,3,0,128,0,0,12,4,0,0,0,1,126,1,68,1,193,114,180,34,64,0,0,0,1,126,1,42,1,172,16,77,92,86,247,1,196,125,63,251,241,176,136,192,148,236,36,224,0};
+
+static void present_seek_preroll_is_not_missing(AVBufferRef *device)
+{
+    AVCodecParameters *parameters=avcodec_parameters_alloc();assert(parameters);
+    parameters->codec_type=AVMEDIA_TYPE_VIDEO;parameters->codec_id=AV_CODEC_ID_HEVC;
+    struct dvbridge_fel *f=dvbridge_fel_create(parameters,(AVRational){1,1000000});
+    avcodec_parameters_free(&parameters);assert(f&&dvbridge_fel_device(f,device));
+    size_t idr=0;
+    while(idr+5<sizeof(synthetic_paired)&&memcmp(synthetic_paired+idr,"\0\0\1\x7e\1",5))++idr;
+    assert(idr+5<sizeof(synthetic_paired));
+    for(unsigned i=0;i<3;++i){
+        const size_t headers=i?0:sizeof(seek_config),base=15+i;
+        const uint8_t *el=i==2?synthetic_paired+idr:seek_el_cra;
+        const size_t bytes=i==2?sizeof(synthetic_paired)-idr:sizeof(seek_el_cra);
+        AVPacket *p=av_packet_alloc();assert(p&&av_new_packet(p,headers+base+bytes)==0);
+        memcpy(p->data,seek_config,headers);memcpy(p->data+headers,seek_base[i],base);
+        memcpy(p->data+headers+base,el,bytes);p->pts=p->dts=1000*(i+1);
+        assert(dvbridge_fel_submit(f,p));av_packet_free(&p);
+        assert(!f->epoch_uncertain && "Parsed EL preroll must never be reported missing");
+    }
+    AVFrame *frame=NULL;
+    assert(dvbridge_fel_take(f,3000,&frame)==1&&frame&&frame->pts==3000);
+    av_frame_free(&frame);dvbridge_fel_destroy(f);
+}
 int __wrap_avcodec_get_hw_frames_parameters(AVCodecContext *ctx, AVBufferRef *device,
                                            enum AVPixelFormat format, AVBufferRef **frames)
 {
@@ -73,6 +103,7 @@ int __wrap_avcodec_receive_frame(AVCodecContext *ctx, AVFrame *frame)
     frame->width = 1920;
     frame->height = 1080;
     frame->best_effort_timestamp = bad_pts ? AV_NOPTS_VALUE : ready[0];
+    frame->pts = frame->best_effort_timestamp;
     frame->buf[0] = av_buffer_alloc(8);
     assert(frame->buf[0]);
     --count;
@@ -306,6 +337,7 @@ int main(void)
         }
         dvbridge_fel_destroy(f);
     }
+    present_seek_preroll_is_not_missing(device);
     av_buffer_unref(&device);
     av_packet_free(&p);
     puts("PASS: real EL split, immutable input, bounded queue, exact PTS, reset, EOF and errors");

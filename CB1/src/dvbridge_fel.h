@@ -11,6 +11,17 @@ void dvbridge_fel_destroy(struct dvbridge_fel *fel);
 void dvbridge_fel_reset(struct dvbridge_fel *fel);
 bool dvbridge_fel_device(struct dvbridge_fel *fel, AVBufferRef *device);
 bool dvbridge_fel_submit(struct dvbridge_fel *fel, const AVPacket *packet);
+/* Declared dual-track timing before conversion to Kodi's clock. AV_NOPTS_VALUE
+ * marks an absent layer in a terminal unit; an EL-only unit never decodes BL.
+ * A non-presentable BL remains a required compressed decoder reference. */
+struct dvbridge_fel_source {
+    int64_t base_pts, enhancement_pts;
+    AVRational time_base;
+    uint64_t epoch;
+    bool presentable;
+};
+bool dvbridge_fel_submit_source(struct dvbridge_fel *fel, const AVPacket *packet,
+                               const struct dvbridge_fel_source *source);
 bool dvbridge_fel_drain(struct dvbridge_fel *fel);
 /* 1: exact pair, 0: need input, 2: discard preroll, -1: missing pair / failure. */
 int dvbridge_fel_take(struct dvbridge_fel *fel, int64_t pts, AVFrame **frame);

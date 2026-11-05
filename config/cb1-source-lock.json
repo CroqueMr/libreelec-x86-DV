@@ -26,7 +26,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "73e102f7d812dcd080373b92640ba9c593d14874279acf285a7897006e6397e2",
-    "config/cb1-patch-index.json": "d60c0df782db3bf6429914b9099ec0656622620bc6da30c2694c57d968710b07",
+    "config/cb1-patch-index.json": "9e793e9b78ffde0abfd2bae4abe2b324245f8825cdb250e46ad7d24f9d4658bd",
     "packages/graphics/nvidia/package.mk": "434527b3e356b2a2dd2dcf231f2f9ea8b087aaa8377911425decd4b8a964b398",
     "packages/graphics/nvidia/files/select-driver": "a59b2112ca28780d6f1d8646d17d34fb657311ce4006ff62f13995a6d81a94cd",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
@@ -104,10 +104,10 @@
     "tests/cb1/test_dcn4_transport.py": "ff0092a0c1a66009ec8de0b1f619b612a10fdfc6e164d88353f3629eda0dc325",
     "tests/cb1/dcn4_transport.c": "63284b5b2cef0bb2f4be1eced5a9b52358e834a1afc8d4d1b8eeeac91e15ab2a",
     "tests/cb1/amd_dv_atomic.c": "c0a29445b50a72fc88f001a74ccf1710c93046eebf90ce50c10ce0f185e48be2",
-    "tests/cb1/test_bluray_pairing.py": "19dde01a9fbc5c360f399d4e8872c6d27005d3ab48a1c6fff4d701608e324433",
-    "tests/cb1/test_bluray_el_preroll.py": "a5b22b5ad78662bd361559e93b682e85874b100c008b28b1b8d429a51d40eb96",
-    "tests/cb1/test_dual_carriage.py": "da1b11e80fc7d38d49a246b89861c8b25bfb700aa70d194025da559d8cdb715f",
-    "tests/cb1/test_joined_headers.py": "346fa01676d7e35f40c5bea912898ecb328627933fb04d42722db8fa7b115db7",
+    "tests/cb1/test_bluray_pairing.py": "4f14cfce8f8f320ebd38f65a4507228c01f74f55946c36f8c9369ae4808aedca",
+    "tests/cb1/test_bluray_el_preroll.py": "f3f849acae74763fb5416e9f8e95223fff66b426a0cbcdb293ccf683f929f430",
+    "tests/cb1/test_dual_carriage.py": "4c8798ebc2b590d7f3dd6cf9d695d9a5427a91b5ff004045d40e1413a9c1dafd",
+    "tests/cb1/test_joined_headers.py": "672e9636c920b03fba8cd5dcdf1b0b2aac930978b296e3c8e2dcc8d41c473119",
     "tests/cb1/test_dovi_association_updates.py": "2281ca7f2e7795ac35807e996f009696256eb1f2ec34fbe761404186bb9172c0",
     "tests/cb1/test_dv_uhd_mode.py": "8f25ab87506157a55d00b0a691e6c17722e0e4a29971b16d8415bc77e1dbca32",
     "tests/cb1/test_auto_view_mode.py": "211362a9f8a51fa5261cc6fa73fe84524d1c3d510d2862a4e22be1db2fafe9ee",
@@ -167,7 +167,7 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "f3dd9fd4e1e4a51ea803071517c761e700d37490ff1c67999fec060cf03d9350",
+    "tests/cb1/test_fel_terminal.py": "c485dd852fa68a5f833382c2bc13c7e179bc3ef1708ad66140d2697b7f758af1",
     "tests/cb1/test_optional_gui.py": "5dfc9ed33b5e94ca6bceb1ae206fed81ea22c9fa504b63f43e434b228262091f",
     "tests/cb1/test_software_dv_import.py": "fd13d6dd7b4757c265a16b35ed5dab1090edc49c6a7629f4be00255496f1e195",
     "tests/cb1/test_hdr10plus_recovery.py": "396f49e90f7580c23e9c005ff18526d77ffc6e38b0e8b994d5f3fac84ac6485a",
@@ -178,11 +178,15 @@
     "tests/cb1/test_gui_cache.py": "f88723eba5c83163d6c70ffe1112d2ebdf7fd8008a5de03007378878a8f4f794",
     "tests/cb1/test_ai_producer_admission.py": "230070a8f95901d14f4be40a54eb7c03add77fc78e97fb58c0b1d9dd372b3f51",
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
-    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "2f1c89d585a575cc80ce8cac67c500a364d9a93aca65594175a9da2045456c26",
+    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "40de58d7c5d3717119f66efd9897ea2dff37ff544e6d5a15815715d8061599cc",
     "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": "423fc14eb55a457bf59913a393d05cd99cc36bbc599c7b155fe84d3dcec8914e",
     "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "7eba1fb531a801ea66079a2e9582f62b1ef8fc6a9c973777050edabecd22b496",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "3eee42128c41947125d72bd6d70480a43c0c6b25ed4ab82d30342158dcb0533a",
-    "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "306c0a127d9344627184858de974fe782007eaf5d71002dd4fd5666f198a7317"
+    "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "306c0a127d9344627184858de974fe782007eaf5d71002dd4fd5666f198a7317",
+    "tests/cb1/test_dual_clock_lifecycle.py": "14230236d20ffad60749ebd3e1a0cb38f3b8be0d80338036b88d9f59fd936485",
+    "tests/cb1/test_bluray_carriage.py": "8a400deb0feaddd1be5e1ca0bc3369897bf8337d88d273c90bae40cb09d7a196",
+    "tests/cb1/test_matroska_rpu_carriage.py": "3948a35278902c9b6584e73c405d08d8e2b3ea129341009ae1ba4cdacc398f11",
+    "tests/cb1/test_dovi_rpu_padding.py": "ed34bf315e9334e332064888825540200ef5bf19f05e8a17844a5944ed512ba3"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
@@ -323,15 +327,15 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.c": {
       "source": "src/dvbridge_fel.c",
-      "sha256": "68e77a4aa61dd3b677335ddec7daea3f078b3648ae8db112412ec62070c05b9b"
+      "sha256": "baa4a0cdf7f1502101c10d86036e0d245c03a0e457c4594b8e326c13875381be"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.h": {
       "source": "src/dvbridge_fel.h",
-      "sha256": "c94f4c3a6231b2db32ecad8dfc927823c810c41f64c1a906a6853a0d79c771e8"
+      "sha256": "ef389c5a311a87540379af54ab0e430fd5165c5912f1a6ee31c85ca6b4e5fa6a"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel_seek.h": {
       "source": "src/dvbridge_fel_seek.h",
-      "sha256": "6e5d35603554cae3e64dec654dbe270f0032bfc7b3e6bb3b620ec3d23d637def"
+      "sha256": "951066eb99ca862ef57fda2cb23b10cfa31278043b10509fde4f9e669eb4feef"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel_vpp.c": {
       "source": "src/dvbridge_fel_vpp.c",
@@ -407,7 +411,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "051e7171a9338389f761ade3083043d20fd23d9fd8a88ea135798432d641a58f"
+      "sha256": "4d6bfa117b16acd5ad8b31a865c1bb259a70b8dd27d48140ea0234851bd2eed2"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -423,7 +427,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "288c606ecb7b2cc3101d28c69aeef70b0c5bc11272d7720e519041c0839b1d15"
+      "sha256": "ae78e96464ae743b574bd1c16e375cbbf351c78a7d21b1f09f0efe47daf0861b"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -467,7 +471,7 @@
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch",
-      "sha256": "b83a9f89befad875d90bd483dd5fdea4e293af037ac2f8c16ebf1bd26d30e2c4"
+      "sha256": "9fa035e84702ca1ee0db82bfcbfc1de029f7a2ca149b36950cf209cbc73aedc0"
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch",
@@ -611,7 +615,7 @@
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch",
-      "sha256": "5c463382da9b54a4786bb3f4ad087ec7cc1e6a3f948240433ebf87c243e9cb52"
+      "sha256": "e50f5680f32f271082d036c4e644300ef211cc8a9b3312c429890f9dc3b971b8"
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch",
