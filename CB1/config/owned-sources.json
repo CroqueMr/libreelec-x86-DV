@@ -70,7 +70,7 @@
   "src/cb1_hdr10plus_analysis.h": "4f995c85b6bb895ee1208e0fde9589bb114db7a7d6e50454b112b2274710067d",
   "src/cb1_hdr10plus_analysis.c": "c6b35d23b49ea4f3da669647d93507119756a0eb3250757f11260a61d04a537f",
   "src/cb1_hdr10plus_curve.h": "efd597687e0aa351732018ba4d395f82137966064719c9650d5b09da01e5f7b4",
-  "src/cb1_hdr10plus_curve.c": "5fbe75efa40577fa58592e42eb4874718e86bb0f349cfcd6ad7e69f15078e272",
+  "src/cb1_hdr10plus_curve.c": "83e9a8b6437e3c5f9d206ed7114b6df47e2440cfb43424d495381a8d0312c8c6",
   "src/cb1_dv_hdr10plus.h": "d8bdeff92c8629796c0721905d43fbd09f75cbda4fcc9422e1151cf5aa7764b8",
   "src/cb1_dv_hdr10plus.c": "1349d80a9af51f22134e81fd21298bf3ab1b7d60aad173fe7fe078dd789a5213",
   "src/cb1_hdr10plus_dovi.c": "1ddb38211ad3b37163f17f74ea4783e5951d3eccbba955439adf66cf056a661e",

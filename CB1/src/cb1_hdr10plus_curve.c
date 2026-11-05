@@ -35,7 +35,7 @@ double cb1_hdr10plus_curve_sample(const struct cb1_hdr10plus_curve *curve,double
     return ky+(1-ky)*p[0];
 }
 
-static double error(const struct cb1_hdr10plus_curve *c,const double *reference,unsigned target)
+static double error(const struct cb1_hdr10plus_curve *c,const double *reference,unsigned target,double limit)
 {
     double worst=0;
     for(unsigned i=0;i<=4096;i++){
@@ -43,6 +43,10 @@ static double error(const struct cb1_hdr10plus_curve *c,const double *reference,
         double actual=cb1_hdr10plus_curve_sample(c,x);
         if(!isfinite(actual) || actual<0 || actual>1+1e-12)return INFINITY;
         worst=fmax(worst,fabs(pq(actual*target)-reference[i]));
+        /* Stop candidates that cannot improve an acceptable best curve or
+         * already exceed the unchanged acceptance threshold. A curve that
+         * can be returned still evaluates every sample, with its exact error. */
+        if(worst>=limit || worst>2.0/1023)return worst;
     }
     return worst;
 }
@@ -85,13 +89,13 @@ bool cb1_hdr10plus_curve_fit(struct cb1_hdr10plus_curve *out,const double values
     }
     struct cb1_hdr10plus_curve best={.knee_x=1023,.knee_y=(uint16_t)fmin(1023,lround(values[1024]*4095/4)),
         .count=1,.anchors={128}};
-    best.maximum_pq_error=error(&best,reference,target);
+    best.maximum_pq_error=error(&best,reference,target,INFINITY);
     static const double knees[]={0,.03125,.0625,.125,.25,.5,.75};
     for(unsigned i=0;i<sizeof(knees)/sizeof(*knees);i++){
         struct cb1_hdr10plus_curve c={.knee_x=(uint16_t)lround(knees[i]*4095/4)};
         c.knee_y=(uint16_t)fmin(1023,lround(sample(values,c.knee_x*4.0/4095)*4095/4));
         if(c.knee_y==1023)continue;
-        fit_anchors(&c,values);c.maximum_pq_error=error(&c,reference,target);
+        fit_anchors(&c,values);c.maximum_pq_error=error(&c,reference,target,best.maximum_pq_error);
         if(c.maximum_pq_error<best.maximum_pq_error)best=c;
     }
     if(best.maximum_pq_error>2.0/1023)return false;

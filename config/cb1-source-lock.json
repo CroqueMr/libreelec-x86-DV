@@ -423,7 +423,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "288c606ecb7b2cc3101d28c69aeef70b0c5bc11272d7720e519041c0839b1d15"
+      "sha256": "fb45da3a20871efee76e2e5965c13aad28abaf1f4136efa21fc0fc0b6282abf2"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -651,7 +651,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10plus_curve.c": {
       "source": "src/cb1_hdr10plus_curve.c",
-      "sha256": "5fbe75efa40577fa58592e42eb4874718e86bb0f349cfcd6ad7e69f15078e272"
+      "sha256": "83e9a8b6437e3c5f9d206ed7114b6df47e2440cfb43424d495381a8d0312c8c6"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_dv_hdr10plus.h": {
       "source": "src/cb1_dv_hdr10plus.h",
