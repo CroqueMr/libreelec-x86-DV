@@ -1,4 +1,4 @@
-Associate declared Profile 7 layers independently of RPU carriage.
+Associate declared Dolby layers and preserve their shared Matroska seek boundary.
 
 --- a/libavformat/matroskadec.c
 +++ b/libavformat/matroskadec.c
@@ -140,3 +140,32 @@ Associate declared Profile 7 layers independently of RPU carriage.
      res = ff_packet_list_put(&matroska->queue, pkt, NULL, 0);
      if (res < 0) {
          av_packet_unref(pkt);
+@@ -4539,8 +4581,27 @@
+         tracks[i].end_timecode         = 0;
+     }
+ 
++    /* A common Dolby layer key may start in an earlier cluster than the
++     * selected track's key. Retain both; the existing timestamp gate still
++     * excludes packets before the requested random-access point. */
++    int64_t seek_pos = sti->index_entries[index].pos;
++    for (unsigned j = 0; j < s->nb_stream_groups; j++) {
++        const AVStreamGroup *group = s->stream_groups[j];
++        if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION || group->nb_streams != 2)
++            continue;
++        AVStream *peer = group->streams[0] == st ? group->streams[1] :
++                         group->streams[1] == st ? group->streams[0] : NULL;
++        if (!peer)
++            continue;
++        int64_t key = sti->index_entries[index].timestamp;
++        const AVIndexEntry *entry = avformat_index_get_entry_from_timestamp(peer,
++            av_rescale_q(key, st->time_base, peer->time_base), flags);
++        if (entry && (entry->flags & AVINDEX_KEYFRAME) &&
++            !av_compare_ts(entry->timestamp, peer->time_base, key, st->time_base))
++            seek_pos = FFMIN(seek_pos, entry->pos);
++    }
+     /* We seek to a level 1 element, so set the appropriate status. */
+-    matroska_reset_status(matroska, 0, sti->index_entries[index].pos);
++    matroska_reset_status(matroska, 0, seek_pos);
+     if (flags & AVSEEK_FLAG_ANY) {
+         sti->skip_to_keyframe = 0;
+         matroska->skip_to_timecode = timestamp;

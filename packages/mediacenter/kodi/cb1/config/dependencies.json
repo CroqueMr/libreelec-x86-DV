@@ -62,7 +62,7 @@
     "patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": "953cfb01339263c02c7932eb67e30ea6603613a1800fa4041f46b5f3ffb10fe0",
     "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": "f2f7d6ac70566b2035966cfe83db8c02b3d6b874b81d31d41a7be126cb52c55a",
     "patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": "4ce28e60a949a51554d3c0d8d2596b2ca791463baf352d7f250c6e710d0f0ac2",
-    "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": "e50f5680f32f271082d036c4e644300ef211cc8a9b3312c429890f9dc3b971b8",
+    "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": "6a9212f6259c8fce96fad7297607d636ad019005928815946115bfdbd3c6089a",
     "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": "dc7e1e8b02e978bd8e090ef6441b110a4865e8fba321025934cec6c31c9c7235",
     "patches/ffmpeg/ffmpeg-9910-mvc.patch": "58886cc463a811a226024da50e5014dd561f79230d6fa9dd9b94b6e84acce5e6",
     "patches/libplacebo/libplacebo-9900-0-src__dispatch.c.patch": "6011006138e5c40670e4d7eb83cf86523354e23d4ca7ea2a622eafd4dee581bb",
@@ -114,7 +114,7 @@
     "libplacebo/src/shaders.h": "2d105b299b5eea28c3a5c3cfa15b005576a853a5891f56af8af6ad67bd72b1d2",
     "ffmpeg/libavformat/mpegts.c": "229c92abd17c0c9bc37338adf660515d18f84af85ba4339e782ff92e4af21565",
     "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e",
-    "ffmpeg/libavformat/matroskadec.c": "eb2255b56bbf4c48b58d7970ea757ae0fe59791414c9b0b2c347cb4acc0f7573",
+    "ffmpeg/libavformat/matroskadec.c": "e8fbe599ef8be450b6ae1818b7392186155ec4e7ce4f5bc422786d9a7c2517c5",
     "ffmpeg/libavcodec/pgssubdec.c": "46f628e57af1c998b3654b11fe46d984db3f13e23127fd4044726216d91cf836"
   }
 }

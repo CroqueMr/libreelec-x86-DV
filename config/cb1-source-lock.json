@@ -167,7 +167,7 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "c485dd852fa68a5f833382c2bc13c7e179bc3ef1708ad66140d2697b7f758af1",
+    "tests/cb1/test_fel_terminal.py": "15537e4d283cc3a75c5dec8095770c1bd68343853d01875d14f688021d15dbc8",
     "tests/cb1/test_optional_gui.py": "5dfc9ed33b5e94ca6bceb1ae206fed81ea22c9fa504b63f43e434b228262091f",
     "tests/cb1/test_software_dv_import.py": "fd13d6dd7b4757c265a16b35ed5dab1090edc49c6a7629f4be00255496f1e195",
     "tests/cb1/test_hdr10plus_recovery.py": "396f49e90f7580c23e9c005ff18526d77ffc6e38b0e8b994d5f3fac84ac6485a",
@@ -178,7 +178,7 @@
     "tests/cb1/test_gui_cache.py": "f88723eba5c83163d6c70ffe1112d2ebdf7fd8008a5de03007378878a8f4f794",
     "tests/cb1/test_ai_producer_admission.py": "230070a8f95901d14f4be40a54eb7c03add77fc78e97fb58c0b1d9dd372b3f51",
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
-    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "40de58d7c5d3717119f66efd9897ea2dff37ff544e6d5a15815715d8061599cc",
+    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "77344354787542a364cf55f293d3017944f8cc6189f4a1332d096b85c73045b4",
     "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": "423fc14eb55a457bf59913a393d05cd99cc36bbc599c7b155fe84d3dcec8914e",
     "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "7eba1fb531a801ea66079a2e9582f62b1ef8fc6a9c973777050edabecd22b496",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "3eee42128c41947125d72bd6d70480a43c0c6b25ed4ab82d30342158dcb0533a",
@@ -411,7 +411,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "4d6bfa117b16acd5ad8b31a865c1bb259a70b8dd27d48140ea0234851bd2eed2"
+      "sha256": "3ca4a0ba46d9525ad18ab509733a68c06ba9c711f0fcd4790d08fecc085f80f0"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -615,7 +615,7 @@
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-05-matroska-dovi-association.patch",
-      "sha256": "e50f5680f32f271082d036c4e644300ef211cc8a9b3312c429890f9dc3b971b8"
+      "sha256": "6a9212f6259c8fce96fad7297607d636ad019005928815946115bfdbd3c6089a"
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-06-hdr10plus-country.patch",

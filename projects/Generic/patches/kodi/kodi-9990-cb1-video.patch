@@ -584,7 +584,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "cores/FFmpeg.h"
  #include "cores/VideoPlayer/Interface/TimingConstants.h"
  #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
-@@ -23,12 +29,25 @@
+@@ -23,12 +29,28 @@
  #include "settings/Settings.h"
  #include "settings/SettingsComponent.h"
  #include "utils/CPUInfo.h"
@@ -605,12 +605,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +#include "dvbridge_fel.h"
 +#include <libavutil/hwcontext.h>
++#ifdef HAVE_LIBVA
++#include <libavutil/hwcontext_vaapi.h>
++#endif
 +}
 +#endif
  
  extern "C" {
  #include <libavcodec/defs.h>
-@@ -261,7 +280,10 @@
+@@ -261,7 +283,10 @@
    // 2nd condition:
    // fix an ffmpeg issue here, it calls us with an invalid profile
    // then a 2nd call with a valid one
@@ -622,7 +625,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        (avctx->codec_id == AV_CODEC_ID_VC1 && avctx->profile == AV_PROFILE_UNKNOWN))
    {
      AVPixelFormat defaultFmt = avcodec_default_get_format(avctx, fmt);
-@@ -334,7 +356,17 @@
+@@ -334,7 +359,17 @@
    }
  
    m_hints = hints;
@@ -640,7 +643,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    const AVCodec* pCodec = nullptr;
  
-@@ -434,6 +466,44 @@
+@@ -434,6 +469,44 @@
      av_opt_set(m_pCodecContext, it->m_name.c_str(), it->m_value.c_str(), 0);
    }
  
@@ -685,7 +688,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
    {
      CLog::Log(LOGDEBUG,"CDVDVideoCodecFFmpeg::Open() Unable to open codec");
-@@ -472,11 +542,41 @@
+@@ -472,11 +545,41 @@
  
    m_dropCtrl.Reset(true);
    m_eof = false;
@@ -727,7 +730,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    av_frame_free(&m_pFrame);
    av_frame_free(&m_pDecodedFrame);
    av_frame_free(&m_pFilterFrame);
-@@ -585,6 +685,18 @@
+@@ -585,6 +688,18 @@
    if (!packet.pData)
      return true;
  
@@ -746,7 +749,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_eof)
    {
      Reset();
-@@ -618,7 +730,29 @@
+@@ -618,7 +733,29 @@
    avpkt->side_data = static_cast<AVPacketSideData*>(packet.pSideData);
    avpkt->side_data_elems = packet.iSideDataElems;
  
@@ -777,7 +780,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -626,6 +760,10 @@
+@@ -626,6 +763,10 @@
    av_buffer_unref(&avpkt->buf);
    av_free(avpkt);
  
@@ -788,7 +791,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // try again
    if (ret == AVERROR(EAGAIN))
    {
-@@ -655,7 +793,109 @@
+@@ -655,7 +796,128 @@
    return true;
  }
  
@@ -839,6 +842,25 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +            return VC_FATAL;
 +          }
 +          ReportDVStartup(4, "el-decoded");
++#ifdef HAVE_LIBVA
++          if (base->iFlags & DVP_FLAG_DROPPED)
++          {
++            // Preroll bypasses the renderer's normal EL completion check. Consume
++            // its decode report before retiring the image, as Kodi does for BL.
++            const auto* frames = enhancement->hw_frames_ctx ?
++                reinterpret_cast<const AVHWFramesContext*>(enhancement->hw_frames_ctx->data) : nullptr;
++            const auto* device = frames ?
++                reinterpret_cast<const AVVAAPIDeviceContext*>(frames->device_ctx->hwctx) : nullptr;
++            if (!device || vaSyncSurface(device->display,
++                static_cast<VASurfaceID>(reinterpret_cast<uintptr_t>(enhancement->data[3]))) != VA_STATUS_SUCCESS)
++            {
++              CLog::Log(LOGERROR, "DV FEL: discarded picture decode did not complete at {}",
++                        base->doviSourcePts);
++              av_frame_free(&enhancement);
++              return VC_FATAL;
++            }
++          }
++#endif
 +          base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
 +          // The pairing owner consumed the exact EL from this stream/reset epoch.
 +          base->doviEnhancementBinding = base->doviMetadata.Binding();
@@ -898,7 +920,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  {
    if (!m_startedInput)
    {
-@@ -671,6 +911,9 @@
+@@ -671,6 +933,9 @@
    {
      int flags = m_codecControlFlags;
      flags &= ~DVD_CODEC_CTRL_DRAIN;
@@ -908,7 +930,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pHardware->SetCodecControl(flags);
      CDVDVideoCodec::VCReturn ret = m_pHardware->Decode(m_pCodecContext, nullptr);
      if (ret == VC_PICTURE)
-@@ -739,6 +982,9 @@
+@@ -739,6 +1004,9 @@
      {
        int flags = m_codecControlFlags;
        flags |= DVD_CODEC_CTRL_DRAIN;
@@ -918,7 +940,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        m_pHardware->SetCodecControl(flags);
        int ret = m_pHardware->Decode(m_pCodecContext, nullptr);
        if (ret == VC_PICTURE)
-@@ -793,21 +1039,8 @@
+@@ -793,21 +1061,8 @@
    }
  
    // here we got a frame
@@ -942,7 +964,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +1068,9 @@
+@@ -835,6 +1090,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -952,7 +974,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1132,13 @@
+@@ -896,8 +1154,13 @@
          need_reopen = true;
      }
  
@@ -967,7 +989,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1167,22 @@
+@@ -926,6 +1189,22 @@
    return VC_NONE;
  }
  
@@ -990,7 +1012,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1211,15 @@
+@@ -954,6 +1233,15 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -1006,7 +1028,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1235,7 @@
+@@ -969,6 +1257,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -1014,7 +1036,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1259,48 @@
+@@ -992,8 +1281,48 @@
    return VC_REOPEN;
  }
  
@@ -1063,7 +1085,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1352,10 @@
+@@ -1045,6 +1374,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -1074,7 +1096,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1409,9 @@
+@@ -1098,6 +1431,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
@@ -1084,7 +1106,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1448,23 @@
+@@ -1134,7 +1470,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
@@ -1109,7 +1131,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,41 +1475,109 @@
+@@ -1145,41 +1497,109 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
@@ -1234,7 +1256,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||
        pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
    {
-@@ -1187,12 +1585,19 @@
+@@ -1187,12 +1607,19 @@
      if (sd)
      {
        if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10)
@@ -1254,7 +1276,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1649,7 @@
+@@ -1244,7 +1671,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -1263,7 +1285,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1707,20 @@
+@@ -1302,7 +1729,20 @@
      return result;
    }
  
@@ -1285,7 +1307,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1735,22 @@
+@@ -1317,7 +1757,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -1309,7 +1331,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1786,8 @@
+@@ -1353,6 +1808,8 @@
      return result;
    }
  
@@ -1318,7 +1340,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1804,8 @@
+@@ -1369,6 +1826,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -1327,7 +1349,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1813,7 @@
+@@ -1376,6 +1835,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -1335,7 +1357,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1824,14 @@
+@@ -1386,7 +1846,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -1351,7 +1373,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1856,18 @@
+@@ -1411,6 +1878,18 @@
      return VC_ERROR;
    }
  
@@ -1370,7 +1392,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1421,6 +1878,34 @@
+@@ -1421,6 +1900,34 @@
  {
    return m_iLastKeyframe;
  }
@@ -1405,7 +1427,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-@@ -1454,7 +1939,17 @@
+@@ -1454,7 +1961,17 @@
  
  void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)
  {
@@ -1423,7 +1445,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pCodecContext)
    {
-@@ -1497,4 +1992,3 @@
+@@ -1497,4 +2014,3 @@
  {
    return m_pHardware;
  }
