@@ -1055,5 +1055,22 @@
       "xbmc/application/Application.cpp": "Reuse clean fullscreen CB1 GUI content through native dirty-region admission, rechecking late player invalidations.",
       "xbmc/video/windows/GUIWindowFullScreen.cpp": "Preserve native dirty controls without forcing a whole-video GUI redraw when the persistent CB1 composite is reusable."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": {
+    "summary": "Player information in Input, Processing and Output columns with the source metadata it held",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/DataCacheCore.cpp": "Hand the dialog the accepted source side data without copying it.",
+      "xbmc/cores/DataCacheCore.h": "Hand the dialog the accepted source side data without copying it.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Clear the primaries-guess flag with the picture's other colour fields.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Record whether Kodi's heuristics chose the picture's primaries.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Set the primaries-guess flag where untagged primaries are assumed.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h":"Carry the base-layer compatibility, RPU levels and decoder colour tags into the native facts.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Keep the sampled RPU's L2-L4 and L8-L255 values with the decoder's colour tags.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Pass each picture's colour tags and enhancement-layer type to the telemetry, clearing both for each new stream.",
+      "xbmc/cores/VideoProcessingInfo.h": "Describe the RPU level values and the decoder's source tags.",
+      "xbmc/dialogs/DVPixelFormat.h": "Name the decoder's primaries, transfer and range.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Load the panel fonts, sample memory at 2 Hz, name the metadata the three columns show and keep the panel on screen."
+    }
   }
 }

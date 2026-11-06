@@ -1,0 +1,711 @@
+diff --git a/xbmc/cores/DataCacheCore.cpp b/xbmc/cores/DataCacheCore.cpp
+index 11e4a6b..dff7918 100644
+--- a/xbmc/cores/DataCacheCore.cpp
++++ b/xbmc/cores/DataCacheCore.cpp
+@@ -88,6 +88,14 @@ bool CDataCacheCore::HasVideoHDR10PlusSource()
+          m_videoSourceSideData->HDR10Plus();
+ }
+ 
++std::shared_ptr<const VideoSourceSideData> CDataCacheCore::GetVideoSourceSideDataSnapshot()
++{
++  std::unique_lock lock(m_videoPlayerSection);
++  if (!m_videoSourceSideData || m_videoSourceSideData->Generation() != m_videoProcessingGeneration)
++    return {};
++  return m_videoSourceSideData;
++}
++
+ bool CDataCacheCore::SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info)
+ {
+   std::unique_lock lock(m_videoPlayerSection);
+diff --git a/xbmc/cores/DataCacheCore.h b/xbmc/cores/DataCacheCore.h
+index 99e66b2..291451c 100644
+--- a/xbmc/cores/DataCacheCore.h
++++ b/xbmc/cores/DataCacheCore.h
+@@ -40,6 +40,8 @@ public:
+   bool SetVideoSourceSideData(uint64_t generation, std::shared_ptr<const VideoSourceSideData> source);
+   std::string GetVideoSourceSideData();
+   bool HasVideoHDR10PlusSource();
++  // The latest accepted picture's source side data for the current generation, or null.
++  std::shared_ptr<const VideoSourceSideData> GetVideoSourceSideDataSnapshot();
+ 
+   // player video info
+   void SetVideoDecoderName(std::string name, bool isHw);
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+index 519c9cc..8e4dc0c 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+@@ -39,6 +39,7 @@ void VideoPicture::Reset()
+   color_range = 0;
+   chroma_position = AVCHROMA_LOC_UNSPECIFIED;
+   color_primaries = AVColorPrimaries::AVCOL_PRI_UNSPECIFIED;
++  colorPrimariesGuessed = false;
+   color_transfer = AVCOL_TRC_UNSPECIFIED;
+   colorBits = 8;
+   stereoMode.clear();
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
+index 7dc9bd0..726f8c1 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
+@@ -58,6 +58,7 @@ public:
+   AVChromaLocation chroma_position;
+   AVColorPrimaries color_primaries; // heuristics applied when original is AVCOL_PRI_UNSPECIFIED
+   AVColorPrimaries m_originalColorPrimaries;
++  bool colorPrimariesGuessed = false; // color_primaries came from those heuristics
+   AVColorTransferCharacteristic color_transfer;
+   unsigned int colorBits = 8;
+   std::string stereoMode;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+index 6ef5a84..f469607 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -1574,7 +1574,8 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+   m_requestSkipDeint = false;
+   pVideoPicture->iFlags |= m_codecControlFlags;
+ 
+-  if (pVideoPicture->color_primaries == AVCOL_PRI_UNSPECIFIED)
++  pVideoPicture->colorPrimariesGuessed = pVideoPicture->color_primaries == AVCOL_PRI_UNSPECIFIED;
++  if (pVideoPicture->colorPrimariesGuessed)
+   {
+     if (pVideoPicture->iDisplayWidth > 1024 || pVideoPicture->iDisplayHeight >= 600)
+       pVideoPicture->color_primaries = AVCOL_PRI_BT709;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
+index 9d480ef..190ee6c 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
+@@ -43,8 +43,10 @@ inline VideoProcessingInfo NativeProcessingInfo(const StreamSnapshot& source)
+   else if (output.flags & CDVPlaybackInfo::HDR10PLUS) info.outputType=VideoOutputType::HDR10Plus;
+   else if (output.flags & CDVPlaybackInfo::HDR10) info.outputType=VideoOutputType::HDR10;
+   info.profile=source.profile; info.level=source.level; info.major=source.major; info.minor=source.minor;
++  info.compatibility=source.compatibility;
+   info.bl=source.bl; info.el=source.el; info.rpu=source.rpu; info.fel=source.fel;
+   info.sourceBits=source.sourceBits; info.sourceFormat=static_cast<int>(source.sourceFormat);
++  info.tags=source.tags;
+   info.sourceMastering=source.sourceMastering; info.sourceLight=source.sourceLight;
+   info.sourceMax=source.sourceMax; info.sourceMin=source.sourceMin;
+   info.sourceCLL=source.sourceCLL; info.sourceFALL=source.sourceFALL;
+@@ -58,7 +60,7 @@ inline VideoProcessingInfo NativeProcessingInfo(const StreamSnapshot& source)
+     info.pq=source.pq; info.area=source.area; info.maxMaster=source.maxMaster;
+     info.minMaster=source.minMaster; info.maxCLL=source.maxCLL; info.maxFALL=source.maxFALL;
+     info.framebufferBits=source.framebufferBits; info.blocks=source.blocks;
+-    info.appliedBlocks=source.AppliedBlocks();
++    info.appliedBlocks=source.AppliedBlocks(); info.levels=source.levels;
+   }
+   const auto& pending=source.transaction;
+   info.transaction.identity={pending.identity.stream,pending.identity.picture,pending.identity.revision};
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+index f804d58..74bc61c 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+@@ -5,6 +5,7 @@
+ #include "DVMetadataBuffer.h"
+ #include "ServiceBroker.h"
+ #include "cores/DataCacheCore.h"
++#include "cores/VideoProcessingInfo.h"
+ #ifdef CB1_HAS_HDR10_AI
+ #include "cb1_circuit.h"
+ #endif
+@@ -99,14 +100,16 @@ struct StreamSnapshot
+     }
+ #endif
+   } output;
+-  unsigned profile{}, level{}, major{}, minor{};
++  unsigned profile{}, level{}, major{}, minor{}, compatibility{};
+   bool bl{}, el{}, rpu{}, metadata{}, cm4{}, fel{};
+   bool l1{}, l5{}, l6{};
+   std::array<unsigned, 3> pq{};
+   std::array<unsigned, 4> area{};
+   unsigned maxMaster{}, minMaster{}, maxCLL{}, maxFALL{};
++  VideoDVLevels levels;
+   unsigned framebufferBits{}, sourceBits{};
+   AVPixelFormat sourceFormat{AV_PIX_FMT_NONE};
++  VideoSourceTags tags;
+   int dropped{}, skipped{};
+   bool counters{};
+   bool sourceMastering{}, sourceLight{};
+@@ -169,7 +172,8 @@ public:
+     CDVPlaybackInfo::presented.store(0);
+   }
+ 
+-  static void SourceBits(unsigned bits, AVPixelFormat format, const SourceInfo& source)
++  static void SourceBits(unsigned bits, AVPixelFormat format, const SourceInfo& source,
++                         const VideoSourceTags& tags = {})
+   {
+     std::lock_guard<std::mutex> lock(m_mutex);
+     if (source.informationGeneration!=m_decodedSource.informationGeneration ||
+@@ -181,6 +185,7 @@ public:
+     m_decodedSource=source;
+     m_decodedSource.bits=bits;
+     m_decodedSource.format=static_cast<int>(format);
++    m_decodedTags=tags;
+   }
+ 
+   static void Counters(int dropped, int skipped)
+@@ -330,6 +335,8 @@ private:
+     out.framebufferBits = bits;
+     out.l1 = out.l5 = out.l6 = out.cm4 = false;
+     out.blocks.reset();
++    out.levels = {};
++    auto& levels = out.levels;
+     for (int i = 0; i < data->num_ext_blocks; ++i)
+     {
+       const auto* ext = av_dovi_get_ext(data, i);
+@@ -340,6 +347,13 @@ private:
+           out.l1 = true;
+           out.pq = {ext->l1.min_pq, ext->l1.max_pq, ext->l1.avg_pq};
+           break;
++        case 2:
++          if (levels.l2Count < levels.l2.size())
++            levels.l2[levels.l2Count++] = ext->l2.target_max_pq;
++          break;
++        case 4:
++          levels.l4 = {ext->l4.anchor_pq, ext->l4.anchor_power};
++          break;
+         case 5:
+           out.l5 = true;
+           out.area = {ext->l5.left_offset, ext->l5.right_offset,
+@@ -352,8 +366,39 @@ private:
+           out.maxCLL = ext->l6.max_cll;
+           out.maxFALL = ext->l6.max_fall;
+           break;
+-        case 3: case 8: case 9: case 10: case 11: case 254:
++        case 3:
+           out.cm4 = true;
++          levels.l3 = {ext->l3.min_pq_offset, ext->l3.max_pq_offset, ext->l3.avg_pq_offset};
++          break;
++        case 8:
++          out.cm4 = true;
++          if (levels.l8Count < levels.l8.size())
++            levels.l8[levels.l8Count++] = ext->l8.target_display_index;
++          break;
++        case 9:
++          out.cm4 = true;
++          levels.l9 = ext->l9.source_primary_index;
++          break;
++        case 10:
++          out.cm4 = true;
++          if (levels.l10Count < levels.l10.size())
++            levels.l10[levels.l10Count++] = {ext->l10.target_display_index,
++                ext->l10.target_primary_index, ext->l10.target_max_pq, ext->l10.target_min_pq};
++          break;
++        case 11:
++          out.cm4 = true;
++          levels.contentType = ext->l11.content_type;
++          levels.whitepoint = ext->l11.whitepoint;
++          levels.referenceMode = ext->l11.reference_mode_flag != 0;
++          break;
++        case 254:
++          out.cm4 = true;
++          levels.dmMode = ext->l254.dm_mode;
++          levels.dmVersion = ext->l254.dm_version_index;
++          break;
++        case 255:
++          levels.runMode = ext->l255.dm_run_mode;
++          levels.runVersion = ext->l255.dm_run_version;
+           break;
+       }
+     }
+@@ -372,12 +417,14 @@ public:
+       result.informationGeneration=source.informationGeneration;
+       result.profile = source.profile; result.level = source.level;
+       result.major = source.major; result.minor = source.minor;
++      result.compatibility = source.compatibility;
+       result.bl = source.bl; result.el = source.el; result.rpu = source.rpu;
+       result.sourceBits = source.bits; result.sourceFormat = static_cast<AVPixelFormat>(source.format);
+       result.sourceMastering = source.mastering; result.sourceLight = source.light;
+       result.sourceMax = source.maxLuma; result.sourceMin = source.minLuma;
+       result.sourceCLL = source.maxCLL; result.sourceFALL = source.maxFALL;
+     }
++    result.tags = m_decodedTags;
+     return result;
+   }
+ 
+@@ -388,6 +435,7 @@ private:
+   inline static StreamSnapshot m_snapshot;
+   inline static SourceInfo m_nativeSource;
+   inline static SourceInfo m_decodedSource;
++  inline static VideoSourceTags m_decodedTags;
+   inline static bool m_nativeActive{};
+   inline static std::chrono::steady_clock::time_point m_next;
+ };
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+index d971bb4..7258639 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -274,6 +274,10 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
+   // the picture is reused from one stream to the next, so a stream without them would
+   // inherit what the last one left here and be taken for 3D.
+   m_picture.stereoMode.clear();
++  // Likewise the enhancement-layer type and the primaries guess: only the FFmpeg decoder
++  // sets them, and the layer type only for pictures whose RPU describes an EL.
++  m_picture.strDVELType.clear();
++  m_picture.colorPrimariesGuessed = false;
+ 
+   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
+   m_rewindStalled = false;
+@@ -1032,7 +1036,9 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
+ #endif
+ #ifdef HAVE_DVBRIDGE
+   if (HandleDVPlaybackFailure(pPicture)) return OUTPUT_ABORT;
+-  DVBRIDGE::StreamTelemetry::SourceBits(pPicture->colorBits,pPicture->pixelFormat,pPicture->doviSourceInfo);
++  DVBRIDGE::StreamTelemetry::SourceBits(pPicture->colorBits,pPicture->pixelFormat,pPicture->doviSourceInfo,
++      {static_cast<int>(pPicture->color_primaries),static_cast<int>(pPicture->color_transfer),
++       pPicture->colorPrimariesGuessed,pPicture->color_range==1,pPicture->strDVELType});
+   if (DVBRIDGE::DiagnosticsEnabled() && CDVPlaybackInfo::presented.load())
+   {
+     ++m_diagnosticPictures;
+diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
+index d1c6021..c055f33 100644
+--- a/xbmc/cores/VideoProcessingInfo.h
++++ b/xbmc/cores/VideoProcessingInfo.h
+@@ -13,6 +13,37 @@ enum class VideoProcessingReason { None, NoDVTransport, NoHDR10Transport,
+   NoHDR10PlusTransport };
+ enum class VideoCreativeStatus { Invalid, Unsupported, Neutral, Ready };
+ 
++// How the decoder tagged the picture: FFmpeg AVColor* codes, -1 when unknown.
++struct VideoSourceTags
++{
++  int primaries{-1}, transfer{-1};
++  bool primariesGuessed{}, fullRange{};
++  std::string enhancement; // "FEL" or "MEL" from Kodi's RPU check, empty without an EL
++};
++
++// RPU level values beyond L1/L5/L6, as FFmpeg parsed the latest sampled picture.
++// Presence is the matching bit of the parsed block set.
++struct VideoDVLevels
++{
++  static constexpr unsigned MaxTrims = 8;
++  struct Target
++  {
++    uint8_t index{}, primaries{};
++    uint16_t maxPQ{}, minPQ{};
++  };
++  std::array<uint16_t, MaxTrims> l2{}; // target_max_pq of each trim pass
++  std::array<uint8_t, MaxTrims> l8{}; // target_display_index of each trim pass
++  std::array<Target, MaxTrims> l10{};
++  unsigned l2Count{}, l8Count{}, l10Count{};
++  std::array<uint16_t, 3> l3{}; // min/max/avg PQ offsets, 2048 is neutral
++  std::array<uint16_t, 2> l4{}; // anchor PQ and power
++  unsigned l9{}; // source_primary_index
++  unsigned contentType{}, whitepoint{};
++  bool referenceMode{};
++  unsigned dmMode{}, dmVersion{}; // L254
++  unsigned runMode{}, runVersion{}; // L255
++};
++
+ // Native playback facts. Renderer objects and full metadata buffers stay with their owners.
+ struct VideoProcessingInfo
+ {
+@@ -62,14 +93,16 @@ struct VideoProcessingInfo
+   std::optional<VideoOutputType> outputType;
+   uint64_t informationGeneration{};
+   bool referenceWarning{};
+-  unsigned profile{}, level{}, major{}, minor{};
++  unsigned profile{}, level{}, major{}, minor{}, compatibility{};
+   bool bl{}, el{}, rpu{}, metadata{}, cm4{}, fel{};
+   bool l1{}, l5{}, l6{};
+   std::array<unsigned,3> pq{};
+   std::array<unsigned,4> area{};
+   unsigned maxMaster{}, minMaster{}, maxCLL{}, maxFALL{};
++  VideoDVLevels levels;
+   unsigned framebufferBits{}, sourceBits{};
+   int sourceFormat{-1};
++  VideoSourceTags tags;
+   int dropped{}, skipped{};
+   bool counters{}, sourceMastering{}, sourceLight{};
+   double sourceMax{}, sourceMin{};
+diff --git a/xbmc/dialogs/DVPixelFormat.h b/xbmc/dialogs/DVPixelFormat.h
+index 17d77b4..df505ec 100644
+--- a/xbmc/dialogs/DVPixelFormat.h
++++ b/xbmc/dialogs/DVPixelFormat.h
+@@ -26,4 +26,46 @@ inline std::string SourcePixelFormat(AVPixelFormat format)
+     return "YUV 4:4:4";
+   return desc->name ? desc->name : "";
+ }
++
++// Name the decoder's colour tags: primaries, transfer and range. Kodi assumes primaries
++// for untagged pictures, which is said rather than presented as a file fact.
++inline std::string SourceColour(int primaries, int transfer, bool guessed, bool fullRange)
++{
++  if (primaries < 0 && transfer < 0)
++    return {};
++  std::string gamut;
++  switch (primaries)
++  {
++    case AVCOL_PRI_BT709: gamut = "BT.709"; break;
++    case AVCOL_PRI_BT2020: gamut = "BT.2020"; break;
++    case AVCOL_PRI_SMPTE432: gamut = "P3-D65"; break;
++    case AVCOL_PRI_SMPTE431: gamut = "DCI-P3"; break;
++    case AVCOL_PRI_BT470BG: gamut = "BT.601 PAL"; break;
++    case AVCOL_PRI_SMPTE170M: gamut = "BT.601 NTSC"; break;
++    case AVCOL_PRI_UNSPECIFIED: break;
++    default:
++      if (const char* name = av_color_primaries_name(static_cast<AVColorPrimaries>(primaries)))
++        gamut = name;
++  }
++  if (!gamut.empty() && guessed)
++    gamut += " (assumed)";
++  std::string curve;
++  switch (transfer)
++  {
++    case AVCOL_TRC_SMPTE2084: curve = "PQ"; break;
++    case AVCOL_TRC_ARIB_STD_B67: curve = "HLG"; break;
++    case AVCOL_TRC_BT709: case AVCOL_TRC_SMPTE170M:
++    case AVCOL_TRC_BT2020_10: case AVCOL_TRC_BT2020_12: curve = "SDR"; break;
++    case AVCOL_TRC_IEC61966_2_1: curve = "sRGB"; break;
++    case AVCOL_TRC_UNSPECIFIED: break;
++    default:
++      if (const char* name = av_color_transfer_name(static_cast<AVColorTransferCharacteristic>(transfer)))
++        curve = name;
++  }
++  std::string text;
++  for (const std::string& part : {gamut, curve, std::string(fullRange ? "Full" : "Limited")})
++    if (!part.empty())
++      text += (text.empty() ? "" : " · ") + part;
++  return text;
++}
+ }
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+index bc00552..4fae79b 100644
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -16,19 +16,25 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
+ #include "cores/DataCacheCore.h"
++#include "cores/VideoSourceSideData.h"
+ #include "guilib/guiinfo/VideoProcessingInfoGUI.h"
+ #include "utils/StringUtils.h"
+ #include "utils/Variant.h"
+ #include "utils/CPUInfo.h"
++#include "utils/MemUtils.h"
+ #include "resources/LocalizeStrings.h"
+ #include "resources/ResourcesComponent.h"
+ #include "guilib/GUIMessage.h"
++#include "filesystem/File.h"
+ #include "guilib/GUIControlGroupList.h"
++#include "guilib/GUIFont.h"
+ #include "guilib/GUIFontManager.h"
+ #include "windowing/WinSystem.h"
+ #include "windowing/GraphicContext.h"
+ #include <algorithm>
+ #include <cmath>
++#include <iterator>
++#include <vector>
+ #endif
+ 
+ CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
+@@ -57,12 +63,19 @@ bool CGUIDialogPlayerProcessInfo::OnMessage(CGUIMessage& message)
+     {
+       const RESOLUTION_INFO resolution(1920, 1080);
+       SetCoordsRes(resolution);
+-      g_fontManager.LoadTTF("CB1.InfoBody", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xfff4f6f6, 0, 18, 0, false, 1.0f, 1.0f, &resolution);
+-      g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xfff4f6f6, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
+-      g_fontManager.LoadTTF("CB1.InfoTitle", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xfff4f6f6, 0, 28, 1, false, 1.0f, 1.0f, &resolution);
++      // Noto Sans ships with Estuary, which every Kodi installs; DejaVu Sans is the fallback.
++      const std::string noto = "special://xbmc/addons/skin.estuary/fonts/NotoSans-Regular.ttf";
++      const std::string face = XFILE::CFile::Exists(noto) ? noto : "special://xbmc/media/Fonts/arial.ttf";
++      g_fontManager.LoadTTF("CB1.InfoCaption", face, 0xfff4f6f6, 0, 16,
++                            FONT_STYLE_BOLD | FONT_STYLE_UPPERCASE, false, 1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoBody", face, 0xfff4f6f6, 0, 20, FONT_STYLE_NORMAL, false,
++                            1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoLead", face, 0xfff4f6f6, 0, 22, FONT_STYLE_NORMAL, false,
++                            1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoMetric", face, 0xfff4f6f6, 0, 26, FONT_STYLE_BOLD, false,
++                            1.0f, 1.0f, &resolution);
++      g_fontManager.LoadTTF("CB1.InfoHero", face, 0xfff4f6f6, 0, 32, FONT_STYLE_BOLD, false,
++                            1.0f, 1.0f, &resolution);
+     }
+   }
+ #endif
+@@ -93,6 +106,131 @@ void CGUIDialogPlayerProcessInfo::OnDeinitWindow(int nextWindowID)
+ }
+ 
+ #ifdef HAVE_DVBRIDGE
++namespace
++{
++// RPU primaries indexes of L9 and L10, as dovi_tool and MediaInfo decode them.
++std::string RPUPrimaries(unsigned index)
++{
++  static constexpr const char* names[] = {"P3-D65", "BT.709", "BT.2020", "BT.601 NTSC",
++      "BT.601 PAL", "DCI-P3", "ACES", "S-Gamut", "S-Gamut3.Cine"};
++  return index < std::size(names) ? names[index] : "Custom";
++}
++
++// Preset target displays named by L8 trims, the table CB1 resolves (cm4_preset).
++long PresetTargetNits(unsigned index)
++{
++  switch (index)
++  {
++    case 1: return 100;
++    case 16: case 18: case 21: return 48;
++    case 27: case 28: return 600;
++    case 37: case 38: return 2000;
++    case 42: return 108;
++    case 48: case 49: return 1000;
++    default: return 0;
++  }
++}
++
++std::string DVContentType(unsigned type)
++{
++  static constexpr const char* names[] = {"Default", "Cinema", "Game", "Sport", "User-generated"};
++  return type < std::size(names) ? names[type] : StringUtils::Format("Type {}", type);
++}
++
++std::string TargetList(std::vector<long> nits, const std::vector<unsigned>& unknown)
++{
++  std::sort(nits.begin(), nits.end());
++  nits.erase(std::unique(nits.begin(), nits.end()), nits.end());
++  std::string text;
++  for (const long value : nits)
++    text += (text.empty() ? "" : " · ") + std::to_string(value);
++  if (!text.empty())
++    text += " nits";
++  for (const unsigned index : unknown)
++    text += (text.empty() ? "#" : " · #") + std::to_string(index);
++  return text;
++}
++
++double PQNits(unsigned pq)
++{
++  const double p = std::pow(pq / 4095.0, 32.0 / 2523.0);
++  return 10000.0 * std::pow(std::max(p - 3424.0 / 4096.0, 0.0) /
++      (2413.0 / 128.0 - 2392.0 / 128.0 * p), 16384.0 / 2610.0);
++}
++
++// A 12-bit PQ code is about 0.23 % of its luminance wide, so an authored target comes back
++// slightly off (1000 nits is code 3079, 1000.6 nits); three significant digits name it.
++long TargetNits(unsigned pq)
++{
++  const double nits = PQNits(pq);
++  if (nits < 100)
++    return std::lround(nits);
++  const double step = std::pow(10.0, std::floor(std::log10(nits)) - 2);
++  return std::lround(std::round(nits / step) * step);
++}
++
++std::string L2Targets(const VideoDVLevels& levels)
++{
++  std::vector<long> nits;
++  for (unsigned i = 0; i < levels.l2Count; ++i)
++    nits.push_back(TargetNits(levels.l2[i]));
++  return TargetList(nits, {});
++}
++
++// As CB1 resolves an L8 target: a preset first, else the L10 block of that index.
++std::string L8Targets(const VideoDVLevels& levels)
++{
++  std::vector<long> nits;
++  std::vector<unsigned> unknown;
++  for (unsigned i = 0; i < levels.l8Count; ++i)
++  {
++    long target = PresetTargetNits(levels.l8[i]);
++    for (unsigned j = 0; !target && j < levels.l10Count; ++j)
++      if (levels.l10[j].index == levels.l8[i])
++        target = TargetNits(levels.l10[j].maxPQ);
++    if (target)
++      nits.push_back(target);
++    else
++      unknown.push_back(levels.l8[i]);
++  }
++  return TargetList(nits, unknown);
++}
++
++std::string L10Displays(const VideoDVLevels& levels)
++{
++  std::string text;
++  for (unsigned i = 0; i < levels.l10Count; ++i)
++    text += StringUtils::Format("{}{} nits {}", text.empty() ? "" : " · ",
++        TargetNits(levels.l10[i].maxPQ), RPUPrimaries(levels.l10[i].primaries));
++  return text;
++}
++
++// White points step by 375 K from D65; index 8 is D93.
++std::string L11Content(const VideoDVLevels& levels)
++{
++  const unsigned white = levels.whitepoint;
++  return StringUtils::Format("{} · {}{}", DVContentType(levels.contentType),
++      white == 0 ? std::string("D65") : white == 8 ? std::string("D93") :
++          StringUtils::Format("{} K", 6504 + 375 * white),
++      levels.referenceMode ? " · reference mode" : "");
++}
++
++// The panel grows with its tallest column but keeps its bottom margin at the top too; past
++// that, the columns are cut above the meter strip instead of the headings leaving the screen.
++struct PanelFit
++{
++  float top, height, columns;
++};
++
++PanelFit FitPanel(float content, float screen)
++{
++  // Heading block, bottom padding and the meter strip DVColumnEnd reserves, as in the XML.
++  constexpr float margin = 24.0f, heading = 108.0f, padding = 16.0f, meters = 130.0f;
++  const float height = std::min(heading + content + padding, screen - 2 * margin);
++  return {screen - margin - height, height, height - heading - padding - meters};
++}
++} // namespace
++
+ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+ {
+     const auto render = m_renderUsage.Sample();
+@@ -107,6 +245,11 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     const auto data = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
+     SetProperty("DV.SourcePixelFormat", DVBRIDGE::SourcePixelFormat(static_cast<AVPixelFormat>(data.sourceFormat)));
+     SetProperty("DV.SourceBits", data.sourceBits ? StringUtils::Format("{}-bit", data.sourceBits) : "N/A");
++    // Profiles 5 and 10.0 carry IPT-PQc2, which their colour tags leave unspecified and Kodi
++    // would otherwise present as an assumed BT.709.
++    SetProperty("DV.SourceColour", data.profile == 5 || (data.profile == 10 && !data.compatibility) ?
++        std::string("IPT-PQc2") : DVBRIDGE::SourceColour(data.tags.primaries, data.tags.transfer,
++        data.tags.primariesGuessed, data.tags.fullRange));
+     const auto active = data.output.flags;
+     const bool hdr10 = active & CDVPlaybackInfo::HDR10;
+     const bool metadata = active && data.metadata;
+@@ -119,6 +262,17 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+           data.output.width,data.output.height,data.output.refresh));
+     const auto cpu = CServiceBroker::GetCPUInfo();
+     SetProperty("DV.CPU", cpu ? StringUtils::Format("{} %", cpu->GetUsedPercentage()) : "N/A");
++    // Sampled here: System.Memory parses /proc/meminfo on every frame it is displayed.
++    KODI::MEMORY::MemoryStatus memory{};
++    KODI::MEMORY::GetMemoryStatus(&memory);
++    const int memoryUsed = memory.totalPhys ? static_cast<int>(
++        100.0 * (memory.totalPhys - memory.availPhys) / memory.totalPhys + 0.5) : 0;
++    SetProperty("DV.Memory", memory.totalPhys ? StringUtils::Format("{} %", memoryUsed) : "N/A");
++    for (const int bar : {9402, 9403})
++    {
++      CGUIMessage usage(GUI_MSG_ITEM_SELECT, GetID(), bar, memoryUsed);
++      OnMessage(usage);
++    }
+     SetProperty("DV.DroppedSkipped", data.counters ?
+         StringUtils::Format("{} / {}", data.dropped, data.skipped) : "N/A");
+     SetProperty("DV.SourceMastering", data.sourceMastering ?
+@@ -126,6 +280,15 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.SourceLight", data.sourceLight ?
+         StringUtils::Format("{} / {} nits", data.sourceCLL, data.sourceFALL) : "N/A");
+     SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
++    // Profile 8 is named with its base-layer compatibility: 8.1 HDR10, 8.2 SDR, 8.4 HLG.
++    SetProperty("DV.ProfileDetail", data.profile == 8 ? StringUtils::Format("8.{}", data.compatibility) :
++        data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
++    // Kodi's decoder tells FEL from MEL by the RPU's NLQ parameters (strDVELType).
++    const std::string base = data.compatibility == 1 || data.compatibility == 6 ? "HDR10 BL" :
++        data.compatibility == 2 ? "SDR BL" : data.compatibility == 4 ? "HLG BL" : "BL";
++    SetProperty("DV.Layers", data.profile && data.bl && data.rpu ? base + (data.el ? " + " +
++        (data.tags.enhancement.empty() ? std::string("EL") : data.tags.enhancement) : std::string()) +
++        " + RPU" : "");
+     SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
+     SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
+     SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
+@@ -176,6 +339,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+             (data.output.untranslatedCurve ? "; authored curve not translated" : "") +
+             (data.output.untranslatedSaturation ? "; authored saturation not translated" : ""));
+       SetProperty("DV.Profile", "");
++      SetProperty("DV.ProfileDetail", "");
++      SetProperty("DV.Layers", "");
+       SetProperty("DV.Level", "");
+       SetProperty("DV.Version", "");
+       const auto& raw=data.output.aiL1L3;
+@@ -225,7 +390,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+         std::string(data.transaction.stage)+" (not committed)" : "");
+     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
+     SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
+-        StringUtils::Format("{} / {:g} nits",
++        StringUtils::Format("{}{} / {:g} nits",
++            data.output.panel==1 || data.output.panel==2 ? localizer.Get(40833+data.output.panel)+" · " : "",
+             data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
+             data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
+     SetProperty("DV.DisplayBlack", hdr10 && data.output.effective==3 ?
+@@ -234,6 +400,9 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
+     SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
+         data.output.effective==7 ? "Curve reference" : "Mapping target") : "");
++    // Basic takes its reference from L6 max_luminance, else the RPU's source_max_pq (dvbridge_hdr10_target).
++    SetProperty("DV.HDR10TargetOrigin", hdr10 && data.output.effective==2 ?
++        (data.output.level6 ? "L6 max" : "RPU source max") : "");
+     SetProperty("DV.CreativeTrims", active ? (data.output.creativeKnown ?
+         (data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Invalid) ||
+          data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Unsupported) ?
+@@ -252,18 +421,47 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+           data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
+     SetProperty("DV.Precision", active ? StringUtils::Format("{}-bit framebuffer", data.output.bits) : "N/A");
+     SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
+-    const auto nits = [](unsigned pq) {
+-      const double p = std::pow(pq / 4095.0, 32.0 / 2523.0);
+-      return 10000.0 * std::pow(std::max(p - 3424.0 / 4096.0, 0.0) /
+-          (2413.0 / 128.0 - 2392.0 / 128.0 * p), 16384.0 / 2610.0);
+-    };
+     SetProperty("DV.L1Nits", metadata && data.l1 ? StringUtils::Format("{:.1f} | {:.1f} | {:.1f} nits",
+-        nits(data.pq[0]), nits(data.pq[1]), nits(data.pq[2])) : "N/A");
++        PQNits(data.pq[0]), PQNits(data.pq[1]), PQNits(data.pq[2])) : "N/A");
+     SetProperty("DV.L5", metadata && data.l5 ? StringUtils::Format("{} | {} | {} | {}",
+         data.area[0], data.area[1], data.area[2], data.area[3]) : "N/A");
+     SetProperty("DV.Mastering", metadata && data.l6 ? StringUtils::Format("{} | {:.4f} nits",
+         data.maxMaster, data.minMaster / 10000.0) : "N/A");
+     SetProperty("DV.CLL", metadata && data.l6 ? StringUtils::Format("{} | {} nits", data.maxCLL, data.maxFALL) : "N/A");
++    // The other levels' values; the parsed chips say which levels the file carries.
++    const auto& levels = data.levels;
++    const auto carried = [&](unsigned level) { return metadata && data.blocks[level]; };
++    SetProperty("DV.L2Targets", carried(2) ? L2Targets(levels) : "");
++    SetProperty("DV.L3", carried(3) ? StringUtils::Format("{} | {} | {}",
++        levels.l3[0], levels.l3[1], levels.l3[2]) : "");
++    SetProperty("DV.L4", carried(4) ? StringUtils::Format("{} | {}", levels.l4[0], levels.l4[1]) : "");
++    SetProperty("DV.L8Targets", carried(8) ? L8Targets(levels) : "");
++    SetProperty("DV.L9", carried(9) ? RPUPrimaries(levels.l9) : "");
++    SetProperty("DV.L10", carried(10) ? L10Displays(levels) : "");
++    SetProperty("DV.L11", carried(11) ? L11Content(levels) : "");
++    SetProperty("DV.L254", carried(254) ? StringUtils::Format("{} / {}", levels.dmMode, levels.dmVersion) : "");
++    SetProperty("DV.L255", carried(255) ? StringUtils::Format("{} / {}", levels.runMode, levels.runVersion) : "");
++    // HDR10+ dynamic metadata of the latest accepted picture; MaxSCL and averages are
++    // linear fractions of 10000 nits. CB1 renders a Dolby Vision source from its RPU and
++    // leaves the file's HDR10+ unused (only its HDR10 path reads it), so it is not listed then.
++    std::shared_ptr<const VideoSourceSideData> side;
++    if (!(active && data.profile && !data.output.hdr10AI))
++      side = CServiceBroker::GetDataCacheCore().GetVideoSourceSideDataSnapshot();
++    const AVDynamicHDRPlus* plus = side ? side->HDR10Plus() : nullptr;
++    const auto scaled = [](AVRational value) { return 10000.0 * av_q2d(value); };
++    const double display = plus ? av_q2d(plus->targeted_system_display_maximum_luminance) : 0.0;
++    SetProperty("DV.HDR10PlusTarget", plus ? StringUtils::Format("{} · version {}",
++        display > 0 ? StringUtils::Format("{:.0f} nits", display) : std::string("Unset"),
++        plus->application_version) : "");
++    SetProperty("DV.HDR10PlusMaxSCL", plus ? StringUtils::Format("{:.0f} | {:.0f} | {:.0f} nits",
++        scaled(plus->params[0].maxscl[0]), scaled(plus->params[0].maxscl[1]),
++        scaled(plus->params[0].maxscl[2])) : "");
++    SetProperty("DV.HDR10PlusAverage", plus ?
++        StringUtils::Format("{:.1f} nits", scaled(plus->params[0].average_maxrgb)) : "");
++    SetProperty("DV.HDR10PlusCurve", !plus ? "" : plus->params[0].tone_mapping_flag ?
++        StringUtils::Format("{} anchors · knee {:.3f} / {:.3f}", plus->params[0].num_bezier_curve_anchors,
++            av_q2d(plus->params[0].knee_point_x), av_q2d(plus->params[0].knee_point_y)) :
++        std::string("None"));
+ }
+ #endif
+ 
+@@ -289,16 +487,21 @@ void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegion
+       if (!panel || !surface)
+         continue;
+       float content = 0.0f;
++      std::vector<CGUIControlGroupList*> columns;
+       for (int column = 0; column < 3; ++column)
+-        if (const auto* list = dynamic_cast<const CGUIControlGroupList*>(
+-                GetControl(9620 + layout * 10 + column)))
++        if (auto* list = dynamic_cast<CGUIControlGroupList*>(GetControl(9620 + layout * 10 + column)))
++        {
+           content = std::max(content, list->GetTotalSize());
++          columns.push_back(list);
++        }
+       if (content <= 0.0f)
+         continue;
+-      const float height = 108.0f + content + 16.0f;
+-      panel->SetHeight(height);
+-      panel->SetPosition(panel->GetXPosition(), GetCoordsRes().iHeight - 24.0f - height);
+-      surface->SetHeight(height + 40.0f);
++      const auto fit = FitPanel(content, static_cast<float>(GetCoordsRes().iHeight));
++      panel->SetHeight(fit.height);
++      panel->SetPosition(panel->GetXPosition(), fit.top);
++      surface->SetHeight(fit.height + 40.0f);
++      for (auto* list : columns)
++        list->SetHeight(fit.columns);
+     }
+   }
+ #endif

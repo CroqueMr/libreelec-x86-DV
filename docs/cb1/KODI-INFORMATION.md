@@ -1,12 +1,33 @@
 # Kodi video information
 
 The RC3 Player information panel uses these native source/output facts and the
-[AudioEngine source and sink report](AUDIO-INFORMATION.md). Source format is
-shown in the Video heading; accepted rendering mode identifies the output.
+[AudioEngine source and sink report](AUDIO-INFORMATION.md). It reads in three
+columns: Input (what the file carries), Processing (what CB1 does with it) and
+Output (what leaves the box). Each heading names the video, then the audio or the
+engine; the output type is the accepted `videooutputhdrtype`, and an output Kodi
+does not attest is shown as Kodi output. Long values wrap instead of scrolling.
+The panel grows with its tallest column and keeps a 24 px margin above it; a
+column that would pass it is cut above the meter strip, never the headings.
 
-The panel distinguishes file metadata, metadata used by CB1 and metadata sent to
-the TV. Forwarded metadata is not described as unused solely because CB1 does
-not apply it locally. CM2.9/CM4 status includes the live Auto/Auto 2 decision.
+Dolby Vision metadata levels appear as chips: in the file, used by CB1 (unused
+ones greyed) and sent to the TV. Forwarded metadata is not described as unused
+solely because CB1 does not apply it locally. CM2.9/CM4 status includes the live
+Auto/Auto 2 decision.
+
+Source metadata also lists the values FFmpeg parsed from the latest sampled RPU:
+L2 and L8 trim targets, L3 offsets, the L4 anchor, L9 source primaries, L10 target
+displays, the L11 content type and white point, and the L254 and L255 mode and
+version. An L8 target resolves as CB1 resolves it, a preset target display first,
+else the file's L10 definition; targets are named to three significant digits, the
+precision of a 12-bit PQ code. Layers names the base-layer compatibility and the
+enhancement layer as Kodi's decoder classifies it (FEL or MEL), and the FEL row,
+which also names the FEL upscaler, appears only for sources with an enhancement
+layer. The HDR10 link minimum is listed under Output. Input shows the decoder's
+colour tags (primaries, transfer and range; primaries Kodi guessed are marked
+assumed), except for profiles 5 and 10.0, which are IPT-PQc2. An HDR10+ source
+shows its latest picture's target display, MaxSCL, average MaxRGB and Bezier
+curve; while CB1 renders a Dolby Vision source from its RPU, the file's HDR10+ is
+unused and not listed.
 
 Source and output are separate facts. Existing `VideoPlayer.HdrType/HdrDetail`
 and `ListItem.HdrType/HdrDetail` describe the original source. HDR10 converted
