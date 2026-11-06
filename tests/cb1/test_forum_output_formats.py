@@ -1,5 +1,6 @@
 """Exercise accepted native output telemetry and its source/output bindings."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -54,12 +55,19 @@ int main(){
     def test_panel_keeps_input_and_mode_without_redundant_output_row(self):
         repo = Path(__file__).resolve().parents[2]
         xml = ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
-        rows = xml.findall(".//include[@name='DVVideoFields']/definition/include[@content='DVInfoRow']")
+        rows = xml.findall(".//include[@content='DVInfoRow']")
         rows = [{p.get('name'):p.get('value') for p in row.findall('param')} for row in rows]
-        video=xml.find(".//include[@name='DVVideoFields']/definition/include[@content='DVSection']")
-        self.assertEqual(video.find("param[@name='label']").get('value'),'VIDEO : $VAR[DVSourceFormat]')
+        headings={h.find("param[@name='title']").get('value'):h.find("param[@name='primary']").get('value')
+                  for h in xml.findall(".//include[@content='DVColumnHeading']")}
+        self.assertEqual(headings['Input'],'$VAR[DVSourceFormat]')
+        self.assertEqual(headings['Output'],'$VAR[DVOutputFormat]')
         self.assertFalse(any(row.get('label')=='Output format' for row in rows))
-        self.assertIsNone(xml.find("variable[@name='DVOutputFormat']"))
+        # The output heading names only the accepted native output type, never a guess.
+        output=ET.tostring(xml.find("variable[@name='DVOutputFormat']"),encoding='unicode')
+        self.assertEqual(set(re.findall(r'Player\.Process\((\w+)\)',output)),{'videooutputhdrtype'})
+        self.assertNotIn('HdrType',output)
+        self.assertEqual(xml.find("variable[@name='DVOutputFormat']/value[last()]").text,'Kodi output')
+        self.assertEqual(headings['Processing'],'$VAR[DVPanelMode]')
         mode=xml.find("variable[@name='DVPanelMode']")
         self.assertIn('Property(DV.Mode)',ET.tostring(mode,encoding='unicode'))
 

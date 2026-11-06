@@ -24,11 +24,15 @@ constexpr int GUI_MSG_WINDOW_INIT=1;
 namespace DVBRIDGE {bool enabled=true;bool EnhancedInfoEnabled() {return enabled;}}
 struct RESOLUTION_INFO {int width,height;RESOLUTION_INFO(int w,int h):width(w),height(h){}};
 struct CGUIMessage {int type;int GetMessage() const {return type;}};
+constexpr int FONT_STYLE_NORMAL=0,FONT_STYLE_BOLD=1,FONT_STYLE_UPPERCASE=8;
+namespace XFILE {struct CFile {static bool estuary;static bool Exists(const std::string& file) {
+ return estuary && file=="special://xbmc/addons/skin.estuary/fonts/NotoSans-Regular.ttf";}};
+ bool CFile::estuary=true;}
 struct FontManager {
- int loads=0;
- void LoadTTF(const char*, const char* file, unsigned, unsigned, int, int,
+ int loads=0;std::string face;
+ void LoadTTF(const char*, const std::string& file, unsigned, unsigned, int, int,
               bool, float, float, const RESOLUTION_INFO*) {
-  assert(std::string(file)=="special://xbmc/media/Fonts/arial.ttf"); ++loads;
+  assert(file==face); ++loads;
  }
 } g_fontManager;
 struct Value {std::string value;std::string asString() const {return value;}};
@@ -49,9 +53,14 @@ struct CGUIDialogPlayerProcessInfo : CGUIDialog {bool OnMessage(CGUIMessage& mes
 int main() {
  CGUIDialogPlayerProcessInfo dialog;CGUIMessage open{GUI_MSG_WINDOW_INIT};
  dialog.loaded="foreign-skin-vanilla.xml";dialog.cached=true;
+ g_fontManager.face="special://xbmc/addons/skin.estuary/fonts/NotoSans-Regular.ttf";
  dialog.OnMessage(open);
  assert(dialog.loaded=="special://xbmc/media/cb1/DialogPlayerProcessInfo.xml");
- assert(g_fontManager.loads==3);
+ assert(g_fontManager.loads==5);
+ // Without Estuary's Noto Sans the panel keeps Kodi's bundled DejaVu Sans.
+ XFILE::CFile::estuary=false;g_fontManager.face="special://xbmc/media/Fonts/arial.ttf";
+ dialog.OnMessage(open);
+ assert(g_fontManager.loads==10);
  assert(dialog.resolution.width==1920 && dialog.resolution.height==1080);
  DVBRIDGE::enabled=false;dialog.OnMessage(open);
  assert(dialog.loaded=="DialogPlayerProcessInfo.xml");
