@@ -3,7 +3,9 @@ import configparser
 import os
 from pathlib import Path
 import subprocess
+import signal
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -68,6 +70,32 @@ class InstallerBootLog(unittest.TestCase):
             self.run_collector(base,env)
             self.assertEqual((base/'flash/cb1-boot-logs/current.log').stat().st_size,8*1024*1024)
             self.assertFalse((base/'mounts.log').exists())
+
+    @unittest.skipUnless(hasattr(os, 'killpg'), 'native POSIX process groups required')
+    def test_quiet_follow_stream_is_flushed_before_eof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp);env=self.fixture(base)
+            marker='last kernel message before the hang'
+            (base/'messages').write_text(marker+'\n')
+            with (base/'bin/journalctl').open('a') as stream:
+                stream.write('sleep 60\n')
+            process=subprocess.Popen(['sh',str(base/'collector')],env=env,
+                                     stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+            visible=False
+            try:
+                deadline=time.monotonic()+2
+                while time.monotonic()<deadline:
+                    current=base/'flash/cb1-boot-logs/current.log'
+                    if current.exists() and marker in current.read_text():
+                        visible=True
+                        break
+                    time.sleep(.02)
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid,signal.SIGTERM)
+                process.wait(timeout=5)
+            self.assertTrue(visible,'a quiet live journal must reach USB before it exits')
 
     def test_preparation_failure_restores_read_only_and_preserves_existing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
