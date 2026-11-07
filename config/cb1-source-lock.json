@@ -28,7 +28,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "5ded5441420e96dc910ae691e1c85ac28456718f22e7ec33107fcc5426219711",
-    "config/cb1-patch-index.json": "97197d407f929f204e44d566560144e23675741c6b1bb2ec876ee02352adad11",
+    "config/cb1-patch-index.json": "3d569e43b7f6ae9dfbf45ac042c3d57e557c64898a1a9b4d5c4071dac63cc905",
     "packages/graphics/nvidia/package.mk": "9898721633ebdf315f5040c0d6329ffaa4d71ee92c3515025ce0b338fcdf260b",
     "packages/graphics/nvidia/files/select-driver": "5e1c7a5974f54976d37bd7b4e07486ee9708ee1fb671e839281fbf03dca94e1b",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
@@ -256,7 +256,7 @@
     "projects/Generic/linux/linux.x86_64.conf": "abf677b47e2279f85371ccc23bc6d7dbcfe04f959d8acb35166258259b4dc3e6",
     "tests/cb1/test_cec_support.py": "e7e1f689ed0498366a25e43fdbc3cf1844c3bd77b2c0b8969db32c05bf4093b0",
     "docs/cb1/CEC.md": "77cd87903b98a066e7d157b24d010dd25c2858ec874dfc34b0174312d3de01cd",
-    "docs/cb1/GBM-COLOUR-SETTINGS.md": "ea0f3f6706b4042822ac9bd2b0a5ed32f15a034b37d17586b26bf12fc5adc659",
+    "docs/cb1/GBM-COLOUR-SETTINGS.md": "026865f9df4c00b716dbedf2ad6822c0f68d95d6c4bd4c5948240e45edccc8f0",
     "projects/Generic/patches/kodi/kodi-9996-gbm-colour-preferences.patch": "721ac58d0368038b6729c420a08e8ad07137f9bd806b67d94cb5ea4aeaa8bef1",
     "tests/cb1/gbm_colour_owner.cpp": "76d0421b3edbe1b6877f59785dd91fc22b09a5a23b660078382c6dd925e9eefc",
     "tests/cb1/gbm_colour_transition.cpp": "8b8d30f3bd9ca8966d0cf1393ed84629a3a4948597c3eb5290f771a9db36aa72",
@@ -264,7 +264,10 @@
     "tests/cb1/test_gbm_colour_transition.py": "8d3e191a94d7def31d224c89e498658cc4da109c9a15eee7f8382fccda55ad01",
     "tests/cb1/test_hdr10plus_atomic.py": "783241ac78270e1896c4bf46ac3353d5d76658a7e9ac074a03ef6c91f9e7d9e8",
     "tests/cb1/test_native_render_receipt.py": "877849ca0c42e4e6babae9044dd0d77696b85fbb5ed6cff3ce5abdec71232aef",
-    "tests/cb1/test_ordinary_gui_transfer.py": "22099fac0baeb5ea520770d8be9cee93ebe57d025c98527571caa8ac22651819"
+    "tests/cb1/test_ordinary_gui_transfer.py": "22099fac0baeb5ea520770d8be9cee93ebe57d025c98527571caa8ac22651819",
+    "projects/Generic/patches/kodi/kodi-9997-gbm-colour-buffer-lifetime.patch": "1cc1ba2c54ea1bae5915b30f60aa94433e5018501156010b2153a25f9945a08c",
+    "tests/cb1/gbm_colour_buffer.cpp": "b381ea39629eb9a94c0bb947f235db6fa0b876c3058d81450771287683af40af",
+    "tests/cb1/test_gbm_colour_buffer.py": "cd878bbb6490d5c8a140b7ef4302a8aafe172bc3784f24d154d558bf2a18ea54"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
