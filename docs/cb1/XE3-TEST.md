@@ -1,11 +1,11 @@
-# Xe3 / Wildcat Lake test image
+# Xe3 / Wildcat Lake display backports
 
 Base: public RC4 Preview Update 1, commit `0766befdfedc548c6a19fa417fb338da5de5a2fc`.
-Image: `DV-R1.0.0-RC4-Preview-Xe3-Test2`. Test2 adds [installer boot logging](INSTALLER-LOGS-XONAR.md). Linux stays at 7.2.6.
+Included in the general image `DV-R1.0.0-RC4-Preview-Update2`, alongside [installer boot logging](INSTALLER-LOGS-XONAR.md). Linux stays at 7.2.6.
 The experimental player information panel from PR92 is excluded.
 
 The FD80/FD81 Xe driver, Iris/Mesa, iHD/media-driver and embedded PTL/DMC
-firmware already exist in the base image. This test adds display backports;
+firmware already exist in the base image. This update adds display backports;
 it does not add force_probe or claim that the HP Omnidesk boot issue is fixed.
 
 ## Backport order and dependencies

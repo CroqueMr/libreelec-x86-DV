@@ -1,6 +1,8 @@
 # R1.0.0 RC4 Preview
 
-Draft prerelease of the normal Generic x86_64 image. This draft is not published.
+Normal Generic x86_64 prerelease. Update 1 is published; see
+[Update 2](RELEASE-RC4-PREVIEW-UPDATE2.md) for its successor and current validation.
+The historical validation below retains its original image scope.
 
 ## Included changes
 
