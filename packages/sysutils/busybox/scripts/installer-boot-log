@@ -1,0 +1,63 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The installer has a RAM-backed /storage. Keep bounded text on its own boot
+# partition instead; do not mount other disks or change installer storage.
+flash=/flash
+run=/run
+proc=/proc
+folder="$flash/cb1-boot-logs"
+marker="$run/installer-boot-log-remounted"
+sync_pid=
+
+stop() {
+  [ -z "$sync_pid" ] || { kill "$sync_pid" 2>/dev/null; wait "$sync_pid" 2>/dev/null; }
+  [ ! -f "$folder/current.log" ] || sync "$folder/current.log" 2>/dev/null || :
+  if [ -f "$marker" ]; then
+    mount -o remount,ro "$flash" && rm -f "$marker"
+  fi
+  return 0
+}
+
+start() {
+  case " $(cat "$proc/cmdline") " in *" installer "*) ;; *) return 0 ;; esac
+  options=$(awk -v target="$flash" '$2 == target && $3 == "vfat" { print $4 }' "$proc/mounts")
+  [ -n "$options" ] || return 0
+  # Keep at least 128 MiB free for updates after this boot's maximum 8 MiB.
+  available=$(df -Pk "$flash" | awk 'END { print $4 + 0 }')
+  [ "$available" -gt 139264 ] || return 0
+
+  trap stop EXIT
+  trap 'exit 0' INT TERM
+  case ",$options," in
+    *,ro,*)
+      : >"$marker" || return 0
+      if ! mount -o remount,rw "$flash"; then
+        rm -f "$marker"
+        return 0
+      fi
+      ;;
+  esac
+  mkdir -p "$folder" || return 0
+  if [ -f "$folder/current.log" ]; then
+    mv -f "$folder/current.log" "$folder/previous.log" || return 0
+  fi
+  : >"$folder/current.log" || return 0
+  sync -f "$flash" || return 0
+  # BusyBox sync FILE fsyncs the file. No GNU dd/stdbuf dependency is needed.
+  (while sleep 1; do sync "$folder/current.log" || break; done) &
+  sync_pid=$!
+  {
+    printf 'Kernel: '; uname -r
+    printf 'System: '; cat /etc/release 2>/dev/null || :
+    printf 'Boot ID: '; cat "$proc/sys/kernel/random/boot_id"
+    printf 'Command line: '; cat "$proc/cmdline"
+    journalctl --boot=0 --lines=all --follow --no-pager --output=short-monotonic
+  } | head -c 8388608 >"$folder/current.log"
+  return 0
+}
+
+case "${1:-start}" in
+  start) start ;;
+  stop) stop ;;
+  *) exit 2 ;;
+esac

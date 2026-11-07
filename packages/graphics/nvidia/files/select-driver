@@ -22,7 +22,7 @@ enable_nvidia_boot_diagnostics() {
   if [ -e "${NVIDIA_BOOT_CONSOLE}" ]; then
     cat "${NVIDIA_BOOT_LOG}" >"${NVIDIA_BOOT_CONSOLE}" 2>/dev/null || :
   fi
-  log "NVIDIA boot diagnostics: GPU ${gpu}; enabling console and persistent journal"
+  log "NVIDIA boot diagnostics: GPU ${gpu}; enabling console and journal diagnostics"
 
   mkdir -p "${run}/systemd/journald.conf.d" \
     "${run}/systemd/system/var-log.mount.d" \

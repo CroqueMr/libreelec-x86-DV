@@ -117,6 +117,8 @@ makeinstall_target() {
 
   mkdir -p ${INSTALL}/usr/lib/libreelec
     cp ${PKG_DIR}/scripts/functions ${INSTALL}/usr/lib/libreelec
+    cp ${PKG_DIR}/scripts/installer-boot-log ${INSTALL}/usr/lib/libreelec
+    chmod 755 ${INSTALL}/usr/lib/libreelec/installer-boot-log
     cp ${PKG_DIR}/scripts/fs-resize ${INSTALL}/usr/lib/libreelec
     sed -e "s/@DISTRONAME@/${DISTRONAME}/g" \
         -i ${INSTALL}/usr/lib/libreelec/fs-resize
@@ -158,6 +160,7 @@ post_install() {
   enable_service shell.service
   enable_service show-version.service
   enable_service var.mount
+  enable_service installer-boot-log.service
   enable_service locale.service
 
   # cron support

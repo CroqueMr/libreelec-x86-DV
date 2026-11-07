@@ -1,0 +1,19 @@
+[Unit]
+Description=Preserve installer boot diagnostics on its boot partition
+DefaultDependencies=no
+Wants=systemd-journald.service
+After=systemd-journald.service flash.mount
+Before=systemd-udevd.service sysinit.target shutdown.target
+Conflicts=shutdown.target
+ConditionKernelCommandLine=installer
+ConditionPathIsMountPoint=/flash
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/libreelec/installer-boot-log start
+ExecStopPost=/usr/lib/libreelec/installer-boot-log stop
+RuntimeMaxSec=10min
+TimeoutStopSec=5s
+
+[Install]
+WantedBy=sysinit.target
