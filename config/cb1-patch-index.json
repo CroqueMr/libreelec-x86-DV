@@ -1136,5 +1136,12 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_gmbus.c": "Keep write-only masks set and preserve sibling GPIO direction/output state."
     }
+  },
+  "projects/Generic/patches/linux/linux-9950-02a-cdclk-register-fields.patch": {
+    "summary": "Prerequisite: define CD2X pipe-select register masks used by the CDCLK helper",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
+    }
   }
 }

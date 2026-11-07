@@ -154,3 +154,34 @@ int main(void){
  }
 }
 '''.replace('@@OWNER@@', owner))
+
+    def test_cd2x_helpers_compile_with_real_register_definitions(self):
+        source = self.source('intel_cdclk.c')
+        owners = '\n'.join(function(source, name) for name in
+                           ('bxt_cdclk_cd2x_pipe_mask', 'bxt_cdclk_cd2x_pipe'))
+        defines = '\n'.join(re.findall(r'^#define\s+(?:BXT|ICL|TGL)_CDCLK_CD2X_PIPE.*$',
+                                       self.source('intel_display_regs.h'), re.M))
+        self.run_native(r'''
+#include <assert.h>
+#include <stdint.h>
+typedef uint32_t u32;
+struct intel_display {int version;};
+enum pipe {INVALID_PIPE=-1,PIPE_A,PIPE_B,PIPE_C};
+#define DISPLAY_VER(d) ((d)->version)
+#define REG_GENMASK(h,l) ((~0U<<(l))&(~0U>>(31-(h))))
+#define REG_FIELD_PREP(mask,val) (((u32)(val)<<__builtin_ctz(mask))&(mask))
+#define _PICK(index,...) (((const u32[]){__VA_ARGS__})[(index)])
+@@DEFINES@@
+@@OWNERS@@
+int main(void){
+ const int versions[]={9,11,12,20,30,35};
+ for(unsigned i=0;i<sizeof(versions)/sizeof(*versions);i++){
+  struct intel_display d={versions[i]};u32 mask=bxt_cdclk_cd2x_pipe_mask(&d);
+  assert(mask==(d.version>=11?0x380000U:0x300000U));
+  assert(bxt_cdclk_cd2x_pipe(&d,INVALID_PIPE)==mask);
+  assert(bxt_cdclk_cd2x_pipe(&d,PIPE_A)==0);
+  assert(bxt_cdclk_cd2x_pipe(&d,PIPE_B)==0x100000U);
+  assert(bxt_cdclk_cd2x_pipe(&d,PIPE_C)==(d.version==11?0x300000U:0x200000U));
+ }
+}
+'''.replace('@@DEFINES@@', defines).replace('@@OWNERS@@', owners))
