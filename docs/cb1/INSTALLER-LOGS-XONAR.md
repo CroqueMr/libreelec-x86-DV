@@ -1,6 +1,6 @@
 # Installer boot logs and Xonar STX II
 
-Test2 retains all ten Xe3 backports from Test1 and excludes the PR92 panel.
+RC4 Preview Update 2 retains all ten Xe3 backports and excludes the PR92 panel.
 
 ## Installer logs
 
@@ -25,11 +25,26 @@ power loss can still lose recent writes; the collector cannot run before
 journald or preserve a failure that prevents the kernel from scheduling it.
 Logs are kept locally and may contain machine details; they are not uploaded.
 
+## On-screen diagnostics
+
+On detected NVIDIA display hardware, the native pre-udev driver selector raises
+the kernel console log level, replays the early kernel messages to /dev/console,
+and enables systemd status output. Kernel messages include audio/PCI events;
+this does not depend on identifying a Xonar card. Kodi start/exit markers are
+also sent to the console. These existing diagnostics remain enabled.
+
+The journal collector is a separate durable copy, not a new crash-screen UI.
+Once a graphical client owns the display, text is not guaranteed to remain
+visible; a GPU/display failure or complete kernel lockup can prevent further
+output. A silent driver failure cannot be turned into a message by logging.
+On Intel/AMD hardware the existing normal console policy is retained; installer
+file collection works independently of the GPU vendor.
+
 ## Comparison with Hades RC8
 
 Compared against Hades RC8 commit `8ed4131907792183d73643975e22d96da3219786`:
 
-| Component | CB1 Test2 | Hades RC8 |
+| Component | CB1 Update 2 | Hades RC8 |
 | --- | --- | --- |
 | Linux | 7.2.6 plus CB1/Xe3 patches | 7.3.1 plus its patch stack |
 | NVIDIA R615 | 615.78.08 | 615.78.08 |
