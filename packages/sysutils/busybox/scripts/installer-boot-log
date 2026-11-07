@@ -46,13 +46,24 @@ start() {
   # BusyBox sync FILE fsyncs the file. No GNU dd/stdbuf dependency is needed.
   (while sleep 1; do sync "$folder/current.log" || break; done) &
   sync_pid=$!
+  # Flush each record: fsync cannot drain head's userspace stdout buffer.
   {
     printf 'Kernel: '; uname -r
     printf 'System: '; cat /etc/release 2>/dev/null || :
     printf 'Boot ID: '; cat "$proc/sys/kernel/random/boot_id"
     printf 'Command line: '; cat "$proc/cmdline"
     journalctl --boot=0 --lines=all --follow --no-pager --output=short-monotonic
-  } | head -c 8388608 >"$folder/current.log"
+  } | LC_ALL=C awk '
+    {
+      text = $0 "\n"
+      remaining = 8388608 - written
+      if (length(text) > remaining) text = substr(text, 1, remaining)
+      printf "%s", text
+      fflush()
+      written += length(text)
+      if (written >= 8388608) exit
+    }
+  ' >"$folder/current.log"
   return 0
 }
 

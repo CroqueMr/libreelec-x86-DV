@@ -20,6 +20,8 @@ boot partition. It never mounts another disk or changes `/storage`. Each
 file is capped at 8 MiB; at most current and previous are retained. Collection
 lasts at most ten minutes, reserves 128 MiB free for updates, flushes the
 current file every second and restores the original read-only mount on exit.
+Each journal record is flushed through the byte limiter immediately; a quiet
+follow stream must not leave its final messages in a userspace output buffer.
 An unavailable, full or read-only medium cannot block normal boot. A sudden
 power loss can still lose recent writes; the collector cannot run before
 journald or preserve a failure that prevents the kernel from scheduling it.
