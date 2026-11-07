@@ -214,7 +214,9 @@
     "docs/cb1/RC4-PREVIEW-INVESTIGATION.md": "c183f30cf01a96fbc75160f90363f20ffd14df99f42ef7e2c3d9e4cdf8b52b07",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": "6f3e0313da94604ddae1cbba600339c89273d3651eab9b29a82b6b81f0cb7337",
     "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": "2181477fd5c9d0df4ba28635ed52e7013313d078ff031040d451b71a8e895408",
-    "docs/cb1/RELEASE-RC4-PREVIEW.md": "0e802f9e4182b7903015708781c941f43853e3045116feea451da8e4beb6e66f"
+    "docs/cb1/RELEASE-RC4-PREVIEW.md": "0e802f9e4182b7903015708781c941f43853e3045116feea451da8e4beb6e66f",
+    ".github/scripts/prepare-test-sources.sh": "f0c7ad8f670c8bfe678d5a1f042d5f312ab56358f1ab2ec664a02f49802b3402",
+    ".github/workflows/cb1-source-checks.yml": "0cead148cc3ee7ed11abc6b61a54cf64c0a07595048b1d226e154bc86e32ef69"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
