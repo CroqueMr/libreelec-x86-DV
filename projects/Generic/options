@@ -55,6 +55,10 @@ CB1_HDR10_AI="${CB1_HDR10_AI:-yes}"
 # setup project defaults
 ################################################################################
 
+  # Keep USB adapters and add native /dev/cec* adapters when hardware exposes them.
+    CEC_SUPPORT="yes"
+    CEC_FRAMEWORK_SUPPORT="yes"
+
   # additional Firmware to use (dvb-firmware, misc-firmware, wlan-firmware)
   # Space separated list is supported,
   # e.g. FIRMWARE="dvb-firmware misc-firmware wlan-firmware"

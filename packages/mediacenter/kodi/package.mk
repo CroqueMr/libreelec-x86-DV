@@ -129,7 +129,8 @@ configure_package() {
     KODI_CEC="-DENABLE_CEC=OFF"
   fi
 
-  if [ "${CEC_FRAMEWORK_SUPPORT}" = "yes" ]; then
+  # Generic DP/USB-C CEC adapters can disappear; keep Kodi polling for hotplug.
+  if [ "${CEC_FRAMEWORK_SUPPORT}" = "yes" ] && [ "${PROJECT}" != "Generic" ]; then
     PKG_PATCH_DIRS+=" cec-framework"
   fi
 
