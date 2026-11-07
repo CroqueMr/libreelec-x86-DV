@@ -21,10 +21,12 @@ class ProcessInfoReadability(unittest.TestCase):
         panel=ET.parse(path)
         row=panel.find('./include[@name="DVInfoRow"]')
         dimensions={p.get('name'):p.get('default') for p in row.findall('param')}
-        controls=panel.findall('./include[@name="DVInfoRow"]/definition/control/control')
-        label,value=controls
+        # The caption sits in a zero-height group; the value textbox shares its line and grows.
+        label=panel.find('./include[@name="DVInfoRow"]/definition/control/control')
+        value=panel.find('./include[@name="DVInfoRow"]/definition/control[@type="textbox"]')
         self.assertEqual(label.get('type'),'label')
         self.assertIsNone(label.find('scroll'))
+        self.assertIsNone(value.find('autoscroll'))
         labelwidth=int(dimensions['labelwidth'])
         valueleft=int(dimensions['valueleft'])
         self.assertEqual(label.findtext('width'),'$PARAM[labelwidth]')
@@ -32,6 +34,14 @@ class ProcessInfoReadability(unittest.TestCase):
         self.assertGreaterEqual(labelwidth,252)
         self.assertGreaterEqual(valueleft-labelwidth,12)
         self.assertGreaterEqual(548-valueleft,280)
+        for column in panel.findall('.//include[@name="DVProcessLayout"]/definition/control/control[@type="grouplist"]'):
+            self.assertEqual(column.findtext('width'),'548')
+        # Free text that cannot fit beside its caption gets the full column under it.
+        stacked=panel.find('./include[@name="DVStackedRow"]/definition/control[@type="textbox"]')
+        self.assertIsNone(stacked.find('left'))
+        self.assertIsNone(stacked.find('autoscroll'))
+        stacked_labels={n.get('value') for n in panel.findall('.//include[@content="DVStackedRow"]/param[@name="label"]')}
+        self.assertTrue({'Fallback','Requested policy','Pending output','Creative trims','Metadata'} <= stacked_labels)
         labels={n.get('value') for n in panel.findall('.//include[@content="DVInfoRow"]/param[@name="label"]')}
         self.assertIn('Before AI min/max/avg',labels)
         self.assertIn('AI model',labels)
