@@ -10,13 +10,14 @@ it does not add force_probe or claim that the HP Omnidesk boot issue is fixed.
 
 ## Backport order and dependencies
 
-All nine patches are imported without source edits from Intel's upstream
+All ten patches are imported without source edits from Intel's upstream
 repository, retaining authors, reviews, upstream commit IDs and links.
 
 | Patch suffix | Upstream commit | Dependency / purpose |
 | --- | --- | --- |
 | 01 | 25ea7671bdbc | One scaler per WCL display pipe; display 30.02 support already exists. |
 | 02 | b42b656db138 | Disable WCL pipe joining; existing DP joiner owner is preserved. |
+| 02a | aa8faabadc59 | Define CD2X pipe-select register masks used by patch 03; preserve existing pipe encodings. |
 | 03 | 67d77d9472c6 | Introduce explicit CD2X pipe-select mask helper for patch 04. |
 | 04 | aad969968824 | Skip absent CD2X pipe-select fields on PTL+ during CDCLK probe. |
 | 05 | 96cb6f956651 | Use existing forcewake accessors under GMBUS mutex; add posting-read accessor. |
@@ -36,6 +37,8 @@ the first choice; the GPIO fallback is corrected without forcing its use.
 against CPU-only register and connector fixtures. It covers read-only GPIO
 sampling, write-only mask handling, sibling pin state, older display versions,
 WCL DP joiner rejection, eDP/MSO guards and valid BIOS CDCLK preservation.
+The CD2X helper is also compiled with the actual register definitions to
+catch missing header prerequisites and preserve BXT/ICL/TGL encodings.
 The complete pinned Linux patch stack must replay with fuzz zero.
 
 These checks do not validate electrical I2C timings or a real display link.
