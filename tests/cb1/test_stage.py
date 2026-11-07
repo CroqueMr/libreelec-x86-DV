@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,14 @@ class StagingTests(unittest.TestCase):
         prefix = 'projects/Generic/patches/kodi/'
         actual = {p.relative_to(tree).as_posix() for p in (tree / prefix).rglob('*.patch')}
         self.assertEqual(actual, {name for name in owners if name.startswith(prefix)})
+        for name in sorted(actual):
+            with self.subTest(patch=name):
+                pairs = re.findall(
+                    r'^--- (a/[^\n]+|/dev/null)\n\+\+\+ (b/[^\n]+|/dev/null)$',
+                    (tree / name).read_text(encoding='utf-8'), re.M)
+                targets = {new[2:] if new != '/dev/null' else old[2:]
+                           for old, new in pairs}
+                self.assertEqual(targets, set(owners[name]['files']))
 
     def test_staged_adapter_has_no_obsolete_source_files(self):
         tree = SCRIPT.parents[1]

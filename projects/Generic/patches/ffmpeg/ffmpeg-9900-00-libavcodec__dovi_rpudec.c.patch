@@ -1,3 +1,8 @@
+Subject: Preserve original DM blocks and restore upstream NAL zero-padding handling
+Padding fix: Kacper Michajlow, FFmpeg PR 24440
+Upstream-commit: 22b96de8034f5441f0e407184269c60310f0142a
+Upstream: https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/24440.patch
+
 --- a/libavcodec/dovi_rpudec.c
 +++ b/libavcodec/dovi_rpudec.c
 @@ -319,6 +319,17 @@
@@ -18,3 +23,23 @@
          switch (ver) {
          case 1: ret = parse_ext_v1(s, gb, dm); break;
          case 2: ret = parse_ext_v2(s, gb, dm, ext_block_length); break;
+@@ -405,6 +416,9 @@
+         VALIDATE(rpu[0], 25, 25); /* NAL prefix */
+         rpu++;
+         rpu_size--;
++        /* Strip trailing padding zero bytes */
++        while (rpu_size && !rpu[rpu_size - 1])
++            rpu_size--;
+     }
+ 
+     if ((ret = init_get_bits8(gb, rpu, rpu_size)) < 0)
+@@ -708,7 +722,8 @@
+             return ret;
+         }
+ 
+-        if (get_bits_left(gb) > 48 /* padding + CRC32 + terminator */) {
++        /* ue(1) + ue(0) + level + CRC32 + terminator */
++        if (get_bits_left(gb) >= 3 + 1 + 8 + 32 + 8) {
+             if ((ret = parse_ext_blocks(s, gb, 2, dm_compression, err_recognition)) < 0) {
+                 ff_dovi_ctx_unref(s);
+                 return ret;

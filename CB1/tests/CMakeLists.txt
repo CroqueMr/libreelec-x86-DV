@@ -12,7 +12,7 @@ target_link_libraries(trim_contract PRIVATE m)
 add_test(NAME trim_contract COMMAND trim_contract)
 
 foreach(name master_spatial_storage source_chroma frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
-             placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue dmabuf_layout metadata_bounds
+             placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue fel_source_time dmabuf_layout metadata_bounds
              policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 shader_cache dmabuf_identity profile5_direct master_ipt)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
@@ -196,10 +196,12 @@ add_test(NAME expert_cm4_compatibility COMMAND creative_cm4_images --compat)
 add_test(NAME reference_transfer COMMAND reference_transfer)
 target_link_libraries(reference_sampler PRIVATE ${CMAKE_DL_LIBS})
 add_test(NAME reference_sampler COMMAND reference_sampler)
-target_link_options(fel_queue PRIVATE -Wl,--wrap=avcodec_open2 -Wl,--wrap=avcodec_send_packet
+foreach(target fel_queue fel_source_time)
+target_link_options(${target} PRIVATE -Wl,--wrap=avcodec_open2 -Wl,--wrap=avcodec_send_packet
                                      -Wl,--wrap=avcodec_receive_frame -Wl,--wrap=avcodec_flush_buffers
                                      -Wl,--wrap=avcodec_get_hw_frames_parameters -Wl,--wrap=av_hwframe_ctx_init)
-set_tests_properties(fel_queue PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(${target} PROPERTIES SKIP_RETURN_CODE 77)
+endforeach()
 foreach(name task3_basic basic_policy basic_render frozen_reference)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)

@@ -61,8 +61,8 @@ meson setup "$test_root/placebo-build" "$test_root/libplacebo" --wrap-mode=nofal
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \
     --disable-doc --disable-network --disable-autodetect --disable-x86asm \
     --enable-gpl --enable-version3 --enable-shared --disable-static \
-    --enable-filter=buffer,buffersink,hstack,settb --enable-decoder=hevc,pgssub \
-    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc,ac3 --enable-protocol=file \
+    --enable-filter=buffer,buffersink,hstack,settb --enable-decoder=hevc,pgssub,vp9 \
+    --enable-demuxer=mov,mpegts,matroska --enable-parser=hevc,ac3,vp9 --enable-protocol=file \
     --enable-bsf=hevc_mp4toannexb,dovi_split,extract_extradata
   make -j2
   make install

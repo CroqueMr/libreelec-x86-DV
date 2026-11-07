@@ -63,6 +63,9 @@ select_nvidia_driver() {
   NVIDIA_OVERLAY=
   mkdir -p "${run}/modprobe.d" || return 1
   rm -f "${run}/nvidia-driver" "${run}/modprobe.d/nvidia-hdr-depth.conf"
+  rm -f "${run}/systemd/system/nvidia-kms.service" \
+    "${run}/systemd/system/kodi.service.d/91-nvidia-kms.conf" \
+    "${run}/systemd/system/installer.service.d/91-nvidia-kms.conf"
 
   for pci in "${sys}/bus/pci/devices/"*; do
     [ -r "${pci}/vendor" ] && [ -r "${pci}/class" ] && [ -r "${pci}/device" ] || continue
@@ -125,5 +128,28 @@ select_nvidia_driver() {
     NVIDIA_OVERLAY="nvidia-${selected}"
   fi
   ln -s "${payload}" "${run}/nvidia-driver" || return 1
+  if [ "${present}" = yes ]; then
+    # udev probes devices concurrently. A sound card can change their order:
+    # finish loading KMS before either graphical client, not after its first frame.
+    mkdir -p "${run}/systemd/system/kodi.service.d" \
+      "${run}/systemd/system/installer.service.d" || return 1
+    cat >"${run}/systemd/system/nvidia-kms.service" <<EOF || return 1
+[Unit]
+Description=Initialize selected NVIDIA KMS driver
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe nvidia-drm
+RemainAfterExit=yes
+TimeoutStartSec=30
+EOF
+    for module in kodi installer; do
+      cat >"${run}/systemd/system/${module}.service.d/91-nvidia-kms.conf" <<EOF || return 1
+[Unit]
+Wants=nvidia-kms.service
+After=nvidia-kms.service
+EOF
+    done
+  fi
   log "NVIDIA selected ${selected} ($(cat "${payload}/driver-version")); overlay=${NVIDIA_OVERLAY:-none}"
 }

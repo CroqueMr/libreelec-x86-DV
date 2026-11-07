@@ -820,8 +820,8 @@
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Copy/reset owned DV metadata and enhancement-layer references with video pictures.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Retain picture metadata, decoder capacity requests and a bound information generation.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Carry original source metadata with the decoder-bound information generation.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h": "Carry owned source metadata and its information generation with decoded pictures.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.; Native CM4 output metadata options, independent L2 removal and committed reporting.",
@@ -835,25 +835,25 @@
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h": "Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/MultiviewFramePairer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/MultiviewFramePairer.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp": "Grow the existing decode surface pool only for eligible HDR10 conversion.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp": "Grow the existing decode surface pool only for eligible HDR10 conversion. Prefer the actual get_format software depth over stale InputStream hints; retain legacy fallback when no software descriptor is available. FFmpeg contract corroborated by Hades9290 (GPL-2.0-or-later); no helper or API added.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h": "Bound optional decode pool ownership while preserving native defaults.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Preserve independent layer decode order and pair unchanged RPU by exact presentation time.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayOffsetMetadata.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayOffsetMetadata.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemux.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxBluray3D.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxBluray3D.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDFactoryDemuxer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/test/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/test/TestBlurayOffsetMetadata.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Use native complete VFS reads for Blu-ray image sectors, including fragmented network reads.; Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Preserve native Blu-ray menu identity through overlay flattening.",
-      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Use native complete VFS reads for Blu-ray image sectors, including fragmented network reads.; Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Preserve native Blu-ray menu identity through overlay flattening. Route keys to committed visible IG only, distinguish synthetic BD-J INIT menu events from top-title/HDMV navigation, and copy shifted dirty rectangles row by row. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted. Use the successfully opened image as one UDF metadata root for menu/direct entry, and override display-only PSR23 after automatic profile initialization when the backend is authoritative. Reapply the bundled-runtime PSR24 capability after automatic profile initialization; clear only unsupported BD-J stereo planes (bit5), retaining MVC and ordinary BD-J menus.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback. Track explicit navigation and committed menu visibility atomically. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBlurayFile.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBlurayFile.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDOverlayContainer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -864,8 +864,8 @@
       "xbmc/cores/VideoPlayer/Interface/StreamInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp": "Forward processing information to the native cache and invalidate it on codec reset.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/Process/ProcessInfo.h": "Expose native process-information publication without a duplicate store.; Native source facts and actual sink reporting; no audio processing changes.",
-      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Report decoded HDR10+ only for the current native HDR10 stream.; Native source facts and actual sink reporting; no audio processing changes.",
-      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Native source facts and actual sink reporting; no audio processing changes.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Drain delayed video once when Blu-ray confirms an authored still after demux packets and navigation events are exhausted; rearm only on selected video input. During initial default-stream selection, use the live nullable menu capability so early authored audio/PG ownership is not overridden by the uninitialized published menu state; retain direct-playlist defaults. Retire a deselected internal native-Blu-ray subtitle on the player thread after messages and reads, without waiting for a sparse replacement packet; close without buffer waiting to retain disc-menu overlays. Direct playlists, external subtitles and unrelated audio/video remain unchanged.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner.",
       "xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp": "Integrate CB1 playback controls and diagnostics.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/VideoPlayerAudio.h": "Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -910,7 +910,9 @@
       "xbmc/cores/VideoProcessingInfo.h": "Define source and accepted-output facts without renderer or CB1 dependencies.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
       "xbmc/cores/VideoSettings.h": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
       "xbmc/cores/VideoSourceSideData.cpp": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
-      "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
+      "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
+      "xbmc/cores/VideoPlayer/Interface/DemuxPacket.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DemuxMultiSource.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner."
     }
   },
   "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": {
@@ -940,7 +942,7 @@
       "xbmc/windowing/GraphicContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/Resolution.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Preserve native 3D selection and search permitted containing 2D modes before desktop fallback; keep exact matches, whitelist refresh permissions and overrides unchanged.",
       "xbmc/windowing/Resolution.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/windowing/WinSystem.h": "Integrate native Dolby Vision playback, exact GPU transport and optional HDR10 analysis lifetimes.",
+      "xbmc/windowing/WinSystem.h": "Integrate native Dolby Vision playback, exact GPU transport and optional HDR10 analysis lifetimes. Publish Blu-ray display capability atomically from the complete GBM mode enumeration; leave unsupported backends without an override.",
       "xbmc/windowing/gbm/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
       "xbmc/windowing/gbm/DVBridgeCapture.h": "Expose logical capture without importing engine headers into native capture modules.",
       "xbmc/windowing/gbm/DVPresentStall.h": "Bound recovery after repeated stalled synchronous presentation.",
@@ -948,11 +950,11 @@
       "xbmc/windowing/gbm/GBMUtils.cpp": "Manage explicit front-buffer ownership for safe presentation/rollback.",
       "xbmc/windowing/gbm/GBMUtils.h": "Declare the buffer lifecycle used by atomic presentation.",
       "xbmc/windowing/gbm/ModeChangeHold.h": "Coalesce eligible CB1 mode and signal transitions with balanced audio notifications.",
-      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose CB1 mode availability and bounded retirement.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback. Publish Blu-ray display capability atomically from the complete GBM mode enumeration; leave unsupported backends without an override.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose CB1 mode availability and bounded retirement. Publish Blu-ray display capability atomically from the complete GBM mode enumeration; leave unsupported backends without an override.",
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish accepted output and presentation failures at existing native presentation seams.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Native output state and metadata ownership.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish accepted output and presentation failures at existing native presentation seams.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Native output state and metadata ownership.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata. Preserve first-output ownership across the ordinary startup hold deadline until the actual flip or restoration receipt.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/windowing/gbm/drm/CMakeLists.txt": "Build/link the native DV adapter and shared helpers behind the existing build-time feature boundary.",
       "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Native output state and metadata ownership.",
@@ -1054,6 +1056,21 @@
       "xbmc/utils/EGLUtils.h": "Declare explicit output-surface transactions and transferable native EGL retirement ownership.",
       "xbmc/application/Application.cpp": "Reuse clean fullscreen CB1 GUI content through native dirty-region admission, rechecking late player invalidations.",
       "xbmc/video/windows/GUIWindowFullScreen.cpp": "Preserve native dirty controls without forcing a whole-video GUI redraw when the persistent CB1 composite is reusable."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": {
+    "summary": "Preserve fractional CTA/HDMI modes and add their missing integer-rate twins on matched R580",
+    "component": "nvidia",
+    "files": {
+      "src/common/modeset/timing/nvt_edid.c": "Hades77c51424 R580 variant; same integer-twin semantics as existing R615; retain native order, codes and clocks."
+    }
+  },
+  "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": {
+    "summary": "Bound EGL config allocation and retain/release display handles correctly",
+    "component": "nvidia",
+    "files": {
+      "src/gbm-display.c": "Hadesfaff2fe8: null attributes, output count, allocation bounds and error result; retain original NVIDIA MIT notice and Hades GPL2-or-later provenance.",
+      "src/gbm-platform.c": "Validate display before access and return the pbuffer hook reference on every path."
     }
   }
 }

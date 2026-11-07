@@ -79,8 +79,19 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
             unsigned __int128 limit=(unsigned __int128)q->vdr_in_max<<bits;
             if(bound>INT64_MAX || limit>INT64_MAX)return CB1_MASTER_UNSUPPORTED;
             int shift=h->coef_log2_denom-5-h->el_bit_depth;
-            unsigned __int128 residual=shift>=0?limit>>shift:limit<<-shift;
-            if(residual>65535)return CB1_MASTER_UNSUPPORTED;
+            /* Bound each reachable sign separately: positive shifts round down,
+             * negative arithmetic shifts round away from zero in magnitude. */
+            for(unsigned negative=0;negative<2;negative++){
+                unsigned delta=negative?q->nlq_offset:65535-q->nlq_offset;
+                if(!delta)continue;
+                unsigned __int128 reachable=((unsigned __int128)(2*delta-1)*
+                    q->linear_deadzone_slope<<(10-h->el_bit_depth))+
+                    ((unsigned __int128)q->linear_deadzone_threshold<<bits);
+                if(reachable>limit)reachable=limit;
+                if(shift>=0?(negative?reachable>((unsigned __int128)65535<<shift):
+                                      (reachable>>shift)>65535):
+                             (reachable<<-shift)>65535)return CB1_MASTER_UNSUPPORTED;
+            }
             next.nlq[c].offset=q->nlq_offset;next.nlq[c].slope=q->linear_deadzone_slope;
             next.nlq[c].threshold=q->linear_deadzone_threshold;next.nlq[c].maximum=q->vdr_in_max;
         }

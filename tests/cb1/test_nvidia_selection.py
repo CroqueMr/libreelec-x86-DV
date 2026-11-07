@@ -10,6 +10,39 @@ SELECTOR = ROOT/'packages/graphics/nvidia/files/select-driver'
 
 
 class NvidiaSelection(unittest.TestCase):
+    def test_selected_gpu_initializes_kms_before_both_graphical_clients(self):
+        import configparser
+        for devices, enabled in [
+            ([('0x10de', '0x1b80', '1', '0x030000')], True),
+            ([('0x10de', '0x1e04', '1', '0x030000')], True),
+            ([('0x10de', '0x1b80', '1', '0x040300')], False),
+            ([('0x8086', '0x1234', '1', '0x030000')], False),
+            ([('0x1002', '0x1234', '1', '0x030000')], False),
+            ([('0x10de', '0xffff', '1', '0x030000')], False),
+        ]:
+            with self.subTest(devices=devices), tempfile.TemporaryDirectory() as tmp:
+                fixture = self.fixture(Path(tmp), devices)
+                result = self.select(fixture)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                units = fixture[2]/'systemd/system'
+                service = units/'nvidia-kms.service'
+                self.assertEqual(service.exists(), enabled)
+                if not enabled:
+                    self.assertFalse(units.exists())
+                    continue
+                config = configparser.ConfigParser(interpolation=None)
+                config.read(service)
+                self.assertEqual(config['Service']['Type'], 'oneshot')
+                self.assertEqual(config['Service']['ExecStart'], '/sbin/modprobe nvidia-drm')
+                self.assertEqual(config['Service']['RemainAfterExit'], 'yes')
+                self.assertGreater(int(config['Service']['TimeoutStartSec']), 0)
+                for client in ('kodi', 'installer'):
+                    config = configparser.ConfigParser(interpolation=None)
+                    config.read(units/(client+'.service.d/91-nvidia-kms.conf'))
+                    self.assertIn('nvidia-kms.service', config['Unit']['After'].split())
+                    self.assertIn('nvidia-kms.service', config['Unit']['Wants'].split())
+                    self.assertNotIn('Requires', config['Unit'], 'a failed secondary GPU must not block native Intel/AMD')
+
     def test_boot_diagnostics_replay_kernel_and_enable_native_services_only_for_display_gpu(self):
         for vendor, cls, expected in [('0x10de', '0x030000', True),
                                       ('0x10de', '0x030200', True),
@@ -135,7 +168,7 @@ class NvidiaSelection(unittest.TestCase):
         lib, run, sys = base/'usr/lib', base/'run', base/'sys'
         (sys/'bus/pci/devices').mkdir(parents=True)
         run.mkdir()
-        for branch, version in [('r615', '615.78.08'), ('r580', '580.178.04')]:
+        for branch, version in [('r615', '615.78.08'), ('r580', '580.196.07')]:
             payload = lib/'nvidia-drivers'/branch
             (payload/'usr/lib').mkdir(parents=True)
             (payload/'driver-version').write_text(version+'\n')
@@ -208,7 +241,7 @@ class NvidiaSelection(unittest.TestCase):
     def test_incomplete_firmware_fails_without_exposing_a_stack(self):
         with tempfile.TemporaryDirectory() as tmp:
             fixture = self.fixture(Path(tmp), [('0x10de', '0x1b80', '1', '0x030000')])
-            (fixture[1]/'kernel-overlays/nvidia-r580/lib/firmware/nvidia/580.178.04/gsp-test.bin').unlink()
+            (fixture[1]/'kernel-overlays/nvidia-r580/lib/firmware/nvidia/580.196.07/gsp-test.bin').unlink()
             result = self.select(fixture)
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse((fixture[2]/'nvidia-driver').is_symlink())

@@ -56,16 +56,26 @@ int main(){CVideoPlayerVideo p;assert(!p.HasData());
 #include <memory>
 #include <cstdint>
 #define HAVE_DVBRIDGE 1
+#define HAVE_LIBVA 1
 constexpr int64_t AV_NOPTS_VALUE=INT64_MIN;
 constexpr unsigned DVD_CODEC_CTRL_DRAIN=1,DVD_CODEC_CTRL_POLL=2,DVD_CODEC_CTRL_DROP_ANY=4;
-struct AVFrame{};
+constexpr unsigned DVP_FLAG_DROPPED=8;
+constexpr int VA_STATUS_SUCCESS=0;
+using VASurfaceID=unsigned;
+struct Buffer{void* data=nullptr;};
+struct AVVAAPIDeviceContext{void* display=(void*)123;};
+struct Device{void* hwctx=nullptr;};
+struct AVHWFramesContext{void* device_ref=nullptr;Device* device_ctx=nullptr;};
+AVVAAPIDeviceContext va;Device device{&va};AVHWFramesContext pool{nullptr,&device};Buffer frameBuffer{&pool};
+int waited=0,syncError=0;
+int vaSyncSurface(void* display,unsigned surface){assert(display==(void*)123 && surface==17);++waited;return syncError;}
+struct AVFrame{Buffer* hw_frames_ctx=&frameBuffer;uint8_t* data[4]={nullptr,nullptr,nullptr,(uint8_t*)17};};
 void av_frame_free(AVFrame** f){delete *f;*f=nullptr;}
-struct Metadata{int Binding()const{return 1;}};
-struct VideoPicture{int64_t doviSourcePts=1;Metadata doviMetadata;
+struct Metadata{bool valid=true;int Binding()const{return 1;}const void* Data()const{return valid?this:nullptr;}};
+struct VideoPicture{int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
+ int doviSourceBinding=1;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
  void Reset(){}void CopyRef(const VideoPicture&v){*this=v;}};
-struct AVHWFramesContext{void* device_ref=nullptr;};
-struct Buffer{void* data=nullptr;};
 struct Context{Buffer* hw_frames_ctx=nullptr;};
 struct Fel{bool failed=false,exhausted=false;int result=0;};
 bool dvbridge_fel_failed(Fel*f){return f->failed;}
@@ -78,6 +88,7 @@ struct CLog{template<class... T>static void Log(T...){}};
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  std::shared_ptr<Fel>m_dvFel=std::make_shared<Fel>();bool m_dvFailed=false,m_dvNativeOutput=false;
+ uint64_t m_dvLayerEpoch=0;
  std::deque<std::shared_ptr<VideoPicture>>m_dvPending;Context context;Context*m_pCodecContext=&context;
  unsigned m_codecControlFlags=0;static constexpr unsigned DVEnhancementPendingPictures=16;
  int reads=0;VCReturn baseResult=VC_BUFFER;void ReportDVStartup(unsigned,const char*){}
@@ -116,6 +127,20 @@ int main(){
  CDVDVideoCodecFFmpeg valid;valid.m_dvFel->result=1;
  valid.m_dvPending.push_back(std::make_shared<VideoPicture>());
  assert(valid.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE && out.doviEnhancement);
+ assert(waited==0 && "Displayed FEL retains its existing renderer synchronization");
+ CDVDVideoCodecFFmpeg preroll;preroll.m_dvFel->result=1;
+ auto dropped=std::make_shared<VideoPicture>();dropped->iFlags=DVP_FLAG_DROPPED;
+ preroll.m_dvPending.push_back(dropped);out=VideoPicture{};
+ assert(preroll.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE && out.doviEnhancement);
+ assert(waited==1 && "Discarded FEL must consume decode completion before bypassing the renderer");
+ CDVDVideoCodecFFmpeg badSync;badSync.m_dvFel->result=1;badSync.m_dvPending.push_back(dropped);
+ syncError=1;out=VideoPicture{};
+ assert(badSync.GetPicture(&out)==CDVDVideoCodec::VC_FATAL && !out.doviEnhancement && waited==2);
+ syncError=0;
+ CDVDVideoCodecFFmpeg invalidMetadata;invalidMetadata.m_dvLayerEpoch=1;invalidMetadata.m_dvFel->result=1;
+ auto invalid=std::make_shared<VideoPicture>();invalid->doviMetadata.valid=false;
+ invalidMetadata.m_dvPending.push_back(invalid);
+ assert(invalidMetadata.GetPicture(&out)==CDVDVideoCodec::VC_FATAL);
  CDVDVideoCodecFFmpeg wait;
  assert(wait.GetPicture(&out)==CDVDVideoCodec::VC_BUFFER);
  CDVDVideoCodecFFmpeg vanilla;vanilla.m_dvFel.reset();vanilla.baseResult=CDVDVideoCodec::VC_ERROR;

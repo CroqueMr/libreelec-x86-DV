@@ -192,6 +192,7 @@ class DualCarriage(unittest.TestCase):
         program = r'''
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
 #include <climits>
 #include <cstdio>
@@ -224,10 +225,11 @@ struct Component {Settings* GetSettings(){static Settings s;return &s;}};
 struct CServiceBroker {static Component* GetSettingsComponent(){static Component c;return &c;}};
 struct Input {bool IsStreamType(int){return false;}};
 struct CDemuxStream {int index;};
-constexpr double DVD_NOPTS_VALUE=-1;
 struct CDVDDemuxFFmpeg {
  AVFormatContext* m_pFormatContext{};bool m_bMatroska{};Input input;Input* m_pInput{&input};
  std::unique_ptr<CBlurayDovi> m_blurayDovi;int m_blurayBase{-1},m_blurayEnhancement{-1};
+ DemuxPacket::DoviLayerTimes m_blurayTiming;
+ uint64_t m_blurayEpoch{};
  unsigned m_doviGroups=0,m_program=0;
  bool m_blurayAwaitBase=false;
  std::mutex m_critSection;double m_currentPts{};

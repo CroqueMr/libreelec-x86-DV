@@ -1,17 +1,26 @@
 /* SPDX-License-Identifier: MIT */
 #include "dvbridge_fel.h"
+#include <assert.h>
 static int receives;
+static int terminal_mode, terminal_eof;
 static int receive_then_fail(AVCodecContext *ctx,AVFrame *frame)
 {
     (void)ctx;
+    if(terminal_mode)return terminal_eof?AVERROR_EOF:AVERROR(EAGAIN);
     if(receives++)return AVERROR(ENOMEM);
     frame->format=AV_PIX_FMT_VAAPI;frame->pts=9;
     return 0;
 }
+static int terminal_send(AVCodecContext *ctx,const AVPacket *packet)
+{
+    if(!terminal_mode)return avcodec_send_packet(ctx,packet);
+    assert(!packet);terminal_eof++;return 0;
+}
+#define avcodec_send_packet terminal_send
 #define avcodec_receive_frame receive_then_fail
 #include "dvbridge_fel.c"
 #undef avcodec_receive_frame
-#include <assert.h>
+#undef avcodec_send_packet
 #include "synthetic_idr.h"
 
 static AVCodecParserContext *reordered_base;
@@ -26,6 +35,39 @@ int __wrap_av_parser_parse2(AVCodecParserContext *parser,AVCodecContext *context
 
 int main(void)
 {
+    /* Draining closes this input epoch: only a proved out-of-range EL suffix
+     * may be retired. Never discard an internal hole or a future reference. */
+    terminal_mode=1;
+    for(int scenario=0;scenario<4;scenario++){
+        struct dvbridge_fel end={.opened=true,.draining=scenario!=1,
+            .anchor_pts=AV_NOPTS_VALUE,.output_order=AV_NOPTS_VALUE,.num_packets=2,.packet_bytes=2};
+        end.decoder=avcodec_alloc_context3(NULL);assert(end.decoder);
+        end.base_order.seen=true;end.base_order.maximum=9;
+        end.packet_order[0]=scenario==2?8:10;
+        end.packet_order[1]=scenario==3?9:18;
+        for(int i=0;i<2;i++){end.packets[i]=av_packet_alloc();assert(end.packets[i]&&av_new_packet(end.packets[i],1)==0);}
+        end.num_frames=2;
+        AVFrame *saved[2];
+        for(int i=0;i<2;i++){
+            end.frames[i]=saved[i]=av_frame_alloc();assert(saved[i]);saved[i]->pts=800+100*i;
+            AVFrameSideData *sd=av_frame_new_side_data(saved[i],AV_FRAME_DATA_DOVI_RPU_BUFFER,5);assert(sd);
+            memcpy(sd->data,(const uint8_t[]){25,8,0,0,0x80},5);
+        }
+        terminal_eof=0;
+        bool ok=pump(&end);
+        if(scenario==0)assert(ok&&!end.failed&&end.eof&&!end.num_packets&&!end.packet_bytes&&terminal_eof==1);
+        else if(scenario==1)assert(ok&&!end.failed&&end.num_packets==2&&!terminal_eof);
+        else assert(!ok&&end.failed&&end.num_packets==2&&!terminal_eof);
+        for(int i=0;i<2;i++){
+            AVFrame *ready=NULL;assert(dvbridge_fel_take(&end,800+100*i,&ready)==1&&ready==saved[i]);
+            assert(!memcmp(av_frame_get_side_data(ready,AV_FRAME_DATA_DOVI_RPU_BUFFER)->data,
+                           (const uint8_t[]){25,8,0,0,0x80},5));
+            av_frame_free(&ready);
+        }
+        for(unsigned i=0;i<end.num_packets;i++)av_packet_free(&end.packets[i]);
+        avcodec_free_context(&end.decoder);
+    }
+    terminal_mode=0;
     struct dvbridge_fel f={.failed=true,.num_frames=2};
     AVFrame *frame=NULL;
     for(unsigned i=0;i<2;i++){

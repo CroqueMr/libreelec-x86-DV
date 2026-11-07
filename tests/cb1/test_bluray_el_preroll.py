@@ -1,4 +1,4 @@
-"""A common IRAP can retire an earlier EL decode prefix, never its references."""
+"""Keep EL native decode order, including its independent seek acquisition."""
 import os
 from pathlib import Path
 import subprocess
@@ -8,104 +8,57 @@ from test_native_video_source import TREE
 
 
 class BlurayEnhancementPreroll(unittest.TestCase):
-    def test_common_irap_recovery_and_unproven_prefix_refusal(self):
+    def test_el_decode_prefix_is_preserved_with_its_source_clock(self):
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
             self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')
         prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
         program = r'''
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
 #include <cassert>
-
-AVPacket* packet(bool el, int64_t pts, int64_t dts, int marker, int type) {
-  AVPacket* p = av_packet_alloc();
-  assert(p && av_new_packet(p, el ? 13 : 6) == 0);
-  const uint8_t base[] = {0,0,1,uint8_t(type << 1),1,uint8_t(marker)};
-  const uint8_t layer[] = {0,0,0,1,uint8_t(type << 1),1,uint8_t(marker),
-                          0,0,1,0x7c,1,uint8_t(pts)};
-  memcpy(p->data, el ? layer : base, p->size);
-  p->pts = pts;
-  p->dts = dts;
-  return p;
+AVPacket* packet(bool el,int pts,int dts,int type) {
+ AVPacket* p=av_packet_alloc();assert(p && av_new_packet(p,el?13:6)==0);
+ const uint8_t b[]={0,0,1,uint8_t(type<<1),1,0xaa};
+ const uint8_t e[]={0,0,0,1,uint8_t(type<<1),1,uint8_t(pts),0,0,1,0x7c,1,uint8_t(pts)};
+ memcpy(p->data,el?e:b,p->size);p->pts=pts;p->dts=dts;return p;
 }
-void push(CBlurayDovi& join, bool el, int64_t pts, int64_t dts, int marker, int type=1) {
-  AVPacket* p = packet(el, pts, dts, marker, type);
-  assert(join.Push(p, el));
-  av_packet_free(&p);
-}
-
 int main() {
-  CBlurayDovi join;
-  AVPacket* out = av_packet_alloc();
-  assert(out);
-  // Reordered presentation times, monotone decode times. Both layers have a
-  // CRA at decode index 3. The BL seek starts there; EL starts three AUs earlier.
-  const int pts[] = {30,10,20,60,40,50};
-  join.Reset(true);
-  for (int i=3; i<6; ++i)
-    push(join, false, pts[i], i, 10+i, i==3 ? 21 : 1);
-  for (int i=0; i<6; ++i) {
-    push(join, true, pts[i], i, 100+i, i==3 ? 21 : 1);
-    if (i<3) {
-      assert(join.Take(out)==AVERROR(EAGAIN));
-      continue;
-    }
-    assert(join.Take(out)==0);
-    assert(out->pts==pts[i] && out->dts==i);
-    assert(out->size==22 && out->data[5]==10+i);
-    assert(out->data[14]==100+i && "EL must start at the common CRA, not the orphan prefix");
-    assert(out->data[out->size-1]==pts[i]);
-    av_packet_unref(out);
-  }
-  assert(join.TakePrerollCount()==3 && !join.Pending());
-
-  // A seek can start both layers before their first shared independent anchor.
-  // Neither queue head is that anchor; retire both proven orphan prefixes.
-  join.Reset(true);
-  push(join, false, 11, 0, 10, 21);
-  push(join, false, 12, 1, 11);
-  push(join, false, 20, 2, 12, 21);
-  push(join, true, 10, 0, 100);
-  push(join, true, 13, 1, 101);
-  push(join, true, 20, 3, 102, 21);
-  assert(join.Take(out)==0 && "Recover a common IRAP behind both seek prefixes");
-  assert(out->pts==20 && out->dts==2 && out->data[5]==12 && out->data[14]==102);
-  assert(join.TakePrerollCount()==4 && !join.Pending());
+ CBlurayDovi join;join.Reset(true);
+ AVPacket* out=av_packet_alloc();assert(out);
+ // RPU60 is in the fourth EL AU, not its decode head. No EL references
+ // may be discarded or assigned the BL clock merely to align these heads.
+ for(int pts : {60,40,50}) {
+  auto* b=packet(false,pts,pts==60?3:pts==40?4:5,pts==60?21:1);
+  assert(join.Push(b,false));av_packet_free(&b);
+ }
+ const int times[]={30,10,20,60,40,50};
+ for(int i=0;i<6;++i) {
+  auto* e=packet(true,times[i],i,i==3?21:1);
+  assert(join.Push(e,true));av_packet_free(&e);
+  if(i<3)assert(join.Take(out)==AVERROR(EAGAIN));
+ }
+ const int bases[]={60,40,50};
+ for(int i=0;i<3;++i) {
+  assert(join.Take(out)==0);
+  const auto timing=join.Timing();
+  assert(timing.basePts==bases[i] && timing.enhancementPts==times[i]);
+  assert(out->data[14]==times[i]);
+  assert(timing.presentable && out->size==22);
+  assert(out->data[out->size-1]==bases[i]);
   av_packet_unref(out);
-
-  // A timestamp match is insufficient: retain references without both IRAPs,
-  // monotone per-layer decode clocks, and proof that each retired RPU is orphaned.
-  for (int refusal=0; refusal<5; ++refusal) {
-    join.Reset(true);
-    push(join, false, 100, 90, 1, refusal==0 ? 1 : 21);
-    if (refusal==4)
-      push(join, false, 80, 91, 2); // This leading BL picture still needs RPU80.
-    push(join, true, 70, 70, 3);
-    push(join, true, 80, refusal==2 ? AV_NOPTS_VALUE : 80, 4);
-    push(join, true, 100, refusal==3 ? 91 : 90, 5, refusal==1 ? 1 : 21);
-    if(refusal==3) {
-      assert(join.Take(out)==0 && out->pts==100 && out->dts==90);
-      assert(out->data[14]==5 && out->data[out->size-1]==100);
-      assert(join.TakePrerollCount()==2);av_packet_unref(out);continue;
-    }
-    assert(join.Take(out)==AVERROR(EAGAIN));
-    assert(join.Pending());
-    assert(join.TakePrerollCount()==0);
-  }
-  join.Reset(true);
-  AVPacket* unknown = packet(true, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 1, 21);
-  assert(!join.Push(unknown, true) && !strcmp(join.LastError(), "packet"));
-  av_packet_free(&unknown);
-  av_packet_free(&out);
+ }
+ assert(join.GetState().elPackets==3); // Still native CRA60, leading40,50.
+ join.Reset(true);assert(!join.Pending());
+ auto* unknown=packet(true,1,1,21);unknown->pts=AV_NOPTS_VALUE;
+ assert(!join.Push(unknown,true) && !strcmp(join.LastError(),"packet"));
+ av_packet_free(&unknown);av_packet_free(&out);
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root/'test.cpp').write_text(program)
-            built = subprocess.run([
-                'c++', '-std=c++20', '-fsanitize=address,undefined',
-                '-I'+str(TREE/'xbmc'), '-I'+str(prefix/'include'), str(root/'test.cpp'),
-                '-L'+str(prefix/'lib'), '-lavcodec', '-lavutil', '-lm', '-o', str(root/'test'),
-            ], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stderr)
-            run = subprocess.run([str(root/'test')], capture_output=True, text=True)
-            self.assertEqual(run.returncode, 0, run.stderr)
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-I'+str(TREE/'xbmc'),'-I'+str(prefix/'include'),str(root/'test.cpp'),
+                '-L'+str(prefix/'lib'),'-lavcodec','-lavutil','-lm','-o',str(root/'test')],
+                capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            run=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
