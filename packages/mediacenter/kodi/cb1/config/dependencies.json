@@ -89,7 +89,7 @@
     "patches/libplacebo/libplacebo-9918-expert-tone.patch": "17177ad4fb82c8fc21df417bfdf142e56d131c84f7501c2cf1c7baccd781b6ee"
   },
   "modified_sources": {
-    "ffmpeg/libavcodec/dovi_rpudec.c": "8c25559492f09b6d114e05c64aee550b00388d9a187dd84176fe508a1dbb348f",
+    "ffmpeg/libavcodec/dovi_rpudec.c": "6d0770c5bc4c0626c439ddfb769c5b44fc5af181db179297cae4260fa3ab9818",
     "ffmpeg/libavformat/isom_tags.c": "9e93c484c91d4f6e8c6f97c7cbe22058821685ef04f2a0347c316f82ed9dcf4b",
     "ffmpeg/libavutil/dovi_meta.h": "f860511cb8be3c992b4ef7da6747d8dc9670d64d276aeab3a7e6867112857a02",
     "libplacebo/src/dispatch.c": "a1ad0fc629e7941774f03ea43cb68828d671cb676bceff3e9dd226cffe51ce23",

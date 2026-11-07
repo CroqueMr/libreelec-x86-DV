@@ -439,7 +439,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "3ca4a0ba46d9525ad18ab509733a68c06ba9c711f0fcd4790d08fecc085f80f0"
+      "sha256": "abc720aa0b30ea845ac421e67bcbd0ccbc57532b32085ff6e9c9dffce984d393"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
