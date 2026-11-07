@@ -11,13 +11,13 @@ class SDRRestoreTests(unittest.TestCase):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
         wake = present[1:present.index('#ifdef HAVE_DVBRIDGE')]
-        ordinary = present[present.index('  if (m_dvOrdinaryFrame)'):
+        ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
                            present.index('  if (m_hdrConversion)')]
         stage = body(source, 'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(')
         stop = body(source, 'bool CWinSystemGbmGLESContext::StopDVBridgePlayback()')
         destroy = body(source, 'bool CWinSystemGbmGLESContext::DestroyWindow()')
-        retry = next(line for line in present.splitlines()
-                     if 'm_dvStopPending && !m_dvOrdinaryFrame && !StopDVBridgePlayback()' in line)
+        retry = 'if (m_dvStopPending && !m_dvOrdinaryFrame)' + body(
+            present, 'if (m_dvStopPending && !m_dvOrdinaryFrame)')
         program = r'''
 #include <cassert>
 #include <memory>
@@ -82,6 +82,8 @@ struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
    std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)->pending=true;}return picture!=nullptr;}
  void SetGuiCompositing(int value){gui=value;}
  bool RejectDVOutputSurface(){++rejects;rollback=true;return false;}
+ bool StageCB1ConnectorPreferences(bool){return true;}
+ void CompleteCB1ConnectorRestore(){}
  bool StageOrdinaryDVOutput(const VideoPicture* picture) STAGE
  bool HoldCB1Stop(){return false;}bool HasPendingDVOutputSurface(){return surfacePending;}
  bool SetVideoOutput(const VideoPicture*){if(outputRefused){--outputRefused;return false;}m_dvState.captured=false;return true;}
@@ -277,6 +279,7 @@ struct CDRMAtomic {
  bool m_dvRestoring=false,m_dvActivating=false,m_active=true,m_propertyFailure=false;
  bool m_dvCommitReported=false,m_dvLastCommitRestore=false,m_signalDirty=false,m_hdr10plusActive=false;
  bool m_sdrRestorePending=false,m_sdrRestoreFailed=false;
+ bool m_commitFellBack=false,m_colorRangeTransition=false;
  std::optional<uint64_t> m_sdrRestoreColorspace;
  int m_cb1TimingInput=-1;uint64_t m_cb1SubmittedNs=0;
  struct Failures {

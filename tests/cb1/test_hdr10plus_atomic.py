@@ -21,6 +21,7 @@ struct CLog {template<class... A>static void LogF(A...) {}};
 struct gbm_bo{};struct drm_fb{int fb_id=42;};
 struct CDRMUtils {static drm_fb* DrmFbGetFromBo(gbm_bo*){return nullptr;}static void DestroyDrm(){}};
 struct CDRMAtomic {
+ bool m_commitFellBack=false;
  bool m_lastPageAccepted=true,m_need_modeset=false,m_hdr10plusActive=true,m_hdr10plusClearRequired=true;
  bool pending=true;void SetSDRRestorePending(bool value){pending=value;}
  uint64_t m_hdr10plusGeneration=3,m_hdr10plusRejectedGeneration=3,m_hdr10plusRejectedEdid=1;

@@ -98,6 +98,8 @@ constexpr int GL_BLEND=1,GL_SRC_ALPHA=2,GL_ONE_MINUS_SRC_ALPHA=3;
 constexpr unsigned RENDER_FLAG_TOP=1,RENDER_FLAG_BOT=2,RENDER_GLSL=1;
 constexpr int RQ_LOW=0,RQ_SINGLEPASS=1,RQ_MULTIPASS=2;
 void glEnable(int){} void glDisable(int){} void glBlendFunc(int,int){} void VerifyGLState(){}
+struct WindowBase {virtual ~WindowBase()=default;bool UseLimitedColor(){return false;}};
+struct CServiceBroker {static WindowBase* GetWinSystem();};
 struct Shader {void SetAlpha(float){}};
 struct CPictureBuffer {struct Plane {unsigned id=1;}; Plane fields[3][1];};
 struct CBaseRenderer {
@@ -106,6 +108,9 @@ struct CBaseRenderer {
 };
 struct CLinuxRendererGLES:CBaseRenderer {
  bool m_bConfigured=true,m_frameRendered=false,gui=true,firstPass=false,upload=true;
+ bool m_fullRange=true,m_reloadShaders=false;
+ static constexpr int VS_SCALINGMETHOD_MAX=99;
+ int m_scalingMethodGui=VS_SCALINGMETHOD_MAX;
  int m_iYUVRenderBuffer=0,m_currentField=0,m_renderMethod=RENDER_GLSL,m_renderQuality=RQ_SINGLEPASS;
  static constexpr int FIELD_FULL=0,FIELD_TOP=1,FIELD_BOT=2;
  CPictureBuffer m_buffers[4]; Shader* m_pYUVProgShader=nullptr; Shader* m_pYUVBobShader=nullptr;
@@ -123,7 +128,6 @@ struct CLinuxRendererGLES:CBaseRenderer {
  void RenderUpdateVideo(bool,unsigned,unsigned);
 };
 @@RENDER_METHODS@@
-struct WindowBase {virtual ~WindowBase()=default;};
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext:WindowBase {
  std::shared_ptr<int> staged=std::make_shared<int>(1),accepted=staged;
@@ -132,7 +136,7 @@ struct CWinSystemGbmGLESContext:WindowBase {
 };
 }
 KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
-struct CServiceBroker {static WindowBase* GetWinSystem(){return &window;}};
+WindowBase* CServiceBroker::GetWinSystem(){return &window;}
 struct CRenderManager {
  CBaseRenderer* m_pRenderer;
  struct Slot{std::shared_ptr<int> sourceSideData=std::make_shared<int>(2);}m_Queue[1];

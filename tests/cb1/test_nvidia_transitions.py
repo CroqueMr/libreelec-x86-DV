@@ -59,7 +59,8 @@ struct CWinSystemGbm {
   bool CompleteDVBridgePage() {return true;}
   bool SupportsDVOutputMode() const {return true;}
   unsigned requeues=0;
-  bool RequeueOutputProperties() {++requeues;return true;}
+  bool StageTransportPreferences(){return true;}
+ bool RequeueOutputProperties() {++requeues;return true;}
   bool FlipDVBridgePage(CDVBridgeState&,bool,bool=false,bool=false,gbm_bo* = nullptr);
 };
 METHOD
