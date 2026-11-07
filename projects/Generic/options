@@ -1,5 +1,5 @@
-CUSTOM_VERSION="${CUSTOM_VERSION:-DV-R1.0.0-RC4-Preview}"
-BUILDER_VERSION="${BUILDER_VERSION:-DV-R1.0.0-RC4-Preview}"
+CUSTOM_VERSION="${CUSTOM_VERSION:-DV-R1.0.0-RC4-Preview-Xe3-Test1}"
+BUILDER_VERSION="${BUILDER_VERSION:-DV-R1.0.0-RC4-Preview-Xe3-Test1}"
 CB1_HDR10_AI="${CB1_HDR10_AI:-yes}"
 
 ################################################################################
