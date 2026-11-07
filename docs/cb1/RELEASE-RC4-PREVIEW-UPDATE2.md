@@ -4,6 +4,9 @@
 
 ## Changes since Update 1
 
+- Improved Blu-ray menu highlighting and disappearance, while keeping subtitles and menu layers separate.
+- Prevent busy Java menu animations from indefinitely delaying their display.
+- Correct menu capability decisions and strengthen chapter/navigation handling of malformed disc data.
 - Improved Intel Xe3 / Wildcat Lake display initialization and I2C handling, with the required upstream dependencies.
 - Preserve installer boot logs on the USB boot partition, including the previous attempt after a failed boot.
 - Retain on-screen NVIDIA boot diagnostics, including kernel audio/PCI messages when emitted.
@@ -13,6 +16,11 @@ systems. It includes the existing ISO/menu, HDR10+, VAAPI and NVIDIA changes
 from Update 1. NVIDIA work retains credit to
 [Hades / hadesdevls](https://github.com/hadesdevls/LibreELEC-Hades).
 The experimental Player information redesign in PR92 is excluded.
+
+General Blu-ray fixes are adapted from
+[AVDVPlus](https://github.com/avdvplus/CoreELEC),
+[SamuriHL](https://github.com/SamuriHL) and VideoLAN/libbluray work, with
+upstream attribution retained in the patches.
 
 ## Installation and logs
 

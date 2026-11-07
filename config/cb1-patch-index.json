@@ -1143,5 +1143,45 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9995-cb1-bluray-overlay.patch": {
+    "summary": "Respect HDMV staged HIDE and palette/image updates per plane",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Respect HDMV staged HIDE and palette/image updates per plane."
+    }
+  },
+  "packages/multimedia/libbluray/patches/0003-hdmv-bc-compare.patch": {
+    "summary": "Correct HDMV BC full-mask comparison",
+    "component": "libbluray",
+    "files": {
+      "src/libbluray/hdmv/hdmv_vm.c": "Correct HDMV BC full-mask comparison."
+    }
+  },
+  "packages/multimedia/libbluray/patches/0004-bdj-bounded-repaint-sync.patch": {
+    "summary": "Bound continuous BD-J repaint deferral with monotonic task age",
+    "component": "libbluray",
+    "files": {
+      "src/libbluray/bdj/java/java/awt/BDRootWindow.java": "Bound continuous BD-J repaint deferral with monotonic task age."
+    }
+  },
+  "packages/multimedia/libbluray/patches/0005-pre151-hardening.patch": {
+    "summary": "Harden native navigation, transport and graphics parsing with validated dependencies",
+    "component": "libbluray",
+    "files": {
+      "src/libbluray/bdj/java/org/dvb/dsmcc/DSMCCObject.java": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdj/java/org/dvb/dsmcc/NPTRate.java": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdj/java/org/dvb/event/EventManager.java": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdnav/clpi_parse.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdnav/mpls_parse.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdnav/navigation.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/bdnav/sound_parse.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/decoders/graphics_processor.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/decoders/m2ts_demux.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/decoders/pg_decode.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/libbluray/hdmv/hdmv_vm.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/util/bits.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
+      "src/util/macro.h": "Harden native navigation, transport and graphics parsing with validated dependencies."
+    }
   }
 }

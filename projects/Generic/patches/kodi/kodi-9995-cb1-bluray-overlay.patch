@@ -1,0 +1,54 @@
+Subject: [PATCH] Bluray: stage HDMV HIDE and image-less palette changes
+
+Palette copy-on-write adapted from avdvplus/xbmc DVDInputStreamBluray.cpp:
+https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+(GPL-2.0-or-later, Team Kodi and avdvplus contributors).
+
+Follow libbluray overlay.h and graphics_controller.c scheduling: HIDE is
+staged until FLUSH. PG queues WIPE/HIDE after its current FLUSH; TextST
+queues HIDE before its future-end FLUSH. Neither may erase the current page.
+Palette-flagged DRAW with an image follows normal decoding, since PG has
+already wiped staging after the previous composition. Image-less palette
+changes copy indexed staging without mutating queued pages or resurrecting
+explicitly wiped objects. Retain CB1 per-plane committed ownership.
+Apply after kodi-9990 through kodi-9994.
+
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+@@ -1015,7 +1015,7 @@
+     return;
+   }
+ 
+-  if (ov->cmd == BD_OVERLAY_CLEAR)
++  if (ov->cmd == BD_OVERLAY_CLEAR || ov->cmd == BD_OVERLAY_HIDE)
+   {
+     plane.o.clear();
+     return;
+@@ -1024,6 +1024,27 @@
+   if (ov->cmd == BD_OVERLAY_INIT)
+   {
+     OverlayInit(plane, ov->w, ov->h);
++    return;
++  }
++
++  if (ov->cmd == BD_OVERLAY_DRAW && ov->palette_update_flag && !ov->img)
++  {
++    if (ov->palette)
++    {
++      std::vector<uint32_t> palette(256);
++      for (unsigned i = 0; i < 256; ++i)
++        palette[i] = build_rgba(ov->palette[i]);
++      for (SOverlay& overlay : plane.o)
++      {
++        if (overlay->palette.empty())
++          continue;
++        // Keep previously committed pages immutable and invalidate the cached texture.
++        auto copy = std::make_shared<CDVDOverlayImage>(
++            *overlay, overlay->x, overlay->y, overlay->width, overlay->height);
++        copy->palette = palette;
++        overlay = copy;
++      }
++    }
+     return;
+   }
+ 
