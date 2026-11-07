@@ -53,9 +53,12 @@ python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
   --libplacebo-source "$test_root/libplacebo"
 # Generate the pinned public headers; these CPU probes do not need a GPU backend.
 meson setup "$test_root/placebo-build" "$test_root/libplacebo" --wrap-mode=nofallback \
+  --prefix="$test_root/prefix" --libdir=lib \
   -Ddemos=false -Dvulkan=disabled -Dopengl=disabled -Dd3d11=disabled \
   -Dglslang=disabled -Dshaderc=disabled -Dlcms=disabled -Dlibdovi=disabled \
   -Dunwind=disabled -Dxxhash=disabled
+meson compile -C "$test_root/placebo-build" -j2
+meson install -C "$test_root/placebo-build"
 (
   cd "$test_root/ffmpeg"
   ./configure --prefix="$test_root/prefix" --disable-everything --disable-programs \
