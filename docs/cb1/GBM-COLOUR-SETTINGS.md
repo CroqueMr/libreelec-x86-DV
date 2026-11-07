@@ -31,6 +31,10 @@ deferred while it is active. Accepted ordinary output is restored before
 pending preferences resume. This includes failed preparation and delayed
 stop/recovery paths; native Dolby Vision retains its required 8-bit transport.
 
+Refused colour changes retain the displayed GBM buffer until a replacement
+is accepted. Colour transitions reuse the existing blocking buffer owner;
+ordinary presentation retains its asynchronous path.
+
 Native owner tests cover accepted and rejected requests, retry limits, missing
 properties, format/range combinations and CB1 restoration. Compilation and
 these tests do not qualify a particular GPU, cable, television or receiver.
