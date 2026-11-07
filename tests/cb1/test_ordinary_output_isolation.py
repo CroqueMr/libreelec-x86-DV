@@ -138,6 +138,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool SetHDR(const VideoPicture* picture){++ordinaryStages;return picture && picture->color_transfer;}
  void SetGuiCompositing(int color){m_guiCompositing=color!=0;}
  bool SetVideoOutput(const VideoPicture*);
+ bool StageCB1ConnectorPreferences(bool){return true;}
  bool StageOrdinaryDVOutput(const VideoPicture*);
  bool RetireDVContext();
  bool PrepareDVOutputFrame(const VideoPicture&);

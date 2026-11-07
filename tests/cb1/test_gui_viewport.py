@@ -20,6 +20,7 @@ class GUIViewportTests(unittest.TestCase):
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 #include <fmt/format.h>
 #include <string>
 #include <vector>
@@ -59,10 +60,19 @@ struct FBO {
  void Cleanup(){}bool Initialize(){return true;}
  bool CreateAndBindToTexture(int,int,int,int){return true;}bool AttachDepthBuffer(int,int){return true;}
 };
+// These geometry fixtures keep one fixed native full-range shader.
+struct CServiceBroker {
+ struct GUI {GUI& GetWindowManager(){return *this;}void MarkDirty(){assert(false);}};
+ static GUI* GetGUI(){static GUI gui;return &gui;}
+};
 struct CWinSystemGbmGLESContext:CRenderSystemGLES {
  int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160;
  FBO m_guiFbo,m_dvPQSubtitleFbo;
  void* m_dvContext=nullptr;
+ std::shared_ptr<int> m_compositeShader=std::make_shared<int>(1);
+ bool m_compositeShaderLimited=false;int m_guiColorTransfer=0;
+ bool UseLimitedColor()const{return false;}
+ bool SetGuiCompositing(int){assert(false);return false;}
  bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false,m_hdrConversion=false;
  bool m_guiCacheValid=false;unsigned m_guiCachedElementCount=0;
  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_cb1FramePending=false,m_dvFrame=false;

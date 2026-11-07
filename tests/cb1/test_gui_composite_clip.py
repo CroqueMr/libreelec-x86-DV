@@ -17,6 +17,7 @@ class GUICompositeClip(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
 #define HAVE_DVBRIDGE 1
 using GLint=int;
 namespace DVBRIDGE {
@@ -58,12 +59,21 @@ struct FBO {
   bool BeginRender() {return begin;}
 };
 struct DVState {bool captured=true;bool Captured() const {return captured;}};
+// These geometry fixtures keep one fixed native full-range shader.
+struct CServiceBroker {
+ struct GUI {GUI& GetWindowManager(){return *this;}void MarkDirty(){assert(false);}};
+ static GUI* GetGUI(){static GUI gui;return &gui;}
+};
 struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   bool m_guiCompositing=true,m_guiWillRender=false,m_guiFboClean=false;
   bool m_guiCacheValid=false;unsigned m_guiCachedElementCount=0;
   int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160;
   FBO m_guiFbo,m_dvPQSubtitleFbo;
   void* m_dvContext=nullptr;
+  std::shared_ptr<int> m_compositeShader=std::make_shared<int>(1);
+  bool m_compositeShaderLimited=false;int m_guiColorTransfer=0;
+  bool UseLimitedColor()const{return false;}
+  bool SetGuiCompositing(int){assert(false);return false;}
   CGraphicContext context;
   DVState m_dvState;
   bool m_hdrConversion=false,m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;

@@ -1183,5 +1183,30 @@
       "src/util/bits.c": "Harden native navigation, transport and graphics parsing with validated dependencies.",
       "src/util/macro.h": "Harden native navigation, transport and graphics parsing with validated dependencies."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9996-gbm-colour-preferences.patch": {
+    "summary": "Backport native GBM colour controls with accepted-state fallback and CB1 connector restoration",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "system/settings/linux.xml": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DRMConnector.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DRMConnector.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DRMUtils.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Integrate native colour range, format and depth controls while preserving CB1 transport and ordinary output restoration."
+    }
   }
 }

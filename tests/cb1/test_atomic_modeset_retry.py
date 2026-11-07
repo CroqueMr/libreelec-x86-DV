@@ -28,7 +28,7 @@ struct drm_fb {int fb_id=12;};
 struct CDRMUtils {static drm_fb* DrmFbGetFromBo(gbm_bo* bo) {
  static drm_fb fb;return bo && bo->usable ? &fb : nullptr;}};
 struct CDRMAtomic {
- bool m_need_modeset=true,m_lastPageAccepted=false,configured=false;
+ bool m_need_modeset=true,m_lastPageAccepted=false,configured=false,m_commitFellBack=false;
  bool permanent=false,rejectNext=true,fallbackNext=false;
  std::optional<int> m_hdr10plusPacket;
  std::vector<unsigned> attempts;

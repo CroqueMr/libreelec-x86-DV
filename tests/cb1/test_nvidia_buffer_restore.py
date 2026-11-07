@@ -15,7 +15,7 @@ class NvidiaBufferRestore(unittest.TestCase):
         context = (base / 'WinSystemGbmGLESContext.cpp').read_text()
         surface = (base / 'GBMUtils.cpp').read_text()
         present = body(context, 'void CWinSystemGbmGLESContext::PresentFrame(')
-        ordinary = present.split('  if (m_dvOrdinaryFrame)\n', 1)[1]
+        ordinary = present.split('\n  if (m_dvOrdinaryFrame)\n', 1)[1]
         ordinary = ordinary[:ordinary.index('    if (!submitted)')]
         ordinary = ordinary[ordinary.index('{') + 1:].replace('return;', 'return false;') + '\nreturn submitted;'
         hdr = present.split('  if (m_hdrConversion)\n', 1)[1]
@@ -78,6 +78,7 @@ struct Window {
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
  bool StageOrdinaryDVOutput(void*){return true;}
  bool CompleteDVBridgePage(){return true;}bool SupportsDVOutputMode(){return true;}
+ bool StageTransportPreferences(){return true;}
  bool RequeueOutputProperties(){return true;}bool FloatOutputUsable(){return true;}
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  @SIGNATURE@

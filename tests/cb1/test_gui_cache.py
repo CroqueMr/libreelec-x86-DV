@@ -55,7 +55,9 @@ struct Components{template<class T>auto GetComponent()const{return &player;}}com
 struct Advanced{int m_guiAlgorithmDirtyRegions=3;bool m_guiVisualizeDirtyRegions=false;}advanced;
 struct SettingsComponent{auto*GetAdvancedSettings(){return &advanced;}}settings;
 struct CServiceBroker{static auto GetCaptureService(){return capture;}static auto&GetAppComponents(){return components;}
- static auto*GetSettingsComponent(){return &settings;}};
+ static auto*GetSettingsComponent(){return &settings;}
+ struct GUI {GUI& GetWindowManager(){return *this;}void MarkDirty(){assert(false);}};
+ static auto*GetGUI(){static GUI gui;return &gui;}};
 namespace DVBRIDGE {
 bool optimized=true;struct Preferences{bool optimizedGUI;};Preferences FrameOutputSettings(){return {optimized};}
 bool DiagnosticsEnabled(){return false;}uint64_t DiagnosticNowMs(){return 0;}
@@ -88,7 +90,10 @@ struct CWinSystemGbmGLESContext:CRenderSystemGLES {
  unsigned m_dvGUIContentGeneration=0,m_dvSubtitleDraws=0,m_dvSubtitleContent=0,m_dvPQSubtitleDraws=0;
  CRect m_dvSubtitleBounds;FBO m_guiFbo,m_dvPQSubtitleFbo;
  int m_nWidth=3840,m_nHeight=2160,m_guiFboWidth=3840,m_guiFboHeight=2160,m_dvPQSubtitleWidth=3840,m_dvPQSubtitleHeight=2160;
- void* m_dvContext=nullptr;void* m_compositeShader=this;
+ void* m_dvContext=nullptr;std::shared_ptr<int> m_compositeShader=std::make_shared<int>(1);
+ bool m_compositeShaderLimited=false;int m_guiColorTransfer=0;
+ bool UseLimitedColor()const{return false;}
+ bool SetGuiCompositing(int){assert(false);return false;}
  struct State{bool captured=true;bool Captured()const{return captured;}}m_dvState;
  struct Gfx{bool fullscreen=true;bool IsFullScreenVideo()const{return fullscreen;}
  CRect GetScissors()const{return {};}CRect StereoCorrection(CRect r)const{return r;}}gfx;
@@ -270,6 +275,7 @@ struct Window{
  std::shared_ptr<DRM>m_DRM=std::make_shared<CDRMAtomic>();
  CDVBridgeGLES bridge;CDVBridgeGLES*m_dvBridge=&bridge;unsigned swaps=0,swapped=0;
  struct EGL{unsigned*counter;bool TrySwapBuffers(){++*counter;return true;}}m_eglContext{&swaps};
+ bool StageCB1ConnectorPreferences(bool){return true;}
  bool UseLimitedColor(){return false;}bool CreateCB1GPUFence(CDVBridgeGLES::Submission&){return true;}
  void HDR(bool rendered) @HDR@
  void DV(bool rendered) @DV@

@@ -1,0 +1,2045 @@
+From: CB1 backport maintainers
+Subject: [PATCH] GBM colour range, format and depth preferences with CB1 ownership
+
+Backport smp79 Kodi PRs 30099 and 30192 once, in dependency order, from
+9fcc80c946fc94f8fdcbe899a15baa0453bd6d63 and
+6cc7650a603fc06992326742def234c27728e310 (both open, not merged).
+
+Keep ordinary connector preferences separate from dedicated CB1 transports.
+Reuse the native snapshot owner for Full/RGB/depth overrides and accepted
+restoration, preserve CB1 software range until restoration, and reapply
+preferences before the next ordinary range query. Refuse range-changing
+frames without substituting their pixels into the old connector request.
+Reconfigure on source-depth changes before Adaptive/shader selection.
+
+The optional color format setting requires an offered connector property;
+this does not backport the Linux 7.3 DRM property to Linux 7.2.6.
+
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -23145,7 +23145,106 @@
+ msgid "songs"
+ msgstr ""
+ 
+-#empty strings from id 36922 to 36999
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36922"
++msgid "Colour range"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36923"
++msgid "Full (0-255)"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36924"
++msgid "Limited (16-235)"
++msgstr ""
++
++#. Help text for setting "Colour range" of label #36922
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36925"
++msgid "Colour range of the video output. \"Auto\" hands the choice back to the graphics driver. \"Full\" and \"Limited\" tell the driver to output that range and signal it to the display, where the driver supports it. Without driver support, Kodi converts to limited range itself when Limited is selected. Choose the range your display expects: limited for a regular HDMI TV, full for a PC monitor or a display with a full range mode."
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36926"
++msgid "Colour format"
++msgstr ""
++
++#. Help text for setting "Colour format" of label #36926
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36927"
++msgid "Colour format used to send the picture to the display. \"Auto\" lets the graphics driver choose, which for HDMI is RGB unless the available bandwidth requires YCbCr 4:2:0. The other choices are requested from the driver and may not work with every display or video mode: if the driver does not offer one, the setting goes back to Auto, and if the display or the mode refuses one, Kodi goes back to Auto for that mode. The YCbCr formats are always limited range, so the colour range setting is ignored and the driver does the conversion. \"Adaptive\" uses Auto, but switches to YCbCr 4:2:2, or 4:2:0 if the driver has no 4:2:2, for video with more than 8 bits per component when the video mode is too fast for RGB at that depth, such as 4K at 50 or 60 Hz over HDMI 2.0. It does not switch on a link that is detected as HDMI 2.1, which carries that as RGB. Requires a Linux kernel with the \"color format\" connector property."
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36928"
++msgid "RGB"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36929"
++msgid "YCbCr 4:4:4"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36930"
++msgid "YCbCr 4:2:2"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36931"
++msgid "YCbCr 4:2:0"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36932"
++msgid "Adaptive"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36933"
++msgid "Maximum bit depth"
++msgstr ""
++
++#. Help text for setting "Maximum bit depth" of label #36933
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36934"
++msgid "Most bits per colour component that the graphics driver may use for the display. \"Auto\" leaves the driver default, which some drivers keep at 8 bit. Choose at least 10 bit to show 10 bit video without reducing it to 8 bit. The driver lowers the depth by itself when the display or the video mode cannot carry it, and with \"Adaptive\" colour format a limit of 8 bit turns the switch to YCbCr off."
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36935"
++msgid "8 bit"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36936"
++msgid "10 bit"
++msgstr ""
++
++#: system/settings/linux.xml
++#: system/settings/freebsd.xml
++msgctxt "#36937"
++msgid "12 bit"
++msgstr ""
++
++#empty strings from id 36938 to 36999
+ 
+ #: xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.cpp
+ msgctxt "#37000"
+diff --git a/system/settings/linux.xml b/system/settings/linux.xml
+--- a/system/settings/linux.xml
++++ b/system/settings/linux.xml
+@@ -242,6 +242,49 @@
+           <default>false</default>
+           <control type="toggle" />
+         </setting>
++        <setting id="videoscreen.colorrange" type="integer" label="36922" help="36925">
++          <visible>false</visible>
++          <level>3</level>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="16316">0</option> <!-- Auto -->
++              <option label="36923">1</option> <!-- Full -->
++              <option label="36924">2</option> <!-- Limited -->
++            </options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="videoscreen.colorformat" type="integer" label="36926" help="36927">
++          <visible>false</visible>
++          <level>3</level>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="16316">0</option> <!-- Auto -->
++              <option label="36928">1</option> <!-- RGB -->
++              <option label="36929">2</option> <!-- YCbCr 4:4:4 -->
++              <option label="36930">3</option> <!-- YCbCr 4:2:2 -->
++              <option label="36931">4</option> <!-- YCbCr 4:2:0 -->
++              <option label="36932">5</option> <!-- Adaptive -->
++            </options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="videoscreen.maxbpc" type="integer" label="36933" help="36934">
++          <visible>false</visible>
++          <level>3</level>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="16316">0</option> <!-- Auto -->
++              <option label="36935">1</option> <!-- 8 bit -->
++              <option label="36936">2</option> <!-- 10 bit -->
++              <option label="36937">3</option> <!-- 12 bit -->
++            </options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
+       </group>
+     </category>
+     <category id="input">
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+@@ -110,5 +110,6 @@
+          this->iDisplayWidth == pic.iDisplayWidth && this->iDisplayHeight == pic.iDisplayHeight &&
+          this->stereoMode == pic.stereoMode && this->color_primaries == pic.color_primaries &&
+          this->color_transfer == pic.color_transfer && this->hdrType == pic.hdrType &&
++         this->colorBits == pic.colorBits &&
+          CompareDisplayMetadata(pic);
+ }
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.cpp
+@@ -232,10 +232,12 @@
+   {
+     CLog::Log(LOGERROR,
+               "RendererDRMPRIMEGLES::Configure: fourcc {:#x} cannot be converted to limited "
+-              "range; switching videoscreen.limitedrange off so the GUI matches the video",
++              "range; switching the limited colour range off so the GUI matches the video",
+               sourceFourcc);
+-    CServiceBroker::GetSettingsComponent()->GetSettings()->SetBool(
+-        CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE, false);
++    const auto rangeSettings = CServiceBroker::GetSettingsComponent()->GetSettings();
++    rangeSettings->SetBool(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE, false);
++    if (rangeSettings->GetSetting("videoscreen.colorrange"))
++      rangeSettings->SetInt("videoscreen.colorrange", 0);
+   }
+ 
+   winSystem->SetColorimetry(&picture);
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
+@@ -517,6 +517,15 @@
+     return;
+   }
+ 
++  if (const bool fullRange = !CServiceBroker::GetWinSystem()->UseLimitedColor();
++      fullRange != m_fullRange)
++  {
++    m_fullRange = fullRange;
++    m_reloadShaders = true;
++    // the CMS output shader bakes in the range
++    m_scalingMethodGui = VS_SCALINGMETHOD_MAX;
++  }
++
+   ManageRenderArea();
+ 
+   if (clear)
+@@ -2808,6 +2817,8 @@
+       tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
+       tmp.iWidth = m_sourceWidth;
+       tmp.iHeight = m_sourceHeight;
++      // Keep Adaptive on the format already selected for this source depth.
++      tmp.colorBits = buf.m_srcBits;
+       CServiceBroker::GetWinSystem()->SetColorimetry(&tmp);
+     }
+ 
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -684,6 +684,14 @@
+     return;
+   }
+ 
++  if (const bool fullRange = !CServiceBroker::GetWinSystem()->UseLimitedColor();
++      fullRange != m_fullRange)
++  {
++    m_fullRange = fullRange;
++    m_reloadShaders = true;
++    m_scalingMethodGui = VS_SCALINGMETHOD_MAX;
++  }
++
+   // if its first pass, just init textures and return
+   if (ValidateRenderTarget())
+   {
+@@ -763,6 +771,14 @@
+   m_frameRendered = false;
+   if (!m_bConfigured)
+     return;
++
++  if (const bool fullRange = !CServiceBroker::GetWinSystem()->UseLimitedColor();
++      fullRange != m_fullRange)
++  {
++    m_fullRange = fullRange;
++    m_reloadShaders = true;
++    m_scalingMethodGui = VS_SCALINGMETHOD_MAX;
++  }
+ 
+   if (IsGuiLayer())
+     return;
+@@ -2502,6 +2518,8 @@
+       tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
+       tmp.iWidth = m_sourceWidth;
+       tmp.iHeight = m_sourceHeight;
++      // Keep Adaptive on the format already selected for this source depth.
++      tmp.colorBits = buf.m_srcBits;
+       CServiceBroker::GetWinSystem()->SetColorimetry(&tmp);
+     }
+ 
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -21,10 +21,13 @@
+ #include "drm/DRMLegacy.h"
+ #include "drm/OffScreenModeSetting.h"
+ #include "messaging/ApplicationMessenger.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
+ #include "settings/DisplaySettings.h"
+ #include "settings/Settings.h"
+ #include "settings/SettingsComponent.h"
+ #include "settings/lib/Setting.h"
++#include "settings/lib/SettingsManager.h"
+ #include "utils/DRMHelpers.h"
+ #include "utils/DisplayInfo.h"
+ #include "utils/HDRUtils.h"
+@@ -33,6 +36,9 @@
+ #include "utils/log.h"
+ #include "windowing/GraphicContext.h"
+ 
++#include <algorithm>
++#include <array>
++#include <vector>
+ #include <mutex>
+ #include <cmath>
+ #include <string.h>
+@@ -72,6 +78,30 @@
+ 
+ namespace
+ {
++
++constexpr const char* BROADCAST_RGB = "Broadcast RGB";
++constexpr const char* BROADCAST_RGB_AUTOMATIC = "Automatic";
++constexpr const char* BROADCAST_RGB_FULL = "Full";
++constexpr const char* BROADCAST_RGB_LIMITED = "Limited 16:235";
++
++constexpr const char* COLOR_FORMAT = "color format";
++
++constexpr const char* MAX_BPC = "max bpc";
++// indexed by the "Maximum bit depth" setting, 0 is Auto
++constexpr std::array<uint64_t, 4> MAX_BPC_VALUES{0, 8, 10, 12};
++
++// HDMI 2.0 carries at most 600 MHz of TMDS characters: the pixel clock times bits per component
++// / 8 for RGB and YCbCr 4:4:4, half of that for 4:2:0, and as is for 4:2:2 (24 bit container).
++// 4K 50/60 Hz (594 MHz) fits as 8 bit RGB, but needs 742 MHz as 10 bit.
++constexpr uint64_t HDMI_MAX_TMDS_KHZ = 600000;
++// YCbCr 4:2:0 over TMDS carries twice the pixel clock, so an HDMI 2.0 source also lists 4:2:0
++// modes up to 1.2 GHz (e.g. 4K120 at 1188 MHz). Only a mode above that can be FRL for sure.
++constexpr uint64_t HDMI_FRL_PROOF_CLOCK_KHZ = 2 * HDMI_MAX_TMDS_KHZ;
++// Max_FRL_Rate code 3 (6 Gbit/s x 4 lanes) is the lowest that carries 4K 60 Hz 10 bit RGB
++constexpr int HDMI_FRL_MIN_RATE_RGB_10BIT = 3;
++// the kernel's enum names of "color format", indexed by ColorFormat
++constexpr std::array<const char*, 5> COLOR_FORMAT_NAMES{"AUTO", "RGB", "YUV 4:4:4", "YUV 4:2:2",
++                                                        "YUV 4:2:0"};
+ 
+ // These map to the definitions in the linux kernel
+ // drivers/gpu/drm/drm_connector.c
+@@ -105,9 +135,15 @@
+ {
+   m_dpms = std::make_shared<CGBMDPMSSupport>();
+   m_libinput->Start();
+-}
+-
+-CWinSystemGbm::~CWinSystemGbm() = default;
++  CServiceBroker::GetSettingsComponent()->GetSettings()->GetSettingsManager()->RegisterCallback(
++      this, {SETTING_VIDEOSCREEN_COLORRANGE, SETTING_VIDEOSCREEN_COLORFORMAT,
++             SETTING_VIDEOSCREEN_MAXBPC});
++}
++
++CWinSystemGbm::~CWinSystemGbm()
++{
++  CServiceBroker::GetSettingsComponent()->GetSettings()->GetSettingsManager()->UnregisterCallback(this);
++}
+ 
+ const std::string CWinSystemGbm::GetName()
+ {
+@@ -198,6 +234,48 @@
+   if (!settings)
+     return false;
+ 
++  MigrateLimitedRangeSetting();
++  if (auto rangeSetting = settings->GetSetting(SETTING_VIDEOSCREEN_COLORRANGE))
++  {
++    m_colorRange = settings->GetInt(SETTING_VIDEOSCREEN_COLORRANGE);
++    m_shaderColorRange = m_colorRange.load();
++    rangeSetting->SetVisible(true);
++    if (auto legacySetting = settings->GetSetting(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE))
++      legacySetting->SetVisible(false);
++  }
++
++  if (auto formatSetting = settings->GetSetting(SETTING_VIDEOSCREEN_COLORFORMAT))
++  {
++    m_colorFormat = settings->GetInt(SETTING_VIDEOSCREEN_COLORFORMAT);
++
++    const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++    formatSetting->SetVisible(std::dynamic_pointer_cast<CDRMAtomic>(m_DRM) && connector &&
++                              connector->SupportsProperty(COLOR_FORMAT));
++
++    if (connector && connector->GetType().rfind("HDMI", 0) == 0)
++    {
++      CLog::LogF(LOGINFO, "HDMI sink max FRL rate code {}, a mode above {} kHz is listed: {}",
++                 connector->GetMaxFrlRate(), HDMI_FRL_PROOF_CLOCK_KHZ,
++                 connector->HasModeAboveClock(HDMI_FRL_PROOF_CLOCK_KHZ));
++    }
++  }
++
++  if (auto bpcSetting = settings->GetSetting(SETTING_VIDEOSCREEN_MAXBPC))
++  {
++    m_maxBpc = settings->GetInt(SETTING_VIDEOSCREEN_MAXBPC);
++
++    const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++    const bool supported = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM) && connector &&
++                           connector->SupportsProperty(MAX_BPC);
++
++    // only once, after a cycle the property holds what Kodi wrote
++    if (supported && !m_defaultMaxBpc)
++      m_defaultMaxBpc = connector->GetPropertyValue(MAX_BPC);
++
++    bpcSetting->SetVisible(supported);
++  }
++
++
+   auto setting = settings->GetSetting("videoscreen.limitguisize");
+   if (setting)
+     setting->SetVisible(true);
+@@ -303,6 +381,526 @@
+   CDisplaySettings::GetInstance().UpdateCalibrations();
+ }
+ 
++void CWinSystemGbm::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
++{
++  if (!setting) return;
++  if (setting->GetId() == SETTING_VIDEOSCREEN_COLORRANGE)
++  {
++    m_colorRange = std::static_pointer_cast<const CSettingInt>(setting)->GetValue();
++    if (!m_migratingColorRange)
++      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_CALLBACK, -1, -1, &m_colorRangeCallback);
++  }
++  else if (setting->GetId() == SETTING_VIDEOSCREEN_COLORFORMAT)
++  {
++    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_CALLBACK, -1, -1, &m_colorFormatCallback);
++  }
++  else if (setting->GetId() == SETTING_VIDEOSCREEN_MAXBPC)
++  {
++    CServiceBroker::GetAppMessenger()->PostMsg(TMSG_CALLBACK, -1, -1, &m_maxBpcCallback);
++  }
++}
++
++void CWinSystemGbm::ApplyMaxBpcSetting(void* userptr)
++{
++  auto winSystem = static_cast<CWinSystemGbm*>(userptr);
++
++  winSystem->m_maxBpc = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
++      SETTING_VIDEOSCREEN_MAXBPC);
++  winSystem->m_maxBpcFallback = false;
++  winSystem->m_bpcProbe = false;
++  winSystem->ApplyConnectorProperties();
++}
++
++uint64_t CWinSystemGbm::GetEffectiveMaxBpc() const
++{
++  const int setting = m_maxBpc;
++  if (!m_maxBpcFallback && setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
++    return MAX_BPC_VALUES[setting];
++
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector)
++    return 0;
++
++  return connector->GetPropertyValue(MAX_BPC).value_or(0);
++}
++
++void CWinSystemGbm::ApplyColorFormatSetting(void* userptr)
++{
++  auto winSystem = static_cast<CWinSystemGbm*>(userptr);
++
++  winSystem->m_colorFormat = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
++      SETTING_VIDEOSCREEN_COLORFORMAT);
++  // a new choice gets a fresh try, even for a mode where the previous one was refused
++  winSystem->m_colorFormatSkip = 0;
++
++  // a format that the connector does not offer would only act as Auto, so show that
++  if (!winSystem->IsColorFormatOffered(winSystem->GetColorFormat()))
++  {
++    CLog::LogF(LOGINFO, "the connector does not offer the chosen colour format, using Auto");
++    CServiceBroker::GetSettingsComponent()->GetSettings()->SetInt(
++        SETTING_VIDEOSCREEN_COLORFORMAT, static_cast<int>(ColorFormat::AUTO));
++  }
++
++  winSystem->ApplyConnectorProperties();
++}
++
++bool CWinSystemGbm::IsColorFormatOffered(ColorFormat format) const
++{
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++
++  // nothing to judge it by, leave the choice alone
++  if (!std::dynamic_pointer_cast<CDRMAtomic>(m_DRM) || !connector ||
++      !connector->SupportsProperty(COLOR_FORMAT))
++    return true;
++
++  const auto listed = [&](ColorFormat candidate)
++  {
++    const char* name = COLOR_FORMAT_NAMES[static_cast<size_t>(candidate)];
++    return connector->GetPropertyEnumValue(COLOR_FORMAT, name).has_value();
++  };
++
++  // Adaptive only ever asks for the subsampled formats
++  if (format == ColorFormat::ADAPTIVE)
++    return listed(ColorFormat::YUV422) || listed(ColorFormat::YUV420);
++
++  return format == ColorFormat::AUTO || listed(format);
++}
++
++ColorFormat CWinSystemGbm::GetColorFormat() const
++{
++  const int value = m_colorFormat;
++  if (value < static_cast<int>(ColorFormat::AUTO) ||
++      value > static_cast<int>(ColorFormat::ADAPTIVE))
++    return ColorFormat::AUTO;
++
++  return static_cast<ColorFormat>(value);
++}
++
++ColorFormat CWinSystemGbm::GetRequestedColorFormat() const
++{
++  if (!std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
++    return ColorFormat::AUTO;
++
++  const auto connector = m_DRM->GetConnector();
++  if (!connector || !connector->SupportsProperty(COLOR_FORMAT))
++    return ColorFormat::AUTO;
++
++  std::vector<ColorFormat> candidates;
++  const ColorFormat format = GetColorFormat();
++  if (format == ColorFormat::ADAPTIVE)
++  {
++    if (ContentNeedsSubsampling())
++    {
++      // 4:2:2 keeps the full vertical resolution of the chroma, but only fits up to 600 MHz
++      if (m_DRM->GetModeClock() <= HDMI_MAX_TMDS_KHZ)
++        candidates.push_back(ColorFormat::YUV422);
++      candidates.push_back(ColorFormat::YUV420);
++    }
++  }
++  else if (format != ColorFormat::AUTO)
++  {
++    candidates.push_back(format);
++  }
++
++  // Only formats that the driver lists (Intel has no YCbCr 4:2:2 on HDMI), or a colorspace tag
++  // would describe the wrong encoding.
++  candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&](ColorFormat candidate)
++                                  { return !IsColorFormatOffered(candidate); }),
++                   candidates.end());
++
++  // Auto is the last resort, after the formats refused for this mode
++  candidates.push_back(ColorFormat::AUTO);
++
++  const size_t skip = static_cast<size_t>(std::max(m_colorFormatSkip, 0));
++  return candidates[std::min(skip, candidates.size() - 1)];
++}
++
++bool CWinSystemGbm::IsHdmiFrlLink() const
++{
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector)
++    return false;
++
++  // no property tells: the sink has to do FRL, and a mode above the proof clock shows that the
++  // source does too
++  return connector->GetMaxFrlRate() >= HDMI_FRL_MIN_RATE_RGB_10BIT &&
++         connector->HasModeAboveClock(HDMI_FRL_PROOF_CLOCK_KHZ);
++}
++
++bool CWinSystemGbm::ContentNeedsSubsampling() const
++{
++  if (m_contentBits <= 8 || !m_DRM)
++    return false;
++
++  // DisplayPort has the bandwidth or compresses, leave it to Auto
++  const auto connector = m_DRM->GetConnector();
++  if (!connector || connector->GetType().rfind("HDMI", 0) != 0)
++    return false;
++
++  if (IsHdmiFrlLink())
++    return false;
++
++  // RGB fits at 8 bit
++  if (const uint64_t bpc = GetEffectiveMaxBpc(); bpc != 0 && bpc < 10)
++    return false;
++
++  // 10 bit RGB needs 10/8 of the pixel clock, YCbCr 4:2:0 half of that. Subsampling only helps
++  // in between: below RGB fits, above not even 4:2:0 does, or the link is HDMI 2.1 and carries RGB.
++  const uint64_t clock = m_DRM->GetModeClock();
++
++  return clock * 5 / 4 > HDMI_MAX_TMDS_KHZ && clock * 5 / 8 <= HDMI_MAX_TMDS_KHZ;
++}
++
++bool CWinSystemGbm::IsYuvRequested() const
++{
++  if (!ConnectorPreferencesAllowed())
++  {
++    const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++    return connector && IsYuvFormat(*connector, RestoredConnectorProperty(COLOR_FORMAT));
++  }
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector) return false;
++  return IsYuvFormat(*connector, m_formatRequest.queued ?
++      std::optional<uint64_t>(m_formatRequest.target) : connector->GetPropertyValue(COLOR_FORMAT));
++}
++
++bool CWinSystemGbm::IsYuvFormatCommitted(const CDRMConnector& connector) const
++{
++  return IsYuvFormat(connector, connector.GetPropertyValue(COLOR_FORMAT));
++}
++
++bool CWinSystemGbm::IsYuvFormat(const CDRMConnector& connector,
++                               std::optional<uint64_t> current) const
++{
++  if (!current)
++    return false;
++
++  for (const ColorFormat format : {ColorFormat::YUV444, ColorFormat::YUV422, ColorFormat::YUV420})
++  {
++    const auto value = connector.GetPropertyEnumValue(
++        COLOR_FORMAT, COLOR_FORMAT_NAMES[static_cast<size_t>(format)]);
++    if (value && *value == *current)
++      return true;
++  }
++
++  return false;
++}
++
++void CWinSystemGbm::ApplyColorRangeSetting(void* userptr)
++{
++  static_cast<CWinSystemGbm*>(userptr)->ApplyConnectorProperties();
++}
++
++ColorRange CWinSystemGbm::GetColorRange() const
++{
++  const int value = m_colorRange;
++  if (value < static_cast<int>(ColorRange::AUTO) || value > static_cast<int>(ColorRange::LIMITED))
++    return ColorRange::AUTO;
++
++  return static_cast<ColorRange>(value);
++}
++
++void CWinSystemGbm::MigrateLimitedRangeSetting()
++{
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++
++  if (!settings->GetBool(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE))
++    return;
++
++  const auto rangeSetting = settings->GetSetting(SETTING_VIDEOSCREEN_COLORRANGE);
++  if (!rangeSetting)
++    return;
++
++  // cleared either way, or choosing Auto later would be undone by the next start
++  if (rangeSetting->IsDefault())
++  {
++    CLog::LogF(LOGINFO, "migrating \"use limited colour range\" to the colour range setting");
++    m_migratingColorRange = true;
++    settings->SetInt(SETTING_VIDEOSCREEN_COLORRANGE, static_cast<int>(ColorRange::LIMITED));
++    m_migratingColorRange = false;
++  }
++
++  settings->SetBool(CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE, false);
++}
++
++void CWinSystemGbm::DeferConnectorPreferences()
++{
++  m_connectorPreferencesDeferred = true;
++  m_rangeRequest.queued = m_formatRequest.queued = m_bpcRequest.queued = false;
++}
++
++void CWinSystemGbm::ApplyConnectorProperties(bool retry)
++{
++  if (!ConnectorPreferencesAllowed())
++  {
++    DeferConnectorPreferences();
++    return;
++  }
++  m_connectorPreferencesDeferred = false;
++  m_shaderColorRange = m_colorRange.load();
++  if (!retry)
++    m_connectorRetries = 0;
++
++  ApplyBroadcastRange();
++  ApplyMaxBpc();
++  ApplyColorFormat();
++  if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
++}
++
++void CWinSystemGbm::ApplyBroadcastRange()
++{
++  const char* targetName = BROADCAST_RGB_AUTOMATIC;
++  switch (GetColorRange())
++  {
++    case ColorRange::FULL:
++      targetName = BROADCAST_RGB_FULL;
++      break;
++    case ColorRange::LIMITED:
++      targetName = BROADCAST_RGB_LIMITED;
++      break;
++    case ColorRange::AUTO:
++      break;
++  }
++
++  QueueConnectorProperty(m_rangeRequest, BROADCAST_RGB, targetName);
++}
++
++bool CWinSystemGbm::QueueConnectorProperty(PropertyRequest& request,
++                                           const char* property,
++                                           const char* valueName)
++{
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector)
++    return false;
++
++  const auto target = connector->GetPropertyEnumValue(property, valueName);
++  if (!target)
++    return false;
++
++  return QueueConnectorProperty(request, property, *target, valueName);
++}
++
++bool CWinSystemGbm::QueueConnectorProperty(PropertyRequest& request,
++                                           const char* property,
++                                           uint64_t target,
++                                           std::string_view label)
++{
++  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm)
++    return false;
++
++  auto connector = drm->GetConnector();
++  if (!connector || !connector->SupportsProperty(property))
++    return false;
++
++  if (connector->IsPropertyImmutable(property).value_or(false))
++    return false;
++
++  // always queue it, to replace a pending value that is not committed yet
++  if (!drm->AddProperty(connector, property, target))
++    return false;
++
++  request.property = property;
++  request.queued = true;
++  request.target = target;
++
++  CLog::LogF(LOGDEBUG, "queued connector \"{}\" = \"{}\"", property, label);
++
++  const auto current = connector->GetPropertyValue(property);
++  if (!current || *current != target)
++  {
++    drm->RequestModeset();
++    if (std::strcmp(property, BROADCAST_RGB) == 0 || std::strcmp(property, COLOR_FORMAT) == 0)
++      drm->SetColorRangeTransition();
++  }
++
++  return true;
++}
++
++void CWinSystemGbm::ApplyMaxBpc()
++{
++  const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector || !connector->SupportsProperty(MAX_BPC))
++    return;
++
++  uint64_t value = 0;
++  const int setting = m_maxBpc;
++  const auto limits = connector->GetRangePropertyLimits(MAX_BPC);
++  if (!m_maxBpcFallback && setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
++    value = MAX_BPC_VALUES[setting];
++  else if (m_defaultMaxBpc)
++    value = *m_defaultMaxBpc; // Auto, or back to it after a refusal
++  else if (limits)
++    value = limits->second; // fallback when the initial value was unavailable
++  else
++    return; // never written, so there is nothing to put back
++
++  // the driver's limits, e.g. Intel stops at 12
++  if (limits)
++    value = std::clamp(value, limits->first, limits->second);
++
++  QueueConnectorProperty(m_bpcRequest, MAX_BPC, value, std::to_string(value));
++}
++
++void CWinSystemGbm::ApplyColorFormat()
++{
++  if (!ConnectorPreferencesAllowed())
++  {
++    DeferConnectorPreferences();
++    return;
++  }
++  const ColorFormat format = GetRequestedColorFormat();
++
++  QueueConnectorProperty(m_formatRequest, COLOR_FORMAT,
++                         COLOR_FORMAT_NAMES[static_cast<size_t>(format)]);
++
++  if (IsYuvRequested() != m_scanoutYuv)
++    ApplyColorspace();
++}
++
++bool CWinSystemGbm::IsRequestRejected(PropertyRequest& request)
++{
++  if (!request.queued)
++    return false;
++
++  request.queued = false;
++
++  const CDRMConnector* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector)
++    return false;
++
++  // a refused commit is replaced by the previous request, which may hold the same value (e.g. when
++  // switching modes), so the value alone does not tell
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  return (drm && !drm->LastPageAccepted()) || m_DRM->LastCommitFellBack() ||
++         connector->GetPropertyValue(request.property) != request.target;
++}
++
++void CWinSystemGbm::RequeueConnectorProperties()
++{
++  ApplyConnectorProperties(true);
++
++  ApplyColorspace();
++  if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++      drm && m_hdrBlob.IsValid() && drm->GetConnector() &&
++      drm->GetConnector()->SupportsProperty("HDR_OUTPUT_METADATA"))
++    drm->AddProperty(drm->GetConnector(), "HDR_OUTPUT_METADATA", m_hdrBlob.Get());
++
++  // The rejected commit took the modeset request along, and queueing only requests one when the
++  // cached value differs from the target, which it may not (same depth, other refresh rate).
++  if (m_DRM)
++    m_DRM->RequestModeset();
++}
++
++void CWinSystemGbm::RetryConnectorProperties()
++{
++  const bool bpcPending = m_bpcRequest.queued;
++  const bool rangeRejected = IsRequestRejected(m_rangeRequest);
++  const bool formatRejected = IsRequestRejected(m_formatRequest);
++  const bool bpcRejected = IsRequestRejected(m_bpcRequest);
++
++  if (!rangeRejected && !formatRejected && !bpcRejected)
++  {
++    // the requests went through, a later rejection gets its own retry
++    m_connectorRetries = 0;
++    if (m_bpcProbe && bpcPending)
++    {
++      // the default depth went through, so the chosen one was refused
++      m_bpcProbe = false;
++      CLog::LogF(LOGWARNING,
++                 "connector \"{}\" could not be committed with the chosen value, using the default",
++                 MAX_BPC);
++    }
++    return;
++  }
++
++  if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
++
++  // the default depth did not help, so it was not the cause: take the choice back
++  bool probeFailed = false;
++  if (m_bpcProbe)
++  {
++    m_bpcProbe = false;
++    m_maxBpcFallback = false;
++    probeFailed = true;
++  }
++
++  // an explicit format that the display or mode refuses is not worth a retry, likely the cause
++  const bool explicitFormat = formatRejected && GetRequestedColorFormat() != ColorFormat::AUTO;
++  const bool customBpc = bpcRejected && m_maxBpc > 0 && !m_maxBpcFallback;
++
++  // format and depth are both suspects, try the default depth first so the format is kept
++  if (explicitFormat && customBpc && !probeFailed)
++  {
++    m_bpcProbe = true;
++    m_maxBpcFallback = true;
++    m_maxBpcFailedMode = m_currentModeId;
++    m_connectorRetries = 0;
++    RequeueConnectorProperties();
++    return;
++  }
++
++  // a rejected commit drops the queued properties and the modeset request, so queue them again
++  if (!explicitFormat && m_connectorRetries++ < 1)
++  {
++    RequeueConnectorProperties();
++    return;
++  }
++
++  if (explicitFormat)
++  {
++    const ColorFormat refused = GetRequestedColorFormat();
++    m_colorFormatFailedMode = m_currentModeId;
++    ++m_colorFormatSkip;
++
++    CLog::LogF(LOGWARNING, "connector \"{}\" = \"{}\" could not be committed, using \"{}\"",
++               COLOR_FORMAT, COLOR_FORMAT_NAMES[static_cast<size_t>(refused)],
++               COLOR_FORMAT_NAMES[static_cast<size_t>(GetRequestedColorFormat())]);
++
++    m_connectorRetries = 0;
++    RequeueConnectorProperties();
++    return;
++  }
++
++  // no format left to blame, the chosen depth may be the cause
++  if (bpcRejected && m_maxBpc > 0 && !m_maxBpcFallback)
++  {
++    CLog::LogF(LOGWARNING, "connector \"{}\" = {} could not be committed, using the default",
++               MAX_BPC, m_bpcRequest.target);
++
++    m_maxBpcFallback = true;
++    m_maxBpcFailedMode = m_currentModeId;
++    m_connectorRetries = 0;
++    RequeueConnectorProperties();
++    return;
++  }
++
++  if (rangeRejected)
++    CLog::LogF(LOGWARNING, "connector \"{}\" could not be committed", m_rangeRequest.property);
++  if (formatRejected)
++    CLog::LogF(LOGWARNING, "connector \"{}\" could not be committed", m_formatRequest.property);
++  if (bpcRejected)
++    CLog::LogF(LOGWARNING, "connector \"{}\" could not be committed", m_bpcRequest.property);
++}
++
++void CWinSystemGbm::UpdateDriverLimitedRange()
++{
++  bool limited = false;
++
++  if (const CDRMConnector* connector = m_DRM ? m_DRM->GetConnector() : nullptr)
++  {
++    const auto current = connector->GetPropertyValue(BROADCAST_RGB);
++    const auto limitedValue = connector->GetPropertyEnumValue(BROADCAST_RGB, BROADCAST_RGB_LIMITED);
++    limited = current && limitedValue && *current == *limitedValue;
++
++    // the driver's RGB to YCbCr conversion is limited range
++    if (!limited)
++      limited = IsYuvFormatCommitted(*connector);
++  }
++
++  m_driverLimitedRange = limited;
++}
++
+ bool CWinSystemGbm::ResizeWindow(int newWidth, int newHeight, int newLeft, int newTop)
+ {
+   return true;
+@@ -318,6 +916,19 @@
+     CLog::Log(LOGERROR, "CWinSystemGbm::{} - failed to set DRM mode", __FUNCTION__);
+     return false;
+   }
++
++  m_currentModeId = res.strId;
++  // a refusal of a depth or format only holds for the mode it happened in
++  if ((m_maxBpcFallback || m_bpcProbe) && m_maxBpcFailedMode != m_currentModeId)
++  {
++    m_maxBpcFallback = false;
++    m_bpcProbe = false;
++  }
++  if (m_colorFormatSkip != 0 && m_colorFormatFailedMode != m_currentModeId)
++    m_colorFormatSkip = 0;
++
++  // the properties go out with the modeset, and are retried if it is rejected
++  ApplyConnectorProperties();
+ 
+   struct gbm_bo* bo = nullptr;
+ 
+@@ -434,6 +1045,7 @@
+   }
+   if (valid)
+     valid = state.Stage(*drm, restore);
++  if (valid) valid = StageTransportPreferences();
+   if (valid && restore && retainSignal)
+     valid = RequeueOutputProperties();
+   bool accepted = false;
+@@ -449,12 +1061,12 @@
+     if (off)
+     {
+       restarted = true;
+-      const bool staged = state.Stage(*drm, true) &&
++      const bool staged = state.Stage(*drm, true) && StageTransportPreferences() &&
+           (!retainSignal || RequeueOutputProperties());
+       accepted = drm->FlipPageTransactional(staged ? bo : nullptr, true);
+     }
+     else
+-      valid = state.Stage(*drm, true) && (!retainSignal || RequeueOutputProperties());
++      valid = state.Stage(*drm, true) && StageTransportPreferences() && (!retainSignal || RequeueOutputProperties());
+   }
+   if (!restarted)
+     accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore, async);
+@@ -476,6 +1088,9 @@
+     m_videoLayerBridge->Disable();
+   }
+ 
++  if (!ConnectorPreferencesAllowed())
++    DeferConnectorPreferences();
++
+   struct gbm_bo* bo = nullptr;
+ 
+   if (rendered)
+@@ -484,6 +1099,12 @@
+   }
+ 
+   m_DRM->FlipPage(bo, rendered, videoLayer, async);
++
++  if (ConnectorPreferencesAllowed())
++  {
++    UpdateDriverLimitedRange();
++    RetryConnectorProperties();
++  }
+ 
+   // !videoLayer alone cannot gate teardown: FlipPage also runs with videoLayer
+   // false during a mode switch or renderer swap. use_count reaches 1 only when
+@@ -500,10 +1121,45 @@
+   }
+ }
+ 
++bool CWinSystemGbm::OrdinaryShaderLimitedColor()
++{
++  UpdateDriverLimitedRange();
++  return !m_driverLimitedRange &&
++      m_shaderColorRange == static_cast<int>(ColorRange::LIMITED);
++}
++
+ bool CWinSystemGbm::UseLimitedColor()
+ {
+-  return CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+-      CSettings::SETTING_VIDEOSCREEN_LIMITEDRANGE);
++  // CB1 consumes the user's range in its own renderer and owns the wire conversion.
++  if (!ConnectorPreferencesAllowed())
++  {
++    if (const auto limited = TransportLimitedColor()) return *limited;
++    const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++    const auto restored = RestoredConnectorProperty(BROADCAST_RGB);
++    const auto limited = connector ?
++        connector->GetPropertyEnumValue(BROADCAST_RGB, BROADCAST_RGB_LIMITED) : std::nullopt;
++    if ((restored && limited && *restored == *limited) || IsYuvRequested())
++      return false;
++    return GetColorRange() == ColorRange::LIMITED;
++  }
++  if (m_connectorPreferencesDeferred)
++  {
++    ApplyConnectorProperties();
++    ApplyColorspace();
++  }
++  UpdateDriverLimitedRange();
++  bool driverLimited = m_driverLimitedRange;
++  if (const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++      connector && (m_rangeRequest.queued || m_formatRequest.queued))
++  {
++    const auto range = m_rangeRequest.queued ? std::optional<uint64_t>(m_rangeRequest.target) :
++        connector->GetPropertyValue(BROADCAST_RGB);
++    const auto limited = connector->GetPropertyEnumValue(BROADCAST_RGB, BROADCAST_RGB_LIMITED);
++    const auto format = m_formatRequest.queued ? std::optional<uint64_t>(m_formatRequest.target) :
++        connector->GetPropertyValue(COLOR_FORMAT);
++    driverLimited = (range && limited && *range == *limited) || IsYuvFormat(*connector, format);
++  }
++  return !driverLimited && m_shaderColorRange == static_cast<int>(ColorRange::LIMITED);
+ }
+ 
+ bool CWinSystemGbm::Hide()
+@@ -597,6 +1253,11 @@
+   if (!drm)
+     return;
+ 
++  // Adaptive follows the video: >8 bit content may need YCbCr, so evaluate when it starts or stops
++  m_contentBits = videoPicture ? videoPicture->colorBits : 0;
++  if (GetColorFormat() == ColorFormat::ADAPTIVE)
++    ApplyColorFormat();
++
+   auto connector = drm->GetConnector();
+   if (!connector || !connector->SupportsProperty("Colorspace"))
+     return;
+@@ -608,40 +1269,69 @@
+ 
+   m_colorimetry = colorimetry;
+ 
++  ApplyColorspace();
++}
++
++void CWinSystemGbm::ApplyColorspace()
++{
++  m_queuedColorspace.reset();
++  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm)
++    return;
++
++  auto connector = drm->GetConnector();
++  if (!connector || !connector->SupportsProperty("Colorspace"))
++    return;
++
++  const KODI::UTILS::Colorimetry colorimetry = m_colorimetry;
++  const bool yuv = IsYuvRequested();
++  m_scanoutYuv = yuv;
++
+   // The DRM Colorspace connector property controls what colorimetry tag the
+   // driver transmits in the HDMI AVI InfoFrame (or DisplayPort VSC SDP). The
+   // transmitted tag must match the pixel encoding actually on the wire.
+-  // Kodi scans out to an RGB primary plane (XR24/XR30/AB4H), so we must pick
+-  // an RGB-variant Colorspace. Signaling YCC while sending RGB causes most
+-  // DP-to-HDMI bridges (incl. LSPCON) to misinterpret the signal.
++  // Kodi scans out to an RGB primary plane (XR24/XR30/AB4H), which the driver sends as RGB or
++  // converts when a YCbCr "color format" is requested. Signaling YCC while sending RGB, or the
++  // opposite, causes most DP-to-HDMI bridges (incl. LSPCON) to misinterpret the signal.
+   //
+   // The CTA-861 standard (used by both HDMI and DisplayPort for colorimetry
+   // signaling) defines explicit RGB variants only for wide-gamut spaces
+   // (BT.2020_RGB, DCI-P3_RGB). BT.709 RGB and BT.601 RGB are signaled via
+   // "Default", with the sink inferring primaries from the transmitted mode
+   // (HD resolution -> BT.709, SD resolution -> BT.601).
++  //
++  // For YCbCr, wide gamut content is tagged BT2020_YCC and the rest BT709_YCC: the driver's
++  // conversion does not depend on the resolution, so "Default" could read an SD mode as BT.601.
+   KODI::UTILS::Colorimetry scanoutColorimetry;
+   switch (colorimetry)
+   {
+     case KODI::UTILS::Colorimetry::BT2020_YCC:
+     case KODI::UTILS::Colorimetry::BT2020_CYCC:
+-      scanoutColorimetry = KODI::UTILS::Colorimetry::BT2020_RGB;
++      scanoutColorimetry =
++          yuv ? KODI::UTILS::Colorimetry::BT2020_YCC : KODI::UTILS::Colorimetry::BT2020_RGB;
+       break;
+     default:
+-      // BT709_YCC, SMPTE_170M_YCC, and all other YCC variants map to Default,
+-      // which signals sRGB/BT.709 RGB (HD) or BT.601 RGB (SD) based on the
+-      // transmitted resolution.
+-      scanoutColorimetry = KODI::UTILS::Colorimetry::DEFAULT;
++      // BT709_YCC, SMPTE_170M_YCC and all other YCC variants map to Default for RGB, see above
++      scanoutColorimetry =
++          yuv ? KODI::UTILS::Colorimetry::BT709_YCC : KODI::UTILS::Colorimetry::DEFAULT;
+       break;
+   }
+ 
+   std::optional<uint64_t> colorspace =
+       connector->GetPropertyEnumValue("Colorspace", ColorimetryMap.at(scanoutColorimetry));
++  if (!colorspace && yuv)
++  {
++    // no YCC variant listed: an untagged signal is better than a wrong one
++    scanoutColorimetry = KODI::UTILS::Colorimetry::DEFAULT;
++    colorspace =
++        connector->GetPropertyEnumValue("Colorspace", ColorimetryMap.at(scanoutColorimetry));
++  }
++
+   if (colorspace)
+   {
+-    CLog::LogF(LOGDEBUG, "setting connector colorspace to {} (source {})",
++    CLog::LogF(LOGDEBUG, "setting connector colorspace to {} (source {}, {} output)",
+                KODI::UTILS::ColorimetryToString(scanoutColorimetry),
+-               KODI::UTILS::ColorimetryToString(colorimetry));
++               KODI::UTILS::ColorimetryToString(colorimetry), yuv ? "YCbCr" : "RGB");
+     drm->AddProperty(connector, "Colorspace", colorspace.value());
+     m_queuedColorspace = colorspace;
+     drm->SetActive(true);
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -9,6 +9,8 @@
+ #pragma once
+ 
+ #include "VideoLayerBridge.h"
++#include "messaging/ApplicationMessenger.h"
++#include "settings/lib/ISettingCallback.h"
+ #include "drm/DRMObject.h"
+ #include "drm/DRMUtils.h"
+ #include "threads/CriticalSection.h"
+@@ -19,6 +21,8 @@
+ #include "platform/linux/input/LibInputHandler.h"
+ 
+ #include <atomic>
++#include <optional>
++#include <string_view>
+ #include <utility>
+ 
+ #include <gbm.h>
+@@ -37,7 +41,24 @@
+ {
+ class CDVBridgeState;
+ 
+-class CWinSystemGbm : public CWinSystemBase
++enum class ColorRange
++{
++  AUTO = 0, //!< leave it to the graphics driver
++  FULL = 1, //!< output full range (0-255) and signal it
++  LIMITED = 2, //!< output limited range (16-235) and signal it
++};
++
++enum class ColorFormat
++{
++  AUTO = 0, //!< leave it to the graphics driver
++  RGB = 1,
++  YUV444 = 2,
++  YUV422 = 3,
++  YUV420 = 4,
++  ADAPTIVE = 5, //!< Auto, with YCbCr for >8 bit video when RGB does not fit the mode
++};
++
++class CWinSystemGbm : public CWinSystemBase, public ISettingCallback
+ {
+ public:
+   CWinSystemGbm();
+@@ -45,6 +66,7 @@
+ 
+   const std::string GetName() override;
+ 
++  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
+   bool InitWindowSystem() override;
+   bool DestroyWindowSystem() override;
+ 
+@@ -97,6 +119,15 @@
+   std::vector<std::string> GetConnectedOutputs() override;
+ 
+ protected:
++  virtual bool ConnectorPreferencesAllowed() const { return true; }
++  void DeferConnectorPreferences();
++  void ApplyColorspace();
++  virtual std::optional<bool> TransportLimitedColor() const { return {}; }
++  bool OrdinaryShaderLimitedColor();
++  bool RequestedLimitedColor() const { return GetColorRange() == ColorRange::LIMITED; }
++  virtual bool StageTransportPreferences() { return true; }
++  virtual std::optional<uint64_t> RestoredConnectorProperty(const char*) const { return {}; }
++  std::optional<uint64_t> DefaultMaxBpc() const { return m_defaultMaxBpc; }
+   bool RequeueOutputProperties();
+   std::optional<uint64_t> m_queuedColorspace, m_queuedHdrMetadata;
+   void OnLostDevice();
+@@ -120,6 +151,96 @@
+   std::unique_ptr<CLibInputHandler> m_libinput;
+ 
+ private:
++  static void ApplyColorRangeSetting(void* userptr);
++  static void ApplyColorFormatSetting(void* userptr);
++  static void ApplyMaxBpcSetting(void* userptr);
++  KODI::MESSAGING::ThreadMessageCallback m_colorRangeCallback{ApplyColorRangeSetting, this};
++  KODI::MESSAGING::ThreadMessageCallback m_colorFormatCallback{ApplyColorFormatSetting, this};
++  KODI::MESSAGING::ThreadMessageCallback m_maxBpcCallback{ApplyMaxBpcSetting, this};
++
++  struct PropertyRequest
++  {
++    const char* property{nullptr};
++    bool queued{false};
++    uint64_t target{0};
++  };
++
++  void ApplyConnectorProperties(bool retry = false);
++  void RetryConnectorProperties();
++  void RequeueConnectorProperties();
++  void ApplyBroadcastRange();
++  void ApplyColorFormat();
++  void ApplyMaxBpc();
++
++  bool QueueConnectorProperty(PropertyRequest& request,
++                              const char* property,
++                              const char* valueName);
++  bool QueueConnectorProperty(PropertyRequest& request,
++                              const char* property,
++                              uint64_t target,
++                              std::string_view label);
++  //! True if the request's commit was refused. Clears its queued flag
++  bool IsRequestRejected(PropertyRequest& request);
++
++  //! True if the connector offers the format, or if that is not known
++  bool IsColorFormatOffered(ColorFormat format) const;
++
++  ColorRange GetColorRange() const;
++  ColorFormat GetColorFormat() const;
++  //! The format to ask the driver for: the choice or Adaptive's pick, if listed and not refused
++  ColorFormat GetRequestedColorFormat() const;
++  //! The "max bpc" in effect: the choice, or what the connector has. 0 if unknown
++  uint64_t GetEffectiveMaxBpc() const;
++  //! True if the HDMI link can be driven with FRL, which carries 4K 60 Hz 10 bit RGB
++  bool IsHdmiFrlLink() const;
++  //! True if >8 bit video in the active HDMI mode does not fit as RGB, but does as YCbCr
++  bool ContentNeedsSubsampling() const;
++
++  bool IsYuvRequested() const;
++  bool IsYuvFormatCommitted(const CDRMConnector& connector) const;
++  bool IsYuvFormat(const CDRMConnector& connector, std::optional<uint64_t> current) const;
++
++  void MigrateLimitedRangeSetting();
++
++  void UpdateDriverLimitedRange();
++
++  std::atomic<int> m_colorRange{static_cast<int>(ColorRange::AUTO)};
++  std::atomic<int> m_shaderColorRange{static_cast<int>(ColorRange::AUTO)};
++
++  //! True while "Broadcast RGB" is committed as "Limited 16:235"
++  std::atomic<bool> m_driverLimitedRange{false};
++
++  bool m_migratingColorRange{false};
++
++  PropertyRequest m_rangeRequest;
++  PropertyRequest m_formatRequest;
++  PropertyRequest m_bpcRequest;
++  int m_connectorRetries{0};
++  bool m_connectorPreferencesDeferred{false};
++
++  std::atomic<int> m_colorFormat{static_cast<int>(ColorFormat::AUTO)};
++
++  //! Index into the "Maximum bit depth" options, 0 is Auto
++  std::atomic<int> m_maxBpc{0};
++  //! The driver refused the chosen "max bpc", so the default is used
++  bool m_maxBpcFallback{false};
++  //! The mode that refused the chosen depth, the fallback only holds there
++  std::string m_maxBpcFailedMode;
++  //! The default depth is being tried, to see whether the chosen one was refused
++  bool m_bpcProbe{false};
++  //! The "max bpc" the connector had before Kodi wrote to it
++  std::optional<uint64_t> m_defaultMaxBpc;
++
++  //! Bits per component of the video that is playing, 0 when there is none
++  std::atomic<int> m_contentBits{0};
++
++  //! How many formats the driver refused for m_colorFormatFailedMode, they are skipped there
++  int m_colorFormatSkip{0};
++  std::string m_colorFormatFailedMode;
++  std::string m_currentModeId;
++
++  //! Whether the "Colorspace" tag was last set for a YCbCr output
++  bool m_scanoutYuv{false};
+   // Claim no 3D display formats until an entire DRM mode enumeration proves them.
+   std::atomic<uint32_t> m_bluray3DDisplayCapabilities{0};
+   CDRMPropertyBlob m_hdrBlob;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
+@@ -9,6 +9,7 @@
+ #include "WinSystemGbmGLContext.h"
+ 
+ #include "OptionalsReg.h"
++#include "ServiceBroker.h"
+ #include "cores/RetroPlayer/process/gbm/RPProcessInfoGbm.h"
+ #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererDMAOpenGL.h"
+ #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererFBO.h"
+@@ -17,6 +18,8 @@
+ #include "cores/VideoPlayer/Process/gbm/ProcessInfoGBM.h"
+ #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h"
+ #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
+ #include "rendering/gl/GuiCompositeShaderGL.h"
+ #include "rendering/gl/ScreenshotSurfaceGL.h"
+ #include "utils/BufferObjectFactory.h"
+@@ -212,6 +215,7 @@
+ 
+ bool CWinSystemGbmGLContext::SetGuiCompositing(int colorTransfer)
+ {
++  m_guiColorTransfer = colorTransfer;
+   // TODO: add CreateLUTs(colorTransfer) support to GL composite shader to match
+   // GLES (WinSystemGbmGLESContext). Currently GL only handles PQ via pow shader;
+   // HLG and LUT-based PQ are not yet implemented.
+@@ -222,7 +226,8 @@
+     if (!m_compositeShader)
+     {
+       std::string defines;
+-      if (UseLimitedColor())
++      m_compositeShaderLimited = UseLimitedColor();
++      if (m_compositeShaderLimited)
+         defines += "#define KODI_LIMITED_RANGE 1\n";
+       m_compositeShader = std::make_unique<CGuiCompositeShaderGL>(defines);
+       if (!m_compositeShader->CompileAndLink())
+@@ -248,6 +253,17 @@
+ {
+   if (!m_guiCompositing)
+     return false;
++
++  // the range is a compile time define, rebuild the shader when it changes
++  if (m_compositeShader && m_compositeShaderLimited != UseLimitedColor())
++  {
++    m_compositeShader.reset();
++    if (!SetGuiCompositing(m_guiColorTransfer))
++      return false;
++    // a skipped GUI walk would leave the GUI plane with the old range
++    if (!guiWillRender)
++      CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++  }
+ 
+   m_guiWillRender = guiWillRender;
+ 
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLContext.h b/xbmc/windowing/gbm/WinSystemGbmGLContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLContext.h
+@@ -55,6 +55,8 @@
+ 
+ private:
+   bool m_guiCompositing{false};
++  int m_guiColorTransfer{0};
++  bool m_compositeShaderLimited{false};
+   CFrameBufferObject m_guiFbo;
+   int m_guiFboWidth{0};
+   int m_guiFboHeight{0};
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -17,6 +17,7 @@
+ #endif
+ 
+ #include "OptionalsReg.h"
++#include "ServiceBroker.h"
+ #include "cores/RetroPlayer/process/gbm/RPProcessInfoGbm.h"
+ #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererDMAOpenGLES.h"
+ #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererFBO.h"
+@@ -28,6 +29,8 @@
+ #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.h"
+ #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h"
+ #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
+ #include "rendering/gles/GuiCompositeShaderGLES.h"
+ #include "rendering/gles/ScreenshotSurfaceGLES.h"
+ 
+@@ -143,7 +146,8 @@
+   if (m_dvContext && m_dvContext->GL())
+   {
+     m_nativeDVRetirement = std::move(m_dvContext);
+-    m_nativeDVProperties = std::make_shared<CDVBridgeState>(std::move(m_dvState));
++    m_nativeDVProperties = std::make_shared<std::pair<CDVBridgeState, CDVBridgeState>>(
++        std::move(m_dvState), std::move(m_cb1ConnectorState));
+   }
+ #endif
+ }
+@@ -437,11 +441,29 @@
+     return;
+   }
+   // An ordinary restoration must present before stop can stage its successor.
+-  if (m_dvStopPending && !m_dvOrdinaryFrame && !StopDVBridgePlayback()) return;
+-  if (m_dvEndPending && !EndDVBridge()) return;
+-  if (m_failedHDR10SetupRestore && !HasPendingDVOutputSurface() && !EndDVBridge())
++  if (m_dvStopPending && !m_dvOrdinaryFrame)
++  {
++    if (!StopDVBridgePlayback()) return;
++    if (m_dvOrdinaryFrame)
++    {
++      CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++      return;
++    }
++  }
++  if (m_dvEndPending)
++  {
++    if (!EndDVBridge()) return;
++    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
+     return;
++  }
+   if (!PollRejectedDVSurface()) return;
++  if (m_failedHDR10SetupRestore || m_dvRecoveryPending)
++  {
++    if (m_failedHDR10SetupRestore && !HasPendingDVOutputSurface() && !EndDVBridge()) return;
++    if (m_dvRecoveryPending && !RecoverDVActivation()) return;
++    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++    return;
++  }
+   if (m_dvOrdinaryFrame)
+   {
+     if (!rendered || !m_eglContext.TrySwapBuffers()) return;
+@@ -465,6 +487,7 @@
+     PublishVideoSource(true, m_videoSourceSideData);
+     surface.EndTransactionalMode();
+     m_dvState.Restored(); m_hdrDeepColorPrevious.reset();
++    CompleteCB1ConnectorRestore();
+     m_dvOrdinaryFrame = false;
+     m_dvStopPending = false;
+     m_hdr10Session.reset(); m_hdr10BasicSignal.reset(); m_hdr10Signal.reset();
+@@ -476,7 +499,7 @@
+   }
+   if (m_hdrConversion)
+   {
+-    if (!m_dvFrame) return;
++    if (!m_dvFrame || !StageCB1ConnectorPreferences(false)) return;
+     bool presented = false;
+     CDVBridgeGLES::Submission submitted;
+     if (m_dvFrame && m_dvBridge && m_dvBridge->ResolveHDR10(UseLimitedColor()))
+@@ -769,6 +792,7 @@
+ bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
+ {
+   m_guiCacheValid = false;
++  m_guiColorTransfer = colorTransfer;
+   m_guiCompositing = (colorTransfer != 0);
+ 
+   if (m_guiCompositing)
+@@ -776,11 +800,12 @@
+     if (!m_compositeShader)
+     {
+       std::string defines;
+-      if (UseLimitedColor()
++      m_compositeShaderLimited = UseLimitedColor()
+ #ifdef HAVE_DVBRIDGE
+           && !m_dvState.Captured() && !m_hdrConversion
+ #endif
+-          )
++          ;
++      if (m_compositeShaderLimited)
+         defines += "#define KODI_LIMITED_RANGE 1\n";
+       m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
+       if (!m_compositeShader->CompileAndLink())
+@@ -880,6 +905,22 @@
+ #endif
+   if (!m_guiCompositing)
+     return false;
++
++  // the range is a compile time define, rebuild the shader when it changes
++  const bool limited = UseLimitedColor()
++#ifdef HAVE_DVBRIDGE
++      && !m_dvState.Captured() && !m_hdrConversion
++#endif
++      ;
++  if (m_compositeShader && m_compositeShaderLimited != limited)
++  {
++    m_compositeShader.reset();
++    if (!SetGuiCompositing(m_guiColorTransfer))
++      return false;
++    // a skipped GUI walk would leave the GUI plane with the old range
++    if (!guiWillRender)
++      CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++  }
+ 
+   m_guiWillRender = guiWillRender;
+ 
+@@ -1772,6 +1813,7 @@
+     output.lightMetadata.MaxCLL = metadata.max_cll;
+     output.lightMetadata.MaxFALL = metadata.max_fall;
+   }
++  if (!CaptureCB1ConnectorPreferences()) return false;
+   // Every rejected setup after this point must restore ordinary HDR/color state.
+   m_failedHDR10SetupRestore = true;
+   SetColorimetry(&output);
+@@ -1831,11 +1873,12 @@
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   if (!drm)
+     return false;
+-  if (!StageOrdinaryHDR10Recovery())
++  if (!StageCB1ConnectorPreferences(true) || !StageOrdinaryHDR10Recovery())
+   {
+     drm->FlipPageTransactional(nullptr, true);
+     return false;
+   }
++  SetColorimetry(nullptr);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+   glDisable(GL_SCISSOR_TEST);
+   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+@@ -1855,8 +1898,67 @@
+     return false;
+   surface.EndTransactionalMode();
+   CompleteOrdinaryHDR10Recovery();
++  CompleteCB1ConnectorRestore();
+   m_failedHDR10SetupRestore = false;
+   return true;
++}
++
++bool CWinSystemGbmGLESContext::ConnectorPreferencesAllowed() const
++{
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  return !HasPendingDVBridgeRestore() && !m_dvOutputSurface && !HasPendingDVOutputSurface() &&
++      !m_nativeDVProperties && !m_cb1ConnectorState.Captured() &&
++      !m_dvOrdinaryFrame && !m_dvEndPending &&
++      (!drm || !drm->HasPendingCB1Page());
++}
++
++bool CWinSystemGbmGLESContext::CaptureCB1ConnectorPreferences()
++{
++  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm || !m_cb1ConnectorState.CaptureColorPreferences(*drm, DefaultMaxBpc()))
++    return false;
++  if (!m_cb1LimitedRange)
++  {
++    m_cb1LimitedRange = RequestedLimitedColor();
++    m_cb1OrdinaryLimitedRange = OrdinaryShaderLimitedColor();
++  }
++  return true;
++}
++
++std::optional<bool> CWinSystemGbmGLESContext::TransportLimitedColor() const
++{
++  return m_cb1RestoringPreferences ? m_cb1OrdinaryLimitedRange : m_cb1LimitedRange;
++}
++
++bool CWinSystemGbmGLESContext::StageCB1ConnectorPreferences(bool restore)
++{
++  m_cb1RestoringPreferences = restore;
++  if (!m_cb1ConnectorState.Captured()) return true;
++  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  return drm && m_cb1ConnectorState.Stage(*drm, restore);
++}
++
++bool CWinSystemGbmGLESContext::StageTransportPreferences()
++{
++  if (!m_cb1RestoringPreferences && m_dvState.Captured() && !m_hdrConversion)
++    return true;
++  if (!StageCB1ConnectorPreferences(m_cb1RestoringPreferences)) return false;
++  if (m_cb1RestoringPreferences) ApplyColorspace();
++  return true;
++}
++
++std::optional<uint64_t> CWinSystemGbmGLESContext::RestoredConnectorProperty(const char* name) const
++{
++  return m_cb1RestoringPreferences ? m_cb1ConnectorState.Before(name) : std::nullopt;
++}
++
++void CWinSystemGbmGLESContext::CompleteCB1ConnectorRestore()
++{
++  m_cb1ConnectorState.Restored();
++  m_cb1RestoringPreferences = false;
++  m_cb1LimitedRange.reset();
++  m_cb1OrdinaryLimitedRange.reset();
++  DeferConnectorPreferences();
+ }
+ 
+ bool CWinSystemGbmGLESContext::BeginDVBridge()
+@@ -1907,6 +2009,9 @@
+     m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
+   }
+   m_GBM->GetDevice().UseDVOutputLifetime();
++  const bool hadConnectorState = m_cb1ConnectorState.Captured();
++  if (!CaptureCB1ConnectorPreferences())
++    return failure("connector-preferences", m_cb1ConnectorState.CaptureFailure());
+   if (!hdr10 && !m_dvState.Captured())
+   {
+     const auto* display = GetDisplayInfo();
+@@ -1919,13 +2024,18 @@
+         mode && mode->vdisplay >= 2160 && rate > 30.01)
+       return failure("output-format", "sink-dv-rate");
+     if (!m_dvState.Capture(*drm, 0, sink.legacy_vsif))
++    {
++      if (!hadConnectorState) CompleteCB1ConnectorRestore();
+       return failure("drm-state-capture", m_dvState.CaptureFailure());
++    }
+     m_presentStall.Reset();
+     if (DVBRIDGE::DiagnosticsEnabled())
+       DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge TV-Led state captured: hdr_static_metadata={}",
+           drm->GetConnector()->SupportsProperty("HDR_OUTPUT_METADATA") ? "preserved" : "not-exposed");
+   }
+   m_hdrConversion = hdr10;
++  if (!StageCB1ConnectorPreferences(false)) return failure("connector-preferences");
++  DeferConnectorPreferences();
+   m_compositeShader.reset();
+   const bool ready = SetGuiCompositing(AVCOL_TRC_SMPTE2084);
+   if (ready) m_dvConfiguredOutput = m_dvSelection.policy.mode;
+@@ -2185,6 +2295,7 @@
+       (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
+           "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
+   { if (!m_dvStopPending) RejectDVOutputSurface(); return false; }
++  if (!StageCB1ConnectorPreferences(true)) return false;
+   SetColorimetry(picture);
+   const bool hdr = SetHDR(picture);
+   SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
+@@ -2808,17 +2919,19 @@
+   }
+   if (m_failedHDR10SetupRestore && !RestoreFailedHDR10Setup())
+     return false;
+-  if (m_hdrDeepColorPrevious)
++  if (m_hdrDeepColorPrevious || (m_cb1ConnectorState.Captured() && !m_dvState.Captured()))
+   {
+     auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+     if (!drm)
+       return false;
+-    if (!drm->AddProperty(drm->GetConnector(), "DVBRIDGE_HDR10_DEEP_COLOR",
+-                          *m_hdrDeepColorPrevious))
++    if (!StageCB1ConnectorPreferences(true) ||
++        (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
++            "DVBRIDGE_HDR10_DEEP_COLOR", *m_hdrDeepColorPrevious)))
+     {
+       drm->FlipPageTransactional(nullptr, true);
+       return false;
+     }
++    SetColorimetry(nullptr);
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+     glDisable(GL_SCISSOR_TEST);
+     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+@@ -2837,6 +2950,7 @@
+       return false;
+     surface.EndTransactionalMode();
+     m_hdrDeepColorPrevious.reset();
++    CompleteCB1ConnectorRestore();
+     if (DVBRIDGE::DiagnosticsEnabled())
+       DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge HDR10: native link policy restored");
+   }
+@@ -2858,6 +2972,8 @@
+     glClear(GL_COLOR_BUFFER_BIT);
+     if (!m_dvBridge || !m_dvBridge->Advanced()) glFinish();
+     AnnounceCB1Mode(false);
++    if (!StageCB1ConnectorPreferences(true)) return false;
++    SetColorimetry(nullptr);
+     const bool restored=m_eglContext.TrySwapBuffers() && FlipDVBridgePage(m_dvState, true);
+     CompleteCB1Mode(restored,false);
+     if (!restored)
+@@ -2878,6 +2994,7 @@
+   m_hdr10Signal.reset();
+   m_hdr10SessionStream = 0;
+   m_hdrConversion = false;
++  CompleteCB1ConnectorRestore();
+   if (DVBRIDGE::DiagnosticsEnabled() &&
+       m_dvSetupFailures.Recovered(DVBRIDGE::DiagnosticNowMs()))
+     DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge: normal display restored after failures={}", m_dvSetupFailures.Count());
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -158,6 +158,13 @@
+   void PresentRenderImpl(bool rendered) override {};
+   bool CreateContext() override;
+ #ifdef HAVE_DVBRIDGE
++  bool ConnectorPreferencesAllowed() const override;
++  bool StageTransportPreferences() override;
++  std::optional<bool> TransportLimitedColor() const override;
++  bool CaptureCB1ConnectorPreferences();
++  std::optional<uint64_t> RestoredConnectorProperty(const char* name) const override;
++  bool StageCB1ConnectorPreferences(bool restore);
++  void CompleteCB1ConnectorRestore();
+   int VideoOutputBitDepth(const VideoPicture* picture) const override;
+   bool RejectDVOutputSurface() override;
+ #endif
+@@ -183,6 +190,8 @@
+ #endif
+   void PresentFrame(bool rendered, bool videoLayer);
+   bool m_guiCompositing{false};
++  int m_guiColorTransfer{0};
++  bool m_compositeShaderLimited{false};
+   CFrameBufferObject m_guiFbo;
+   int m_guiFboWidth{0};
+   int m_guiFboHeight{0};
+@@ -249,6 +258,9 @@
+   uint64_t m_dvPendingStream{}, m_dvPendingPolicy{}, m_dvFailedStream{}, m_dvFailedPolicy{};
+   bool m_dvOutputRetiring{}, m_dvOrdinaryFrame{};
+   CDVBridgeState m_dvState;
++  CDVBridgeState m_cb1ConnectorState;
++  bool m_cb1RestoringPreferences{};
++  std::optional<bool> m_cb1LimitedRange, m_cb1OrdinaryLimitedRange;
+   DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
+   DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
+   bool m_dvFrame = false;
+diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+@@ -261,6 +261,8 @@
+   if (!PrepareHDR10Plus(flags, frameMetadata))
+     return reject("hdr10plus-property", EINVAL);
+ 
++  m_commitFellBack = false;
++
+   if (m_old_crtc != nullptr)
+   {
+     if (m_old_crtc->GetId() != m_crtc->GetId())
+@@ -383,7 +385,8 @@
+   if (ret < 0)
+   {
+     const int testError = errno;
+-    if (strict || m_req->sdrRestore || frameMetadata || (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
++    if (strict || m_req->sdrRestore || frameMetadata || m_colorRangeTransition ||
++        (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
+     {
+       return reject("atomic-test", testError);
+     }
+@@ -393,6 +396,8 @@
+                strerror(testError));
+     if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Record(DVNowMs(), "native-atomic-test", testError))
+       CollectDVKernelLog();
++
++    m_commitFellBack = true;
+ 
+     auto oldRequest = m_atomicRequestQueue.front().get();
+     CDRMAtomicRequest::LogAtomicDiff(m_req, oldRequest);
+@@ -456,7 +461,12 @@
+       ReportSignalState();
+ 
+     if (m_atomicRequestQueue.size() > 1)
+-      m_atomicRequestQueue.pop_front();
++    {
++      if (m_commitFellBack)
++        m_atomicRequestQueue.pop_back();
++      else
++        m_atomicRequestQueue.pop_front();
++    }
+   }
+   else if (!m_atomicRequestQueue.empty())
+     m_atomicRequestQueue.pop_back();
+@@ -470,6 +480,7 @@
+   m_atomicRequestQueue.emplace_back(std::make_unique<CDRMAtomicRequest>());
+   m_req = m_atomicRequestQueue.back().get();
+   m_propertyFailure = false;
++  m_colorRangeTransition = false;
+   m_signalDirty = false;
+ }
+ 
+@@ -658,6 +669,7 @@
+ void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
+ {
+   ResetCB1PresentationTime();
++  m_commitFellBack = false;
+   m_lastPageAccepted=false;
+   struct drm_fb* drm_fb = nullptr;
+   uint32_t flags = 0;
+@@ -807,7 +819,8 @@
+   if (added && DVBRIDGE::DiagnosticsEnabled() &&
+       (strcmp(name, "MODE_ID") == 0 || strcmp(name, "ACTIVE") == 0 ||
+        strcmp(name, "DVBRIDGE_DV_STANDARD_LAB") == 0 || strcmp(name, "HDR_OUTPUT_METADATA") == 0 ||
+-       strcmp(name, "Colorspace") == 0 || strcmp(name, "max bpc") == 0 ||
++       strcmp(name, "Colorspace") == 0 || strcmp(name, "color format") == 0 ||
++       strcmp(name, "max bpc") == 0 ||
+        strcmp(name, "Broadcast RGB") == 0 || strcmp(name, "NV_HDMI_VSIF_METADATA") == 0 ||
+        strcmp(name, "dithering mode") == 0))
+     m_signalDirty = true;
+@@ -828,25 +841,28 @@
+   const auto color = get(m_connector, "Colorspace");
+   const auto bpc = get(m_connector, "max bpc");
+   const auto rgb = get(m_connector, "Broadcast RGB");
++  const auto format = get(m_connector, "color format");
+   const auto active = get(m_crtc, "ACTIVE");
+   const auto nv = get(m_connector, "NV_HDMI_VSIF_METADATA");
+   const auto dither = get(m_connector, "dithering mode");
+   const auto& mode = m_committedMode;
+-  const std::array<uint64_t, 25> state{m_connector ? m_connector->GetId() : 0,
++  const std::array<uint64_t, 27> state{m_connector ? m_connector->GetId() : 0,
+       m_crtc ? m_crtc->GetId() : 0, dv.value.value_or(0), hdr.value.value_or(0),
+       color.value.value_or(0), bpc.value.value_or(0), rgb.value.value_or(0),
+       mode.hdisplay, mode.vdisplay, mode.clock, mode.htotal, mode.vtotal, mode.flags,
+       mode.vscan, active.value.value_or(0), dv.Code(),hdr.Code(),color.Code(),bpc.Code(),rgb.Code(),active.Code(),
+-      nv.value.value_or(0),nv.Code(),dither.value.value_or(0),dither.Code()};
++      nv.value.value_or(0),nv.Code(),dither.value.value_or(0),dither.Code(),
++      format.value.value_or(0),format.Code()};
+   if (m_signalKnown && state == m_signalState)
+     return;
+   const auto error = m_connector ? m_connector->PropertyInventoryError() : std::nullopt;
+   if (DVBRIDGE::DiagnosticLog(LOGINFO,
+-      "DVBridge signal: origin=accepted-commit-cache connector={} crtc={} dv_property={} dv_value={} hdr_property={} hdr_value={} colorspace_property={} colorspace_value={} max_bpc_property={} max_bpc_ceiling={} rgb_property={} rgb_value={} active_property={} active_value={} mode={}x{} clock_khz={} inventory_error={} nv_vsif_property={} nv_vsif_value={} dither_property={} dither_value={}",
++      "DVBridge signal: origin=accepted-commit-cache connector={} crtc={} dv_property={} dv_value={} hdr_property={} hdr_value={} colorspace_property={} colorspace_value={} max_bpc_property={} max_bpc_ceiling={} rgb_property={} rgb_value={} active_property={} active_value={} mode={}x{} clock_khz={} inventory_error={} nv_vsif_property={} nv_vsif_value={} dither_property={} dither_value={} color_format_property={} color_format_value={}",
+       state[0], state[1], dv.Presence(),dv.Value(),hdr.Presence(),hdr.Value(),
+       color.Presence(),color.Value(),bpc.Presence(),bpc.Value(),rgb.Presence(),rgb.Value(),
+       active.Presence(),active.Value(),mode.hdisplay,mode.vdisplay,mode.clock,
+-      error ? std::to_string(*error) : "unavailable",nv.Presence(),nv.Value(),dither.Presence(),dither.Value()))
++      error ? std::to_string(*error) : "unavailable",nv.Presence(),nv.Value(),dither.Presence(),dither.Value(),
++      format.Presence(),format.Value()))
+   {
+     m_signalKnown = true;
+     m_signalState = state;
+@@ -932,6 +948,7 @@
+       const auto name = object.first->GetPropertyName(property.first);
+       if (name != "DVBRIDGE_DV_STANDARD_LAB" && name != "HDR_OUTPUT_METADATA" &&
+           name != "max bpc" && name != "Broadcast RGB" && name != "Colorspace" &&
++          name != "color format" &&
+           name != "CRTC_ID" && name != "ACTIVE" && name != "VRR_ENABLED" &&
+           name != "CTM" && name != "GAMMA_LUT" && name != "DEGAMMA_LUT" &&
+           name != "rotation" && name != "alpha" && name != "COLOR_PIPELINE" &&
+diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.h
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
+@@ -32,6 +32,7 @@
+   CDRMAtomic() = default;
+   ~CDRMAtomic() override;
+   void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
++  void SetColorRangeTransition() { m_colorRangeTransition = true; }
+   bool LastPageAccepted() const { return m_lastPageAccepted; }
+   bool IsSDRRestorePending() const { return m_sdrRestorePending; }
+   void SetSDRRestorePending(bool pending)
+@@ -51,6 +52,8 @@
+   bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
+   bool SetActive(bool active) override;
+   bool IsActive() const { return m_active; }
++  void RequestModeset() override { m_need_modeset = true; }
++  bool LastCommitFellBack() const override { return m_commitFellBack; }
+   void AllowModeset() { m_need_modeset = true; }
+   bool InitDrm() override;
+   void DestroyDrm() override;
+@@ -105,7 +108,7 @@
+   void ReportDVCommit(const char* stage) noexcept;
+   void ReportSignalState() noexcept;
+   bool m_signalDirty{false}, m_signalKnown{false};
+-  std::array<uint64_t, 25> m_signalState{};
++  std::array<uint64_t, 27> m_signalState{};
+   drmModeModeInfo m_committedMode{};
+   DVBRIDGE::DiagnosticFailures m_dvFailures;
+   bool m_dvCommitReported{}, m_dvLastCommitRestore{};
+@@ -114,6 +117,8 @@
+   uint32_t m_dvSnapshotConnector{0};
+ 
+   bool m_need_modeset{true};
++  bool m_commitFellBack{false};
++  bool m_colorRangeTransition{false};
+   bool m_cb1Pending{}, m_cb1Uncertain{};
+   int m_cb1OutFence{-1};
+   uint64_t m_cb1CompletedNs{};
+diff --git a/xbmc/windowing/gbm/drm/DRMConnector.cpp b/xbmc/windowing/gbm/drm/DRMConnector.cpp
+--- a/xbmc/windowing/gbm/drm/DRMConnector.cpp
++++ b/xbmc/windowing/gbm/drm/DRMConnector.cpp
+@@ -99,6 +99,52 @@
+   return GetType() + "-" + std::to_string(m_connector->connector_type_id);
+ }
+ 
++namespace
++{
++constexpr size_t EDID_BLOCK_SIZE = 128;
++constexpr uint8_t CTA_EXTENSION_TAG = 0x02;
++constexpr uint8_t CTA_DB_VENDOR_SPECIFIC = 3;
++constexpr uint8_t CTA_DB_EXTENDED = 7;
++constexpr uint8_t CTA_EXT_DB_HF_SCDB = 0x79;
++
++int ParseMaxFrlRate(const std::vector<uint8_t>& edid)
++{
++  for (size_t block = EDID_BLOCK_SIZE; block + EDID_BLOCK_SIZE <= edid.size();
++       block += EDID_BLOCK_SIZE)
++  {
++    const uint8_t* ext = &edid[block];
++    if (ext[0] != CTA_EXTENSION_TAG)
++      continue;
++
++    // the data blocks run from byte 4 up to the first detailed timing descriptor, 0 means none
++    const size_t end = std::min<size_t>(ext[2], EDID_BLOCK_SIZE);
++    for (size_t pos = 4; pos < end;)
++    {
++      const uint8_t tag = ext[pos] >> 5;
++      const size_t length = ext[pos] & 0x1f;
++      if (pos + 1 + length > end)
++        break;
++
++      const uint8_t* db = &ext[pos];
++
++      // The HDMI Forum vendor block (OUI C4-5D-D8) and the HF-SCDB extended block share their
++      // layout: Max_FRL_Rate is the upper four bits of byte 7, as in the kernel.
++      const bool forumVendor = tag == CTA_DB_VENDOR_SPECIFIC && length >= 7 && db[1] == 0xd8 &&
++                               db[2] == 0x5d && db[3] == 0xc4;
++      const bool forumExtended =
++          tag == CTA_DB_EXTENDED && length >= 7 && db[1] == CTA_EXT_DB_HF_SCDB;
++
++      if (forumVendor || forumExtended)
++        return (db[7] & 0xf0) >> 4;
++
++      pos += 1 + length;
++    }
++  }
++
++  return 0;
++}
++} // namespace
++
+ std::vector<uint8_t> CDRMConnector::GetEDID(bool refresh) const
+ {
+ 
+@@ -139,3 +185,19 @@
+ 
+   return edid;
+ }
++
++int CDRMConnector::GetMaxFrlRate() const
++{
++  return ParseMaxFrlRate(GetEDID());
++}
++
++bool CDRMConnector::HasModeAboveClock(uint32_t clockKHz) const
++{
++  for (int i = 0; i < m_connector->count_modes; i++)
++  {
++    if (m_connector->modes[i].clock > clockKHz)
++      return true;
++  }
++
++  return false;
++}
+diff --git a/xbmc/windowing/gbm/drm/DRMConnector.h b/xbmc/windowing/gbm/drm/DRMConnector.h
+--- a/xbmc/windowing/gbm/drm/DRMConnector.h
++++ b/xbmc/windowing/gbm/drm/DRMConnector.h
+@@ -41,6 +41,15 @@
+ 
+   std::vector<uint8_t> GetEDID(bool refresh = false) const;
+ 
++  /*!
++   * \brief Max_FRL_Rate of the sink from the HDMI Forum block of the EDID, 0 if it does no FRL.
++   *        1 is 3 Gbit/s x 3 lanes, 2 is 6x3, 3 is 6x4, 4 is 8x4, 5 is 10x4 and 6 is 12x4
++   */
++  int GetMaxFrlRate() const;
++
++  //! True if the connector has a mode with a pixel clock above the given one, in kHz
++  bool HasModeAboveClock(uint32_t clockKHz) const;
++
+ private:
+   struct DrmModeConnectorDeleter
+   {
+diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils.h
+--- a/xbmc/windowing/gbm/drm/DRMUtils.h
++++ b/xbmc/windowing/gbm/drm/DRMUtils.h
+@@ -27,6 +27,10 @@
+ {
+ namespace GBM
+ {
++constexpr const char* SETTING_VIDEOSCREEN_COLORRANGE = "videoscreen.colorrange";
++constexpr const char* SETTING_VIDEOSCREEN_COLORFORMAT = "videoscreen.colorformat";
++constexpr const char* SETTING_VIDEOSCREEN_MAXBPC = "videoscreen.maxbpc";
++
+ // https://github.com/torvalds/linux/blob/7d0a66e4bb9081d75c82ec4957c50034cb0ea449/drivers/
+ // gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c#L683-L692
+ //
+@@ -60,6 +64,9 @@
+   virtual void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) {}
+   virtual bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) { return false; }
+   virtual bool SetActive(bool active) { return false; }
++  virtual void RequestModeset() {}
++  //! True if the last commit was refused and the previous request was committed instead
++  virtual bool LastCommitFellBack() const { return false; }
+   virtual bool InitDrm();
+   virtual void DestroyDrm();
+   virtual bool SupportsFencing() { return false; }
+@@ -71,6 +78,7 @@
+   CDRMPlane* GetGuiPlane() const { return m_gui_plane; }
+   CDRMCrtc* GetCrtc() const { return m_crtc; }
+   CDRMConnector* GetConnector() const { return m_connector; }
++  uint32_t GetModeClock() const { return m_mode ? m_mode->clock : 0; }
+   const drmModeModeInfo* GetSelectedMode() const { return m_mode; }
+   const drmModeModeInfo* GetDVTransportMode() const;
+   std::vector<outputformat>& GetOutputFormats() { return m_output_formats; }
+diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -136,6 +136,8 @@
+                 setting.required,setting.blob,setting.enumeration))
+         return false;
+   }
++  if (!Read(drm,changes,connector,"color format",0,false,false,"RGB"))
++    return false;
+   const Setting neutral[] = {
+     {crtc,"CTM",0,false,true},{crtc,"GAMMA_LUT",0,false,true},
+     {crtc,"DEGAMMA_LUT",0,false,true},{crtc,"VRR_ENABLED",0,false,false},
+@@ -170,6 +172,31 @@
+   return true;
+ }
+ 
++bool CDVBridgeState::CaptureColorPreferences(CDRMAtomic& drm,
++                                              std::optional<uint64_t> defaultMaxBpc)
++{
++  if (Captured()) return m_owner == &drm;
++  auto* connector = drm.GetConnector();
++  if (!connector) return Reject("connector");
++  std::vector<Change> changes;
++  if (!Read(drm,changes,connector,"Broadcast RGB",0,false,false,"Full") ||
++      !Read(drm,changes,connector,"color format",0,false,false,"RGB") ||
++      !Read(drm,changes,connector,"max bpc",
++            defaultMaxBpc.value_or(connector->GetPropertyValue("max bpc").value_or(0)),
++            false,false,nullptr))
++    return false;
++  m_changes = std::move(changes);
++  m_owner = &drm;
++  return true;
++}
++
++std::optional<uint64_t> CDVBridgeState::Before(const char* name) const
++{
++  for (const auto& change : m_changes)
++    if (change.name == name) return change.before;
++  return std::nullopt;
++}
++
+ bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore)
+ {
+   if (!Captured() || m_owner != &drm || m_changes.front().object != drm.GetConnector())
+diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.h b/xbmc/windowing/gbm/drm/DVBridgeState.h
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.h
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.h
+@@ -15,6 +15,8 @@
+   enum class Backend { NONE, KERNEL, NVIDIA };
+   static Backend GetBackend(CDRMConnector&);
+   bool Capture(CDRMAtomic&, uint64_t ownVsif = 0, bool legacyVsif = false);
++  bool CaptureColorPreferences(CDRMAtomic&, std::optional<uint64_t> defaultMaxBpc);
++  std::optional<uint64_t> Before(const char* name) const;
+   bool Stage(CDRMAtomic&, bool restore);
+   void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
+   bool Captured() const { return !m_changes.empty(); }

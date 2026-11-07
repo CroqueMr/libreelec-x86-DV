@@ -32,6 +32,7 @@ struct CWinSystemGbmGLESContext {
    (p->color_transfer==AVCOL_TRC_SMPTE2084 || p->color_transfer==AVCOL_TRC_ARIB_STD_B67);}
  void SetGuiCompositing(int transfer){gui=transfer;}
  bool RejectDVOutputSurface(){return false;}
+ bool StageCB1ConnectorPreferences(bool){return true;}
  bool StageOrdinaryDVOutput(const VideoPicture* picture);
 };
 bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture) BODY
