@@ -1072,5 +1072,69 @@
       "src/gbm-display.c": "Hadesfaff2fe8: null attributes, output count, allocation bounds and error result; retain original NVIDIA MIT notice and Hades GPL2-or-later provenance.",
       "src/gbm-platform.c": "Validate display before access and return the pbuffer hook reference on every path."
     }
+  },
+  "projects/Generic/patches/linux/linux-9950-01-wcl-single-scaler.patch": {
+    "summary": "WCL has one scaler per pipe",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_display_device.c": "WCL has one scaler per pipe."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-02-wcl-disable-joiner.patch": {
+    "summary": "Reject unsupported WCL DP pipe joining",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_dp.c": "Reject unsupported WCL DP pipe joining."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-03-cdclk-pipe-mask.patch": {
+    "summary": "Prerequisite: explicit CD2X pipe-select mask helper",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_cdclk.c": "Prerequisite: explicit CD2X pipe-select mask helper."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-04-ptl-cdclk-probe.patch": {
+    "summary": "Do not sanitize absent PTL+ CD2X pipe-select fields",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_cdclk.c": "Do not sanitize absent PTL+ CD2X pipe-select fields."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-05-gmbus-fw-access.patch": {
+    "summary": "Prerequisite: forcewake register access and posting-read helper under GMBUS mutex",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_de.h": "Prerequisite: forcewake register access and posting-read helper under GMBUS mutex.",
+      "drivers/gpu/drm/i915/display/intel_gmbus.c": "Prerequisite: forcewake register access and posting-read helper under GMBUS mutex."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-06-gmbus-read-only-sampling.patch": {
+    "summary": "Prerequisite: I2C input sampling must not change pin direction",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_gmbus.c": "Prerequisite: I2C input sampling must not change pin direction."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-07-gmbus-pullup-preservation.patch": {
+    "summary": "Prerequisite: preserve gen2/3 firmware pullup state",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_gmbus.c": "Prerequisite: preserve gen2/3 firmware pullup state."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-08-gmbus-clock-gating-order.patch": {
+    "summary": "Prerequisite: keep PNV gating outside GPIO register access",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_gmbus.c": "Prerequisite: keep PNV gating outside GPIO register access."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9950-09-ptl-gmbus-mask-bits.patch": {
+    "summary": "Keep write-only masks set and preserve sibling GPIO direction/output state",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_gmbus.c": "Keep write-only masks set and preserve sibling GPIO direction/output state."
+    }
   }
 }
