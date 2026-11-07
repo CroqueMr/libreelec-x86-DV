@@ -51,6 +51,7 @@ class MatroskaDualTrack(unittest.TestCase):
         program=r'''
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <climits>
 #include <cassert>
 extern "C" {
@@ -69,6 +70,7 @@ struct CDemuxStream {int index;};
 struct CDVDDemuxFFmpeg {
   AVFormatContext* m_pFormatContext{};bool m_bMatroska{true};Input input;Input* m_pInput{&input};
   std::unique_ptr<CBlurayDovi> m_blurayDovi;int m_blurayBase{-1},m_blurayEnhancement{-1};
+  DemuxPacket::DoviLayerTimes m_blurayTiming;uint64_t m_blurayEpoch{};
   unsigned m_doviGroups=0;
   bool m_blurayAwaitBase=false;
   struct AVCodecParametersDeleter {void operator()(AVCodecParameters* p)const{avcodec_parameters_free(&p);}};

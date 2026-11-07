@@ -1,5 +1,7 @@
 # LibreELEC with Dolby Vision, HDR10+ and AMD 3D support
 
+> This branch prepares **R1.0.0 RC4 Preview** as a draft. [Preview notes](docs/cb1/RELEASE-RC4-PREVIEW.md) describe included fixes, tests and remaining hardware checks.
+
 Dolby Vision playback and HDR10/HDR10+ output in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Supported Intel, AMD and NVIDIA
 GPU families are listed below. One Generic image includes both NVIDIA driver branches.

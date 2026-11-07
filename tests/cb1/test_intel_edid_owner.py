@@ -33,7 +33,8 @@ struct i2c_adapter {int unused;}; struct ref_tracker {int unused;};
 struct intel_display {int version;void *drm;bool enabled,access,port;};
 struct intel_encoder {int unused;};
 struct intel_hdmi {struct{int type,max_tmds_clock;}dp_dual_mode;void *cec_notifier;};
-struct drm_connector {int status;struct i2c_adapter *ddc;
+enum drm_connector_force {DRM_FORCE_UNSPECIFIED,DRM_FORCE_OFF,DRM_FORCE_ON,DRM_FORCE_ON_DIGITAL};
+struct drm_connector {int status;enum drm_connector_force force;struct i2c_adapter *ddc;
  struct{struct{int id;}base;const char *name;}base;
  struct{int source_physical_address;}display_info;};
 struct intel_connector {struct drm_connector base;struct intel_display *display;
@@ -49,13 +50,13 @@ static struct{struct intel_encoder base;}port;
 #define DRM_DP_DUAL_MODE_NONE 0
 #define POWER_DOMAIN_GMBUS 0
 #define drm_dbg_kms(...) ((void)0)
-static const struct drm_edid *next_edid;static int publication_result;
+static const struct drm_edid *next_edid;static int publication_result,ddc_reads;
 static struct ref_tracker *intel_display_power_get(struct intel_display*d,int p)
 {(void)d;(void)p;return NULL;}
 static void intel_display_power_put(struct intel_display*d,int p,struct ref_tracker*r)
 {(void)d;(void)p;(void)r;}
 static const struct drm_edid *drm_edid_read_ddc(struct drm_connector*c,struct i2c_adapter*a)
-{(void)c;(void)a;return next_edid;}
+{(void)a;ddc_reads++;return c->force==DRM_FORCE_OFF?NULL:next_edid;}
 static bool intel_gmbus_is_forced_bit(struct i2c_adapter*a){(void)a;return true;}
 static void intel_gmbus_force_bit(struct i2c_adapter*a,bool b){(void)a;(void)b;}
 static int drm_edid_connector_update(struct drm_connector*c,const struct drm_edid*e)
@@ -109,6 +110,70 @@ int main(void){
   assert(c.dv_sink_caps.status!=DV_EDID_STANDARD);
   raw[20]=128;source.size=sizeof(raw);
  }
+ /* A forced, published-connected connector must refresh EDID despite a
+  * transient low live pin. Never authorize using the old sink alone. */
+ for(int force=DRM_FORCE_ON;force<=DRM_FORCE_ON_DIGITAL;force++){
+  for(int scenario=0;scenario<7;scenario++){
+   memcpy(raw+256,saved_block,128);raw[20]=128;checksum(raw);
+   source.size=sizeof(raw);next_edid=&source;publication_result=0;
+   c.base.status=connector_status_connected;c.base.force=force;
+   display.enabled=display.access=true;display.port=false;
+   c.dv_sink_caps=dvbridge_parse_edid(raw,sizeof(raw));ddc_reads=0;
+   assert(c.dv_sink_caps.status==DV_EDID_STANDARD && c.dv_sink_caps.supports_2160p60);
+   if(scenario==1)next_edid=NULL; /* Cable absent, no old permission. */
+   if(scenario==2)publication_result=-12;
+   if(scenario==3){b[6]=0;checksum(b);} /* New sink without DV. */
+   if(scenario==4){b[4]=0xeb;b[9]=0x20;checksum(b);} /* V1, no 2160p60. */
+   if(scenario==5)source.size=128;
+   if(scenario==6){b[9]^=1;} /* Bad checksum. */
+   enum drm_connector_status status=intel_hdmi_detect(&c.base,false);
+   assert(ddc_reads>0);
+   if(scenario==0){
+    assert(status==connector_status_connected);
+    assert(c.dv_sink_caps.status==DV_EDID_STANDARD && c.dv_sink_caps.supports_2160p60);
+   }else if(scenario==4){
+    assert(c.dv_sink_caps.status==DV_EDID_STANDARD && !c.dv_sink_caps.supports_2160p60);
+   }else assert(c.dv_sink_caps.status!=DV_EDID_STANDARD);
+  }
+ }
+ /* Unforced, OFF and disabled connectors retain their strict invalidation. */
+ for(int force=DRM_FORCE_UNSPECIFIED;force<=DRM_FORCE_OFF;force++){
+  c.base.force=force;c.base.status=connector_status_connected;
+  c.dv_sink_caps.status=DV_EDID_STANDARD;ddc_reads=0;
+  display.port=false;(void)intel_hdmi_detect(&c.base,false);
+  assert(ddc_reads==0 && c.dv_sink_caps.status!=DV_EDID_STANDARD);
+ }
+ for(int force=DRM_FORCE_ON;force<=DRM_FORCE_ON_DIGITAL;force++){
+  c.base.force=force;c.base.status=connector_status_connected;
+  c.dv_sink_caps.status=DV_EDID_STANDARD;display.enabled=false;ddc_reads=0;
+  (void)intel_hdmi_detect(&c.base,false);
+  assert(ddc_reads==0 && c.dv_sink_caps.status!=DV_EDID_STANDARD);
+ }
+ /* A forced mode with no published connection is not a cached permission. */
+ for(int force=DRM_FORCE_ON;force<=DRM_FORCE_ON_DIGITAL;force++){
+  c.base.force=force;c.base.status=connector_status_disconnected;
+  c.dv_sink_caps.status=DV_EDID_STANDARD;display.enabled=true;ddc_reads=0;
+  (void)intel_hdmi_detect(&c.base,false);
+  assert(ddc_reads==0 && c.dv_sink_caps.status!=DV_EDID_STANDARD);
+ }
+ /* Fresh ON without EDID must not manufacture a supported sink. */
+ c.base.force=DRM_FORCE_ON;c.base.status=connector_status_connected;
+ c.dv_sink_caps=(struct dvbridge_sink_caps){};display.enabled=true;
+ next_edid=NULL;(void)intel_hdmi_detect(&c.base,false);
+ assert(c.dv_sink_caps.status!=DV_EDID_STANDARD);
+ /* The ordinary high-pin path recovers from all previous failures. */
+ memcpy(raw+256,saved_block,128);raw[20]=128;checksum(raw);
+ source.size=sizeof(raw);next_edid=&source;publication_result=0;
+ display.port=true;c.base.force=DRM_FORCE_UNSPECIFIED;
+ assert(intel_hdmi_detect(&c.base,false)==connector_status_connected);
+ assert(c.dv_sink_caps.status==DV_EDID_STANDARD && c.dv_sink_caps.supports_2160p60);
+ /* Old display generations still use DDC without the live-pin gate. */
+ display.version=10;display.port=false;
+ assert(intel_hdmi_detect(&c.base,false)==connector_status_connected);
+ assert(c.dv_sink_caps.status==DV_EDID_STANDARD);
+ display.version=12;display.port=true;c.base.force=DRM_FORCE_OFF;
+ (void)intel_hdmi_detect(&c.base,false);
+ assert(c.dv_sink_caps.status!=DV_EDID_STANDARD);
  c.dv_sink_caps.status=DV_EDID_STANDARD;intel_hdmi_unset_edid(&c.base);
  assert(c.dv_sink_caps.status!=DV_EDID_STANDARD && !c.detect_edid);
  assert(drm_edid_size(&source)==384 && drm_edid_size(NULL)==0);

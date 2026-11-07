@@ -22,13 +22,28 @@ unpack() {
 make_target() {
   if [ "${NVIDIA_BRANCH}" = r580 ]; then
     local public="$(get_build_dir nvidia-pascal-modeset)"
+    local archive="${SOURCES}/nvidia-pascal-modeset/nvidia-pascal-modeset-${PKG_VERSION}.tar.gz"
+    local top="open-gpu-kernel-modules-$(get_pkg_variable nvidia-pascal-modeset PKG_COMMIT)"
+    local name patched
+    # Hades' matched closed-RM/open-modeset build: reject source drift before
+    # replacing anything. Keep the closed-flavour nvidia-drm-linux.c and RM.
+    [ "$(get_pkg_version nvidia-pascal-modeset)" = "${PKG_VERSION}" ] && [ -f "${archive}" ] ||
+      die "nvidia: R580 source version/archive mismatch"
+    for name in common/inc/nvkms-kapi.h nvidia-drm/nvidia-drm-{connector.c,connector.h,drv.c,priv.h,modeset.c,encoder.c,encoder.h}; do
+      # A retried build may already contain this exact patched source.
+      patched="${public}/kernel-open/${name}"
+      [ "${name}" != common/inc/nvkms-kapi.h ] || patched="${public}/src/nvidia-modeset/kapi/interface/nvkms-kapi.h"
+      cmp -s "${patched}" "${PKG_BUILD}/kernel/${name}" && continue
+      [ -s "${PKG_BUILD}/kernel/${name}" ] &&
+        tar -xzOf "${archive}" "${top}/kernel-open/${name}" | cmp -s - "${PKG_BUILD}/kernel/${name}" ||
+        die "nvidia: R580 source mismatch: ${name}"
+    done
     # Keep RM proprietary; build the modified modeset core and DRM adapter from source.
     cp "${public}/src/nvidia-modeset/_out/Linux_x86_64/nv-modeset-kernel.o" \
        "${PKG_BUILD}/kernel/nvidia-modeset/nv-modeset-kernel.o_binary"
     cp "${public}/src/nvidia-modeset/kapi/interface/nvkms-kapi.h" \
        "${public}/src/common/inc/nvkms-cb1-vsif.h" \
        "${public}/src/common/inc/nvkms-cb1-hdr10plus.h" "${PKG_BUILD}/kernel/common/inc/"
-    local name
     for name in nvidia-drm-connector.c nvidia-drm-connector.h nvidia-drm-drv.c nvidia-drm-priv.h nvidia-drm-modeset.c nvidia-drm-encoder.c nvidia-drm-encoder.h; do
       cp "${public}/kernel-open/nvidia-drm/${name}" "${PKG_BUILD}/kernel/nvidia-drm/${name}"
     done
@@ -86,14 +101,8 @@ makeinstall_target() {
   mkdir -p ${INSTALL}/usr/share/egl/egl_external_platform.d
     cp -p 10_nvidia_wayland.json ${INSTALL}/usr/share/egl/egl_external_platform.d
 
-  # EGL-GBM
-  mkdir -p ${INSTALL}/usr/lib
-    cp -p libnvidia-egl-gbm.so.1.1.3 ${INSTALL}/usr/lib/
-    ln -sf libnvidia-egl-gbm.so.1.1.3 ${INSTALL}/usr/lib/libnvidia-egl-gbm.so.1
-    ln -sf libnvidia-egl-gbm.so.1 ${INSTALL}/usr/lib/libnvidia-egl-gbm.so
-
-  mkdir -p ${INSTALL}/usr/share/egl/egl_external_platform.d
-    cp -p 15_nvidia_gbm.json ${INSTALL}/usr/share/egl/egl_external_platform.d
+  # The source-built nvidia_egl-gbm package owns the common library and JSON.
+  # Neither selected vendor payload may replace them with installer binaries.
 
   # OpenGL / EGL
   mkdir -p ${INSTALL}/usr/lib

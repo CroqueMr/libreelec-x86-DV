@@ -584,7 +584,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "cores/FFmpeg.h"
  #include "cores/VideoPlayer/Interface/TimingConstants.h"
  #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
-@@ -23,12 +29,25 @@
+@@ -23,12 +29,28 @@
  #include "settings/Settings.h"
  #include "settings/SettingsComponent.h"
  #include "utils/CPUInfo.h"
@@ -605,12 +605,30 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +#include "dvbridge_fel.h"
 +#include <libavutil/hwcontext.h>
++#ifdef HAVE_LIBVA
++#include <libavutil/hwcontext_vaapi.h>
++#endif
 +}
 +#endif
  
  extern "C" {
  #include <libavcodec/defs.h>
-@@ -261,7 +280,10 @@
+@@ -48,6 +70,14 @@
+ #define RINT lrint
+ #endif
+ 
++#ifdef HAVE_DVBRIDGE
++namespace
++{
++char presentableDVPacket;
++char decodeOnlyDVPacket;
++}
++#endif
++
+ enum DecoderState
+ {
+   STATE_NONE,
+@@ -261,7 +291,10 @@
    // 2nd condition:
    // fix an ffmpeg issue here, it calls us with an invalid profile
    // then a 2nd call with a valid one
@@ -622,7 +640,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        (avctx->codec_id == AV_CODEC_ID_VC1 && avctx->profile == AV_PROFILE_UNKNOWN))
    {
      AVPixelFormat defaultFmt = avcodec_default_get_format(avctx, fmt);
-@@ -334,7 +356,17 @@
+@@ -334,7 +367,17 @@
    }
  
    m_hints = hints;
@@ -640,7 +658,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    const AVCodec* pCodec = nullptr;
  
-@@ -434,6 +466,44 @@
+@@ -434,6 +477,44 @@
      av_opt_set(m_pCodecContext, it->m_name.c_str(), it->m_value.c_str(), 0);
    }
  
@@ -685,7 +703,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
    {
      CLog::Log(LOGDEBUG,"CDVDVideoCodecFFmpeg::Open() Unable to open codec");
-@@ -472,11 +542,40 @@
+@@ -472,11 +553,42 @@
  
    m_dropCtrl.Reset(true);
    m_eof = false;
@@ -720,21 +738,77 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#ifdef HAVE_DVBRIDGE
 +  m_dvPending.clear();
 +  m_dvFel.reset();
++  m_dvLayerEpoch = 0;
++  m_dvVideoWindow = false;
 +  m_dvFailed = false;
 +  m_dvNativeOutput = false;
 +#endif
    av_frame_free(&m_pFrame);
    av_frame_free(&m_pDecodedFrame);
    av_frame_free(&m_pFilterFrame);
-@@ -619,6 +718,16 @@
+@@ -585,6 +697,18 @@
+   if (!packet.pData)
+     return true;
+ 
++#ifdef HAVE_DVBRIDGE
++  const auto& layer = packet.doviLayerTimes;
++  if (m_dvFel && layer.valid && m_dvLayerEpoch && layer.epoch != m_dvLayerEpoch)
++  {
++    if (layer.epoch < m_dvLayerEpoch)
++    {
++      m_dvFailed = true;
++      return true;
++    }
++    Reset(); // Both native decoders and pending pictures share this boundary.
++  }
++#endif
+   if (m_eof)
+   {
+     Reset();
+@@ -609,6 +733,16 @@
+ 
+   avpkt->data = packet.pData;
+   avpkt->size = packet.iSize;
++#ifdef HAVE_DVBRIDGE
++  if (m_dvFel)
++  {
++    if (packet.videoWindowed)
++      avpkt->opaque = packet.videoDecodeOnly ? &decodeOnlyDVPacket : &presentableDVPacket;
++  }
++  else
++#endif
++  if (packet.videoDecodeOnly)
++    avpkt->flags |= AV_PKT_FLAG_DISCARD;
+   avpkt->dts = (packet.dts == DVD_NOPTS_VALUE)
+                    ? AV_NOPTS_VALUE
+                    : static_cast<int64_t>(packet.dts / DVD_TIME_BASE * AV_TIME_BASE);
+@@ -618,7 +752,33 @@
+   avpkt->side_data = static_cast<AVPacketSideData*>(packet.pSideData);
    avpkt->side_data_elems = packet.iSideDataElems;
  
-   int ret = avcodec_send_packet(m_pCodecContext, avpkt);
+-  int ret = avcodec_send_packet(m_pCodecContext, avpkt);
++  int ret;
++#ifdef HAVE_DVBRIDGE
++  if (m_dvFel && layer.valid && layer.basePts == AV_NOPTS_VALUE)
++    ret = 0; // An explicit terminal EL unit is not a BL access unit.
++  else
++#endif
++    ret = avcodec_send_packet(m_pCodecContext, avpkt);
 +#ifdef HAVE_DVBRIDGE
 +  // Submit once, only after BL accepted the packet (Kodi retries EAGAIN).
 +  if (ret == 0 && m_dvFel)
 +  {
-+    if (!dvbridge_fel_submit(m_dvFel.get(), avpkt))
++    if (packet.doviLayerTimes.valid)
++    {
++      m_dvLayerEpoch = packet.doviLayerTimes.epoch;
++      m_dvVideoWindow = packet.videoWindowed;
++    }
++    const auto& timing = packet.doviLayerTimes;
++    const dvbridge_fel_source source{timing.basePts, timing.enhancementPts,
++        {timing.clockNum, timing.clockDen}, timing.epoch, timing.presentable};
++    const bool submitted = timing.valid ? dvbridge_fel_submit_source(m_dvFel.get(), avpkt, &source) :
++                                         dvbridge_fel_submit(m_dvFel.get(), avpkt);
++    if (!submitted)
 +      m_dvFailed = true;
 +    else
 +      ReportDVStartup(2, "fel-input-accepted");
@@ -743,7 +817,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
    // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
-@@ -655,7 +764,96 @@
+@@ -626,6 +786,10 @@
+   av_buffer_unref(&avpkt->buf);
+   av_free(avpkt);
+ 
++#ifdef HAVE_DVBRIDGE
++  if (m_dvFel && layer.valid && layer.basePts == AV_NOPTS_VALUE)
++    return true;
++#endif
+   // try again
+   if (ret == AVERROR(EAGAIN))
+   {
+@@ -655,7 +819,128 @@
    return true;
  }
  
@@ -762,70 +847,102 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvFel)
 +  {
-+    auto emit = [&]() -> VCReturn
++    for (;;)
 +    {
-+      if (m_dvPending.empty())
-+        return VC_NONE;
-+      auto& base = m_dvPending.front();
-+      if (base->doviSourcePts == AV_NOPTS_VALUE)
-+        return VC_FATAL;
-+      AVFrame* enhancement = nullptr;
-+      int result = dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts,
-+                                     &enhancement);
-+      if (result == 2)
++      auto emit = [&]() -> VCReturn
 +      {
-+        m_dvPending.pop_front();
++        while (!m_dvPending.empty())
++        {
++          auto& base = m_dvPending.front();
++          if (base->doviSourcePts == AV_NOPTS_VALUE)
++            return VC_FATAL;
++          AVFrame* enhancement = nullptr;
++          int result = dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts,
++                                         &enhancement);
++          if (result == 2)
++          {
++            m_dvPending.pop_front();
++            continue;
++          }
++          if (result < 0)
++          {
++            CLog::Log(LOGERROR, "DV FEL: cannot pair {} pending base pictures; stopping without substitution",
++                      m_dvPending.size());
++            return VC_FATAL;
++          }
++          if (!result)
++            return VC_NONE;
++          if (m_dvLayerEpoch && (!base->doviMetadata.Data() ||
++              !(base->doviMetadata.Binding() == base->doviSourceBinding)))
++          {
++            av_frame_free(&enhancement);
++            return VC_FATAL;
++          }
++          ReportDVStartup(4, "el-decoded");
++#ifdef HAVE_LIBVA
++          if (base->iFlags & DVP_FLAG_DROPPED)
++          {
++            // Preroll bypasses the renderer's normal EL completion check. Consume
++            // its decode report before retiring the image, as Kodi does for BL.
++            const auto* frames = enhancement->hw_frames_ctx ?
++                reinterpret_cast<const AVHWFramesContext*>(enhancement->hw_frames_ctx->data) : nullptr;
++            const auto* device = frames ?
++                reinterpret_cast<const AVVAAPIDeviceContext*>(frames->device_ctx->hwctx) : nullptr;
++            if (!device || vaSyncSurface(device->display,
++                static_cast<VASurfaceID>(reinterpret_cast<uintptr_t>(enhancement->data[3]))) != VA_STATUS_SUCCESS)
++            {
++              CLog::Log(LOGERROR, "DV FEL: discarded picture decode did not complete at {}",
++                        base->doviSourcePts);
++              av_frame_free(&enhancement);
++              return VC_FATAL;
++            }
++          }
++#endif
++          base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
++          // The pairing owner consumed the exact EL from this stream/reset epoch.
++          base->doviEnhancementBinding = base->doviMetadata.Binding();
++          pVideoPicture->CopyRef(*base);
++          m_dvPending.pop_front();
++          ReportDVStartup(8, "fel-paired");
++          return VC_PICTURE;
++        }
++        return VC_NONE;
++      };
++      VCReturn paired = emit();
++      if (paired != VC_NONE)
++        return paired;
++      if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
++        return VC_FATAL;
++      if (m_codecControlFlags & DVD_CODEC_CTRL_POLL)
 +        return VC_BUFFER;
-+      }
-+      if (result < 0)
++      if (m_dvPending.size() >= DVEnhancementPendingPictures)
++        return VC_FATAL;
++      auto base = std::make_shared<VideoPicture>();
++      base->Reset();
++      VCReturn result = GetBasePicture(base.get());
++      if (m_pCodecContext->hw_frames_ctx)
 +      {
-+        CLog::Log(LOGERROR, "DV FEL: cannot pair {} pending base pictures; stopping without substitution",
-+                  m_dvPending.size());
-+        return VC_FATAL;
++        auto* frames = reinterpret_cast<AVHWFramesContext*>(m_pCodecContext->hw_frames_ctx->data);
++        if (!dvbridge_fel_device(m_dvFel.get(), frames->device_ref))
++          return VC_FATAL;
 +      }
-+      if (!result)
-+        return VC_NONE;
-+      ReportDVStartup(4, "el-decoded");
-+      base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
-+      // The pairing owner consumed the exact EL from this stream/reset epoch.
-+      base->doviEnhancementBinding = base->doviMetadata.Binding();
-+      pVideoPicture->CopyRef(*base);
-+      m_dvPending.pop_front();
-+      ReportDVStartup(8, "fel-paired");
-+      return VC_PICTURE;
-+    };
-+    VCReturn paired = emit();
-+    if (paired != VC_NONE)
-+      return paired;
-+    if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
-+      return VC_FATAL;
-+    if (m_codecControlFlags & DVD_CODEC_CTRL_POLL)
-+      return VC_BUFFER;
-+    if (m_dvPending.size() >= DVEnhancementPendingPictures)
-+      return VC_FATAL;
-+    auto base = std::make_shared<VideoPicture>();
-+    base->Reset();
-+    VCReturn result = GetBasePicture(base.get());
-+    if (m_pCodecContext->hw_frames_ctx)
-+    {
-+      auto* frames = reinterpret_cast<AVHWFramesContext*>(m_pCodecContext->hw_frames_ctx->data);
-+      if (!dvbridge_fel_device(m_dvFel.get(), frames->device_ref))
++      if (result == VC_PICTURE)
++      {
++        ReportDVStartup(1, "base-decoded");
++        m_dvPending.push_back(std::move(base));
++      }
++      if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
++        if (!dvbridge_fel_drain(m_dvFel.get()))
++          return VC_FATAL;
++      paired = emit();
++      if (paired != VC_NONE)
++        return paired;
++      if (result == VC_EOF && !m_dvPending.empty())
 +        return VC_FATAL;
++      if (result == VC_PICTURE && (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
++        continue; // Retire internal preroll until a real picture or native EOF.
++      return result == VC_PICTURE ? VC_BUFFER : result;
 +    }
-+    if (result == VC_PICTURE)
-+    {
-+      ReportDVStartup(1, "base-decoded");
-+      m_dvPending.push_back(std::move(base));
-+    }
-+    if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
-+      if (!dvbridge_fel_drain(m_dvFel.get()))
-+        return VC_FATAL;
-+    paired = emit();
-+    if (paired != VC_NONE)
-+      return paired;
-+    if (result == VC_EOF && !m_dvPending.empty())
-+      return VC_FATAL;
-+    return result == VC_PICTURE ? VC_BUFFER : result;
 +  }
 +#endif
 +  const auto result = GetBasePicture(pVideoPicture);
@@ -840,7 +957,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  {
    if (!m_startedInput)
    {
-@@ -671,6 +869,9 @@
+@@ -671,6 +956,9 @@
    {
      int flags = m_codecControlFlags;
      flags &= ~DVD_CODEC_CTRL_DRAIN;
@@ -850,7 +967,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pHardware->SetCodecControl(flags);
      CDVDVideoCodec::VCReturn ret = m_pHardware->Decode(m_pCodecContext, nullptr);
      if (ret == VC_PICTURE)
-@@ -739,6 +940,9 @@
+@@ -739,6 +1027,9 @@
      {
        int flags = m_codecControlFlags;
        flags |= DVD_CODEC_CTRL_DRAIN;
@@ -860,7 +977,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        m_pHardware->SetCodecControl(flags);
        int ret = m_pHardware->Decode(m_pCodecContext, nullptr);
        if (ret == VC_PICTURE)
-@@ -793,21 +997,8 @@
+@@ -793,21 +1084,8 @@
    }
  
    // here we got a frame
@@ -884,7 +1001,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
    {
-@@ -835,6 +1026,9 @@
+@@ -835,6 +1113,9 @@
      int frames = 300;
      if (m_dropCtrl.m_state == CDropControl::VALID)
        frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
@@ -894,7 +1011,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_iLastKeyframe >= frames && m_pDecodedFrame->pict_type == AV_PICTURE_TYPE_I)
      {
        m_started = true;
-@@ -896,8 +1090,13 @@
+@@ -896,8 +1177,13 @@
          need_reopen = true;
      }
  
@@ -909,7 +1026,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        m_filters = m_filters_next;
  
-@@ -926,6 +1125,22 @@
+@@ -926,6 +1212,22 @@
    return VC_NONE;
  }
  
@@ -932,7 +1049,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CDVDVideoCodecFFmpeg::SetPictureParams(VideoPicture* pVideoPicture)
  {
    if (!GetPictureCommon(pVideoPicture))
-@@ -954,6 +1169,14 @@
+@@ -954,6 +1256,16 @@
  
  void CDVDVideoCodecFFmpeg::Reset()
  {
@@ -943,11 +1060,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  m_dvPending.clear();
 +  dvbridge_fel_reset(m_dvFel.get());
 +  m_dvFailed = false;
++  m_dvLayerEpoch = 0;
++  m_dvVideoWindow = false;
 +#endif
    m_started = false;
    m_startedInput = false;
    m_interlaced = false;
-@@ -969,6 +1192,7 @@
+@@ -969,6 +1281,7 @@
      m_pHardware->Reset();
  
    m_filters = "";
@@ -955,7 +1074,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    FilterClose();
    m_dropCtrl.Reset(false);
  }
-@@ -992,8 +1216,48 @@
+@@ -992,8 +1305,48 @@
    return VC_REOPEN;
  }
  
@@ -1004,7 +1123,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_pFrame)
      return false;
  
-@@ -1045,6 +1309,10 @@
+@@ -1045,6 +1398,10 @@
    {
      pVideoPicture->stereoMode = (const char*)entry->value;
    }
@@ -1015,7 +1134,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else
      pVideoPicture->stereoMode.clear();
  
-@@ -1098,6 +1366,9 @@
+@@ -1098,6 +1455,9 @@
    pVideoPicture->qscale_type = 0;
  
    pVideoPicture->hdrType = m_hints.hdrType;
@@ -1025,7 +1144,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    AVFrameSideData* sd;
  
-@@ -1134,7 +1405,23 @@
+@@ -1134,7 +1494,23 @@
    {
      pVideoPicture->displayMetadata = *(AVMasteringDisplayMetadata *)sd->data;
      pVideoPicture->hasDisplayMetadata = true;
@@ -1050,7 +1169,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    else if (m_hints.masteringMetadata)
    {
      pVideoPicture->displayMetadata = *m_hints.masteringMetadata.get();
-@@ -1145,35 +1432,89 @@
+@@ -1145,41 +1521,115 @@
    {
      pVideoPicture->lightMetadata = *(AVContentLightMetadata *)sd->data;
      pVideoPicture->hasLightMetadata = true;
@@ -1100,6 +1219,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    sourceInfo.minLuma = av_q2d(sourceMastering.min_luminance);
 +  }
 +  pVideoPicture->doviSourcePts = m_pFrame->best_effort_timestamp;
++#ifdef HAVE_DVBRIDGE
++  if (m_dvLayerEpoch) pVideoPicture->doviSourcePts = m_pFrame->pts;
++#endif
    if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
    {
      sd = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_METADATA);
@@ -1155,7 +1277,30 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            }
          }
        }
-@@ -1187,12 +1528,19 @@
+     }
+   }
+ 
++#ifdef HAVE_DVBRIDGE
++  if (m_dvLayerEpoch)
++  {
++    // COPY_OPAQUE follows the AU through native reordering and VAAPI references.
++    // The ordinary paired path still validates/synchronizes EL before Kodi drops it.
++    if (m_dvVideoWindow && m_pFrame->opaque == &decodeOnlyDVPacket)
++      pVideoPicture->iFlags |= DVP_FLAG_DROPPED;
++    const auto* raw = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_RPU_BUFFER);
++    if ((m_dvVideoWindow && m_pFrame->opaque != &presentableDVPacket &&
++         m_pFrame->opaque != &decodeOnlyDVPacket) ||
++        m_pFrame->pts == AV_NOPTS_VALUE || m_pFrame->decode_error_flags ||
++        (m_pFrame->flags & AV_FRAME_FLAG_CORRUPT) || !raw || !raw->data || raw->size < 5 ||
++        raw->data[0] != 25 || (raw->data[1] >> 2) != 2)
++      pVideoPicture->doviMetadata.Reset();
++  }
++#endif
++
+   if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||
+       pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
+   {
+@@ -1187,12 +1637,19 @@
      if (sd)
      {
        if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10)
@@ -1175,7 +1320,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (pVideoPicture->iRepeatPicture)
      pVideoPicture->dts = DVD_NOPTS_VALUE;
    else
-@@ -1244,7 +1592,7 @@
+@@ -1244,7 +1701,7 @@
    if (m_pFilterGraph)
      FilterClose();
  
@@ -1184,7 +1329,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return 0;
  
    if (m_pHardware)
-@@ -1302,7 +1650,20 @@
+@@ -1302,7 +1759,20 @@
      return result;
    }
  
@@ -1206,7 +1351,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      AVFilterInOut* outputs = avfilter_inout_alloc();
      AVFilterInOut* inputs  = avfilter_inout_alloc();
-@@ -1317,7 +1678,22 @@
+@@ -1317,7 +1787,22 @@
      inputs->pad_idx = 0;
      inputs->next = nullptr;
  
@@ -1230,7 +1375,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      avfilter_inout_free(&outputs);
      avfilter_inout_free(&inputs);
  
-@@ -1353,6 +1729,8 @@
+@@ -1353,6 +1838,8 @@
      return result;
    }
  
@@ -1239,7 +1384,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
    {
      char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
-@@ -1369,6 +1747,8 @@
+@@ -1369,6 +1856,8 @@
  
  void CDVDVideoCodecFFmpeg::FilterClose()
  {
@@ -1248,7 +1393,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_pFilterGraph)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
-@@ -1376,6 +1756,7 @@
+@@ -1376,6 +1865,7 @@
  
      // Disposed by above code
      m_pFilterIn = nullptr;
@@ -1256,7 +1401,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_pFilterOut = nullptr;
    }
  }
-@@ -1386,7 +1767,14 @@
+@@ -1386,7 +1876,14 @@
  
    if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
    {
@@ -1272,7 +1417,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (result < 0)
      {
        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");
-@@ -1411,6 +1799,18 @@
+@@ -1411,6 +1908,18 @@
      return VC_ERROR;
    }
  
@@ -1291,7 +1436,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    av_frame_unref(m_pFrame);
    av_frame_move_ref(m_pFrame, m_pFilterFrame);
  
-@@ -1421,6 +1821,34 @@
+@@ -1421,6 +1930,34 @@
  {
    return m_iLastKeyframe;
  }
@@ -1326,7 +1471,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  unsigned CDVDVideoCodecFFmpeg::GetAllowedReferences()
  {
-@@ -1454,7 +1882,17 @@
+@@ -1454,7 +1991,17 @@
  
  void CDVDVideoCodecFFmpeg::SetCodecControl(int flags)
  {
@@ -1344,7 +1489,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_pCodecContext)
    {
-@@ -1497,4 +1935,3 @@
+@@ -1497,4 +2044,3 @@
  {
    return m_pHardware;
  }
@@ -1370,7 +1515,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  extern "C"
  {
-@@ -46,8 +52,39 @@
+@@ -46,8 +52,41 @@
  
    IHardwareDecoder* GetHWAccel() override;
    bool GetPictureCommon(VideoPicture* pVideoPicture) override;
@@ -1396,6 +1541,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::shared_ptr<dvbridge_fel> m_dvFel;
 +  std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
 +  bool m_dvFailed{false};
++  uint64_t m_dvLayerEpoch{0};
++  bool m_dvVideoWindow{false};
 +  unsigned m_dvStartupReported{};
 +  uint64_t m_dvDiagnosticGeneration{};
 +  void ReportDVStartup(unsigned fact, const char* stage) noexcept;
@@ -1410,7 +1557,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void Dispose();
    CDVDVideoCodec::VCReturn HandleHwFatal();
    static enum AVPixelFormat GetFormat(struct AVCodecContext * avctx, const AVPixelFormat * fmt);
-@@ -58,6 +95,7 @@
+@@ -58,6 +97,7 @@
    void SetFilters();
    void UpdateName();
    bool SetPictureParams(VideoPicture* pVideoPicture);
@@ -1418,7 +1565,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    bool HasHardware() { return m_pHardware != nullptr; }
    void SetHardware(IHardwareDecoder *hardware);
-@@ -71,10 +109,16 @@
+@@ -71,10 +111,16 @@
    std::string m_filters_next;
    AVFilterGraph* m_pFilterGraph = nullptr;
    AVFilterContext* m_pFilterIn = nullptr;
@@ -3161,7 +3308,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include <drm_fourcc.h>
  #include <va/va_drm.h>
-@@ -749,6 +756,23 @@
+@@ -576,6 +583,12 @@
+   m_vaapiConfig.surfaceHeight = avctx->coded_height;
+   m_vaapiConfig.aspect = avctx->sample_aspect_ratio;
+   m_vaapiConfig.bitDepth = avctx->bits_per_raw_sample;
++  // get_format's software format describes the decoded samples. Add-on hints
++  // can still say 8 bits for a 10-bit stream; retain the old fallback if absent.
++  const auto* decodedFormat = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
++  if (decodedFormat && !(decodedFormat->flags & AV_PIX_FMT_FLAG_HWACCEL) &&
++      decodedFormat->comp[0].depth > 0)
++    m_vaapiConfig.bitDepth = decodedFormat->comp[0].depth;
+   // ffmpeg's HEVC, VP9, and AV1 decoders do not set bits_per_raw_sample,
+   // but they do set pix_fmt correctly (e.g. yuv420p10le for 10-bit).
+   // Derive bit depth from the pixel format when bits_per_raw_sample is 0,
+@@ -749,6 +762,23 @@
    // add an extra surface for safety, some faulty material
    // make ffmpeg require more buffers
    m_vaapiConfig.maxReferences += 6;
@@ -3185,7 +3345,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (!ConfigVAAPI())
    {
-@@ -766,6 +790,20 @@
+@@ -766,6 +796,20 @@
  
    vaapiDeviceCtx->display = m_vaapiConfig.dpy;
    vaapiDeviceCtx->driver_quirks = AV_VAAPI_DRIVER_QUIRK_RENDER_PARAM_BUFFERS;
@@ -3206,7 +3366,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    vaapiFramesCtx->nb_attributes = 0;
    vaapiFramesCtx->nb_surfaces = m_videoSurfaces.Size();
    VASurfaceID *surfaceIds = (VASurfaceID*)av_malloc(vaapiFramesCtx->nb_surfaces *  sizeof(VASurfaceID));
-@@ -1027,6 +1065,23 @@
+@@ -1027,6 +1071,23 @@
              "VAAPI::{} - timed out waiting for output message - decoded: {}, proc: {}, has free "
              "surface: {}",
              __FUNCTION__, decoded, processed, m_videoSurfaces.HasFree() ? "yes" : "no");
@@ -3230,7 +3390,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_DisplayState = VAAPI_ERROR;
  
    return CDVDVideoCodec::VC_ERROR;
-@@ -1041,6 +1096,23 @@
+@@ -1041,6 +1102,23 @@
      state = m_DisplayState;
    }
  
@@ -3254,7 +3414,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (state == VAAPI_LOST)
    {
      CLog::Log(LOGDEBUG, LOGVIDEO, "VAAPI::Check waiting for display reset event");
-@@ -1255,11 +1327,13 @@
+@@ -1255,11 +1333,13 @@
    // can dispatch sampling per-fourcc without re-inspecting each surface.
    m_vaapiConfig.pixelFormat = pixelFormat;
  
@@ -3270,7 +3430,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            nb_surfaces, attribs, 1), "vaCreateSurfaces"))
    {
      return false;
-@@ -1405,7 +1479,7 @@
+@@ -1405,7 +1485,7 @@
    bool HasFree();
    void QueueReturnPicture(CVaapiRenderPicture *pic);
    CVaapiRenderPicture* ProcessSyncPicture();
@@ -3279,7 +3439,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void DeleteTextures(bool precleanup);
  
    std::deque<CVaapiProcessedPicture> processedPics;
-@@ -1436,10 +1510,9 @@
+@@ -1436,10 +1516,9 @@
  
  CVaapiBufferPool::~CVaapiBufferPool()
  {
@@ -3293,7 +3453,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      delete pic;
    }
    allRenderPics.clear();
-@@ -1537,11 +1610,19 @@
+@@ -1537,11 +1616,19 @@
    return retPic;
  }
  
@@ -3316,7 +3476,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      pic->valid = false;
    }
    procPicId = 0;
-@@ -2014,6 +2095,14 @@
+@@ -2014,6 +2101,14 @@
  
  bool COutput::Uninit()
  {
@@ -3331,7 +3491,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    ProcessSyncPicture();
    ReleaseBufferPool();
    if (m_pp)
-@@ -2232,6 +2321,7 @@
+@@ -2232,6 +2327,7 @@
  {
    CVaapiRenderPicture *retPic;
    retPic = m_bufferPool->GetVaapi();
@@ -3339,7 +3499,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    retPic->DVDPic.SetParams(pic.DVDPic);
  
    // Stamp the surface fourcc so renderers can dispatch sampling per-fourcc
-@@ -2247,11 +2337,12 @@
+@@ -2247,11 +2343,12 @@
  
    if (pic.source->UseVideoSurface())
    {
@@ -3353,7 +3513,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
    else
    {
-@@ -2321,7 +2412,7 @@
+@@ -2321,7 +2418,7 @@
  
  void COutput::EnsureBufferPool()
  {
@@ -3410,7 +3570,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
-@@ -0,0 +1,388 @@
+@@ -0,0 +1,413 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -3430,13 +3590,38 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#include <libavutil/mathematics.h>
 +}
 +
++// A value owned by the demuxer which read this clip, never a later global play item.
++struct CBlurayVideoWindow
++{
++  bool active{false};
++  int64_t first{0}, last{0}; // authored source PTS in 90 kHz
++  bool DecodeOnly(int64_t pts, AVRational clock) const
++  {
++    if (!active)
++      return false;
++    if (pts == AV_NOPTS_VALUE || clock.num <= 0 || clock.den <= 0)
++      return true;
++    // FFmpeg can unwrap MPEG-TS to negative timestamps near its 33-bit rollover.
++    // Compare exact rationals in the authored epoch, without rounding a boundary
++    // or changing either decoder's clock. The products fit in signed 128 bits.
++    const __int128 scale = clock.den;
++    const __int128 period = (__int128{1} << 33) * scale;
++    __int128 source = (__int128{pts} * clock.num * 90000) % period;
++    if (source < 0)
++      source += period;
++    return source < __int128{first} * scale || source > __int128{last} * scale;
++  }
++};
++
 +// Present separate HEVC layers as the joined stream consumed by CB1.
 +class CBlurayDovi
 +{
 +public:
++  explicit CBlurayDovi(uint64_t* epochs = nullptr, bool transportClock = false)
++    : m_epochs(epochs), m_transportClock(transportClock) { Reset(); }
 +  // Preserve each layer's HEVC configuration and time base.
 +  bool Configure(const AVCodecParameters* base, const AVCodecParameters* enhancement,
-+                 AVRational baseClock, AVRational enhancementClock)
++                 AVRational baseClock, AVRational enhancementClock, bool transportClock = false)
 +  {
 +    const auto* filter = av_bsf_get_by_name("hevc_mp4toannexb");
 +    if (!filter || baseClock.num <= 0 || baseClock.den <= 0 ||
@@ -3458,6 +3643,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        return false;
 +    }
 +    m_filters = std::move(prepared);
++    m_transportClock = transportClock;
 +    return true;
 +  }
 +  const AVCodecParameters* BaseParameters() const { return m_filters[0]->par_out; }
@@ -3478,6 +3664,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_lastDts = {AV_NOPTS_VALUE, AV_NOPTS_VALUE};
 +    m_discontinuity = false;
 +    m_restartPeer = -1;
++    m_elAnchor = AV_NOPTS_VALUE;
++    m_timing = {};
++    m_epoch = m_epochs ? ++*m_epochs : m_epoch + 1;
 +  }
 +
 +  bool Push(const AVPacket* packet, bool enhancement)
@@ -3497,15 +3686,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      const auto from = filter->time_base_out, to = m_filters[0]->time_base_out;
 +      if (av_cmp_q(from, to))
 +      {
-+        const auto pts = normalized->pts, dts = normalized->dts, duration = normalized->duration;
++        const auto pts = normalized->pts;
 +        av_packet_rescale_ts(normalized.get(), from, to);
-+        if ((pts != AV_NOPTS_VALUE && av_rescale_q(normalized->pts, to, from) != pts) ||
-+            (dts != AV_NOPTS_VALUE && av_rescale_q(normalized->dts, to, from) != dts) ||
-+            av_rescale_q(normalized->duration, to, from) != duration)
++        // PTS identifies the picture; DTS/duration use FFmpeg's native rescaling.
++        if (pts != AV_NOPTS_VALUE && av_compare_ts(pts, from, normalized->pts, to))
 +          return Reject("layer-time-base");
 +      }
 +      packet = normalized.get();
 +    }
++    if (m_transportClock && enhancement && packet->pts != AV_NOPTS_VALUE &&
++        packet->dts != AV_NOPTS_VALUE && packet->pts < packet->dts)
++      return Reject("transport-presentation-before-decode");
 +    // Wait for both transport clocks before accepting a new layer epoch.
 +    if (m_restartPeer == int(enhancement))
 +    {
@@ -3535,22 +3726,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      if (m_resync && !enhancement) return SkipPreroll();
 +      return Reject("packet");
 +    }
-+    if (!enhancement)
-+    {
-+      ResyncPreroll();
-+      if (m_base.size() >= MAX_PACKETS)
-+        return Reject("base-queue");
-+      Packet owned(av_packet_clone(packet));
-+      if (!owned)
-+        return Reject("allocation");
-+      m_bytes += packet->size;
-+      m_base.push_back(std::move(owned));
-+      return true;
-+    }
-+    if (m_enhancement.size() >= MAX_PACKETS || m_rpu.size() >= MAX_PACKETS)
-+      return Reject("enhancement-queue");
-+    if (m_rpu.contains(packet->pts))
-+      return Reject("duplicate-rpu-pts");
++    auto& queue = enhancement ? m_enhancement : m_base;
++    if (queue.size() >= MAX_PACKETS)
++      return Reject(enhancement ? "enhancement-queue" : "base-queue");
++    if (std::any_of(queue.begin(), queue.end(), [&](const Packet& p) { return p->pts == packet->pts; }))
++      return Reject("duplicate-layer-pts");
 +
 +    std::vector<uint8_t> layer, rpu;
 +    auto begin = Start(packet->data, packet->size, 0);
@@ -3563,61 +3743,131 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      if (size < 2 || packet->data[begin[1]] & 0x80 || !(packet->data[begin[1]+1] & 7))
 +        return Reject("nal-header");
 +      const int type = (packet->data[begin[1]] >> 1) & 63;
-+      auto& destination = type == 62 ? rpu : layer;
-+      destination.insert(destination.end(), {0, 0, 0, 1});
-+      if (type != 62)
-+        destination.insert(destination.end(), {0x7e, 1});
-+      destination.insert(destination.end(), packet->data + begin[1], packet->data + next[0]);
++      if (type == 62)
++      {
++        if (!rpu.empty()) return Reject("multiple-rpu");
++        if (!enhancement)
++          layer.insert(layer.end(), packet->data, packet->data + begin[0]);
++        rpu.insert(rpu.end(), {0, 0, 0, 1});
++        rpu.insert(rpu.end(), packet->data + begin[1], packet->data + next[0]);
++      }
++      else if (enhancement)
++      {
++        layer.insert(layer.end(), {0, 0, 0, 1, 0x7e, 1});
++        layer.insert(layer.end(), packet->data + begin[1], packet->data + next[0]);
++      }
++      else if (!rpu.empty())
++        layer.insert(layer.end(), packet->data + begin[0], packet->data + next[0]);
 +      if (layer.size() + rpu.size() > MAX_BYTES - m_bytes)
 +        return Reject("byte-limit");
 +      begin = next;
 +    }
-+    if (layer.empty() || rpu.empty())
-+      return Reject("missing-layer-or-rpu");
-+    Packet owned(av_packet_alloc());
-+    if (!owned || av_new_packet(owned.get(), layer.size()) < 0)
-+      return Reject("allocation");
-+    std::memcpy(owned->data, layer.data(), layer.size());
-+    owned->pts = packet->pts;
-+    owned->dts = packet->dts;
-+    m_bytes += layer.size() + rpu.size();
-+    m_enhancement.push_back(std::move(owned));
-+    m_rpu.emplace(packet->pts, std::move(rpu));
++    if ((enhancement || !rpu.empty()) && layer.empty()) return Reject("missing-layer");
++    const auto saved = m_rpu.find(packet->pts);
++    const unsigned layerBit = enhancement ? 2 : 1;
++    if (saved != m_rpu.end() && (saved->second.layers & layerBit))
++      return Reject("duplicate-layer-pts");
++    if (!rpu.empty() && saved != m_rpu.end() && !saved->second.bytes.empty() &&
++        saved->second.bytes != rpu)
++      return Reject("conflicting-rpu");
++    const bool store = !rpu.empty() && (saved == m_rpu.end() || saved->second.bytes.empty());
++    if (saved == m_rpu.end() && m_rpu.size() >= 2 * MAX_PACKETS)
++      return Reject("rpu-queue");
++    Packet owned;
++    if (!enhancement && rpu.empty())
++      owned.reset(av_packet_clone(packet));
++    else
++    {
++      owned.reset(av_packet_alloc());
++      if (!owned || av_new_packet(owned.get(), layer.size()) < 0 ||
++          av_packet_copy_props(owned.get(), packet) < 0)
++        return Reject("allocation");
++      std::memcpy(owned->data, layer.data(), layer.size());
++    }
++    if (!owned) return Reject("allocation");
++    if (enhancement && m_resync && m_elAnchor == AV_NOPTS_VALUE && IsIrap(*owned, true))
++      m_elAnchor = packet->pts;
++    const size_t bytes = owned->size + (store ? rpu.size() : 0);
++    if (bytes > MAX_BYTES - m_bytes) return Reject("byte-limit");
++    m_bytes += bytes;
++    queue.push_back(std::move(owned));
++    auto& record = m_rpu[packet->pts];
++    record.layers |= layerBit;
++    if (store) record.bytes = std::move(rpu);
++    if (record.emitted && record.layers == 3)
++    {
++      m_bytes -= record.bytes.size();
++      m_rpu.erase(packet->pts);
++    }
 +    return true;
 +  }
 +
-+  int Take(AVPacket* output)
++  int Take(AVPacket* output, bool end = false)
 +  {
-+    ResyncPreroll();
-+    if (m_base.empty() || m_enhancement.empty())
++    m_timing = {};
++    if (m_base.empty())
++    {
++      if (!end) return AVERROR(EAGAIN);
++      if (m_enhancement.empty())
++      {
++        m_rpu.clear();
++        m_bytes = 0;
++        return AVERROR(EAGAIN);
++      }
++      m_timing = {AV_NOPTS_VALUE, m_enhancement.front()->pts, m_epoch, false};
++      m_bytes -= m_enhancement.front()->size;
++      av_packet_move_ref(output, m_enhancement.front().get());
++      m_enhancement.pop_front();
++      return 0; // Explicit EL-only terminal unit; never sent to the BL decoder.
++    }
++    if (m_enhancement.empty() && !end)
 +      return AVERROR(EAGAIN);
-+    if (m_resync && m_base.front()->pts != m_enhancement.front()->pts &&
-+        (IsIrap(*m_base.front(), false) ||
-+         (m_base.front()->dts != AV_NOPTS_VALUE &&
-+          m_enhancement.front()->dts != AV_NOPTS_VALUE &&
-+          m_enhancement.front()->dts < m_base.front()->dts)))
-+      return AVERROR(EAGAIN); // No safe common anchor was proved by ResyncPreroll.
 +    auto rpu = m_rpu.find(m_base.front()->pts);
-+    if (rpu == m_rpu.end())
++    const bool missing = rpu == m_rpu.end() || rpu->second.bytes.empty();
++    // A seek may leave a BL reference unit whose RPU was before the read point.
++    // Preserve that unit for decoding, but never allow it to become a picture.
++    const bool primer = m_resync && (end || (m_transportClock &&
++        m_lastDts[1] != AV_NOPTS_VALUE && m_base.front()->pts < m_lastDts[1]));
++    if (missing && !primer)
 +      return AVERROR(EAGAIN);
-+    const auto& layer = m_enhancement.front();
++    const auto* layer = m_enhancement.empty() ? nullptr : m_enhancement.front().get();
 +    const int baseSize = m_base.front()->size;
-+    const size_t extra = layer->size + rpu->second.size();
++    const size_t rpuSize = missing ? 0 : rpu->second.bytes.size();
++    const size_t extra = (layer ? layer->size : 0) + rpuSize;
 +    if (extra > MAX_BYTES - static_cast<size_t>(baseSize))
 +      return AVERROR_INVALIDDATA;
 +    Packet joined(av_packet_clone(m_base.front().get()));
 +    if (!joined || av_grow_packet(joined.get(), extra) < 0)
 +      return AVERROR(ENOMEM);
-+    std::memcpy(joined->data + baseSize, layer->data, layer->size);
-+    std::memcpy(joined->data + baseSize + layer->size, rpu->second.data(), rpu->second.size());
-+    m_bytes -= baseSize + extra;
++    if (layer) std::memcpy(joined->data + baseSize, layer->data, layer->size);
++    if (rpuSize)
++      std::memcpy(joined->data + baseSize + (layer ? layer->size : 0), rpu->second.bytes.data(), rpuSize);
++    m_timing = {joined->pts, layer ? layer->pts : AV_NOPTS_VALUE, m_epoch, !missing};
++    m_bytes -= baseSize + (layer ? layer->size : 0);
 +    av_packet_move_ref(output, joined.get());
 +    m_base.pop_front();
-+    m_enhancement.pop_front();
-+    m_rpu.erase(rpu);
-+    m_resync = false;
++    if (layer) m_enhancement.pop_front();
++    if (rpu != m_rpu.end())
++    {
++      rpu->second.emitted = true;
++      if (missing || rpu->second.layers == 3)
++      {
++        m_bytes -= rpu->second.bytes.size();
++        m_rpu.erase(rpu);
++      }
++    }
++    if (!missing && m_elAnchor != AV_NOPTS_VALUE && output->pts >= m_elAnchor)
++      m_resync = false;
 +    return 0;
 +  }
++
++  struct SourceTiming
++  {
++    int64_t basePts{AV_NOPTS_VALUE}, enhancementPts{AV_NOPTS_VALUE};
++    uint64_t epoch{0};
++    bool presentable{false};
++  };
++  SourceTiming Timing() const { return m_timing; }
 +
 +  bool Pending() const { return !m_base.empty() || !m_enhancement.empty() || !m_rpu.empty(); }
 +  const char* LastError() const { return m_error; }
@@ -3634,11 +3884,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    const auto* el = m_enhancement.empty() ? nullptr : m_enhancement.front().get();
 +    return {base ? base->pts : AV_NOPTS_VALUE, base ? base->dts : AV_NOPTS_VALUE,
 +            el ? el->pts : AV_NOPTS_VALUE, el ? el->dts : AV_NOPTS_VALUE,
-+            m_base.size(), m_enhancement.size(), m_rpu.size(),
++            m_base.size(), m_enhancement.size(), size_t(std::count_if(m_rpu.begin(), m_rpu.end(),
++              [](const auto& item) { return !item.second.bytes.empty(); })),
 +            m_resync, base && IsIrap(*base, false), el && IsIrap(*el, true), m_restartPeer};
 +  }
 +  int64_t BasePTS() const { return m_base.empty() ? AV_NOPTS_VALUE : m_base.front()->pts; }
-+  int64_t RpuPTS() const { return m_rpu.empty() ? AV_NOPTS_VALUE : m_rpu.begin()->first; }
++  int64_t RpuPTS() const
++  {
++    const auto entry = std::find_if(m_rpu.begin(), m_rpu.end(),
++      [](const auto& item) { return !item.second.bytes.empty(); });
++    return entry == m_rpu.end() ? AV_NOPTS_VALUE : entry->first;
++  }
 +  size_t TakePrerollCount() { const auto count=m_preroll; m_preroll=0; return count; }
 +  bool TakeDiscontinuity() { const bool changed=m_discontinuity; m_discontinuity=false; return changed; }
 +
@@ -3649,89 +3905,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (m_preroll >= MAX_PACKETS) return Reject("seek-preroll-limit");
 +    ++m_preroll;
 +    return true;
-+  }
-+  void ResyncPreroll()
-+  {
-+    if (!m_resync)
-+      return;
-+    if (!m_base.empty() && !m_enhancement.empty() &&
-+        m_base.front()->pts != m_enhancement.front()->pts)
-+    {
-+      // A seek may leave an orphan prefix on both layers. Recover only at a
-+      // common independent picture, never at an arbitrary timestamp match.
-+      for (auto base = m_base.begin(); base != m_base.end(); ++base)
-+      {
-+        if (!IsIrap(**base, false)) continue;
-+        auto el = std::find_if(m_enhancement.begin(), m_enhancement.end(), [&base](const Packet& packet) {
-+          return packet->pts == (*base)->pts && IsIrap(*packet, true);
-+        });
-+        if (el == m_enhancement.end() ||
-+            !std::all_of(m_base.begin(), base, [this, &base](const Packet& packet) {
-+              return packet->dts != AV_NOPTS_VALUE && packet->dts < (*base)->dts &&
-+                  packet->pts < (*base)->pts && !m_rpu.contains(packet->pts);
-+            }) || !std::all_of(m_enhancement.begin(), el, [this, &base, &el](const Packet& packet) {
-+              return packet->dts != AV_NOPTS_VALUE && packet->dts < (*el)->dts &&
-+                  packet->pts < (*el)->pts && std::none_of(m_base.begin(), m_base.end(), [&packet](const Packet& kept) {
-+                    return kept->pts == packet->pts;
-+                  });
-+            })) continue;
-+        const size_t baseCount = std::distance(m_base.begin(), base);
-+        const size_t elCount = std::distance(m_enhancement.begin(), el);
-+        if (!elCount) continue; // Keep the existing full-window proof for BL-only preroll.
-+        if (m_preroll > MAX_PACKETS || baseCount + elCount > MAX_PACKETS - m_preroll)
-+          return;
-+        for (size_t i = 0; i < baseCount; ++i)
-+        {
-+          m_bytes -= m_base.front()->size;
-+          m_base.pop_front();
-+        }
-+        for (size_t i = 0; i < elCount; ++i)
-+        {
-+          const auto rpu = m_rpu.find(m_enhancement.front()->pts);
-+          m_bytes -= m_enhancement.front()->size;
-+          if (rpu != m_rpu.end()) { m_bytes -= rpu->second.size(); m_rpu.erase(rpu); }
-+          m_enhancement.pop_front();
-+        }
-+        m_preroll += baseCount + elCount;
-+        return;
-+      }
-+    }
-+    if (!m_enhancement.empty() && m_enhancement.front()->dts != AV_NOPTS_VALUE)
-+    {
-+      if (m_base.size() < MAX_PACKETS && m_enhancement.size() < MAX_PACKETS)
-+        return;
-+      // A common decode anchor proves which BL units precede the first EL unit.
-+      const auto& first = m_enhancement.front();
-+      const auto anchor = std::find_if(m_base.begin(), m_base.end(), [&first](const Packet& base) {
-+        return base->pts == first->pts && (base->dts == first->dts ||
-+            (IsIrap(*base, false) && IsIrap(*first, true)));
-+      });
-+      if (anchor == m_base.end() || !std::all_of(m_base.begin(), anchor, [&first, &anchor](const Packet& base) {
-+            return base->dts != AV_NOPTS_VALUE && base->dts < (*anchor)->dts &&
-+                ((*anchor)->dts == first->dts || base->pts < (*anchor)->pts);
-+          }))
-+        return;
-+      const auto count = static_cast<size_t>(std::distance(m_base.begin(), anchor));
-+      if (m_preroll > MAX_PACKETS || count > MAX_PACKETS - m_preroll)
-+        return;
-+      for (size_t i = 0; i < count; ++i)
-+      {
-+        m_bytes -= m_base.front()->size;
-+        m_base.pop_front();
-+        ++m_preroll;
-+      }
-+      return;
-+    }
-+    // Only retire leading seek packets after a full reorder window proves them orphaned.
-+    if (m_base.size() < MAX_PACKETS || m_rpu.size() < MAX_PACKETS - 1 ||
-+        std::none_of(m_base.begin(),m_base.end(),
-+            [this](const Packet& base) { return m_rpu.contains(base->pts); })) return;
-+    while (!m_base.empty() && m_base.front()->pts < m_rpu.begin()->first)
-+    {
-+      m_bytes -= m_base.front()->size;
-+      m_base.pop_front();
-+      ++m_preroll;
-+    }
 +  }
 +  static constexpr size_t MAX_PACKETS = 32;
 +  static constexpr size_t MAX_BYTES = 64u * 1024u * 1024u;
@@ -3790,7 +3963,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +  std::deque<Packet> m_base, m_enhancement;
 +  // Keep each layer's decode order; associate RPU only by presentation time.
-+  std::map<int64_t, std::vector<uint8_t>> m_rpu;
++  struct Rpu
++  {
++    std::vector<uint8_t> bytes;
++    unsigned layers{0};
++    bool emitted{false};
++  };
++  // Retain emitted metadata until the peer arrives, so late conflicts cannot escape validation.
++  std::map<int64_t, Rpu> m_rpu;
 +  size_t m_bytes{0};
 +  const char* m_error{""};
 +  bool m_resync{false};
@@ -3798,6 +3978,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::array<int64_t, 2> m_lastDts{AV_NOPTS_VALUE, AV_NOPTS_VALUE};
 +  bool m_discontinuity{false};
 +  int m_restartPeer{-1};
++  int64_t m_elAnchor{AV_NOPTS_VALUE};
++  uint64_t m_epoch{1};
++  uint64_t* m_epochs{};
++  bool m_transportClock{false};
++  SourceTiming m_timing;
 +};
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayOffsetMetadata.cpp
@@ -4230,6 +4415,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  };
  
  class CDemuxStreamAudio : public CDemuxStream
+@@ -262,6 +266,9 @@
+    */
+   virtual bool SeekTime(double time, bool backwards = false, double* startpts = nullptr) = 0;
+ 
++  // The last seek deliberately acquired earlier decoder references.
++  virtual bool HasSeekPreroll() const { return false; }
++
+   /*
+    * Seek to a specified chapter.
+    * startpts can be updated to the point where display should start
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxBluray3D.cpp
 @@ -0,0 +1,717 @@
@@ -5172,7 +5367,37 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  using namespace KODI::UTILS;
-@@ -490,6 +500,24 @@
+@@ -170,6 +180,10 @@
+ 
+   std::shared_ptr<CDVDInputStream> pInputStream = static_cast<CDVDDemuxFFmpeg*>(h)->m_pInput;
+   int len = pInputStream->Read(buf, size);
++#ifdef HAVE_DVBRIDGE
++  if (len > 0 && !static_cast<CDVDDemuxFFmpeg*>(h)->CaptureBlurayVideoWindow())
++    return AVERROR_INVALIDDATA;
++#endif
+   if (len == 0)
+     return AVERROR_EOF;
+   else
+@@ -260,6 +274,7 @@
+   m_speed = DVD_PLAYSPEED_NORMAL;
+   m_program = UINT_MAX;
+   m_seekToKeyFrame = false;
++  m_seekPreroll = false;
+ 
+   const AVIOInterruptCB int_cb = { interrupt_cb, this };
+ 
+@@ -267,6 +282,10 @@
+     return false;
+ 
+   m_pInput = pInput;
++#ifdef HAVE_DVBRIDGE
++  m_blurayVideoWindow = {};
++  m_blurayWindowCaptured = false;
++#endif
+   strFile = m_pInput->GetFileName();
+ 
+   if (!m_pInput->GetContent().empty())
+@@ -490,6 +509,24 @@
    if (iformat && (strcmp(iformat->name, "mjpeg") == 0) && m_ioContext->seekable == 0)
      av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
  
@@ -5197,7 +5422,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool skipCreateStreams = false;
    bool isBluray = pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
  
-@@ -569,11 +597,22 @@
+@@ -569,11 +606,22 @@
    // Live/realtime excluded: the full probe would stall playback start by seconds.
    bool forceFullAnalysis = skipTsOptimization && !pInput->IsRealtime();
  
@@ -5221,7 +5446,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
    else if (!isMpegTs || forceFullAnalysis)
    {
-@@ -621,7 +660,7 @@
+@@ -621,7 +669,7 @@
        ResetVideoStreams();
      }
    }
@@ -5230,7 +5455,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_program = 0;
      m_checkTransportStream = true;
-@@ -722,6 +761,10 @@
+@@ -722,6 +770,10 @@
  
  void CDVDDemuxFFmpeg::Dispose()
  {
@@ -5241,28 +5466,30 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_pkt.result = -1;
    av_packet_unref(&m_pkt.pkt);
  
-@@ -759,6 +802,10 @@
+@@ -759,6 +811,11 @@
  
  void CDVDDemuxFFmpeg::Flush()
  {
 +#ifdef HAVE_DVBRIDGE
 +  if (m_blurayDovi)
 +    m_blurayDovi->Reset(true);
++  m_blurayTiming = {};
 +#endif
    if (m_pFormatContext)
    {
      if (m_pFormatContext->pb)
-@@ -774,6 +821,9 @@
+@@ -774,6 +831,10 @@
    m_displayTime = 0;
    m_dtsAtDisplayTime = DVD_NOPTS_VALUE;
    m_seekToKeyFrame = false;
++  m_seekPreroll = false;
 +
 +  if (m_offsetMetadata)
 +    m_offsetMetadata->Flush();
  }
  
  void CDVDDemuxFFmpeg::Abort()
-@@ -1098,7 +1148,12 @@
+@@ -1098,7 +1159,12 @@
  
          // timeout reads after 100ms
          m_timeout.Set(20s);
@@ -5275,7 +5502,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_timeout.SetInfinite();
        }
  
-@@ -1142,7 +1197,31 @@
+@@ -1133,7 +1199,10 @@
+       }
+       else
+       {
+-        ParsePacket(&m_pkt.pkt);
++#ifdef HAVE_DVBRIDGE
++        if (!(m_blurayTiming.valid && m_blurayTiming.basePts == AV_NOPTS_VALUE))
++#endif
++          ParsePacket(&m_pkt.pkt);
+ 
+         if (IsProgramChange())
+         {
+@@ -1142,7 +1211,31 @@
                           0);
  
            // update streams
@@ -5307,7 +5546,27 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
            pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
            pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
-@@ -1292,6 +1371,13 @@
+@@ -1202,6 +1295,19 @@
+                                               stream->time_base.den);
+ 
+           CDVDDemuxUtils::StoreSideData(pPacket, &m_pkt.pkt);
++#ifdef HAVE_DVBRIDGE
++          if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
++          {
++            pPacket->videoWindowed = m_blurayVideoWindow.active;
++            pPacket->videoDecodeOnly = m_blurayVideoWindow.DecodeOnly(m_pkt.pkt.pts, stream->time_base);
++          }
++#endif
++#ifdef HAVE_DVBRIDGE
++          if (m_blurayDovi && m_pkt.pkt.stream_index == m_blurayBase &&
++              m_blurayTiming.valid && (m_blurayTiming.basePts == AV_NOPTS_VALUE ||
++                                       m_blurayTiming.basePts == m_pkt.pkt.pts))
++            pPacket->doviLayerTimes = m_blurayTiming;
++#endif
+ 
+           CDVDInputStream::IDisplayTime* inputStream = m_pInput->GetIDisplayTime();
+           if (inputStream)
+@@ -1292,6 +1398,13 @@
        return pPacket;
      }
  
@@ -5321,7 +5580,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      pPacket->iStreamId = stream->uniqueId;
      pPacket->demuxerId = GetDemuxerId();
    }
-@@ -1410,8 +1496,50 @@
+@@ -1306,6 +1419,7 @@
+ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
+ {
+   bool hitEnd = false;
++  m_seekPreroll = false;
+ 
+   if (!m_pInput)
+     return false;
+@@ -1410,11 +1524,55 @@
        ret = -1;
      }
      else
@@ -5350,6 +5617,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          const int64_t anchor = dvbridge_fel_seek_point_at(m_pFormatContext, id, target, &layerPosition, original);
 +          if (anchor != AV_NOPTS_VALUE)
 +          {
++            m_seekPreroll = anchor < target;
 +            seek_pts = av_rescale_q(anchor, video->time_base, AV_TIME_BASE_Q);
 +            backwards = true;
 +            CLog::Log(LOGDEBUG, "DV FEL: random-access preroll begins at {} us for {} ms seek",
@@ -5374,7 +5642,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (ret < 0)
      {
-@@ -1482,7 +1610,12 @@
++      m_seekPreroll = false;
+       // demuxer can return failure, if seeking behind eof
+       if (beyondEof)
+       {
+@@ -1482,7 +1640,12 @@
    int ret = av_seek_frame(m_pFormatContext, -1, pos, AVSEEK_FLAG_BYTE);
  
    if (ret >= 0)
@@ -5387,7 +5659,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    m_pkt.result = -1;
    av_packet_unref(&m_pkt.pkt);
-@@ -1606,6 +1739,9 @@
+@@ -1606,6 +1769,9 @@
  
  void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
  {
@@ -5397,7 +5669,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // changes must keep increasing across rebuilds; consumers detect a rebuild by comparing values
    std::map<int, int> prevChanges;
    for (const auto& [streamIdx, stream] : m_streams)
-@@ -1664,7 +1800,11 @@
+@@ -1664,7 +1830,11 @@
        for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
        {
          m_pFormatContext->streams[i]->discard = AVDISCARD_NONE;
@@ -5410,7 +5682,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
        }
      }
-@@ -1818,11 +1958,22 @@
+@@ -1818,11 +1988,22 @@
      delete it->second;
    m_streams.clear();
    m_parsers.clear();
@@ -5433,7 +5705,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (pStream && pStream->discard != AVDISCARD_ALL)
    {
      // Video (mp4) from GoPro cameras can have a 'meta' track used for a file repair containing
-@@ -1974,10 +2125,16 @@
+@@ -1974,10 +2155,16 @@
            sideData =
                av_packet_side_data_get(pStream->codecpar->coded_side_data,
                                        pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
@@ -5451,7 +5723,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          }
  
          sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,
-@@ -2012,13 +2169,56 @@
+@@ -2012,13 +2199,56 @@
          }
  
          // detect stereoscopic mode
@@ -5511,7 +5783,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
          if (m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD))
          {
-@@ -2084,6 +2284,11 @@
+@@ -2084,6 +2314,11 @@
  
            if (av_dict_get(pStream->metadata, "title", NULL, 0))
              st->m_description = av_dict_get(pStream->metadata, "title", NULL, 0)->value;
@@ -5523,7 +5795,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
            break;
          }
        }
-@@ -2207,8 +2412,13 @@
+@@ -2207,8 +2442,13 @@
        // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
        if (pStream->id == 0x1015)
        {
@@ -5537,7 +5809,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          delete stream;
          return nullptr;
        }
-@@ -2292,6 +2502,11 @@
+@@ -2292,6 +2532,11 @@
    {
      /* was new stream */
      stream->uniqueId = streamIdx;
@@ -5549,7 +5821,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
    else
    {
-@@ -2419,6 +2634,13 @@
+@@ -2419,6 +2664,13 @@
  
  bool CDVDDemuxFFmpeg::IsProgramChange()
  {
@@ -5563,7 +5835,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_program == UINT_MAX)
      return false;
  
-@@ -2454,8 +2676,12 @@
+@@ -2454,8 +2706,12 @@
  
    for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
    {
@@ -5578,7 +5850,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        continue;
      CDemuxStream* stream = GetStream(idx);
      if (!stream)
-@@ -2560,6 +2786,161 @@
+@@ -2560,6 +2816,161 @@
    return stereoMode;
  }
  
@@ -5740,7 +6012,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap* conversionMap)
  {
    size_t i = 0;
-@@ -2598,6 +2979,9 @@
+@@ -2598,6 +3009,9 @@
  
      CDemuxStream* stream = GetStream(st->index);
      if (!stream)
@@ -5750,11 +6022,26 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        return;
  
      if (parser->second->m_parserCtx && parser->second->m_parserCtx->parser &&
-@@ -2840,6 +3224,276 @@
+@@ -2840,6 +3254,307 @@
    }
  }
  
 +#ifdef HAVE_DVBRIDGE
++bool CDVDDemuxFFmpeg::CaptureBlurayVideoWindow()
++{
++  if (m_blurayWindowCaptured)
++    return true;
++  CBlurayVideoWindow window;
++#ifdef HAVE_LIBBLURAY
++  const auto bluray = std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInput);
++  if (bluray && !bluray->GetVideoPresentationWindow(window.active, window.first, window.last))
++    return false;
++#endif
++  m_blurayVideoWindow = window;
++  m_blurayWindowCaptured = true;
++  return true;
++}
++
 +void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
 +{
 +  const bool bluray = m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
@@ -5815,6 +6102,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      return;
 +    }
 +  m_blurayDovi.reset();
++  m_blurayTiming = {};
 +  m_blurayBase = m_blurayEnhancement = -1;
 +  m_blurayAwaitBase = false;
 +  const bool mov = std::strcmp(format, "mov") == 0 || std::strncmp(format, "mov,", 4) == 0;
@@ -5883,7 +6171,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      report("incompatible-layer-clocks");
 +      return;
 +    }
-+    auto join = std::make_unique<CBlurayDovi>();
++    auto join = std::make_unique<CBlurayDovi>(&m_blurayEpoch, bluray || transport);
 +    std::unique_ptr<AVCodecParameters, AVCodecParametersDeleter> combined(avcodec_parameters_alloc());
 +    if (!combined || avcodec_parameters_copy(combined.get(), bl->codecpar) < 0)
 +    {
@@ -5918,7 +6206,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        report("missing-dv-config");
 +        return;
 +      }
-+      if (!join->Configure(bl->codecpar, el->codecpar, bl->time_base, el->time_base) ||
++      if (!join->Configure(bl->codecpar, el->codecpar, bl->time_base, el->time_base, transport) ||
 +          avcodec_parameters_copy(combined.get(), join->BaseParameters()) < 0)
 +      {
 +        CLog::Log(LOGWARNING, "DV layers: HEVC normalization unavailable");
@@ -5979,12 +6267,27 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +int CDVDDemuxFFmpeg::ReadBlurayDovi(AVPacket* packet)
 +{
-+  int result = m_blurayDovi->Take(packet);
++  m_blurayTiming = {};
++  auto take = [&](bool end = false) {
++    const int result = m_blurayDovi->Take(packet, end);
++    if (result == 0)
++    {
++      const auto source = m_blurayDovi->Timing();
++      const auto clock = m_pFormatContext->streams[m_blurayBase]->time_base;
++      m_blurayTiming = {source.basePts, source.enhancementPts, source.epoch,
++                        clock.num, clock.den, true, source.presentable};
++      packet->stream_index = m_blurayBase;
++    }
++    return result;
++  };
++  int result = take();
 +  while (result == AVERROR(EAGAIN))
 +  {
 +    result = av_read_frame(m_pFormatContext, packet);
 +    if (result < 0)
 +    {
++      if (result == AVERROR_EOF && take(true) == 0)
++        return 0;
 +      if (result == AVERROR_EOF && m_blurayDovi->Pending())
 +        CLog::Log(LOGWARNING, "DV Blu-ray: incomplete layer pair at end of stream");
 +      return result;
@@ -6015,7 +6318,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    av_packet_unref(packet);
 +    if (!accepted)
 +      return AVERROR_INVALIDDATA;
-+    result = m_blurayDovi->Take(packet);
++    result = take();
 +  }
 +  if (result == 0)
 +    if (const auto count = m_blurayDovi->TakePrerollCount())
@@ -6029,12 +6332,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    StreamHdrType hdrType = StreamHdrType::HDR_TYPE_NONE;
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.h
-@@ -8,11 +8,13 @@
+@@ -8,11 +8,14 @@
  
  #pragma once
  
 +#include "BlurayOffsetMetadata.h"
  #include "DVDDemux.h"
++#include "cores/VideoPlayer/Interface/DemuxPacket.h"
  #include "threads/CriticalSection.h"
  #include "threads/SystemClock.h"
  #include <map>
@@ -6043,17 +6347,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <vector>
  
  extern "C" {
-@@ -20,6 +22,9 @@
+@@ -20,6 +23,9 @@
  }
  
  class CDVDDemuxFFmpeg;
 +#ifdef HAVE_DVBRIDGE
-+class CBlurayDovi;
++#include "BlurayDovi.h"
 +#endif
  class CDVDInputStream;
  class CURL;
  struct ChapterFFmpeg;
-@@ -62,6 +67,8 @@
+@@ -62,6 +68,8 @@
    std::string GetStreamName() override;
  
    std::string m_description;
@@ -6062,7 +6366,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  protected:
    CDVDDemuxFFmpeg* m_parent;
    AVStream* m_stream = nullptr;
-@@ -115,6 +122,23 @@
+@@ -95,8 +103,12 @@
+ 
+   DemuxPacket* Read() override;
+   DemuxPacket* ReadInternal(bool keep);
++#ifdef HAVE_DVBRIDGE
++  bool CaptureBlurayVideoWindow();
++#endif
+ 
+   bool SeekTime(double time, bool backwards = false, double* startpts = NULL) override;
++  bool HasSeekPreroll() const override { return m_seekPreroll; }
+   bool SeekByte(int64_t pos);
+   int GetStreamLength() override;
+   CDemuxStream* GetStream(int iStreamId) const override;
+@@ -115,6 +127,23 @@
    bool IsStreaming() const override;
  
    bool Aborted();
@@ -6086,7 +6403,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    AVFormatContext* m_pFormatContext;
    std::shared_ptr<CDVDInputStream> m_pInput;
-@@ -142,12 +166,26 @@
+@@ -142,12 +171,30 @@
    unsigned int HLSSelectProgram();
  
    std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
@@ -6109,11 +6426,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  int m_blurayBase{-1}, m_blurayEnhancement{-1};
 +  unsigned m_doviGroups{0};
 +  bool m_blurayAwaitBase{false};
++  DemuxPacket::DoviLayerTimes m_blurayTiming;
++  CBlurayVideoWindow m_blurayVideoWindow;
++  bool m_blurayWindowCaptured{false};
++  uint64_t m_blurayEpoch{0};
 +#endif
  
    CCriticalSection m_critSection;
    std::map<int, CDemuxStream*> m_streams;
-@@ -166,6 +204,16 @@
+@@ -166,6 +213,16 @@
    unsigned int m_initialProgramNumber;
    int m_seekStream;
  
@@ -6130,6 +6451,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    XbmcThreads::EndTime<> m_timeout;
  
    // Due to limitations of ffmpeg, we only can detect a program change
+@@ -198,6 +255,7 @@
+   int m_displayTime = 0;
+   double m_dtsAtDisplayTime;
+   bool m_seekToKeyFrame = false;
++  bool m_seekPreroll = false;
+   double m_startTime = 0;
+   std::vector<ChapterFFmpeg> m_chapters;
+ };
 --- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.cpp
 @@ -20,6 +20,7 @@
@@ -6542,10 +6871,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "settings/Settings.h"
  #include "settings/SettingsComponent.h"
  #include "utils/Geometry.h"
-@@ -27,10 +30,12 @@
+@@ -26,11 +29,14 @@
+ #include "utils/log.h"
  #include "video/VideoFileItemClassify.h"
  #include "video/VideoInfoTag.h"
- 
+-
++#include "windowing/WinSystem.h"
++
 +#include <algorithm>
  #include <chrono>
  #include <cstring>
@@ -6555,24 +6887,49 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <string>
  #include <vector>
  
-@@ -189,6 +194,13 @@
+@@ -43,6 +49,12 @@
+ 
+ using namespace KODI;
+ using namespace std::chrono_literals;
++
++// PSR24 bit 5 promises BD-J while outputting stereo. The bundled BD-J runtime
++// supplies no DirectDrawS3D stereo planes; retain MVC and all other capabilities.
++// Revisit this bit only when that runtime implements the corresponding service.
++constexpr uint32_t BLURAY_3D_CAPABILITIES = 0xffffffffu & ~0x20u;
++
+ 
+ static int read_blocks(void* handle, void* buf, int lba, int num_blocks)
+ {
+@@ -180,6 +192,7 @@
+           return false;
+ 
+         openStream = true;
++        root = item.GetDynPath();
+       }
+     }
+   }
+@@ -189,6 +202,8 @@
        return false;
  
      openStream = true;
 +
-+    // libbluray reads the image through our block callback and so needs no path, but
-+    // Kodi's own MPLS parser does - it reads the playlist to find the 3D extension data
-+    // that libbluray parses but does not expose.
-+    CURL udfUrl("udf://");
-+    udfUrl.SetHostName(m_item.GetDynPath());
-+    root = udfUrl.Get();
++    root = m_item.GetDynPath();
    }
    else if (VIDEO::IsProtectedBlurayDisc(m_item))
    {
-@@ -219,6 +231,10 @@
+@@ -219,6 +234,19 @@
      filename = URIUtils::GetFileName(m_item.GetDynPath());
    }
  
++  // Stream mode gives libbluray blocks, but Kodi's MPLS reader still needs a
++  // filesystem root. Both direct images and menu entries use the image's UDF view.
++  if (openStream)
++  {
++    CURL udfUrl("udf://");
++    udfUrl.SetHostName(root);
++    root = udfUrl.Get();
++  }
++
 +  // Keep the VFS form, including any trailing slash, before it is trimmed below - a
 +  // udf:// root needs it to parse back into protocol and host name.
 +  m_vfsRoot = root;
@@ -6580,19 +6937,54 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // root should not have trailing slash
    URIUtils::RemoveSlashAtEnd(root);
  
-@@ -287,6 +303,8 @@
+@@ -287,6 +315,30 @@
      CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - bd_get_disc_info() failed");
      return false;
    }
++
++  // Automatic profile initialization overwrites PSR24 as well. Reapply the actual
++  // bundled runtime capability before disc code chooses its Java/HDMV menu path.
++  if (!bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_3D_CAP, BLURAY_3D_CAPABILITIES))
++  {
++    CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to set 3D player capabilities");
++    return false;
++  }
++
++  // libbluray's automatic profile initialization also supplies optimistic display
++  // capabilities. Replace only PSR23, after opening and before starting disc code,
++  // when the window backend can report the formats its connected output can drive.
++  if (const auto* windowSystem = CServiceBroker::GetWinSystem())
++  {
++    if (const auto capabilities = windowSystem->GetBluray3DDisplayCapabilities();
++        capabilities && !bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_DISPLAY_CAP,
++                                               *capabilities))
++    {
++      CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to set display capabilities");
++      return false;
++    }
++  }
 +
 +  m_stereoscopicDisc = disc_info->content_exist_3D != 0;
  
    if (disc_info->bluray_detected)
    {
-@@ -407,6 +425,14 @@
+@@ -369,6 +421,11 @@
+ 
+   if (m_navmode)
+   {
++#ifdef HAVE_DVBRIDGE
++    // The demuxer carries the authored PTS window to both video consumers.
++    if (!bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_DV_VIDEO_PREROLL, 1))
++      return false;
++#endif
+ 
+     bd_register_overlay_proc (m_bd, this, bluray_overlay_cb);
+ #ifdef HAVE_LIBBLURAY_BDJ
+@@ -406,6 +463,14 @@
+   // Process any events that occurred during opening
    while (bd_get_event(m_bd, &m_event))
      ProcessEvent();
- 
++
 +  // Selecting a playlist normally raises BD_EVENT_PLAYLIST, which is where the 3D
 +  // information is picked up. Cover the case where it did not.
 +  if (!m_playlistInfoValid && m_titleInfo)
@@ -6600,11 +6992,24 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_playlist = m_titleInfo->playlist;
 +    UpdatePlaylistInformation();
 +  }
-+
+ 
    return true;
  }
+@@ -466,6 +531,13 @@
  
-@@ -584,10 +610,13 @@
+ void CDVDInputStreamBluray::ProcessEvent() {
+ 
++  // The last data/still transition owns the state, even without DISCONTINUITY.
++  if (m_hold == HOLD_STILL &&
++      (m_event.event == BD_EVENT_SEEK || m_event.event == BD_EVENT_TITLE ||
++       m_event.event == BD_EVENT_ANGLE || m_event.event == BD_EVENT_PLAYLIST ||
++       m_event.event == BD_EVENT_PLAYITEM))
++    m_hold = HOLD_HELD;
++
+   int pid = -1;
+   switch (m_event.event) {
+ 
+@@ -584,10 +656,13 @@
      m_playlist = m_event.param;
      FreeTitleInfo();
      m_titleInfo = bd_get_playlist_info(m_bd, m_playlist, m_angle);
@@ -6618,7 +7023,98 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      if (m_titleInfo && m_event.param < m_titleInfo->clip_count)
      {
        m_clip = &m_titleInfo->clips[m_event.param];
-@@ -780,9 +809,14 @@
+@@ -625,12 +700,17 @@
+     break;
+ 
+   case BD_EVENT_MENU:
++  {
+     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_MENU {}", m_event.param);
+-    m_menu = (m_event.param != 0);
+-    if (!m_menu)
+-      m_isInMainMenu = false;
++    const BLURAY_DISC_INFO* discInfo = bd_get_disc_info(m_bd);
++    const bool topMenu = m_title && discInfo && m_title == discInfo->top_menu;
++    // BD-J plane INIT also emits MENU=1 without visible pixels. The top title,
++    // unlike an ordinary BD-J title, remains an explicit navigation owner.
++    m_menu = m_event.param != 0 && (topMenu || !m_title || !m_title->bdj);
++    m_isInMainMenu = m_menu && (topMenu || m_isInMainMenu);
+     m_player->OnDiscNavResult(&m_event.param, BD_EVENT_MENU);
+     break;
++  }
+ 
+   case BD_EVENT_IDLE:
+     KODI::TIME::Sleep(100ms);
+@@ -678,6 +758,36 @@
+   m_event.event = BD_EVENT_NONE;
+ }
+ 
++bool CDVDInputStreamBluray::HoldEvent()
++{
++  if (m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
++    return true;
++
++  switch (m_event.event)
++  {
++    case BD_EVENT_SEEK:
++    case BD_EVENT_TITLE:
++    case BD_EVENT_ANGLE:
++    case BD_EVENT_PLAYLIST:
++    case BD_EVENT_PLAYITEM:
++      if (m_hold != HOLD_DATA)
++      {
++        m_hold = HOLD_HELD;
++        return true;
++      }
++      break;
++    case BD_EVENT_STILL_TIME:
++      if (m_hold == HOLD_STILL)
++        m_event.event = BD_EVENT_NONE;
++      else
++        m_hold = HOLD_HELD;
++      return true;
++    default:
++      break;
++  }
++  return false;
++}
++
+ int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)
+ {
+   int result = 0;
+@@ -701,30 +811,8 @@
+         return result;
+       }
+ 
+-      /* Check for holding events */
+-      switch(m_event.event) {
+-        case BD_EVENT_SEEK:
+-        case BD_EVENT_TITLE:
+-        case BD_EVENT_ANGLE:
+-        case BD_EVENT_PLAYLIST:
+-        case BD_EVENT_PLAYITEM:
+-          if(m_hold != HOLD_DATA)
+-          {
+-            m_hold = HOLD_HELD;
+-            return result;
+-          }
+-          break;
+-
+-        case BD_EVENT_STILL_TIME:
+-          if(m_hold == HOLD_STILL)
+-            m_event.event = 0; /* Consume duplicate still event */
+-          else
+-            m_hold = HOLD_HELD;
+-          return result;
+-
+-        default:
+-          break;
+-      }
++      if (HoldEvent())
++        return result;
+ 
+       if(result > 0)
+         m_hold = HOLD_NONE;
+@@ -780,11 +868,16 @@
  {
  #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
    for(SPlane& plane : m_planes)
@@ -6631,9 +7127,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  group->SetSource(DVDOverlaySource::MENU);
 +  group->SetOverlayContainerFlushable(false);
    m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
-   m_hasOverlay = false;
+-  m_hasOverlay = false;
++  m_menuShows = false;
  #endif
-@@ -792,6 +826,7 @@
+ }
+ 
+@@ -792,6 +885,7 @@
  {
  #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
    plane.o.clear();
@@ -6641,14 +7140,47 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    plane.w = w;
    plane.h = h;
  #endif
-@@ -836,29 +871,36 @@
+@@ -836,29 +930,71 @@
  #endif
  }
  
 -void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
-+void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)
++bool CDVDInputStreamBluray::PlaneShows(const SPlane& plane)
  {
  #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  for (const SOverlay& overlay : plane.committed)
++  {
++    const size_t pixelBytes = overlay->palette.empty() ? 4 : 1;
++    if (overlay->width <= 0 || overlay->height <= 0 || overlay->linesize <= 0 ||
++        static_cast<size_t>(overlay->width) > overlay->linesize / pixelBytes ||
++        static_cast<size_t>(overlay->height) > overlay->pixels.size() / overlay->linesize)
++      continue;
++    for (int y = 0; y < overlay->height; ++y)
++    {
++      const uint8_t* row = overlay->pixels.data() + static_cast<size_t>(y) * overlay->linesize;
++      for (int x = 0; x < overlay->width; ++x)
++      {
++        uint32_t pixel = 0;
++        if (pixelBytes == 1)
++        {
++          if (row[x] < overlay->palette.size())
++            pixel = overlay->palette[row[x]];
++        }
++        else
++          memcpy(&pixel, row + static_cast<size_t>(x) * 4, sizeof(pixel));
++        const unsigned alphaShift = pixelBytes == 1 ? PIXEL_ASHIFT : 24;
++        if ((pixel >> alphaShift) & 0xff)
++          return true;
++      }
++    }
++  }
++#endif
++  return false;
++}
++
++void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)
++{
++#if(BD_OVERLAY_INTERFACE_VERSION >= 2)
 +  updated.committed = updated.o;
    auto group = std::make_shared<CDVDOverlayGroup>();
    group->bForced       = true;
@@ -6670,7 +7202,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
 -  m_hasOverlay = true;
-+  m_hasOverlay = !group->m_overlays.empty();
++  // PG does not change committed IG; avoid rescanning it for subtitle-only updates.
++  if (&updated == &m_planes[1] || m_planes[1].committed.empty())
++    m_menuShows = PlaneShows(m_planes[1]);
  #endif
  }
  
@@ -6682,7 +7216,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      OverlayClose();
      return;
-@@ -872,6 +914,13 @@
+@@ -872,6 +1008,13 @@
  
    SPlane& plane(m_planes[ov->plane]);
  
@@ -6696,7 +7230,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (ov->cmd == BD_OVERLAY_CLEAR)
    {
      plane.o.clear();
-@@ -891,6 +940,7 @@
+@@ -891,6 +1034,7 @@
    if (ov->img && ov->cmd == BD_OVERLAY_DRAW)
    {
      SOverlay overlay = std::make_shared<CDVDOverlayImage>();
@@ -6704,7 +7238,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (ov->palette)
      {
-@@ -920,14 +970,14 @@
+@@ -920,14 +1064,14 @@
    }
  
    if (ov->cmd == BD_OVERLAY_FLUSH)
@@ -6721,7 +7255,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      OverlayClose();
      return;
-@@ -941,6 +991,13 @@
+@@ -941,6 +1085,13 @@
  
    SPlane& plane(m_planes[ov->plane]);
  
@@ -6735,24 +7269,105 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (ov->cmd == BD_ARGB_OVERLAY_INIT)
    {
      OverlayInit(plane, ov->w, ov->h);
-@@ -954,6 +1011,7 @@
+@@ -954,13 +1105,14 @@
    if (ov->argb && ov->cmd == BD_ARGB_OVERLAY_DRAW)
    {
      SOverlay overlay = std::make_shared<CDVDOverlayImage>();
 +    overlay->SetSource(DVDOverlaySource::MENU);
  
      overlay->palette.clear();
-     size_t bytes = static_cast<size_t>(ov->stride * ov->h * 4);
-@@ -971,7 +1029,7 @@
+-    size_t bytes = static_cast<size_t>(ov->stride * ov->h * 4);
+-    overlay->pixels.resize(bytes);
+-    memcpy(overlay->pixels.data(), ov->argb, bytes);
+-
+-    overlay->linesize = ov->stride * 4;
++    overlay->linesize = ov->w * 4;
++    overlay->pixels.resize(static_cast<size_t>(overlay->linesize) * ov->h);
++    for (int y = 0; y < ov->h; ++y)
++      memcpy(overlay->pixels.data() + static_cast<size_t>(y) * overlay->linesize,
++             ov->argb + static_cast<size_t>(y) * ov->stride, overlay->linesize);
+     overlay->x = ov->x;
+     overlay->y = ov->y;
+     overlay->height = ov->h;
+@@ -971,10 +1123,33 @@
    }
  
    if(ov->cmd == BD_ARGB_OVERLAY_FLUSH)
 -    OverlayFlush(ov->pts);
+-}
+-#endif
+-
 +    OverlayFlush(plane, ov->pts);
- }
- #endif
++}
++#endif
++
++
++bool CDVDInputStreamBluray::GetVideoPresentationWindow(
++    bool& required, int64_t& first, int64_t& last) const
++{
++  required = false;
++  if (!m_navmode)
++    return true;
++  if (!m_titleInfo || m_playItem >= m_titleInfo->clip_count)
++    return false;
++  // Angle events can replace title information without repeating PLAYITEM.
++  const auto& clip = m_titleInfo->clips[m_playItem];
++  if (clip.video_stream_count == 1 && clip.video_streams &&
++      clip.video_streams[0].coding_type == 0x24 &&
++      clip.dv_stream_count == 1 && clip.dv_streams && clip.dv_streams[0].coding_type == 0x24)
++  {
++    required = true;
++    if (clip.in_time > clip.out_time || clip.out_time > INT64_MAX)
++      return false;
++    first = static_cast<int64_t>(clip.in_time);
++    last = static_cast<int64_t>(clip.out_time);
++  }
++  return true;
++}
  
-@@ -1114,7 +1172,8 @@
+ int CDVDInputStreamBluray::GetTotalTime()
+ {
+@@ -991,11 +1166,17 @@
+ 
+ bool CDVDInputStreamBluray::PosTime(int ms)
+ {
++  if (m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
++    return false;
++
+   if(bd_seek_time(m_bd, ms * 90) < 0)
+     return false;
+ 
+-  while (bd_get_event(m_bd, &m_event))
+-    ProcessEvent();
++  if (m_navmode)
++    m_hold = HOLD_HELD;
++  else
++    while (bd_get_event(m_bd, &m_event))
++      ProcessEvent();
+ 
+   return true;
+ }
+@@ -1033,11 +1214,17 @@
+ 
+ bool CDVDInputStreamBluray::SeekChapter(int ch)
+ {
++  if (m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
++    return false;
++
+   if(m_titleInfo && bd_seek_chapter(m_bd, ch-1) < 0)
+     return false;
+ 
+-  while (bd_get_event(m_bd, &m_event))
+-    ProcessEvent();
++  if (m_navmode)
++    m_hold = HOLD_HELD;
++  else
++    while (bd_get_event(m_bd, &m_event))
++      ProcessEvent();
+ 
+   return true;
+ }
+@@ -1114,7 +1301,8 @@
  
  bool CDVDInputStreamBluray::GetPlaylistStreamLanguage(int pid, std::string& language) const
  {
@@ -6762,7 +7377,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      return find_stream(pid, m_clip->video_streams, m_clip->video_stream_count, language);
    if (HDMV_PID_AUDIO_FIRST <= pid && pid <= HDMV_PID_AUDIO_LAST)
      return find_stream(pid, m_clip->audio_streams, m_clip->audio_stream_count, language);
-@@ -1192,6 +1251,149 @@
+@@ -1192,6 +1380,149 @@
    return false;
  }
  
@@ -6912,9 +7527,81 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  CDVDInputStream::ENextStream CDVDInputStreamBluray::NextStream()
  {
    if(!m_navmode || m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
-@@ -1358,12 +1560,19 @@
+@@ -1199,10 +1530,16 @@
+ 
+   /* process any current event */
+   ProcessEvent();
++  if (m_hold == HOLD_ERROR || m_hold == HOLD_EXIT)
++    return NEXTSTREAM_NONE;
+ 
+   /* process all queued up events */
+   while(bd_get_event(m_bd, &m_event))
++  {
+     ProcessEvent();
++    if (m_hold == HOLD_ERROR || m_hold == HOLD_EXIT)
++      return NEXTSTREAM_NONE;
++  }
+ 
+   if(m_hold == HOLD_STILL)
+     return NEXTSTREAM_RETRY;
+@@ -1213,7 +1550,7 @@
+ 
+ void CDVDInputStreamBluray::UserInput(bd_vk_key_e vk)
+ {
+-  if(m_bd == nullptr || !m_navmode)
++  if (m_bd == nullptr || !m_navmode || m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
+     return;
+ 
+   int ret = bd_user_input(m_bd, -1, vk);
+@@ -1223,9 +1560,17 @@
+   }
+   else
+   {
+-    /* process all queued up events */
++    // Preserve a reader's pending boundary; ordinary paused-menu events stay immediate.
++    if (m_hold == HOLD_HELD)
++      return;
+     while (bd_get_event(m_bd, &m_event))
++    {
++      if (HoldEvent())
++        break;
+       ProcessEvent();
++      if (m_hold == HOLD_ERROR || m_hold == HOLD_EXIT)
++        return;
++    }
+   }
+ }
+ 
+@@ -1306,10 +1651,8 @@
+   if(m_bd == nullptr || !m_navmode)
+     return false;
+ 
+-  // since there is no way to tell in a BD-J blu-ray when a popup menu actually is visible,
+-  // we have to assume that the blu-ray is in menu/navigation mode when there is an overlay
+-  // on screen, even if it might be invisible (which is impossible to detect)
+-  if(m_menu || m_hasOverlay)
++  // Disc navigation is authoritative; transparent BD-J graphics and PG alone are not menus.
++  if(m_menu || m_menuShows)
+     return true;
+   return false;
+ }
+@@ -1324,9 +1667,7 @@
+     m_hold = HOLD_HELD;
+     bd_read_skip_still(m_bd);
+ 
+-    /* process all queued up events */
+-    while (bd_get_event(m_bd, &m_event))
+-      ProcessEvent();
++    // NextStream consumes the pending events after the old demuxer reaches EOF.
+   }
+ }
+ 
+@@ -1356,14 +1697,21 @@
+   }
+   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_REGION_CODE, static_cast<uint32_t>(region));
    bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PARENTAL, 99);
-   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_3D_CAP, 0xffffffff);
+-  bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_3D_CAP, 0xffffffff);
++  bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_3D_CAP, BLURAY_3D_CAPABILITIES);
  #if (BLURAY_VERSION >= BLURAY_VERSION_CODE(1, 0, 2))
 -  bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PLAYER_PROFILE, BLURAY_PLAYER_PROFILE_6_v3_1);
    bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_UHD_CAP, 0xffffffff);
@@ -6934,7 +7621,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #endif
  
    const std::string audioLang{g_langInfo.GetDVDAudioLanguage().AsIso6392T()};
-@@ -1388,8 +1597,9 @@
+@@ -1388,8 +1736,9 @@
  
  bool CDVDInputStreamBluray::OpenStream(CFileItem &item)
  {
@@ -6947,7 +7634,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
 --- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
 +++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
-@@ -10,6 +10,8 @@
+@@ -10,13 +10,17 @@
  
  #include "BlurayStateSerializer.h"
  #include "DVDInputStream.h"
@@ -6956,15 +7643,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "threads/CriticalSection.h"
  #if defined(HAS_UDFREAD)
  #include "filesystem/UDFContext.h"
-@@ -17,6 +19,7 @@
+ #endif
  
++#include <atomic>
  #include <chrono>
  #include <list>
 +#include <map>
  #include <memory>
  #include <optional>
  #include <string>
-@@ -38,6 +41,7 @@
+@@ -38,6 +42,7 @@
  #define BD_EVENT_ENC_ERROR    -3
  
  #define HDMV_PID_VIDEO            0x1011
@@ -6972,7 +7660,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #define HDMV_PID_AUDIO_FIRST      0x1100
  #define HDMV_PID_AUDIO_LAST       0x111f
  #define HDMV_PID_PG_FIRST         0x1200
-@@ -47,6 +51,7 @@
+@@ -47,6 +52,7 @@
  #define HDMV_PID_IG_FIRST         0x1400
  #define HDMV_PID_IG_LAST          0x141f
  
@@ -6980,7 +7668,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  class CDVDOverlayImage;
  class IVideoPlayer;
  
-@@ -141,6 +146,75 @@
+@@ -132,6 +138,7 @@
+   bool PosTime(int ms) override;
+ 
+   void GetStreamInfo(int pid, std::string &language);
++  bool GetVideoPresentationWindow(bool& required, int64_t& first, int64_t& last) const;
+ 
+   /*!
+    * \brief Check whether a stream is the default of the playlist being played, ie. audio stream
+@@ -141,6 +148,75 @@
     */
    bool IsDefaultStream(int pid) const;
  
@@ -7056,16 +7752,37 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void OverlayCallback(const BD_OVERLAY * const);
  #ifdef HAVE_LIBBLURAY_BDJ
    void OverlayCallbackARGB(const struct bd_argb_overlay_s * const);
-@@ -159,7 +233,7 @@
+@@ -151,6 +227,7 @@
+   BLURAY_TITLE_INFO* GetTitleFile(const std::string& name);
+ 
+   void ProcessEvent();
++  bool HoldEvent();
+ 
+   void SaveCurrentState(const CStreamDetails& details) override;
+   UpdateState UpdateItemFromSavedStates(CFileItem& item, double time, bool& closed) override;
+@@ -159,7 +236,8 @@
  protected:
    struct SPlane;
  
 -  void OverlayFlush(int64_t pts);
++  static bool PlaneShows(const SPlane& plane);
 +  void OverlayFlush(SPlane& updated, int64_t pts);
    void OverlayClose();
    static void OverlayClear(SPlane& plane, int x, int y, int w, int h);
    static void OverlayInit (SPlane& plane, int w, int h);
-@@ -187,6 +261,7 @@
+@@ -175,9 +253,9 @@
+   //! GetStreamInfo). Owned, and only valid while m_clip refers to the same play item.
+   struct clpi_cl* m_clipInfo = nullptr;
+   uint32_t m_angle = 0;
+-  bool m_menu = false;
++  std::atomic_bool m_menu{false};
+   bool m_isInMainMenu = false;
+-  bool m_hasOverlay = false;
++  std::atomic_bool m_menuShows{false};
+   bool m_navmode = false;
+   int m_dispTimeBeforeRead = 0;
+ 
+@@ -187,6 +265,7 @@
    struct SPlane
    {
      SOverlays o;
@@ -7073,7 +7790,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      int w = 0;
      int h = 0;
    };
-@@ -232,6 +307,10 @@
+@@ -232,6 +311,10 @@
       * \return True if the clip carries the stream, false otherwise
       */
      bool GetClipStreamLanguage(int pid, std::string& language) const;
@@ -7084,7 +7801,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      std::unique_ptr<CDVDInputStreamFile> m_pstream;
      std::string m_rootPath;
  
-@@ -240,6 +319,29 @@
+@@ -240,6 +323,29 @@
      std::optional<XFILE::CUDFMount> m_udfMount;
  #endif
  
@@ -7933,7 +8650,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_pDemuxer.reset();
    m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_DEMUX);
  
-@@ -1420,6 +1483,9 @@
+@@ -1065,8 +1128,11 @@
+ {
+   // if input stream dictate, we will open later
+   // unless we are loading a bluray playlist directly in which case set now
++  // Disc stream events may arrive while probing, before playback state is
++  // published. Consult the live input capability instead of its initial NONE cache.
++  const auto menus = std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInputStream);
+   const bool noBlurayMenu{m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) &&
+-                          m_State.menuType == MenuType::NONE};
++                          (!menus || menus->GetSupportedMenuType() == MenuType::NONE)};
+   if (!noBlurayMenu && (m_dvd.iSelectedAudioStream >= 0 || m_dvd.iSelectedSPUStream >= 0))
+     return;
+ 
+@@ -1420,6 +1486,9 @@
  
  void CVideoPlayer::Prepare()
  {
@@ -7943,7 +8673,93 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CFFmpegLog::SetLogLevel(1);
    SetPlaySpeed(DVD_PLAYSPEED_NORMAL);
    m_processInfo->SetSpeed(1.0);
-@@ -2140,6 +2206,19 @@
+@@ -1608,6 +1677,28 @@
+   Prepare();
+ 
+   unsigned int emptyPackets = 0;
++  bool stillDrainPending = false;
++
++  // A newly selected PG stream may have no packets for a long time. Retire
++  // the previous internal track immediately, without clearing the disc menu.
++  // Run on the player thread, never from a potentially reentrant AVIO callback.
++  const auto closeDeselectedBluraySubtitle = [this]
++  {
++    if (!m_pInputStream || !m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) ||
++        !m_pDemuxer || m_CurrentSubtitle.id < 0 ||
++        STREAM_SOURCE_MASK(m_CurrentSubtitle.source) != STREAM_SOURCE_DEMUX ||
++        m_dvd.iSelectedSPUStream < 0)
++      return;
++
++    const auto menus = std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInputStream);
++    if (!menus || menus->GetSupportedMenuType() != MenuType::NATIVE)
++      return;
++
++    const auto* current =
++        m_pDemuxer->GetStream(m_CurrentSubtitle.demuxerId, m_CurrentSubtitle.id);
++    if (current && current->dvdNavId != m_dvd.iSelectedSPUStream)
++      CloseStream(m_CurrentSubtitle, false);
++  };
+ 
+   while (!m_bAbortRequest)
+   {
+@@ -1626,6 +1717,9 @@
+ 
+     if (m_bAbortRequest)
+       break;
++
++    // UserInput can publish selection while paused or before full queues drain.
++    closeDeselectedBluraySubtitle();
+ 
+     // should we open a new input stream?
+     if (!m_pInputStream)
+@@ -1719,6 +1813,8 @@
+     DemuxPacket* pPacket = NULL;
+     CDemuxStream *pStream = NULL;
+     ReadPacket(pPacket, pStream);
++    // AVIO may also publish selection while producing an empty/null packet.
++    closeDeselectedBluraySubtitle();
+     if (pPacket && !pStream)
+     {
+       /* probably a empty packet, just free it and move on */
+@@ -1783,6 +1879,14 @@
+       // input stream asked us to just retry
+       if(next == CDVDInputStream::NEXTSTREAM_RETRY)
+       {
++        // The disc ended this still's video input. Unlike an ordinary read
++        // timeout, release its delayed pictures before waiting for navigation.
++        if (m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY) &&
++            m_dvd.state == DVDSTATE_STILL && m_CurrentVideo.inited && stillDrainPending)
++        {
++          m_VideoPlayerVideo->SendMessage(std::make_shared<CDVDMsg>(CDVDMsg::VIDEO_DRAIN));
++          stillDrainPending = false;
++        }
+         CThread::Sleep(100ms);
+         continue;
+       }
+@@ -1872,6 +1976,8 @@
+     }
+ 
+     // process the packet
++    if (CheckIsCurrent(m_CurrentVideo, pStream, pPacket))
++      stillDrainPending = true;
+     ProcessPacket(pStream, pPacket);
+   }
+ }
+@@ -1969,6 +2075,13 @@
+ 
+ void CVideoPlayer::ProcessVideoData(CDemuxStream* pStream, DemuxPacket* pPacket)
+ {
++#ifdef HAVE_DVBRIDGE
++  if (pPacket->doviLayerTimes.valid && pPacket->doviLayerTimes.basePts == AV_NOPTS_VALUE)
++  {
++    m_VideoPlayerVideo->SendMessage(std::make_shared<CDVDMsgDemuxerPacket>(pPacket, false));
++    return; // Terminal EL work does not advance or initialize the BL clock.
++  }
++#endif
+   CheckStreamChanges(m_CurrentVideo, pStream);
+   bool checkcont = false;
+ 
+@@ -2140,6 +2253,19 @@
  
  void CVideoPlayer::HandlePlaySpeed()
  {
@@ -7963,7 +8779,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    const bool isInMenu = IsInMenuInternal();
    const bool tolerateStall =
        isInMenu || (m_CurrentVideo.hint.flags & StreamFlags::FLAG_STILL_IMAGES);
-@@ -3011,6 +3090,10 @@
+@@ -2531,7 +2657,8 @@
+       return true;
+     }
+ 
+-    if ((current.startpts - current.dts) > DVD_SEC_TO_TIME(20))
++    if ((current.startpts - current.dts) > DVD_SEC_TO_TIME(20) &&
++        !(m_pDemuxer && m_pDemuxer->HasSeekPreroll()))
+     {
+       CLog::Log(LOGDEBUG, "{} - too far to decode before finishing seek", __FUNCTION__);
+       if(m_CurrentAudio.startpts != DVD_NOPTS_VALUE)
+@@ -3011,6 +3138,10 @@
    });
  
    // destroy objects
@@ -7974,7 +8800,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_renderManager.Flush(false, false);
    m_pDemuxer.reset();
    m_pSubtitleDemuxer.reset();
-@@ -3084,6 +3167,12 @@
+@@ -3084,6 +3215,12 @@
  
        FlushBuffers(DVD_NOPTS_VALUE, true, true);
        m_renderManager.Flush(false, false);
@@ -7987,7 +8813,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        m_pDemuxer.reset();
        m_pSubtitleDemuxer.reset();
        m_subtitleDemuxerMap.clear();
-@@ -3611,6 +3700,10 @@
+@@ -3611,6 +3748,10 @@
      {
        CLog::Log(LOGDEBUG, "CVideoPlayer - CDVDMsg::PLAYER_ABORT");
        m_bAbortRequest = true;
@@ -7998,7 +8824,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      }
      else if (pMsg->IsType(CDVDMsg::PLAYER_SET_UPDATE_STREAM_DETAILS))
        m_updateStreamDetails = true;
-@@ -4306,6 +4399,8 @@
+@@ -4306,6 +4447,8 @@
          hint.colorTransferCharacteristic = m_CurrentVideo.hint.colorTransferCharacteristic;
        }
        res = OpenSubtitleStream(hint);
@@ -8007,7 +8833,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        break;
      case StreamType::TELETEXT:
        res = OpenTeletextStream(hint);
-@@ -4452,9 +4547,17 @@
+@@ -4452,9 +4595,17 @@
                                                     (double)DVD_TIME_BASE * hint.fpsscale /
                                                     (hint.fpsrate * (hint.interlaced ? 2 : 1)));
  
@@ -8026,7 +8852,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      }
    }
  
-@@ -4511,6 +4614,60 @@
+@@ -4511,6 +4662,60 @@
    }
  
    return true;
@@ -8087,7 +8913,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  bool CVideoPlayer::OpenSubtitleStream(const CDVDStreamInfo& hint)
-@@ -6255,6 +6412,9 @@
+@@ -6255,6 +6460,9 @@
    info.stereoMode = s.stereo_mode;
    info.flags = s.flags;
    info.hdrType = s.hdrType;
@@ -8097,7 +8923,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (info.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
    {
      if (info.hdrDetail.length() == 0)
-@@ -6324,6 +6484,16 @@
+@@ -6324,6 +6532,16 @@
    info.codecName = s.codec;
    info.codecDesc = s.codecDesc;
    info.flags = s.flags;
@@ -16188,3 +17014,40 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  mutable std::once_flag m_jsonOnce;
 +  mutable std::string m_json;
 +};
+--- a/xbmc/cores/VideoPlayer/Interface/DemuxPacket.h
++++ b/xbmc/cores/VideoPlayer/Interface/DemuxPacket.h
+@@ -43,6 +43,19 @@
+ 
+     //! @brief PTS offset correction applied to the PTS and DTS.
+     double m_ptsOffsetCorrection{0};
++
++    // Decode the original reference AU while suppressing its reordered picture.
++    bool videoDecodeOnly{false};
++    bool videoWindowed{false};
++
++    // Native dual-layer identity, kept separate from Kodi's adjusted clock.
++    struct DoviLayerTimes
++    {
++      int64_t basePts{0}, enhancementPts{0};
++      uint64_t epoch{0};
++      int clockNum{0}, clockDen{0};
++      bool valid{false}, presentable{false};
++    } doviLayerTimes;
+   };
+ 
+ #ifdef __cplusplus
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DemuxMultiSource.h
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DemuxMultiSource.h
+@@ -49,6 +49,12 @@
+   DemuxPacket* Read() override;
+   bool Reset() override;
+   bool SeekTime(double time, bool backwards = false, double* startpts = NULL) override;
++  bool HasSeekPreroll() const override
++  {
++    for (const auto& [id, demuxer] : m_demuxerMap)
++      if (demuxer->HasSeekPreroll()) return true;
++    return false;
++  }
+ 
+ protected:
+   CDemuxStream* GetStream(int iStreamId) const override { return nullptr; }

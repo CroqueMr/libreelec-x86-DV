@@ -37,33 +37,40 @@ struct AVBufferRef{unsigned char* data{};};
 struct AVHWFramesContext{void* device_ref{};};
 struct AVCodecContext{AVBufferRef* hw_frames_ctx{};};
 struct AVPacket{};
-struct Fel{bool ready=false,failed=false,submit=true;int takes=0;};
+struct AVRational{int num,den;};
+struct dvbridge_fel_source{int64_t base_pts,enhancement_pts;AVRational time_base;uint64_t epoch;bool presentable;};
+struct DemuxPacket{bool videoWindowed=false;struct{int64_t basePts{},enhancementPts{};int clockNum{},clockDen{};uint64_t epoch{};bool valid{},presentable{};}doviLayerTimes;};
+struct Fel{bool ready=false,failed=false,submit=true;int takes=0,discardUntil=0;};
 bool dvbridge_fel_submit(Fel* f,AVPacket*){return f->submit;}
+bool dvbridge_fel_submit_source(Fel* f,AVPacket*,const dvbridge_fel_source*){return f->submit;}
 bool dvbridge_fel_failed(Fel* f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*){return false;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
 bool dvbridge_fel_drain(Fel*){return true;}
 int dvbridge_fel_take(Fel* f,int64_t pts,AVFrame** frame){
+ if(pts<=f->discardUntil)return 2;
  if(!f->ready)return 0;assert(pts>=1);++f->takes;*frame=new AVFrame;return 1;
 }
 struct VideoPicture{
  int64_t doviSourcePts=AV_NOPTS_VALUE;int pixels=123;
  std::shared_ptr<AVFrame> doviEnhancement;int doviEnhancementBinding{};
- struct Metadata{int Binding()const{return 17;}}doviMetadata;
+ int doviSourceBinding=17;
+ struct Metadata{bool valid=true;int Binding()const{return 17;}const void* Data()const{return valid?this:nullptr;}}doviMetadata;
  void Reset(){*this={};}void CopyRef(const VideoPicture& p){*this=p;}
 };
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  std::shared_ptr<Fel> m_dvFel;std::deque<std::shared_ptr<VideoPicture>>m_dvPending;
  unsigned m_dvStartupReported{};uint64_t m_dvDiagnosticGeneration=1;
+ uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,drainSequence=false;
  struct SourceOwner{uint64_t Stream()const{return 7;}}m_dvSourceOwner;
  bool m_dvFailed=false,m_dvNativeOutput=true;
  int m_codecControlFlags{},baseDecoded{};AVCodecContext context;AVCodecContext* m_pCodecContext=&context;
  static constexpr unsigned DVEnhancementPendingPictures=16;
  void ReportDVStartup(unsigned fact,const char* stage)noexcept @REPORT@
- VCReturn GetBasePicture(VideoPicture* p){p->doviSourcePts=++baseDecoded;p->pixels=123;return VC_PICTURE;}
+ VCReturn GetBasePicture(VideoPicture* p){if(drainSequence&&baseDecoded==21)return VC_EOF;p->doviSourcePts=++baseDecoded;p->pixels=123;return VC_PICTURE;}
  VCReturn GetPicture(VideoPicture* pVideoPicture)@PICTURE@
- void Submitted(int ret){AVPacket packet;auto* avpkt=&packet;@SUBMITTED@}
+ void Submitted(int ret){DemuxPacket packet;AVPacket compressed;auto* avpkt=&compressed;@SUBMITTED@}
 };
 int main(){
  using namespace DVBRIDGE;
@@ -86,6 +93,11 @@ int main(){
  assert(vanilla.GetPicture(&output)==CDVDVideoCodec::VC_PICTURE && events.size()==5);
  enabled=false;CDVDVideoCodecFFmpeg disabled;disabled.GetPicture(&output);assert(events.size()==5);
  enabled=true;c.m_dvFel->submit=false;c.Submitted(0);assert(c.m_dvFailed && events.size()==5);
+ CDVDVideoCodecFFmpeg drain;drain.m_dvFel=std::make_shared<Fel>();
+ drain.m_dvFel->ready=true;drain.m_dvFel->discardUntil=20;
+ drain.drainSequence=true;drain.m_codecControlFlags=DVD_CODEC_CTRL_DRAIN;
+ assert(drain.GetPicture(&output)==CDVDVideoCodec::VC_PICTURE&&output.doviSourcePts==21);
+ assert(drain.GetPicture(&output)==CDVDVideoCodec::VC_EOF);
 }
 '''.replace('@REPORT@', report).replace('@PICTURE@', picture).replace('@SUBMITTED@', submitted)
         with tempfile.TemporaryDirectory() as temporary:

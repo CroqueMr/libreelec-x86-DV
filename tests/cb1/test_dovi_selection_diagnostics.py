@@ -19,6 +19,7 @@ class DoviSelectionDiagnostics(unittest.TestCase):
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
 #include <climits>
 #include <string>
@@ -44,6 +45,8 @@ struct CDVDDemuxFFmpeg {
  int m_blurayBase{-1},m_blurayEnhancement{-1};
  unsigned m_doviGroups=0;
  bool m_blurayAwaitBase=false;
+ DemuxPacket::DoviLayerTimes m_blurayTiming;
+ uint64_t m_blurayEpoch{0};
  struct AVCodecParametersDeleter {void operator()(AVCodecParameters* p)const{avcodec_parameters_free(&p);}};
  void InitBlurayDovi(unsigned int);
  CDVDDemuxFFmpeg(){assert(m_pFormatContext);static const AVInputFormat format{.name="mpegts"};m_pFormatContext->iformat=&format;

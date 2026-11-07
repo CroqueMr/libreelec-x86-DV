@@ -20,6 +20,7 @@ class NvidiaPackages(unittest.TestCase):
         version, deps, flags = result.stdout.splitlines()
         self.assertEqual(version, '615.78.08')
         self.assertIn('nvidia-open-kernel-modules', deps.split())
+        self.assertIn('nvidia_egl-gbm', deps.split())
         self.assertIn('-strip', flags.split())
         modules = self.recipe('packages/graphics/nvidia-open-kernel-modules/package.mk',
                               'printf "%s\\n%s\\n" "$PKG_VERSION" "$PKG_COMMIT"')
@@ -41,8 +42,8 @@ class NvidiaPackages(unittest.TestCase):
             recipe = ROOT / 'packages/graphics/nvidia/package.mk'
             # Missing payloads deliberately make the real installation fail.
             # A complete manifest supplies every copied file without executing vendor code.
-            files = ['10_nvidia.json', '10_nvidia_wayland.json', '15_nvidia_gbm.json',
-                     'libnvidia-egl-wayland.so.1.1.20', 'libnvidia-egl-gbm.so.1.1.3',
+            files = ['10_nvidia.json', '10_nvidia_wayland.json',
+                     'libnvidia-egl-wayland.so.1.1.20',
                      'nvidia-smi', 'nvidia-application-profiles-615.78.08-rc']
             files += [name + '.615.78.08' for name in
                       ('libnvidia-allocator.so', 'libEGL_nvidia.so', 'libnvidia-eglcore.so',
@@ -58,6 +59,9 @@ class NvidiaPackages(unittest.TestCase):
             (base / 'licenses').mkdir()
             (base / 'licenses/LicenseRef-NVIDIA-Driver-License-Agreement.txt').write_bytes(b'test-license')
             env = dict(os.environ, INSTALL=str(installed), ROOT=str(base), PKG_DIR=str(recipe.parent))
+            shared = installed/'usr/lib/libnvidia-egl-gbm.so.1.1.3'
+            shared.parent.mkdir(parents=True)
+            shared.write_bytes(b'source-built-common-egl-gbm')
             result = subprocess.run(['bash', '-ec',
                 'VULKAN_SUPPORT=no; source "$1"; '
                 'get_full_firmware_dir() { echo usr/lib/kernel-overlays/$1/lib/firmware; }; '
@@ -65,6 +69,9 @@ class NvidiaPackages(unittest.TestCase):
                 'die() { echo "$*" >&2; exit 1; }; cd "$2"; makeinstall_target',
                 'install', str(recipe), str(payload)], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(shared.read_bytes(), b'source-built-common-egl-gbm')
+            self.assertFalse(shared.is_symlink())
+            self.assertFalse((installed/'usr/lib/nvidia-drivers/r615/usr/lib/libnvidia-egl-gbm.so.1.1.3').exists())
             self.assertEqual((installed / 'usr/lib/nvidia-drivers/r615/usr/share/licenses/nvidia/LICENSE').read_bytes(), b'test-license')
             self.assertTrue((installed / 'usr/lib/kernel-overlays/nvidia-r615/lib/firmware/nvidia/615.78.08/ucodes_test.bin').is_file())
             self.assertTrue((installed / 'usr/lib/libnvcuvid.so.1').is_symlink())

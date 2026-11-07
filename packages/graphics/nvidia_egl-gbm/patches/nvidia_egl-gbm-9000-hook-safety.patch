@@ -1,0 +1,116 @@
+From faff2fe821317955ecf3839a602927db2609737c Mon Sep 17 00:00:00 2001
+From: Hades <15710513+hadesdevls@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 01:27:14 +0000
+Subject: [PATCH] egl-gbm: the eglChooseConfig and eglCreatePbufferSurface
+ hooks, made safe
+
+Three defects of egl-gbm 1.1.4 (the tag is also the head of its main
+branch, 2026-10-27), none of which Kodi reaches today: it passes an
+attribute list without EGL_NATIVE_VISUAL_ID, and creates no pbuffer.
+
+- CreatePbufferSurfaceHook() (gbm-platform.c) read display->data before
+  it checked that display was not NULL (a display that is not one of
+  egl-gbm's, or one that was terminated), and never gave back the
+  reference that eGbmRefHandle() took: each call left the display one
+  reference more, so that it could not be freed. It now checks first,
+  and drops the reference as the other hooks do.
+
+- eGbmChooseConfigHook() (gbm-display.c), with EGL_NATIVE_VISUAL_ID,
+  counts the configs that match everything else into nNewConfigs, and
+  then allocated and tested the caller's *numConfig, which is only an
+  output: with *numConfig below the count, the second eglChooseConfig()
+  of the device wrote past the end of the array (a heap overflow); with
+  *numConfig 0 it returned no config at all. It now allocates the count,
+  sets *numConfig to 0 where nothing matches, returns EGL_BAD_PARAMETER
+  for a NULL num_config, and EGL_FALSE when the allocation fails (it
+  returned EGL_TRUE with EGL_BAD_ALLOC set).
+
+- The same hook read the attribute list in its second loop without the
+  NULL check of the first: EGL allows a NULL list.
+
+Checked on the host: the six sources of the library compiled unchanged
+with AddressSanitizer and UBSan, loaded with loadEGLExternalPlatform()
+over a fake EGL device, the hooks taken from getHookAddress(), each case
+in a process of its own: 8 of 10 cases fail on 1.1.4 (two heap overflows,
+two NULL dereferences, a leaked reference, a member access through NULL,
+two lists without their configs) and none with this; gbm-display.c and
+gbm-platform.c build with the compiler of the image and the -Wall
+-Werror of its meson.build, without warnings, before and after.
+---
+ src/gbm-display.c  | 17 ++++++++++++++---
+ src/gbm-platform.c |  8 ++++++--
+ 2 files changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/src/gbm-display.c b/src/gbm-display.c
+index fcc8c0e..4e37928 100644
+--- a/src/gbm-display.c
++++ b/src/gbm-display.c
+@@ -502,7 +502,7 @@ eGbmChooseConfigHook(EGLDisplay dpy,
+     }
+ 
+     for (nAttribs = 0, nNewAttribs = 0;
+-         attribs[nAttribs] != EGL_NONE;
++         attribs && attribs[nAttribs] != EGL_NONE;
+          nAttribs += 2) {
+         /*
+          * Convert all instances of EGL_WINDOW_BIT in an EGL_SURFACE_TYPE
+@@ -546,6 +546,11 @@ eGbmChooseConfigHook(EGLDisplay dpy,
+     newAttribs[nNewAttribs] = EGL_NONE;
+ 
+     if (nativeVisual != EGL_DONT_CARE) {
++        if (!numConfig) {
++            err = EGL_BAD_PARAMETER;
++            goto done;
++        }
++
+         /*
+          * Need to query *all* configs that match everything but the specified
+          * native visual ID, then filter them down based on visual ID before
+@@ -557,12 +562,18 @@ eGbmChooseConfigHook(EGLDisplay dpy,
+                                      0,
+                                      &nNewConfigs);
+ 
+-        if (!ret || !*numConfig) goto done;
++        if (!ret) goto done;
++
++        if (nNewConfigs <= 0) {
++            *numConfig = 0;
++            goto done;
++        }
+ 
+-        newConfigs = malloc(sizeof(EGLConfig) * *numConfig);
++        newConfigs = malloc(sizeof(EGLConfig) * nNewConfigs);
+ 
+         if (!newConfigs) {
+             err = EGL_BAD_ALLOC;
++            ret = EGL_FALSE;
+             goto done;
+         }
+ 
+diff --git a/src/gbm-platform.c b/src/gbm-platform.c
+index 8188d55..4f0fdf1 100644
+--- a/src/gbm-platform.c
++++ b/src/gbm-platform.c
+@@ -100,14 +100,18 @@ CreatePbufferSurfaceHook(EGLDisplay dpy,
+                          const EGLint *attribs)
+ {
+     GbmDisplay* display = (GbmDisplay*)eGbmRefHandle(dpy);
+-    GbmPlatformData* data = display->data;
++    EGLSurface surface;
+ 
+     if (!display) {
+         /*  No platform data. Can't set error EGL_NO_DISPLAY */
+         return EGL_NO_SURFACE;
+     }
+ 
+-    return data->egl.CreatePbufferSurface(display->devDpy, config, attribs);
++    surface = display->data->egl.CreatePbufferSurface(display->devDpy, config,
++                                                      attribs);
++    eGbmUnrefObject(&display->base);
++
++    return surface;
+ }
+ 
+ typedef struct GbmEglHookRec {
+-- 
+2.53.0

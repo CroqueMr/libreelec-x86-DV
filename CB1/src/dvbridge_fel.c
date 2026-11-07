@@ -22,6 +22,18 @@ struct picture_order {
     bool seen;
 };
 
+/* Splitter output is Annex-B; only identify the first VCL NAL header. The
+ * native HEVC parser still validates the complete access unit below. */
+static int vcl_type(const AVPacket *packet)
+{
+    for (int i=0;i+4<packet->size;++i)
+        if (!packet->data[i] && !packet->data[i+1] && packet->data[i+2]==1) {
+            int type=(packet->data[i+3]>>1)&63;
+            if (type<32) return type;
+        }
+    return -1;
+}
+
 static bool picture_identity(struct picture_order *order, const AVPacket *packet, int64_t *identity)
 {
     uint8_t *output;
@@ -57,13 +69,37 @@ struct dvbridge_fel {
     struct picture_order base_order, enhancement_order;
     int64_t packet_order[QUEUE_MAX];
     bool packet_key[QUEUE_MAX];
-    struct { int64_t order, pts; bool key; } times[MAP_MAX];
+    struct { int64_t order, pts; bool key, presentable; } times[MAP_MAX];
     unsigned num_times;
     bool synchronizing;
     int64_t anchor_pts;
     unsigned preroll_packets;
     int64_t output_order;
+    uint64_t source_epoch;
+    AVRational source_clock;
+    bool source_timed;
+    bool source_no_rasl;
+    int64_t source_taken;
 };
+
+/* Keep exact discarded EL identities in the existing bounded map, including
+ * an EL arriving before its BL. A decoder error without an identity is fatal. */
+static bool discard_source(struct dvbridge_fel *f, int64_t source)
+{
+    if (source == AV_NOPTS_VALUE) return false;
+    if (source <= f->source_taken) return true;
+    unsigned i=0;
+    while (i<f->num_times && f->times[i].order!=source) ++i;
+    if (i==f->num_times) {
+        if (i==MAP_MAX) return false;
+        f->times[i].order=source;
+        f->times[i].pts=AV_NOPTS_VALUE;
+        f->times[i].key=false;
+        ++f->num_times;
+    }
+    f->times[i].presentable=false;
+    return true;
+}
 
 static enum AVPixelFormat hardware_format(AVCodecContext *ctx, const enum AVPixelFormat *formats)
 {
@@ -100,6 +136,10 @@ static void clear_queues(struct dvbridge_fel *f)
     f->epoch_uncertain = false;
     f->num_times = 0;
     f->output_order = AV_NOPTS_VALUE;
+    f->source_epoch = 0;
+    f->source_timed = false;
+    f->source_no_rasl = false;
+    f->source_taken = AV_NOPTS_VALUE;
 }
 
 void dvbridge_fel_reset(struct dvbridge_fel *f)
@@ -155,6 +195,7 @@ struct dvbridge_fel *dvbridge_fel_create(const AVCodecParameters *p, AVRational 
     f->synchronizing = true;
     f->anchor_pts = AV_NOPTS_VALUE;
     f->output_order = AV_NOPTS_VALUE;
+    f->source_taken = AV_NOPTS_VALUE;
     if (av_bsf_list_parse_str("dovi_split=mode=el", &f->split) < 0 ||
         avcodec_parameters_copy(f->split->par_in, p) < 0)
         goto fail;
@@ -207,6 +248,7 @@ static bool receive_frames(struct dvbridge_fel *f)
         if (result < 0) {
             av_frame_free(&frame);
             if (result == AVERROR_INVALIDDATA && !f->harvesting) {
+                if (f->source_timed) return false; // No exact identity to discard.
                 recover(f);
                 return !f->failed;
             }
@@ -214,8 +256,10 @@ static bool receive_frames(struct dvbridge_fel *f)
                 f->eof = true;
             return result == AVERROR(EAGAIN) || result == AVERROR_EOF;
         }
-        if (frame->flags & AV_FRAME_FLAG_CORRUPT) {
+        if ((frame->flags & AV_FRAME_FLAG_CORRUPT) || (f->source_timed && frame->decode_error_flags)) {
+            const bool identified = !f->source_timed || discard_source(f, frame->pts);
             av_frame_free(&frame);
+            if (!identified) return false;
             if (f->harvesting)
                 continue;
             recover(f);
@@ -223,26 +267,29 @@ static bool receive_frames(struct dvbridge_fel *f)
         }
         /* The private decoder timestamp is the stable HEVC identity. Restore
          * the exact original BL time only after native POC reordering. */
-        if (frame->pts == AV_NOPTS_VALUE)
+        if (!f->source_timed && frame->pts == AV_NOPTS_VALUE)
             frame->pts = frame->best_effort_timestamp;
         if (frame->format != AV_PIX_FMT_VAAPI || frame->pts == AV_NOPTS_VALUE) {
             av_frame_free(&frame);
             return false;
         }
         unsigned match = 0;
-        while (match < f->num_times && f->times[match].order != frame->pts)
-            ++match;
-        if (match == f->num_times ||
+        if (!f->source_timed)
+            while (match < f->num_times && f->times[match].order != frame->pts)
+                ++match;
+        if ((!f->source_timed && match == f->num_times) ||
             (f->output_order != AV_NOPTS_VALUE && frame->pts <= f->output_order)) {
             av_frame_free(&frame);
             return false;
         }
         f->output_order = frame->pts;
-        frame->pts = f->times[match].pts;
-        frame->best_effort_timestamp = frame->pts;
-        --f->num_times;
-        memmove(f->times + match, f->times + match + 1,
-                (f->num_times - match) * sizeof(*f->times));
+        if (!f->source_timed) {
+            frame->pts = f->times[match].pts;
+            frame->best_effort_timestamp = frame->pts;
+            --f->num_times;
+            memmove(f->times + match, f->times + match + 1,
+                    (f->num_times - match) * sizeof(*f->times));
+        }
         for (unsigned i = 0; i < f->num_frames; ++i) {
             if (f->frames[i]->pts == frame->pts) {
                 av_frame_free(&frame);
@@ -303,21 +350,25 @@ static bool pump(struct dvbridge_fel *f)
          * a lost terminal EL AU can make its max+1 counter one picture early.
          * Non-reordered independently coded IDRs keep their existing admission.
          * Never decode an ambiguous IDR into a previous BL's exact-time slot. */
-        if (f->packet_key[0] && match < f->num_times && !f->times[match].key &&
+        if (!f->source_timed && f->packet_key[0] && match < f->num_times && !f->times[match].key &&
             f->base_order.context->has_b_frames > 0) {
             av_log(f->decoder, AV_LOG_ERROR,
                    "FEL decode: ambiguous enhancement epoch at picture %lld; refusing an unproven pair\n",
                    (long long)f->packet_order[0]);
             goto fail;
         }
-        if (f->recovering) {
-            if (f->packet_key[0] && match == f->num_times && !f->draining)
+        const int type=f->source_timed ? vcl_type(packet) : -1;
+        if (f->recovering || (f->source_timed && f->source_no_rasl && (type==8 || type==9))) {
+            if (!f->source_timed && f->packet_key[0] && match == f->num_times && !f->draining)
                 break; /* Independent EL IDR can precede the matching BL key. */
-            if (!f->packet_key[0] || match == f->num_times || !f->times[match].key) {
-                if (match < f->num_times) {
-                    --f->num_times;
-                    memmove(f->times + match, f->times + match + 1,
-                            (f->num_times - match) * sizeof(*f->times));
+            if (!f->packet_key[0] || (!f->source_timed &&
+                (match == f->num_times || !f->times[match].key))) {
+                if (f->source_timed) {
+                    if (!discard_source(f, f->packet_order[0])) goto fail;
+                } else if (match < f->num_times) {
+                        --f->num_times;
+                        memmove(f->times + match, f->times + match + 1,
+                                (f->num_times - match) * sizeof(*f->times));
                 }
                 f->packet_bytes -= packet->size;
                 av_packet_free(&packet);
@@ -329,10 +380,10 @@ static bool pump(struct dvbridge_fel *f)
                         f->num_packets * sizeof(*f->packet_key));
                 continue;
             }
-            f->anchor_pts = f->times[match].pts;
-            int64_t anchor_order = f->times[match].order;
+            f->anchor_pts = f->source_timed ? f->packet_order[0] : f->times[match].pts;
+            int64_t anchor_order = f->source_timed ? f->packet_order[0] : f->times[match].order;
             for (unsigned i = 0; i < f->num_times;) {
-                if (f->times[i].order >= anchor_order) {
+                if (f->source_timed || f->times[i].order >= anchor_order) {
                     ++i;
                     continue;
                 }
@@ -341,17 +392,30 @@ static bool pump(struct dvbridge_fel *f)
                         (f->num_times - i) * sizeof(*f->times));
             }
             match = 0;
-            while (f->times[match].order != anchor_order)
+            while (!f->source_timed && f->times[match].order != anchor_order)
                 ++match;
             f->recovering = false;
+            if (f->source_timed) f->source_no_rasl=true;
             av_log(f->decoder, AV_LOG_INFO,
                    "FEL decode: resumed exact pairing at picture %lld, source PTS %lld\n",
                    (long long)anchor_order, (long long)f->anchor_pts);
         }
-        if (match == f->num_times) {
-            if (f->draining)
-                goto fail;
-            break; /* A reference EL picture can precede its corresponding BL. */
+        if (!f->source_timed && match == f->num_times) {
+            if (!f->draining)
+                break; /* A reference EL picture can precede its corresponding BL. */
+            /* Drain closes this input epoch (submit rejects further BL). A cut
+             * may retain an EL-only suffix; no queued dependent BL may need it.
+             * Internal holes still fail, and native EOF releases the valid DPB. */
+            if (!f->base_order.seen) goto fail;
+            for (unsigned i=0;i<f->num_packets;++i)
+                if (f->packet_order[i] <= f->base_order.maximum) goto fail;
+            av_log(f->decoder, AV_LOG_DEBUG,
+                   "FEL decode: retiring %u terminal EL units beyond BL %lld\n",
+                   f->num_packets, (long long)f->base_order.maximum);
+            for (unsigned i=0;i<f->num_packets;++i) av_packet_free(&f->packets[i]);
+            f->num_packets=0;
+            f->packet_bytes=0;
+            break;
         }
         packet->pts = f->packet_order[0];
         packet->dts = AV_NOPTS_VALUE;
@@ -359,6 +423,12 @@ static bool pump(struct dvbridge_fel *f)
         if (result == AVERROR(EAGAIN))
             break;
         if (result < 0 && result != AVERROR_INVALIDDATA)
+            goto fail;
+        if (result==0 && f->source_timed && type>=0 && type<16 && type!=6 && type!=7 &&
+            type!=8 && type!=9)
+            f->source_no_rasl=false;
+        if (result == AVERROR_INVALIDDATA && f->source_timed &&
+            !discard_source(f, f->packet_order[0]))
             goto fail;
         f->packet_bytes -= packet->size;
         av_packet_free(&packet);
@@ -418,20 +488,47 @@ bool dvbridge_fel_device(struct dvbridge_fel *f, AVBufferRef *device)
 }
 
 
-bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
+static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
+                   const struct dvbridge_fel_source *source)
 {
     if (!f || !packet || f->failed || f->draining || packet->size <= 0 ||
-        packet->pts == AV_NOPTS_VALUE)
+        (packet->pts == AV_NOPTS_VALUE && (!source || source->base_pts != AV_NOPTS_VALUE)))
         return false;
-    int64_t base_identity;
-    if (f->num_times == MAP_MAX || !picture_identity(&f->base_order, packet, &base_identity))
-        goto fail;
-    for (unsigned i = 0; i < f->num_times; ++i)
-        if (f->times[i].order == base_identity)
+    if (source) {
+        if ((source->base_pts == AV_NOPTS_VALUE && source->enhancement_pts == AV_NOPTS_VALUE) ||
+            source->time_base.num <= 0 ||
+            source->time_base.den <= 0 || !source->epoch ||
+            (!f->source_timed && f->base_order.seen) ||
+            (source->base_pts != AV_NOPTS_VALUE && source->base_pts <= f->source_taken) ||
+            (f->source_epoch && (source->epoch != f->source_epoch ||
+                                av_cmp_q(source->time_base, f->source_clock))))
             goto fail;
-    f->times[f->num_times].order = base_identity;
-    f->times[f->num_times].key = f->base_order.parser->key_frame == 1;
-    f->times[f->num_times++].pts = packet->pts;
+        f->source_timed = true;
+        f->source_epoch = source->epoch;
+        f->source_clock = source->time_base;
+        f->decoder->pkt_timebase = source->time_base;
+    } else if (f->source_timed) goto fail;
+    int64_t base_identity = source ? source->base_pts : 0;
+    if (!source || source->base_pts != AV_NOPTS_VALUE) {
+        if (!source && !picture_identity(&f->base_order, packet, &base_identity))
+            goto fail;
+        unsigned match=f->num_times;
+        for (unsigned i=0;i<f->num_times;++i) {
+            if (source && f->times[i].pts == packet->pts) goto fail;
+            if (f->times[i].order != base_identity) continue;
+            if (!source || f->times[i].pts != AV_NOPTS_VALUE) goto fail;
+            match=i;
+        }
+        if (match==f->num_times) {
+            if (f->num_times==MAP_MAX) goto fail;
+            ++f->num_times;
+            f->times[match].presentable=true;
+        }
+        f->times[match].order=base_identity;
+        f->times[match].key=f->base_order.parser->key_frame==1;
+        f->times[match].presentable &= !source || source->presentable;
+        f->times[match].pts=packet->pts;
+    }
     AVPacket *copy = av_packet_clone(packet);
     if (!copy)
         goto fail;
@@ -448,7 +545,9 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
         if (result < 0) {
             av_packet_free(&copy);
             if (result == AVERROR(EAGAIN)) {
-                if (!received_enhancement)f->epoch_uncertain = true;
+                if (source && !received_enhancement && source->enhancement_pts != AV_NOPTS_VALUE)
+                    goto fail;
+                if (!source && !received_enhancement)f->epoch_uncertain = true;
                 return true; /* Submit EL when a decoded BL requests its matching picture. */
             }
             goto fail;
@@ -459,6 +558,32 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
             av_packet_free(&copy);
             goto fail;
         }
+        /* Present seek preroll is not a missing enhancement access unit. */
+        if (source) {
+            if (received_enhancement || source->enhancement_pts == AV_NOPTS_VALUE) {
+                av_packet_free(&copy);
+                goto fail;
+            }
+            received_enhancement = true;
+            f->packet_order[f->num_packets] = source->enhancement_pts;
+            const bool key = f->enhancement_order.parser->key_frame == 1;
+            if (f->synchronizing) {
+                if (!key) {
+                    av_packet_free(&copy);
+                    if (!discard_source(f, source->enhancement_pts)) goto fail;
+                    if (++f->preroll_packets > 1024) goto fail;
+                    continue;
+                }
+                f->anchor_pts = source->enhancement_pts;
+                f->source_no_rasl = true;
+                f->synchronizing = false;
+            }
+            f->packet_key[f->num_packets] = key;
+            f->packet_bytes += copy->size;
+            f->packets[f->num_packets++] = copy;
+            continue;
+        }
+        received_enhancement = true;
         /* Reordered layers cannot corroborate an epoch with independent
          * max+1 counters. A common key AU proves the new offset even if an
          * entire enhancement GOP was absent. Never bind it to a stale BL key. */
@@ -475,7 +600,6 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
                    "FEL decode: missing enhancement AU makes this key ambiguous; waiting for a shared key\n");
             av_packet_free(&copy);
             recover(f);
-            received_enhancement = true;
             continue;
         }
         if (common_key || el_idr) {
@@ -502,13 +626,23 @@ bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
             f->synchronizing = false;
         }
         f->packet_key[f->num_packets] = f->enhancement_order.parser->key_frame == 1;
-        received_enhancement = true;
         f->packet_bytes += copy->size;
         f->packets[f->num_packets++] = copy;
     }
 fail:
     f->failed = true;
     return false;
+}
+
+bool dvbridge_fel_submit(struct dvbridge_fel *f, const AVPacket *packet)
+{
+    return submit(f, packet, NULL);
+}
+
+bool dvbridge_fel_submit_source(struct dvbridge_fel *f, const AVPacket *packet,
+                               const struct dvbridge_fel_source *source)
+{
+    return source && submit(f, packet, source);
 }
 
 bool dvbridge_fel_drain(struct dvbridge_fel *f)
@@ -543,10 +677,49 @@ static int take_ready(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
     return 0;
 }
 
+static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
+{
+    unsigned match = 0;
+    while (match < f->num_times && f->times[match].pts != pts) ++match;
+    if (match == f->num_times) return -1;
+    const int64_t source = f->times[match].order;
+    const bool presentable = f->times[match].presentable;
+    for (unsigned i = 0; i < f->num_times;) {
+        if (f->times[i].order >= source) {++i;continue;}
+        --f->num_times;
+        memmove(f->times+i, f->times+i+1, (f->num_times-i)*sizeof(*f->times));
+    }
+    if (presentable && !f->failed) pump(f);
+    int result = 0;
+    if (!presentable)
+        result = 2;
+    else if (take_ready(f, source, frame)) {
+        (*frame)->pts = (*frame)->best_effort_timestamp = pts;
+        result = 1;
+    } else if (f->failed || (f->eof && !f->recovering) ||
+               (f->output_order != AV_NOPTS_VALUE && source < f->output_order))
+    {
+        result = !f->failed && f->anchor_pts != AV_NOPTS_VALUE && source < f->anchor_pts ? 2 : -1;
+        av_log(f->decoder,result < 0 ? AV_LOG_ERROR : AV_LOG_DEBUG,
+               "FEL source: absent source=%lld output=%lld anchor=%lld failed=%d eof=%d\n",
+               (long long)source,(long long)f->output_order,(long long)f->anchor_pts,f->failed,f->eof);
+    }
+    if (result > 0) {
+        f->source_taken = source;
+        for (unsigned i = 0; i < f->num_times; ++i) if (f->times[i].order == source) {
+            --f->num_times;
+            memmove(f->times+i, f->times+i+1, (f->num_times-i)*sizeof(*f->times));
+            break;
+        }
+    }
+    return result;
+}
+
 int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 {
     if (!f || !frame || *frame || pts == AV_NOPTS_VALUE)
         return -1;
+    if (f->source_timed) return take_source(f, pts, frame);
     /* Return available work before submitting future enhancement pictures. */
     if (take_ready(f, pts, frame))
         return 1;

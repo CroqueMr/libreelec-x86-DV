@@ -7,6 +7,122 @@ from test_native_video_source import TREE, body
 
 
 class ModeHoldTests(unittest.TestCase):
+    def test_first_output_keeps_held_mode_until_real_receipt_across_deadline(self):
+        source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        present=body(source,'void CWinSystemGbmGLESContext::PresentFrame(bool rendered, bool videoLayer)')
+        # Execute the actual entry gate before the unchanged restoration branches.
+        gate=present.split('  if (m_dvStopPending && !m_dvOrdinaryFrame',1)[0]+'\n#endif\n++pastGate;\n}'
+        complete=body(source,'bool CWinSystemGbmGLESContext::CompleteDVModeSwitch(')
+        receipt=body(source,'void CWinSystemGbmGLESContext::CompleteCB1Mode(')
+        program=r'''
+#define HAVE_DVBRIDGE
+#include "ModeChangeHold.h"
+#include <cassert>
+#include <chrono>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <thread>
+using namespace KODI::WINDOWING::GBM;
+int64_t now=0;
+namespace DVBRIDGE {
+ int64_t DiagnosticNowMs(){return now;}
+ enum class OutputReason {None,ActivationFailed};
+}
+struct VideoPicture {};
+struct CDRMAtomic {
+ bool committed=false;
+ bool IsSDRRestorePending(){return false;}
+ bool IsSelectedModeCommitted(){return committed;}
+};
+struct Manager {void MarkDirty(){}};
+struct GUI {Manager manager;Manager& GetWindowManager(){return manager;}};
+struct Settings {Settings* GetSettings(){return this;}int GetInt(const char*){return 3;}};
+struct CServiceBroker {
+ static GUI* GetGUI(){static GUI g;return &g;}
+ static Settings* GetSettingsComponent(){static Settings s;return &s;}
+};
+struct Timer {void Set(std::chrono::milliseconds){}};
+struct State {bool captured=false;bool Captured(){return captured;}};
+struct Window {
+ CModeChangeHold m_modeHold;CHeldModeAnnouncement m_modeAnnouncement;
+ std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
+ State m_dvState;bool m_hdrConversion=false,m_dvFrame=false,pageReady=true,supported=true;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvFallbackActive=false;
+ std::mutex m_dvCapabilityMutex;Timer m_dispResetTimer;
+ DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
+ uint64_t m_dvFailedStream=0,m_dvFailedPolicy=0,m_dvActivationStream=9,m_dvActivationPolicy=2;
+ int pastGate=0;
+ bool CompleteDVBridgePage(int){return pageReady;}
+ bool SupportsDVOutputMode(){return supported;}
+ void ResetDVActivation(const VideoPicture*){}
+ void tick(bool rendered=false,bool videoLayer=false) GATE
+ bool complete(const VideoPicture& picture) COMPLETE
+ void receipt(bool accepted,bool transport) RECEIPT
+};
+void first_output(bool converted) {
+ Window w;VideoPicture picture;
+ now=0;w.m_modeHold.Start(now);w.m_modeAnnouncement.Held();
+ // Real first picture captured just before the observed 3-second boundary.
+ now=2999;w.m_dvState.captured=!converted;w.m_hdrConversion=converted;
+ now=3001;w.tick();
+ assert(w.m_modeHold.Holding()==CModeChangeHold::Kind::START &&
+        "a prepared output must retain ownership until its real flip");
+ assert(w.pastGate==1 && "stop/recovery/restoration must remain reachable");
+ assert(w.complete(picture) && !w.m_dvNativeFailed);
+ // A first frame that never arrives can still be stopped/restored after expiry.
+ now=4000;w.tick();assert(w.pastGate==2);
+ assert(w.m_modeAnnouncement.Before(false));w.receipt(false,false);
+ now=5000;w.tick();assert(w.pastGate==3);
+ assert(w.m_modeAnnouncement.Before(false));w.receipt(true,false);
+ w.m_dvState.captured=false;w.m_hdrConversion=false;w.m_DRM->committed=true;
+ assert(w.m_modeHold.Holding()==CModeChangeHold::Kind::NONE);
+ assert(w.complete(picture));
+ // Normal first output also closes the hold at its real accepted receipt.
+ Window accepted;now=0;accepted.m_modeHold.Start(now);accepted.m_modeAnnouncement.Held();
+ accepted.m_dvState.captured=!converted;accepted.m_hdrConversion=converted;
+ now=3001;accepted.tick();assert(accepted.complete(picture));
+ accepted.m_dvFrame=true;accepted.tick();assert(accepted.pastGate==2);
+ assert(accepted.m_modeAnnouncement.Before(true));accepted.receipt(true,true);
+ assert(accepted.m_modeHold.Holding()==CModeChangeHold::Kind::NONE);
+ accepted.m_DRM->committed=true;assert(accepted.complete(picture));
+}
+int main(){
+ first_output(false);first_output(true);
+ // No producer: the existing deadline still releases the ordinary commit.
+ Window idle;now=0;idle.m_modeHold.Start(now);
+ now=2999;idle.tick();assert(idle.pastGate==0);
+ now=3001;idle.tick();assert(idle.pastGate==1);
+ assert(idle.m_modeHold.Holding()==CModeChangeHold::Kind::NONE);
+ VideoPicture picture;assert(!idle.complete(picture) && idle.m_dvNativeFailed);
+ // Ready native first frame closes the hold only with an accepted receipt.
+ Window native;now=0;native.m_modeHold.Start(now);native.m_modeAnnouncement.Held();
+ native.m_dvState.captured=true;native.m_dvFrame=true;now=3001;native.tick();
+ assert(native.pastGate==1 && native.complete(picture));
+ assert(native.m_modeAnnouncement.Before(true));native.receipt(false,true);
+ assert(native.m_modeAnnouncement.Pending()==CHeldModeAnnouncement::Step::BEFORE_ORDINARY);
+ native.m_dvFrame=false;native.tick();assert(native.pastGate==2);
+ assert(native.m_modeAnnouncement.Before(false));native.receipt(true,false);
+ native.m_dvState.captured=false;native.m_DRM->committed=true;
+ assert(native.complete(picture));
+ // Unsupported output and missing DRM must still fail even during START.
+ Window unsupported;now=0;unsupported.m_modeHold.Start(now);unsupported.supported=false;
+ assert(!unsupported.complete(picture));
+ Window missing;missing.m_modeHold.Start(now);missing.m_DRM.reset();
+ assert(!missing.complete(picture));
+ Window pending;pending.m_modeHold.Start(now);pending.pageReady=false;
+ now=4000;pending.tick();assert(pending.pastGate==0);
+}
+'''.replace('GATE',gate).replace('COMPLETE',complete).replace('RECEIPT',receipt)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-fno-omit-frame-pointer','-I'+str(TREE/'xbmc/windowing/gbm'),
+                str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
     def test_renderer_carries_startup_intent_with_its_native_resolution_request(self):
         method=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text(),
                     'void CRenderManager::UpdateResolution()')
