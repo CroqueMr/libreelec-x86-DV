@@ -44,6 +44,17 @@ int main(void)
     assert(intel_dv_lab_validate(&link) == 0);
     link.native_hdmi = false;
     assert(intel_dv_lab_validate(&link) == -EOPNOTSUPP);
+    /* A verified DP-to-HDMI converter stands in for native HDMI... */
+    link.verified_bridge = true;
+    assert(intel_dv_lab_validate(&link) == 0);
+    /* ...but keeps every link guard. */
+    link.limited_range = true;
+    assert(intel_dv_lab_validate(&link) == -EINVAL);
+    link.limited_range = false;
+    link.sink_standard = false;
+    assert(intel_dv_lab_validate(&link) == -EOPNOTSUPP);
+    link.sink_standard = true;
+    link.verified_bridge = false;
     link.native_hdmi = true;
     link.sink_standard = false;
     assert(intel_dv_lab_validate(&link) == -EOPNOTSUPP);

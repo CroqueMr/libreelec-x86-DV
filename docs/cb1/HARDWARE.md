@@ -5,6 +5,7 @@
 | Family | Dolby Vision support |
 | --- | --- |
 | Intel Core 8th generation and newer | Supported |
+| Intel mini PCs whose HDMI sockets are onboard DP-to-HDMI converters | INUC 11i5FL verified; others opt-in, [converter route](INTEL-DP-CONVERTER.md) |
 | Intel Core 7th generation, Kaby Lake | Supported, [HDMI qualification](INTEL-KABY-LAKE.md) |
 | Intel Core Ultra Series 1 / 2, including 200V | Supported |
 | Intel N-series, including N100 / N150 | Supported |
