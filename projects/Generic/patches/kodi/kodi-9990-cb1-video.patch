@@ -10109,7 +10109,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2644 @@
+@@ -0,0 +1,2645 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -11312,7 +11312,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return true;
 +}
 +
-+bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<Context> context)
++bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<Context> context, bool sdr)
 +{
 +  if (m_gl)
 +    return m_renderer && m_packer;
@@ -11327,10 +11327,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return Failure("float-blend-or-linear-unavailable");
 +  m_renderer = m_context->Attach();
 +  m_packer = dvbridge_gl_packer_create(DVBRIDGE_VERTEX, DVBRIDGE_FRAGMENT);
-+  return m_renderer && m_packer && RebindOutputSurface(hdr10);
++  return m_renderer && m_packer && RebindOutputSurface(hdr10,sdr);
 +}
 +
-+bool CDVBridgeGLES::RebindOutputSurface(bool hdr10)
++bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr)
 +{
 +  if (!m_gl || m_pending || m_prepared) return false;
 +  pl_opengl_wrap_params output{};
@@ -11353,8 +11353,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
 +  pl_tex candidate{};
 +  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE &&
-+      ((hdr10 && red >= 10 && green >= 10 && blue >= 10) ||
-+       (!hdr10 && red == 8 && green == 8 && blue == 8)) &&
++      ((sdr && hdr10 && red >= 8 && green >= 8 && blue >= 8 && red <= 16 && green <= 16 && blue <= 16) ||
++       (!sdr && hdr10 && red >= 10 && green >= 10 && blue >= 10) ||
++       (!sdr && !hdr10 && red == 8 && green == 8 && blue == 8)) &&
 +      samples <= 1 && encoding == GL_LINEAR)
 +    candidate = pl_opengl_wrap(m_gl->gpu, &output);
 +  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
@@ -12964,10 +12965,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  CDVBridgeGLES& operator=(const CDVBridgeGLES&) = delete;
 +
 +  bool Initialize(bool allowSoftware = false, bool hdr10 = false,
-+                  std::shared_ptr<Context> context = {});
++                  std::shared_ptr<Context> context = {}, bool sdr = false);
 +  bool SetHDR10Session(const dvbridge_hdr10_session& session, uint64_t stream = 0,
 +                      bool limited = false);
-+  bool RebindOutputSurface(bool hdr10);
++  bool RebindOutputSurface(bool hdr10, bool sdr = false);
 +  void Reset();
 +  bool Prepare(const Layer& base, const Layer* enhancement,
 +               const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked = false);
