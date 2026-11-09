@@ -105,8 +105,14 @@ PR92 at `346f41853906dbbca754771c961b3536fc4ca80c` was rebased against the
 RC4 matched Kodi source. Its decoder hunk moved by 109 lines; no stale source
 replacement was used. The generation-checked immutable side-data snapshot and
 per-stream FEL/MEL/guessed-primaries clears were absent on this base and retained.
-Reset clears guessed primaries too. Input keeps unused HDR10+ alongside DV RPU
-facts; Processing never shows grey unused levels. Levels use numeric order in
+Reset clears guessed primaries too. Input identifies unused HDR10+ alongside DV RPU
+facts with its version and window count. Rejected HDR10+ is identified as
+unavailable using the accepted source owner's rejection bit. The raw side-data
+API exports complete validated version1 single-window HDR10+ records; unsupported
+sections remain omitted. Pure HDR10+ Input shows the available statistics, curve
+and saturation. Its formatter qualifies the first window if a multiwindow snapshot
+is supplied, although the current snapshot owner rejects multiwindow metadata.
+Processing never shows grey unused levels. Levels use numeric order in
 all three columns. Output L2/L8 target lists are shown only when the accepted
 transmitted mask forwards those unchanged authored blocks; legacy synthesized
 output excludes them. SDR carries no DV transmitted blocks.
@@ -116,19 +122,48 @@ behavior. It adds no popup, selection action, paging or scrolling. Every field
 stays fixed on one line. Input retains the file inventory and native HDR facts;
 Processing shows metadata components only when actually used; Output shows the
 accepted signal and proven forwarded inventories. Used trim levels remain bright,
-without claiming that all source targets were selected. SDR L1 shows max/average,
-not the unused source minimum. Profile10 distinguishes PQ and HLG compatibility.
+without claiming that all source targets were selected. SDR and Expert L1 show
+max/average; Expert L3 also shows only max/average.
+Unused source minima are excluded from Processing. The full source properties
+retain their original values. A full L1 luminance triple omits the redundant
+unit only when required to fit; its caption still states nits. Profile10
+distinguishes PQ, SDR, HLG and IPT compatibility.
 
 Transition messages, queue values and framebuffer/minimum-link depth are compacted
 within the existing rows. Detailed counts and numerical values remain present.
-Only overflowing numerical inventories use counts plus explicit bounds, measured
+Trims retain every extension block admitted by the pinned FFmpeg parser
+(32 total: at most seven static and 25 dynamic). Only overflowing numerical
+inventories use counts plus explicit bounds, measured
 with the actual Kodi panel font; fitting lists remain explicit. No target between
 the bounds is implied. The native Kodi dialog remains available when enhanced
-information is disabled.
+information is disabled. Native DV Input additionally shows fresh mastering and
+content-light facts even while CB1 is inactive. Detailed RPU values remain gated
+by active accepted metadata; clearing output can retain an older sampled RPU.
+
+SDR Processing consumes the accepted import's used-field mask and imported scene
+values. It shows only the actual mastering minimum, mastering maximum or MaxCLL
+fallback, and HDR10+ MaxRGB/average when successfully imported. MaxFALL remains
+an Input fact. Unsupported multiwindow or zero-average HDR10+ never becomes a
+Processing claim from side-data presence alone. Forwarded L2/L8 summaries describe
+the complete accepted inventory, not selected local trim anchors.
 
 Focused qualification: eight column contract tests and 23 process information
-tests pass against a separate copied matched Kodi tree, including compiled RPU
-capture/target formatting, FEL reset, pending-output, skin recovery, old O-key behavior and applied-only metadata checks.
+tests pass against a separate copied matched Kodi tree, including compiled
+ten-pass RPU capture, the legal seven-L10/25-L8 inventory,
+target formatting, all SDR import-mask bits, Expert/SDR component subsets,
+HDR10+ window/saturation provenance, FEL reset, pending-output, skin recovery,
+old O-key behavior and applied-only metadata checks.
 RPU capture uses the existing FFmpeg test prefix. This is native source testing,
 not physical display qualification. An actual panel capture is still required
 on the new combined preview image; no new image was running during this edit.
+
+Logical layout qualification covers 64,260 conservative scenarios across 16
+source classes, including P8.2/P10.0/P10.2, all original headings, effective
+routes, ten transition/error phases, seven audio classes and subtitle states.
+A further 10,920 cases check reachable rejected HDR10+ and valid zero-average
+source boundaries. Maximum measured height is 1018 of 1032 pixels, with no
+visible text-width overflow. A separate compiled-formatter check measures 296
+bounded inventories and extreme values against the shipped Noto Sans font:
+maximum 283 of 284 pixels. The multiwindow full-numeric scenario is formatter
+stress only; the current source owner omits it. These logical/font checks do
+not qualify the final physical Kodi/TV rendering.
