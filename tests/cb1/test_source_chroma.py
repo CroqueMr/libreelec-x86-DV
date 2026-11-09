@@ -1,11 +1,83 @@
 """Execute the real Kodi import prefixes for all DV conversion policies."""
 import unittest
 import re
+import os
+import shlex
+import subprocess
+import tempfile
+from pathlib import Path
 import test_native_spatial_contract as spatial
 from test_native_video_source import TREE, body
 
 
 class SourceChromaTests(unittest.TestCase):
+    def test_hdr10plus_import_links_without_optional_placebo_libav_adapter(self):
+        source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        helper=body(source,'bool ImportDVLayer(')
+        program=r'''
+#include <cassert>
+#include <memory>
+extern "C" {
+#include "dvbridge_gl_frame.h"
+#include "cb1_hdr10plus_dovi.h"
+#define PL_LIBAV_IMPLEMENTATION 0
+#include <libplacebo/utils/libav.h>
+}
+struct Side {
+ AVDynamicHDRPlus metadata{};
+ unsigned Serial()const{return 7;}unsigned Generation()const{return 9;}
+ const AVDynamicHDRPlus* HDR10Plus()const{return &metadata;}
+};
+struct Binding{bool Valid()const{return true;}};
+struct Layer {
+ dvbridge_gl_layout layout=DVBRIDGE_P010;int width=16,height=16;
+ dvbridge_gl_plane planes[3]{};AVChromaLocation chromaLocation=AVCHROMA_LOC_LEFT;
+ struct{unsigned profile=0,informationGeneration=9;}sourceInfo;
+ pl_hdr_metadata hdr{};bool hlg=false,fullRange=false;Binding binding;
+ unsigned sourceSerial=7;std::shared_ptr<Side> sourceSideData=std::make_shared<Side>();
+};
+extern "C" bool dvbridge_gl_frame_import(dvbridge_gl_frame* out,pl_gpu,dvbridge_gl_layout,int,int,const dvbridge_gl_plane[3]){
+ out->frame={};out->frame.color=pl_color_space_hdr10;return true;
+}
+extern "C" void dvbridge_gl_frame_set_chroma(dvbridge_gl_frame*,pl_chroma_location){}
+pl_chroma_location SourceChroma(AVChromaLocation,unsigned){return PL_CHROMA_LEFT;}
+bool ImportDVLayer(dvbridge_gl_frame* frame,pl_gpu gpu,const Layer& layer) HELPER
+int main(){
+ Layer layer;layer.hdr.max_luma=1000;
+ auto& metadata=layer.sourceSideData->metadata;
+ metadata.itu_t_t35_country_code=0xb5;metadata.num_windows=1;
+ metadata.params[0].maxscl[0]={10000,100000};
+ metadata.params[0].maxscl[1]={20000,100000};
+ metadata.params[0].maxscl[2]={30000,100000};
+ metadata.params[0].average_maxrgb={5000,100000};
+ dvbridge_gl_frame imported{};
+ assert(ImportDVLayer(&imported,nullptr,layer));
+ assert(imported.frame.color.hdr.scene_max[0]==1000 && imported.frame.color.hdr.scene_max[2]==3000);
+ assert(imported.frame.color.hdr.scene_avg==500 && imported.frame.color.hdr.max_luma==1000);
+ layer.sourceSerial=8;assert(ImportDVLayer(&imported,nullptr,layer));
+ assert(imported.frame.color.hdr.scene_max[0]==0 && imported.frame.color.hdr.scene_avg==0);
+ layer.sourceSerial=7;metadata.params[0].maxscl[0].den=0;
+ assert(ImportDVLayer(&imported,nullptr,layer) && imported.frame.color.hdr.scene_max[0]==0);
+}
+'''.replace('HELPER',helper)
+        repo=Path(__file__).resolve().parents[2]
+        env=dict(os.environ)
+        prefix=env.get('FFMPEG_TEST_PREFIX')
+        if prefix:env['PKG_CONFIG_PATH']=prefix+'/lib/pkgconfig:'+env.get('PKG_CONFIG_PATH','')
+        flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libavutil','libplacebo'],env=env,text=True))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['cc','-std=c11','-I'+str(repo/'CB1/src'),*flags,
+                '-c',str(repo/'CB1/src/cb1_hdr10plus_dovi.c'),'-o',str(root/'adapter.o')],env=env,capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            build=subprocess.run(['c++','-std=c++20','-I'+str(repo/'CB1/src'),str(root/'test.cpp'),
+                str(root/'adapter.o'),*flags,'-lm','-o',str(root/'test')],env=env,capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            symbols=subprocess.check_output(['nm','-u',str(root/'test')],text=True)
+            self.assertNotIn('pl_map_hdr_metadata',symbols)
+            run=subprocess.run([str(root/'test')],env=env,capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+
     def test_ai_ingress_keeps_unshifted_coded_planes(self):
         text = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         for signature in ('cb1_ai_status CDVBridgeGLES::Context::AnalyseHDR10AI(',
@@ -81,18 +153,24 @@ constexpr int AVCHROMA_LOC_UNSPECIFIED=0,AVCHROMA_LOC_LEFT=1,AVCHROMA_LOC_CENTER
 constexpr int PL_COLOR_SYSTEM_BT_2020_NC=1,PL_COLOR_PRIM_BT_2020=2,
  PL_COLOR_TRC_HLG=3,PL_COLOR_TRC_PQ=4,PL_COLOR_LEVELS_FULL=5,PL_COLOR_LEVELS_LIMITED=6;
 struct Binding{bool Valid()const{return true;}};
-struct Side{unsigned Serial()const{return 1;}unsigned Generation()const{return 1;}const int* HDR10Plus()const{static int metadata=1;return &metadata;}};
+struct Dynamic{struct{double maxscl[3]{.1,.2,.3},average_maxrgb=.05;
+ unsigned num_distribution_maxrgb_percentiles=0;
+ struct{double percentile;}distribution_maxrgb[15];}params[1];};
+struct Side{unsigned Serial()const{return 1;}unsigned Generation()const{return 1;}
+ const Dynamic* HDR10Plus()const{static Dynamic metadata;return &metadata;}};
 struct cb1_hdr10plus_dovi_result{};
 constexpr int CB1_HDR10PLUS_DOVI_OK=0;
-int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const int*,void*){return 0;}
-struct pl_av_hdr_metadata{void* a;void* b;const int* c;};
-void pl_map_hdr_metadata(int* out,const pl_av_hdr_metadata*){*out=999;}
+int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const Dynamic*,void*){return 0;}
+double av_q2d(double value){return value;}
+struct HDR{double scene_max[3]{},scene_avg{};int sentinel{};
+ HDR& operator=(int value){for(auto& c:scene_max)c=0;scene_avg=0;sentinel=value;return *this;}
+ bool operator==(int value)const{return sentinel==value && scene_max[0]==0;}};
 struct Layer {int layout=0,width=8,height=8,planes[3]{};double pts=0;
  Binding binding;Side* sourceSideData=nullptr;unsigned sourceSerial=0;
  bool hlg=false,fullRange=false;int hdr=0;
  int chromaLocation=AVCHROMA_LOC_LEFT;struct{int profile=8;unsigned informationGeneration=1;}sourceInfo;};
 struct Frame {Frame* enhancement_layer=nullptr;float x=0,y=0;
- struct{int sys=0,levels=0;}repr;struct{int primaries=0,transfer=0,hdr=0;}color;};
+ struct{int sys=0,levels=0;}repr;struct{int primaries=0,transfer=0;HDR hdr;}color;};
 struct dvbridge_gl_frame {Frame frame;};
 int dvbridge_map_chroma(int c){return c==AVCHROMA_LOC_LEFT?PL_CHROMA_LEFT:
  c==AVCHROMA_LOC_TOPLEFT?PL_CHROMA_TOP_LEFT:c==AVCHROMA_LOC_CENTER?PL_CHROMA_CENTER:PL_CHROMA_UNKNOWN;}
@@ -117,7 +195,7 @@ struct Test {bool m_hdr10=false;struct{int gpu=0;}gl,*m_gl=&gl;
 int main(){Test t;Layer b,e;e.chromaLocation=AVCHROMA_LOC_TOPLEFT;
  Layer hdr;hdr.sourceInfo.profile=0;Side side;hdr.sourceSideData=&side;hdr.sourceSerial=1;
  dvbridge_gl_frame mapped;
- assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==999);
+ assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr.scene_max[0]==1000 && mapped.frame.color.hdr.scene_max[2]==3000 && mapped.frame.color.hdr.scene_avg==500);
  hdr.sourceSerial=2;assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==0);
  hdr.sourceSerial=1;hdr.sourceInfo.informationGeneration=2;
  assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==0);
