@@ -306,8 +306,9 @@
     "docs/cb1/README.md": "c9449ccf4729d7fb282c52e1f94cbf2cdf39a56b9708909fcab00d868b907fb5",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "201966ffa353166081d5c7f66a0bb3d368b53b8173e2025f0a0e7c76985d2535",
     "tests/cb1/test_sdr_capture_color.py": "8d49acfc46e627d12a3d073d6b550fb67d72ed0151f37fbcb1ddf5c0e7f491ef",
-    "tests/cb1/test_master_screenshot.py": "dc652312a2f81ff5336e23ea8a604e0c5a6cfc4e20d9e9a0adc5ce01ea80c5d6",
-    "tests/cb1/test_master_recovery.py": "715839c30a2db3820bfc4926aa15767a4d801a3f7be409bdd1a285ecdd5a76d4"
+    "tests/cb1/test_master_screenshot.py": "27d82a3cc865a2e931b18f3c7dcad93958d368950770e386bc71f39d738e3c48",
+    "tests/cb1/test_master_recovery.py": "715839c30a2db3820bfc4926aa15767a4d801a3f7be409bdd1a285ecdd5a76d4",
+    "tests/cb1/test_native_spatial_contract.py": "49262917162fee9ef5fead3e29fd9a17042518af764e77974cefd8874a6681aa"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
