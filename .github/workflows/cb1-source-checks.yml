@@ -8,7 +8,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ffmpeg pkg-config meson ninja-build libdrm-dev libvulkan-dev libfmt-dev libbluray-dev nlohmann-json3-dev squashfs-tools libtinyxml-dev libegl-dev libgles-dev libegl-mesa0 libgl1-mesa-dri
+          sudo apt-get install -y build-essential ffmpeg pkg-config meson ninja-build python3-glad libdrm-dev libvulkan-dev libfmt-dev libbluray-dev nlohmann-json3-dev squashfs-tools libtinyxml-dev libegl-dev libgles-dev libegl-mesa0 libgl1-mesa-dri
       - name: Prepare matched test sources
         run: bash .github/scripts/prepare-test-sources.sh
       - name: Test source staging
