@@ -3384,7 +3384,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +272,338 @@
+@@ -128,16 +272,339 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -3588,7 +3588,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_hdr10SessionStream=0;
 +    if (m_dvBridge) m_dvBridge->Reset();
 +    DVBRIDGE::StreamTelemetry::ClearOutput();
-+    DVBRIDGE::PlaybackNotification::OrdinaryOutputAccepted(true);
++    if (m_dvSelection.reason != DVBRIDGE::OutputReason::ProcessingPending)
++      DVBRIDGE::PlaybackNotification::OrdinaryOutputAccepted(true);
 +    return;
 +  }
 +  if (m_hdrConversion)
@@ -3724,7 +3725,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (rendered || videoLayer)
    {
-@@ -175,27 +641,134 @@
+@@ -175,27 +642,135 @@
  #endif
      }
  
@@ -3746,7 +3747,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#ifdef HAVE_DVBRIDGE
 +    if (auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
 +    {
-+      DVBRIDGE::PlaybackNotification::OrdinaryOutputAccepted(drm->LastPageAccepted());
++      if (m_dvSelection.reason != DVBRIDGE::OutputReason::ProcessingPending)
++        DVBRIDGE::PlaybackNotification::OrdinaryOutputAccepted(drm->LastPageAccepted());
 +      if (drm->LastPageAccepted() &&
 +          CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->IsPlayingVideo())
 +      {
@@ -3870,7 +3872,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_guiCompositing = (colorTransfer != 0);
  
    if (m_guiCompositing)
-@@ -203,7 +776,11 @@
+@@ -203,7 +778,11 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -3883,7 +3885,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -215,7 +792,16 @@
+@@ -215,7 +794,16 @@
        }
      }
  
@@ -3901,7 +3903,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        CLog::Log(LOGERROR, "CWinSystemGbmGLESContext: failed to create LUTs");
        m_compositeShader.reset();
-@@ -225,6 +811,13 @@
+@@ -225,6 +813,13 @@
    }
    else
    {
@@ -3915,7 +3917,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -234,8 +827,66 @@
+@@ -234,8 +829,66 @@
    return m_guiCompositing;
  }
  
@@ -3982,7 +3984,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_guiCompositing)
      return false;
  
-@@ -274,24 +925,43 @@
+@@ -274,24 +927,43 @@
  
      m_guiFboWidth = width;
      m_guiFboHeight = height;
@@ -4035,7 +4037,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +970,11 @@
+@@ -300,6 +972,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -4047,7 +4049,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -307,7 +982,16 @@
+@@ -307,7 +984,16 @@
  void CWinSystemGbmGLESContext::EndGuiComposite()
  {
    if (m_guiWillRender)
@@ -4064,7 +4066,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +1024,32 @@
+@@ -340,17 +1026,32 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -4100,7 +4102,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +1059,35 @@
+@@ -360,6 +1061,35 @@
    if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
        m_DRM->GetGuiPlane() != nullptr)
      return;
@@ -4136,7 +4138,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +1108,21 @@
+@@ -380,11 +1110,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
@@ -4160,7 +4162,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1135,1909 @@
+@@ -397,13 +1137,1910 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4263,7 +4265,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!window) return false;
 +  const auto selected = window->SelectedDVOutput(picture);
 +  if (selected.route != OutputRoute::Vanilla) return true;
-+  if (selected.reason != OutputReason::NoGPUProcessing &&
++  if (selected.reason != OutputReason::ProcessingPending &&
++      selected.reason != OutputReason::NoGPUProcessing &&
 +      selected.reason != OutputReason::NoDVTransport &&
 +      selected.reason != OutputReason::NoHDR10Transport) return false;
 +  auto caps = window->GetDVOutputCapabilities(picture, true);
@@ -6073,7 +6076,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3051,16 @@
+@@ -417,5 +3054,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
