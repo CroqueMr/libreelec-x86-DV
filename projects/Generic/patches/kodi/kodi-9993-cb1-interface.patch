@@ -15,7 +15,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,542 @@
+@@ -25795,3 +25795,586 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -558,6 +558,50 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgctxt "#41121"
 +msgid "Ignore Level 5 margins only for files already cropped without matching metadata. Kodi zoom and placement still apply. Off preserves the authored active area; no automatic aspect-ratio correction is performed."
 +msgstr ""
++
++msgctxt "#41130"
++msgid "SDR Rendering"
++msgstr ""
++
++msgctxt "#41131"
++msgid "HLG rendering"
++msgstr ""
++
++msgctxt "#41132"
++msgid "Choose Dolby Vision Reference rendering or Kodi default for original HLG video."
++msgstr ""
++
++msgctxt "#41133"
++msgid "SDR rendering target"
++msgstr ""
++
++msgctxt "#41134"
++msgid "Independent BT.709 rendering target, not measured screen brightness. Custom values set peak luminance, gamma and black floor."
++msgstr ""
++
++msgctxt "#41135"
++msgid "Reference (100 nits / gamma 2.4)"
++msgstr ""
++
++msgctxt "#41136"
++msgid "Bright room (200 nits / gamma 2.2)"
++msgstr ""
++
++msgctxt "#41137"
++msgid "Custom / Projector"
++msgstr ""
++
++msgctxt "#41138"
++msgid "SDR target peak (nits)"
++msgstr ""
++
++msgctxt "#41139"
++msgid "SDR target gamma"
++msgstr ""
++
++msgctxt "#41140"
++msgid "SDR target black (nits)"
++msgstr ""
 --- a/system/keymaps/keyboard.xml
 +++ b/system/keymaps/keyboard.xml
 @@ -727,6 +727,11 @@
@@ -574,7 +618,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <period>NextPicture</period>
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -2,6 +2,196 @@
+@@ -2,6 +2,224 @@
  <settings version="1">
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
@@ -583,16 +627,44 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
 +          <constraints><options>
 +            <option label="40867">1</option><option label="40868">2</option>
-+            <option label="40866">0</option>
++            <option label="40866">0</option><option label="41130">4</option>
 +          </options></constraints>
 +          <control type="list" format="string"><usedetails>true</usedetails></control>
 +        </setting>
 +        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
 +          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
 +          <constraints><options>
-+            <option label="40970">3</option><option label="41014">0</option>
++            <option label="40970">3</option><option label="41014">0</option><option label="41130">4</option>
 +          </options></constraints>
 +          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hlgsource" type="integer" label="41131" help="41132">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options><option label="40867">1</option><option label="40866">0</option></options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.sdrpreset" type="integer" label="41133" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <constraints><options><option label="41135">0</option><option label="41136">1</option><option label="41137">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrpeak" type="number" label="41138" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>100</default>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
++          <constraints><minimum>20</minimum><maximum>500</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrgamma" type="number" label="41139" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2.4</default>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
++          <constraints><minimum>1.8</minimum><maximum>2.8</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrblack" type="number" label="41140" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>5</maximum><step>0.001</step></constraints>
++          <control type="edit" format="string" />
 +        </setting>
 +        <setting id="dvbridge.playback" type="action" label="40811" help="40815">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
@@ -608,7 +680,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +              <option label="40913">4</option>
 +              <option label="40914">5</option>
 +              <option label="40814">2</option>
-+              <option label="40813">1</option>
++              <option label="40813">1</option><option label="41130">6</option>
 +            </options>
 +          </constraints>
 +          <control type="list" format="string"><usedetails>true</usedetails></control>
@@ -771,7 +843,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <group id="1" label="14230">
          <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
            <constraints>
-@@ -649,6 +839,48 @@
+@@ -649,6 +867,48 @@
        </group>
      </category>
      <category id="subtitles" label="287" help="37033">
@@ -846,29 +918,50 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- a/system/shaders/GLES/2.0/gles_gui_composite.frag
 +++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
-@@ -15,6 +15,8 @@
+@@ -13,8 +13,10 @@
+ uniform sampler2D u_samp;       // GUI FBO texture (sRGB, rendered by GUI shaders)
+ uniform sampler2D u_lutDegamma; // sRGB -> linear LUT (IEC 61966-2-1)
  uniform sampler2D u_lutTF;      // linear -> PQ LUT (1024 entries, sdrPeak baked in)
- uniform float u_ootfGamma;      // HLG: OOTF gamma (1.2 for BT.2100 1000-nit ref)
+-uniform float u_ootfGamma;      // HLG: OOTF gamma (1.2 for BT.2100 1000-nit ref)
++uniform highp float u_ootfGamma; // HLG OOTF or negative SDR target gamma
                                  // PQ: 0.0 (use LUT path instead)
 +uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
-+uniform highp vec2 u_outputRange; // CB1 final HDR target: exact bit-depth scale and black code.
++uniform highp vec2 u_outputRange; // CB1 exact bit-depth scale and black code.
  
  // BT.709 -> BT.2020 color space conversion matrix (applied in linear light)
  const mat3 bt709_to_bt2020 = mat3(
-@@ -32,6 +34,12 @@
-   // and avoids the tone-map math, BO read and BO write for those pixels.
+@@ -33,12 +35,29 @@
    if (gui.a == 0.0)
      discard;
-+
+ 
 +  if (u_inputPQ)
 +  {
 +    gl_FragColor = vec4(gui.rgb * u_outputRange.x + gui.a * u_outputRange.y, gui.a);
 +    return;
 +  }
- 
++
    // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
-   vec3 linear = vec3(
-@@ -85,5 +93,5 @@
+-  vec3 linear = vec3(
++  highp vec3 linear = vec3(
+     texture2D(u_lutDegamma, vec2(gui.r, 0.5)).r,
+     texture2D(u_lutDegamma, vec2(gui.g, 0.5)).r,
+     texture2D(u_lutDegamma, vec2(gui.b, 0.5)).r
+   );
++
++  // SDR movie composition stays in BT.709 and uses the independent target gamma.
++  if (u_ootfGamma < 0.0)
++  {
++    highp vec3 result = pow(max(linear, vec3(0.0)), vec3(-1.0 / u_ootfGamma));
++#if defined(KODI_LIMITED_RANGE)
++    result = result * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
++#endif
++    gl_FragColor = vec4(result * u_outputRange.x + u_outputRange.y, gui.a);
++    return;
++  }
+ 
+   // BT.709 -> BT.2020 gamut mapping
+   linear = bt709_to_bt2020 * linear;
+@@ -85,5 +104,5 @@
    result = result * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
  #endif
  
@@ -1062,7 +1155,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,264 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVPlaybackModes.h"
 +#ifdef HAVE_DVBRIDGE
@@ -1101,7 +1194,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +struct Choice { int output,method,label; };
 +constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
 +    {5,0,40914},
-+    {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922}};
++    {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922},{6,0,41130}};
 +}
 +
 +CDVPlaybackModes& CDVPlaybackModes::GetInstance()
@@ -1207,19 +1300,21 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const bool hdr10PlusSource=nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
 +  const bool hdr10Source=nativeSource==StreamHdrType::HDR_TYPE_HDR10 ||
 +                         nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
-+  if (!hdr10Source && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
++  const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
++  if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
++  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,40866}};
 +  const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
 +#ifdef CB1_HAS_HDR10_AI
-+  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866}};
-+  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014}};
++  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866},{4,0,41130}};
++  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014},{4,0,41130}};
 +#else
 +  constexpr Choice hdr10Choices[]={{0,0,40866}};
 +  constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
 +#endif
-+  const Choice* choices=hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
-+  const int count=hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
-+  const char* sourceSetting=hdr10PlusSource ? "dvbridge.hdr10plussource" : "dvbridge.hdr10source";
-+  const auto choiceSetting=std::make_shared<CSettingInt>(settingsMenu ? "dvbridge.playback" : hdr10PlusSource ? "dvbridge.hdr10plusplaybackchoice" :
++  const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
++  const int count=hlgSource ? std::size(hlgChoices) : hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
++  const char* sourceSetting=hlgSource ? "dvbridge.hlgsource" : hdr10PlusSource ? "dvbridge.hdr10plussource" : "dvbridge.hdr10source";
++  const auto choiceSetting=std::make_shared<CSettingInt>(settingsMenu ? "dvbridge.playback" : hlgSource ? "dvbridge.hlgplaybackchoice" : hdr10PlusSource ? "dvbridge.hdr10plusplaybackchoice" :
 +      hdr10Source ? "dvbridge.hdr10playbackchoice" : "dvbridge.playbackchoice");
 +  {
 +    const auto preferences=DVBRIDGE::FrameOutputSettings(hdr10PlusSource);
@@ -1229,7 +1324,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    {
 +      options.emplace_back(strings.Get(choices[i].label),i);
 +      const auto& choice=choices[i];
-+      if (hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
++      if (hlgSource ? (int(preferences.hlgSource)==choice.output) : hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
 +          (int(preferences.output)==choice.output &&
 +          (choice.output!=1 || preferences.method==choice.method))) current=i;
 +    }
@@ -1240,7 +1335,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        int(preferences.output), int(preferences.hdr10Source));
 +    dialog->Reset();
 +    dialog->SetHeading(settingsMenu ? strings.Get(40811) :
-+        StringUtils::Format(strings.Get(40876), hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
++        StringUtils::Format(strings.Get(40876), hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
 +    dialog->SetUseDetails(!settingsMenu);
 +    for(const auto& option : options)
 +    {
@@ -1271,7 +1366,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      const int priorOutput=settings->GetInt("dvbridge.outputmode");
 +      const int priorHDR10=settings->GetInt(sourceSetting);
 +      const int priorMethod=settings->GetInt("dvbridge.hdr10method");
-+      if (!(hdr10Source ? settings->SetInt(sourceSetting,choice.output) :
++      if (!((hdr10Source || hlgSource) ? settings->SetInt(sourceSetting,choice.output) :
 +          (settings->SetInt("dvbridge.outputmode",choice.output) &&
 +           settings->SetInt("dvbridge.hdr10method",choice.method))))
 +      {
@@ -1379,7 +1474,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
      : CGUIDialog(WINDOW_DIALOG_PLAYER_PROCESS_INFO, "DialogPlayerProcessInfo.xml")
-@@ -19,11 +39,283 @@
+@@ -19,11 +39,285 @@
  
  CGUIDialogPlayerProcessInfo::~CGUIDialogPlayerProcessInfo(void) = default;
  
@@ -1568,11 +1663,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    SetProperty("DV.OutputStage", transaction ?
 +        std::string(data.transaction.stage)+" (not committed)" : "");
 +    SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
-+    SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
++    SetProperty("DV.TVProfile", active && data.output.effective==8 ?
++        StringUtils::Format("BT.709 / {:g} nits / gamma {:g}", data.output.target,data.output.sdrGamma) :
++        active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
 +        StringUtils::Format("{} / {:g} nits",
 +            data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
 +            data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
-+    SetProperty("DV.DisplayBlack", hdr10 && data.output.effective==3 ?
++    SetProperty("DV.DisplayBlack", (hdr10 && data.output.effective==3 || active && data.output.effective==8) ?
 +        StringUtils::Format("{:g} nits", data.output.displayBlack) : "");
 +    SetProperty("DV.HDR10Policy", hdr10 ? CDVPlaybackInfo::Policy(data.output) : "");
 +    SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
@@ -2698,7 +2795,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #endif
  #ifdef HAS_GL
    m_simpleConditions.emplace("has_gl");
-@@ -488,6 +503,98 @@
+@@ -488,6 +503,100 @@
    m_complexConditions.try_emplace("lte", LessThanOrEqual);
  }
  
@@ -2709,6 +2806,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  // Availability never substitutes or saves a different requested preference.
 +  const bool menu=setting->GetId()=="dvbridge.playbackchoice";
 +  const bool playback=setting->GetId()=="dvbridge.playback";
++  const bool hlgMenu=setting->GetId()=="dvbridge.hlgplaybackchoice";
++  const bool hlgSource=hlgMenu || setting->GetId()=="dvbridge.hlgsource";
 +  const bool hdr10PlusMenu=setting->GetId()=="dvbridge.hdr10plusplaybackchoice";
 +  const bool hdr10Menu=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10playbackchoice";
 +  const auto preferences=DVBRIDGE::FrameOutputSettings();
@@ -2717,7 +2816,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
 +  const auto available=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
 +  // Global preferences use hardware capabilities, not the current or previous film.
-+  if ((!menu && !hdr10Menu) ||
++  if ((!menu && !hdr10Menu && !hlgMenu) ||
 +      (!caps.sourceKnown && !data.transaction.identity.Valid()))
 +    caps=available;
 +  // A failed frame or disabled import does not remove reusable output capabilities.
@@ -2736,24 +2835,24 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const bool nativeHDR10Plus=hdr10PlusMenu;
 +  // A preference can be deferred while paused; only the renderer admits a frame.
 +  const bool pendingHDR10Plus=nativeHDR10Plus && !caps.sourceKnown && !data.transaction.identity.Valid();
-+  const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
++  const auto& processing=(hdr10Source || hlgSource) && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
 +  constexpr int menuModes[]{1,5,
-+      4,0,2,3,6};
++      4,0,2,3,6,7};
 +#ifdef CB1_HAS_HDR10_AI
-+  constexpr int hdr10MenuModes[]{1,4,0};
-+  constexpr int hdr10PlusMenuModes[]{1,0};
++  constexpr int hdr10MenuModes[]{1,4,0,7};
++  constexpr int hdr10PlusMenuModes[]{1,0,7};
 +#else
 +  constexpr int hdr10MenuModes[]{0};
 +  constexpr int hdr10PlusMenuModes[]{0};
 +#endif
 +  for(auto& option : list)
 +  {
-+    const int mode=hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
++    const int mode=hlgSource ? ((hlgMenu ? option.value==0 : option.value==1) ? 1 : 0) : hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
 +        hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
-+        hdr10Source ? (option.value==1 || option.value==3 ? 1 : option.value==2 ? 4 : 0) :
++        hdr10Source ? (option.value==1 || option.value==3 ? 1 : option.value==2 ? 4 : option.value==4 ? 7 : 0) :
 +        (menu || playback) ? (option.value>=0 && option.value<int(std::size(menuModes)) ? menuModes[option.value] : 0) :
 +        method ? (option.value==0 ? 2 : option.value==1 ? 3 : option.value==2 ? 6 : 0) :
-+        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : 0);
++        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : option.value==6 ? 7 : 0);
 +    auto reason=DVBRIDGE::OutputReason::None;
 +    const bool guided = hdr10PlusSource && (hdr10PlusMenu ? option.value==0 : option.value==3);
 +    if (mode)
@@ -2761,18 +2860,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      const bool dv=mode==1 || mode==4 || mode==5;
 +      if (guided && hdr10Menu && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
-+      else if (hdr10Source && (nativeHDR10Plus || caps.hdr10PlusSource) && !guided)
++      else if (hdr10Source && (nativeHDR10Plus || caps.hdr10PlusSource) && !guided && mode!=7)
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
-+      else if (!(dv ? caps.nativeDV : caps.hdr10))
++      else if (mode!=7 && !(dv ? caps.nativeDV : caps.hdr10))
 +        reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
 +      else if (mode==6 && !caps.hdr10plus) reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
 +      else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::NoGPUProcessing;
-+      else if (caps.sourceKnown && !(hdr10Source ? (caps.isHDR10 && !caps.isDV) : caps.isDV))
++      else if (caps.sourceKnown && !(hlgSource ? (caps.isHLG && !caps.isDV) : hdr10Source ? (caps.isHDR10 && !caps.isDV) : caps.isDV))
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
 +      else if (!processing[mode].usable)
 +        reason=processing[mode].reason==DVBRIDGE::OutputReason::None ?
 +            DVBRIDGE::OutputReason::NoGPUProcessing : processing[mode].reason;
-+      else if ((mode==3 || mode==4) && !preferences.ProfileValid(static_cast<dvbridge_mode>(mode)))
++      else if ((mode==3 || mode==4 || mode==7) && !preferences.ProfileValid(static_cast<dvbridge_mode>(mode)))
 +        reason=DVBRIDGE::OutputReason::TVProfileRequired;
 +    }
 +    int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
@@ -2788,7 +2887,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    option.label2=reasonId ? localizer.Get(reasonId) :
 +        guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
 +    // Settings must allow selection before the required profile controls appear.
-+    const bool configure=reason==DVBRIDGE::OutputReason::TVProfileRequired && !menu && !hdr10Menu;
++    const bool configure=reason==DVBRIDGE::OutputReason::TVProfileRequired && !menu && !hdr10Menu && !hlgMenu;
 +    option.properties.emplace_back("disabled",reasonId!=0 && !configure);
 +  }
 +}
@@ -3031,13 +3130,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include "settings/SettingDateTime.h"
  #include "settings/SettingPath.h"
  #include "settings/SettingUtils.h"
-@@ -175,6 +178,11 @@
+@@ -175,6 +178,12 @@
      }
    }
  
 +#ifdef HAVE_DVBRIDGE
 +  if (setting->GetId()=="dvbridge.outputmode" || setting->GetId()=="dvbridge.hdr10method" ||
-+      setting->GetId()=="dvbridge.hdr10source" || setting->GetId()=="dvbridge.hdr10plussource")
++      setting->GetId()=="dvbridge.hdr10source" || setting->GetId()=="dvbridge.hdr10plussource" ||
++      setting->GetId()=="dvbridge.hlgsource")
 +    CSettingConditions::DVOutputOptions(setting,options);
 +#endif
    switch (pSettingInt->GetOptionsSort())

@@ -20,10 +20,19 @@ class SoftwareDVImportTests(unittest.TestCase):
 constexpr int AV_PIX_FMT_YUV420P10LE=1,AV_PIX_FMT_YUV444P10LE=2,
  AV_PIX_FMT_NV12=3,AV_PIX_FMT_YUYV422=4,AV_PIX_FMT_UYVY422=5,
  GL_TEXTURE_2D=6,FIELD_FULL=0,DVBRIDGE_YUV420P10=7,DVBRIDGE_YUV444P10=8;
-constexpr double DVD_NOPTS_VALUE=-1;
+constexpr double DVD_NOPTS_VALUE=-1,DVD_TIME_BASE=1000000,AV_NOPTS_VALUE=-2;
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+double av_q2d(double value){return value;}
+struct SourceInfo{int profile=8;};
+struct Side{unsigned Serial()const{return 1;}};
+struct HDR{double max_luma{},min_luma{},max_cll{},max_fall{};};
 struct Binding{int picture=0;bool Valid()const{return picture>0;}};
 struct Metadata{const char* Data()const{return "dv";}::Binding Binding()const{return {1};}};
-struct Picture{int doviSourceInfo{},sourceSideData{},chroma_position{};::Binding doviSourceBinding{1};};
+struct Picture{SourceInfo doviSourceInfo;std::shared_ptr<Side> sourceSideData;int chroma_position{};::Binding doviSourceBinding{1};
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;double pts=1000000,doviSourcePts=1000000;
+ int color_range{};bool hasDisplayMetadata{},hasLightMetadata{};
+ struct{bool has_luminance{};double max_luminance{},min_luminance{};}displayMetadata;
+ struct{unsigned MaxCLL{},MaxFALL{};}lightMetadata;};
 struct Plane{unsigned id,texwidth,texheight;};
 struct YuvImage{int plane[3]{},stride[3]{};};
 struct VideoBuffer{void GetPlanes(int*){} void GetStrides(int*){}};
@@ -32,7 +41,7 @@ struct Buffer{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture
  Metadata doviMetadata;double doviPts=100;bool loaded=false;YuvImage image;
  Plane fields[1][3]={{{11,3840,1920},{12,1920,960},{13,1920,960}}};};
 struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},width{},height{};
- double pts{};::Binding binding{};std::shared_ptr<void>lease;int sourceInfo{},sourceSideData{},chromaLocation{};
+ double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{};HDR hdr;
  struct{unsigned texture;int width,height;}planes[3]{};};};
 struct WindowBase{virtual ~WindowBase()=default;};
 namespace KODI::WINDOWING::GBM{struct CWinSystemGbmGLESContext:WindowBase{
@@ -75,7 +84,12 @@ int main(){CLinuxRendererGLES r;
  r.m_sourceHeight=180;r.m_buffers[0].fields[0][0]={11,320,180};
  assert(r.UploadTexture(0) && window.usable && window.last.Valid());
  r.m_renderOrientation=0;r.m_buffers[0].doviPts=DVD_NOPTS_VALUE;
- assert(!r.BuildDVBridgeLayer(0,layer));}
+ assert(!r.BuildDVBridgeLayer(0,layer));
+ auto& source=*r.m_buffers[0].doviSourcePicture;
+ source.doviSourceInfo.profile=0;source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ source.hasDisplayMetadata=true;source.displayMetadata.has_luminance=true;source.displayMetadata.max_luminance=1000;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.pts==1 && layer.hdr.max_luma==1000);
+ source.doviSourcePts=AV_NOPTS_VALUE;assert(!r.BuildDVBridgeLayer(0,layer));}
 '''.replace('BUILD',build).replace('UPLOAD',upload)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'check.cpp').write_text(program)

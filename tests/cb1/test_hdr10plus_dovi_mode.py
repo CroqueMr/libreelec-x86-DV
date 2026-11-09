@@ -14,7 +14,7 @@ class HDR10PlusDVModeTests(unittest.TestCase):
     def test_primed_guided_picture_reaches_render_with_its_source_preferences(self):
         native = TREE/'xbmc/cores/VideoPlayer/VideoRenderers'
         settings = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         source = (native/'HDR10AISource.cpp').read_text()
         render = body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
@@ -38,7 +38,7 @@ namespace DVBRIDGE {
 ENUMS
 PREFERENCES
 OutputPreferences stored;
-OutputPreferences FrameOutputSettings(bool plus=false){
+OutputPreferences FrameOutputSettings(bool plus=false,bool=false){
  auto p=stored;if(plus)p.hdr10Source=p.hdr10PlusSource;return p;
 }
 uint64_t DiagnosticNowMs(){return 1;}
@@ -77,6 +77,7 @@ struct Bridge {
 struct Window {
  Context context;Context* m_dvContext=&context;Bridge bridge{&context};Bridge* m_dvBridge=&bridge;
  bool Render(bool authored=false){
+  dvbridge_policy policy{};policy.mode=DVBRIDGE_MODE_STANDARD;
   struct {bool authored;bool Data()const{return authored;}}metadata{authored};
   struct {DVBRIDGE::SourceBinding binding{7,1,11};}layer;
   SNAPSHOT
@@ -109,7 +110,7 @@ int main(){
     def test_missing_snapshot_keeps_the_existing_activation_fallback(self):
         headers=TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings=(headers/'DVOutputSettings.h').read_text()
-        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;',settings))
+        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',settings))
         preferences='struct OutputPreferences '+body(settings,'struct OutputPreferences')+';'
         selector=body((headers/'DVOutputSelection.h').read_text(),'inline OutputSelection SelectOutput(')
         preparation=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
@@ -127,14 +128,14 @@ int main(){
 #include <mutex>
 namespace DVBRIDGE { ENUMS
 PREFERENCES
-enum class OutputRoute {Vanilla,NativeDV,HDR10};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputPreferences prefs;
-OutputPreferences FrameOutputSettings(bool plus=false){auto value=prefs;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
+OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=prefs;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
 }
-enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
-struct Picture {DVBRIDGE::SourceBinding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;};
+enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
+struct Picture {struct{int profile=0;}doviSourceInfo;DVBRIDGE::SourceBinding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;};
 struct Context {unsigned stops{};bool StopHDR10AI(){++stops;return true;}};
 struct Window {
  DVBRIDGE::OutputCapabilities caps;
@@ -146,7 +147,7 @@ struct Window {
  bool prepare(const Picture& picture) INGRESS
 };
 int main(){
- using namespace DVBRIDGE;Window w;Picture p{{7,14,11}};
+ using namespace DVBRIDGE;Window w;Picture p{{},{7,14,11}};
  prefs.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;prefs.revision=9;
  w.caps.sourceKnown=w.caps.isHDR10=w.caps.hdr10PlusSource=w.caps.nativeDV=true;
  w.m_aiActivation=p.doviSourceBinding;w.m_aiPolicy=prefs.revision;
@@ -165,7 +166,7 @@ int main(){
     def test_direct_metadata_uses_accepted_scene_without_ai_or_stale_reuse(self):
         renderer=TREE/'xbmc/cores/VideoPlayer/VideoRenderers'
         settings=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
-        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;',settings))
+        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',settings))
         preferences='struct OutputPreferences '+body(settings,'struct OutputPreferences')+';'
         declaration='class HDR10AISource '+body((renderer/'HDR10AISource.h').read_text(),'class HDR10AISource')+';'
         source=(renderer/'HDR10AISource.cpp').read_text()
@@ -311,7 +312,7 @@ int main(){
     def test_selected_hdr10plus_reuses_reference_without_touching_other_modes(self):
         headers = TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings = (headers/'DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         selector = body((headers/'DVOutputSelection.h').read_text(), 'inline OutputSelection SelectOutput(')
         budget = 'struct HDR10AIBuffers '+body((headers/'HDR10AIBuffers.h').read_text(), 'struct HDR10AIBuffers')+';'
@@ -329,7 +330,7 @@ namespace DVBRIDGE {
 ENUMS
 PREFERENCES
 BUDGET
-enum class OutputRoute { Vanilla, NativeDV, HDR10 };
+enum class OutputRoute { Vanilla, NativeDV, HDR10, SDR };
 struct OutputSelection { OutputRoute route{};dvbridge_policy policy{};OutputReason reason{}; };
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
@@ -382,7 +383,7 @@ int main(){
     def test_prediction_epoch_is_not_confused_with_source_binding_revision(self):
         headers = TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings = (headers/'DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         renderer = TREE/'xbmc/cores/VideoPlayer/VideoRenderers'
         source = (renderer/'HDR10AISource.cpp').read_text()
@@ -430,12 +431,12 @@ int main(){
     def test_guided_rejection_reason_survives_the_native_activation_gate(self):
         headers = TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings = (headers/'DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         selector = body((headers/'DVOutputSelection.h').read_text(), 'inline OutputSelection SelectOutput(')
         window = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         selection = body(window,'DVBRIDGE::OutputSelection CWinSystemGbmGLESContext::SelectedDVOutput(const VideoPicture* picture,')
-        begin = selection.index('  if (caps.isHDR10)')
+        begin = selection.index('  if ((caps.isHDR10 || caps.isHLG)')
         gate = selection[begin:selection.index('#endif', begin)]
         self.compile_run(r'''
 #define HAVE_DVBRIDGE
@@ -450,7 +451,7 @@ int main(){
 namespace DVBRIDGE {
 ENUMS
 PREFERENCES
-enum class OutputRoute {Vanilla,NativeDV,HDR10};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputSelection gated(const OutputPreferences& preferences,OutputCapabilities caps,bool m_aiReady){
@@ -477,7 +478,7 @@ int main(){
 
     def test_quick_menu_refuses_guided_for_plain_hdr10(self):
         settings = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         options = body((TREE/'xbmc/settings/SettingConditions.cpp').read_text(),
                        'void CSettingConditions::DVOutputOptions(')
@@ -499,7 +500,7 @@ int main(){
 namespace DVBRIDGE { ENUMS
 PREFERENCES
 }
-enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS};
+enum class StreamHdrType{HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
 struct CDVPlaybackModes {static StreamHdrType SourceType(){return StreamHdrType::HDR_TYPE_NONE;}};
 struct Setting {std::string id;const std::string& GetId()const{return id;}};
 struct Option {explicit Option(int n):value(n){} int value;std::string label,label2;
@@ -679,7 +680,7 @@ int main(){
         native = Path(os.environ.get('KODI_TEST_SUPPORT_TREE', str(TREE)))
         headers = TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings = (headers/'DVOutputSettings.h').read_text()
-        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;', settings))
+        enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         selector = body((headers/'DVOutputSelection.h').read_text(), 'inline OutputSelection SelectOutput(')
         budget = 'struct HDR10AIBuffers '+body((headers/'HDR10AIBuffers.h').read_text(), 'struct HDR10AIBuffers')+';'
@@ -696,7 +697,7 @@ int main(){
         upload = body(renderer, 'bool CRendererVAAPIGLES::UploadTexture(')
         publication = upload[upload.index('  if (window && buf.doviSourcePicture)'):upload.rindex('#endif')]
         layer = body(renderer, 'bool CRendererVAAPIGLES::BuildDVBridgeLayer(')
-        layer_gate = layer[layer.index('  hdr10 ='):layer.index('#endif')]
+        layer_gate = layer[layer.index('  bool hdr10 ='):layer.index('  if (!hdr10')].replace('  bool hdr10 =','  hdr10 =')
         window = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         capability = body(window, 'DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(\n    const VideoPicture* picture, const')
         capability = capability[capability.index('  caps.sourceKnown ='):capability.index('  if (!caps.isDV) return caps;')]
@@ -727,8 +728,9 @@ BUDGET
 inline OutputPreferences current;
 inline std::atomic<HDR10SourceMode> hdr10PlaybackMode{HDR10SourceMode::Native};
 inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Native};
-OutputPreferences FrameOutputSettings(bool plus=false){auto value=current;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
-enum class OutputRoute {Vanilla,NativeDV,HDR10};
+inline std::atomic<HDR10SourceMode> hlgPlaybackMode{HDR10SourceMode::Native};
+OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=current;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
@@ -811,7 +813,7 @@ int main(){
  window.m_dvImportBinding=picture.doviSourceBinding;
  window.m_dvImportGeometry.crop[0]=1;assert(!window.Caps(&picture).isHDR10Plus);
  window.m_dvImportGeometry.crop[0]=0;
- assert(select(current,caps).route==OutputRoute::Vanilla && !LayerEligible(picture));
+ assert(select(current,caps).route==OutputRoute::Vanilla && LayerEligible(picture));
  Decoder decoder;AVCodecContext context{};context.opaque=&decoder;
  decoder.Observe(picture,frame);
  assert(decoder.m_hints.hdrType==StreamHdrType::HDR_TYPE_HDR10PLUS);
@@ -822,7 +824,7 @@ int main(){
  assert(Check(&context,buffers)==CDVDVideoCodec::VC_REOPEN && decoder.m_decoderState==Decoder::STATE_NONE);
  buffers=decoder.GetHDR10AIBufferCount();assert(Check(&context,buffers)==CDVDVideoCodec::VC_NONE);
  for(auto mode:{HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
-  current.hdr10PlusSource=mode;hdr10PlusPlaybackMode.store(mode);assert(!LayerEligible(picture));
+  current.hdr10PlusSource=mode;hdr10PlusPlaybackMode.store(mode);assert(LayerEligible(picture));
   assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);
   assert(select(current,caps).route==OutputRoute::Vanilla);
  }
@@ -831,7 +833,7 @@ int main(){
  assert(Check(&context,buffers)==CDVDVideoCodec::VC_NONE);
  assert(decoder.m_decoderState==Decoder::STATE_HW); // A smaller request can reuse this file's pool.
  assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);
- assert(select(current,caps).route==OutputRoute::Vanilla && !LayerEligible(picture));
+ assert(select(current,caps).route==OutputRoute::Vanilla && LayerEligible(picture));
  AVFrame* withoutMetadata=av_frame_alloc();
  decoder.Observe(picture,withoutMetadata);
  assert(picture.hdrType==StreamHdrType::HDR_TYPE_HDR10PLUS);
@@ -847,7 +849,7 @@ int main(){
  assert(decoder.GetHDR10AIBufferCount()==27);
  av_frame_free(&withoutMetadata);
  current.hdr10Source=HDR10SourceMode::HDR10PlusDV;
- for(auto type:{StreamHdrType::HDR_TYPE_NONE,StreamHdrType::HDR_TYPE_DOLBYVISION,StreamHdrType::HDR_TYPE_HLG}){
+ for(auto type:{StreamHdrType::HDR_TYPE_NONE,StreamHdrType::HDR_TYPE_DOLBYVISION}){
   picture.hdrType=type;decoder.m_hints.hdrType=type;hdr10PlaybackMode.store(current.hdr10Source);
   assert(!LayerEligible(picture) && !window.Caps(&picture).isHDR10);
   assert(decoder.GetHDR10AIBufferCount()==HDR10AIBuffers::Native);

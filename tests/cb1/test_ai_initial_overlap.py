@@ -18,7 +18,7 @@ class InitialOverlapTests(unittest.TestCase):
 using pl_gpu=void*;
 namespace DVBRIDGE {
 struct SourceBinding {uint64_t stream=7,picture=1,revision=1;bool Valid(){return stream && revision;}};
-enum class HDR10SourceMode {Native,ReferenceDV};
+enum class HDR10SourceMode{Native,ReferenceDV,SDR};
 struct OutputPreferences {uint64_t revision=9;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 uint64_t NextRevisionAfter(uint64_t value){return value+1;}
 }
@@ -117,7 +117,7 @@ int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const AVDynamicHDRPlu
 struct Binding {uint64_t picture;};
 struct SideData {const AVDynamicHDRPlus* HDR10Plus()const{assert(false);return nullptr;}};
 namespace DVBRIDGE {
-enum class HDR10SourceMode {Native,ReferenceDV,EnhancedDV,HDR10PlusDV};
+enum class HDR10SourceMode{Native,ReferenceDV,EnhancedDV,HDR10PlusDV,SDR};
 struct OutputPreferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 bool HDR10PlusDVSnapshotMatches(const std::shared_ptr<SideData>&,Binding,Binding,uint64_t,uint64_t,bool){assert(false);return false;}
 }

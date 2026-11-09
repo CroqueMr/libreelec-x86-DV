@@ -65,7 +65,7 @@ HDR10_SOURCE_MODE
 struct Preferences {HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;
 inline Preferences plusPrefs{HDR10SourceMode::HDR10PlusDV};
-inline Preferences FrameOutputSettings(bool plus=false){return plus?plusPrefs:prefs;}
+inline Preferences FrameOutputSettings(bool plus=false,bool=false){return plus?plusPrefs:prefs;}
 }
 struct Clock {
  double now=4625876.598333334;
@@ -92,7 +92,7 @@ struct Renderer {bool lookahead=true;bool HDR10AILookahead(){return lookahead;}
 struct Port {void UpdateRenderBuffers(size_t,size_t,size_t){}};
 struct Event {void notifyAll(){}};
 struct CRenderManager {
- enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+ enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
  struct ConfigPicture {StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;} m_picture;
  ConfigPicture* m_pConfigPicture=nullptr; // Configure has retired its temporary picture.
  Renderer renderer;Renderer* m_pRenderer=&renderer;

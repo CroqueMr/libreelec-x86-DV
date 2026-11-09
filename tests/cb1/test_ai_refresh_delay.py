@@ -35,13 +35,14 @@ struct Context {
  void RecordStatus(const char*,cb1_ai_status){assert(false);}
 };
 constexpr const char* CB1_L1L3_BUNDLE_DIR="unused";
-enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
 struct Window {
  Context context;Context* m_dvContext=&context;
  bool m_dispReset=false;
  struct {StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;}picture;
  HDR10AISource::Decision Tick(uint64_t now,bool paused=false){
   DVBRIDGE::now=now;int queue=0,preferences=0;bool end=false;uint64_t presentationDeadline=0;
+  struct{bool isHLG;}caps{picture.hdrType==StreamHdrType::HDR_TYPE_HLG};
   ADAPTER
   return decision;
  }
@@ -57,6 +58,9 @@ int main(){
  assert(settling.Tick(4000)==Decision::Native); // Still only 1000 ms of actual required wait.
  Window priming;assert(priming.Tick(999)==Decision::Wait);
  assert(priming.Tick(1000)==Decision::Native); // A stopped bootstrap clock is not a display reset.
+ Window hlg;hlg.picture.hdrType=StreamHdrType::HDR_TYPE_HLG;hlg.m_dispReset=true;
+ assert(hlg.Tick(0)==Decision::Wait);assert(hlg.Tick(2000)==Decision::Wait);hlg.m_dispReset=false;
+ assert(hlg.Tick(3000)==Decision::Wait);assert(hlg.Tick(4000)==Decision::Native);
  Window guided;guided.picture.hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;guided.m_dispReset=true;
  assert(guided.Tick(1000)==Decision::Native); // Guided HDR10+ timing is unchanged.
  Window overlap;overlap.m_dispReset=true;assert(overlap.Tick(0)==Decision::Wait);

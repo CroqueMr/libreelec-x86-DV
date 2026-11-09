@@ -16,8 +16,8 @@ class SourcePreferencesTests(unittest.TestCase):
         plain = settings.find(".//setting[@id='dvbridge.hdr10source']")
         plus = settings.find(".//setting[@id='dvbridge.hdr10plussource']")
         self.assertIsNotNone(plus, 'HDR10+ requires its own saved preference')
-        self.assertEqual([x.text for x in plain.findall('constraints/options/option')], ['1','2','0'])
-        self.assertEqual([x.text for x in plus.findall('constraints/options/option')], ['3','0'])
+        self.assertEqual([x.text for x in plain.findall('constraints/options/option')], ['1','2','0','4'])
+        self.assertEqual([x.text for x in plus.findall('constraints/options/option')], ['3','0','4'])
         self.assertEqual(plain.findtext('default'), '0')
         self.assertEqual(plus.findtext('default'), '0')
 
@@ -60,13 +60,13 @@ struct CServiceBroker {static auto GetSettingsComponent(){return &component;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t id=1;return ++id;}}
 HEADER
 namespace DVBRIDGE {
-enum class OutputRoute {Vanilla,NativeDV,HDR10};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};
  static Snapshot Read(){return {};}};
 }
-enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_DOLBYVISION,HDR_TYPE_NONE};
+enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_DOLBYVISION,HDR_TYPE_NONE,HDR_TYPE_HLG};
 bool choose(StreamHdrType type,int selected,bool settingsMenu=false){
  auto settings=stored;auto SourceType=[&]{return type;};
  CHOICES

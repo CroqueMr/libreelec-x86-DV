@@ -78,9 +78,21 @@ int main(){for(int c:{0,1,2,3}){Frame f{c};int expected=c?c+10:PL_CHROMA_TOP_LEF
 #include <limits>
 constexpr int AVCHROMA_LOC_UNSPECIFIED=0,AVCHROMA_LOC_LEFT=1,AVCHROMA_LOC_CENTER=2,AVCHROMA_LOC_TOPLEFT=3,
        PL_CHROMA_UNKNOWN=10,PL_CHROMA_LEFT=11,PL_CHROMA_CENTER=12,PL_CHROMA_TOP_LEFT=13;
+constexpr int PL_COLOR_SYSTEM_BT_2020_NC=1,PL_COLOR_PRIM_BT_2020=2,
+ PL_COLOR_TRC_HLG=3,PL_COLOR_TRC_PQ=4,PL_COLOR_LEVELS_FULL=5,PL_COLOR_LEVELS_LIMITED=6;
+struct Binding{bool Valid()const{return true;}};
+struct Side{unsigned Serial()const{return 1;}unsigned Generation()const{return 1;}const int* HDR10Plus()const{static int metadata=1;return &metadata;}};
+struct cb1_hdr10plus_dovi_result{};
+constexpr int CB1_HDR10PLUS_DOVI_OK=0;
+int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const int*,void*){return 0;}
+struct pl_av_hdr_metadata{void* a;void* b;const int* c;};
+void pl_map_hdr_metadata(int* out,const pl_av_hdr_metadata*){*out=999;}
 struct Layer {int layout=0,width=8,height=8,planes[3]{};double pts=0;
- int chromaLocation=AVCHROMA_LOC_LEFT;struct{int profile=8;}sourceInfo;};
-struct Frame {Frame* enhancement_layer=nullptr;float x=0,y=0;};
+ Binding binding;Side* sourceSideData=nullptr;unsigned sourceSerial=0;
+ bool hlg=false,fullRange=false;int hdr=0;
+ int chromaLocation=AVCHROMA_LOC_LEFT;struct{int profile=8;unsigned informationGeneration=1;}sourceInfo;};
+struct Frame {Frame* enhancement_layer=nullptr;float x=0,y=0;
+ struct{int sys=0,levels=0;}repr;struct{int primaries=0,transfer=0,hdr=0;}color;};
 struct dvbridge_gl_frame {Frame frame;};
 int dvbridge_map_chroma(int c){return c==AVCHROMA_LOC_LEFT?PL_CHROMA_LEFT:
  c==AVCHROMA_LOC_TOPLEFT?PL_CHROMA_TOP_LEFT:c==AVCHROMA_LOC_CENTER?PL_CHROMA_CENTER:PL_CHROMA_UNKNOWN;}
@@ -103,9 +115,18 @@ struct Test {bool m_hdr10=false;struct{int gpu=0;}gl,*m_gl=&gl;
  }
 };
 int main(){Test t;Layer b,e;e.chromaLocation=AVCHROMA_LOC_TOPLEFT;
+ Layer hdr;hdr.sourceInfo.profile=0;Side side;hdr.sourceSideData=&side;hdr.sourceSerial=1;
+ dvbridge_gl_frame mapped;
+ assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==999);
+ hdr.sourceSerial=2;assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==0);
+ hdr.sourceSerial=1;hdr.sourceInfo.informationGeneration=2;
+ assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==0);
+ hdr.sourceInfo.informationGeneration=1;hdr.hlg=true;
+ assert(ImportDVLayer(&mapped,0,hdr) && mapped.frame.color.hdr==0);
  for(bool advanced:{false,true})for(bool hdr:{false,true})for(int p:{AVCHROMA_LOC_LEFT,AVCHROMA_LOC_CENTER,AVCHROMA_LOC_TOPLEFT,AVCHROMA_LOC_UNSPECIFIED,999}){
  t.m_hdr10=hdr;b.chromaLocation=p;b.sourceInfo.profile=8;assert(t.run(b,&e,advanced));
  b.sourceInfo.profile=7;assert(t.run(b,&e,advanced));
+ b.sourceInfo.profile=0;b.hlg=true;assert(t.run(b,nullptr,advanced));
  assert(t.run(b,nullptr,advanced));
  }
 }
@@ -115,6 +136,8 @@ int main(){Test t;Layer b,e;e.chromaLocation=AVCHROMA_LOC_TOPLEFT;
  float y=base.chromaLocation==AVCHROMA_LOC_TOPLEFT ||
    (base.chromaLocation==AVCHROMA_LOC_UNSPECIFIED && base.sourceInfo.profile==7)?-.5f:0;
  assert(bl.frame.x==x && bl.frame.y==y);
+ if(!base.sourceInfo.profile){assert(bl.frame.color.transfer==PL_COLOR_TRC_HLG);
+  assert(bl.frame.color.primaries==PL_COLOR_PRIM_BT_2020 && bl.frame.repr.sys==PL_COLOR_SYSTEM_BT_2020_NC);}
  if(enhancement)assert(el.frame.x==-.5f && el.frame.y==-.5f);
 '''
         spatial.NativeSpatialContractTests.run_program(self, program.replace('HELPER', helper).replace('PREPARE', prepare)

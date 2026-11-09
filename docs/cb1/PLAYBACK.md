@@ -6,12 +6,13 @@ modes appear during playback. Unavailable modes show their blocking reason.
 
 | Source | Available processing |
 | --- | --- |
-| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering or Kodi default |
-| HDR10 | Dolby Vision Rendering (AI), Adaptive HDR Mapping (AI) or Kodi default |
-| HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion |
-| SDR / HLG / 3D | Native Kodi playback |
+| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering, SDR Rendering or Kodi default |
+| HDR10 | Dolby Vision Rendering (AI), Adaptive HDR Mapping (AI), SDR Rendering or Kodi default |
+| HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion; SDR Rendering |
+| HLG | Dolby Vision Reference Rendering (AI) or Kodi default |
+| SDR / 3D | Native Kodi playback |
 
-The **Dolby Vision playback**, **HDR10 playback** and **HDR10+ playback** selectors
+The **Dolby Vision playback**, **HDR10 playback**, **HDR10+ playback** and **HLG playback** selectors
 remember independent preferences. **Kodi default** bypasses CB1 image processing.
 Automatic fallback does not overwrite the saved choice for the next file.
 
@@ -165,3 +166,20 @@ remain Kodi-owned.
 
 Automatic diagnostics are recorded in `kodi.log`. Attach it to an issue with the
 build version, CPU/GPU, display and HDMI route. No automatic upload is performed.
+
+## SDR rendering target
+
+SDR Rendering reconstructs the original Dolby Vision base, applicable enhancement/FEL
+and RPU before mapping to BT.709. HDR10/HDR10+ use their original decoded image.
+It works on SDR-only displays without Dolby Vision or HDR transport. The accepted
+output carries no Dolby Vision, HDR10 or HDR10+ metadata.
+
+The independent SDR target offers Reference (100 nits, gamma 2.4), Bright room
+(200 nits, gamma 2.2), or Custom / Projector. Custom peak is 20–500 nits,
+gamma 1.8–2.8 and black floor 0–5 nits below the peak. These are rendering
+targets, not measurements of the screen. HDR calibration is preserved separately.
+
+HLG has only Dolby Vision Reference Rendering (AI) and native Kodi. The reference
+path normalizes original HLG with the BT.2100 1000-nit / gamma 1.2 reference
+before analysis; it does not invent authored L2/L8 trims. HLG-base Dolby Vision
+P8.4/P10.4 with RPU remains Dolby Vision and retains full reconstruction.

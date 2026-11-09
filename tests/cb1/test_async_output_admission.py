@@ -51,7 +51,7 @@ int main(){
 #include <cassert>
 #include <memory>
 namespace DVBRIDGE {
-enum class OutputRoute { Vanilla, NativeDV, HDR10 };
+enum class OutputRoute { Vanilla, NativeDV, HDR10, SDR };
 enum class OutputReason { None, NoHDR10PlusTransport, NoDVTransport, NoGPUProcessing };
 }
 struct DRM {virtual ~DRM()=default;};
