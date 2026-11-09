@@ -74,7 +74,7 @@ namespace DVBRIDGE {struct PlaybackNotification{static void OrdinaryOutputAccept
 struct Window {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
- CDVBridgeState m_dvState;bool m_dvStopPending=false;
+ CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
  bool StageOrdinaryDVOutput(void*){return true;}
  bool CompleteDVBridgePage(){return true;}bool SupportsDVOutputMode(){return true;}

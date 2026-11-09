@@ -44,11 +44,11 @@ template<class...T>void DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
  messages.push_back(fmt::format(f,std::forward<T>(a)...));}
 }
 enum {LOGINFO};
-struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;}};
+struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;} const void* Data()const{return this;}};
 struct dvbridge_geometry {};
 struct CDVBridgeGLES {
  enum class FrameStatus{Ready,Pending,Busy,Failed,Reused,Unsupported};
- struct Layer {DVBRIDGE::Binding binding;double pts=1;};
+ struct Layer {DVBRIDGE::Binding binding;double pts=1;struct {int profile=7;}sourceInfo;};
  struct Context {bool bad=false;bool Quarantined()const{return bad;}
  bool AsyncPreparation(uint64_t)const{return true;}}context;
  Context* m_context=&context;int m_renderer=1;

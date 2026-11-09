@@ -25,7 +25,7 @@ class OrdinaryOutputIsolationTests(unittest.TestCase):
 #include "windowing/gbm/ModeChangeHold.h"
 using KODI::WINDOWING::GBM::CHeldModeAnnouncement;
 constexpr int DVBRIDGE_DV_IDLE=0;
-constexpr int LOGWARNING=1;
+constexpr int LOGWARNING=1,AVCOL_TRC_GAMMA22=4;
 struct Services {Services& GetWindowManager(){return *this;}void MarkDirty(){}};
 struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG,HDR_TYPE_DOLBYVISION};
@@ -37,13 +37,13 @@ struct VideoPicture {
  bool doviEnhancement=false; int color_transfer=0;double pts=0;
 };
 namespace DVBRIDGE {
- enum class OutputMode {Disabled,Standard,HDR10,MasterReference}; enum class OutputRoute {Vanilla,NativeDV,HDR10};
+ enum class OutputMode {Disabled=2,Standard=0,HDR10=1,MasterReference=4,SDR=6}; enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
  enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired};
  struct Policy {int mode=0;};
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
    double peak=1000;int panel=0,gamut=2;
    ::DVBRIDGE::Policy Policy()const{return {};}};
- Preferences FrameOutputSettings(bool=false){return {};}
+ Preferences FrameOutputSettings(bool=false,bool=false){return {};}
  bool DiagnosticsEnabled(){return false;}
  std::string lastStage;
  void DiagnosticStage(const char* stage){lastStage=stage;}
@@ -96,7 +96,7 @@ struct CWinSystemGbmEGLContext {
 };
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=false,m_dvStopPending=false,m_dvOrdinaryFrame=false;
- bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false;
+ bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
  bool m_failedHDR10SetupRestore=false,m_dvShutdownFence=false;
@@ -123,6 +123,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  std::shared_ptr<GBM> m_GBM=std::make_shared<GBM>();
  bool StopDVBridgePlayback(){return true;}
  bool SupportsDVOutputMode(){return modeOK;}
+ bool SupportsSDRConversion(){return modeOK;}
  bool DVBridgeRequested(const VideoPicture*){return requested;}
  bool CompleteDVBridgePage(){return completeOK;}
  bool RecoverDVActivation(){return recoveryOK;}
@@ -136,12 +137,13 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool EndDVBridge(){return restoreOK;}
  void SetColorimetry(const VideoPicture*){}
  bool SetHDR(const VideoPicture* picture){++ordinaryStages;return picture && picture->color_transfer;}
- void SetGuiCompositing(int color){m_guiCompositing=color!=0;}
+ bool SetGuiCompositing(int color){m_guiCompositing=color!=0;return true;}
  bool SetVideoOutput(const VideoPicture*);
  bool StageCB1ConnectorPreferences(bool){return true;}
  bool StageOrdinaryDVOutput(const VideoPicture*);
  bool RetireDVContext();
  bool PrepareDVOutputFrame(const VideoPicture&);
+ bool ConfigureSDRConversion(const VideoPicture&){m_sdrConversion=m_hdrConversion=true;return true;}
  int hdrConfigurations=0;
  bool ConfigureHDR10Conversion(const VideoPicture& p){
   ++hdrConfigurations;if(depth<10)return false;
