@@ -174,6 +174,7 @@
     "tests/cb1/hdr10plus_recovery.c": "9710fbf973db9145b51b9d09eb62975af4085c077a740ba02bf219dc4ae081f1",
     "projects/Generic/patches/linux/linux-9942-intel-hdr10plus-internal-recovery.patch": "a24160e0a629a878da72695941f3a0e638356e4d82af6f429d850ec274618d7b",
     "projects/Generic/patches/linux/linux-9950-intel-dp-pcon-dv.patch": "c9530826ae0050c0687b8c4fd774f16d57eb4644470a57f057fdbc5e9a12c8e3",
+    "projects/Generic/patches/linux/linux-9951-intel-lspcon-ls-dv.patch": "c089ee8de10e5827e298d4f2b4ae6ff40759810fa34a49b43c776734cef5f86b",
     "tests/cb1/test_master_scaling.py": "a86e9ac29f52767ac703c67bd576cd85c8f50218bd5a16eddf448a270298926e",
     "tests/cb1/test_hdr10_final_gui.py": "15d2b7d1cfb3f20bf919e75de8c6abdd099357160a4bcf291d7865a53a2e1a7f",
     "tests/cb1/test_gui_cache.py": "f88723eba5c83163d6c70ffe1112d2ebdf7fd8008a5de03007378878a8f4f794",

@@ -54,6 +54,19 @@ int main(void)
     link.sink_standard = false;
     assert(intel_dv_lab_validate(&link) == -EOPNOTSUPP);
     link.sink_standard = true;
+    /* NUC7 LSPCON in level-shifter mode (linux-9951): an active LSPCON is
+     * never native HDMI, so display9 is admitted only through the verified
+     * route, with the same guards. */
+    assert(admitted(9));
+    link.native_hdmi = intel_dv_lab_native_hdmi(true, true, true);
+    assert(!link.native_hdmi);
+    link.verified_bridge = false;
+    assert(intel_dv_lab_validate(&link) == -EOPNOTSUPP);
+    link.verified_bridge = true;
+    assert(intel_dv_lab_validate(&link) == 0);
+    link.requested_bpc = 10;
+    assert(intel_dv_lab_validate(&link) == -EINVAL);
+    link.requested_bpc = 8;
     link.verified_bridge = false;
     link.native_hdmi = true;
     link.sink_standard = false;

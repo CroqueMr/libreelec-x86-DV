@@ -10,7 +10,8 @@ successful-output receipt.
 | Intel Display9, Skylake / Kaby Lake | Admitted DV route | Documented HDMI GMP bank, native 12-bit constraints; receiver confirmation pending | Guarded native route; receiver confirmation pending | Same guarded route |
 | Other Intel Display9 native-HDMI routes | Admitted DV route | Native restrictions retained | No new admission | No new admission |
 | Intel gen11+ onboard DP-to-HDMI converter (PCON), allowlisted boards | Admitted DV route, [converter SDPs](INTEL-DP-CONVERTER.md) | Native route restrictions retained | No new admission | No new admission |
-| Other Intel DP/LSPCON or converted routes | No new DV admission (PCON: `i915.dv_pcon=1` opt-in) | Native route restrictions retained | No new admission | No new admission |
+| Intel NUC7i7BN, MCDP2800 LSPCON in level-shifter mode (FW 1.77) | Admitted DV route, 4K up to 30 Hz, [level-shifter switch](INTEL-DP-CONVERTER.md#nuc7i7bn-lspcon-in-level-shifter-mode); in-modeset switch not hardware-verified | Native route restrictions retained | No new admission | No new admission |
+| Other Intel DP/LSPCON or converted routes | No new DV admission (opt-in: `i915.dv_pcon=1`, `i915.dv_lspcon=1`) | Native route restrictions retained | No new admission | No new admission |
 | Intel Display10 | Admitted DV route | Native selector; converted PQ uses 12 bits | Frame-owned output, native 12-bit route | Same guarded 12-bit route |
 | Intel Display11 and newer, i915 / xe | Admitted DV route | Native selector, guarded deep PQ conversions | Frame-owned output, at least 10 bits | Same frame-owned deep output |
 | AMD admitted DCN 1.x / 2.x / 3.x families | Admitted DV route | Native AMD output | Frame-owned output, at least 10 bits | Same frame-owned deep output |
@@ -131,6 +132,8 @@ module stacks are compiled. V1/V2 tests retain frozen modern-V2 packet goldens.
 Supported status describes the implemented driver path, not Dolby or HDMI
 certification. Display capabilities, output depth and the accepted native
 transaction still apply. DP adapters/LSPCON routes do not gain support from
-the physical shape of their connector. The one exception is the onboard
-DP-to-HDMI converter route of allowlisted gen11+ boards
-([INTEL-DP-CONVERTER.md](INTEL-DP-CONVERTER.md)), which is verified on hardware.
+the physical shape of their connector. The exceptions are the onboard
+DP-to-HDMI converter route of allowlisted gen11+ boards, which is verified on
+hardware, and the NUC7i7BN's LSPCON level-shifter route, whose signalling is
+verified on hardware but whose in-modeset mode switch is not
+([INTEL-DP-CONVERTER.md](INTEL-DP-CONVERTER.md)).
