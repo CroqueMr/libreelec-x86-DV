@@ -119,20 +119,21 @@ int main(){Test t;auto g=t.run();assert(g.x==0 && g.width==3840);
         prefix = capture[1:capture.index("  if (!read)")]
         self.run_program(r'''
 #include <cassert>
-constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,GL_READ_FRAMEBUFFER_BINDING=1,GL_READ_FRAMEBUFFER=2;
+constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_SDR=7,GL_READ_FRAMEBUFFER_BINDING=1,GL_READ_FRAMEBUFFER=2;
 using GLint=int;void glGetIntegerv(int,int* p){*p=0;}void glBindFramebuffer(int,unsigned){}
 namespace KODI::RENDERING::CAPTURE {
  struct ReadbackBuffer{int width=0,height=0;};
  bool ReadFramebufferRegion(int,int,int w,int h,int,bool,ReadbackBuffer& p){p.width=w;p.height=h;return true;}
 }
 struct Test{
- int m_effectiveMode=1;bool m_prepared=true,m_direct=true;unsigned m_scanoutFramebuffer=0;
+ int m_effectiveMode=1;bool m_prepared=true,m_direct=true;unsigned m_scanoutFramebuffer=0,m_outputBits=8;
  struct Texture{struct{int w=1920,h=1080;}params;} texture;Texture* m_scanout=&texture;
  unsigned GetPQFramebuffer(){return 2;}
  bool run(){ PREFIX return read && pixels.width==texture.params.w && pixels.height==texture.params.h;}
 };
 int main(){Test t;assert(t.run());t.m_effectiveMode=5;assert(t.run());
- t.texture.params={2560,1440};assert(t.run());t.m_scanout=nullptr;assert(!t.run());}
+ t.texture.params={2560,1440};assert(t.run());t.m_effectiveMode=7;assert(t.run());
+ t.m_scanout=nullptr;assert(!t.run());}
 '''.replace("PREFIX",prefix))
 
     def test_direct_hdr_admission_uses_actual_target(self):
