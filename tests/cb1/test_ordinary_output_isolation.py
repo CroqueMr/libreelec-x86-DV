@@ -104,7 +104,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool m_failedHDR10SetupRestore=false,m_dvShutdownFence=false;
  bool completeOK=true,pollOK=true,restoreOK=true,modeOK=true,recoveryOK=true;
  Capabilities capabilities;
- bool m_dvRollbackFailed=false,m_dvFatalConsumed=false,m_dvNativeFailed=false,m_dvFallbackActive=false;
+ bool m_dvSuperseded=false,m_dvRollbackFailed=false,m_dvFatalConsumed=false,m_dvNativeFailed=false,m_dvFallbackActive=false;
  DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None,m_dvActivationReason=DVBRIDGE::OutputReason::None;
  std::mutex m_dvCapabilityMutex;
  unsigned m_dvAttemptFailures=0,m_hdr10SessionStream=0;
