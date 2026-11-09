@@ -136,6 +136,19 @@ int main() {
      {AVCOL_PRI_BT2020,AVCOL_TRC_SMPTE2084,false,false,"FEL"});
  DVBRIDGE::StreamTelemetry::Metadata(data,true,10);
  const auto info=DVBRIDGE::NativeProcessingInfo(DVBRIDGE::StreamTelemetry::Read());
+ // SDR is an actual accepted processing route, retaining original DV metadata in Input.
+ auto rendered=DVBRIDGE::StreamTelemetry::Read();
+ rendered.output.flags=CDVPlaybackInfo::SDR; rendered.output.effective=8;
+ rendered.output.bits=10;
+ auto sdr=DVBRIDGE::NativeProcessingInfo(rendered);
+ assert(sdr.outputType==VideoOutputType::SDR && sdr.output.flags==CDVPlaybackInfo::SDR);
+ assert(sdr.metadata && sdr.profile==8 && sdr.blocks[2] && sdr.levels.l2Count==8);
+ assert(sdr.TransmittedBlocks().none() && sdr.AppliedBlocks()[1]);
+ // HLG-base DV remains an original HLG-base source carrying its authored RPU.
+ rendered.compatibility=4; rendered.tags.transfer=AVCOL_TRC_ARIB_STD_B67;
+ sdr=DVBRIDGE::NativeProcessingInfo(rendered);
+ assert(sdr.compatibility==4 && sdr.tags.transfer==AVCOL_TRC_ARIB_STD_B67 && sdr.metadata);
+
  assert(info.metadata && info.cm4 && info.compatibility==1);
  const auto& levels=info.levels;
  // At most eight trim passes are kept, in stream order.
