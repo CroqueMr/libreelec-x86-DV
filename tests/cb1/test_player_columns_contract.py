@@ -70,6 +70,8 @@ int main(){
   self.assertEqual(dimensions['valueleft'],'264')
   source=(TREE/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
   self.assertIn('const float height = 108.0f + content + 16.0f;',source)
+  self.assertIn('surface->SetHeight(height);',source)
+  self.assertNotIn('surface->SetHeight(height + 40.0f);',source)
   self.assertIn('0, 20, FONT_STYLE_NORMAL',source)
   self.assertNotIn('list->SetHeight',source)
  def test_processing_contains_only_applied_levels_in_numeric_order(self):
@@ -78,12 +80,13 @@ int main(){
   self.assertNotIn('DV.UnappliedBlocks',ET.tostring(row,encoding='unicode'))
   levels=[int(x.get('value')[1:]) for x in row.findall('.//param[@name="level"]')]
   self.assertEqual(levels,sorted(set(levels)))
- def test_source_hdr10plus_survives_dv_processing(self):
+ def test_raw_hdr10plus_remains_available_without_panel_summary(self):
   patch=PATCH.read_text()
   self.assertNotIn('+    if (!(active && data.profile && !data.output.hdr10AI))',patch)
   panel=ET.parse(PANEL)
   dv=panel.find('./include[@name="DVInputDolbyVisionFields"]')
-  self.assertIsNotNone(dv.find('.//param[@name="value"][@value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusCarried)]"]'))
+  self.assertIsNone(dv.find('.//param[@name="value"][@value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusCarried)]"]'))
+  self.assertIn('SetProperty("DV.HDR10PlusCarried"',patch)
   layout=panel.find('./include[@name="DVProcessLayout"]')
   static=layout.find('.//include[.="DVStaticMetadataFields"]')
   self.assertIn('String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))',static.get('condition'))
@@ -109,4 +112,43 @@ int main(){
   for signal in ('sdr','hlg','hdr10','hdr10plus','dolbyvision'):
    self.assertTrue(any('videooutputhdrtype),'+signal+')' in v.get('condition','') for v in values))
   self.assertEqual(values[-1].text,'Kodi output')
+ def test_requested_panel_fields_are_removed(self):
+  panel=ET.parse(PANEL)
+  labels={p.get('value') for p in panel.findall('.//include[@content="DVInfoRow"]/param[@name="label"]')}
+  for label in ('Also carried','Presentation','Language','Subtitles'):
+   self.assertNotIn(label,labels)
+  self.assertIsNone(panel.find('./variable[@name="DVSubtitleLanguage"]'))
+ def test_active_green_requires_accepted_cb1_output(self):
+  panel=ET.parse(PANEL)
+  for name in ('DVPanelMode','DVRenderMeterColor'):
+   values=panel.find('./variable[@name="'+name+'"]').findall('value')
+   active=values[0]
+   self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))',active.get('condition',''))
+   self.assertIn('!String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)',active.get('condition',''))
+   self.assertIn('FF65E18D',active.text)
+   self.assertNotIn('65E18D',values[-1].text)
+ def test_panel_has_no_translucent_surface_or_inherited_fade(self):
+  panel=ET.parse(PANEL)
+  dialog=ET.parse(PANEL.with_name('DialogPlayerProcessInfo.xml'))
+  self.assertFalse(dialog.findall('.//animation'))
+  # The playback-mode chooser is a separate dialog, outside the information panel.
+  for include in panel.findall('./include'):
+   if include.get('name','').startswith('CB1PlaybackMode'):continue
+   for node in include.iter():
+    for color in (node.get('colordiffuse'), node.get('value') if node.tag=='param' and node.get('name') in ('fill','color','labelcolor') else None, node.get('default') if node.tag=='param' and node.get('name') in ('fill','color','labelcolor') else None, node.text if node.tag=='textcolor' else None):
+     if color and not color.startswith('$'):
+      self.assertTrue(color.startswith('FF'),(include.get('name'),color))
+    if node.tag in ('texture','texturebg','midtexture') and node.text:
+     self.assertEqual(node.text,'special://xbmc/media/cb1-white.png')
+   self.assertFalse(include.findall('.//animation'))
+ def test_source_metadata_details_remain_applied_and_neutral(self):
+  panel=ET.parse(PANEL)
+  source=panel.find('./include[@name="DVSourceMetadataFields"]')
+  self.assertEqual(source.find('.//include[@content="DVSection"]/param[@name="label"]').get('value'),'Source metadata')
+  for name in ('DVSourceMetadataFields','DVUsedHDRFields','DVUsedHDR10PlusFields'):
+   for row in panel.findall('./include[@name="'+name+'"]/definition/include[@content="DVInfoRow"]'):
+    self.assertEqual(row.find('./param[@name="labelcolor"]').get('value'),'FFEEF2F3')
+  usage=panel.find('./include[@name="DVUsageChips"]')
+  for p in usage.findall('.//param[@name="color"]'):self.assertEqual(p.get('value'),'FFE6ECEE')
+  for p in usage.findall('.//param[@name="fill"]'):self.assertEqual(p.get('value'),'FF2E3539')
 if __name__=='__main__': unittest.main()

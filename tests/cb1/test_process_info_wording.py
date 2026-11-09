@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 
 PANEL=(Path(__file__).resolve().parents[2]/
        'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
-# Every source the RC3 panel displays, now in a row, the signal chain or the meters.
+# Retained RC3 facts, excluding the presentation/language/subtitle rows removed by request.
 RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'AIL1 AIL3 AIModel AdmissionReason AppliedBlocks AtomicResult BL BeforeAI CLL CM CPU Circuit CreativeTrims '
     'Display DisplayBlack DroppedSkipped EL Engine Enhanced FEL FELUpscaling Fallback GPUAvailable GPURender '
@@ -19,13 +19,12 @@ RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'SourcePixelFormat TVProfile TransmittedBlocks Transport Version').split()]+[
     f'Player.Process({name})' for name in (
     'audiobedobjects audiobedobjectslabel audiodecoder audiodialnorm audiooutputchannels '
-    'audiooutputcodec audiooutputdata audiooutputtransport audiopresentation audioqueuedatalevel '
-    'audioqueuelevel audiosourcebitrate audiosourcechannels audiosourceformat audiosourcelanguage '
+    'audiooutputcodec audiooutputdata audiooutputtransport audioqueuedatalevel '
+    'audioqueuelevel audiosourcebitrate audiosourcechannels audiosourceformat '
     'audiosourcetitle videodar videodecoder videofps videoheight videolivebitrate '
     'videoqueuedatalevel videoqueuelevel videowidth').split()]+[
     'Player.CacheLevel','System.CPUTemperature','Property(DV.Memory)',
-    'VideoPlayer.AudioStreamCount','VideoPlayer.HasSubtitles','VideoPlayer.HdrType',
-    'VideoPlayer.SubtitlesEnabled','VideoPlayer.SubtitlesLanguage']
+    'VideoPlayer.AudioStreamCount','VideoPlayer.HdrType']
 # Kodi labels the panel adds to the RC3 set: scan type, codec, decoded surface, deinterlacer.
 ADDED_LABELS=['Player.Process(videoscantype)','Player.Process(pixformat)',
               'Player.Process(deintmethod)','VideoPlayer.VideoCodec']
@@ -264,7 +263,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),75)
+        self.assertEqual(len(rows),71)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
@@ -302,8 +301,9 @@ int main() {
                 'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         names=set(re.findall(r'SetProperty\("DV\.(\w+)"',source))
         # Shown another way: the gauge reads its integer, the mode name carries both policies.
-        # RC3 no longer displays the partial-use list.
-        shown_elsewhere={'GPURenderPercent','ActivePolicy','HDR10Policy','PartialBlocks','UnappliedBlocks','L2Targets','L8Targets'}
+        # Partial/unused lists, source-wide trim anchors and co-carried HDR10+ summary
+        # intentionally stay outside this bounded applied-only panel.
+        shown_elsewhere={'GPURenderPercent','ActivePolicy','HDR10Policy','PartialBlocks','UnappliedBlocks','L2Targets','L8Targets','HDR10PlusCarried'}
         text=PANEL.read_text()
         for name in sorted(names-shown_elsewhere):
             self.assertIn('Property(DV.'+name+')',text,name)

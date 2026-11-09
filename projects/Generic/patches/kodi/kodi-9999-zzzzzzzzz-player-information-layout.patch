@@ -788,3 +788,12 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
  }
  #endif
  
+@@ -300,7 +564,7 @@
+       const float height = 108.0f + content + 16.0f;
+       panel->SetHeight(height);
+       panel->SetPosition(panel->GetXPosition(), GetCoordsRes().iHeight - 24.0f - height);
+-      surface->SetHeight(height + 40.0f);
++      surface->SetHeight(height);
+     }
+   }
+ #endif

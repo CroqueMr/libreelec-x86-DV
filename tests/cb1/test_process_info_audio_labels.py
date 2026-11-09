@@ -25,7 +25,7 @@ class AudioLabelsTests(unittest.TestCase):
             self.assertIn('$INFO[Player.Process('+name+')]', audio_format)
             self.assertIn('!String.IsEmpty(Player.Process('+name+'))', format_row)
         for name in ('audiobedobjects',
-                     'audiopresentation', 'audiodialnorm', 'audiosourcelanguage',
+                     'audiodialnorm',
                      'audiosourcebitrate', 'audiooutputtransport', 'audiooutputdata',
                      'audiooutputchannels', 'audiooutputcodec'):
             value = '$INFO[Player.Process('+name+')]'
@@ -36,7 +36,7 @@ class AudioLabelsTests(unittest.TestCase):
         self.assertNotIn('Player.Passthrough', PANEL.read_text())
         video = {r.find('./param[@name="value"]').get('value'): r for r in
                  self.panel.findall('./include[@name="DVOutputFields"]/definition/include[@content="DVInfoRow"]')}
-        self.assertIsNone(video['$VAR[DVSubtitleLanguage]'].find('./param[@name="visible"]'))
+        self.assertNotIn('$VAR[DVSubtitleLanguage]',video)
 
     def test_formats_are_in_headings_without_duplicate_time_rows(self):
         headings = {h.find('./param[@name="title"]').get('value'): h
