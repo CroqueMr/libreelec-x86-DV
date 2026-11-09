@@ -1218,20 +1218,20 @@
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": {
-    "summary": "Show original source, actual processing and accepted output in navigable single-line columns",
+    "summary": "Show original source, actual processing and accepted output in fixed single-line columns",
     "component": "kodi",
     "files": {
-      "xbmc/cores/DataCacheCore.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/DataCacheCore.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/cores/VideoProcessingInfo.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/dialogs/DVPixelFormat.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
-      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show original source, actual processing and accepted output in navigable single-line columns."
+      "xbmc/cores/DataCacheCore.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/DataCacheCore.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/cores/VideoProcessingInfo.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/dialogs/DVPixelFormat.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show original source, actual processing and accepted output in fixed single-line columns."
     }
   }
 }
