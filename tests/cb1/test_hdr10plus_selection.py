@@ -43,7 +43,7 @@ int main(){
         configure=body(renderer,'bool CLinuxRendererGLES::ConfigureVideoOutput(const VideoPicture& picture)')
         settings=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         profile=body(settings,'bool ProfileValid() const')
-        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;',settings))
+        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',settings))
         program=r'''
 #define HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
@@ -54,9 +54,10 @@ int main(){
 #include <cmath>
 namespace DVBRIDGE {
 NATIVE_ENUMS
-enum class OutputRoute {Vanilla,NativeDV,HDR10};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 struct OutputPreferences {
+ HLGSourceMode hlgSource=HLGSourceMode::Native;
  OutputMode output=OutputMode::HDR10;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
  bool allowMasterFallback=true;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;
  double peak=1000;int panel=0,gamut=2;

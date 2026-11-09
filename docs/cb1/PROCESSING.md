@@ -223,3 +223,19 @@ metadata, not ordinary 8-bit SDR. HDR10 conversion requires a driver-validated
 
 Full source equations and execution details are in
 [CB1 algorithms](../../CB1/docs/ALGORITHMS.md).
+
+
+## SDR and original HLG routing
+
+SDR reuses the advanced policy RGB prepare/resolve/commit owner and its source
+leases, picture identity, FEL reconstruction, spatial fitting and cancellation.
+OutputRoute::SDR is appended; existing selectors and circuits retain their IDs.
+SDR policy mode 7 is reported as telemetry policy 8 because telemetry 7 already
+identifies HDR10+ Rendering. Committed SDR carries flag 32 and reports `sdr`;
+processing metadata stays distinct from transmitted metadata, which is empty.
+
+Original HLG is admitted only to the Reference AI circuit or native playback.
+The source preference is independent of HDR10/HDR10+ and Dolby Vision. Source
+classification gives Dolby Vision configuration/RPU priority over HLG transfer,
+so P8.4/P10.4 cannot enter plain-HLG analysis. Layer imports retain original HLG
+transfer until engine reference normalization; they are never relabeled PQ.
