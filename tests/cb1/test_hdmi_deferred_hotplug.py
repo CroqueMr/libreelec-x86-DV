@@ -128,12 +128,12 @@ def run_owner_proof(kernel):
  intel_encoder*intel_attached_encoder(intel_connector*c){return c->encoder;}
  u32 get_blocked_hpd_pin_mask(intel_display*){return 0;}
  void intel_hpd_irq_storm_switch_to_polling(intel_display*){}
- int refs=0,notifications=0,queues=0,delay_ms=0,worker_runs=0;
+ int refs=0,notifications=0,single_notifications=0,global_notifications=0,queues=0,delay_ms=0,worker_runs=0;
  bool queued=false;
  void drm_connector_get(drm_connector*){++refs;}
  void drm_connector_put(drm_connector*){--refs;}
- void drm_kms_helper_connector_hotplug_event(drm_connector*){++notifications;}
- void drm_kms_helper_hotplug_event(drm_device*){++notifications;}
+ void drm_kms_helper_connector_hotplug_event(drm_connector*){++notifications;++single_notifications;}
+ void drm_kms_helper_hotplug_event(drm_device*){++notifications;++global_notifications;}
  int msecs_to_jiffies(int ms){return ms;}
  bool mod_delayed_detection_work(intel_display*,delayed_work*,int delay){queued=true;++queues;delay_ms=delay;return true;}
  #define container_of(pointer,type,member) ((pointer)->owner)
@@ -162,7 +162,7 @@ def run_owner_proof(kernel):
   Fixture(){connector.base.dev=&device;connector.base.state=&conn;connector.base.ddc=&bus;
   connector.base.status=2;connector.encoder=&encoder;port.dp.attached_connector=&connector;
   display.hotplug.hotplug_work.work.owner=&display;device.connectors.push_back(&connector);
-  queued=false;queues=0;notifications=0;refs=0;worker_runs=0;probe_connected=true;
+  queued=false;queues=0;notifications=single_notifications=global_notifications=0;refs=0;worker_runs=0;probe_connected=true;
   probe_epoch=false;lock_error=0;lock_failures=0;backoffs=0;acquire_init=acquire_fini=0;dp_checks=0;warns=0;messages.clear();kms=true;}
   void add(Fixture&other,hpd_pin pin){other.encoder.display=&display;other.encoder.base.dev=&device;
   other.connector.base.dev=&device;other.connector.pin=pin;device.connectors.push_back(&other.connector);}
@@ -277,6 +277,13 @@ def run_owner_proof(kernel):
   {
    Fixture f;f.commit.hw_done=false;f.irq();f.commit.hw_done=true;lock_error=1;lock_failures=1;f.drain();
    check(backoffs==1&&f.configs()==1&&!queued&&!warns&&acquire_init==acquire_fini,"deferred callback reacquires locks with real EDEADLK backoff");
+  }
+  {
+   Fixture f,g;f.add(g,HPD_A);f.connector.base.status=1;f.commit.hw_done=false;f.irq();
+   check(single_notifications==1&&global_notifications==0&&notifications==1,"only newly changed sibling is notified, never unchanged pending owner");
+   check(queued&&f.display.hotplug.retry_bits==BIT(HPD_A),"UNCHANGED pending survives sibling CHANGED on same pin");
+   f.commit.hw_done=true;f.drain();
+   check(f.configs()==1&&g.configs()==2&&!queued,"UNCHANGED pending followup reads CONFIG after sibling notification");
   }
   std::cout<<checks-failed<<'/'<<checks<<" actual-owner invariants pass\n";return failed?1:0;
  }

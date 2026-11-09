@@ -51,7 +51,7 @@ connector/CRTC state on the later check. Do not change SCDC recovery policy.
  			drm_WARN_ON(encoder->base.dev, ret);
  		} else {
  			intel_dp_check_link_state(intel_dp);
-@@ -4938,9 +4943,16 @@
+@@ -4938,9 +4943,17 @@
  	 * becomes functional. Retry the detection for 5 seconds on type-c
  	 * connectors to account for this delay.
  	 */
@@ -62,9 +62,10 @@ connector/CRTC state on the later check. Do not change SCDC recovery policy.
 +	 * immediate connection-change notification. Reuse the native one-second
 +	 * retry once; never spin on hw_done or retain its commit/CRTC pointer.
 +	 */
-+	if (hdmi_retry && state == INTEL_HOTPLUG_CHANGED &&
++	if (hdmi_retry &&
 +	    connector->hotplug_retries < 1 && !dig_port->dp.is_mst)
-+		state = INTEL_HOTPLUG_CHANGED_RETRY;
++		state = state == INTEL_HOTPLUG_CHANGED ?
++			INTEL_HOTPLUG_CHANGED_RETRY : INTEL_HOTPLUG_DEFERRED;
 +	else if (state == INTEL_HOTPLUG_UNCHANGED &&
 +		 connector->hotplug_retries < (hdmi_retry ? 1 : (is_tc ? 5 : 1)) &&
 +		 !dig_port->dp.is_mst)
@@ -82,17 +83,20 @@ connector/CRTC state on the later check. Do not change SCDC recovery policy.
  	u32 hpd_event_bits;
  	u32 hpd_retry_bits;
  	struct drm_connector *first_changed_connector = NULL;
-@@ -529,6 +529,9 @@
+@@ -529,6 +529,12 @@
  			switch (encoder->hotplug(encoder, connector)) {
  			case INTEL_HOTPLUG_UNCHANGED:
  				break;
++			case INTEL_HOTPLUG_DEFERRED:
++				deferred |= hpd_bit;
++				break;
 +			case INTEL_HOTPLUG_CHANGED_RETRY:
 +				deferred |= hpd_bit;
 +				fallthrough;
  			case INTEL_HOTPLUG_CHANGED:
  				changed |= hpd_bit;
  				changed_connectors++;
-@@ -554,8 +557,10 @@
+@@ -554,8 +560,10 @@
  	if (first_changed_connector)
  		drm_connector_put(first_changed_connector);
  
@@ -107,11 +111,12 @@ connector/CRTC state on the later check. Do not change SCDC recovery policy.
  		display->hotplug.retry_bits |= retry;
 --- a/drivers/gpu/drm/i915/display/intel_display_types.h
 +++ b/drivers/gpu/drm/i915/display/intel_display_types.h
-@@ -160,6 +160,7 @@
+@@ -160,6 +160,8 @@
  	INTEL_HOTPLUG_UNCHANGED,
  	INTEL_HOTPLUG_CHANGED,
  	INTEL_HOTPLUG_RETRY,
 +	INTEL_HOTPLUG_CHANGED_RETRY,
++	INTEL_HOTPLUG_DEFERRED,
  };
  
  struct intel_encoder {
