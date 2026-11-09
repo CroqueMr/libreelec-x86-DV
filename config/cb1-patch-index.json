@@ -1240,5 +1240,14 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_ddi.c": "Observe guarded HDMI hotplug recovery and typed SCDC CONFIG/STATUS under KMS debug; preserve existing recovery decisions."
     }
+  },
+  "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": {
+    "summary": "Retry an HDMI link check deferred by a pending commit while preserving immediate hotplug notification",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_ddi.c": "Preserve the explicit pending-commit reason and request a bounded native HDMI link recheck.",
+      "drivers/gpu/drm/i915/display/intel_display_types.h": "Distinguish deferred link checks and combined changed notifications from ordinary retries.",
+      "drivers/gpu/drm/i915/display/intel_hotplug.c": "Keep immediate changed notifications and explicit deferred checks on the existing bounded hotplug queue."
+    }
   }
 }

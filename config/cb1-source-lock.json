@@ -28,7 +28,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "5ded5441420e96dc910ae691e1c85ac28456718f22e7ec33107fcc5426219711",
-    "config/cb1-patch-index.json": "9ec12f0259585e182f7e04491d0402a9cefe0088578a686b3d6928c7ab59f094",
+    "config/cb1-patch-index.json": "29301eb813ccf7625391306e5fc9776dcb555471dce59dbb0a06dbe40ae96980",
     "packages/graphics/nvidia/package.mk": "9898721633ebdf315f5040c0d6329ffaa4d71ee92c3515025ce0b338fcdf260b",
     "packages/graphics/nvidia/files/select-driver": "5e1c7a5974f54976d37bd7b4e07486ee9708ee1fb671e839281fbf03dca94e1b",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
@@ -316,7 +316,9 @@
     "tests/cb1/test_sdr_applied_metadata.py": "828d531ee9d0c6418f7d600b4947691b51ce487b6265c1b3c2b7e67eacd5cf85",
     "tests/cb1/test_output_supersession.py": "ca2b52568d682225fb42f5331a258db845f44cb84a15977f5bd21e98456d734e",
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
-    "tests/cb1/test_hdmi_scdc_diagnostics.py": "a68031f72947e9f6194394a2fc852f8ba3be2d37a663d13a8f2ca66b88d5f667"
+    "tests/cb1/test_hdmi_scdc_diagnostics.py": "4a2115d345369ccc4089c02ab7d8e5ed3a98ddc0f0ad22b1e79e8dd1449b69fb",
+    "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "9cf86d55b00ba34e84569aea75278e9452a61e15090deb60b1df9a54aee03c43",
+    "tests/cb1/test_hdmi_deferred_hotplug.py": "d86cb7004524ec1ad0c9cfb9d1b966e3d7d8f8672066e052bbc8441c7fda8c68"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
