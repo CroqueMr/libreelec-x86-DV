@@ -283,7 +283,7 @@ int main() {
             self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.'+prop+')]',values)
         for name in ('DVInfoRow','DVStackedRow'):
             value=panel.find('./include[@name="'+name+'"]/definition/control[@type="label"]')
-            self.assertEqual(value.findtext('scroll'),'true')
+            self.assertEqual(value.findtext('scroll'),'false')
             self.assertEqual(value.findtext('wrapmultiline'),'false')
 
     def test_every_rc3_field_remains_displayed(self):

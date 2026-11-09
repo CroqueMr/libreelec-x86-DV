@@ -111,11 +111,14 @@ all three columns. Output L2/L8 target lists are shown only when the accepted
 transmitted mask forwards those unchanged authored blocks; legacy synthesized
 output excludes them. SDR carries no DV transmitted blocks.
 
-Each field stays on one line and its full value scrolls horizontally. Up/Down
-and Page Up/Page Down scroll column inventories together, bounded independently
-by each column's contents. This keeps maximum RPU inventories accessible rather
-than cutting off source facts. Empty metadata sections collapse. The native
-Kodi dialog fallback remains available when enhanced information is disabled.
+Each field stays static on one line. No heading or value scrolls automatically.
+Long values use Kodi's normal ellipsis; press OK/Select to open the native text
+reader with a frozen, untruncated snapshot of every visible column, including
+metadata below the current viewport. Hidden and unused rows stay excluded.
+Close the reader to return to live information. Up/Down and Page Up/Page Down
+move column inventories only when requested, bounded by each column's contents.
+Empty metadata sections collapse. The native Kodi dialog fallback remains
+available when enhanced information is disabled.
 
 Focused qualification: seven column contract tests and 22 process information
 tests pass against a separate copied matched Kodi tree, including compiled RPU

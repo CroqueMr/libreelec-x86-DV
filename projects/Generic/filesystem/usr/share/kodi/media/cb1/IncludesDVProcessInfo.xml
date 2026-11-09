@@ -76,17 +76,17 @@
     <value>[COLOR FFF2C46D]$INFO[Window(playerprocessinfo).Property(DV.DroppedSkipped)][/COLOR]</value>
   </variable>
   <include name="DVColumnHeading">
-    <param name="left"/><param name="title"/><param name="primary"/><param name="secondary"/>
+    <param name="left"/><param name="details"/><param name="title"/><param name="primary"/><param name="secondary"/>
     <definition>
-      <control type="group"><left>$PARAM[left]</left><top>28</top><width>548</width><height>112</height>
-        <control type="label"><height>44</height><aligny>center</aligny>
+      <control type="group" id="$PARAM[details]"><left>$PARAM[left]</left><top>28</top><width>548</width><height>112</height>
+        <control type="label" id="9690"><height>44</height><aligny>center</aligny>
           <font>CB1.InfoHero</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[title]</label>
         </control>
-        <control type="fadelabel"><top>46</top><height>30</height>
-          <font>CB1.InfoLead</font><textcolor>FFEEF2F3</textcolor><label>$PARAM[primary]</label><scroll>true</scroll><resetonlabelchange>false</resetonlabelchange>
+        <control type="label" id="9690"><top>46</top><height>30</height>
+          <font>CB1.InfoLead</font><textcolor>FFEEF2F3</textcolor><label>$PARAM[primary]</label><scroll>false</scroll>
         </control>
-        <control type="fadelabel"><top>76</top><height>30</height>
-          <font>CB1.InfoLead</font><textcolor>FF8C989E</textcolor><label>$PARAM[secondary]</label><scroll>true</scroll><resetonlabelchange>false</resetonlabelchange>
+        <control type="label" id="9690"><top>76</top><height>30</height>
+          <font>CB1.InfoLead</font><textcolor>FF8C989E</textcolor><label>$PARAM[secondary]</label><scroll>false</scroll>
         </control>
         <control type="image"><top>111</top><height>1</height>
           <texture colordiffuse="1CFFFFFF">special://xbmc/media/cb1-white.png</texture>
@@ -99,10 +99,10 @@
     <param name="label"/><param name="value"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><width>292</width><height>58</height><visible>$PARAM[visible]</visible>
-        <control type="label"><width>268</width><height>20</height><aligny>center</aligny>
+        <control type="label" id="9690"><width>268</width><height>20</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FF7D8A90</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label"><top>22</top><width>268</width><height>36</height><aligny>center</aligny>
+        <control type="label" id="9690"><top>22</top><width>268</width><height>36</height><aligny>center</aligny>
           <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label>
         </control>
       </control>
@@ -112,10 +112,10 @@
     <param name="label"/><param name="value"/><param name="id" default=""/><param name="info" default=""/><param name="color" default="FFC6CED2"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><width>292</width><height>58</height><visible>$PARAM[visible]</visible>
-        <control type="label"><width>268</width><height>20</height><aligny>center</aligny>
+        <control type="label" id="9690"><width>268</width><height>20</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FF7D8A90</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label"><top>22</top><width>100</width><height>36</height><aligny>center</aligny>
+        <control type="label" id="9690"><top>22</top><width>100</width><height>36</height><aligny>center</aligny>
           <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label>
         </control>
         <control type="progress" id="$PARAM[id]"><left>104</left><top>38</top><width>156</width><height>4</height><info>$PARAM[info]</info>
@@ -140,17 +140,17 @@
         <include content="DVMeterText"><param name="label" value="Temperature"/><param name="value" value="$INFO[System.CPUTemperature]"/><param name="visible" value="!String.IsEmpty(System.CPUTemperature) + !String.IsEqual(System.CPUTemperature,$LOCALIZE[10005])"/></include>
       </control>
     </definition></include>
-  <!-- Single-line values scroll in place, preserving complete long metadata. -->
+  <!-- Static single-line fields; OK opens the complete visible snapshot in the native reader. -->
   <include name="DVInfoRow">
     <param name="label"/><param name="value"/><param name="visible" default="true"/><param name="labelwidth" default="252"/><param name="valueleft" default="264"/>
     <definition>
       <control type="group"><height>0</height><visible>$PARAM[visible]</visible>
-        <control type="label"><top>-1.5</top><width>$PARAM[labelwidth]</width><height>29.5</height><aligny>center</aligny>
+        <control type="label" id="9690"><top>-1.5</top><width>$PARAM[labelwidth]</width><height>29.5</height><aligny>center</aligny>
           <font>CB1.InfoBody</font><textcolor>FFB3C0C6</textcolor><label>$PARAM[label]</label>
         </control>
       </control>
-      <control type="label"><left>$PARAM[valueleft]</left><top>-1.5</top><right>0</right><height>29.5</height><visible>$PARAM[visible]</visible>
-        <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><align>right</align><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      <control type="label" id="9690"><left>$PARAM[valueleft]</left><top>-1.5</top><right>0</right><height>29.5</height><visible>$PARAM[visible]</visible>
+        <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><align>right</align><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </definition>
   </include>
@@ -158,12 +158,12 @@
     <param name="label"/><param name="value"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><height>28</height><visible>$PARAM[visible]</visible>
-        <control type="label"><top>-1.5</top><height>29.5</height><aligny>center</aligny>
+        <control type="label" id="9690"><top>-1.5</top><height>29.5</height><aligny>center</aligny>
           <font>CB1.InfoBody</font><textcolor>FFB3C0C6</textcolor><label>$PARAM[label]</label>
         </control>
       </control>
-      <control type="label"><top>-1.5</top><height>29.5</height><visible>$PARAM[visible]</visible>
-        <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      <control type="label" id="9690"><top>-1.5</top><height>29.5</height><visible>$PARAM[visible]</visible>
+        <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </definition>
   </include>
@@ -171,7 +171,7 @@
     <param name="label"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><height>50</height><visible>$PARAM[visible]</visible>
-        <control type="label"><top>20</top><height>24</height><aligny>center</aligny>
+        <control type="label" id="9690"><top>20</top><height>24</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FFA3AFB4</textcolor><label>$PARAM[label]</label>
         </control>
       </control>
@@ -187,7 +187,7 @@
         <control type="image"><width>$PARAM[width]</width><height>30</height>
           <texture border="6" colordiffuse="$PARAM[fill]">special://xbmc/media/cb1-chip.png</texture>
         </control>
-        <control type="label"><width>$PARAM[width]</width><height>30</height><align>center</align><aligny>center</aligny>
+        <control type="label" id="9690"><width>$PARAM[width]</width><height>30</height><align>center</align><aligny>center</aligny>
           <font>CB1.InfoBody</font><textcolor>$PARAM[color]</textcolor><label>$PARAM[level]</label>
         </control>
       </control>
@@ -212,7 +212,7 @@
       </control>
     </definition>
   </include>
-  <!-- What CB1 applied, in mint, among the file's levels it left unused, greyed. -->
+  <!-- Only metadata levels actually applied by CB1. -->
   <include name="DVUsageChips"><definition>
       <control type="grouplist"><height>42</height><orientation>horizontal</orientation><itemgap>6</itemgap><visible>!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))</visible>
         <include content="DVBlockChip"><param name="list" value="DV.AppliedBlocks"/><param name="level" value="L1"/><param name="width" value="36"/><param name="fill" value="33B9D8C7"/><param name="color" value="FFB9D8C7"/></include>
@@ -364,9 +364,12 @@
         <control type="image" id="$PARAM[surface]"><left>-20</left><top>-20</top><width>1896</width><height>$PARAM[background]</height>
           <texture border="60">special://xbmc/media/cb1-glass.png</texture>
         </control>
-        <include content="DVColumnHeading"><param name="left" value="40"/><param name="title" value="Input (Up / Down to scroll)"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
-        <include content="DVColumnHeading"><param name="left" value="654"/><param name="title" value="Processing"/><param name="primary" value="$VAR[DVPanelMode]"/><param name="secondary" value="$VAR[DVModeDetail]"/></include>
-        <include content="DVColumnHeading"><param name="left" value="1268"/><param name="title" value="Output"/><param name="primary" value="$VAR[DVOutputFormat]"/><param name="secondary" value="$VAR[DVOutputAudio]"/></include>
+        <include content="DVColumnHeading"><param name="left" value="40"/><param name="details" value="9640"/><param name="title" value="Input"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
+        <include content="DVColumnHeading"><param name="left" value="654"/><param name="details" value="9641"/><param name="title" value="Processing"/><param name="primary" value="$VAR[DVPanelMode]"/><param name="secondary" value="$VAR[DVModeDetail]"/></include>
+        <include content="DVColumnHeading"><param name="left" value="1268"/><param name="details" value="9642"/><param name="title" value="Output"/><param name="primary" value="$VAR[DVOutputFormat]"/><param name="secondary" value="$VAR[DVOutputAudio]"/></include>
+        <control type="label" id="9690"><left>150</left><top>32</top><width>430</width><height>36</height><aligny>center</aligny>
+          <font>CB1.InfoCaption</font><textcolor>FFB3C0C6</textcolor><label>Up/Down: more · OK: details</label><scroll>false</scroll>
+        </control>
         <control type="grouplist" id="$PARAM[col1]"><left>40</left><top>108</top><width>548</width><height>1500</height><itemgap>0</itemgap><usecontrolcoords>true</usecontrolcoords>
           <include>DVColumnSpacer</include>
           <include>DVInputFields</include>
@@ -407,7 +410,7 @@
         <texture colordiffuse="FF1A2123">special://xbmc/media/cb1-white.png</texture>
       </control>
       <control type="label" id="1">
-        <left>20</left><top>12</top><width>620</width><height>40</height><font>CB1.SwitchBody</font><textcolor>FFF0F0F0</textcolor><scroll>true</scroll>
+        <left>20</left><top>12</top><width>620</width><height>40</height><font>CB1.SwitchBody</font><textcolor>FFF0F0F0</textcolor><scroll>false</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
       <control type="list" id="3">
@@ -438,7 +441,7 @@
       <control type="label">
         <left>42</left><top>5</top><width>566</width><height>40</height>
         <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </itemlayout>
     <focusedlayout width="620" height="50">
@@ -453,7 +456,7 @@
       <control type="label">
         <left>42</left><top>5</top><width>566</width><height>40</height>
         <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </focusedlayout>
   </include>

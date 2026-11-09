@@ -364,10 +364,16 @@ index 17d77b4..df505ec 100644
 +}
  }
 diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
-index bc00552..6e93a1f 100644
 --- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
-@@ -16,19 +16,25 @@
+@@ -12,23 +12,32 @@
+ #include "input/actions/ActionIDs.h"
+ #ifdef HAVE_DVBRIDGE
+ #include "DVPlaybackModes.h"
++#include "GUIDialogTextViewer.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
+ #include "DVPixelFormat.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
  #include "cores/DataCacheCore.h"
@@ -393,7 +399,7 @@ index bc00552..6e93a1f 100644
  #endif
  
  CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
-@@ -57,12 +63,19 @@ bool CGUIDialogPlayerProcessInfo::OnMessage(CGUIMessage& message)
+@@ -57,12 +66,19 @@
      {
        const RESOLUTION_INFO resolution(1920, 1080);
        SetCoordsRes(resolution);
@@ -419,7 +425,7 @@ index bc00552..6e93a1f 100644
      }
    }
  #endif
-@@ -93,6 +106,131 @@ void CGUIDialogPlayerProcessInfo::OnDeinitWindow(int nextWindowID)
+@@ -93,6 +109,131 @@
  }
  
  #ifdef HAVE_DVBRIDGE
@@ -551,7 +557,7 @@ index bc00552..6e93a1f 100644
  void CGUIDialogPlayerProcessInfo::RefreshInfo()
  {
      const auto render = m_renderUsage.Sample();
-@@ -107,6 +245,11 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -107,6 +248,11 @@
      const auto data = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
      SetProperty("DV.SourcePixelFormat", DVBRIDGE::SourcePixelFormat(static_cast<AVPixelFormat>(data.sourceFormat)));
      SetProperty("DV.SourceBits", data.sourceBits ? StringUtils::Format("{}-bit", data.sourceBits) : "N/A");
@@ -563,7 +569,7 @@ index bc00552..6e93a1f 100644
      const auto active = data.output.flags;
      const bool hdr10 = active & CDVPlaybackInfo::HDR10;
      const bool metadata = active && data.metadata;
-@@ -119,6 +262,17 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -119,6 +265,17 @@
            data.output.width,data.output.height,data.output.refresh));
      const auto cpu = CServiceBroker::GetCPUInfo();
      SetProperty("DV.CPU", cpu ? StringUtils::Format("{} %", cpu->GetUsedPercentage()) : "N/A");
@@ -581,7 +587,7 @@ index bc00552..6e93a1f 100644
      SetProperty("DV.DroppedSkipped", data.counters ?
          StringUtils::Format("{} / {}", data.dropped, data.skipped) : "N/A");
      SetProperty("DV.SourceMastering", data.sourceMastering ?
-@@ -126,6 +280,15 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -126,6 +283,15 @@
      SetProperty("DV.SourceLight", data.sourceLight ?
          StringUtils::Format("{} / {} nits", data.sourceCLL, data.sourceFALL) : "N/A");
      SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
@@ -597,7 +603,7 @@ index bc00552..6e93a1f 100644
      SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
      SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
      SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
-@@ -176,6 +339,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -176,6 +342,8 @@
              (data.output.untranslatedCurve ? "; authored curve not translated" : "") +
              (data.output.untranslatedSaturation ? "; authored saturation not translated" : ""));
        SetProperty("DV.Profile", "");
@@ -606,7 +612,7 @@ index bc00552..6e93a1f 100644
        SetProperty("DV.Level", "");
        SetProperty("DV.Version", "");
        const auto& raw=data.output.aiL1L3;
-@@ -227,7 +392,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -227,7 +395,8 @@
      SetProperty("DV.TVProfile", active && data.output.effective==8 ?
          StringUtils::Format("BT.709 / {:g} nits / gamma {:g}", data.output.target,data.output.sdrGamma) :
          active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
@@ -616,7 +622,7 @@ index bc00552..6e93a1f 100644
              data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
              data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
      SetProperty("DV.DisplayBlack", (hdr10 && data.output.effective==3 || active && data.output.effective==8) ?
-@@ -234,6 +400,9 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -236,6 +405,9 @@
      SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
      SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
          data.output.effective==7 ? "Curve reference" : "Mapping target") : "");
@@ -626,7 +632,7 @@ index bc00552..6e93a1f 100644
      SetProperty("DV.CreativeTrims", active ? (data.output.creativeKnown ?
          (data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Invalid) ||
           data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Unsupported) ?
-@@ -252,18 +421,48 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -254,18 +426,48 @@
            data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
      SetProperty("DV.Precision", active ? StringUtils::Format("{}-bit framebuffer", data.output.bits) : "N/A");
      SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
@@ -681,7 +687,7 @@ index bc00552..6e93a1f 100644
  }
  #endif
  
-@@ -289,16 +488,21 @@ void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegion
+@@ -291,16 +493,21 @@
        if (!panel || !surface)
          continue;
        float content = 0.0f;
@@ -709,11 +715,47 @@ index bc00552..6e93a1f 100644
      }
    }
  #endif
-@@ -306,6 +510,24 @@ void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegion
+@@ -308,6 +515,60 @@
  
  bool CGUIDialogPlayerProcessInfo::OnAction(const CAction &action)
  {
 +#ifdef HAVE_DVBRIDGE
++  if (DVBRIDGE::EnhancedInfoEnabled() && action.GetID() == ACTION_SELECT_ITEM)
++  {
++    // Labels retain their full info expression even when the static panel ellipsizes it.
++    // Reuse the native text reader on request; keep a frozen snapshot while it is open.
++    std::string snapshot;
++    const auto [first, last] = GetLookupControls(9690);
++    for (int column = 0; column < 3; ++column)
++    {
++      for (auto it = first; it != last; ++it)
++      {
++        const auto* control = it->second;
++        bool visible = true, belongs = false;
++        for (auto* parent = control; parent; parent = parent->GetParentControl())
++        {
++          visible = visible && parent->IsVisible();
++          belongs = belongs || parent->GetID() == 9620 + column ||
++              parent->GetID() == 9630 + column || parent->GetID() == 9640 + column;
++        }
++        if (visible && belongs)
++        {
++          const auto text = control->GetDescription();
++          if (!text.empty())
++            snapshot += text + "\n";
++        }
++      }
++      snapshot += "\n";
++    }
++    if (auto* viewer = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogTextViewer>(
++            WINDOW_DIALOG_TEXT_VIEWER))
++    {
++      viewer->SetHeading("Player information");
++      viewer->SetText(snapshot);
++      viewer->Open();
++    }
++    return true;
++  }
 +  if (DVBRIDGE::EnhancedInfoEnabled() &&
 +      (action.GetID() == ACTION_MOVE_UP || action.GetID() == ACTION_MOVE_DOWN ||
 +       action.GetID() == ACTION_PAGE_UP || action.GetID() == ACTION_PAGE_DOWN))
