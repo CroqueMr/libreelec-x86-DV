@@ -87,14 +87,19 @@ int main(){
  eglDestroyContext(display,context);eglDestroySurface(display,surface);eglTerminate(display);
 }
 '''.replace('INITIALIZE',initialize).replace('REBIND',rebind).replace('R"SHADER(VERTEX)SHADER"','R"SHADER('+vertex+')SHADER"').replace('R"SHADER(FRAGMENT)SHADER"','R"SHADER('+fragment+')SHADER"')
-        flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libplacebo'],text=True))
+        env=dict(os.environ)
+        prefix=env.get('FFMPEG_TEST_PREFIX')
+        if prefix:
+            env['PKG_CONFIG_PATH']=prefix+'/lib/pkgconfig:'+env.get('PKG_CONFIG_PATH','')
+            env['LD_LIBRARY_PATH']=prefix+'/lib:'+env.get('LD_LIBRARY_PATH','')
+        flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libplacebo'],env=env,text=True))
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'test.cpp').write_text(program)
-            built=subprocess.run(['cc','-std=c11','-I'+str(ROOT/'CB1/src'),'-c',str(ROOT/'CB1/src/dvbridge_gl_pack.c'),'-o',str(root/'pack.o')],capture_output=True,text=True)
+            built=subprocess.run(['cc','-std=c11','-I'+str(ROOT/'CB1/src'),'-c',str(ROOT/'CB1/src/dvbridge_gl_pack.c'),'-o',str(root/'pack.o')],env=env,capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
-            built=subprocess.run(['c++','-std=c++20','-I'+str(ROOT/'CB1/src'),str(root/'test.cpp'),str(root/'pack.o'),*flags,'-lEGL','-lGLESv2','-o',str(root/'test')],capture_output=True,text=True)
+            built=subprocess.run(['c++','-std=c++20','-I'+str(ROOT/'CB1/src'),str(root/'test.cpp'),str(root/'pack.o'),*flags,'-lEGL','-lGLESv2','-o',str(root/'test')],env=env,capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
-            run=subprocess.run([str(root/'test')],env=dict(os.environ,EGL_PLATFORM='surfaceless',LIBGL_ALWAYS_SOFTWARE='1'),capture_output=True,text=True)
+            run=subprocess.run([str(root/'test')],env=dict(env,EGL_PLATFORM='surfaceless',LIBGL_ALWAYS_SOFTWARE='1'),capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
 
     def test_source_depth_matrix_preserves_hdr_and_dv_restrictions(self):
