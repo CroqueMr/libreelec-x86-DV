@@ -161,6 +161,85 @@ int main(){
             result=subprocess.run([str(binary)],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
 
+    def test_quantized_sdr_transfer_matches_scalar_for_every_code(self):
+        header=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h').replace('#pragma once','')
+        program=header+r'''
+#include <cassert>
+#include <vector>
+uint16_t scalar(unsigned code,unsigned maximum,unsigned bits,bool limited,double gamma){
+ const double offset=limited ? double(16u<<(bits-8))/((1u<<bits)-1) : 0;
+ const double scale=limited ? double(219u<<(bits-8))/((1u<<bits)-1) : 1;
+ const double value=double(code)/maximum;
+ const double linear=std::pow(std::clamp((value-offset)/scale,0.0,1.0),gamma);
+ const double srgb=linear<=0.0031308 ? 12.92*linear : 1.055*std::pow(linear,1.0/2.4)-0.055;
+ return static_cast<uint16_t>(std::lround(std::clamp(srgb,0.0,1.0)*65535));
+}
+int main(){using F=DVBRIDGE::SDRScreenshotFormat;
+ for(F format:{F::RGBA8,F::BGRA8,F::RGBA16,F::RGB10}){
+  const unsigned maximum=format==F::RGBA16 ? 65535 : format==F::RGB10 ? 1023 : 255;
+  const unsigned count=maximum+1,step=format==F::RGBA16 ? 8 : 4;
+  std::vector<uint8_t> input(size_t(count)*step);std::vector<uint16_t> output(size_t(count)*4);
+  for(unsigned i=0;i<count;++i){
+   const unsigned codes[4]={i,maximum-i,(i*37)%count,format==F::RGBA16 ? (i*7)&65535 : i&255};
+   auto* p=input.data()+size_t(i)*step;
+   if(format==F::RGB10){uint32_t packed=codes[0]|codes[1]<<10|codes[2]<<20|(i&3)<<30;
+    for(unsigned c=0;c<4;++c)p[c]=(packed>>(8*c))&255;
+   }else for(unsigned c=0;c<4;++c){
+    if(format==F::RGBA16){p[2*c]=codes[c]&255;p[2*c+1]=codes[c]>>8;}
+    else p[format==F::BGRA8 && c<3 ? 2-c : c]=codes[c];
+   }
+  }
+  for(unsigned bits=8;bits<=16;++bits)for(bool limited:{false,true})for(double gamma:{1.8,2.2,2.35,2.4,2.6,2.8}){
+   assert(DVBRIDGE::DecodeSDRScreenshot(input.data(),count,1,format,bits,limited,gamma,output.data()));
+   for(unsigned i=0;i<count;++i){
+    assert(output[4*i]==scalar(i,maximum,bits,limited,gamma));
+    assert(output[4*i+1]==scalar(maximum-i,maximum,bits,limited,gamma));
+    assert(output[4*i+2]==scalar((i*37)%count,maximum,bits,limited,gamma));
+    const unsigned alpha=format==F::RGBA16 ? (i*7)&65535 : format==F::RGB10 ? 65535 : (i&255)*257;
+    assert(output[4*i+3]==alpha);
+   }
+  }
+ }
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            source,binary=Path(directory)/'exact.cpp',Path(directory)/'exact'
+            source.write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-O2','-Wall','-Wextra','-Werror',str(source),'-o',str(binary)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            run=subprocess.run([str(binary)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+
+    def test_4k_capture_transfer_cost_is_bounded_by_input_codes(self):
+        header=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h').replace('#pragma once','')
+        counted=r'''
+#include <cmath>
+#include <cstddef>
+size_t powers=0,rounds=0;
+double CountedPow(double x,double y){++powers;return std::pow(x,y);}
+long CountedRound(double x){++rounds;return std::lround(x);}
+'''
+        program=counted+header.replace('std::pow','CountedPow').replace('std::lround','CountedRound')+r'''
+#include <cassert>
+#include <vector>
+int main(){
+ const unsigned width=3840,height=2160;
+ std::vector<uint8_t> input(size_t(width)*height*4,128);
+ std::vector<uint16_t> output(size_t(width)*height*4);
+ assert(DVBRIDGE::DecodeSDRScreenshot(input.data(),width,height,
+     DVBRIDGE::SDRScreenshotFormat::RGBA8,8,false,2.4,output.data()));
+ assert(powers<=2*256 && rounds<=256); // Shared transfer: no per-pixel transcendental work.
+ assert(output[3]==32896);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            source,binary=Path(directory)/'bounded.cpp',Path(directory)/'bounded'
+            source.write_text(program)
+            built=subprocess.run(['c++','-std=c++20','-O2',str(source),'-o',str(binary)],capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            run=subprocess.run([str(binary)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+
     def test_carrier_pairs_colours_orientation_and_input_unchanged(self):
         header = shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h')
         self.assertTrue(header, 'Master screenshot decoder is missing')
