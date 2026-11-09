@@ -1233,5 +1233,12 @@
       "xbmc/dialogs/DVPixelFormat.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show original source, actual processing and accepted output in fixed single-line columns."
     }
+  },
+  "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": {
+    "summary": "Observe Intel HDMI SCDC reset-link guards and typed sink registers under KMS debug without changing recovery",
+    "component": "linux",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_ddi.c": "Observe guarded HDMI hotplug recovery and typed SCDC CONFIG/STATUS under KMS debug; preserve existing recovery decisions."
+    }
   }
 }
