@@ -2403,7 +2403,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +} // namespace DVBRIDGE
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,78 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "cores/VideoProcessingInfo.h"
@@ -2423,6 +2423,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  accepted.panel=output.panel;
 +  accepted.gamut=output.gamut; accepted.manualPeak=output.manualPeak;
 +  accepted.displayBlack=output.displayBlack; accepted.sdrGamma=output.sdrGamma;
++  accepted.sdrHDRInputUsed=output.sdrHDRInputUsed;
++  accepted.sdrHDRInputValues=output.sdrHDRInputValues;
 +  accepted.revision=output.revision; accepted.stream=output.stream; accepted.picture=output.picture;
 +  accepted.format=output.format; accepted.width=output.width; accepted.height=output.height;
 +  accepted.refresh=output.refresh; accepted.fallback=output.fallback;
@@ -2482,7 +2484,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-@@ -0,0 +1,427 @@
+@@ -0,0 +1,429 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -2533,6 +2535,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    bool level6{};
 +    int requested{}, effective{1}, method{}, panel{}, gamut{};
 +    double manualPeak{}, displayBlack{}, sdrGamma{};
++    unsigned sdrHDRInputUsed{}; // MDCV min/max, MaxCLL fallback, HDR10+ max/avg: bits 1/2/4/8/16.
++    std::array<float,4> sdrHDRInputValues{}; // Imported scene_max RGB and scene_avg, in nits.
 +    uint64_t revision{};
 +    bool fallback{};
 +    uint64_t stream{}, picture{};
@@ -10113,7 +10117,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2658 @@
+@@ -0,0 +1,2683 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -10180,8 +10184,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return location == PL_CHROMA_UNKNOWN ? PL_CHROMA_LEFT : location;
 +}
 +
-+bool ImportDVLayer(dvbridge_gl_frame* frame, pl_gpu gpu, const CDVBridgeGLES::Layer& layer)
++bool ImportDVLayer(dvbridge_gl_frame* frame, pl_gpu gpu, const CDVBridgeGLES::Layer& layer,
++                   unsigned* hdrInputUsed = nullptr)
 +{
++  if (hdrInputUsed) *hdrInputUsed = 0;
 +  if (!dvbridge_gl_frame_import(frame,gpu,layer.layout,layer.width,layer.height,layer.planes))
 +    return false;
 +  dvbridge_gl_frame_set_chroma(frame,SourceChroma(layer.chromaLocation,layer.sourceInfo.profile));
@@ -10212,6 +10218,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        }
 +        frame->frame.color.hdr.scene_avg=10000*av_q2d(statistics.average_maxrgb);
 +      }
++    }
++    if (hdrInputUsed)
++    {
++      // Attest the same nominal input selection the SDR tone mapper consumes.
++      const auto& hdr=frame->frame.color.hdr;
++      float minimum=0, maximum=0;
++      struct pl_nominal_luma_params params{};
++      params.color=&frame->frame.color; params.metadata=PL_HDR_METADATA_ANY;
++      params.scaling=PL_HDR_NITS; params.out_min=&minimum; params.out_max=&maximum;
++      pl_color_space_nominal_luma_ex(&params);
++      const bool suppliedRange=hdr.min_luma<=minimum;
++      const bool dynamic=pl_hdr_metadata_contains(&hdr,PL_HDR_METADATA_HDR10PLUS);
++      if (hdr.min_luma>0 && suppliedRange) *hdrInputUsed |= 1u;
++      if (dynamic && suppliedRange) *hdrInputUsed |= 24u;
++      else if (!dynamic && hdr.max_luma>0 && maximum==hdr.max_luma) *hdrInputUsed |= 2u;
++      else if (!dynamic && !hdr.max_luma && hdr.max_cll>0 && maximum==hdr.max_cll) *hdrInputUsed |= 4u;
 +    }
 +    frame->frame.repr.levels=layer.fullRange ? PL_COLOR_LEVELS_FULL : PL_COLOR_LEVELS_LIMITED;
 +  }
@@ -11710,6 +11732,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (policy.mode == DVBRIDGE_MODE_DISABLED) return FrameStatus::Unsupported;
 +  m_pendingBinding = base.binding;
 +  m_pendingSourceInfo = base.sourceInfo;
++  m_pendingSDRHDRInputUsed = 0;
++  m_pendingSDRHDRInputValues = {};
 +  m_pendingIdentity = {base.binding.stream,base.binding.picture,revision};
 +  DVBRIDGE::StreamTelemetry::NativeRequest({base.binding.stream,base.binding.picture,revision},
 +      DVBRIDGE::PolicyCode(preferences.Policy()),DVBRIDGE::PolicyCode(policy),
@@ -11760,8 +11784,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!base.lease || (enhancement && !enhancement->lease))
 +  { Failure("policy-source-lease"); return FrameStatus::Failed; }
 +  dvbridge_gl_frame bl{}, el{};
-+  if (!ImportDVLayer(&bl,m_gl->gpu,base))
++  if (!ImportDVLayer(&bl,m_gl->gpu,base,&m_pendingSDRHDRInputUsed))
 +  { Failure("policy-base-import"); return FrameStatus::Failed; }
++  const auto& importedHDR=bl.frame.color.hdr;
++  m_pendingSDRHDRInputValues={importedHDR.scene_max[0],importedHDR.scene_max[1],
++      importedHDR.scene_max[2],importedHDR.scene_avg};
 +  if (enhancement)
 +  {
 +    if (!ImportDVLayer(&el,m_gl->gpu,*enhancement))
@@ -12569,6 +12596,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (m_effectiveMode == DVBRIDGE_MODE_SDR)
 +  {
 +    output.effective=8;
++    output.sdrHDRInputUsed=m_pendingSourceInfo.profile ? 0 : m_pendingSDRHDRInputUsed;
++    if (!m_pendingSourceInfo.profile) output.sdrHDRInputValues=m_pendingSDRHDRInputValues;
 +    if (!m_pendingSourceInfo.profile) output.requested=DVBRIDGE::PolicyCode(m_requested.HDR10Policy());
 +    output.flags &= ~(CDVPlaybackInfo::HDR10 | CDVPlaybackInfo::HDR10PLUS | CDVPlaybackInfo::HDMI | CDVPlaybackInfo::CM4);
 +    output.flags |= CDVPlaybackInfo::SDR;
@@ -12774,7 +12803,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -0,0 +1,334 @@
+@@ -0,0 +1,336 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -13031,6 +13060,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::shared_ptr<Context> m_context;
 +  CDVMetadataBuffer m_pendingMetadata;
 +  DVBRIDGE::SourceInfo m_pendingSourceInfo{};
++  unsigned m_pendingSDRHDRInputUsed{};
++  std::array<float,4> m_pendingSDRHDRInputValues{};
 +  std::shared_ptr<void> m_hardwareLease;
 +  std::weak_ptr<AVFrame> m_hardwareFrame;
 +  std::vector<std::shared_ptr<void>> m_rawELCache;
@@ -16873,7 +16904,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CLog::Log(LOGDEBUG, "GLES: using shader format: {}",
 --- /dev/null
 +++ b/xbmc/cores/VideoProcessingInfo.h
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,82 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -16914,6 +16945,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    bool level6{};
 +    int requested{}, effective{1}, method{}, panel{}, gamut{};
 +    double manualPeak{}, displayBlack{}, sdrGamma{};
++    unsigned sdrHDRInputUsed{}; // MDCV min/max, MaxCLL fallback, HDR10+ max/avg: bits 1/2/4/8/16.
++    std::array<float,4> sdrHDRInputValues{}; // Imported scene_max RGB and scene_avg, in nits.
 +    uint64_t revision{}, stream{}, picture{};
 +    uint32_t format{};
 +    unsigned width{}, height{};
