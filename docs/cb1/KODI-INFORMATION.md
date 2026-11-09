@@ -120,9 +120,10 @@ move column inventories only when requested, bounded by each column's contents.
 Empty metadata sections collapse. The native Kodi dialog fallback remains
 available when enhanced information is disabled.
 
-Focused qualification: seven column contract tests and 22 process information
+Focused qualification: eight column contract tests and 22 process information
 tests pass against a separate copied matched Kodi tree, including compiled RPU
-capture/target formatting, FEL reset, pending-output and skin recovery checks.
+capture/target formatting, FEL reset, pending-output, skin recovery and frozen
+full-detail snapshot checks.
 RPU capture uses the existing FFmpeg test prefix. This is native source testing,
 not physical display qualification. An actual panel capture is still required
 on the new combined preview image; no new image was running during this edit.
