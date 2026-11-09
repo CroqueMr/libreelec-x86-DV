@@ -1681,7 +1681,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +};
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,127 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -1713,7 +1713,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    policy.adaptive=DVBRIDGE_ADAPTIVE_A; policy.expert_black_nits=0;
 +    if (!caps.nativeDV) return {OutputRoute::Vanilla,{},OutputReason::NoDVTransport};
 +    if (!caps.processingKnown || !caps.hdr10Processing[DVBRIDGE_MODE_STANDARD].usable)
-+      return {OutputRoute::Vanilla,{},OutputReason::NoGPUProcessing};
++      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.hdr10Processing[policy.mode].reason!=OutputReason::None ?
++          caps.hdr10Processing[policy.mode].reason : OutputReason::NoGPUProcessing};
 +    return {OutputRoute::NativeDV,policy,OutputReason::None};
 +  }
 +  if (caps.sourceKnown && caps.isHDR10 && !caps.isDV)
@@ -1729,9 +1730,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
 +    if (policy.mode == DVBRIDGE_MODE_SDR)
 +    {
-+      if (!preferences.ProfileValid(policy.mode)) return {OutputRoute::Vanilla,{},OutputReason::TVProfileRequired};
++      if (!preferences.ProfileValid(policy.mode)) return {OutputRoute::Vanilla,{},OutputReason::SDRTargetInvalid};
 +      if (!caps.processingKnown || !caps.processing[policy.mode].usable)
-+        return {OutputRoute::Vanilla,{},OutputReason::NoGPUProcessing};
++        return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.processing[policy.mode].reason!=OutputReason::None ?
++            caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
 +      return {OutputRoute::SDR,policy,OutputReason::None};
 +    }
 +    if (policy.mode != DVBRIDGE_MODE_STANDARD && !preferences.ProfileValid(policy.mode))
@@ -1739,7 +1741,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (!caps.nativeDV)
 +      return {OutputRoute::Vanilla,{},OutputReason::NoDVTransport};
 +    if (!caps.processingKnown || !caps.processing[policy.mode].usable)
-+      return {OutputRoute::Vanilla,{},OutputReason::NoGPUProcessing};
++      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.processing[policy.mode].reason!=OutputReason::None ?
++          caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
 +    return {OutputRoute::NativeDV,policy,OutputReason::None};
 +  }
 +  if (!caps.sourceKnown || !caps.isDV || preferences.output == OutputMode::Disabled)
@@ -1747,9 +1750,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  auto policy = preferences.Policy();
 +  if (policy.mode == DVBRIDGE_MODE_SDR)
 +  {
-+    if (!preferences.ProfileValid(policy.mode)) return {OutputRoute::Vanilla,{},OutputReason::TVProfileRequired};
++    if (!preferences.ProfileValid(policy.mode)) return {OutputRoute::Vanilla,{},OutputReason::SDRTargetInvalid};
 +    if (!caps.processingKnown || !caps.processing[policy.mode].usable)
-+      return {OutputRoute::Vanilla,{},OutputReason::NoGPUProcessing};
++      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.processing[policy.mode].reason!=OutputReason::None ?
++          caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
 +    return {OutputRoute::SDR,policy,OutputReason::None};
 +  }
 +  // Display configuration is known before the first GPU import.
@@ -1758,7 +1762,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return {OutputRoute::Vanilla, {}, OutputReason::TVProfileRequired};
 +  if (!caps.processingKnown)
 +  {
-+    result.reason = OutputReason::NoGPUProcessing;
++    result.reason = OutputReason::ProcessingPending;
 +    return result;
 +  }
 +  if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !caps.hdr10plus)
@@ -2093,7 +2097,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +} // namespace DVBRIDGE
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,159 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <atomic>
@@ -2107,7 +2111,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +enum class OutputReason { None, NoDVTransport, NoHDR10Transport,
 +  NoGPUProcessing, SourceIneligible, TVProfileRequired, ActivationFailed, RestoreFailed,
-+  NoHDR10PlusTransport };
++  NoHDR10PlusTransport, SDRTargetInvalid, ProcessingPending };
 +struct ModeAdmission { bool usable{}; OutputReason reason{OutputReason::None}; };
 +struct OutputCapabilities
 +{
@@ -2141,7 +2145,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  enum : unsigned { HDMI = 1, FEL = 2, CM4 = 4, HDR10 = 8, HDR10PLUS = 16, SDR = 32 };
 +  inline static std::atomic<unsigned> presented{0};
 +  static int ReasonLabel(DVBRIDGE::OutputReason reason)
-+  { return reason == DVBRIDGE::OutputReason::NoHDR10PlusTransport ? 40923 :
++  { return reason == DVBRIDGE::OutputReason::ProcessingPending ? 41142 :
++      reason == DVBRIDGE::OutputReason::SDRTargetInvalid ? 41141 :
++      reason == DVBRIDGE::OutputReason::NoHDR10PlusTransport ? 40923 :
 +      reason == DVBRIDGE::OutputReason::None ? 0 : 40840 + static_cast<int>(reason); }
 +
 +  static const char* Reason(DVBRIDGE::OutputReason reason)
@@ -2153,6 +2159,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      case DVBRIDGE::OutputReason::NoGPUProcessing: return "gpu-processing-unavailable";
 +      case DVBRIDGE::OutputReason::SourceIneligible: return "source-ineligible";
 +      case DVBRIDGE::OutputReason::TVProfileRequired: return "tv-profile-required";
++      case DVBRIDGE::OutputReason::SDRTargetInvalid: return "sdr-target-invalid";
++      case DVBRIDGE::OutputReason::ProcessingPending: return "processing-pending";
 +      case DVBRIDGE::OutputReason::ActivationFailed: return "activation-failed";
 +      case DVBRIDGE::OutputReason::RestoreFailed: return "restoration-failed";
 +      case DVBRIDGE::OutputReason::NoHDR10PlusTransport: return "no-hdr10plus-transport";
@@ -2243,14 +2251,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    if (!output.flags) return source;
 +    if ((output.flags & FEL) && source.find("FEL") == std::string::npos) source += " FEL";
-+    source += output.flags & CM4 ? " · CM4 metadata" : " · CM2.9 metadata";
++    if (!(output.flags & SDR))
++      source += output.flags & CM4 ? " · CM4 metadata" : " · CM2.9 metadata";
 +    source += " · " + Mode(output);
 +    return source;
 +  }
 +};
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,113 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#ifdef HAVE_DVBRIDGE
@@ -2294,10 +2303,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  static void RenderedOrdinary(uint64_t generation)
 +  {
 +    if (!generation || !Pending()) return;
-+    const auto preferences=FrameOutputSettings();
 +    std::lock_guard lock(m_mutex);
 +    if (!Pending() || generation!=m_generation.load(std::memory_order_relaxed)) return;
-+    m_ordinaryMode=preferences.output==OutputMode::Disabled ? 0 : 1;
 +    m_nativeFrame={};
 +    m_ordinaryFrame=true;
 +  }
@@ -2313,15 +2320,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  static void OrdinaryOutputAccepted(bool accepted)
 +  {
 +    if (!Pending()) return;
-+    int mode{};
 +    {
 +      std::lock_guard lock(m_mutex);
 +      const bool notify=accepted && m_ordinaryFrame && m_pending.exchange(false);
 +      m_ordinaryFrame=false;
 +      if (!notify) return;
-+      mode=m_ordinaryMode;
 +    }
-+    Emit(mode==0 ? "Disabled / Kodi playback" : "Standard / Kodi playback");
++    Emit("Kodi default");
 +  }
 +  template<class Output> static void NativeOutputAccepted(const Output& output)
 +  {
@@ -2363,7 +2368,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  inline static std::atomic<uint64_t> m_generation{0};
 +  inline static std::mutex m_mutex;
 +  inline static bool m_ordinaryFrame{};
-+  inline static int m_ordinaryMode{};
 +  inline static uint64_t m_nativeFloor{};
 +  inline static SourceBinding m_nativeFrame{};
 +};
@@ -16882,7 +16886,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +enum class VideoOutputType { SDR, HDR10, HLG, DolbyVision, HDR10Plus };
 +enum class VideoProcessingReason { None, NoDVTransport, NoHDR10Transport,
 +  NoGPUProcessing, SourceIneligible, TVProfileRequired, ActivationFailed, RestoreFailed,
-+  NoHDR10PlusTransport };
++  NoHDR10PlusTransport, SDRTargetInvalid, ProcessingPending };
 +enum class VideoCreativeStatus { Invalid, Unsupported, Neutral, Ready };
 +
 +// Native playback facts. Renderer objects and full metadata buffers stay with their owners.

@@ -15,7 +15,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  msgstr ""
  
  #. Used in the smart playlist editor to define a watched mode
-@@ -25795,3 +25795,586 @@
+@@ -25795,3 +25795,594 @@
  msgctxt "#40804"
  msgid "{0:.1f} dB"
  msgstr ""
@@ -83,7 +83,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40923"
-+msgid "HDR10+ output requires a supported HDMI driver and display."
++msgid "No HDR10+ output"
 +msgstr ""
 +
 +msgctxt "#40925"
@@ -151,11 +151,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40841"
-+msgid "Dolby Vision output not supported"
++msgid "No Dolby Vision output"
 +msgstr ""
 +
 +msgctxt "#40842"
-+msgid "HDR10 output not supported"
++msgid "No HDR10 output"
 +msgstr ""
 +
 +msgctxt "#40843"
@@ -163,7 +163,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40844"
-+msgid "Source cannot use this processing mode"
++msgid "Mode unavailable for source"
 +msgstr ""
 +
 +msgctxt "#40845"
@@ -175,7 +175,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40847"
-+msgid "Display restoration failed"
++msgid "Display restore failed"
 +msgstr ""
 +
 +msgctxt "#40848"
@@ -276,11 +276,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40911"
-+msgid "Configure TV peak brightness (nits)"
++msgid "Set HDR target peak"
 +msgstr ""
 +
 +msgctxt "#40912"
-+msgid "Configure TV color gamut"
++msgid "Set HDR target gamut"
 +msgstr ""
 +
 +msgctxt "#40910"
@@ -597,6 +597,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +msgctxt "#41139"
 +msgid "SDR target gamma"
++msgstr ""
++
++msgctxt "#41142"
++msgid "Checking rendering support"
++msgstr ""
++
++msgctxt "#41141"
++msgid "Check SDR target settings"
 +msgstr ""
 +
 +msgctxt "#41140"
@@ -2795,7 +2803,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #endif
  #ifdef HAS_GL
    m_simpleConditions.emplace("has_gl");
-@@ -488,6 +503,100 @@
+@@ -488,6 +503,101 @@
    m_complexConditions.try_emplace("lte", LessThanOrEqual);
  }
  
@@ -2865,14 +2873,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      else if (mode!=7 && !(dv ? caps.nativeDV : caps.hdr10))
 +        reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
 +      else if (mode==6 && !caps.hdr10plus) reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
-+      else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::NoGPUProcessing;
++      else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::ProcessingPending;
 +      else if (caps.sourceKnown && !(hlgSource ? (caps.isHLG && !caps.isDV) : hdr10Source ? (caps.isHDR10 && !caps.isDV) : caps.isDV))
 +        reason=DVBRIDGE::OutputReason::SourceIneligible;
 +      else if (!processing[mode].usable)
 +        reason=processing[mode].reason==DVBRIDGE::OutputReason::None ?
 +            DVBRIDGE::OutputReason::NoGPUProcessing : processing[mode].reason;
 +      else if ((mode==3 || mode==4 || mode==7) && !preferences.ProfileValid(static_cast<dvbridge_mode>(mode)))
-+        reason=DVBRIDGE::OutputReason::TVProfileRequired;
++        reason=mode==7 ? DVBRIDGE::OutputReason::SDRTargetInvalid : DVBRIDGE::OutputReason::TVProfileRequired;
 +    }
 +    int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
 +    if (reason==DVBRIDGE::OutputReason::TVProfileRequired)
@@ -2882,12 +2890,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      reasonId=!std::isfinite(peak) || peak<(mode==3?50:0.000001) || peak>10000 ? 40911 :
 +          gamut<1 || gamut>3 ? 40912 : 40845;
 +    }
-+    if (reasonId && reason!=DVBRIDGE::OutputReason::TVProfileRequired)
++    const bool profile=reason==DVBRIDGE::OutputReason::TVProfileRequired || reason==DVBRIDGE::OutputReason::SDRTargetInvalid;
++    if (reasonId && !profile && reason!=DVBRIDGE::OutputReason::ProcessingPending)
 +      option.label+=" / "+localizer.Get(40851);
 +    option.label2=reasonId ? localizer.Get(reasonId) :
 +        guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
 +    // Settings must allow selection before the required profile controls appear.
-+    const bool configure=reason==DVBRIDGE::OutputReason::TVProfileRequired && !menu && !hdr10Menu && !hlgMenu;
++    const bool configure=profile && !menu && !hdr10Menu && !hdr10PlusMenu && !hlgMenu;
 +    option.properties.emplace_back("disabled",reasonId!=0 && !configure);
 +  }
 +}

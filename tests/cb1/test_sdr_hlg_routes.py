@@ -61,20 +61,38 @@ int main(){
  for(double invalid:{0.,501.,std::numeric_limits<double>::quiet_NaN()}){
   p.sdrPeak=invalid;
   assert(SelectOutput(p,c).route==OutputRoute::Vanilla);
+  assert(SelectOutput(p,c).reason==OutputReason::SDRTargetInvalid);
  }
  p.sdrPreset=0;p.sdrPeak=0; // Presets do not consume hidden custom values.
  c.isDV=false;c.isHDR10=true;p.hdr10Source=HDR10SourceMode::SDR;
  assert(SelectOutput(p,c).route==OutputRoute::SDR);
  c.hdr10PlusSource=c.isHDR10Plus=true;p.hdr10PlusSource=HDR10SourceMode::SDR;
  assert(SelectOutput(p,c).route==OutputRoute::SDR);
+ c.processingKnown=false;
+ assert(SelectOutput(p,c).reason==OutputReason::ProcessingPending);
+ p.hdr10PlusSource=HDR10SourceMode::Native;
+ assert(SelectOutput(p,c).reason==OutputReason::None);
+ p.hdr10PlusSource=HDR10SourceMode::SDR;c.processingKnown=true;
  c.processing[DVBRIDGE_MODE_SDR].usable=false;
  assert(SelectOutput(p,c).reason==OutputReason::NoGPUProcessing);
+ c.processing[DVBRIDGE_MODE_SDR].reason=OutputReason::ActivationFailed;
+ assert(SelectOutput(p,c).reason==OutputReason::ActivationFailed);
+ c.processing[DVBRIDGE_MODE_SDR].reason=OutputReason::RestoreFailed;
+ assert(SelectOutput(p,c).reason==OutputReason::RestoreFailed);
  assert(p.hdr10Source==HDR10SourceMode::SDR && p.hdr10PlusSource==HDR10SourceMode::SDR);
  c.isHDR10=c.hdr10PlusSource=c.isHDR10Plus=false;c.isHLG=true;
  assert(SelectOutput(p,c).route==OutputRoute::Vanilla);
+ c.processingKnown=false;
+ assert(SelectOutput(p,c).reason==OutputReason::None);
+ c.processingKnown=true;
  p.hlgSource=HLGSourceMode::ReferenceDV;
  assert(SelectOutput(p,c).reason==OutputReason::NoDVTransport);
  c.nativeDV=true;
+ c.processingKnown=false;
+ assert(SelectOutput(p,c).reason==OutputReason::ProcessingPending);
+ c.processingKnown=true;c.hdr10Processing[DVBRIDGE_MODE_STANDARD]={false,OutputReason::SourceIneligible};
+ assert(SelectOutput(p,c).reason==OutputReason::SourceIneligible);
+ c.hdr10Processing[DVBRIDGE_MODE_STANDARD]={true,OutputReason::None};
  selected=SelectOutput(p,c);
  assert(selected.route==OutputRoute::NativeDV && selected.policy.mode==DVBRIDGE_MODE_STANDARD);
  for(int saved=0;saved<=6;++saved){
@@ -89,6 +107,9 @@ int main(){
  assert(SelectOutput(p,c).route==OutputRoute::Vanilla); // SDR renderer unavailable, no BL-only HLG success.
  c.processing[DVBRIDGE_MODE_SDR].usable=true;
  assert(SelectOutput(p,c).route==OutputRoute::SDR);
+ p.output=OutputMode::Disabled;c.processingKnown=false;
+ assert(SelectOutput(p,c).route==OutputRoute::Vanilla && SelectOutput(p,c).reason==OutputReason::None);
+ p.output=OutputMode::SDR;c.processingKnown=true;
  c.stereoSource=true;assert(SelectOutput(p,c).route==OutputRoute::Vanilla);
  stored->ints["dvbridge.outputmode"]=6;
  stored->ints["dvbridge.hdr10source"]=4;
