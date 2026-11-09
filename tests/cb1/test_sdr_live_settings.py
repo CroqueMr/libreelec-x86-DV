@@ -35,7 +35,7 @@ class SDRLiveSettingsTests(unittest.TestCase):
 #include <vector>
 #include <limits>
 #include "dvbridge_policy.h"
-constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18,LOGERROR=1,LOGDEBUG=2,DVBRIDGE_DV_IDLE=0;
+constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18,LOGERROR=1,LOGDEBUG=2,DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3;
 struct CLog{template<class... A>static void Log(A...){}};
 bool failLUT=false;unsigned textures=0;
 void glDeleteTextures(int,const unsigned*){}
