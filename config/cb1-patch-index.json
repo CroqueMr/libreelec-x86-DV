@@ -849,6 +849,7 @@
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/DVDFactoryDemuxer.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DemuxMultiSource.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/test/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDDemuxers/test/TestBlurayOffsetMetadata.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/CMakeLists.txt": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -861,6 +862,7 @@
       "xbmc/cores/VideoPlayer/DVDStreamInfo.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/DVDSubtitles/BitmapSubtitles.h": "Customize native bitmap subtitle colors and placement without changing menus.",
+      "xbmc/cores/VideoPlayer/Interface/DemuxPacket.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
       "xbmc/cores/VideoPlayer/Interface/StreamInfo.h": "Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp": "Forward processing information to the native cache and invalidate it on codec reset.; Native source facts and actual sink reporting; no audio processing changes.",
       "xbmc/cores/VideoPlayer/Process/ProcessInfo.h": "Expose native process-information publication without a duplicate store.; Native source facts and actual sink reporting; no audio processing changes.",
@@ -910,9 +912,7 @@
       "xbmc/cores/VideoProcessingInfo.h": "Define source and accepted-output facts without renderer or CB1 dependencies.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.; Translate selected-frame HDR10+ source statistics into descriptive Dolby Vision metadata.",
       "xbmc/cores/VideoSettings.h": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
       "xbmc/cores/VideoSourceSideData.cpp": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
-      "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
-      "xbmc/cores/VideoPlayer/Interface/DemuxPacket.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner. Preserve authored Blu-ray clip boundaries and source-PTS presentation cuts while decoding required video references; keep unrelated sources unrestricted.",
-      "xbmc/cores/VideoPlayer/DVDDemuxers/DemuxMultiSource.h": "Preserve native BL/EL source clocks and immutable seek-primer eligibility through the existing decoder owner."
+      "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
     }
   },
   "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": {
@@ -1027,6 +1027,7 @@
       "LICENSES/GPL-3.0-or-later": "Retain the existing combined-build GPLv3 license text.",
       "LICENSES/README.md": "Retain the existing DV-enabled combined-build licensing notice.",
       "xbmc/addons/Skin.cpp": "Resolve only CB1 shared include resources independently of the active skin.",
+      "xbmc/application/Application.cpp": "Reuse clean fullscreen CB1 GUI content through native dirty-region admission, rechecking late player invalidations.",
       "xbmc/filesystem/BlurayDirectory.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/filesystem/DiscDirectoryHelper.cpp": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
       "xbmc/filesystem/DiscDirectoryHelper.h": "Integrate Beta3 rendering, AI scheduling, output recovery and Blu-ray 3D playback.",
@@ -1054,7 +1055,6 @@
       "xbmc/utils/DisplayInfo.h": "Retain the validated sink capabilities alongside native display information.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/utils/EGLUtils.cpp": "Stage output drawables and retain the exact EGL tuple until transactional rollback or GPU retirement permits destruction.",
       "xbmc/utils/EGLUtils.h": "Declare explicit output-surface transactions and transferable native EGL retirement ownership.",
-      "xbmc/application/Application.cpp": "Reuse clean fullscreen CB1 GUI content through native dirty-region admission, rechecking late player invalidations.",
       "xbmc/video/windows/GUIWindowFullScreen.cpp": "Preserve native dirty controls without forcing a whole-video GUI redraw when the persistent CB1 composite is reusable."
     }
   },
@@ -1215,6 +1215,23 @@
     "files": {
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep accepted scanout buffers locked across refused colour changes.",
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Keep accepted scanout buffers locked across refused colour changes."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": {
+    "summary": "Show original source, actual processing and accepted output in navigable single-line columns",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/DataCacheCore.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/DataCacheCore.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/cores/VideoProcessingInfo.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/dialogs/DVPixelFormat.h": "Show original source, actual processing and accepted output in navigable single-line columns.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show original source, actual processing and accepted output in navigable single-line columns."
     }
   }
 }

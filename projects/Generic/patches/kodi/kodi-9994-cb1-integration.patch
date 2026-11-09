@@ -1542,6 +1542,37 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    glActiveTexture(GL_TEXTURE1);
    glBindTexture(GL_TEXTURE_2D, m_lutDegammaTexId);
+@@ -164,12 +168,14 @@
+   return lut;
+ }
+ 
+-bool CGuiCompositeShaderGLES::CreateLUTs(int colorTransfer)
++bool CGuiCompositeShaderGLES::CreateLUTs(int colorTransfer, float sdrGamma)
+ {
+   if (m_lutDegammaTexId)
+     glDeleteTextures(1, &m_lutDegammaTexId);
+   if (m_lutTFTexId)
+     glDeleteTextures(1, &m_lutTFTexId);
++  m_lutTFTexId = 0;
++  m_lutDegammaTexId = 0;
+ 
+   m_lutDegammaTexId = CreateLUTTexture(GenerateDegammaLUT());
+   if (!m_lutDegammaTexId)
+@@ -178,7 +184,13 @@
+     return false;
+   }
+ 
+-  if (colorTransfer == AVCOL_TRC_SMPTE2084)
++  if (colorTransfer == AVCOL_TRC_GAMMA22)
++  {
++    if (!std::isfinite(sdrGamma) || sdrGamma < 1.8f || sdrGamma > 2.8f) return false;
++    // Negative selects BT.709 SDR in the shared compositor; no PQ/HLG LUT.
++    m_ootfGamma = -sdrGamma;
++  }
++  else if (colorTransfer == AVCOL_TRC_SMPTE2084)
+   {
+     m_lutTFTexId = CreateLUTTexture(GeneratePQLUT(m_sdrPeak));
+     if (!m_lutTFTexId)
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.h
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.h
 @@ -20,11 +20,15 @@
@@ -1551,7 +1582,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  void SetInputPQ(bool value) { m_inputPQ = value; }
 +  void SetOutputRange(float scale, float offset) { m_outputScale = scale; m_outputOffset = offset; }
  
-   bool CreateLUTs(int colorTransfer);
+-  bool CreateLUTs(int colorTransfer);
++  bool CreateLUTs(int colorTransfer, float sdrGamma = 2.4f);
  
    GLint GetPosLoc() { return m_hPos; }
    GLint GetTexLoc() { return m_hTex; }

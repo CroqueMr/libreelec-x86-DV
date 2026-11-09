@@ -14,6 +14,9 @@ Published RC3 engine: **CB1 0.5**. Each end-to-end rendering circuit has its own
 | HDR10 to Dolby Vision Rendering, AI-assisted | `CB1-HDR10DVR.0.1.3` |
 | HDR10 to Dolby Vision Adaptive HDR Mapping, AI-assisted | `CB1-HDR10DVA.0.8` |
 | HDR10+ to Dolby Vision Rendering, metadata-guided | `CB1-HDR10PDVR.0.2` |
+| Dolby Vision to SDR Rendering | `CB1-DVSDR.0.1` |
+| HDR10/HDR10+ to SDR Rendering | `CB1-HDR10SDR.0.1` |
+| Plain HLG to Dolby Vision Reference Rendering | `CB1-HLGDVR.0.1` |
 
 Identifiers are defined in `src/cb1_circuit.c`. A circuit revision changes when
 its processing contract or rendered result changes. Player UI and driver-only
@@ -58,6 +61,9 @@ optimizations, not user-selectable quality variants.
 
 The integration image has an independent release version and records the exact
 CB1 source revision. Standard HDR10/SDR playback remains owned by the player.
+
+[SDR and HLG contracts](SDR-HLG.md) define the independent BT.709 target,
+complete DV reconstruction, reference HLG normalization and qualification limits.
 
 [Master Reference](MASTER-REFERENCE.md) defines its admitted representations,
 integer reconstruction and deterministic spatial contract. The saved FEL scaler

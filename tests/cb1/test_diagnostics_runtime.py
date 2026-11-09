@@ -386,7 +386,7 @@ using namespace KODI::WINDOWING::GBM;
 constexpr int EGL_NO_CONTEXT=0, EGL_OPENGL_ES3_BIT=3, LOGDEBUG=0, LOGERROR=1, LOGINFO=2;
 constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2;
 enum class RenderStereoMode {MONO};
-enum dvbridge_mode {DVBRIDGE_MODE_DISABLED};
+enum dvbridge_mode {DVBRIDGE_MODE_DISABLED,DVBRIDGE_MODE_SDR=7};
 namespace DVBRIDGE {enum class OutputReason {None,NoGPUProcessing};
 inline std::atomic<int> modeChangeResolution{-1};
 inline thread_local std::optional<int> guiModeChangeResolution;

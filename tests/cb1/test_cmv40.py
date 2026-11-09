@@ -63,7 +63,7 @@ int main(){
         repo=Path(__file__).resolve().parents[2]
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         s=(tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
-        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode)[^;]+;',s))
+        enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',s))
         preferences=s.split('struct OutputPreferences',1)[1].split('inline std::mutex&',1)[0]
         render=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         admission=re.search(r'const auto cmv40 = ([^;]+);',render).group(1)
@@ -90,7 +90,7 @@ int main(){
   assert(p.CMv40Options(mode,true).mode==CB1_CMV40_DISABLED);
   assert(p.L2TrimsDisabled(mode) && !p.L2TrimsDisabled(mode,true));
  }
- for(auto mode:{DVBRIDGE_MODE_DISABLED,DVBRIDGE_MODE_ENHANCED_DV,DVBRIDGE_MODE_HDR10_BASIC,DVBRIDGE_MODE_HDR10_EXPERT,DVBRIDGE_MODE_HDR10PLUS})
+ for(auto mode:{DVBRIDGE_MODE_DISABLED,DVBRIDGE_MODE_ENHANCED_DV,DVBRIDGE_MODE_HDR10_BASIC,DVBRIDGE_MODE_HDR10_EXPERT,DVBRIDGE_MODE_HDR10PLUS,DVBRIDGE_MODE_SDR})
   assert(p.CMv40Options(mode).mode==CB1_CMV40_DISABLED);
  auto other=p;assert(p.SameValues(other));
  other.cmv40Mode=0;assert(!p.SameValues(other));other=p;

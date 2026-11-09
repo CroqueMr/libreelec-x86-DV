@@ -54,12 +54,13 @@ int main(){
     def test_panel_keeps_input_and_mode_without_redundant_output_row(self):
         repo = Path(__file__).resolve().parents[2]
         xml = ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
-        rows = xml.findall(".//include[@name='DVVideoFields']/definition/include[@content='DVInfoRow']")
+        rows = xml.findall(".//include[@name='DVInputFields']/definition/include[@content='DVInfoRow']")
         rows = [{p.get('name'):p.get('value') for p in row.findall('param')} for row in rows]
-        video=xml.find(".//include[@name='DVVideoFields']/definition/include[@content='DVSection']")
-        self.assertEqual(video.find("param[@name='label']").get('value'),'VIDEO : $VAR[DVSourceFormat]')
+        headings=xml.findall(".//include[@name='DVProcessLayout']/definition/control/include[@content='DVColumnHeading']")
+        self.assertEqual([row.find("param[@name='primary']").get('value') for row in headings],
+                         ['$VAR[DVSourceFormat]','$VAR[DVPanelMode]','$VAR[DVOutputFormat]'])
         self.assertFalse(any(row.get('label')=='Output format' for row in rows))
-        self.assertIsNone(xml.find("variable[@name='DVOutputFormat']"))
+        self.assertIsNotNone(xml.find("variable[@name='DVOutputFormat']"))
         mode=xml.find("variable[@name='DVPanelMode']")
         self.assertIn('Property(DV.Mode)',ET.tostring(mode,encoding='unicode'))
 

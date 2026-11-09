@@ -39,9 +39,10 @@ const AVDOVIDmData* av_dovi_find_level(const AVDOVIMetadata*,int) {return nullpt
 struct CDVMetadataBuffer {AVDOVIMetadata value{};const void* Data() const {return &value;}size_t Size() const {return sizeof(value);}};
 struct dvbridge_color {struct {bool nlq_active{true};} dovi;};
 bool dvbridge_map_color(dvbridge_color*,const void*,size_t,bool) {return true;}
-struct CDVPlaybackInfo {enum : unsigned {HDMI=1,FEL=2,CM4=4,HDR10=8};};
+struct CDVPlaybackInfo {enum : unsigned {HDMI=1,FEL=2,CM4=4,HDR10=8,SDR=32};};
 constexpr int LOGINFO=0;
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
+constexpr int DVBRIDGE_MODE_SDR=7;
 constexpr int DVBRIDGE_MODE_HDR10PLUS=6,CB1_HDR10PLUS_VSIF_BYTES=31,CB1_HDR10PLUS_OK=0;
 struct AVDynamicHDRPlus {};
 int cb1_hdr10plus_vsif(uint8_t*,const AVDynamicHDRPlus*,bool,bool){assert(false);return 1;}
