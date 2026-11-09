@@ -49,7 +49,7 @@
 ### Task 3: Correct PR92 Player information
 
 **Files:** IncludesDVProcessInfo.xml, PR92 textures, a rebased Player information patch, focused tests/cb1 metadata/readability/native snapshot tests; docs/cb1/KODI-INFORMATION.md.
-**Interfaces:** Existing VideoProcessingInfo and source snapshot with original/applied/transmitted metadata remain independent. Metadata ordering is numeric by level. Processing hides unapplied blocks. Single-line fields retain long data through scrolling or detail navigation.
+**Interfaces:** Existing VideoProcessingInfo and source snapshot with original/applied/transmitted metadata remain independent. Metadata ordering is numeric by level. Processing hides unapplied blocks. Fields stay static on one line, with full long data available through deliberate detail navigation; no automatic scrolling.
 
 - [ ] Add failing tests covering long trim lists, HDR10+, DV FEL/DT, native HDR/HLG/SDR, SDR rendering and pending/fallback states; compare PR source reset/snapshot changes to latest base.
 - [ ] Rebase PR92 behavior, remove unused-grey/wrapping and preserve original/source details; keep all columns coherent.
