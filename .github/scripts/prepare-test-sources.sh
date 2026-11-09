@@ -51,10 +51,10 @@ for patch_file in CB1/patches/libplacebo/*.patch; do
 done
 python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
   --libplacebo-source "$test_root/libplacebo"
-# Generate the pinned public headers; these CPU probes do not need a GPU backend.
+# Build the pinned OpenGL backend for CPU probes and the native EGL surface regression.
 meson setup "$test_root/placebo-build" "$test_root/libplacebo" --wrap-mode=nofallback \
   --prefix="$test_root/prefix" --libdir=lib \
-  -Ddemos=false -Dvulkan=disabled -Dopengl=disabled -Dd3d11=disabled \
+  -Ddemos=false -Dvulkan=disabled -Dopengl=enabled -Dd3d11=disabled \
   -Dglslang=disabled -Dshaderc=disabled -Dlcms=disabled -Dlibdovi=disabled \
   -Dunwind=disabled -Dxxhash=disabled
 meson compile -C "$test_root/placebo-build" -j2
