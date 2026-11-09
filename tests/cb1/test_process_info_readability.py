@@ -1,6 +1,10 @@
 """Regression for clipped static metadata captions and grouped pixel dimensions."""
 from pathlib import Path
+import itertools
+import os
+import re
 import subprocess
+import tarfile
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -8,6 +12,42 @@ from test_native_video_source import TREE
 
 
 class ProcessInfoReadability(unittest.TestCase):
+    def test_native_topbar_is_hidden_only_while_process_info_is_visible(self):
+        name='addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml'
+        panel=ET.parse(TREE/name).getroot()
+        archive=os.environ.get('KODI_UPSTREAM_ARCHIVE')
+        if not archive:
+            self.skipTest('Set KODI_UPSTREAM_ARCHIVE to the pinned Kodi archive')
+        with tarfile.open(archive) as source:
+            members=[member for member in source.getmembers() if member.name.endswith('/'+name)]
+            self.assertEqual(len(members),1)
+            original=ET.fromstring(source.extractfile(members[0]).read())
+        conditions=[node.text for node in panel.findall('visible')]
+        guard='!Window.IsVisible(playerprocessinfo)'
+        added=[node for node in panel.findall('visible') if node.text==guard]
+        self.assertEqual(len(added),1)
+        panel.remove(added[0])
+        # Closing O restores the entire original window: timers, animations,
+        # title/clock, actions and every native visibility condition unchanged.
+        self.assertEqual(ET.tostring(panel),ET.tostring(original))
+        original_conditions=[node.text for node in original.findall('visible')]
+        windows=['fullscreenvideo','visualisation','seekbar','pvrosdchannels','pvrchannelguide']
+
+        def evaluate(expression,active,visible):
+            expression=re.sub(r'Window.Is(Active|Visible)\(([^)]+)\)',
+                lambda match:str(match[2] in (active if match[1]=='Active' else visible)),expression)
+            return eval(expression.replace('!',' not ').replace('|',' or ').replace('+',' and '),{'__builtins__':{}},{})
+
+        for flags in itertools.product([False,True],repeat=len(windows)):
+            active={window for window,enabled in zip(windows,flags) if enabled}
+            native=all(evaluate(condition,active,set()) for condition in original_conditions)
+            for info_active,info_visible in itertools.product([False,True],repeat=2):
+                context=active|({'playerprocessinfo'} if info_active else set())
+                visible={'playerprocessinfo'} if info_visible else set()
+                actual=all(evaluate(condition,context,visible) for condition in conditions)
+                self.assertEqual(actual,native and not info_visible,
+                    (active,info_active,info_visible))
+
     def test_temperature_uses_kodis_regional_label(self):
         path=Path(__file__).resolve().parents[2]/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml'
         panel=ET.parse(path)

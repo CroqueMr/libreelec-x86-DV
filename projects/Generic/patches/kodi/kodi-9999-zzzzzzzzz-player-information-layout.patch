@@ -797,3 +797,14 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      }
    }
  #endif
+diff --git a/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml b/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml
+--- a/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml
++++ b/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml
+@@ -1,6 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <window type="dialog" id="1109">
+ 	<onload>Skin.TimerStart(1109_topbaroverlay)</onload>
++	<visible>!Window.IsVisible(playerprocessinfo)</visible>
+ 	<visible>Window.IsActive(fullscreenvideo) | Window.IsActive(visualisation)</visible>
+ 	<visible>Window.IsActive(seekbar) | Window.IsActive(pvrosdchannels) | Window.IsActive(pvrchannelguide)</visible>
+ 	<depth>DepthOSD</depth>
