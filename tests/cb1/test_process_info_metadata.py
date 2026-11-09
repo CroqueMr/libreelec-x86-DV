@@ -1,6 +1,7 @@
 """Run the shipped RPU level capture and the formatting behind the added Player information rows."""
 from pathlib import Path
 import os
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -40,7 +41,7 @@ def run(test, program, flags=()):
 class FormattingTests(unittest.TestCase):
     def test_applied_sdr_components_and_profile10_are_truthful(self):
         source = DIALOG.read_text()
-        start = source.index('    const bool sdrL1 =')
+        start = source.index('    const bool partialL1 =')
         sdr = source[start:source.index('    SetProperty("DV.L5"', start)]
         start = source.index('    const bool plainHDRSDR =')
         guidance = source[start:source.index('    const double display =', start)]
@@ -55,22 +56,40 @@ class FormattingTests(unittest.TestCase):
 struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> pattern, T&&... args)
  {return std::format(pattern, std::forward<T>(args)...);}};
 NITS
+bool mockFits=true;
+bool InfoValueFits(const std::string&){return mockFits;}
 int main() {
  VideoProcessingInfo data;data.metadata=true;data.l1=true;data.profile=7;
- data.pq={11,3000,1000};data.appliedBlocks[1]=true;
+ data.pq={11,3000,1000};data.appliedBlocks[1]=true;data.appliedBlocks[3]=true;data.blocks[3]=true;data.levels.l3={11,2100,2000};
  data.output.flags=32;data.output.effective=8;
  std::map<std::string,std::string> text;std::map<std::string,bool> used;
  auto SetProperty=[&]<class T>(const char* key,const T& value){
   if constexpr(std::is_same_v<T,bool>)used[key]=value;else text[key]=value;};
- int sourcePlus=1;auto* plus=&sourcePlus;
  auto refresh=[&]{const auto active=data.output.flags;const auto applied=data.AppliedBlocks();
-  const bool metadata=active&&data.metadata;const bool hdr10=false;
-  SDR_BLOCK GUIDANCE_BLOCK PROFILE_BLOCK CREATIVE_BLOCK
+  const bool metadata=active&&data.metadata;const bool hdr10=data.output.effective==3;
+  const auto& levels=data.levels;const auto carried=[&](unsigned n){return metadata&&data.blocks[n];};
+  RAW_LUMINANCE SDR_BLOCK L3_BLOCK GUIDANCE_BLOCK PROFILE_BLOCK CREATIVE_BLOCK
  };
- refresh();assert(text["DV.SDRL1PQ"]=="3000 | 1000");
+ refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000");
  assert(text["DV.CreativeTrims"].empty()&&!used["DV.UsedHDRStatic"]);
- data.appliedBlocks.reset();refresh();assert(text["DV.SDRL1PQ"].empty());
- data.profile=0;refresh();assert(used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&used["DV.UsedHDR10PlusAvg"]);
+ data.output.effective=3;refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000"&&text["DV.UsedL3"]=="2100 | 2000");
+ data.appliedBlocks[3]=false;refresh();assert(text["DV.UsedL3"].empty());
+ data.output.effective=1;refresh();assert(text["DV.UsedL1PQ"].empty()&&!text["DV.UsedL1Nits"].empty());
+ data.pq={4095,4095,4095};mockFits=false;refresh();
+ assert(text["DV.L1Nits"]=="10000.0 | 10000.0 | 10000.0 nits");
+ assert(text["DV.UsedL1Nits"]=="10000.0 | 10000.0 | 10000.0");mockFits=true;
+ data.output.effective=8;data.appliedBlocks.reset();refresh();assert(text["DV.UsedL1PQ"].empty());
+ data.profile=0;refresh();assert(!used["DV.UsedHDRStatic"]&&!used["DV.UsedHDR10PlusMax"]&&!used["DV.UsedHDR10PlusAvg"]);
+ data.output.sdrHDRInputUsed=25;data.output.sdrHDRInputValues={800,900,700,125};
+ refresh();assert(used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&used["DV.UsedHDR10PlusAvg"]);
+ assert(text["DV.UsedHDR10PlusMaxRGB"]=="800 | 900 | 700 nits" && text["DV.UsedHDR10PlusAverage"]=="125.0 nits");
+ for(unsigned mask=0;mask<32;++mask){data.output.sdrHDRInputUsed=mask;refresh();
+  assert(used["DV.UsedHDRStatic"]==bool(mask&7));
+  assert(!text["DV.UsedHDRMin"].empty()==bool(mask&1));
+  assert(!text["DV.UsedHDRMax"].empty()==bool(mask&2));
+  assert(!text["DV.UsedHDRCLL"].empty()==bool(mask&4));
+  assert(used["DV.UsedHDR10PlusMax"]==bool(mask&8)&&used["DV.UsedHDR10PlusAvg"]==bool(mask&16));}
+ data.output.sdrHDRInputUsed=3;refresh();assert(!used["DV.UsedHDR10PlusMax"]&&!used["DV.UsedHDR10PlusAvg"]);
  data.output.effective=1;data.output.hdr10PlusDV=true;data.output.guidedSourceFields=2;
  refresh();assert(!used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&!used["DV.UsedHDR10PlusAvg"]);
  data.output.flags=0;refresh();assert(!used["DV.UsedHDRStatic"]&&!used["DV.UsedHDR10PlusMax"]);
@@ -78,7 +97,7 @@ int main() {
   assert(text["DV.ProfileDetail"]==(profile==8?"8.4":profile==10?"10.4":std::to_string(profile)));}
  data.profile=10;data.compatibility=1;refresh();assert(text["DV.ProfileDetail"]=="10.1");
 }
-'''.replace('NITS', nits).replace('SDR_BLOCK', sdr).replace('GUIDANCE_BLOCK', guidance).replace(
+'''.replace('NITS', nits).replace('RAW_LUMINANCE',statement('DV.L1Nits')).replace('SDR_BLOCK', sdr).replace('L3_BLOCK',statement('DV.UsedL3')).replace('GUIDANCE_BLOCK', guidance).replace(
             'PROFILE_BLOCK', statement('DV.ProfileDetail')).replace('CREATIVE_BLOCK', statement('DV.CreativeTrims'))
         run(self, {'test.cpp': program})
 
@@ -128,6 +147,7 @@ int main() {
  mockWidth=284;assert(InfoValueFits("exact boundary"));
  mockWidth=285;assert(!InfoValueFits("overflow"));
  assert(TargetList({48,100,300,600,1000,2000,4000,10000},{})=="8 targets · 48–10000 nits");
+ assert(TargetList({48,100,300,600,1000,2000,4000,10000},{50,51})=="8: 48–10000 nits · 2 custom");
  assert(L10Displays(levels).find("displays")!=std::string::npos);
  mockWidth=-1;
  assert(PolicyText("Dolby Vision Adaptive HDR Mapping (AI)")=="DV Adaptive (AI)");
@@ -194,7 +214,7 @@ int main() {
  rendered.output.bits=10;
  auto sdr=DVBRIDGE::NativeProcessingInfo(rendered);
  assert(sdr.outputType==VideoOutputType::SDR && sdr.output.flags==CDVPlaybackInfo::SDR);
- assert(sdr.metadata && sdr.profile==8 && sdr.blocks[2] && sdr.levels.l2Count==8);
+ assert(sdr.metadata && sdr.profile==8 && sdr.blocks[2] && sdr.levels.l2Count==10);
  assert(sdr.TransmittedBlocks().none() && sdr.AppliedBlocks()[1]);
  // HLG-base DV remains an original HLG-base source carrying its authored RPU.
  rendered.compatibility=4; rendered.tags.transfer=AVCOL_TRC_ARIB_STD_B67;
@@ -203,8 +223,8 @@ int main() {
 
  assert(info.metadata && info.cm4 && info.compatibility==1);
  const auto& levels=info.levels;
- // At most eight trim passes are kept, in stream order.
- assert(levels.l2Count==8 && levels.l2[0]==2000 && levels.l2[7]==2007);
+ // All ten authored trim passes survive the bounded telemetry copy.
+ assert(levels.l2Count==10 && levels.l2[0]==2000 && levels.l2[9]==2009);
  assert(levels.l3[0]==2048 && levels.l3[1]==2111 && levels.l3[2]==1987);
  assert(levels.l4[0]==1500 && levels.l4[1]==2048);
  assert(levels.l8Count==1 && levels.l8[0]==48 && levels.l9==0);
@@ -227,6 +247,17 @@ int main() {
  colour(); assert(properties["DV.SourceColour"]=="IPT-PQc2");
  shown.profile=10; colour(); assert(properties["DV.SourceColour"]=="IPT-PQc2");
  shown.compatibility=1; colour(); assert(properties["DV.SourceColour"]=="BT.709 (assumed) · Full");
+ // The pinned parser admits seven static + 25 dynamic extension blocks.
+ // L10 is static, L8 dynamic: all 32 slots form one legal mixed inventory.
+ data->num_ext_blocks=0;
+ for(unsigned i=0;i<7;++i){auto* t=add(10);t->l10.target_display_index=200+i;t->l10.target_max_pq=2000+i;}
+ for(unsigned i=0;i<25;++i)add(8)->l8.target_display_index=i?uint8_t(200+i):48;
+ assert(data->num_ext_blocks==AV_DOVI_MAX_EXT_BLOCKS);
+ DVBRIDGE::StreamTelemetry::Begin(8,0,1,0,true,false,true);
+ DVBRIDGE::StreamTelemetry::Metadata(data,true,10);
+ auto complete=DVBRIDGE::NativeProcessingInfo(DVBRIDGE::StreamTelemetry::Read());
+ assert(complete.levels.l8Count==25&&complete.levels.l8[24]==224);
+ assert(complete.levels.l10Count==7&&complete.levels.l10[6].index==206);
  av_free(data);
 }
 '''.replace('COLOUR', statement('DV.SourceColour'))
@@ -255,6 +286,108 @@ class PictureStateTests(unittest.TestCase):
         source = DIALOG.read_text()
         self.assertIn('const auto side = CServiceBroker::GetDataCacheCore().GetVideoSourceSideDataSnapshot();', source)
         self.assertNotIn('if (!(active && data.profile && !data.output.hdr10AI))', source)
+        start=source.index('    const double display =')
+        code=source[start:source.index('\n}',start)]
+        program=r'''
+#include <cassert>
+#include <cmath>
+#include <format>
+#include <map>
+#include <string>
+extern "C" {
+#include <libavutil/hdr_dynamic_metadata.h>
+}
+struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> p,T&&... v)
+{return std::format(p,std::forward<T>(v)...);}};
+int main(){AVDynamicHDRPlus raw{};const auto* plus=&raw;
+ struct Side {unsigned rejected{};unsigned RejectedSections()const{return rejected;}} owner;const auto* side=&owner;
+ std::map<std::string,std::string> p;
+ auto SetProperty=[&](const char* k,const std::string& v){p[k]=v;};
+ const auto scaled=[](AVRational v){return 10000.0*av_q2d(v);};
+ auto refresh=[&]{CODE};
+ raw.num_windows=3;raw.application_version=1;raw.params[0].maxscl[0]={1,10};
+ raw.params[0].maxscl[1]={2,10};raw.params[0].maxscl[2]={3,10};
+ raw.params[0].average_maxrgb={1,100};raw.params[0].color_saturation_mapping_flag=1;
+ raw.params[0].color_saturation_weight={3,2};refresh();
+ assert(p["DV.HDR10PlusSection"]=="HDR10+ · window 1/3"&&p["DV.HDR10PlusCarried"]=="HDR10+ v1 / 3 windows");
+ assert(p["DV.HDR10PlusMaxSCL"]=="1000 | 2000 | 3000 nits");
+ assert(p["DV.HDR10PlusSaturation"]=="1.500×");
+ raw.num_windows=1;refresh();assert(p["DV.HDR10PlusSection"]=="HDR10+ metadata");
+ plus=nullptr;refresh();for(const auto& [k,v]:p)assert(v.empty());
+ owner.rejected=4;refresh();assert(p["DV.HDR10PlusCarried"]=="HDR10+ · unavailable");
+ assert(p["DV.HDR10PlusMaxSCL"].empty()&&p["DV.HDR10PlusSection"].empty());
+}
+'''.replace('CODE',code)
+        run(self,{'test.cpp':program},('-I'+os.environ['FFMPEG_TEST_PREFIX']+'/include',))
+        # A reachable published source can carry a valid pointer while PL declines dynamic use.
+        from test_native_video_source import body
+        from test_native_video_sidedata import SideDataTests
+        renderer=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        importer=body(renderer,'bool ImportDVLayer(')
+        start=source.index('    const bool plainHDRSDR =')
+        guidance=source[start:source.index('    const double display =',start)]
+        repo=Path(__file__).resolve().parents[2]
+        program=r'''
+#include "cores/VideoSourceSideData.h"
+#include "cores/VideoProcessingInfo.h"
+#include <cassert>
+#include <cstdio>
+#include <format>
+#include <map>
+extern "C" {
+#include "FRAME_HEADER"
+#include "STATS_HEADER"
+}
+struct Layer {
+ dvbridge_gl_layout layout=DVBRIDGE_P010;int width=16,height=16;dvbridge_gl_plane planes[3]{};
+ AVChromaLocation chromaLocation=AVCHROMA_LOC_LEFT;
+ struct {unsigned profile{},informationGeneration=9;}sourceInfo;
+ pl_hdr_metadata hdr{};bool hlg{},fullRange{};
+ struct {bool Valid()const{return true;}}binding;
+ unsigned sourceSerial=7;std::shared_ptr<const VideoSourceSideData> sourceSideData;
+};
+extern "C" bool dvbridge_gl_frame_import(dvbridge_gl_frame* out,pl_gpu,dvbridge_gl_layout,int,int,const dvbridge_gl_plane[3]){
+ out->frame={};out->frame.color=pl_color_space_hdr10;return true;
+}
+extern "C" void dvbridge_gl_frame_set_chroma(dvbridge_gl_frame*,pl_chroma_location){}
+pl_chroma_location SourceChroma(AVChromaLocation,unsigned){return PL_CHROMA_LEFT;}
+bool ImportDVLayer(dvbridge_gl_frame* frame,pl_gpu gpu,const Layer& layer,unsigned* hdrInputUsed=nullptr) IMPORTER
+struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> f,T&&... v){return std::format(f,std::forward<T>(v)...);}};
+int main(){
+ AVFrame* frame=av_frame_alloc();auto* hdr=av_dynamic_hdr_plus_create_side_data(frame);assert(hdr);
+ hdr->itu_t_t35_country_code=0xb5;hdr->application_version=1;hdr->num_windows=1;
+ hdr->targeted_system_display_maximum_luminance={4000,1};
+ for(auto& m:hdr->params[0].maxscl)m={1,10};
+ hdr->params[0].average_maxrgb={0,1};hdr->params[0].fraction_bright_pixels={0,1};
+ Layer layer;layer.hdr.min_luma=.01;layer.hdr.max_luma=1000;
+ layer.sourceSideData=VideoSourceSideData::Capture(9,7,AV_CODEC_ID_HEVC,frame,nullptr);
+ assert(layer.sourceSideData&&layer.sourceSideData->HDR10Plus()&&!layer.sourceSideData->RejectedSections());
+ assert(layer.sourceSideData->JSON().find("hdr10plus")!=std::string::npos);
+ dvbridge_gl_frame importedFrame{};unsigned used=99;
+ assert(ImportDVLayer(&importedFrame,nullptr,layer,&used)&&used==3);
+ VideoProcessingInfo data;data.output.flags=32;data.output.effective=8;data.output.sdrHDRInputUsed=used;
+ data.sourceMin=.01;data.sourceMax=1000;
+ std::map<std::string,bool> facts;std::map<std::string,std::string> text;
+ auto SetProperty=[&]<class T>(const char* k,const T& v){if constexpr(std::is_same_v<T,bool>)facts[k]=v;else text[k]=v;};
+ const auto active=data.output.flags;
+ GUIDANCE
+ assert(facts["DV.UsedHDRStatic"]&&!facts["DV.UsedHDR10PlusMax"]&&!facts["DV.UsedHDR10PlusAvg"]);
+ assert(text["DV.UsedHDRMax"]=="1000 nits"&&text["DV.UsedHDR10PlusMaxRGB"].empty());
+ av_frame_free(&frame);
+}
+'''.replace('IMPORTER',importer).replace('GUIDANCE',guidance).replace(
+            'FRAME_HEADER',str(repo/'CB1/src/dvbridge_gl_frame.h')).replace(
+            'STATS_HEADER',str(repo/'CB1/src/cb1_hdr10plus_dovi.h'))
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter=Path(tmp)/'adapter.o'
+            build=subprocess.run(['cc','-std=c11','-I'+os.environ['FFMPEG_TEST_PREFIX']+'/include',
+                '-I'+str(repo/'CB1/src'),'-c',str(repo/'CB1/src/cb1_hdr10plus_dovi.c'),'-o',str(adapter)],
+                capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libplacebo'],text=True))
+            libdir=subprocess.check_output(['pkg-config','--variable=libdir','libplacebo'],text=True).strip()
+            SideDataTests().compile_run(program,objects=(adapter,*flags,'-Wl,-rpath,'+libdir))
+
 
 
 

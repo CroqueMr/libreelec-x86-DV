@@ -81,6 +81,13 @@ int main(){
  def test_source_hdr10plus_survives_dv_processing(self):
   patch=PATCH.read_text()
   self.assertNotIn('+    if (!(active && data.profile && !data.output.hdr10AI))',patch)
+  panel=ET.parse(PANEL)
+  dv=panel.find('./include[@name="DVInputDolbyVisionFields"]')
+  self.assertIsNotNone(dv.find('.//param[@name="value"][@value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusCarried)]"]'))
+  layout=panel.find('./include[@name="DVProcessLayout"]')
+  static=layout.find('.//include[.="DVStaticMetadataFields"]')
+  self.assertIn('String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))',static.get('condition'))
+  self.assertIn('const bool metadata = active && data.metadata;', (TREE/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text())
  def test_forwarded_trims_have_dedicated_output_properties(self):
   panel=PANEL.read_text(encoding="utf8");patch=PATCH.read_text(encoding="utf8")
   for level in (2,8):

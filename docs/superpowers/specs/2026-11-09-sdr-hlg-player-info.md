@@ -1,6 +1,6 @@
 # SDR, HLG and Player information
 
-Approved by the user, 2026-11-09. Implement through verification and the normal preview build. No Astra and no Support build. Base: f630d2e9eaabc3b83d27621b64af044e7a316f4d (RC4 Preview Update 2).
+Approved by the user, 2026-11-09. Implement through verification and the normal preview build. Implementation and checks use Sol High; the final review alone uses Astra XHigh. No Support build. Base: f630d2e9eaabc3b83d27621b64af044e7a316f4d (RC4 Preview Update 2).
 
 ## Processing
 

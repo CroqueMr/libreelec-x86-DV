@@ -101,8 +101,12 @@ int main(){
         repo=Path(__file__).resolve().parents[2]
         env=dict(os.environ)
         prefix=env.get('FFMPEG_TEST_PREFIX')
-        if prefix:env['PKG_CONFIG_PATH']=prefix+'/lib/pkgconfig:'+env.get('PKG_CONFIG_PATH','')
+        if prefix:
+            env['PKG_CONFIG_PATH']=prefix+'/lib/pkgconfig:'+env.get('PKG_CONFIG_PATH','')
+            env['LD_LIBRARY_PATH']=prefix+'/lib:'+env.get('LD_LIBRARY_PATH','')
         flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libavutil','libplacebo'],env=env,text=True))
+        libdir=subprocess.check_output(['pkg-config','--variable=libdir','libplacebo'],env=env,text=True).strip()
+        env['LD_LIBRARY_PATH']=libdir+':'+env.get('LD_LIBRARY_PATH','')
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'test.cpp').write_text(program)
             build=subprocess.run(['cc','-std=c11','-I'+str(repo/'CB1/src'),*flags,

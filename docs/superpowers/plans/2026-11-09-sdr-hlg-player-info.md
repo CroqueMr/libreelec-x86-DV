@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- No Astra and no Support build.
+- Implementation and checks use Sol High; the final review alone uses Astra XHigh. No Support build.
 - Preserve existing numeric IDs; append modes/circuits.
 - HLG has ONLY DV Reference and Kodi default, no Adaptive and no HDR conversion.
 - SDR profile is independent of the existing HDR profile; BT.709 targets are Reference 100 nits/gamma 2.4 and Bright room 200 nits/gamma 2.2.
@@ -61,6 +61,6 @@
 **Interfaces:** Exact combined source identity through source lock, matched replay, tests and image.
 
 - [ ] Refresh authoritative hashes/staging and replay every native patch with fuzz=0 against pinned sources.
-- [ ] Run full matched Python/native/engine tests. Review complete diff independently without Astra and resolve material findings with regression tests.
+- [ ] Run full matched Python/native/engine tests. Review the complete final diff with Astra XHigh after Sol High implementation/checks and resolve material findings with regression tests.
 - [ ] Build normal preview; inspect compiled owners, signaling and source provenance, test VM boot/logging and available physical playback/mode transitions.
 - [ ] Prepare update artifacts and concise feature changelog/backlog; never claim unperformed physical tests or publish an unqualified build.

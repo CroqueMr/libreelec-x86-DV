@@ -70,7 +70,12 @@ int main(){
  assert(p["DV.AIL1"]=="15 | 3100 | 1100" && p["DV.OutputL1"]=="15 | 3100 | 1100");
  output.aiModel.clear();output.hdr10PlusDV=true;output.guidedSourceFields=6;refresh();
  assert(p["DV.AIModel"].empty() && p["DV.BeforeAI"].empty());
- assert(p["DV.Reconstruction"].find("AI")==std::string::npos);
+ assert(p["DV.Reconstruction"]=="HDR10+ max/avg · min est.");
+ output.untranslatedCurve=true;output.untranslatedSaturation=true;refresh();
+ assert(p["DV.Reconstruction"]=="HDR10+ max/avg · min est.");
+ output.guidedSourceFields=2;refresh();assert(p["DV.Reconstruction"]=="HDR10+ max · min/avg est.");
+ output.aiModel="CB1-L1L3 0.1";refresh();assert(p["DV.Reconstruction"]=="HDR10+ max · min/avg AI");
+ output.guidedSourceFields=0;refresh();assert(p["DV.Reconstruction"]=="Min/max/avg: AI");
  assert(p["DV.AIL1"]=="15 | 3100 | 1100");
  output={};refresh();
  for(const auto* key:{"DV.AIModel","DV.BeforeAI","DV.AIL1","DV.AIL3","DV.OutputL1","DV.Reconstruction"})assert(p[key].empty());
@@ -259,7 +264,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),70)
+        self.assertEqual(len(rows),73)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
