@@ -1701,7 +1701,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
    int m_guiFboHeight{0};
-@@ -249,6 +258,9 @@
+@@ -249,7 +258,10 @@
    uint64_t m_dvPendingStream{}, m_dvPendingPolicy{}, m_dvFailedStream{}, m_dvFailedPolicy{};
    bool m_dvOutputRetiring{}, m_dvOrdinaryFrame{};
    CDVBridgeState m_dvState;
@@ -1709,6 +1709,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
 +  bool m_cb1RestoringPreferences{};
 +  std::optional<bool> m_cb1LimitedRange, m_cb1OrdinaryLimitedRange;
    DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
+   DVBRIDGE::DiagnosticFailures m_dvScreenshotFailures;
    DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
    bool m_dvFrame = false;
 diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
