@@ -67,6 +67,9 @@ int main(){
  const int priorPQ=bridge.pqCalls;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==10 && flip);
  assert(bridge.pqCalls==priorPQ && out.format==AV_PIX_FMT_RGBA64LE && out.stride==-16);
+ bridge.m_scanoutFramebuffer=0; // Native EGL output may be the default framebuffer.
+ assert(bridge.ReadScreenshot(out) && bridge.pqCalls==priorPQ && bound==99);
+ assert(depth==10 && flip && out.format==AV_PIX_FMT_RGBA64LE && out.stride==-16);
  bridge.m_direct=false;accepted=out.pixels.get();
  assert(!bridge.ReadScreenshot(out) && out.pixels.get()==accepted && bound==99);
 }
