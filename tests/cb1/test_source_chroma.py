@@ -90,6 +90,11 @@ int main(){
  layer.hdr.max_cll=0;
  assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==1);
  layer.hdr.min_luma=0;
+ layer.hdr.min_luma=10000;layer.hdr.max_luma=10000;layer.hdr.max_cll=0;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==0);
+ layer.hdr.max_luma=0;layer.hdr.max_cll=10000;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==0);
+ layer.hdr.min_luma=0;
  assert(ImportDVLayer(&imported,nullptr,layer) && imported.frame.color.hdr.scene_max[0]==0);
 }
 '''.replace('HELPER',helper)
