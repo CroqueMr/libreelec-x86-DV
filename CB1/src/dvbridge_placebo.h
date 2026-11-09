@@ -12,8 +12,12 @@
  * applies inverse OETF, BT.2020 luminance OOTF and the actual PQ encoding. */
 static inline struct pl_color_space cb1_hlg_reference_color(enum pl_color_transfer transfer)
 {
-    return (struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,.transfer=transfer,
-        .hdr={.prim=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),.min_luma=0,.max_luma=1000}};
+    struct pl_color_space color=pl_color_space_unknown;
+    color.primaries=PL_COLOR_PRIM_BT_2020;
+    color.transfer=transfer;
+    color.hdr.prim=*pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020);
+    color.hdr.max_luma=1000;
+    return color;
 }
 #define DVBRIDGE_CHROMA_MAP_API 1
 enum pl_chroma_location dvbridge_map_chroma(enum AVChromaLocation location);

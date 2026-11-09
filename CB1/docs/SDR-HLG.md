@@ -59,3 +59,7 @@ ctest --test-dir "$ENGINE_BUILD" -j4 --output-on-failure
 ```
 
 Final standalone qualification: all 257 registered tests completed with zero failures; 234 passed and 23 returned their explicit capability skip. Total wall time was 78.80 seconds. GLES shader/image/identity/lifecycle tests ran on llvmpipe (OpenGL ES 3.2, Mesa 25.2.8); the skipped GUI/packed-transport/subgroup and VA/VPP cases are not claimed as physical GPU coverage. The standalone no-Kodi build, original source provenance/privacy checks, stock-header rejection, frozen native replay and matched AI inference checks passed. `git diff --check -- CB1` passed.
+
+The normal SDK build additionally exposed a C++20 public-header warning that the C-only engine suite could not detect. `placebo_header_cpp` now compiles the real public header with `-Wmissing-field-initializers -Werror` and verifies the complete zero metadata contract for both HLG and PQ. The test reproduced the seven omitted HDR-member initialization errors before the helper was changed to start from libplacebo's complete unknown-color value. No warning is disabled.
+
+After this public-header correction, the complete frozen suite passed again: 258 registered tests, zero failures, 235 passed and the same 23 capability skips, in 80.98 seconds. The generated C++ compile flags explicitly contain `-std=c++20 -Wmissing-field-initializers -Werror`.
