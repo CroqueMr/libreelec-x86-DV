@@ -3725,7 +3725,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (rendered || videoLayer)
    {
-@@ -175,27 +642,135 @@
+@@ -175,27 +642,153 @@
  #endif
      }
  
@@ -3868,11 +3868,29 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
  {
++  float gamma = 2.4f;
++#ifdef HAVE_DVBRIDGE
++  if (colorTransfer && m_sdrConversion)
++  {
++    double peak = 0, targetGamma = 0, black = 0;
++    if (!dvbridge_sdr_target(&m_dvSelection.policy.sdr, &peak, &targetGamma, &black)) return false;
++    gamma = static_cast<float>(targetGamma);
++  }
++#endif
++  return ConfigureGuiCompositing(colorTransfer, gamma);
++}
++
++bool CWinSystemGbmGLESContext::ConfigureGuiCompositing(int colorTransfer, float gamma)
++{
++  if (colorTransfer == AVCOL_TRC_GAMMA22 && m_guiColorTransfer == colorTransfer &&
++      m_guiCompositing && m_compositeShader && m_guiSDRGamma == gamma)
++    return true;
++
 +  m_guiCacheValid = false;
    m_guiCompositing = (colorTransfer != 0);
  
    if (m_guiCompositing)
-@@ -203,7 +778,11 @@
+@@ -203,7 +796,11 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -3885,25 +3903,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -215,7 +794,16 @@
+@@ -215,16 +812,24 @@
        }
      }
  
 -    if (!m_compositeShader->CreateLUTs(colorTransfer))
-+    float gamma = 2.4f;
-+#ifdef HAVE_DVBRIDGE
-+    if (m_sdrConversion)
-+    {
-+      double peak = 0, targetGamma = 0, black = 0;
-+      if (!dvbridge_sdr_target(&m_dvSelection.policy.sdr, &peak, &targetGamma, &black)) return false;
-+      gamma = static_cast<float>(targetGamma);
-+    }
-+#endif
 +    if (!m_compositeShader->CreateLUTs(colorTransfer, gamma))
      {
        CLog::Log(LOGERROR, "CWinSystemGbmGLESContext: failed to create LUTs");
        m_compositeShader.reset();
-@@ -225,6 +813,13 @@
+       m_guiCompositing = false;
+       return false;
+     }
++    m_guiSDRGamma = gamma;
    }
    else
    {
@@ -3917,7 +3929,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -234,8 +829,66 @@
+@@ -234,8 +839,66 @@
    return m_guiCompositing;
  }
  
@@ -3984,7 +3996,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_guiCompositing)
      return false;
  
-@@ -274,24 +927,43 @@
+@@ -274,24 +937,43 @@
  
      m_guiFboWidth = width;
      m_guiFboHeight = height;
@@ -4037,7 +4049,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +972,11 @@
+@@ -300,6 +982,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -4049,7 +4061,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -307,7 +984,16 @@
+@@ -307,7 +994,16 @@
  void CWinSystemGbmGLESContext::EndGuiComposite()
  {
    if (m_guiWillRender)
@@ -4066,7 +4078,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +1026,32 @@
+@@ -340,17 +1036,32 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -4102,7 +4114,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +1061,35 @@
+@@ -360,6 +1071,35 @@
    if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
        m_DRM->GetGuiPlane() != nullptr)
      return;
@@ -4138,7 +4150,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +1110,21 @@
+@@ -380,11 +1120,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
@@ -4162,7 +4174,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1137,1910 @@
+@@ -397,13 +1147,1916 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4984,7 +4996,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
 +  if (m_dvBridge && m_dvConfiguredOutput == m_dvSelection.policy.mode &&
 +      (m_dvState.Captured() || m_hdrConversion))
-+    return m_dvBridge && m_guiCompositing && m_compositeShader;
++    return (!sdr || SetGuiCompositing(AVCOL_TRC_GAMMA22)) &&
++        m_guiCompositing && m_compositeShader;
 +  if (!CompleteDVBridgePage())
 +  { DVBRIDGE::DiagnosticStage("display-pending"); return false; }
 +  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
@@ -5075,6 +5088,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      m_dvPriorHDRConversion = m_hdrConversion;
 +      m_dvPriorSDRConversion = m_sdrConversion;
 +      m_dvPriorGuiCompositing = m_guiCompositing;
++      m_dvPriorGuiSDRGamma = m_guiSDRGamma;
 +      m_dvPendingStream = picture ? (picture->doviSourceBinding.Valid() ?
 +          picture->doviSourceBinding.stream : picture->doviMetadata.Binding().stream) : 0;
 +      m_dvPendingPolicy = preferences.revision;
@@ -5255,7 +5269,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring &&
 +      (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla || m_dvState.Captured() || m_hdrConversion))
-+    return true;
++    return m_dvSelection.route != DVBRIDGE::OutputRoute::SDR ||
++        SetGuiCompositing(AVCOL_TRC_GAMMA22);
 +  const bool requested = DVBridgeRequested(&picture);
 +  if (requested && m_dvBridge && !HasPendingDVOutputSurface() &&
 +      (m_dvState.Captured() || m_hdrConversion) &&
@@ -5364,8 +5379,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  m_sdrConversion = m_dvPriorSDRConversion;
 +  m_hdr10Signal.reset();
 +  m_dvConfiguredOutput = m_dvPriorConfiguredOutput;
-+  SetGuiCompositing(m_dvPriorGuiCompositing ?
-+      (m_dvPriorSDRConversion ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084) : 0);
++  const bool guiReady = ConfigureGuiCompositing(m_dvPriorGuiCompositing ?
++      (m_dvPriorSDRConversion ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084) : 0,
++      m_dvPriorGuiSDRGamma);
++  if (m_dvPriorGuiCompositing && !guiReady)
++  {
++    m_dvRollbackFailed = true;
++    return false;
++  }
 +  m_dvRejectedSurface = false;
 +  return true;
 +}
@@ -5469,12 +5490,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      m_previousSourceStream == layer.binding.stream &&
 +      DVBRIDGE::ContinuousPresentationPicture(layer.pts, m_previousSourcePts) &&
 +      m_dvSelection.reason == DVBRIDGE::OutputReason::None;
-+#ifdef CB1_HAS_HDR10_AI
 +  const auto preferences = DVBRIDGE::FrameOutputSettings(
-+      !metadata.Data() && m_dvContext && m_dvContext->HDR10AI().HDR10Plus());
-+#else
-+  const auto preferences = DVBRIDGE::FrameOutputSettings();
-+#endif
++      !layer.sourceInfo.profile && layer.hdr10PlusSource,
++      !layer.sourceInfo.profile && layer.hlg);
 +  m_masterFramePeriodNs=m_continuousFrameEligible && preferences.allowMasterFallback &&
 +      m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE ?
 +      DVBRIDGE::MasterFramePeriodNs(CServiceBroker::GetDataCacheCore().GetVideoFps()) : 0;
@@ -6076,7 +6094,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3054,16 @@
+@@ -417,5 +3070,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6267,7 +6285,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +193,93 @@
+@@ -63,8 +193,96 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
@@ -6275,6 +6293,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  unsigned m_guiCachedElementCount{0};
  
    std::unique_ptr<CGuiCompositeShaderGLES> m_compositeShader;
++  float m_guiSDRGamma{2.4f};
++  bool ConfigureGuiCompositing(int colorTransfer, float gamma);
 +#ifdef HAVE_DVBRIDGE
 +  DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
 +      const DVBRIDGE::OutputPreferences& preferences, bool allowModeSwitch = false) const;
@@ -6340,6 +6360,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool m_hdrConversion = false;
 +  bool m_sdrConversion = false;
 +  bool m_dvPriorSDRConversion = false;
++  float m_dvPriorGuiSDRGamma{2.4f};
 +  std::optional<dvbridge_hdr10_session> m_hdr10Session;
 +  std::unique_ptr<VideoPicture> m_hdr10BasicSignal;
 +  std::optional<std::array<unsigned, 5>> m_hdr10Signal;

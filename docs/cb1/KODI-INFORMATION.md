@@ -122,7 +122,7 @@ behavior. It adds no popup, selection action, paging or scrolling. Every field
 stays fixed on one line. Input retains the file inventory and native HDR facts;
 Processing shows metadata components only when actually used; Output shows the
 accepted signal and proven forwarded inventories. Used trim levels remain bright,
-without claiming that all source targets were selected. SDR and Expert L1 show
+without claiming that all source targets were selected. SDR, Basic and Expert L1 show
 max/average; Expert L3 also shows only max/average.
 Unused source minima are excluded from Processing. The full source properties
 retain their original values. A full L1 luminance triple omits the redundant
@@ -161,9 +161,24 @@ Logical layout qualification covers 64,260 conservative scenarios across 16
 source classes, including P8.2/P10.0/P10.2, all original headings, effective
 routes, ten transition/error phases, seven audio classes and subtitle states.
 A further 10,920 cases check reachable rejected HDR10+ and valid zero-average
-source boundaries. Maximum measured height is 1018 of 1032 pixels, with no
-visible text-width overflow. A separate compiled-formatter check measures 296
+source boundaries. Maximum measured height is 1032 of 1032 pixels, with no
+visible text-width overflow. A separate compiled-formatter check measures 297
 bounded inventories and extreme values against the shipped Noto Sans font:
 maximum 283 of 284 pixels. The multiwindow full-numeric scenario is formatter
 stress only; the current source owner omits it. These logical/font checks do
 not qualify the final physical Kodi/TV rendering.
+
+Final review corrections keep same-mode SDR GUI/subtitle gamma synchronized with
+live and paused target changes. Unchanged targets reuse their LUTs and GUI cache;
+failed updates block the successor, and rollback restores the prior GUI gamma.
+Requested HDR10+ preferences follow the immutable source type, including SDR
+without an AI session. HLG admission uses the current-picture-qualified GPU
+capabilities rather than the unqualified renderer inventory.
+
+Basic and Expert consume L6 maximum only; complete L6 minimum/CLL/FALL remain in
+Input. SDR and Basic mark L1 applied only when libplacebo can use both maximum
+and average; legal zero-average L1 stays in the original file inventory. Expert's
+explicit curve retains its independent zero-average behavior. Ignored source L5
+is suppressed using the accepted renderer geometry, while Input and final
+transmitted margins retain their own facts. Another 36,960 logical mask scenarios
+verify these visibility boundaries without width or height overflow.

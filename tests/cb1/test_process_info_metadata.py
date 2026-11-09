@@ -66,19 +66,20 @@ int main() {
  auto SetProperty=[&]<class T>(const char* key,const T& value){
   if constexpr(std::is_same_v<T,bool>)used[key]=value;else text[key]=value;};
  auto refresh=[&]{const auto active=data.output.flags;const auto applied=data.AppliedBlocks();
-  const bool metadata=active&&data.metadata;const bool hdr10=data.output.effective==3;
+  const bool metadata=active&&data.metadata;const bool hdr10=bool(active&8u);
   const auto& levels=data.levels;const auto carried=[&](unsigned n){return metadata&&data.blocks[n];};
   RAW_LUMINANCE SDR_BLOCK L3_BLOCK GUIDANCE_BLOCK PROFILE_BLOCK CREATIVE_BLOCK
  };
  refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000");
  assert(text["DV.CreativeTrims"].empty()&&!used["DV.UsedHDRStatic"]);
- data.output.effective=3;refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000"&&text["DV.UsedL3"]=="2100 | 2000");
- data.appliedBlocks[3]=false;refresh();assert(text["DV.UsedL3"].empty());
- data.output.effective=1;refresh();assert(text["DV.UsedL1PQ"].empty()&&!text["DV.UsedL1Nits"].empty());
+ data.output.flags=8;data.output.effective=3;refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000"&&text["DV.UsedL3"]=="2100 | 2000");
+ data.output.effective=2;refresh();assert(text["DV.UsedL1PQ"]=="3000 | 1000");
+ data.output.effective=3;data.appliedBlocks[3]=false;refresh();assert(text["DV.UsedL3"].empty());
+ data.output.flags=1;data.output.effective=1;refresh();assert(text["DV.UsedL1PQ"].empty()&&!text["DV.UsedL1Nits"].empty());
  data.pq={4095,4095,4095};mockFits=false;refresh();
  assert(text["DV.L1Nits"]=="10000.0 | 10000.0 | 10000.0 nits");
  assert(text["DV.UsedL1Nits"]=="10000.0 | 10000.0 | 10000.0");mockFits=true;
- data.output.effective=8;data.appliedBlocks.reset();refresh();assert(text["DV.UsedL1PQ"].empty());
+ data.output.flags=32;data.output.effective=8;data.appliedBlocks.reset();refresh();assert(text["DV.UsedL1PQ"].empty());
  data.profile=0;refresh();assert(!used["DV.UsedHDRStatic"]&&!used["DV.UsedHDR10PlusMax"]&&!used["DV.UsedHDR10PlusAvg"]);
  data.output.sdrHDRInputUsed=25;data.output.sdrHDRInputValues={800,900,700,125};
  refresh();assert(used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&used["DV.UsedHDR10PlusAvg"]);
@@ -192,7 +193,7 @@ int main() {
  const auto add=[&](uint8_t level) {
    auto* ext=av_dovi_get_ext(data,data->num_ext_blocks++); ext->level=level; return ext;
  };
- add(1)->l1.max_pq=3079;
+ auto* l1=add(1);l1->l1.max_pq=3079;l1->l1.avg_pq=1000;
  for (uint16_t pq=2000; pq<2010; ++pq) add(2)->l2.target_max_pq=pq;
  auto* l3=add(3); l3->l3.min_pq_offset=2048; l3->l3.max_pq_offset=2111; l3->l3.avg_pq_offset=1987;
  auto* l4=add(4); l4->l4.anchor_pq=1500; l4->l4.anchor_power=2048;
@@ -384,8 +385,11 @@ int main(){
                 '-I'+str(repo/'CB1/src'),'-c',str(repo/'CB1/src/cb1_hdr10plus_dovi.c'),'-o',str(adapter)],
                 capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
-            flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libplacebo'],text=True))
-            libdir=subprocess.check_output(['pkg-config','--variable=libdir','libplacebo'],text=True).strip()
+            env=dict(os.environ)
+            prefix=env['FFMPEG_TEST_PREFIX']
+            env['PKG_CONFIG_PATH']=prefix+'/lib/pkgconfig:'+env.get('PKG_CONFIG_PATH','')
+            flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','libplacebo'],env=env,text=True))
+            libdir=subprocess.check_output(['pkg-config','--variable=libdir','libplacebo'],env=env,text=True).strip()
             SideDataTests().compile_run(program,objects=(adapter,*flags,'-Wl,-rpath,'+libdir))
 
 

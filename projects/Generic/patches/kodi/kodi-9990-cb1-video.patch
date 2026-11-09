@@ -1712,9 +1712,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    policy.mode=DVBRIDGE_MODE_STANDARD; policy.master_ipt=false; policy.tv={};
 +    policy.adaptive=DVBRIDGE_ADAPTIVE_A; policy.expert_black_nits=0;
 +    if (!caps.nativeDV) return {OutputRoute::Vanilla,{},OutputReason::NoDVTransport};
-+    if (!caps.processingKnown || !caps.hdr10Processing[DVBRIDGE_MODE_STANDARD].usable)
-+      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.hdr10Processing[policy.mode].reason!=OutputReason::None ?
-+          caps.hdr10Processing[policy.mode].reason : OutputReason::NoGPUProcessing};
++    if (!caps.processingKnown || !caps.processing[DVBRIDGE_MODE_STANDARD].usable)
++      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.processing[policy.mode].reason!=OutputReason::None ?
++          caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
 +    return {OutputRoute::NativeDV,policy,OutputReason::None};
 +  }
 +  if (caps.sourceKnown && caps.isHDR10 && !caps.isDV)
@@ -2484,7 +2484,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
-@@ -0,0 +1,429 @@
+@@ -0,0 +1,434 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -2554,6 +2554,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    int creativeStatus{}, creativeReason{};
 +    bool iptTransport{};
 +    bool l2TrimsDisabled{};
++    bool ignoreL5{}; // Actual accepted frame geometry, independent of later preferences.
 +    bool cmv40Appended{};
 +    int felUpscaling{-1};
 +#ifdef CB1_HAS_HDR10_AI
@@ -2616,10 +2617,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if ((((output.flags & CDVPlaybackInfo::HDR10) && output.effective!=7) ||
 +         (output.flags & CDVPlaybackInfo::SDR)) || output.authoredLegacy)
 +    {
-+      result[1]=blocks[1] && pq[0]<=pq[2] && pq[2]<=pq[1] && pq[1]>0 && pq[1]<=4095;
++      const bool cieY = (output.flags & CDVPlaybackInfo::SDR) ||
++          ((output.flags & CDVPlaybackInfo::HDR10) && output.effective==2);
++      result[1]=blocks[1] && pq[0]<=pq[2] && pq[2]<=pq[1] && pq[1]>0 && pq[1]<=4095 &&
++          (!cieY || pq[2]>0);
 +      result[6]=blocks[6] && !(output.flags & CDVPlaybackInfo::SDR) &&
 +          (output.effective>=3 || output.level6);
 +    }
++    if (output.ignoreL5) result[5]=false;
 +    return result;
 +  }
 +  std::bitset<256> TransmittedBlocks() const
@@ -10117,7 +10122,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2683 @@
+@@ -0,0 +1,2684 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -12612,6 +12617,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      !output.hdr10AI &&
 +#endif
 +      m_requested.output==DVBRIDGE::OutputMode::AdaptiveB)output.effective=6;
++  output.ignoreL5 = m_sourceGeometry.ignore_l5;
 +  output.method = m_requested.method;
 +  output.cmv40Appended = submission.cmv40Status == CB1_CMV40_APPEND;
 +  if (output.cmv40Appended) output.flags |= CDVPlaybackInfo::CM4;
@@ -12803,7 +12809,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -0,0 +1,336 @@
+@@ -0,0 +1,337 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -12908,6 +12914,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    uint64_t sourceSerial{};
 +    bool fullRange{};
 +    bool hlg{};
++    bool hdr10PlusSource{};
 +    pl_hdr_metadata hdr{};
 +    AVChromaLocation chromaLocation{AVCHROMA_LOC_UNSPECIFIED};
 +  };
@@ -13983,7 +13990,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
        (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
      return true;
-@@ -171,6 +218,191 @@
+@@ -171,6 +218,192 @@
    return false;
  }
  
@@ -14030,6 +14037,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  layer.sourceInfo = buffer.doviSourcePicture->doviSourceInfo;
 +  layer.sourceSideData = source.sourceSideData;
 +  layer.sourceSerial = source.sourceSideData ? source.sourceSideData->Serial() : 0;
++  layer.hdr10PlusSource = source.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS;
 +  layer.chromaLocation = source.chroma_position;
 +  layer.hlg = source.hdrType == StreamHdrType::HDR_TYPE_HLG;
 +  if (hdr10)
@@ -14175,7 +14183,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  bool CRendererVAAPIGLES::CreateTexture(int index)
  {
    if (!m_isVAAPIBuffer)
-@@ -237,6 +469,11 @@
+@@ -237,6 +470,11 @@
  
  bool CRendererVAAPIGLES::UploadTexture(int index)
  {
@@ -14187,7 +14195,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_isVAAPIBuffer)
    {
      CPictureBuffer& buf = m_buffers[index];
-@@ -315,6 +552,18 @@
+@@ -315,6 +553,18 @@
    }
  
    CalculateTextureSourceRects(index, 3);
@@ -14982,7 +14990,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    // cleanup framebuffer object if it was in use
-@@ -1116,38 +1260,147 @@
+@@ -1116,38 +1260,148 @@
      return false;
    }
  
@@ -15102,6 +15110,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  layer.sourceInfo=buffer.doviSourcePicture->doviSourceInfo;
 +  layer.sourceSideData=buffer.doviSourcePicture->sourceSideData;
 +  layer.sourceSerial=layer.sourceSideData ? layer.sourceSideData->Serial() : 0;
++  layer.hdr10PlusSource = source.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS;
 +  layer.chromaLocation=buffer.doviSourcePicture->chroma_position;
 +  for (int p=0;p<3;++p)
 +  {
@@ -15158,7 +15167,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CLinuxRendererGLES::Render(unsigned int flags, int index)
  {
-@@ -1171,6 +1424,26 @@
+@@ -1171,6 +1425,26 @@
      return false;
    }
  
@@ -15185,7 +15194,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (RenderHook(index))
    {
      ;
-@@ -1204,6 +1477,10 @@
+@@ -1204,6 +1478,10 @@
    }
  
    AfterRenderHook(index);
@@ -15196,7 +15205,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -1616,8 +1893,6 @@
+@@ -1616,8 +1894,6 @@
    }
  
    VerifyGLState();
@@ -15205,7 +15214,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -1822,8 +2097,6 @@
+@@ -1822,8 +2098,6 @@
  
    VerifyGLState();
  
@@ -15214,7 +15223,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -1978,8 +2251,6 @@
+@@ -1978,8 +2252,6 @@
              im->bpp, im->plane[0]);
  
    VerifyGLState();

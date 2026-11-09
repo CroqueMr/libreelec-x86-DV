@@ -41,7 +41,7 @@ struct Buffer{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture
  Metadata doviMetadata;double doviPts=100;bool loaded=false;YuvImage image;
  Plane fields[1][3]={{{11,3840,1920},{12,1920,960},{13,1920,960}}};};
 struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},width{},height{};
- double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{};HDR hdr;
+ double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{},hdr10PlusSource{};HDR hdr;
  struct{unsigned texture;int width,height;}planes[3]{};};};
 struct WindowBase{virtual ~WindowBase()=default;};
 namespace KODI::WINDOWING::GBM{struct CWinSystemGbmGLESContext:WindowBase{
@@ -67,7 +67,7 @@ int main(){CLinuxRendererGLES r;
  assert(layer.layout==DVBRIDGE_YUV420P10 && layer.width==3840 && layer.height==1920);
  assert(layer.planes[0].texture==11 && layer.planes[1].texture==12 && layer.planes[2].texture==13);
  assert(layer.planes[1].width==1920 && layer.planes[1].height==960);
- assert(layer.lease && layer.binding.Valid() && layer.pts==100);
+ assert(layer.lease && layer.binding.Valid() && layer.pts==100 && !layer.hdr10PlusSource);
  assert(r.UploadTexture(0) && r.uploads==1 && window.observed==2);
  r.m_format=AV_PIX_FMT_YUV444P10LE;
  r.m_buffers[0].fields[0][1]={12,3840,1920};r.m_buffers[0].fields[0][2]={13,3840,1920};
@@ -88,7 +88,11 @@ int main(){CLinuxRendererGLES r;
  auto& source=*r.m_buffers[0].doviSourcePicture;
  source.doviSourceInfo.profile=0;source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
  source.hasDisplayMetadata=true;source.displayMetadata.has_luminance=true;source.displayMetadata.max_luminance=1000;
- assert(r.BuildDVBridgeLayer(0,layer) && layer.pts==1 && layer.hdr.max_luma==1000);
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.pts==1 && layer.hdr.max_luma==1000 && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ assert(r.BuildDVBridgeLayer(0,layer) && !layer.hdr10PlusSource);
  source.doviSourcePts=AV_NOPTS_VALUE;assert(!r.BuildDVBridgeLayer(0,layer));}
 '''.replace('BUILD',build).replace('UPLOAD',upload)
         with tempfile.TemporaryDirectory() as temporary:

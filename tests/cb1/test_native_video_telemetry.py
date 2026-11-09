@@ -121,11 +121,13 @@ int main() {
  assert(!compatibility.output.fallback && compatibility.output.reason==DVBRIDGE::OutputReason::None);
  // Accepted SDR import facts survive a rejected newer frame, but never a source epoch reset.
  output={};output.flags=CDVPlaybackInfo::SDR;output.effective=8;
- output.stream=9;output.picture=1;output.revision=4;output.sdrHDRInputUsed=24;
+ output.stream=9;output.picture=1;output.revision=4;output.sdrHDRInputUsed=24;output.ignoreL5=true;
  DVBRIDGE::StreamTelemetry::NativePresented(sdr,metadata,output);
  DVBRIDGE::StreamTelemetry::PublishNativeInfo(current);
  assert(cache.GetVideoProcessingInfo().output.sdrHDRInputUsed==24);
+ assert(DVBRIDGE::StreamTelemetry::Read().output.ignoreL5);
  assert(!failedCommit({{9,2,4},current}));
+ assert(DVBRIDGE::StreamTelemetry::Read().output.ignoreL5);
  assert(cache.GetVideoProcessingInfo().output.sdrHDRInputUsed==24);
  const auto next=cache.ResetVideoProcessingInfo();
  assert(cache.GetVideoProcessingInfo().output.sdrHDRInputUsed==0);
@@ -135,6 +137,7 @@ int main() {
  assert(cache.GetVideoProcessingInfo().output.sdrHDRInputUsed==0);
  DVBRIDGE::StreamTelemetry::ClearOutput();
  assert(DVBRIDGE::StreamTelemetry::Read().output.sdrHDRInputUsed==0);
+ assert(!DVBRIDGE::StreamTelemetry::Read().output.ignoreL5);
 }
 '''.replace('IMPLEMENTATIONS',implementations).replace('FAILED',failed).replace('RESTORE',restore).replace('DEFERRED',deferred)
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
