@@ -2,6 +2,9 @@
 
 Current release: **R1.0.0 RC3**, **CB1 0.5**.
 
+Preview branch: [RC4 Update 3](RELEASE-RC4-PREVIEW-UPDATE3.md), adding SDR targets,
+HLG Dolby Vision Reference and the Input / Processing / Output information panel.
+
 ## Playback
 
 | Page | Content |

@@ -196,6 +196,15 @@ bool dvbridge_render_hdr10_policy_rgb(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy, const struct dvbridge_identity *identity,
     const struct pl_frame *source, const void *metadata, size_t bytes,
     double pts, double el_pts, struct dvbridge_geometry geometry);
+/* SDR shares the policy output/resolve/commit/cancel owner. Metadata absent:
+ * original PQ HDR10/HDR10+; metadata present: original DV including required EL.
+ * No HDR/DV output metadata is generated. Resolve accepts native 8..16-bit RGB. */
+bool dvbridge_render_sdr_policy_rgb(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct dvbridge_identity *identity,
+    const struct pl_frame *source,const void *metadata,size_t bytes,
+    double pts,double el_pts,struct dvbridge_geometry geometry);
+bool dvbridge_render_sdr_policy_resolve(struct dvbridge_renderer *renderer,
+    pl_tex target,bool flip_y,bool limited,unsigned bits);
 /* Raw-video final target path: render and quantize in one FP32-precision pass.
  * Basic session and Expert policy remain separate mapping contracts. */
 bool dvbridge_render_hdr10_direct(struct dvbridge_renderer *renderer,

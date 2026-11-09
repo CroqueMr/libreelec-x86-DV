@@ -1499,7 +1499,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    m_guiWillRender = guiWillRender;
  
-@@ -1772,6 +1813,7 @@
+@@ -1815,6 +1856,7 @@
      output.lightMetadata.MaxCLL = metadata.max_cll;
      output.lightMetadata.MaxFALL = metadata.max_fall;
    }
@@ -1507,7 +1507,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    // Every rejected setup after this point must restore ordinary HDR/color state.
    m_failedHDR10SetupRestore = true;
    SetColorimetry(&output);
-@@ -1831,11 +1873,12 @@
+@@ -1874,11 +1916,12 @@
    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
    if (!drm)
      return false;
@@ -1521,7 +1521,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    glDisable(GL_SCISSOR_TEST);
    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-@@ -1855,8 +1898,67 @@
+@@ -1898,8 +1941,67 @@
      return false;
    surface.EndTransactionalMode();
    CompleteOrdinaryHDR10Recovery();
@@ -1589,7 +1589,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  bool CWinSystemGbmGLESContext::BeginDVBridge()
-@@ -1907,6 +2009,9 @@
+@@ -1952,6 +2054,9 @@
      m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
    }
    m_GBM->GetDevice().UseDVOutputLifetime();
@@ -1599,7 +1599,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (!hdr10 && !m_dvState.Captured())
    {
      const auto* display = GetDisplayInfo();
-@@ -1919,13 +2024,18 @@
+@@ -1964,7 +2069,10 @@
          mode && mode->vdisplay >= 2160 && rate > 30.01)
        return failure("output-format", "sink-dv-rate");
      if (!m_dvState.Capture(*drm, 0, sink.legacy_vsif))
@@ -1610,15 +1610,16 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_presentStall.Reset();
      if (DVBRIDGE::DiagnosticsEnabled())
        DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge TV-Led state captured: hdr_static_metadata={}",
-           drm->GetConnector()->SupportsProperty("HDR_OUTPUT_METADATA") ? "preserved" : "not-exposed");
+@@ -1972,6 +2080,8 @@
    }
    m_hdrConversion = hdr10;
+   m_sdrConversion = sdr;
 +  if (!StageCB1ConnectorPreferences(false)) return failure("connector-preferences");
 +  DeferConnectorPreferences();
    m_compositeShader.reset();
-   const bool ready = SetGuiCompositing(AVCOL_TRC_SMPTE2084);
+   const bool ready = SetGuiCompositing(sdr ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084);
    if (ready) m_dvConfiguredOutput = m_dvSelection.policy.mode;
-@@ -2185,6 +2295,7 @@
+@@ -2241,6 +2351,7 @@
        (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
            "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
    { if (!m_dvStopPending) RejectDVOutputSurface(); return false; }
@@ -1626,7 +1627,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    SetColorimetry(picture);
    const bool hdr = SetHDR(picture);
    SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
-@@ -2808,17 +2919,19 @@
+@@ -2865,17 +2976,19 @@
    }
    if (m_failedHDR10SetupRestore && !RestoreFailedHDR10Setup())
      return false;
@@ -1649,7 +1650,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
      glDisable(GL_SCISSOR_TEST);
      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-@@ -2837,6 +2950,7 @@
+@@ -2894,6 +3007,7 @@
        return false;
      surface.EndTransactionalMode();
      m_hdrDeepColorPrevious.reset();
@@ -1657,7 +1658,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      if (DVBRIDGE::DiagnosticsEnabled())
        DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge HDR10: native link policy restored");
    }
-@@ -2858,6 +2972,8 @@
+@@ -2915,6 +3029,8 @@
      glClear(GL_COLOR_BUFFER_BIT);
      if (!m_dvBridge || !m_dvBridge->Advanced()) glFinish();
      AnnounceCB1Mode(false);
@@ -1666,10 +1667,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      const bool restored=m_eglContext.TrySwapBuffers() && FlipDVBridgePage(m_dvState, true);
      CompleteCB1Mode(restored,false);
      if (!restored)
-@@ -2878,6 +2994,7 @@
-   m_hdr10Signal.reset();
+@@ -2936,6 +3052,7 @@
    m_hdr10SessionStream = 0;
    m_hdrConversion = false;
+   m_sdrConversion = false;
 +  CompleteCB1ConnectorRestore();
    if (DVBRIDGE::DiagnosticsEnabled() &&
        m_dvSetupFailures.Recovered(DVBRIDGE::DiagnosticNowMs()))

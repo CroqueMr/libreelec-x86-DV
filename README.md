@@ -1,6 +1,6 @@
 # LibreELEC with Dolby Vision, HDR10+ and AMD 3D support
 
-> This branch prepares **R1.0.0 RC4 Preview** as a draft. [Preview notes](docs/cb1/RELEASE-RC4-PREVIEW.md) describe included fixes, tests and remaining hardware checks.
+> This branch prepares **R1.0.0 RC4 Preview Update 3**. [Update notes](docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md) describe SDR rendering, HLG Dolby Vision and the revised Player information panel.
 
 Dolby Vision playback and HDR10/HDR10+ output in Kodi, powered by **CB1**, an
 open-source Dolby Vision processing engine. Supported Intel, AMD and NVIDIA
@@ -63,15 +63,21 @@ selection and independent L2-trim removal for Reference and Master Reference.
 | HDR10 | **Kodi default** | HDR10 | Keep native Kodi HDR10 playback |
 | HDR10+ | **Kodi default** | HDR10+ | Preserve authored dynamic metadata on an admitted deep-colour output |
 | HDR10+ | **Dolby Vision Rendering** | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and labelled estimates when incomplete |
-| SDR / HLG | **Native** | Native SDR / HLG | Keep native Kodi playback |
+| Dolby Vision / HDR10 / HDR10+ | **SDR Rendering** | BT.709 SDR | Map the complete original image to an independent SDR display target |
+| HLG | **Dolby Vision Reference Rendering (AI)** | Dolby Vision, TV-Led | Normalize HLG to the reference display before shared scene analysis |
+| SDR / HLG | **Kodi default** | Native SDR / HLG | Keep native Kodi playback |
 
 Adaptive HDR Mapping requires a TV profile. HDR10 Rendering Reference has separate
 peak, black-level and gamut settings. Reference, Master Reference, HDR10 Rendering
 and Dolby Vision Rendering (AI) do not require a TV profile.
 
-**Dolby Vision playback**, **HDR10 playback** and **HDR10+ playback** remember
+**Dolby Vision playback**, **HDR10 playback**, **HDR10+ playback** and **HLG playback** remember
 independent choices. Automatic fallback does not overwrite the next file's saved
 choice. **Kodi default** bypasses CB1 image processing for each source type.
+
+SDR Rendering has its own BT.709 target: Reference (100 nits, gamma 2.4), Bright
+room (200 nits, gamma 2.2), or Custom / Projector. These are rendering references,
+independent of HDR calibration. HLG offers Reference DV or Kodi default only.
 
 For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
 The [historical Master Reference / Standard comparison](docs/reports/master-reference-vs-standard-2026-10-21.md)
