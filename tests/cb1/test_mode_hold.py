@@ -28,6 +28,7 @@ int64_t now=0;
 namespace DVBRIDGE {
  int64_t DiagnosticNowMs(){return now;}
  enum class OutputReason {None,ActivationFailed};
+ enum class OutputRoute {NativeDV,HDR10,SDR};
 }
 struct VideoPicture {};
 struct CDRMAtomic {
@@ -48,13 +49,15 @@ struct Window {
  CModeChangeHold m_modeHold;CHeldModeAnnouncement m_modeAnnouncement;
  std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
  State m_dvState;bool m_hdrConversion=false,m_dvFrame=false,pageReady=true,supported=true;
- bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvFallbackActive=false;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvFallbackActive=false;
+ struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::NativeDV;}m_dvSelection;
  std::mutex m_dvCapabilityMutex;Timer m_dispResetTimer;
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
  uint64_t m_dvFailedStream=0,m_dvFailedPolicy=0,m_dvActivationStream=9,m_dvActivationPolicy=2;
  int pastGate=0;
  bool CompleteDVBridgePage(int){return pageReady;}
  bool SupportsDVOutputMode(){return supported;}
+ bool SupportsSDRConversion(){return supported;}
  void ResetDVActivation(const VideoPicture*){}
  void tick(bool rendered=false,bool videoLayer=false) GATE
  bool complete(const VideoPicture& picture) COMPLETE

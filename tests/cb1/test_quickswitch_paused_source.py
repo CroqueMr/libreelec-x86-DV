@@ -49,6 +49,7 @@ struct Snapshot {struct {Capabilities capabilities;}transaction;};
 struct StreamTelemetry {static inline Snapshot value;static Snapshot Read(){return value;}};
 template<class... T>void DiagnosticLog(T...){}
 }
+struct Choice {int output,method,label;};
 struct CDVPlaybackModes {
  static bool enabled;
  static bool MenuEnabled(){return enabled;}
@@ -64,13 +65,13 @@ int main(){
  DVBRIDGE::StreamTelemetry::value={};
  assert(CDVPlaybackModes::ShowMenu());
  assert(!DVBRIDGE::StreamTelemetry::value.transaction.capabilities.sourceKnown);
- for(auto type:{H::HDR_TYPE_HDR10,H::HDR_TYPE_HDR10PLUS,H::HDR_TYPE_DOLBYVISION}){
+ for(auto type:{H::HDR_TYPE_HDR10,H::HDR_TYPE_HDR10PLUS,H::HDR_TYPE_DOLBYVISION,H::HDR_TYPE_HLG}){
   player->info={true,type,"mono"};assert(CDVPlaybackModes::ShowMenu());
  }
- // A new source cannot inherit the previous DV/HDR transaction's menu.
+ // HLG is independently eligible; an SDR source cannot inherit the previous DV/HDR transaction's menu.
  auto& old=DVBRIDGE::StreamTelemetry::value.transaction.capabilities;
  old.sourceKnown=old.isDV=true;
- for(auto type:{H::HDR_TYPE_NONE,H::HDR_TYPE_HLG}){
+ for(auto type:{H::HDR_TYPE_NONE}){
   player->info={true,type,""};assert(!CDVPlaybackModes::ShowMenu());
  }
  player->info={true,H::HDR_TYPE_DOLBYVISION,"left_right"};assert(!CDVPlaybackModes::ShowMenu());
