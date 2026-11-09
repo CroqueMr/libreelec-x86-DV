@@ -66,10 +66,10 @@ class AudioLabelsTests(unittest.TestCase):
         row = self.panel.find('./include[@name="DVInfoRow"]')
         for label in row.findall('.//control[@type="fadelabel"]'):
             self.assertEqual(label.findtext('scroll'), 'true')
-        # Inventory can exceed a screen; native Up/Down paging keeps every source row reachable.
+        # The overlay retains the old O handler and adds no focus, paging or popup action.
         source=(TREE/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
-        self.assertIn('ACTION_PAGE_DOWN',source)
-        self.assertIn('list->SetScrollOffset(std::clamp(',source)
+        for action in ('ACTION_PAGE_DOWN','ACTION_MOVE_DOWN','ACTION_SELECT_ITEM','SetScrollOffset'):
+            self.assertNotIn(action,source)
         for value in row.findall('./definition/control[@type="label"]'):
             self.assertEqual(value.findtext('scroll'),'false')
             self.assertEqual(value.findtext('wrapmultiline'),'false')

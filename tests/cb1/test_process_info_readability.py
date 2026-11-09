@@ -31,7 +31,7 @@ class ProcessInfoReadability(unittest.TestCase):
         valueleft=int(dimensions['valueleft'])
         self.assertEqual(label.findtext('width'),'$PARAM[labelwidth]')
         self.assertEqual(value.findtext('left'),'$PARAM[valueleft]')
-        self.assertGreaterEqual(labelwidth,252)
+        self.assertEqual(labelwidth,252)
         self.assertGreaterEqual(valueleft-labelwidth,12)
         self.assertGreaterEqual(548-valueleft,280)
         for column in panel.findall('.//include[@name="DVProcessLayout"]/definition/control/control[@type="grouplist"]'):
