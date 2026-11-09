@@ -71,7 +71,8 @@ struct CDVBridgeGLES {
   bool FenceLastUse(){++fences;return true;}
   bool Close(){++closed;gl=false;return true;}
  };
- void Cancel(){} bool RebindOutputSurface(bool){return true;}
+ bool rebindHDR=false,rebindSDR=false;
+ void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false){rebindHDR=hdr10;rebindSDR=sdr;return true;}
  template<class... T> Binding SelectionIdentity(T...){return {};}
 };
 struct State {bool captured=false; bool Captured()const{return captured;}
@@ -213,6 +214,17 @@ int main(){
   window.m_hdrConversion=route==DVBRIDGE::OutputRoute::HDR10;
   expect(window.SetVideoOutput(&picture) && window.m_modeAnnouncement.Pending()==CHeldModeAnnouncement::Step::NONE,
          "stable transport does not announce a metadata/policy-only update");
+ }
+ // A retained RGB renderer entering SDR must bind the native SDR drawable,
+ // rather than applying HDR10's deep-colour requirement to its 8-bit successor.
+ {
+  CWinSystemGbmGLESContext window;VideoPicture picture;window.requested=true;
+  window.m_dvSelection.route=DVBRIDGE::OutputRoute::SDR;
+  window.m_dvBridge=std::make_unique<CDVBridgeGLES>();
+  window.m_dvContext=std::make_shared<CDVBridgeGLES::Context>();
+  expect(window.SetVideoOutput(&picture) && window.depth==8 &&
+         window.m_dvBridge->rebindHDR && window.m_dvBridge->rebindSDR,
+         "SDR transaction forwards native drawable identity to retained RGB renderer");
  }
  // A successful session can outlive a rejected surface: rollback restores the
  // ordinary 8-bit drawable and ownership, not the cached session's stream.

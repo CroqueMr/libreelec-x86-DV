@@ -14,7 +14,7 @@ Integrate settings, quick switch, availability/reasons, paused/live changes, lif
 
 ## Player information
 
-Integrate and correct PR92 against this base. Keep Input / Processing / Output. Input describes the original file including metadata not applied. Processing contains only actually applied blocks (no grey unused blocks). Output describes the accepted signal and forwarded metadata, including forwarded trims. Use the same metadata order L1 through L255 everywhere. Never wrap a field onto two lines; use short labels and accessible scrolling/details for long values. Hide empty sections. Keep pending/unknown/fallback distinct from effective output. Preserve native Kodi information without CB1. Audit PR source snapshot and FEL/MEL reset fixes rather than applying stale patches blindly.
+Integrate and correct PR92 against this base. Keep Input / Processing / Output. Input describes the original file including metadata not applied. Processing contains only actually applied blocks (no grey unused blocks). Output describes the accepted signal and forwarded metadata, including forwarded trims. Use the same metadata order L1 through L255 everywhere. Never wrap a field onto two lines. The user's physical review rejects automatic scrolling: use static short labels, and provide full long values through a manually opened details view. Hide empty sections. Keep pending/unknown/fallback distinct from effective output. Preserve native Kodi information without CB1. Audit PR source snapshot and FEL/MEL reset fixes rather than applying stale patches blindly.
 
 ## Qualification
 
