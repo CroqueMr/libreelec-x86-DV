@@ -105,9 +105,10 @@ PR92 at `346f41853906dbbca754771c961b3536fc4ca80c` was rebased against the
 RC4 matched Kodi source. Its decoder hunk moved by 109 lines; no stale source
 replacement was used. The generation-checked immutable side-data snapshot and
 per-stream FEL/MEL/guessed-primaries clears were absent on this base and retained.
-Reset clears guessed primaries too. Input identifies unused HDR10+ alongside DV RPU
-facts with its version and window count. Rejected HDR10+ is identified as
-unavailable using the accepted source owner's rejection bit. The raw side-data
+Reset clears guessed primaries too. Co-carried HDR10+ is omitted from the bounded
+DV panel; its native source property and original side-data remain available.
+Rejected HDR10+ on its own source path is identified as unavailable using the
+accepted source owner's rejection bit. The raw side-data
 API exports complete validated version1 single-window HDR10+ records; unsupported
 sections remain omitted. Pure HDR10+ Input shows the available statistics, curve
 and saturation. Its formatter qualifies the first window if a multiwindow snapshot
@@ -117,8 +118,13 @@ all three columns. Output L2/L8 target lists are shown only when the accepted
 transmitted mask forwards those unchanged authored blocks; legacy synthesized
 output excludes them. SDR carries no DV transmitted blocks.
 
-The overlay preserves PR92's typography, cards, spacing and original O-key
-behavior. It adds no popup, selection action, paging or scrolling. Every field
+The overlay preserves PR92's typography, column and row spacing, and original O-key
+behavior. The information panel uses solid dark surfaces without window fades,
+translucent textures or translucent chip fills. Clear green denotes accepted CB1
+processing only; native Kodi and pending-only requests remain neutral. Used
+metadata captions, values and chips are fully opaque and neutral. The Processing
+section is titled Source metadata and retains its detailed applied-component rows.
+Audio Presentation, Language, Subtitles and Also carried rows are omitted. It adds no popup, selection action, paging or scrolling. Every field
 stays fixed on one line. Input retains the file inventory and native HDR facts;
 Processing shows metadata components only when actually used; Output shows the
 accepted signal and proven forwarded inventories. Used trim levels remain bright,
