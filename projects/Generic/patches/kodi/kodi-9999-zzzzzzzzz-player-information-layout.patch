@@ -69,12 +69,11 @@ index a4c0bb6..93fd569 100644
      if (pVideoPicture->iDisplayWidth > 1024 || pVideoPicture->iDisplayHeight >= 600)
        pVideoPicture->color_primaries = AVCOL_PRI_BT709;
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
-index 9d480ef..190ee6c 100644
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
-@@ -43,8 +43,10 @@ inline VideoProcessingInfo NativeProcessingInfo(const StreamSnapshot& source)
-   else if (output.flags & CDVPlaybackInfo::HDR10PLUS) info.outputType=VideoOutputType::HDR10Plus;
+@@ -44,8 +44,10 @@
    else if (output.flags & CDVPlaybackInfo::HDR10) info.outputType=VideoOutputType::HDR10;
+   else if (output.flags & CDVPlaybackInfo::SDR) info.outputType=VideoOutputType::SDR;
    info.profile=source.profile; info.level=source.level; info.major=source.major; info.minor=source.minor;
 +  info.compatibility=source.compatibility;
    info.bl=source.bl; info.el=source.el; info.rpu=source.rpu; info.fel=source.fel;
@@ -83,7 +82,7 @@ index 9d480ef..190ee6c 100644
    info.sourceMastering=source.sourceMastering; info.sourceLight=source.sourceLight;
    info.sourceMax=source.sourceMax; info.sourceMin=source.sourceMin;
    info.sourceCLL=source.sourceCLL; info.sourceFALL=source.sourceFALL;
-@@ -58,7 +60,7 @@ inline VideoProcessingInfo NativeProcessingInfo(const StreamSnapshot& source)
+@@ -59,7 +61,7 @@
      info.pq=source.pq; info.area=source.area; info.maxMaster=source.maxMaster;
      info.minMaster=source.minMaster; info.maxCLL=source.maxCLL; info.maxFALL=source.maxFALL;
      info.framebufferBits=source.framebufferBits; info.blocks=source.blocks;
@@ -607,16 +606,16 @@ index bc00552..6e93a1f 100644
        SetProperty("DV.Level", "");
        SetProperty("DV.Version", "");
        const auto& raw=data.output.aiL1L3;
-@@ -225,7 +390,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
-         std::string(data.transaction.stage)+" (not committed)" : "");
-     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
-     SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
+@@ -227,7 +392,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.TVProfile", active && data.output.effective==8 ?
+         StringUtils::Format("BT.709 / {:g} nits / gamma {:g}", data.output.target,data.output.sdrGamma) :
+         active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
 -        StringUtils::Format("{} / {:g} nits",
 +        StringUtils::Format("{}{} / {:g} nits",
 +            data.output.panel==1 || data.output.panel==2 ? localizer.Get(40833+data.output.panel)+" · " : "",
              data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
              data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
-     SetProperty("DV.DisplayBlack", hdr10 && data.output.effective==3 ?
+     SetProperty("DV.DisplayBlack", (hdr10 && data.output.effective==3 || active && data.output.effective==8) ?
 @@ -234,6 +400,9 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
      SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
      SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
