@@ -12,6 +12,16 @@
     <value condition="VideoPlayer.HasSubtitles + VideoPlayer.SubtitlesEnabled">$INFO[VideoPlayer.SubtitlesLanguage]</value>
     <value>Off</value>
   </variable>
+  <variable name="DVAppliedL1PQLabel"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SDRL1PQ))">L1 PQ max/avg</value><value>L1 PQ min/max/avg</value></variable>
+  <variable name="DVAppliedL1NitsLabel"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SDRL1Nits))">L1 nits max/avg</value><value>L1 nits min/max/avg</value></variable>
+  <variable name="DVAppliedL1PQ"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SDRL1PQ))">$INFO[Window(playerprocessinfo).Property(DV.SDRL1PQ)]</value><value>$INFO[Window(playerprocessinfo).Property(DV.L1PQ)]</value></variable>
+  <variable name="DVAppliedL1Nits"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SDRL1Nits))">$INFO[Window(playerprocessinfo).Property(DV.SDRL1Nits)]</value><value>$INFO[Window(playerprocessinfo).Property(DV.L1Nits)]</value></variable>
+  <variable name="DVMappingLabel"><value condition="String.IsEqual(Player.Process(videooutputhdrtype),sdr)">Gamut / peak / gamma</value><value>Display mapping</value></variable>
+  <variable name="DVPendingSummary">
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AdmissionReason))">$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]$INFO[Window(playerprocessinfo).Property(DV.AdmissionReason), · ]</value>
+    <value>$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]$INFO[Window(playerprocessinfo).Property(DV.OutputStage), · ]</value>
+  </variable>
+  <variable name="DVPrecisionLabel"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.MinimumLinkBits))">Framebuffer / link min</value><value>Framebuffer</value></variable>
   <!-- Column headings: what the file carries, what CB1 does with it and what leaves the box. -->
   <variable name="DVInputAudio">
     <value condition="!Integer.IsGreater(VideoPlayer.AudioStreamCount,0)">No audio track</value>
@@ -76,16 +86,16 @@
     <value>[COLOR FFF2C46D]$INFO[Window(playerprocessinfo).Property(DV.DroppedSkipped)][/COLOR]</value>
   </variable>
   <include name="DVColumnHeading">
-    <param name="left"/><param name="details"/><param name="title"/><param name="primary"/><param name="secondary"/>
+    <param name="left"/><param name="title"/><param name="primary"/><param name="secondary"/>
     <definition>
-      <control type="group" id="$PARAM[details]"><left>$PARAM[left]</left><top>28</top><width>548</width><height>112</height>
-        <control type="label" id="9690"><height>44</height><aligny>center</aligny>
+      <control type="group"><left>$PARAM[left]</left><top>28</top><width>548</width><height>112</height>
+        <control type="label"><height>44</height><aligny>center</aligny>
           <font>CB1.InfoHero</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[title]</label>
         </control>
-        <control type="label" id="9690"><top>46</top><height>30</height>
+        <control type="label"><top>46</top><height>30</height>
           <font>CB1.InfoLead</font><textcolor>FFEEF2F3</textcolor><label>$PARAM[primary]</label><scroll>false</scroll>
         </control>
-        <control type="label" id="9690"><top>76</top><height>30</height>
+        <control type="label"><top>76</top><height>30</height>
           <font>CB1.InfoLead</font><textcolor>FF8C989E</textcolor><label>$PARAM[secondary]</label><scroll>false</scroll>
         </control>
         <control type="image"><top>111</top><height>1</height>
@@ -99,11 +109,11 @@
     <param name="label"/><param name="value"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><width>292</width><height>58</height><visible>$PARAM[visible]</visible>
-        <control type="label" id="9690"><width>268</width><height>20</height><aligny>center</aligny>
+        <control type="label"><width>268</width><height>20</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FF7D8A90</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label" id="9690"><top>22</top><width>268</width><height>36</height><aligny>center</aligny>
-          <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label>
+        <control type="label"><top>22</top><width>268</width><height>36</height><aligny>center</aligny>
+          <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
         </control>
       </control>
     </definition>
@@ -112,11 +122,11 @@
     <param name="label"/><param name="value"/><param name="id" default=""/><param name="info" default=""/><param name="color" default="FFC6CED2"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><width>292</width><height>58</height><visible>$PARAM[visible]</visible>
-        <control type="label" id="9690"><width>268</width><height>20</height><aligny>center</aligny>
+        <control type="label"><width>268</width><height>20</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FF7D8A90</textcolor><label>$PARAM[label]</label>
         </control>
-        <control type="label" id="9690"><top>22</top><width>100</width><height>36</height><aligny>center</aligny>
-          <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label>
+        <control type="label"><top>22</top><width>100</width><height>36</height><aligny>center</aligny>
+          <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
         </control>
         <control type="progress" id="$PARAM[id]"><left>104</left><top>38</top><width>156</width><height>4</height><info>$PARAM[info]</info>
           <texturebg border="2,0,2,0" colordiffuse="26FFFFFF">special://xbmc/media/cb1-bar.png</texturebg>
@@ -140,30 +150,17 @@
         <include content="DVMeterText"><param name="label" value="Temperature"/><param name="value" value="$INFO[System.CPUTemperature]"/><param name="visible" value="!String.IsEmpty(System.CPUTemperature) + !String.IsEqual(System.CPUTemperature,$LOCALIZE[10005])"/></include>
       </control>
     </definition></include>
-  <!-- Static single-line fields; OK opens the complete visible snapshot in the native reader. -->
+  <!-- Fixed single-line values retain the PR row pitch without scrolling or wrapping. -->
   <include name="DVInfoRow">
     <param name="label"/><param name="value"/><param name="visible" default="true"/><param name="labelwidth" default="252"/><param name="valueleft" default="264"/>
     <definition>
       <control type="group"><height>0</height><visible>$PARAM[visible]</visible>
-        <control type="label" id="9690"><top>-1.5</top><width>$PARAM[labelwidth]</width><height>29.5</height><aligny>center</aligny>
-          <font>CB1.InfoBody</font><textcolor>FFB3C0C6</textcolor><label>$PARAM[label]</label>
+        <control type="label"><top>-1.5</top><width>$PARAM[labelwidth]</width><height>29.5</height><aligny>center</aligny>
+          <font>CB1.InfoBody</font><textcolor>FF77848A</textcolor><label>$PARAM[label]</label>
         </control>
       </control>
-      <control type="label" id="9690"><left>$PARAM[valueleft]</left><top>-1.5</top><right>0</right><height>29.5</height><visible>$PARAM[visible]</visible>
+      <control type="label"><left>$PARAM[valueleft]</left><top>-1.5</top><right>0</right><height>29.5</height><visible>$PARAM[visible]</visible>
         <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><align>right</align><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
-      </control>
-    </definition>
-  </include>
-  <include name="DVStackedRow">
-    <param name="label"/><param name="value"/><param name="visible" default="true"/>
-    <definition>
-      <control type="group"><height>28</height><visible>$PARAM[visible]</visible>
-        <control type="label" id="9690"><top>-1.5</top><height>29.5</height><aligny>center</aligny>
-          <font>CB1.InfoBody</font><textcolor>FFB3C0C6</textcolor><label>$PARAM[label]</label>
-        </control>
-      </control>
-      <control type="label" id="9690"><top>-1.5</top><height>29.5</height><visible>$PARAM[visible]</visible>
-        <font>CB1.InfoBody</font><textcolor>FFEEF2F3</textcolor><aligny>center</aligny><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </definition>
   </include>
@@ -171,7 +168,7 @@
     <param name="label"/><param name="visible" default="true"/>
     <definition>
       <control type="group"><height>50</height><visible>$PARAM[visible]</visible>
-        <control type="label" id="9690"><top>20</top><height>24</height><aligny>center</aligny>
+        <control type="label"><top>20</top><height>24</height><aligny>center</aligny>
           <font>CB1.InfoCaption</font><textcolor>FFA3AFB4</textcolor><label>$PARAM[label]</label>
         </control>
       </control>
@@ -187,7 +184,7 @@
         <control type="image"><width>$PARAM[width]</width><height>30</height>
           <texture border="6" colordiffuse="$PARAM[fill]">special://xbmc/media/cb1-chip.png</texture>
         </control>
-        <control type="label" id="9690"><width>$PARAM[width]</width><height>30</height><align>center</align><aligny>center</aligny>
+        <control type="label"><width>$PARAM[width]</width><height>30</height><align>center</align><aligny>center</aligny>
           <font>CB1.InfoBody</font><textcolor>$PARAM[color]</textcolor><label>$PARAM[level]</label>
         </control>
       </control>
@@ -263,7 +260,7 @@
       <include content="DVInfoRow"><param name="label" value="Creative trims"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CreativeTrims)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A)"/></include>
       <!-- The upscaler is set only while the FEL is reconstructed, so it shares the FEL row. -->
       <include content="DVInfoRow"><param name="label" value="FEL / upscaling"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FEL)]$INFO[Window(playerprocessinfo).Property(DV.FELUpscaling), · ]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + String.IsEqual(Window(playerprocessinfo).Property(DV.EL),Yes) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Display mapping"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TVProfile)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="$VAR[DVMappingLabel]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TVProfile)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Black level"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.DisplayBlack)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10TargetLabel)]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10Target)]$INFO[Window(playerprocessinfo).Property(DV.HDR10TargetOrigin), · ]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target))"/></include>
       <include content="DVInfoRow"><param name="label" value="Render warning"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.ReferenceWarning)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A)"/></include>
@@ -272,32 +269,27 @@
   <include name="DVModeChangeFields"><definition>
       <include content="DVSection"><param name="label" value="Mode change"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.AdmissionReason)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.AtomicResult))]"/></include>
       <include content="DVInfoRow"><param name="label" value="Fallback"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Fallback)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Requested policy"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.Fallback))"/></include>
-      <include content="DVInfoRow"><param name="label" value="Pending output"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.OutputStage)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage))"/></include>
-      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40849]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AdmissionReason)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AdmissionReason)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.AdmissionReason),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40850]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AtomicResult)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AtomicResult)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.AtomicResult),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value=""/><param name="labelwidth" value="0"/><param name="valueleft" value="0"/><param name="value" value="$VAR[DVPendingSummary]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputStage))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Error / retry / restored"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.AtomicResult)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AtomicResult)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.AtomicResult),N/A)"/></include>
     </definition></include>
   <include name="DVStaticHDRFields"><definition>
       <include content="DVInfoRow"><param name="label" value="Mastering max / min"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SourceMastering)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceMastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="MaxCLL / MaxFALL"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SourceLight)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceLight)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)"/></include>
     </definition></include>
   <include name="DVSourceMetadataFields"><definition>
-      <include content="DVSection"><param name="label" value="Source metadata"/><param name="visible" value="[!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceMastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceLight)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)] | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"/></include>
-      <include>DVStaticHDRFields</include>
-      <include content="DVInfoRow"><param name="label" value="L1 PQ min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L1PQ)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L1 nits min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L1Nits)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L2 trim targets"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L2Targets)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L2Targets))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L3 min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L3)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L3))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L4 PQ / power"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L4)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L4))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L5 L/R/T/B"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L5)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L6 max / min"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Mastering)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L6 CLL / FALL"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CLL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="L8 trim targets"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L8Targets)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L8Targets))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L9 source primaries"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L9)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L9))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L10 target displays"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L10)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L10))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L11 content type"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L11)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L11))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L254 mode / ver."/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L254)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L254))"/></include>
-      <include content="DVInfoRow"><param name="label" value="L255 mode / ver."/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L255)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.L255))"/></include>
+      <include content="DVSection"><param name="label" value="Applied metadata"/><param name="visible" value="[[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L1 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L1 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L3 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L3)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L3))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L4 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L4)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L4))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L5 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L5)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L6 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L6 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L9 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L9)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L9))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L10 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L10)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L10))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L11 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L11)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L11))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L254 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L254)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L254))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L255 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L255)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L255))]]"/></include>
+      <include content="DVInfoRow"><param name="label" value="$VAR[DVAppliedL1PQLabel]"/><param name="value" value="$VAR[DVAppliedL1PQ]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L1 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="$VAR[DVAppliedL1NitsLabel]"/><param name="value" value="$VAR[DVAppliedL1Nits]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L1 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L3 offset min/max/avg"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L3)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L3 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L3)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L3))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L4 anchor PQ / power"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L4)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L4 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L4)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L4))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L5 L/R/T/B"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L5)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L5 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L5)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L6 max / min"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Mastering)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L6 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L6 CLL / FALL"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CLL)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L6 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L9 source primaries"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L9)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L9 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L9)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L9))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L10 target displays"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L10)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L10 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L10)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L10))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L11 content type"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L11)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L11 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L11)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L11))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L254 DM mode / version"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L254)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L254 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L254)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L254))]"/></include>
+      <include content="DVInfoRow"><param name="label" value="L255 run mode / version"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.L255)]"/><param name="visible" value="[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),&quot;L255 &quot;) | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L255)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L255))]"/></include>
     </definition></include>
   <include name="DVStaticMetadataFields"><definition>
       <include content="DVSection"><param name="label" value="Source metadata"/><param name="visible" value="[!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceMastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceLight)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)]"/></include>
@@ -309,6 +301,16 @@
       <include content="DVInfoRow"><param name="label" value="MaxSCL R/G/B"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusMaxSCL)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10PlusMaxSCL))"/></include>
       <include content="DVInfoRow"><param name="label" value="Average MaxRGB"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusAverage)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10PlusAverage))"/></include>
       <include content="DVInfoRow"><param name="label" value="Bezier curve"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusCurve)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10PlusCurve))"/></include>
+    </definition></include>
+  <include name="DVUsedHDRFields"><definition>
+      <include content="DVSection"><param name="label" value="Applied HDR metadata"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDRStatic),true) + [!String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A) | !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)]"/></include>
+      <include content="DVInfoRow"><param name="label" value="Mastering max / min"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SourceMastering)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDRStatic),true) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceMastering),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="MaxCLL / MaxFALL"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SourceLight)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDRStatic),true) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceLight),N/A)"/></include>
+    </definition></include>
+  <include name="DVUsedHDR10PlusFields"><definition>
+      <include content="DVSection"><param name="label" value="Applied HDR10+ metadata"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDR10PlusMax),true) | String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDR10PlusAvg),true)"/></include>
+      <include content="DVInfoRow"><param name="label" value="MaxSCL R/G/B"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusMaxSCL)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDR10PlusMax),true)"/></include>
+      <include content="DVInfoRow"><param name="label" value="Average MaxRGB"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HDR10PlusAverage)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.UsedHDR10PlusAvg),true)"/></include>
     </definition></include>
   <include name="DVReconstructionFields"><definition>
       <include content="DVSection"><param name="label" value="DV metadata generation"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Reconstruction))"/></include>
@@ -328,8 +330,7 @@
       <include content="DVInfoRow"><param name="label" value="Display output"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Display)]"/></include>
       <include content="DVInfoRow"><param name="label" value="Signal intent"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SignalIntent)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SignalIntent))"/></include>
       <include content="DVInfoRow"><param name="label" value="Scanout container"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Transport)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"/></include>
-      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40848]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.MinimumLinkBits)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.MinimumLinkBits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.MinimumLinkBits),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="Precision"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Precision)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Precision)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Precision),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="$VAR[DVPrecisionLabel]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Precision)]$INFO[Window(playerprocessinfo).Property(DV.MinimumLinkBits), / ]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Precision)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Precision),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Committed source"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Committed)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Committed))"/></include>
       <include content="DVInfoRow"><param name="label" value="Subtitles"/><param name="value" value="$VAR[DVSubtitleLanguage]"/></include>
       <include>DVModeChangeFields</include>
@@ -345,9 +346,7 @@
       <include content="DVInfoRow"><param name="label" value="Data"/><param name="value" value="$INFO[Player.Process(audiooutputdata)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputdata))"/></include>
       <include content="DVInfoRow"><param name="label" value="Output channels"/><param name="value" value="$INFO[Player.Process(audiooutputchannels)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputchannels))"/></include>
       <include content="DVInfoRow"><param name="label" value="Decoder"/><param name="value" value="$INFO[Player.Process(audiodecoder)]"/><param name="visible" value="!String.IsEmpty(Player.Process(audiooutputtransport)) + !String.IsEmpty(Player.Process(audiodecoder))"/></include>
-      <include content="DVSection"><param name="label" value="Buffers"/></include>
-      <include content="DVInfoRow"><param name="label" value="Video queue / data"/><param name="value" value="$INFO[Player.Process(videoqueuelevel)] % / $INFO[Player.Process(videoqueuedatalevel)] %"/></include>
-      <include content="DVInfoRow"><param name="label" value="Audio queue / data"/><param name="value" value="$INFO[Player.Process(audioqueuelevel)] % / $INFO[Player.Process(audioqueuedatalevel)] %"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
+      <include content="DVInfoRow"><param name="label" value="Buffers V / A"/><param name="value" value="$INFO[Player.Process(videoqueuelevel)]/$INFO[Player.Process(videoqueuedatalevel)] % · $INFO[Player.Process(audioqueuelevel)]/$INFO[Player.Process(audioqueuedatalevel)] %"/></include>
     </definition></include>
   <!-- The native grouplists start at 108; their leading spacer reserves the headings and their
        end spacer the meter strip, so the measured column height covers the whole panel. The
@@ -364,24 +363,23 @@
         <control type="image" id="$PARAM[surface]"><left>-20</left><top>-20</top><width>1896</width><height>$PARAM[background]</height>
           <texture border="60">special://xbmc/media/cb1-glass.png</texture>
         </control>
-        <include content="DVColumnHeading"><param name="left" value="40"/><param name="details" value="9640"/><param name="title" value="Input"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
-        <include content="DVColumnHeading"><param name="left" value="654"/><param name="details" value="9641"/><param name="title" value="Processing"/><param name="primary" value="$VAR[DVPanelMode]"/><param name="secondary" value="$VAR[DVModeDetail]"/></include>
-        <include content="DVColumnHeading"><param name="left" value="1268"/><param name="details" value="9642"/><param name="title" value="Output"/><param name="primary" value="$VAR[DVOutputFormat]"/><param name="secondary" value="$VAR[DVOutputAudio]"/></include>
-        <control type="label" id="9690"><left>150</left><top>32</top><width>430</width><height>36</height><aligny>center</aligny>
-          <font>CB1.InfoCaption</font><textcolor>FFB3C0C6</textcolor><label>Up/Down: more · OK: details</label><scroll>false</scroll>
-        </control>
+        <include content="DVColumnHeading"><param name="left" value="40"/><param name="title" value="Input"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
+        <include content="DVColumnHeading"><param name="left" value="654"/><param name="title" value="Processing"/><param name="primary" value="$VAR[DVPanelMode]"/><param name="secondary" value="$VAR[DVModeDetail]"/></include>
+        <include content="DVColumnHeading"><param name="left" value="1268"/><param name="title" value="Output"/><param name="primary" value="$VAR[DVOutputFormat]"/><param name="secondary" value="$VAR[DVOutputAudio]"/></include>
         <control type="grouplist" id="$PARAM[col1]"><left>40</left><top>108</top><width>548</width><height>1500</height><itemgap>0</itemgap><usecontrolcoords>true</usecontrolcoords>
           <include>DVColumnSpacer</include>
           <include>DVInputFields</include>
           <include condition="$PARAM[dv]">DVInputDolbyVisionFields</include>
-          <include condition="$PARAM[dv]">DVSourceMetadataFields</include>
           <include condition="![$PARAM[dv]]">DVStaticMetadataFields</include>
-          <include>DVHDR10PlusFields</include>
+          <include condition="![$PARAM[dv]]">DVHDR10PlusFields</include>
           <include>DVColumnEnd</include>
         </control>
         <control type="grouplist" id="$PARAM[col2]"><left>654</left><top>108</top><width>548</width><height>1500</height><itemgap>0</itemgap><usecontrolcoords>true</usecontrolcoords>
           <include>DVColumnSpacer</include>
           <include>DVRenderingFields</include>
+          <include condition="$PARAM[dv]">DVSourceMetadataFields</include>
+          <include>DVUsedHDRFields</include>
+          <include>DVUsedHDR10PlusFields</include>
           <include>DVReconstructionFields</include>
           <include condition="$PARAM[dv]">DVUsageFields</include>
           <include>DVColumnEnd</include>

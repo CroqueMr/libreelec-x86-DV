@@ -111,19 +111,24 @@ all three columns. Output L2/L8 target lists are shown only when the accepted
 transmitted mask forwards those unchanged authored blocks; legacy synthesized
 output excludes them. SDR carries no DV transmitted blocks.
 
-Each field stays static on one line. No heading or value scrolls automatically.
-Long values use Kodi's normal ellipsis; press OK/Select to open the native text
-reader with a frozen, untruncated snapshot of every visible column, including
-metadata below the current viewport. Hidden and unused rows stay excluded.
-Close the reader to return to live information. Up/Down and Page Up/Page Down
-move column inventories only when requested, bounded by each column's contents.
-Empty metadata sections collapse. The native Kodi dialog fallback remains
-available when enhanced information is disabled.
+The overlay preserves PR92's typography, cards, spacing and original O-key
+behavior. It adds no popup, selection action, paging or scrolling. Every field
+stays fixed on one line. Input retains the file inventory and native HDR facts;
+Processing shows metadata components only when actually used; Output shows the
+accepted signal and proven forwarded inventories. Used trim levels remain bright,
+without claiming that all source targets were selected. SDR L1 shows max/average,
+not the unused source minimum. Profile10 distinguishes PQ and HLG compatibility.
 
-Focused qualification: eight column contract tests and 22 process information
+Transition messages, queue values and framebuffer/minimum-link depth are compacted
+within the existing rows. Detailed counts and numerical values remain present.
+Only overflowing numerical inventories use counts plus explicit bounds, measured
+with the actual Kodi panel font; fitting lists remain explicit. No target between
+the bounds is implied. The native Kodi dialog remains available when enhanced
+information is disabled.
+
+Focused qualification: eight column contract tests and 23 process information
 tests pass against a separate copied matched Kodi tree, including compiled RPU
-capture/target formatting, FEL reset, pending-output, skin recovery and frozen
-full-detail snapshot checks.
+capture/target formatting, FEL reset, pending-output, skin recovery, old O-key behavior and applied-only metadata checks.
 RPU capture uses the existing FFmpeg test prefix. This is native source testing,
 not physical display qualification. An actual panel capture is still required
 on the new combined preview image; no new image was running during this edit.

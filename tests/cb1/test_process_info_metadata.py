@@ -38,6 +38,50 @@ def run(test, program, flags=()):
 
 
 class FormattingTests(unittest.TestCase):
+    def test_applied_sdr_components_and_profile10_are_truthful(self):
+        source = DIALOG.read_text()
+        start = source.index('    const bool sdrL1 =')
+        sdr = source[start:source.index('    SetProperty("DV.L5"', start)]
+        start = source.index('    const bool plainHDRSDR =')
+        guidance = source[start:source.index('    const double display =', start)]
+        start = source.index('double PQNits(')
+        nits = source[start:source.index('// A 12-bit PQ code', start)]
+        program = r'''
+#include "cores/VideoProcessingInfo.h"
+#include <cassert>
+#include <cmath>
+#include <format>
+#include <map>
+struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> pattern, T&&... args)
+ {return std::format(pattern, std::forward<T>(args)...);}};
+NITS
+int main() {
+ VideoProcessingInfo data;data.metadata=true;data.l1=true;data.profile=7;
+ data.pq={11,3000,1000};data.appliedBlocks[1]=true;
+ data.output.flags=32;data.output.effective=8;
+ std::map<std::string,std::string> text;std::map<std::string,bool> used;
+ auto SetProperty=[&]<class T>(const char* key,const T& value){
+  if constexpr(std::is_same_v<T,bool>)used[key]=value;else text[key]=value;};
+ int sourcePlus=1;auto* plus=&sourcePlus;
+ auto refresh=[&]{const auto active=data.output.flags;const auto applied=data.AppliedBlocks();
+  const bool metadata=active&&data.metadata;const bool hdr10=false;
+  SDR_BLOCK GUIDANCE_BLOCK PROFILE_BLOCK CREATIVE_BLOCK
+ };
+ refresh();assert(text["DV.SDRL1PQ"]=="3000 | 1000");
+ assert(text["DV.CreativeTrims"].empty()&&!used["DV.UsedHDRStatic"]);
+ data.appliedBlocks.reset();refresh();assert(text["DV.SDRL1PQ"].empty());
+ data.profile=0;refresh();assert(used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&used["DV.UsedHDR10PlusAvg"]);
+ data.output.effective=1;data.output.hdr10PlusDV=true;data.output.guidedSourceFields=2;
+ refresh();assert(!used["DV.UsedHDRStatic"]&&used["DV.UsedHDR10PlusMax"]&&!used["DV.UsedHDR10PlusAvg"]);
+ data.output.flags=0;refresh();assert(!used["DV.UsedHDRStatic"]&&!used["DV.UsedHDR10PlusMax"]);
+ for(unsigned profile:{5u,7u,8u,10u}){data.profile=profile;data.compatibility=4;refresh();
+  assert(text["DV.ProfileDetail"]==(profile==8?"8.4":profile==10?"10.4":std::to_string(profile)));}
+ data.profile=10;data.compatibility=1;refresh();assert(text["DV.ProfileDetail"]=="10.1");
+}
+'''.replace('NITS', nits).replace('SDR_BLOCK', sdr).replace('GUIDANCE_BLOCK', guidance).replace(
+            'PROFILE_BLOCK', statement('DV.ProfileDetail')).replace('CREATIVE_BLOCK', statement('DV.CreativeTrims'))
+        run(self, {'test.cpp': program})
+
     def test_level_values_are_named_as_authored(self):
         program = r'''
 #include "cores/VideoProcessingInfo.h"
@@ -50,6 +94,11 @@ class FormattingTests(unittest.TestCase):
 #include <vector>
 struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> pattern, T&&... args)
  {return std::format(pattern, std::forward<T>(args)...);}};
+static float mockWidth=-1;
+struct CGUIFont {};
+struct FontManager {CGUIFont font;CGUIFont* GetFont(const std::string&,bool){return &font;}} g_fontManager;
+struct CGUITextLayout {std::string text;CGUITextLayout(CGUIFont*,bool){} void Update(const std::string& t){text=t;}
+ float GetTextWidth()const{return mockWidth>=0?mockWidth:6.0f*text.size();}};
 HELPERS
 int main() {
  assert(RPUPrimaries(0)=="P3-D65" && RPUPrimaries(2)=="BT.2020" && RPUPrimaries(255)=="Custom");
@@ -75,11 +124,14 @@ int main() {
  assert(L11Content(levels)=="User-generated · D93");
  levels.contentType=9; levels.whitepoint=2;
  assert(L11Content(levels)=="Type 9 · 7254 K");
- // The panel follows its tallest column until the top margin, then cuts the columns.
- const auto fit=FitPanel(700,1080);
- assert(fit.height==824 && fit.top==232 && fit.columns==570);
- const auto full=FitPanel(1100,1080);
- assert(full.height==1032 && full.top==24 && full.columns==778);
+ // The native font bound preserves fitting explicit values and condenses only overflow.
+ mockWidth=284;assert(InfoValueFits("exact boundary"));
+ mockWidth=285;assert(!InfoValueFits("overflow"));
+ assert(TargetList({48,100,300,600,1000,2000,4000,10000},{})=="8 targets · 48–10000 nits");
+ assert(L10Displays(levels).find("displays")!=std::string::npos);
+ mockWidth=-1;
+ assert(PolicyText("Dolby Vision Adaptive HDR Mapping (AI)")=="DV Adaptive (AI)");
+
 }
 '''.replace('HELPERS', helpers())
         run(self, {'test.cpp': program})

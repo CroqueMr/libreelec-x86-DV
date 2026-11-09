@@ -179,7 +179,7 @@ int main() {
  assert(properties["DV.DisplayBlack"].empty());
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
  output.displayBlack=0;refresh();
- assert(properties["DV.TVProfile"]=="BT.709 / 100 nits / gamma 2.4");
+ assert(properties["DV.TVProfile"]=="BT.709 / 100 nits / 2.4");
  assert(properties["DV.DisplayBlack"]=="0 nits" && properties["DV.HDR10Target"].empty());
  output.flags=0;refresh();
  assert(properties["DV.TVProfile"].empty() && properties["DV.DisplayBlack"].empty());
@@ -259,14 +259,14 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),72)
+        self.assertEqual(len(rows),70)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
         def row_for(prop):
             return next(r for r in rows if r.find('./param[@name="value"]').get('value')==
                         '$INFO[Window(playerprocessinfo).Property('+prop+')]')
-        expected={'DV.MinimumLinkBits':'$LOCALIZE[40848]','DV.Fallback':'Fallback'}
+        expected={'DV.Fallback':'Fallback'}
         for prop,label in expected.items():
             self.assertEqual(row_for(prop).find('./param[@name="label"]').get('value'),label)
         # Each list of levels is a row of chips under its own caption.
@@ -281,7 +281,7 @@ int main() {
         values={r.find('./param[@name="value"]').get('value') for r in rows}
         for prop in ('ParsedBlocks','AppliedBlocks','TransmittedBlocks','UnappliedBlocks','PartialBlocks'):
             self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.'+prop+')]',values)
-        for name in ('DVInfoRow','DVStackedRow'):
+        for name in ('DVInfoRow',):
             value=panel.find('./include[@name="'+name+'"]/definition/control[@type="label"]')
             self.assertEqual(value.findtext('scroll'),'false')
             self.assertEqual(value.findtext('wrapmultiline'),'false')
@@ -298,7 +298,7 @@ int main() {
         names=set(re.findall(r'SetProperty\("DV\.(\w+)"',source))
         # Shown another way: the gauge reads its integer, the mode name carries both policies.
         # RC3 no longer displays the partial-use list.
-        shown_elsewhere={'GPURenderPercent','ActivePolicy','HDR10Policy','PartialBlocks','UnappliedBlocks'}
+        shown_elsewhere={'GPURenderPercent','ActivePolicy','HDR10Policy','PartialBlocks','UnappliedBlocks','L2Targets','L8Targets'}
         text=PANEL.read_text()
         for name in sorted(names-shown_elsewhere):
             self.assertIn('Property(DV.'+name+')',text,name)
