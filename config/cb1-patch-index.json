@@ -1221,6 +1221,7 @@
     "summary": "Show original source, actual processing and accepted output in fixed single-line columns",
     "component": "kodi",
     "files": {
+      "addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml": "Hide the native title and clock overlay while the O process-information panel is visible, retaining native visibility on close.",
       "xbmc/cores/DataCacheCore.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
       "xbmc/cores/DataCacheCore.h": "Show original source, actual processing and accepted output in fixed single-line columns.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Show original source, actual processing and accepted output in fixed single-line columns.",
