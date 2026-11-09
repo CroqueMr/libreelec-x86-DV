@@ -1697,7 +1697,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/windowing/gbm/DVBridgeCapture.h
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,12 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1707,6 +1707,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +namespace KODI::WINDOWING::GBM
 +{
 +bool HasDVBridgeScreenshot(CWinSystemBase& window);
++bool IsDVBridgeScreenshotSDR(CWinSystemBase& window);
 +bool ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out);
 +}
 --- /dev/null
@@ -4159,7 +4160,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1135,1887 @@
+@@ -397,13 +1135,1893 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4796,7 +4797,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
 +  const auto* mode = drm ? drm->GetSelectedMode() : nullptr;
-+  const auto* connector = drm ? drm->GetConnector() : nullptr;
++  auto* connector = drm ? drm->GetConnector() : nullptr;
 +  return connector && connector->IsConnected() && mode && mode->hdisplay && mode->vdisplay &&
 +      mode->hdisplay <= 3840 && mode->vdisplay <= 2160 &&
 +      !(mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN));
@@ -5370,6 +5371,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +  auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
 +  return gbm && gbm->HasDVBridgeScreenshot();
++}
++
++bool KODI::WINDOWING::GBM::IsDVBridgeScreenshotSDR(CWinSystemBase& window)
++{
++  auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
++  return gbm && gbm->IsDVBridgeScreenshotSDR();
 +}
 +
 +bool KODI::WINDOWING::GBM::ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
@@ -6050,7 +6057,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3029,16 @@
+@@ -417,5 +3035,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6102,7 +6109,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,20 +53,137 @@
+@@ -41,20 +53,141 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -6191,6 +6198,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  void EndDVPQSubtitle();
 +  bool DVPQSubtitlesReady() const { return m_dvPQSubtitleDraws != 0; }
 +  bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
++  bool IsDVBridgeScreenshotSDR() const
++  {
++    return HasDVBridgeScreenshot() && m_sdrConversion;
++  }
 +  bool ReadDVBridgeScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
 +  {
 +    return m_dvFrame && m_dvBridge && m_dvBridge->ReadScreenshot(out);
@@ -6240,7 +6251,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +192,92 @@
+@@ -63,8 +196,92 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
