@@ -1444,7 +1444,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_dvOrdinaryFrame = false;
      m_dvStopPending = false;
      m_hdr10Session.reset(); m_hdr10BasicSignal.reset(); m_hdr10Signal.reset();
-@@ -476,7 +499,7 @@
+@@ -477,7 +500,7 @@
    }
    if (m_hdrConversion)
    {
@@ -1453,15 +1453,15 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      bool presented = false;
      CDVBridgeGLES::Submission submitted;
      if (m_dvFrame && m_dvBridge && m_dvBridge->ResolveHDR10(UseLimitedColor()))
-@@ -769,6 +792,7 @@
- bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
- {
+@@ -789,6 +812,7 @@
+     return true;
+ 
    m_guiCacheValid = false;
 +  m_guiColorTransfer = colorTransfer;
    m_guiCompositing = (colorTransfer != 0);
  
    if (m_guiCompositing)
-@@ -776,11 +800,12 @@
+@@ -796,11 +820,12 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -1476,7 +1476,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -880,6 +905,22 @@
+@@ -901,6 +926,22 @@
  #endif
    if (!m_guiCompositing)
      return false;
@@ -1499,7 +1499,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  
    m_guiWillRender = guiWillRender;
  
-@@ -1815,6 +1856,7 @@
+@@ -1845,6 +1886,7 @@
      output.lightMetadata.MaxCLL = metadata.max_cll;
      output.lightMetadata.MaxFALL = metadata.max_fall;
    }
@@ -1507,7 +1507,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    // Every rejected setup after this point must restore ordinary HDR/color state.
    m_failedHDR10SetupRestore = true;
    SetColorimetry(&output);
-@@ -1874,11 +1916,12 @@
+@@ -1904,11 +1946,12 @@
    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
    if (!drm)
      return false;
@@ -1521,7 +1521,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
    glDisable(GL_SCISSOR_TEST);
    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-@@ -1898,8 +1941,67 @@
+@@ -1928,8 +1971,67 @@
      return false;
    surface.EndTransactionalMode();
    CompleteOrdinaryHDR10Recovery();
@@ -1589,7 +1589,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  bool CWinSystemGbmGLESContext::BeginDVBridge()
-@@ -1952,6 +2054,9 @@
+@@ -1983,6 +2085,9 @@
      m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
    }
    m_GBM->GetDevice().UseDVOutputLifetime();
@@ -1599,7 +1599,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    if (!hdr10 && !m_dvState.Captured())
    {
      const auto* display = GetDisplayInfo();
-@@ -1964,7 +2069,10 @@
+@@ -1995,7 +2100,10 @@
          mode && mode->vdisplay >= 2160 && rate > 30.01)
        return failure("output-format", "sink-dv-rate");
      if (!m_dvState.Capture(*drm, 0, sink.legacy_vsif))
@@ -1610,7 +1610,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      m_presentStall.Reset();
      if (DVBRIDGE::DiagnosticsEnabled())
        DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge TV-Led state captured: hdr_static_metadata={}",
-@@ -1972,6 +2080,8 @@
+@@ -2003,6 +2111,8 @@
    }
    m_hdrConversion = hdr10;
    m_sdrConversion = sdr;
@@ -1619,7 +1619,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    m_compositeShader.reset();
    const bool ready = SetGuiCompositing(sdr ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084);
    if (ready) m_dvConfiguredOutput = m_dvSelection.policy.mode;
-@@ -2241,6 +2351,7 @@
+@@ -2280,6 +2390,7 @@
        (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
            "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
    { if (!m_dvStopPending) RejectDVOutputSurface(); return false; }
@@ -1627,7 +1627,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    SetColorimetry(picture);
    const bool hdr = SetHDR(picture);
    SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
-@@ -2865,17 +2976,19 @@
+@@ -2931,17 +3042,19 @@
    }
    if (m_failedHDR10SetupRestore && !RestoreFailedHDR10Setup())
      return false;
@@ -1650,7 +1650,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
      glDisable(GL_SCISSOR_TEST);
      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-@@ -2894,6 +3007,7 @@
+@@ -2960,6 +3073,7 @@
        return false;
      surface.EndTransactionalMode();
      m_hdrDeepColorPrevious.reset();
@@ -1658,7 +1658,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      if (DVBRIDGE::DiagnosticsEnabled())
        DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge HDR10: native link policy restored");
    }
-@@ -2915,6 +3029,8 @@
+@@ -2981,6 +3095,8 @@
      glClear(GL_COLOR_BUFFER_BIT);
      if (!m_dvBridge || !m_dvBridge->Advanced()) glFinish();
      AnnounceCB1Mode(false);
@@ -1667,7 +1667,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      const bool restored=m_eglContext.TrySwapBuffers() && FlipDVBridgePage(m_dvState, true);
      CompleteCB1Mode(restored,false);
      if (!restored)
-@@ -2936,6 +3052,7 @@
+@@ -3002,6 +3118,7 @@
    m_hdr10SessionStream = 0;
    m_hdrConversion = false;
    m_sdrConversion = false;
@@ -1678,7 +1678,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-@@ -158,6 +158,13 @@
+@@ -161,6 +161,13 @@
    void PresentRenderImpl(bool rendered) override {};
    bool CreateContext() override;
  #ifdef HAVE_DVBRIDGE
@@ -1692,7 +1692,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    int VideoOutputBitDepth(const VideoPicture* picture) const override;
    bool RejectDVOutputSurface() override;
  #endif
-@@ -183,6 +190,8 @@
+@@ -186,6 +193,8 @@
  #endif
    void PresentFrame(bool rendered, bool videoLayer);
    bool m_guiCompositing{false};
@@ -1701,7 +1701,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
    int m_guiFboHeight{0};
-@@ -249,7 +258,10 @@
+@@ -254,7 +263,10 @@
    uint64_t m_dvPendingStream{}, m_dvPendingPolicy{}, m_dvFailedStream{}, m_dvFailedPolicy{};
    bool m_dvOutputRetiring{}, m_dvOrdinaryFrame{};
    CDVBridgeState m_dvState;

@@ -28,8 +28,8 @@ class GUICache(unittest.TestCase):
         overlay = re.search(r'  const bool overlayFree = .*?;', render, re.S)[0]
         route = render[render.index('  const bool mergedPQGUI ='):render.index('  // The TV masks L5 margins.')]
         visible = re.search(r'm_dvBridge->SetOverlayVisible\((.*?)\);',render,re.S)[1]
-        transfer = body(source,'bool CWinSystemGbmGLESContext::SetGuiCompositing(')
-        transfer = transfer[transfer.index('{')+1:transfer.index('  if (m_guiCompositing)')]
+        transfer = body(source,'bool CWinSystemGbmGLESContext::ConfigureGuiCompositing(')
+        transfer = transfer[transfer.index('  m_guiCacheValid = false;'):transfer.index('  if (m_guiCompositing)')]
         program = r'''
 #define HAVE_DVBRIDGE 1
 #include <algorithm>

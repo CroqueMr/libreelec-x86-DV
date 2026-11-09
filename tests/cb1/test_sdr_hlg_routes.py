@@ -12,6 +12,9 @@ class SDRHLGRoutes(unittest.TestCase):
         header='\n'.join(l for l in header.splitlines() if not l.startswith('#include'))
         selector=body((TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h').read_text(),
                       'inline OutputSelection SelectOutput(')
+        window=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(encoding='utf-8')
+        start=window.index('    caps.processing=caps.hdr10Processing;')
+        qualified=window[start:window.index('#endif',start)]
         program=r'''
 #include <atomic>
 #include <bit>
@@ -36,7 +39,9 @@ struct Settings {
 auto stored=std::make_shared<Settings>();
 struct Component {auto GetSettings(){return stored;}} component;
 struct CServiceBroker {static auto GetSettingsComponent(){return &component;}};
-namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}}
+namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}
+ bool HDR10PlusDVWholeSource(const float(&)[4],int width,int height){return width>0&&height>0;}
+}
 HEADER
 namespace DVBRIDGE {
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
@@ -90,9 +95,28 @@ int main(){
  c.nativeDV=true;
  c.processingKnown=false;
  assert(SelectOutput(p,c).reason==OutputReason::ProcessingPending);
- c.processingKnown=true;c.hdr10Processing[DVBRIDGE_MODE_STANDARD]={false,OutputReason::SourceIneligible};
+ // The producer preserves raw GPU availability but disqualifies the current picture's processing array.
+ for(int failure=0;failure<5;++failure){
+  auto current=c;current.processingKnown=true;current.generation=9;
+  struct Binding{unsigned picture=1;bool Valid()const{return picture!=0;}bool operator==(const Binding&)const=default;};
+  struct Picture{Binding doviSourceBinding;long doviSourcePts=0;unsigned iFlags=0;std::string stereoMode;}sample;
+  auto* picture=&sample;auto& caps=current;
+  bool m_dvImportUsable=true;Binding m_dvImportBinding;unsigned m_dvImportGeneration=9;
+  struct{float crop[4]{};int source_width=3840,source_height=2160;}m_dvImportGeometry;
+  constexpr long AV_NOPTS_VALUE=-1;constexpr unsigned DVP_FLAG_INTERLACED=1;
+  if(failure==0)m_dvImportUsable=false;
+  if(failure==1)m_dvImportBinding.picture=2;
+  if(failure==2)m_dvImportGeneration=10;
+  if(failure==3)sample.doviSourcePts=AV_NOPTS_VALUE;
+  if(failure==4)sample.iFlags=DVP_FLAG_INTERLACED;
+  QUALIFIED
+  assert(current.hdr10Processing[DVBRIDGE_MODE_STANDARD].usable);
+  assert(!current.processing[DVBRIDGE_MODE_STANDARD].usable);
+  auto invalid=SelectOutput(p,current);assert(invalid.route==OutputRoute::Vanilla&&invalid.reason==OutputReason::SourceIneligible);
+ }
+ c.processingKnown=true;c.processing[DVBRIDGE_MODE_STANDARD]={false,OutputReason::SourceIneligible};
  assert(SelectOutput(p,c).reason==OutputReason::SourceIneligible);
- c.hdr10Processing[DVBRIDGE_MODE_STANDARD]={true,OutputReason::None};
+ c.processing[DVBRIDGE_MODE_STANDARD]={true,OutputReason::None};
  selected=SelectOutput(p,c);
  assert(selected.route==OutputRoute::NativeDV && selected.policy.mode==DVBRIDGE_MODE_STANDARD);
  for(int saved=0;saved<=6;++saved){
@@ -124,7 +148,7 @@ int main(){
   assert(hlg.revision==before.revision && plus.revision==before.revision && dv.revision==before.revision);
  }
 }
-'''.replace('HEADER',header).replace('SELECTOR',selector)
+'''.replace('HEADER',header).replace('SELECTOR',selector).replace('QUALIFIED',qualified)
         repo=Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'test.cpp').write_text(program)

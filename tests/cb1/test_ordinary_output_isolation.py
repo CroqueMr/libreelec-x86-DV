@@ -99,6 +99,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=false,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
+ float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
  bool m_failedHDR10SetupRestore=false,m_dvShutdownFence=false;
  bool completeOK=true,pollOK=true,restoreOK=true,modeOK=true,recoveryOK=true;

@@ -76,10 +76,12 @@ struct Bridge {
 };
 struct Window {
  Context context;Context* m_dvContext=&context;Bridge bridge{&context};Bridge* m_dvBridge=&bridge;
- bool Render(bool authored=false){
+ bool Render(bool authored=false,bool plus=false){
   dvbridge_policy policy{};policy.mode=DVBRIDGE_MODE_STANDARD;
   struct {bool authored;bool Data()const{return authored;}}metadata{authored};
-  struct {DVBRIDGE::SourceBinding binding{7,1,11};}layer;
+  struct {DVBRIDGE::SourceBinding binding{7,1,11};struct{unsigned profile{};}sourceInfo;
+   bool hdr10PlusSource{},hlg{};}layer;
+  layer.sourceInfo.profile=authored?8:0;layer.hdr10PlusSource=plus;
   SNAPSHOT
   GATE
   return true; // The real rendering body can now submit/present the primed image.
@@ -90,13 +92,13 @@ int main(){
  stored.hdr10PlusSource=HDR10SourceMode::HDR10PlusDV;
  for(auto plain:{HDR10SourceMode::Native,HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
   stored.hdr10Source=plain;Window guided;guided.context.source.Prime(true);
-  assert(guided.Render()); // A plain-HDR10 preference must never veto selected HDR10+.
+  assert(guided.Render(false,true)); // A plain-HDR10 preference must never veto selected HDR10+.
  }
  for(auto plain:{HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV}){
   stored.hdr10Source=plain;Window ordinary;ordinary.context.source.Prime(false);
   assert(ordinary.Render()); // The sibling HDR10 path keeps its own preference.
  }
- Window authored;authored.context.source.Prime(true);assert(authored.Render(true));
+ Window authored;authored.context.source.Prime(true);assert(authored.Render(true,true));
 }
 '''
         replacements = dict(ENUMS=enums,PREFERENCES=preferences,SNAPSHOT=snapshot,GATE=gate,
