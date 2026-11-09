@@ -1,8 +1,12 @@
 # Kodi video information
 
-The RC3 Player information panel uses these native source/output facts and the
+The Player information panel uses three columns: Input (original file),
+Processing (accepted work), and Output (accepted signal). It uses native source/output facts and the
 [AudioEngine source and sink report](AUDIO-INFORMATION.md). Source format is
-shown in the Video heading; accepted rendering mode identifies the output.
+shown in the Input heading; committed output telemetry identifies Output.
+Native SDR, HDR and HLG remain separate from a source converted to another format.
+Unknown output is labelled Kodi output; requests, pending changes and fallbacks
+remain in a separate Mode change section.
 
 The panel distinguishes file metadata, metadata used by CB1 and metadata sent to
 the TV. Forwarded metadata is not described as unused solely because CB1 does
@@ -94,3 +98,28 @@ TinyPPI requires a separate platform/output-label adaptation and matching x86-64
 native dependencies. This label alone does not make the unmodified extension
 compatible. Reference-dependent RPU parsing and other HDR10+ variants remain
 unqualified; no alternate parser is added to Kodi.
+
+## Player information integration (2026-11-09)
+
+PR92 at `346f41853906dbbca754771c961b3536fc4ca80c` was rebased against the
+RC4 matched Kodi source. Its decoder hunk moved by 109 lines; no stale source
+replacement was used. The generation-checked immutable side-data snapshot and
+per-stream FEL/MEL/guessed-primaries clears were absent on this base and retained.
+Reset clears guessed primaries too. Input keeps unused HDR10+ alongside DV RPU
+facts; Processing never shows grey unused levels. Levels use numeric order in
+all three columns. Output L2/L8 target lists are shown only when the accepted
+transmitted mask forwards those unchanged authored blocks; legacy synthesized
+output excludes them. SDR carries no DV transmitted blocks.
+
+Each field stays on one line and its full value scrolls horizontally. Up/Down
+and Page Up/Page Down scroll column inventories together, bounded independently
+by each column's contents. This keeps maximum RPU inventories accessible rather
+than cutting off source facts. Empty metadata sections collapse. The native
+Kodi dialog fallback remains available when enhanced information is disabled.
+
+Focused qualification: seven column contract tests and 22 process information
+tests pass against a separate copied matched Kodi tree, including compiled RPU
+capture/target formatting, FEL reset, pending-output and skin recovery checks.
+RPU capture uses the existing FFmpeg test prefix. This is native source testing,
+not physical display qualification. An actual panel capture is still required
+on the new combined preview image; no new image was running during this edit.
