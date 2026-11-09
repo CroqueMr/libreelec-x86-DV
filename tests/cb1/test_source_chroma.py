@@ -36,12 +36,13 @@ struct Layer {
  pl_hdr_metadata hdr{};bool hlg=false,fullRange=false;Binding binding;
  unsigned sourceSerial=7;std::shared_ptr<Side> sourceSideData=std::make_shared<Side>();
 };
+bool importOK=true;
 extern "C" bool dvbridge_gl_frame_import(dvbridge_gl_frame* out,pl_gpu,dvbridge_gl_layout,int,int,const dvbridge_gl_plane[3]){
- out->frame={};out->frame.color=pl_color_space_hdr10;return true;
+ out->frame={};out->frame.color=pl_color_space_hdr10;return importOK;
 }
 extern "C" void dvbridge_gl_frame_set_chroma(dvbridge_gl_frame*,pl_chroma_location){}
 pl_chroma_location SourceChroma(AVChromaLocation,unsigned){return PL_CHROMA_LEFT;}
-bool ImportDVLayer(dvbridge_gl_frame* frame,pl_gpu gpu,const Layer& layer) HELPER
+bool ImportDVLayer(dvbridge_gl_frame* frame,pl_gpu gpu,const Layer& layer,unsigned* hdrInputUsed=nullptr) HELPER
 int main(){
  Layer layer;layer.hdr.max_luma=1000;
  auto& metadata=layer.sourceSideData->metadata;
@@ -50,13 +51,45 @@ int main(){
  metadata.params[0].maxscl[1]={20000,100000};
  metadata.params[0].maxscl[2]={30000,100000};
  metadata.params[0].average_maxrgb={5000,100000};
- dvbridge_gl_frame imported{};
- assert(ImportDVLayer(&imported,nullptr,layer));
+ dvbridge_gl_frame imported{};unsigned used=99;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==24);
  assert(imported.frame.color.hdr.scene_max[0]==1000 && imported.frame.color.hdr.scene_max[2]==3000);
  assert(imported.frame.color.hdr.scene_avg==500 && imported.frame.color.hdr.max_luma==1000);
- layer.sourceSerial=8;assert(ImportDVLayer(&imported,nullptr,layer));
+ metadata.params[0].maxscl[0]={0,100000};
+ metadata.params[0].num_distribution_maxrgb_percentiles=1;
+ metadata.params[0].distribution_maxrgb[0].percentage=99;
+ metadata.params[0].distribution_maxrgb[0].percentile={20000,100000};
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==24);
+ assert(imported.frame.color.hdr.scene_max[0]==2000); // The applied value is not the raw zero MaxSCL.
+ metadata.params[0].maxscl[0]={10000,100000};
+ metadata.params[0].num_distribution_maxrgb_percentiles=0;
+ layer.hdr.min_luma=.01;layer.hdr.max_cll=900;layer.hdr.max_fall=400;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==25);
+ layer.hdr.min_luma=0;layer.hdr.max_cll=layer.hdr.max_fall=0;
+ metadata.num_windows=2;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
+ assert(imported.frame.color.hdr.max_luma==1000 && imported.frame.color.hdr.scene_avg==0);
+ metadata.num_windows=1;metadata.params[0].average_maxrgb={0,100000};
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
+ metadata.params[0].average_maxrgb={5000,100000};
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==24);
+ importOK=false;assert(!ImportDVLayer(&imported,nullptr,layer,&used) && used==0);importOK=true;
+ layer.sourceSerial=8;assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
  assert(imported.frame.color.hdr.scene_max[0]==0 && imported.frame.color.hdr.scene_avg==0);
- layer.sourceSerial=7;metadata.params[0].maxscl[0].den=0;
+ layer.sourceSerial=7;layer.sourceInfo.informationGeneration=10;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
+ layer.sourceInfo.informationGeneration=9;layer.hlg=true;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
+ layer.hlg=false;layer.sourceInfo.profile=8;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==0);
+ layer.sourceInfo.profile=0;metadata.params[0].maxscl[0].den=0;
+ layer.hdr.min_luma=.01;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==3);
+ layer.hdr.max_luma=0;layer.hdr.max_cll=800;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==5);
+ layer.hdr.max_cll=0;
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==1);
+ layer.hdr.min_luma=0;
  assert(ImportDVLayer(&imported,nullptr,layer) && imported.frame.color.hdr.scene_max[0]==0);
 }
 '''.replace('HELPER',helper)
@@ -142,12 +175,13 @@ int main(){for(int c:{0,1,2,3}){Frame f{c};int expected=c?c+10:PL_CHROMA_TOP_LEF
         policy = policy[start:policy.index('  const double elPts', start)]
         helper = ''
         if 'bool ImportDVLayer(' in text:
-            helper = 'bool ImportDVLayer(dvbridge_gl_frame* frame, int gpu, const Layer& layer) ' + body(text, 'bool ImportDVLayer(')
+            helper = 'bool ImportDVLayer(dvbridge_gl_frame* frame, int gpu, const Layer& layer,unsigned* hdrInputUsed=nullptr) ' + body(text, 'bool ImportDVLayer(')
         if 'SourceChroma(' in text:
             helper = 'int SourceChroma(int source,unsigned profile) ' + body(text, 'SourceChroma(') + helper
         program = r'''
 #include <cassert>
 #include <limits>
+#include <array>
 constexpr int AVCHROMA_LOC_UNSPECIFIED=0,AVCHROMA_LOC_LEFT=1,AVCHROMA_LOC_CENTER=2,AVCHROMA_LOC_TOPLEFT=3,
        PL_CHROMA_UNKNOWN=10,PL_CHROMA_LEFT=11,PL_CHROMA_CENTER=12,PL_CHROMA_TOP_LEFT=13;
 constexpr int PL_COLOR_SYSTEM_BT_2020_NC=1,PL_COLOR_PRIM_BT_2020=2,
@@ -162,7 +196,7 @@ struct cb1_hdr10plus_dovi_result{};
 constexpr int CB1_HDR10PLUS_DOVI_OK=0;
 int cb1_hdr10plus_dovi_describe(cb1_hdr10plus_dovi_result*,const Dynamic*,void*){return 0;}
 double av_q2d(double value){return value;}
-struct HDR{double scene_max[3]{},scene_avg{};int sentinel{};
+struct HDR{float scene_max[3]{},scene_avg{},min_luma{},max_luma{},max_cll{};int sentinel{};
  HDR& operator=(int value){for(auto& c:scene_max)c=0;scene_avg=0;sentinel=value;return *this;}
  bool operator==(int value)const{return sentinel==value && scene_max[0]==0;}};
 struct Layer {int layout=0,width=8,height=8,planes[3]{};double pts=0;
@@ -172,6 +206,11 @@ struct Layer {int layout=0,width=8,height=8,planes[3]{};double pts=0;
 struct Frame {Frame* enhancement_layer=nullptr;float x=0,y=0;
  struct{int sys=0,levels=0;}repr;struct{int primaries=0,transfer=0;HDR hdr;}color;};
 struct dvbridge_gl_frame {Frame frame;};
+constexpr int PL_HDR_METADATA_ANY=0,PL_HDR_METADATA_HDR10PLUS=1,PL_HDR_NITS=0;
+bool pl_hdr_metadata_contains(const HDR* h,int){return h->scene_avg && (h->scene_max[0] || h->scene_max[1] || h->scene_max[2]);}
+struct pl_nominal_luma_params {const decltype(Frame::color)* color{};int metadata{},scaling{};float* out_min{};float* out_max{};};
+void pl_color_space_nominal_luma_ex(pl_nominal_luma_params* p){*p->out_min=0.000001;*p->out_max=10000;}
+
 int dvbridge_map_chroma(int c){return c==AVCHROMA_LOC_LEFT?PL_CHROMA_LEFT:
  c==AVCHROMA_LOC_TOPLEFT?PL_CHROMA_TOP_LEFT:c==AVCHROMA_LOC_CENTER?PL_CHROMA_CENTER:PL_CHROMA_UNKNOWN;}
 bool dvbridge_gl_frame_import(dvbridge_gl_frame* f,int,int layout,int,int,const int*){
@@ -184,7 +223,7 @@ void dvbridge_gl_frame_set_chroma(dvbridge_gl_frame* f,int p){
 }
 HELPER
 enum FrameStatus{Failed};
-struct Test {bool m_hdr10=false;struct{int gpu=0;}gl,*m_gl=&gl;
+struct Test {std::array<float,4> m_pendingSDRHDRInputValues{};unsigned m_pendingSDRHDRInputUsed{};bool m_hdr10=false;struct{int gpu=0;}gl,*m_gl=&gl;
  bool Failure(const char*){return false;}
  bool run(const Layer& base,const Layer* enhancement,bool advanced){
  if(advanced){ POLICY CHECK }

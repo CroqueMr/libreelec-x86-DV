@@ -57,7 +57,12 @@ int main() {
  info=DVBRIDGE::NativeProcessingInfo(s);
  assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.0.2");
  assert(info.output.guidedSourceFields==2 && info.output.guidedEstimatedFields==5);
+ s.output.flags=CDVPlaybackInfo::SDR;s.output.effective=8;s.output.sdrHDRInputUsed=24;s.output.sdrHDRInputValues={2000,2000,3000,500};
+ info=DVBRIDGE::NativeProcessingInfo(s);
+ assert(info.output.sdrHDRInputUsed==24 && info.outputType==VideoOutputType::SDR);
+ assert(info.output.sdrHDRInputValues[0]==2000 && info.output.sdrHDRInputValues[3]==500);
  s={}; info=DVBRIDGE::NativeProcessingInfo(s);
+ assert(info.output.sdrHDRInputUsed==0);
  assert(!info.outputType.has_value() && info.output.engine.empty());
  assert(info.output.aiModel.empty() && info.output.aiBaseline[1]==0);
  assert(info.output.felUpscaling==-1);
