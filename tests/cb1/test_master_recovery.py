@@ -29,9 +29,9 @@ inline Preferences FrameOutputSettings(){return {};}
 struct SourceBinding{unsigned long long stream{},picture{},revision{};bool Valid()const{return stream && picture && revision;}};
 }
 @@HEADER@@
-static int recoveries=0,notifications=0;
+static int recoveries=0,notifications=0;static std::string notified;
 void DVBRIDGE::PlaybackNotification::EmitMasterRecovery(){++recoveries;}
-void DVBRIDGE::PlaybackNotification::Emit(const std::string&){++notifications;}
+void DVBRIDGE::PlaybackNotification::Emit(const std::string& text){++notifications;notified=text;}
 void DVBRIDGE::PlaybackNotification::EmitAI(int){}
 int main(){using N=DVBRIDGE::PlaybackNotification;
  struct Output{unsigned flags=1;int requested=5,effective=5;unsigned long long stream=1,picture=1;} out;
@@ -48,6 +48,10 @@ int main(){using N=DVBRIDGE::PlaybackNotification;
  auto stale=out;stale.picture=4;N::NativeOutputAccepted(stale);assert(N::Pending() && !notifications);
  N::NativeOutputAccepted(out);assert(!N::Pending() && notifications==1);
  N::NativeOutputAccepted(out);assert(notifications==1);
+ N::StartVideo();const auto ordinary=N::Generation();N::RenderedOrdinary(ordinary);
+ N::OrdinaryOutputAccepted(false);assert(N::Pending() && notifications==1);
+ N::RenderedOrdinary(ordinary);N::OrdinaryOutputAccepted(true);
+ assert(!N::Pending() && notifications==2 && notified=="Kodi default");
 }
 '''.replace('@@HEADER@@',header)
         with tempfile.TemporaryDirectory() as directory:
