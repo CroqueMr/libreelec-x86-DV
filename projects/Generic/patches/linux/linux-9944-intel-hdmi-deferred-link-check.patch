@@ -1,0 +1,117 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] i915: defer HDMI link checks while preserving hotplug changes
+
+Reuse the existing bounded HPD retry work when an active HDMI commit is
+still pending. Notify connection changes immediately and re-read current
+connector/CRTC state on the later check. Do not change SCDC recovery policy.
+
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4744,7 +4744,8 @@
+ }
+ 
+ static int intel_hdmi_reset_link(struct intel_encoder *encoder,
+-				 struct drm_modeset_acquire_ctx *ctx)
++				 struct drm_modeset_acquire_ctx *ctx,
++				 bool *retry)
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+ 	struct intel_hdmi *hdmi = enc_to_intel_hdmi(encoder);
+@@ -4756,6 +4757,8 @@
+ 	u8 config;
+ 	int ret;
+ 
++	*retry = false;
++
+ 	if (connector->base.status != connector_status_connected) {
+ 		drm_dbg_kms(display->drm,
+ 			    "HDMI SCDC reset-link: reason=not-connected connector=%u status=%d\n",
+@@ -4816,6 +4819,7 @@
+ 			    "HDMI SCDC reset-link: reason=commit-pending connector=%u expected_scrambling=%d expected_ratio40=%d hw_done=0\n",
+ 			    connector->base.base.id, crtc_state->hdmi_scrambling,
+ 			    crtc_state->hdmi_high_tmds_clock_ratio);
++		*retry = true;
+ 		return 0;
+ 	}
+ 
+@@ -4897,6 +4901,7 @@
+ 	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
+ 	struct intel_dp *intel_dp = &dig_port->dp;
+ 	bool is_tc = intel_encoder_is_tc(encoder);
++	bool hdmi_retry = false;
+ 	struct drm_modeset_acquire_ctx ctx;
+ 	enum intel_hotplug_state state;
+ 	int ret;
+@@ -4909,7 +4914,7 @@
+ 	if (!intel_tc_port_link_reset(dig_port)) {
+ 		if (connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA) {
+ 			intel_modeset_lock_ctx_retry(&ctx, NULL, 0, ret)
+-				ret = intel_hdmi_reset_link(encoder, &ctx);
++				ret = intel_hdmi_reset_link(encoder, &ctx, &hdmi_retry);
+ 			drm_WARN_ON(encoder->base.dev, ret);
+ 		} else {
+ 			intel_dp_check_link_state(intel_dp);
+@@ -4938,9 +4943,16 @@
+ 	 * becomes functional. Retry the detection for 5 seconds on type-c
+ 	 * connectors to account for this delay.
+ 	 */
+-	if (state == INTEL_HOTPLUG_UNCHANGED &&
+-	    connector->hotplug_retries < (is_tc ? 5 : 1) &&
+-	    !dig_port->dp.is_mst)
++	/* A pending HDMI commit needs a later check, independently of the
++	 * immediate connection-change notification. Reuse the native one-second
++	 * retry once; never spin on hw_done or retain its commit/CRTC pointer.
++	 */
++	if (hdmi_retry && state == INTEL_HOTPLUG_CHANGED &&
++	    connector->hotplug_retries < 1 && !dig_port->dp.is_mst)
++		state = INTEL_HOTPLUG_CHANGED_RETRY;
++	else if (state == INTEL_HOTPLUG_UNCHANGED &&
++		 connector->hotplug_retries < (hdmi_retry ? 1 : (is_tc ? 5 : 1)) &&
++		 !dig_port->dp.is_mst)
+ 		state = INTEL_HOTPLUG_RETRY;
+ 
+ 	return state;
+--- a/drivers/gpu/drm/i915/display/intel_hotplug.c
++++ b/drivers/gpu/drm/i915/display/intel_hotplug.c
+@@ -472,7 +472,7 @@
+ 	struct intel_hotplug *hotplug = &display->hotplug;
+ 	struct drm_connector_list_iter conn_iter;
+ 	struct intel_connector *connector;
+-	u32 changed = 0, retry = 0;
++	u32 changed = 0, retry = 0, deferred = 0;
+ 	u32 hpd_event_bits;
+ 	u32 hpd_retry_bits;
+ 	struct drm_connector *first_changed_connector = NULL;
+@@ -529,6 +529,9 @@
+ 			switch (encoder->hotplug(encoder, connector)) {
+ 			case INTEL_HOTPLUG_UNCHANGED:
+ 				break;
++			case INTEL_HOTPLUG_CHANGED_RETRY:
++				deferred |= hpd_bit;
++				fallthrough;
+ 			case INTEL_HOTPLUG_CHANGED:
+ 				changed |= hpd_bit;
+ 				changed_connectors++;
+@@ -554,8 +557,10 @@
+ 	if (first_changed_connector)
+ 		drm_connector_put(first_changed_connector);
+ 
+-	/* Remove shared HPD pins that have changed */
+-	retry &= ~changed;
++	/* Remove obsolete shared-pin retries, but preserve an explicit HDMI
++	 * check deferred until its pending commit can complete.
++	 */
++	retry = (retry & ~changed) | deferred;
+ 	if (retry) {
+ 		spin_lock_irq(&display->irq.lock);
+ 		display->hotplug.retry_bits |= retry;
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
++++ b/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -160,6 +160,7 @@
+ 	INTEL_HOTPLUG_UNCHANGED,
+ 	INTEL_HOTPLUG_CHANGED,
+ 	INTEL_HOTPLUG_RETRY,
++	INTEL_HOTPLUG_CHANGED_RETRY,
+ };
+ 
+ struct intel_encoder {

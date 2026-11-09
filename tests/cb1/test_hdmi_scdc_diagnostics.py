@@ -58,7 +58,7 @@ bool try_wait_for_completion(bool*done){return *done;}
 int lock_error=0;
 int drm_modeset_lock(int*lock,drm_modeset_acquire_ctx*){return *lock==lock_error?-EDEADLK:0;}
 int intel_modeset_commit_pipes(intel_display*d,unsigned,drm_modeset_acquire_ctx*){++d->resets;return d->result;}
-static int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx) OWNER
+static int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx,bool*retry) OWNER
 struct Fixture{
  drm_device device;intel_display display{&device};i2c_adapter bus;intel_crtc_state state;
  intel_crtc crtc{{2,&state}};::commit commit;drm_connector_state conn{&crtc.base,&commit};
@@ -89,10 +89,11 @@ int main(){int failures=0,cases=0;auto check=[&](bool good,const std::string&nam
    case 15:f.bus.config=0xa3;f.bus.status=0x43;reason="config-match";break;
    case 16:f.bus.config=0;f.bus.status_error=-EREMOTEIO;expected_resets=1;reason="config-mismatch";break;
   }
-  drm_modeset_acquire_ctx ctx;const auto result=intel_hdmi_reset_link(&f.encoder,&ctx);
+  drm_modeset_acquire_ctx ctx;bool retry=true;const auto result=intel_hdmi_reset_link(&f.encoder,&ctx,&retry);
   int config_reads=0,status_reads=0;for(int offset:f.bus.reads){config_reads+=offset==0x20;status_reads+=offset==0x21;}
   const std::string label="debug="+std::to_string(debug)+" case="+std::to_string(scenario);
   check(result==expected_return&&f.display.resets==expected_resets,label+" unchanged return/reset");
+  check(retry==(scenario==10),label+" only pending commit requests deferred check");
   check(config_reads==expected_config_reads,label+" unchanged CONFIG I/O");
   check(status_reads==(debug&&expected_config_reads&&!f.bus.config_error?1:0),label+" STATUS is diagnostic-only and guarded");
   if(debug){check(has(reason),label+" guard/decision reason");
