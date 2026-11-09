@@ -146,6 +146,7 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
     ++c->metrics.gpu_submissions;
     status=cb1_hdr10_ingress_validate(frame);if(status!=CB1_AI_READY)goto submit_fail;
     const bool source_analysis=
+        frame->color.transfer==PL_COLOR_TRC_PQ &&
         frame->planes[1].texture->params.w==frame->planes[0].texture->params.w/2 &&
         frame->planes[1].texture->params.h==frame->planes[0].texture->params.h/2;
     if(!source_analysis){

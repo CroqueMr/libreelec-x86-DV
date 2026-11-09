@@ -137,6 +137,14 @@ static void renderer(void)
     reference_read(g.gl->gpu,dvbridge_render_texture(r),0,0,3840,2160,after);
     assert(!memcmp(before,after,size));free(before);free(after);
     assert(packet_blocks(r->pending)==7); /* L1, L2, L5, L3, L9, L11, L254. */
+    struct pl_frame hdr10=source;hdr10.repr=pl_color_repr_rgb;
+    hdr10.color=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,.transfer=PL_COLOR_TRC_PQ};
+    struct dvbridge_policy sdr={.revision=1,.mode=DVBRIDGE_MODE_SDR};
+    const struct dvbridge_identity identity={1,1,1};
+    assert(dvbridge_render_sdr_policy_rgb(r,&sdr,&identity,&hdr10,NULL,0,0,0,geo));
+    assert(dvbridge_renderer_cmv40_status(r)==CB1_CMV40_OFF);
+    dvbridge_render_policy_cancel(r);
+    dvbridge_renderer_set_cmv40(r,&o);
     dvbridge_renderer_set_l2_trims_disabled(r,true);
     assert(dvbridge_render_rgb(r,&source,m,bytes,0,NAN,geo));
     assert(packet_blocks(r->pending)==6);

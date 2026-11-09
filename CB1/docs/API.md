@@ -130,3 +130,5 @@ sets the scene-refresh flag, including on a paused, repeated picture. Invalid,
 truncated or duplicate L5 is still rejected before any output is produced. The
 default is off; HDR10 output is unaffected. Kodi sets it from GUI and subtitle
 visibility.
+
+SDR policy preparation/resolve and original HLG AI ingress extend the existing owners; see [SDR and HLG contracts](SDR-HLG.md) for signatures, validation, metadata consumption and presentation rules.
