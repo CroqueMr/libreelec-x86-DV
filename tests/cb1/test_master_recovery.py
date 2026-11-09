@@ -17,10 +17,10 @@ class MasterRecoveryTests(unittest.TestCase):
 #include <string>
 #include <cassert>
 #define HAVE_DVBRIDGE
-struct Settings{bool GetBool(const char*){return false;}} settings;
+struct Settings{bool enabled=false;bool GetBool(const char*){return enabled;}} settings;
 struct Component{Settings* GetSettings(){return &settings;}} component;
 struct CServiceBroker{static Component* GetSettingsComponent(){return &component;}};
-struct CDVPlaybackInfo{enum{HDMI=1,HDR10=8};template<class T> static std::string Mode(const T&){return "mode";}};
+struct CDVPlaybackInfo{enum{HDMI=1,HDR10=8,SDR=32};template<class T> static std::string Mode(const T&){return "mode";}};
 namespace DVBRIDGE {
 inline std::atomic<unsigned long long> nativeRevision{0};
 enum class OutputMode{Disabled,Standard};
@@ -29,9 +29,9 @@ inline Preferences FrameOutputSettings(){return {};}
 struct SourceBinding{unsigned long long stream{},picture{},revision{};bool Valid()const{return stream && picture && revision;}};
 }
 @@HEADER@@
-static int recoveries=0;
+static int recoveries=0,notifications=0;
 void DVBRIDGE::PlaybackNotification::EmitMasterRecovery(){++recoveries;}
-void DVBRIDGE::PlaybackNotification::Emit(const std::string&){}
+void DVBRIDGE::PlaybackNotification::Emit(const std::string&){++notifications;}
 void DVBRIDGE::PlaybackNotification::EmitAI(int){}
 int main(){using N=DVBRIDGE::PlaybackNotification;
  struct Output{unsigned flags=1;int requested=5,effective=5;unsigned long long stream=1,picture=1;} out;
@@ -42,6 +42,12 @@ int main(){using N=DVBRIDGE::PlaybackNotification;
  N::NativeOutputAccepted(out);assert(recoveries==1);
  N::ArmMasterRecovery();N::StopVideo();N::NativeOutputAccepted(out);assert(recoveries==1);
  N::ArmMasterRecovery();N::StartVideo();N::NativeOutputAccepted(out);assert(recoveries==1);
+ settings.enabled=true;N::StartVideo();assert(N::Pending());
+ const auto generation=N::Generation();out.stream=3;out.picture=5;out.flags=32;out.requested=out.effective=8;
+ N::RenderedNative(generation,{out.stream,out.picture,9});
+ auto stale=out;stale.picture=4;N::NativeOutputAccepted(stale);assert(N::Pending() && !notifications);
+ N::NativeOutputAccepted(out);assert(!N::Pending() && notifications==1);
+ N::NativeOutputAccepted(out);assert(notifications==1);
 }
 '''.replace('@@HEADER@@',header)
         with tempfile.TemporaryDirectory() as directory:
