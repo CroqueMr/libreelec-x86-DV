@@ -9,6 +9,42 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class SDRDisplayTransitionTests(unittest.TestCase):
+    def test_sdr_admission_uses_connected_progressive_mode_without_hdr_capabilities(self):
+        patch=(ROOT/'projects/Generic/patches/kodi/kodi-9992-cb1-display.patch').read_text()
+        source='\n'.join(line[1:] if line.startswith('+') else line for line in patch.splitlines())
+        code=body(source,'bool CWinSystemGbmGLESContext::SupportsSDRConversion() const')
+        program=r'''
+#include <cassert>
+#include <memory>
+constexpr unsigned DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
+struct Mode{unsigned hdisplay=1920,vdisplay=1080,flags=0;};
+struct Connector{bool connected=true;bool IsConnected(){return connected;}};
+struct DRM{virtual ~DRM()=default;};
+struct CDRMAtomic:DRM{Mode mode;Connector connector;bool selected=true;
+ Mode* GetSelectedMode(){return selected?&mode:nullptr;}Connector* GetConnector(){return &connector;}};
+struct CWinSystemGbmGLESContext{
+ std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
+ bool SupportsSDRConversion() const BODY
+};
+int main(){
+ CWinSystemGbmGLESContext window;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(window.m_DRM);
+ assert(window.SupportsSDRConversion());
+ drm->mode={3840,2160,0};assert(window.SupportsSDRConversion());
+ drm->connector.connected=false;assert(!window.SupportsSDRConversion());drm->connector.connected=true;
+ drm->selected=false;assert(!window.SupportsSDRConversion());drm->selected=true;
+ drm->mode.hdisplay=4096;assert(!window.SupportsSDRConversion());drm->mode.hdisplay=1920;
+ for(unsigned flags:{DRM_MODE_FLAG_INTERLACE,DRM_MODE_FLAG_DBLSCAN}){
+  drm->mode.flags=flags;assert(!window.SupportsSDRConversion());}
+ window.m_DRM.reset();assert(!window.SupportsSDRConversion());
+}
+'''.replace('BODY',code)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'test.cpp').write_text(program)
+            compiled=subprocess.run(['c++','-std=c++20','-Wall','-Wextra','-Werror',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr)
+            ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(ran.returncode,0,ran.stderr)
+
     def test_sdr_only_sink_clears_hdr_and_uses_existing_transaction_owner(self):
         patch=(ROOT/'projects/Generic/patches/kodi/kodi-9992-cb1-display.patch').read_text()
         source='\n'.join(line[1:] if line.startswith('+') else line for line in patch.splitlines())
