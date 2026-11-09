@@ -11,14 +11,23 @@ class MasterScreenshot(unittest.TestCase):
         from test_native_video_source import body
         implementation=body(shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp'),
                             'bool CDVBridgeGLES::ReadScreenshot(')
+        diagnostics=body(shipped_code('xbmc/utils/DVBridgeDiagnosticState.h'),'class DiagnosticFailures')
         program=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h')+r'''
 #include <cassert>
 #include <memory>
 #include <utility>
+#include <string>
+constexpr int LOGWARNING=1;
+namespace DVBRIDGE {
+class DiagnosticFailures DIAGNOSTICS;
+inline bool enabled=false;inline uint64_t now=0;inline unsigned logs=0;inline std::string lastStage;
+bool DiagnosticsEnabled(){return enabled;}uint64_t DiagnosticNowMs(){return now;}
+template<class... T>void DiagnosticLog(int,const char*,const char* stage,T...){++logs;lastStage=stage;}
+}
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_SDR=7,AV_PIX_FMT_RGBA=1,AV_PIX_FMT_RGBA64LE=2,AV_PIX_FMT_BGRA=3,AV_PIX_FMT_X2BGR10LE=4;
 constexpr int GL_READ_FRAMEBUFFER_BINDING=1,GL_READ_FRAMEBUFFER=2;
 using GLint=int;
-int bound=99,depth=0;bool flip=false,readOK=true,mapOK=true;
+int bound=99,depth=0,readFormat=AV_PIX_FMT_RGBA;bool flip=false,readOK=true,mapOK=true;
 void glGetIntegerv(int,int* out){*out=bound;}
 void glBindFramebuffer(int,unsigned value){bound=value;}
 namespace KODI::RENDERING::CAPTURE {
@@ -26,7 +35,7 @@ struct ReadbackBuffer {std::unique_ptr<uint8_t[]> pixels; unsigned width=0,heigh
 bool ReadFramebufferRegion(int,int,int w,int h,int bits,bool upsideDown,ReadbackBuffer& out){
  assert(w==3840 && h==2160);depth=bits;flip=upsideDown;
  if(!readOK)return false;
- out.width=2;out.height=1;out.stride=8;out.format=AV_PIX_FMT_RGBA;
+ out.width=2;out.height=1;out.stride=8;out.format=readFormat;
  out.pixels=std::make_unique<uint8_t[]>(8);
  return true;
 }}
@@ -43,6 +52,8 @@ struct CDVPlaybackInfo {enum {FEL=2};};
 namespace DVBRIDGE {enum class OutputMode{MasterReference};}
 struct CDVBridgeGLES {
  struct {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;int sdrPreset=0;double sdrGamma=2.4;}m_requested;
+ DVBRIDGE::DiagnosticFailures m_captureFailures;
+ struct{uint64_t stream=3,picture=4,revision=5;}m_pendingIdentity;
  int m_effectiveMode=5;bool m_prepared=true,m_direct=true,m_hdr10Limited=false;unsigned m_outputBits=10;
  struct Texture{struct{int w=3840,h=2160;}params;} texture;Texture* m_scanout=&texture;
  unsigned m_scanoutFramebuffer=42,m_pendingInfo=2;int pqCalls=0;
@@ -72,8 +83,25 @@ int main(){
  assert(depth==10 && flip && out.format==AV_PIX_FMT_RGBA64LE && out.stride==-16);
  bridge.m_direct=false;accepted=out.pixels.get();
  assert(!bridge.ReadScreenshot(out) && out.pixels.get()==accepted && bound==99);
+ DVBRIDGE::enabled=true;bridge.m_prepared=false;
+ for(int i=0;i<1000;++i)assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::logs==1 && DVBRIDGE::lastStage=="unprepared");
+ DVBRIDGE::now=30000;assert(!bridge.ReadScreenshot(out));assert(DVBRIDGE::logs==2);
+ bridge.m_prepared=true;bridge.m_scanout=nullptr;assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::lastStage=="no-scanout");
+ bridge.m_scanout=&bridge.texture;bridge.m_direct=false;assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::lastStage=="direct-target");
+ bridge.m_direct=true;readOK=false;assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::lastStage=="readback");
+ const auto bounded=DVBRIDGE::logs;readOK=true;readFormat=99;assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::logs==bounded); // At most four failure reports per 30-second window.
+ DVBRIDGE::now=60000;assert(!bridge.ReadScreenshot(out));
+ assert(DVBRIDGE::lastStage=="unsupported-format");
+ readFormat=AV_PIX_FMT_RGBA;bridge.m_requested.sdrPreset=2;bridge.m_requested.sdrGamma=NAN;
+ assert(!bridge.ReadScreenshot(out));assert(DVBRIDGE::lastStage=="decode");
+ assert(out.pixels.get()==accepted && bound==99);
 }
-'''.replace('@@BODY@@',implementation)
+'''.replace('@@BODY@@',implementation).replace('DIAGNOSTICS',diagnostics)
         with tempfile.TemporaryDirectory() as directory:
             source,binary=Path(directory)/'read.cpp',Path(directory)/'read'
             source.write_text(program)

@@ -119,6 +119,12 @@ int main(){Test t;auto g=t.run();assert(g.x==0 && g.width==3840);
         prefix = capture[1:capture.index("  if (!read)")]
         self.run_program(r'''
 #include <cassert>
+constexpr int LOGWARNING=1;
+namespace DVBRIDGE {
+ bool DiagnosticsEnabled(){return false;}unsigned DiagnosticNowMs(){return 0;}
+ struct DiagnosticFailures{bool Record(unsigned,const char*){return false;}};
+ template<class... T>void DiagnosticLog(T...){}
+}
 constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_SDR=7,GL_READ_FRAMEBUFFER_BINDING=1,GL_READ_FRAMEBUFFER=2;
 using GLint=int;void glGetIntegerv(int,int* p){*p=0;}void glBindFramebuffer(int,unsigned){}
 namespace KODI::RENDERING::CAPTURE {
@@ -126,6 +132,8 @@ namespace KODI::RENDERING::CAPTURE {
  bool ReadFramebufferRegion(int,int,int w,int h,int,bool,ReadbackBuffer& p){p.width=w;p.height=h;return true;}
 }
 struct Test{
+ DVBRIDGE::DiagnosticFailures m_captureFailures;
+ struct{unsigned stream=0,picture=0,revision=0;}m_pendingIdentity;
  int m_effectiveMode=1;bool m_prepared=true,m_direct=true;unsigned m_scanoutFramebuffer=0,m_outputBits=8;
  struct Texture{struct{int w=1920,h=1080;}params;} texture;Texture* m_scanout=&texture;
  unsigned GetPQFramebuffer(){return 2;}
