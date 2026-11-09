@@ -4160,7 +4160,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1135,1893 @@
+@@ -397,13 +1135,1909 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -5379,6 +5379,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return gbm && gbm->IsDVBridgeScreenshotSDR();
 +}
 +
++bool CWinSystemGbmGLESContext::ReadDVBridgeScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
++{
++  if (!m_dvFrame || !m_dvBridge)
++  {
++    const char* stage = !m_dvBridge ? "renderer-unavailable" : "video-frame-unprepared";
++    if (DVBRIDGE::DiagnosticsEnabled() &&
++        m_dvScreenshotFailures.Record(DVBRIDGE::DiagnosticNowMs(), stage))
++      DVBRIDGE::DiagnosticLog(LOGWARNING,
++          "DVBridge screenshot: stage={} frame={} bridge={} sdr={} hdr_conversion={} gui={} gui_render={} size={}x{}",
++          stage, m_dvFrame, m_dvBridge != nullptr, m_sdrConversion, m_hdrConversion,
++          m_guiCompositing, m_guiWillRender, m_nWidth, m_nHeight);
++    return false;
++  }
++  return m_dvBridge->ReadScreenshot(out);
++}
++
 +bool KODI::WINDOWING::GBM::ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
 +{
 +  auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
@@ -6057,7 +6073,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3035,16 @@
+@@ -417,5 +3051,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6109,7 +6125,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,20 +53,141 @@
+@@ -41,20 +53,138 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -6202,10 +6218,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    return HasDVBridgeScreenshot() && m_sdrConversion;
 +  }
-+  bool ReadDVBridgeScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
-+  {
-+    return m_dvFrame && m_dvBridge && m_dvBridge->ReadScreenshot(out);
-+  }
++  bool ReadDVBridgeScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out);
 +  bool RenderDVBridge(const CDVBridgeGLES::Layer& layer, std::shared_ptr<AVFrame> enhancement,
 +                       DVBRIDGE::SourceBinding enhancementBinding,
 +                       const CDVMetadataBuffer& metadata,
@@ -6251,7 +6264,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +196,92 @@
+@@ -63,8 +193,93 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
@@ -6315,6 +6328,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool m_dvOutputRetiring{}, m_dvOrdinaryFrame{};
 +  CDVBridgeState m_dvState;
 +  DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
++  DVBRIDGE::DiagnosticFailures m_dvScreenshotFailures;
 +  DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
 +  bool m_dvFrame = false;
 +  bool m_cb1FramePending{};

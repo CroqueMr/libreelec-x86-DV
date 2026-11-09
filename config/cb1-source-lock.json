@@ -180,9 +180,9 @@
     "tests/cb1/test_gui_cache.py": "d507ce120589a97445093208b2baa77b3c5eebd73f776a03d2c8e392b922b69e",
     "tests/cb1/test_ai_producer_admission.py": "230070a8f95901d14f4be40a54eb7c03add77fc78e97fb58c0b1d9dd372b3f51",
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
-    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "671848bb3811aeea885ad97179d6c92dfa2601bfc3c49c430f1c4d9850b7f0f8",
+    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "9bf7f41c63443ea9111a4fccc6c3846bbd326e3211feddde22ea5909d951bd2b",
     "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": "423fc14eb55a457bf59913a393d05cd99cc36bbc599c7b155fe84d3dcec8914e",
-    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "a932e72e8c2c51bceab3ea11631deecb85d4f0eb22484c27f21674d3137bd601",
+    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "b6f1702fd2a6aeac13607f1cacb43bd7837ca832fb063252ebdf9d07dc8e5e2d",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "90882c6a30126d66db9091bdd9484a685b8c50e8817ae323c5563e7a4be845c7",
     "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "2675086aa08f050fbe8916f9f312a8d5cbadfba6fb994a67eeab550339498a64",
     "tests/cb1/test_dual_clock_lifecycle.py": "09951c514afcf41190e01649e53fe49c4218df551da08f835ca22e96b6902080",
@@ -257,7 +257,7 @@
     "tests/cb1/test_cec_support.py": "e7e1f689ed0498366a25e43fdbc3cf1844c3bd77b2c0b8969db32c05bf4093b0",
     "docs/cb1/CEC.md": "77cd87903b98a066e7d157b24d010dd25c2858ec874dfc34b0174312d3de01cd",
     "docs/cb1/GBM-COLOUR-SETTINGS.md": "026865f9df4c00b716dbedf2ad6822c0f68d95d6c4bd4c5948240e45edccc8f0",
-    "projects/Generic/patches/kodi/kodi-9996-gbm-colour-preferences.patch": "1f364be0dff36f8de39d72199a32d656b0b3f32140fb3e7337d8a4deb94dd4e6",
+    "projects/Generic/patches/kodi/kodi-9996-gbm-colour-preferences.patch": "893ae99a9f49173cf62b2ec01e1ab775b09a1c579478d2c1ee7dac20a478f847",
     "tests/cb1/gbm_colour_owner.cpp": "76d0421b3edbe1b6877f59785dd91fc22b09a5a23b660078382c6dd925e9eefc",
     "tests/cb1/gbm_colour_transition.cpp": "8b8d30f3bd9ca8966d0cf1393ed84629a3a4948597c3eb5290f771a9db36aa72",
     "tests/cb1/test_gbm_colour_owner.py": "90e33c1bea289f4cb7a6b5fd2d01c48e3c32fba3c52229b85eeec2f1966b67d8",
@@ -306,10 +306,10 @@
     "docs/cb1/README.md": "c9449ccf4729d7fb282c52e1f94cbf2cdf39a56b9708909fcab00d868b907fb5",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "67132dc4588738c95129340f8d7a6adf0c243fff939ac05ddbb26fa70ccdcf40",
     "tests/cb1/test_sdr_capture_color.py": "8d49acfc46e627d12a3d073d6b550fb67d72ed0151f37fbcb1ddf5c0e7f491ef",
-    "tests/cb1/test_master_screenshot.py": "27d82a3cc865a2e931b18f3c7dcad93958d368950770e386bc71f39d738e3c48",
+    "tests/cb1/test_master_screenshot.py": "bbdd80676e556da0b8cec01589b014d40c7d279dc284efbd15f81e559cb758b5",
     "tests/cb1/test_master_recovery.py": "715839c30a2db3820bfc4926aa15767a4d801a3f7be409bdd1a285ecdd5a76d4",
-    "tests/cb1/test_native_spatial_contract.py": "49262917162fee9ef5fead3e29fd9a17042518af764e77974cefd8874a6681aa",
-    "tests/cb1/test_sdr_native_surface.py": "03fb65d34b81761cbc8a06c7a66b77afdbc4e23d31b61e959a32b5ec066b4d05"
+    "tests/cb1/test_native_spatial_contract.py": "384ba57251d60c2fdd54cfc606de6c755ac248fef55d7388962d488b638ceaf0",
+    "tests/cb1/test_sdr_native_surface.py": "8fbbcd98eaae7473dcedc4f7b2521ae96ee90511f9561c28ed285a1852facdfa"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
