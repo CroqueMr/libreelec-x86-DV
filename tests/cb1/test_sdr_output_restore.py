@@ -32,7 +32,11 @@ struct Services {unsigned dirty=0;Services& GetWindowManager(){return *this;}
 struct CServiceBroker {static Services* GetGUI(){static Services value;return &value;}};
 namespace DVBRIDGE {
  uint64_t DiagnosticNowMs(){return 0;}
- struct PlaybackNotification{static void OrdinaryOutputAccepted(bool){}};
+ enum class OutputReason {None,ProcessingPending};
+ struct PlaybackNotification{
+  static inline unsigned accepted=0;
+  static void OrdinaryOutputAccepted(bool ok){accepted+=ok;}
+ };
  struct StreamTelemetry{static void ClearOutput(){}};
 }
 struct DRM{virtual ~DRM()=default;};
@@ -57,6 +61,7 @@ struct CWinSystemGbmEGLContext{
  bool destroyOK=true;bool DestroyWindow(){return destroyOK;}
 };
 struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
+ struct {DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;}m_dvSelection;
  bool m_dvOrdinaryFrame=true,m_dvStopPending=true,rollback=false;
  unsigned rejects=0,gui=0,swaps=0;
  unsigned colorClears=0,hdrClears=0;
@@ -106,6 +111,14 @@ int main(){
  window.Present(true);
  assert(!window.m_dvOrdinaryFrame && !window.m_dvStopPending && !drm->pending && drm->commits==3);
  assert(window.m_dvState.stages==3);
+ assert(DVBRIDGE::PlaybackNotification::accepted==1);
+ // A temporary ordinary frame must restore normally without reporting a fallback
+ // while the selected processing route is still being probed.
+ CWinSystemGbmGLESContext probing;
+ probing.m_dvSelection.reason=DVBRIDGE::OutputReason::ProcessingPending;
+ probing.Present(true);
+ assert(!probing.m_dvOrdinaryFrame && !probing.m_dvStopPending);
+ assert(DVBRIDGE::PlaybackNotification::accepted==1);
  const auto dirty=CServiceBroker::GetGUI()->dirty;window.Present(false);
  assert(CServiceBroker::GetGUI()->dirty==dirty);
  CWinSystemGbmGLESContext staged;

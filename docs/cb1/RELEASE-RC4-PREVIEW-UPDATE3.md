@@ -5,7 +5,7 @@ Work-in-progress preview.
 - **HDR10/HDR10+ to SDR** and **Dolby Vision to SDR**, including complete applicable FEL reconstruction.
 - **Independent SDR targets**: Reference, Bright room and Custom / Projector. HDR calibration remains separate.
 - **HLG to Dolby Vision Reference**, alongside native Kodi HLG, with independently saved preferences. No HLG Adaptive mode.
-- **Revised Player information**, based on [CorentinB's PR92](https://github.com/CroqueMr/libreelec-x86-DV/pull/92): Input / Processing / Output columns, applied metadata only, consistent level order and static single-line values with full details on demand.
+- **Revised Player information**, based on [CorentinB's PR92](https://github.com/CroqueMr/libreelec-x86-DV/pull/92): Input / Processing / Output columns, applied metadata only, consistent level order and compact static single-line values and the familiar O-key control.
 
 The normal Generic image retains the [Update 2](RELEASE-RC4-PREVIEW-UPDATE2.md)
 Blu-ray menus, Xe3 backports, installer USB logs, CEC and display controls.
