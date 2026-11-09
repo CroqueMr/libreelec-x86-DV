@@ -36,7 +36,7 @@ class ProcessInfoReadability(unittest.TestCase):
         self.assertGreaterEqual(548-valueleft,280)
         for column in panel.findall('.//include[@name="DVProcessLayout"]/definition/control/control[@type="grouplist"]'):
             self.assertEqual(column.findtext('width'),'548')
-        self.assertEqual(value.findtext('scroll'),'true')
+        self.assertEqual(value.findtext('scroll'),'false')
         self.assertEqual(value.findtext('wrapmultiline'),'false')
         labels={n.get('value') for n in panel.findall('.//include[@content="DVInfoRow"]/param[@name="label"]')}
         self.assertIn('Before AI min/max/avg',labels)

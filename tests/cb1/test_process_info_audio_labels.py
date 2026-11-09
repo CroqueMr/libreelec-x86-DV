@@ -41,8 +41,8 @@ class AudioLabelsTests(unittest.TestCase):
     def test_formats_are_in_headings_without_duplicate_time_rows(self):
         headings = {h.find('./param[@name="title"]').get('value'): h
                     for h in self.panel.findall('.//include[@content="DVColumnHeading"]')}
-        self.assertEqual(headings['Input (Up / Down to scroll)'].find('./param[@name="primary"]').get('value'), '$VAR[DVSourceFormat]')
-        self.assertEqual(headings['Input (Up / Down to scroll)'].find('./param[@name="secondary"]').get('value'), '$VAR[DVInputAudio]')
+        self.assertEqual(headings['Input'].find('./param[@name="primary"]').get('value'), '$VAR[DVSourceFormat]')
+        self.assertEqual(headings['Input'].find('./param[@name="secondary"]').get('value'), '$VAR[DVInputAudio]')
         self.assertEqual(headings['Output'].find('./param[@name="secondary"]').get('value'), '$VAR[DVOutputAudio]')
         self.assertIn('$INFO[Player.Process(audiosourcetitle)]',
                       ET.tostring(self.panel.find('./variable[@name="DVInputAudio"]'), encoding='unicode'))
@@ -55,7 +55,7 @@ class AudioLabelsTests(unittest.TestCase):
                          self.panel.findall('.//include[@content="DVInfoRow"]/param[@name="value"]')])
         self.assertIn('$INFO[Player.Process(audiobedobjectslabel)]', labels)
 
-    def test_every_audio_label_is_registered_and_rows_do_not_ellipsize(self):
+    def test_every_audio_label_is_registered_and_rows_are_static(self):
         manager = (TREE/'xbmc/GUIInfoManager.cpp').read_text()
         ids = (TREE/'xbmc/guilib/guiinfo/GUIInfoLabels.h').read_text()
         names = set(re.findall(r'Player.Process\((audio\w+)\)', PANEL.read_text()))
@@ -71,5 +71,5 @@ class AudioLabelsTests(unittest.TestCase):
         self.assertIn('ACTION_PAGE_DOWN',source)
         self.assertIn('list->SetScrollOffset(std::clamp(',source)
         for value in row.findall('./definition/control[@type="label"]'):
-            self.assertEqual(value.findtext('scroll'),'true')
+            self.assertEqual(value.findtext('scroll'),'false')
             self.assertEqual(value.findtext('wrapmultiline'),'false')
