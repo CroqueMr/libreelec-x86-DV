@@ -1,0 +1,22 @@
+Subject: [PATCH] GUIFontTTFGL: draw a font batch with the shader it began with
+
+LastEnd took its attribute locations from whatever shader was current.
+A texture drawn while the batch was open, such as a masked group's
+stencil quad, leaves the default shader current, which has no colour or
+texture coordinate inputs. On desktop GL this enabled vertex attribute
+-1 on every such frame, leaving GL_INVALID_VALUE pending.
+
+--- a/xbmc/guilib/GUIFontTTFGL.cpp
++++ b/xbmc/guilib/GUIFontTTFGL.cpp
+@@ -162,6 +162,11 @@ void CGUIFontTTFGL::LastEnd()
+ 
+   CRenderSystemGL* renderSystem = dynamic_cast<CRenderSystemGL*>(CServiceBroker::GetRenderSystem());
+ 
++  // Textures drawn while the batch was open (a masked group's stencil, a button's background)
++  // leave another shader current.
++  renderSystem->EnableShader(m_scissorClip ? ShaderMethodGL::SM_FONTS
++                                           : ShaderMethodGL::SM_FONTS_SHADER_CLIP);
++
+   GLint posLoc = renderSystem->ShaderGetPos();
+   GLint colLoc = renderSystem->ShaderGetCol();
+   GLint tex0Loc = renderSystem->ShaderGetCoord0();
