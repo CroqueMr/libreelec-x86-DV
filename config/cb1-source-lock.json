@@ -276,7 +276,7 @@
     "tests/cb1/gbm_colour_owner.cpp": "bdc53ac0ba221e41038deb4ffcb914bb0fcbafbb0dd75c3c6777683bed18012f",
     "tests/cb1/gbm_colour_transition.cpp": "7b03ad851f3f7561ead7767f0a449dd779950e8e178537eb8a748519eddc1b76",
     "tests/cb1/test_gbm_colour_owner.py": "8cb86baa0011037764789c54fa266881efd11d31adbe312e8df63856a592f897",
-    "tests/cb1/test_gbm_colour_transition.py": "346aac7db58fee98fbda826b7e3d609172e96e7b32ca194781aa5c68869f13e9",
+    "tests/cb1/test_gbm_colour_transition.py": "f424eaac147e21cf8b6caa8d7abe6dce7698586837dcc63393bd714d3dae3761",
     "tests/cb1/test_hdr10plus_atomic.py": "783241ac78270e1896c4bf46ac3353d5d76658a7e9ac074a03ef6c91f9e7d9e8",
     "tests/cb1/test_native_render_receipt.py": "a9d60ed458ddc0d061535a1d9f37587dc71bc08c3deb4593acb35c26df6a3055",
     "tests/cb1/test_ordinary_gui_transfer.py": "1e502440841fe984327ee172b5b1eaa29f26fedf176a3ec5911f4341530b2711",
@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "bc0ba8bb512dfbdb9c8142a22945ced7b482741038eeaf86e7b01d19848b2ccb",
+    "config/cb1-patch-index.json": "5029593dca8ed8eb7aefa06c4e70341034a3b5cf5368f73dbb3b1ccd8b7a8c4a",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -504,7 +504,8 @@
     "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "099564fcde774aea8314cfe30f1a674778571c3b5851972bbf0b8ee7142e125e",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": "41769716dc6ed649633382a28442e69ca27d3663d77df8838fc3653b76bce29a",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-03-shaders-screenshots.patch": "7e8563b73d8075e43f1dc1469041d0ccc46997f6ef117157aeccbdad44fc4c43"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-03-shaders-screenshots.patch": "7e8563b73d8075e43f1dc1469041d0ccc46997f6ef117157aeccbdad44fc4c43",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-04-gl-video-renderer.patch": "891d67b1743283eed558d9b31a1a76be1650567e15781f53c51a95d182e10190"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
