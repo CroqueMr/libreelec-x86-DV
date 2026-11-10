@@ -149,7 +149,7 @@
     "tests/cb1/test_audio_track_bitrate.py": "0e83dd09868b3aedf4d769981703f3069516e5360ea90736d89e446fc1b080ba",
     "tests/cb1/test_process_info_readability.py": "655f2854fd33da54721c32010456811a57309cd2bfe8cb16f1836ccb4b45111c",
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
-    "tests/cb1/test_ai_reentry.py": "f8bb34446479898b136f07e4553b1a7127c9ab0660c0d13c95ce358456d19722",
+    "tests/cb1/test_ai_reentry.py": "15527f1ce8f82e9e6f2f4ac20c27141c43e20978fd75ec34138ff21287908445",
     "tests/cb1/test_ai_reference_phase.py": "d941d4707bfc166fd20b40c3a34f8d8d2d109dc19795819595bcf52c3a3a352d",
     "tests/cb1/test_output_menu_recovery.py": "76f833f148d9bfe3883ec274c598cc3578e462c9954be9128f73ae2385591b6a",
     "tests/cb1/test_hdr10plus_selection.py": "b2809c776daa17fc2539d41f7d98cc27144ad731327e806c5dffafc16a8e8532",
@@ -180,9 +180,9 @@
     "tests/cb1/test_gui_cache.py": "6be76a0b9b7d1767218e3eb64d4ee3a1967bc1b6e458ef05fa06aa4dbaaffe95",
     "tests/cb1/test_ai_producer_admission.py": "230070a8f95901d14f4be40a54eb7c03add77fc78e97fb58c0b1d9dd372b3f51",
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
-    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "b1f14934b82b52d18cbacd186127c45f78ecf0762f0c0816b46133d57c7bd3c6",
+    "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "6b46ee0c3e340f4fceeee959dad60377eb22027adbf2991c4848d405290b9dce",
     "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": "423fc14eb55a457bf59913a393d05cd99cc36bbc599c7b155fe84d3dcec8914e",
-    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "861d7eda69077172ff870d28a9df75681ccc6ee40ea2feeb03980ed99cab756c",
+    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "9f147dd7a3b51077a6b4fb80632ed70a7393ecd02433db67f6ded0927c1bf9fb",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "56d739bacf316481d12d08d0c9eb08b6dc38a01076df90630c9eb01080777336",
     "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "2675086aa08f050fbe8916f9f312a8d5cbadfba6fb994a67eeab550339498a64",
     "tests/cb1/test_dual_clock_lifecycle.py": "09951c514afcf41190e01649e53fe49c4218df551da08f835ca22e96b6902080",
@@ -321,7 +321,8 @@
     "tests/cb1/test_hdmi_deferred_hotplug.py": "0d845096b44451b9cccca1bd94358dbb50923c694093481ce6d0eda5804cbcb4",
     "packages/mediacenter/kodi-theme-Estuary/package.mk": "2f360b508a0fd05a9b6eee81469875f840882e01f7a60df3f162c365c1fe40f7",
     "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078",
-    "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce"
+    "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce",
+    "tests/cb1/test_hlg_startup.py": "daf3d8c10e4ae1a12a1cdb9788d433cab300f1e553b4fe5bc0a0aadda8041496"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
