@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "2426615db7285185da2068a7463fb90478239ada4ebf801544bbb9b5caa6b968",
+    "config/cb1-patch-index.json": "c690c4482418cc381e638d303eb6a48a88fa50939f58b65ad2af8d06a1e10117",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -508,7 +508,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-04-gl-video-renderer.patch": "891d67b1743283eed558d9b31a1a76be1650567e15781f53c51a95d182e10190",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-05-vaapi-gl-renderer.patch": "b99c1e41a1331fa67a624ed20e3db3cea44ed87fb545a50598d6b26829a7749f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": "e98e9674335b237f99f736eca7a18b7ad5608207d0fad229def08c16b0780fa2",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": "d2bd9faa9e39e1b073910d5c00acbd7c83b16d6786c7e01a9236f3b8020a1f29"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": "d2bd9faa9e39e1b073910d5c00acbd7c83b16d6786c7e01a9236f3b8020a1f29",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": "e1dd3396c990b022df143a9cf86e8ccc15b3b4ca16d3076b7e95cde6ba13ee9a"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
