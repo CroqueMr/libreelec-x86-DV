@@ -21,6 +21,17 @@ placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo
 placebo_version=$(pin PKG_VERSION "$placebo_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
 bluray_version=$(pin PKG_VERSION "$bluray_recipe")
+# Generic kernel fixtures use the recipe's default branch, not its board forks.
+linux_recipe=packages/linux/package.mk
+read -r linux_version linux_sha < <(
+  awk -F '"' '
+    /^  \*\)/ { generic=1 }
+    generic && $1 ~ /^[[:space:]]*PKG_VERSION=/ { version=$2 }
+    generic && $1 ~ /^[[:space:]]*PKG_SHA256=/ { print version, $2; exit }
+  ' "$linux_recipe"
+)
+test -n "$linux_version" && test -n "$linux_sha"
+
 test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_version" && test -n "$bluray_version"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
   "$test_root/kodi.tar.gz" "$(pin PKG_SHA256 packages/mediacenter/kodi/package.mk)"
@@ -31,12 +42,22 @@ download "https://github.com/haasn/libplacebo/archive/$placebo_version.tar.gz" \
 download "https://download.videolan.org/pub/videolan/libbluray/$bluray_version/libbluray-$bluray_version.tar.xz" \
   "$test_root/libbluray.tar.xz" "$(pin PKG_SHA256 "$bluray_recipe")"
 
+download "https://www.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/linux-$linux_version.tar.xz" \
+  "$test_root/linux.tar.xz" "$linux_sha"
+
 python3 scripts/cb1-stage.py
-mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray"
+mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray" "$test_root/linux"
 tar -xf "$test_root/kodi.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg.tar.xz" -C "$test_root/ffmpeg" --strip-components=1
 tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
 tar -xf "$test_root/libbluray.tar.xz" -C "$test_root/libbluray" --strip-components=1
+tar -xf "$test_root/linux.tar.xz" -C "$test_root/linux" --strip-components=1
+
+# Match Generic's shipped default kernel stack; retain full source dependencies.
+for patch_file in packages/linux/patches/default/*.patch projects/Generic/patches/linux/*.patch; do
+  patch --batch --forward --fuzz=0 -p1 -d "$test_root/linux" < "$patch_file"
+done
+
 for patch_file in packages/mediacenter/kodi/patches/*.patch projects/Generic/patches/kodi/*.patch \
                   projects/Generic/patches/kodi/x86/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/kodi" < "$patch_file"
@@ -74,6 +95,7 @@ printf '%s\n' \
   "KODI_NATIVE_SOURCE_TREE=$test_root/kodi" \
   "KODI_UPSTREAM_ARCHIVE=$test_root/kodi.tar.gz" \
   "CB1_DRM_STATE_SOURCE=$test_root/kodi" \
+  "CB1_KERNEL_SOURCE=$test_root/linux" \
   "FFMPEG_TEST_PREFIX=$test_root/prefix" \
   "FFMPEG_PGS_TEST_PREFIX=$test_root/prefix" \
   "LIBBLURAY_TEST_INCLUDE=$test_root/libbluray/src" \
