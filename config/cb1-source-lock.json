@@ -320,7 +320,8 @@
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "e73a5a3c32a8a83781dcf693bf6f096921526b910ab7373a17ddde8b62bb425b",
     "tests/cb1/test_hdmi_deferred_hotplug.py": "0d845096b44451b9cccca1bd94358dbb50923c694093481ce6d0eda5804cbcb4",
     "packages/mediacenter/kodi-theme-Estuary/package.mk": "2f360b508a0fd05a9b6eee81469875f840882e01f7a60df3f162c365c1fe40f7",
-    "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078"
+    "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078",
+    "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
