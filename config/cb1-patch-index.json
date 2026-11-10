@@ -1463,5 +1463,17 @@
       "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py.",
       "xbmc/windowing/gbm/WinSystemGbmGLContext.h": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-03-shaders-screenshots.patch": {
+    "summary": "DV screenshots and float-output clamps for the GL shaders",
+    "component": "kodi",
+    "files": {
+      "system/shaders/GL/1.5/gl_output.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_videofilter_frag.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_yuv2rgb_basic.glsl": "Clamp on a floating-point output; keep black pixels black in tone mapping.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/rendering/gl/ScreenshotSurfaceGL.cpp": "Read DV screenshots from the bridge."
+    }
   }
 }
