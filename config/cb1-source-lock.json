@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "5e8afa0144e75a7a198041cbc7e2412dfba3bf19811ca7bf9a7da31d08c22202",
+    "config/cb1-patch-index.json": "19244c90c7b7f4e0c2ab652d1ef4741972fd968e21e26f9b291b7007242fc311",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -502,7 +502,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": "957170369482dd2e74d3665aa49d003d599347257ec6bf0502eb90823571eaa4",
     "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
     "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "099564fcde774aea8314cfe30f1a674778571c3b5851972bbf0b8ee7142e125e"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "099564fcde774aea8314cfe30f1a674778571c3b5851972bbf0b8ee7142e125e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": "41769716dc6ed649633382a28442e69ca27d3663d77df8838fc3653b76bce29a"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
