@@ -55,6 +55,14 @@ cpp = cpp.replace(egl.group(0),
     "  if (!CWinSystemGbmEGLContext::InitWindowSystemEGL(EGL_OPENGL_BIT, EGL_OPENGL_API))\n  {\n    return false;\n  }\n")
 # DV output checks ask for the modern client API: ES 3 on GLES, desktop GL here.
 cpp = cpp.replace("EGL_OPENGL_ES3_BIT", "EGL_OPENGL_BIT")
+# Desktop GL never advertises these GLES extensions: both features are core there.
+cpp = sub_once(cpp,
+    '        const bool common = pl_opengl_has_ext(context->GL(), "GL_EXT_float_blend") &&\n'
+    '            pl_opengl_has_ext(context->GL(), "GL_OES_texture_float_linear");\n',
+    '        // Desktop OpenGL has float blending and linear float filtering in core.\n'
+    '        const bool common = true;\n',
+    "float blend probe")
+
 ctx = re.search(r"bool CWinSystemGbmGLContext::CreateContext\(\)\n\{\n.*?\n\}\n", cpp, re.S)
 if not ctx:
     sys.exit("CreateContext not found")

@@ -1,0 +1,20 @@
+Subject: [PATCH] DV GL: probe GPU processing without GLES extension names
+
+Desktop GL never advertises GL_EXT_float_blend or
+GL_OES_texture_float_linear, because both are core there. The DV
+capability probe therefore reported no GPU processing, and every Dolby
+Vision stream was refused with NoGPUProcessing.
+
+--- a/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
+@@ -1579,8 +1579,8 @@ void CWinSystemGbmGLContext::RefreshDVOutputCapabilities()
+     {
+       if (auto* renderer = context->Attach())
+       {
+-        const bool common = pl_opengl_has_ext(context->GL(), "GL_EXT_float_blend") &&
+-            pl_opengl_has_ext(context->GL(), "GL_OES_texture_float_linear");
++        // Desktop OpenGL has float blending and linear float filtering in core.
++        const bool common = true;
+         caps.processingKnown = true;
+         for (unsigned mode = 1; mode < caps.processing.size(); ++mode)
+         {

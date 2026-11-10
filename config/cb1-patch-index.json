@@ -1499,5 +1499,12 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp": "Record subtitle bounds and textures for the DV composite.",
       "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h": "Keep the ASS glyph extent."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": {
+    "summary": "Probe DV GPU processing without GLES extension names on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Desktop GL has float blending and linear float filtering in core."
+    }
   }
 }
