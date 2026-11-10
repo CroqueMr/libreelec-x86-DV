@@ -19,6 +19,7 @@ class OutputMenuRecoveryTests(unittest.TestCase):
         program = r'''
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 #include <cassert>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 #include <algorithm>
 #include <cmath>
 #include <memory>
