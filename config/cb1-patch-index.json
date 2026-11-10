@@ -1506,5 +1506,12 @@
     "files": {
       "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Desktop GL has float blending and linear float filtering in core."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": {
+    "summary": "Read the DV scanout's bit depths the core-profile way on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Read scanout bit depths from the GL_BACK_LEFT attachment on desktop GL."
+    }
   }
 }

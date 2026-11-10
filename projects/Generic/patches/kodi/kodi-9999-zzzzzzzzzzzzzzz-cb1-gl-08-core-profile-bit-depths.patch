@@ -1,0 +1,36 @@
+Subject: [PATCH] DV GL: read the scanout's bit depths the core-profile way
+
+Core profiles dropped GL_RED_BITS and friends and call the default
+colour buffer GL_BACK_LEFT. The GLES queries left INVALID_ENUM pending
+and reported garbage depths, so the scanout was never wrapped.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1612,13 +1612,26 @@ bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr, unsigned int frame
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+   output.framebuffer = framebuffer;
+   glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
++#if defined(HAS_GL)
++  // Core profiles dropped GL_RED_BITS and call the default colour buffer GL_BACK_LEFT.
++  const GLenum attachment = framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK_LEFT;
++  glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
++      GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &red);
++  glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
++      GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &green);
++  glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
++      GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &blue);
++  glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
++      GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
++#else
+   glGetIntegerv(GL_RED_BITS, &red);
+   glGetIntegerv(GL_GREEN_BITS, &green);
+   glGetIntegerv(GL_BLUE_BITS, &blue);
+-  glGetIntegerv(GL_SAMPLES, &samples);
+   glGetFramebufferAttachmentParameteriv(
+       GL_FRAMEBUFFER, framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK,
+       GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
++#endif
++  glGetIntegerv(GL_SAMPLES, &samples);
+   pl_tex candidate{};
+   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE &&
+       ((sdr && hdr10 && red >= 8 && green >= 8 && blue >= 8 && red <= 16 && green <= 16 && blue <= 16) ||
