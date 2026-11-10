@@ -1,0 +1,493 @@
+Subject: [PATCH] DV GL: native output hooks in the GL video renderer
+
+Port the GLES video renderer's DV hooks to the GL one: source and
+enhancement-layer retention per buffer, the bridge layer and render
+path, frame receipts, scaling selection and HDR10 AI lookahead.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
+@@ -10,6 +10,9 @@
+  */
+ 
+ #include "LinuxRendererGL.h"
++#ifdef HAVE_DVBRIDGE
++#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
++#endif
+ 
+ #include "RenderFactory.h"
+ #include "ServiceBroker.h"
+@@ -31,6 +34,10 @@
+ #include "utils/log.h"
+ #include "windowing/GraphicContext.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
++#endif
+ 
+ #ifdef TARGET_DARWIN_OSX
+ #include "platform/darwin/osx/CocoaInterface.h"
+@@ -38,6 +45,7 @@
+ 
+ #include <locale.h>
+ #include <memory>
++#include <cmath>
+ #include <mutex>
+ 
+ #if defined(TARGET_DARWIN_OSX)
+@@ -194,7 +202,7 @@ bool CLinuxRendererGL::ValidateRenderTarget()
+     // function pointer for texture might change in
+     // call to LoadShaders
+     glFinish();
+-    for (int i = 0 ; i < NUM_BUFFERS ; i++)
++    for (int i = 0 ; i < MAX_RENDER_BUFFERS ; i++)
+     {
+       DeleteTexture(i);
+     }
+@@ -255,11 +263,74 @@ bool CLinuxRendererGL::Configure(const VideoPicture &picture, float fps, unsigne
+ 
+   m_pboSupported = CGLExtensions::IsExtensionSupported(CGLExtensions::ARB_pixel_buffer_object);
+ 
++#ifdef CB1_HAS_HDR10_AI
++  m_aiOutputPending = HDR10AILookahead() &&
++      DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS).hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
++  if (m_aiOutputPending)
++  {
++    // Keep the GUI output until AI preparation selects DV or native HDR10.
++    m_dvRequested = m_passthroughHDR = m_hdrFboActive = false;
++    return true;
++  }
++#endif
++  return ConfigureVideoOutput(picture);
++}
++
++bool CLinuxRendererGL::ConfigureVideoOutput(const VideoPicture& picture)
++{
++#ifdef CB1_HAS_HDR10_AI
++  if (m_aiOutputPending &&
++      KODI::WINDOWING::GBM::CWinSystemGbmDVContext::DVBridgeRequested(&picture))
++  {
++    // Queue preparation already owns the final surface and its first DV frame.
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++        CServiceBroker::GetWinSystem());
++    m_dvRequested = true;
++    m_passthroughHDR = false;
++    m_hdrFboActive = window && window->BeginDVBridge();
++    m_bConfigured = m_hdrFboActive;
++    return m_hdrFboActive;
++  }
++#endif
+   if (!CServiceBroker::GetWinSystem()->SetVideoOutput(&picture))
++  {
+     CLog::Log(LOGWARNING, "LinuxRendererGL::Configure: SetVideoOutput failed");
++#ifdef HAVE_DVBRIDGE
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++        CServiceBroker::GetWinSystem());
++    if (KODI::WINDOWING::GBM::CWinSystemGbmDVContext::DVBridgeRequested(&picture) ||
++        (window && window->HasPendingDVBridgeRestore()))
++    {
++      m_bConfigured = false;
++      return false;
++    }
++#endif
++  }
+ 
+   CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
+ 
++#ifdef HAVE_DVBRIDGE
++  m_dvRequested = KODI::WINDOWING::GBM::CWinSystemGbmDVContext::DVBridgeRequested(&picture);
++  if (m_dvRequested)
++  {
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++        CServiceBroker::GetWinSystem());
++    m_passthroughHDR = false;
++    // Native activation follows source import and its output-surface transaction.
++    m_hdrFboActive = window &&
++        (window->SelectedDVOutput(&picture).route != DVBRIDGE::OutputRoute::HDR10 ||
++         window->ConfigureHDR10Conversion(picture));
++    if (!m_hdrFboActive)
++    {
++      m_bConfigured = false;
++      CLog::Log(LOGERROR, "DVBridge: native output initialization rejected");
++      return false;
++    }
++    m_bConfigured = true;
++    return true;
++  }
++#endif
++
+   m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
+   CLog::Log(LOGDEBUG, "LinuxRendererGL::Configure: HDR passthrough: {}",
+             m_passthroughHDR ? "on" : "off");
+@@ -286,6 +357,9 @@ bool CLinuxRendererGL::Configure(const VideoPicture &picture, float fps, unsigne
+     m_cmsOn = false;
+   }
+ 
++  // AI priming may have compiled the ordinary shader before HDR was selected.
++  m_reloadShaders = true;
++  m_bConfigured = true;
+   return true;
+ }
+ 
+@@ -309,6 +383,16 @@ void CLinuxRendererGL::AddVideoPicture(const VideoPicture &picture, int index)
+   buf.videoBuffer->Acquire();
+   buf.loaded = false;
+   buf.doviMetadata = picture.doviMetadata;
++#ifdef HAVE_DVBRIDGE
++  buf.doviEnhancement = picture.doviEnhancement;
++  buf.doviEnhancementBinding = picture.doviEnhancementBinding;
++  if (picture.doviSourceBinding.Valid() || picture.doviMetadata.Data())
++  {
++    buf.doviSourcePicture = std::make_shared<VideoPicture>();
++    buf.doviSourcePicture->CopyRef(picture);
++  }
++  else buf.doviSourcePicture.reset();
++#endif
+   buf.doviPts = picture.doviSourcePts == AV_NOPTS_VALUE ? DVD_NOPTS_VALUE :
+                   static_cast<double>(picture.doviSourcePts);
+   buf.m_srcPrimaries = picture.color_primaries;
+@@ -328,6 +412,11 @@ void CLinuxRendererGL::ReleaseBuffer(int idx)
+ {
+   CPictureBuffer &buf = m_buffers[idx];
+   buf.doviMetadata.Reset();
++#ifdef HAVE_DVBRIDGE
++  buf.doviEnhancement.reset();
++  buf.doviEnhancementBinding = {};
++  buf.doviSourcePicture.reset();
++#endif
+   buf.doviPts = DVD_NOPTS_VALUE;
+   if (buf.videoBuffer)
+   {
+@@ -473,6 +562,13 @@ bool CLinuxRendererGL::Flush(bool saveBuffers)
+   bool safe = saveBuffers && CanSaveBuffers();
+   glFinish();
+ 
++#ifdef HAVE_DVBRIDGE
++  if (!safe && m_dvRequested)
++    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++            CServiceBroker::GetWinSystem()))
++      window->DiscardDVBridgeFrame();
++#endif
++
+   for (int i = 0; i < m_NumYUVBuffers; i++)
+   {
+     if (!safe)
+@@ -504,6 +600,10 @@ void CLinuxRendererGL::Update()
+ 
+ void CLinuxRendererGL::RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha)
+ {
++  m_frameRendered = false;
++#ifdef CB1_HAS_HDR10_AI
++  m_aiFrameRendered = false;
++#endif
+   if (index2 >= 0)
+     m_iYUVRenderBuffer = index2;
+   else
+@@ -552,7 +652,12 @@ void CLinuxRendererGL::RenderUpdate(int index, int index2, bool clear, unsigned
+   if (m_pVideoFilterShader)
+     m_pVideoFilterShader->SetAlpha(alpha/255);
+ 
+-  if (!Render(flags, m_iYUVRenderBuffer) && clear)
++  const bool rendered = Render(flags, m_iYUVRenderBuffer);
++  m_frameRendered = rendered;
++#ifdef CB1_HAS_HDR10_AI
++  m_aiFrameRendered = rendered;
++#endif
++  if (!rendered && clear)
+     ClearBackBuffer();
+ 
+   if (index2 >= 0)
+@@ -753,6 +858,31 @@ void CLinuxRendererGL::DrawBlackBars()
+   m_renderSystem->DisableShader();
+ }
+ 
++ESCALINGMETHOD CLinuxRendererGL::SelectScalingMethod() const
++{
++  auto method = m_videoSettings.m_ScalingMethod;
++  if (!Supports(method))
++    method = VS_SCALINGMETHOD_LINEAR;
++
++  if (method == VS_SCALINGMETHOD_AUTO)
++  {
++    bool scaleSD = m_sourceHeight < 720 && m_sourceWidth < 1280;
++    bool scaleUp =
++        (int)m_sourceHeight < m_viewRect.Height() && (int)m_sourceWidth < m_viewRect.Width();
++    bool scaleFps =
++        m_fps <
++        CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoAutoScaleMaxFps +
++            0.01f;
++
++    if (Supports(VS_SCALINGMETHOD_LANCZOS3_FAST) && scaleSD && scaleUp && scaleFps)
++      method = VS_SCALINGMETHOD_LANCZOS3_FAST;
++    else
++      method = VS_SCALINGMETHOD_LINEAR;
++  }
++
++  return method;
++}
++
+ void CLinuxRendererGL::UpdateVideoFilter()
+ {
+   if (!m_pVideoFilterShader)
+@@ -1086,8 +1216,24 @@ void CLinuxRendererGL::UnInit()
+ 
+   glFinish();
+ 
++  bool outputStopped = false;
++#ifdef HAVE_DVBRIDGE
++  if (m_dvRequested)
++  {
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++        CServiceBroker::GetWinSystem());
++    if (window)
++    {
++      outputStopped = true;
++      if (!window->StopDVBridgePlayback())
++        CLog::Log(LOGDEBUG, "DVBridge: output cleanup deferred until scanout retires");
++    }
++    m_dvRequested = false;
++  }
++#endif
++
+   // YUV textures
+-  for (int i = 0; i < NUM_BUFFERS; ++i)
++  for (int i = 0; i < MAX_RENDER_BUFFERS; ++i)
+   {
+     ReleaseBuffer(i);
+     DeleteTexture(i);
+@@ -1098,11 +1244,14 @@ void CLinuxRendererGL::UnInit()
+   if (m_bConfigured)
+   {
+     m_hdrFboActive = false;
+-    CServiceBroker::GetWinSystem()->SetGuiCompositing(false);
+-    CServiceBroker::GetWinSystem()->SetHDR(nullptr);
++    if (!outputStopped)
++    {
++      CServiceBroker::GetWinSystem()->SetGuiCompositing(false);
++      CServiceBroker::GetWinSystem()->SetHDR(nullptr);
++      CServiceBroker::GetWinSystem()->SetColorimetry(nullptr);
++      CServiceBroker::GetWinSystem()->SetVideoOutput(nullptr);
++    }
+     m_passthroughHDR = false;
+-    CServiceBroker::GetWinSystem()->SetColorimetry(nullptr);
+-    CServiceBroker::GetWinSystem()->SetVideoOutput(nullptr);
+   }
+ 
+   // cleanup framebuffer object if it was in use
+@@ -1134,6 +1283,26 @@ bool CLinuxRendererGL::Render(unsigned int flags, int renderBuffer)
+     return false;
+   }
+ 
++#ifdef HAVE_DVBRIDGE
++  if (m_buffers[renderBuffer].doviSourcePicture)
++  {
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++        CServiceBroker::GetWinSystem());
++    if (!window || !window->PrepareDVOutputFrame(*m_buffers[renderBuffer].doviSourcePicture))
++      return false;
++    m_dvRequested = window->DVBridgeRequested(m_buffers[renderBuffer].doviSourcePicture.get());
++  }
++  if (m_dvRequested)
++  {
++    const bool rendered = m_currentField == FIELD_FULL && RenderDVBridge(renderBuffer);
++    AfterRenderHook(renderBuffer);
++    if (rendered)
++      DVBRIDGE::PlaybackNotification::RenderedNative(
++          m_buffers[renderBuffer].videoBuffer ? m_buffers[renderBuffer].videoBuffer->PlaybackGeneration() : 0,
++          m_buffers[renderBuffer].doviMetadata.Binding());
++    return rendered;
++  }
++#endif
+   if (RenderHook(renderBuffer))
+     ;
+   else if (m_renderMethod & RENDER_GLSL)
+@@ -1160,6 +1329,10 @@ bool CLinuxRendererGL::Render(unsigned int flags, int renderBuffer)
+   }
+ 
+   AfterRenderHook(renderBuffer);
++#ifdef HAVE_DVBRIDGE
++  DVBRIDGE::PlaybackNotification::RenderedOrdinary(
++      m_buffers[renderBuffer].videoBuffer ? m_buffers[renderBuffer].videoBuffer->PlaybackGeneration() : 0);
++#endif
+   return true;
+ }
+ 
+@@ -1896,9 +2069,97 @@ bool CLinuxRendererGL::UploadTexture(int index)
+   if (ret)
+     CalculateTextureSourceRects(index, 3);
+ 
++#ifdef HAVE_DVBRIDGE
++  if (auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem()))
++  {
++    CDVBridgeGLES::Layer layer{};
++    const bool usable=ret && BuildDVBridgeLayer(index,layer);
++    const auto& buffer=m_buffers[index];
++    const auto binding=buffer.doviSourcePicture && buffer.doviSourcePicture->doviSourceBinding.Valid() ?
++        buffer.doviSourcePicture->doviSourceBinding : buffer.doviMetadata.Binding();
++    window->ObserveDVImport(binding,DVBridgeGeometry(),usable);
++  }
++#endif
+   return ret;
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++bool CLinuxRendererGL::BuildDVBridgeLayer(int index, CDVBridgeGLES::Layer& layer)
++{
++  auto& buffer=m_buffers[index];
++  if (!buffer.doviSourcePicture || !buffer.doviMetadata.Data() ||
++      buffer.doviPts==DVD_NOPTS_VALUE || !std::isfinite(buffer.doviPts) ||
++      m_textureTarget!=GL_TEXTURE_2D || m_renderOrientation!=0)
++    return false;
++  if (m_sourceWidth<=0 || m_sourceWidth>3840 || m_sourceHeight<=0 || m_sourceHeight>2160)
++    return false;
++  switch (m_format)
++  {
++    case AV_PIX_FMT_YUV420P10LE: layer.layout=DVBRIDGE_YUV420P10; break;
++    case AV_PIX_FMT_YUV444P10LE: layer.layout=DVBRIDGE_YUV444P10; break;
++    default: return false;
++  }
++  layer.width=m_sourceWidth; layer.height=m_sourceHeight;
++  layer.scalingMethod=SelectScalingMethod();
++  layer.pts=buffer.doviPts;
++  layer.binding=buffer.doviMetadata.Binding();
++  layer.lease=buffer.doviSourcePicture;
++  layer.sourceInfo=buffer.doviSourcePicture->doviSourceInfo;
++  layer.sourceSideData=buffer.doviSourcePicture->sourceSideData;
++  layer.chromaLocation=buffer.doviSourcePicture->chroma_position;
++  for (int p=0;p<3;++p)
++  {
++    const auto& plane=buffer.fields[FIELD_FULL][p];
++    const bool subsampled=p && m_format==AV_PIX_FMT_YUV420P10LE;
++    const unsigned width=subsampled ? (m_sourceWidth+1)/2 : m_sourceWidth;
++    const unsigned height=subsampled ? (m_sourceHeight+1)/2 : m_sourceHeight;
++    if (!plane.id || plane.texwidth!=width || plane.texheight!=height) return false;
++    layer.planes[p]={plane.id,static_cast<int>(plane.texwidth),static_cast<int>(plane.texheight)};
++  }
++  return layer.binding.Valid();
++}
++
++bool CLinuxRendererGL::RenderDVBridge(int index)
++{
++  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem());
++  CDVBridgeGLES::Layer layer{};
++  if (!window || !BuildDVBridgeLayer(index,layer)) return false;
++  const auto& buffer=m_buffers[index];
++  return window->RenderDVBridge(layer,buffer.doviEnhancement,buffer.doviEnhancementBinding,
++      buffer.doviMetadata,DVBridgeGeometry());
++}
++
++dvbridge_geometry CLinuxRendererGL::DVBridgeGeometry()
++{
++  auto* window = CServiceBroker::GetWinSystem();
++  CRect source, dest, view;
++  GetVideoRect(source, dest, view);
++  const int width = window->GetWidth(), height = window->GetHeight();
++  const auto& context = window->GetGfxContext();
++  if (width <= 0 || height <= 0 || context.GetWidth() <= 0 || context.GetHeight() <= 0)
++    return {};
++  const CRect original = dest;
++  dest.Intersect(CRect(0, 0, context.GetWidth(), context.GetHeight()));
++  if (dest.Width() <= 0 || dest.Height() <= 0 || original.Width() <= 0 || original.Height() <= 0)
++    return {};
++  const float sourceX = source.Width() / original.Width();
++  const float sourceY = source.Height() / original.Height();
++  source.x1 += (dest.x1 - original.x1) * sourceX;
++  source.x2 += (dest.x2 - original.x2) * sourceX;
++  source.y1 += (dest.y1 - original.y1) * sourceY;
++  source.y2 += (dest.y2 - original.y2) * sourceY;
++  const float sx = float(width) / context.GetWidth();
++  const float sy = float(height) / context.GetHeight();
++  const float left = dest.x1 * sx, top = dest.y1 * sy;
++  const float right = dest.x2 * sx, bottom = dest.y2 * sy;
++  const int x = std::floor(left), y = std::floor(top);
++  return {static_cast<int>(m_sourceWidth), static_cast<int>(m_sourceHeight),
++          x, y, static_cast<int>(std::ceil(right)) - x,
++          static_cast<int>(std::ceil(bottom)) - y, width, height,
++          {source.x1, source.y1, source.x2, source.y2}, {left, top, right, bottom}, false};
++}
++#endif
++
+ //********************************************************************************************************
+ // YUV texture creation, deletion, copying + clearing
+ //********************************************************************************************************
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
+@@ -16,6 +16,10 @@
+ #include "cores/VideoSettings.h"
+ #include "RenderInfo.h"
+ #include "BaseRenderer.h"
++#include "cores/VideoPlayer/Interface/TimingConstants.h"
++#ifdef HAVE_DVBRIDGE
++#include "DVBridgeGLES.h"
++#endif
+ #include "ColorManager.h"
+ #include "utils/Geometry.h"
+ 
+@@ -71,9 +75,13 @@ public:
+   void SetBufferSize(int numBuffers) override { m_NumYUVBuffers = numBuffers; }
+   void ReleaseBuffer(int idx) override;
+   void RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha) override;
++  bool HasRenderedFrame() const override { return m_frameRendered; }
+   void Update() override;
+   CRenderInfo GetRenderInfo() override;
+   bool ConfigChanged(const VideoPicture &picture) override;
++#ifdef CB1_HAS_HDR10_AI
++  bool HDR10AIFramePending() const override { return HDR10AILookahead() && !m_aiFrameRendered; }
++#endif
+ 
+   // Feature support
+   bool SupportsMultiPassRendering() override;
+@@ -84,6 +92,12 @@ public:
+   bool VideoBypassesFramebuffer() override { return false; }
+ 
+ protected:
++  bool m_frameRendered{false};
++  bool ConfigureVideoOutput(const VideoPicture& picture);
++#ifdef CB1_HAS_HDR10_AI
++  bool m_aiOutputPending{false};
++  bool m_aiFrameRendered{true};
++#endif
+ 
+   bool Render(unsigned int flags, int renderBuffer);
+   void ClearBackBuffer();
+@@ -94,6 +108,7 @@ protected:
+   virtual bool ValidateRenderTarget();
+   virtual void LoadShaders(int field=FIELD_FULL);
+   void SetTextureFilter(GLenum method);
++  ESCALINGMETHOD SelectScalingMethod() const;
+   void UpdateVideoFilter();
+   void CheckVideoParameters(int index);
+   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
+@@ -138,6 +153,13 @@ protected:
+   // hooks for HwDec Renderer
+   virtual bool LoadShadersHook() { return false; }
+   virtual bool RenderHook(int idx) { return false; }
++#ifdef HAVE_DVBRIDGE
++  // Failure is terminal for this frame: never silently use the ordinary shader.
++  virtual bool RenderDVBridge(int idx);
++  virtual bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
++  dvbridge_geometry DVBridgeGeometry();
++  bool m_dvRequested{false};
++#endif
+   virtual void AfterRenderHook(int idx) {}
+   virtual bool CanSaveBuffers() { return true; }
+ 
+@@ -204,12 +226,17 @@ protected:
+     bool hasLightMetadata = false;
+     AVContentLightMetadata lightMetadata;
+     CDVMetadataBuffer doviMetadata;
++#ifdef HAVE_DVBRIDGE
++    std::shared_ptr<AVFrame> doviEnhancement;
++    DVBRIDGE::SourceBinding doviEnhancementBinding{};
++    std::shared_ptr<VideoPicture> doviSourcePicture;
++#endif
+     double doviPts = DVD_NOPTS_VALUE;
+   };
+ 
+   // YUV decoder textures
+   // field index 0 is full image, 1 is odd scanlines, 2 is even scanlines
+-  CPictureBuffer m_buffers[NUM_BUFFERS];
++  CPictureBuffer m_buffers[MAX_RENDER_BUFFERS];
+ 
+   Shaders::GL::BaseYUV2RGBGLSLShader* m_pYUVShader = nullptr;
+   Shaders::GL::BaseVideoFilterShader* m_pVideoFilterShader = nullptr;

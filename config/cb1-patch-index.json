@@ -1475,5 +1475,13 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp": "Enable the clamp on a floating-point output.",
       "xbmc/rendering/gl/ScreenshotSurfaceGL.cpp": "Read DV screenshots from the bridge."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-04-gl-video-renderer.patch": {
+    "summary": "DV output hooks in the GL video renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Retain DV sources per buffer, build bridge layers, render through the bridge and report frame receipts.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Declare the DV hooks and per-buffer source retention."
+    }
   }
 }
