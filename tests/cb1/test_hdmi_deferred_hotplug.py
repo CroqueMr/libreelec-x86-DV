@@ -170,7 +170,7 @@ void complete_all(std::atomic<bool>*done){done->store(true);if(published){auto h
   ('intel_hpd_hdmi_cancel','void intel_hpd_hdmi_cancel(intel_encoder*encoder)'),
   ('intel_hpd_hdmi_wait_for_commit','bool intel_hpd_hdmi_wait_for_commit(intel_encoder*encoder,enum pipe pipe,drm_crtc_commit*commit)'),
   ('intel_hpd_hdmi_commit_done','void intel_hpd_hdmi_commit_done(intel_display*display,u8 pipe_mask)')]:code+=add('intel_hotplug.c',name+'(',proto)
- code+=add('intel_ddi.c','static int intel_hdmi_reset_link(','int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx,bool*retry)')
+ code+=add('intel_ddi.c','static int intel_hdmi_reset_link(','int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx)')
  code+=add('intel_hotplug.c','intel_hotplug_detect_connector(','intel_hotplug_state intel_hotplug_detect_connector(intel_connector*connector)')
  code+=add('intel_hotplug.c','intel_encoder_hotplug(','intel_hotplug_state intel_encoder_hotplug(intel_encoder*encoder,intel_connector*connector)')
  code+=add('intel_ddi.c','intel_ddi_hotplug(','intel_hotplug_state intel_ddi_hotplug(intel_encoder*encoder,intel_connector*connector)')
@@ -372,6 +372,21 @@ int main(){int failures=0,checks=0;auto check=[&](bool good,const char*text){++c
   f.publish();f.drain();check(f.configs()==1&&!g.configs(),"surviving owner alone consumes its native completion");
   intel_ddi_hotplug(&g.encoder,&g.connector);g.publish();f.drain();
   check(g.configs()==1,"sibling cancel epoch ends with dispatch and never permanently blocks port");
+ }
+ {
+  Fixture f;f.connector.base.status=1;f.pending();f.irq();probe_connected=false;
+  check(f.advance_to(1000)==1&&f.connector.base.status==2&&single_notifications==1&&!f.waiting()&&!queued&&!f.configs(),
+   "ordinary UNCHANGED detect retry must still discover unplug while commit remains pending");
+ }
+ {
+  Fixture f;f.connector.base.status=1;f.pending();f.irq();
+  check(f.drain()==1&&f.connector.hotplug_retries==1&&f.waiting()&&!queued&&!f.configs(),
+   "pending HDMI preserves exactly one ordinary detection retry without CONFIG polling");
+ }
+ {
+  Fixture f;f.port.tc=true;f.connector.base.status=1;f.pending();f.irq();
+  check(f.drain()==5&&f.connector.hotplug_retries==5&&f.waiting()&&!queued&&!f.configs(),
+   "pending Type-C preserves all five native ordinary detection retries without CONFIG polling");
  }
  std::cout<<checks-failures<<'/'<<checks<<" actual native completion invariants pass\n";return failures?1:0;
 }
