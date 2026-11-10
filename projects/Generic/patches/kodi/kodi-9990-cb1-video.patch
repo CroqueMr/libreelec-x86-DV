@@ -1681,7 +1681,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +};
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,105 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVOutputSettings.h"
@@ -1748,6 +1748,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (!caps.sourceKnown || !caps.isDV || preferences.output == OutputMode::Disabled)
 +    return result;
 +  auto policy = preferences.Policy();
++  result.policy=policy;
 +  if (policy.mode == DVBRIDGE_MODE_SDR)
 +  {
 +    if (!preferences.ProfileValid(policy.mode)) return {OutputRoute::Vanilla,{},OutputReason::SDRTargetInvalid};
@@ -1766,12 +1767,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return result;
 +  }
 +  if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !caps.hdr10plus)
-+  {
-+    if (!caps.hdr10 || !caps.processing[DVBRIDGE_MODE_HDR10_BASIC].usable)
-+      return {OutputRoute::Vanilla, {}, OutputReason::NoHDR10PlusTransport};
-+    policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
-+    return {OutputRoute::HDR10, policy, OutputReason::NoHDR10PlusTransport};
-+  }
++    return {OutputRoute::Vanilla, policy, OutputReason::NoHDR10PlusTransport};
 +  const auto admission = [&](dvbridge_mode mode) {
 +    if ((mode == DVBRIDGE_MODE_HDR10_EXPERT || mode == DVBRIDGE_MODE_ENHANCED_DV) &&
 +        !preferences.ProfileValid(mode))
@@ -1787,31 +1783,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return {requestedDV ? OutputRoute::NativeDV : OutputRoute::HDR10, policy, OutputReason::None};
 +  result.reason = !(requestedDV ? caps.nativeDV : caps.hdr10) ?
 +      (requestedDV ? OutputReason::NoDVTransport : OutputReason::NoHDR10Transport) : candidate.reason;
-+  if (!requestedDV) return result;
-+  if(policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE && !preferences.allowMasterFallback)
-+    return {OutputRoute::Vanilla,policy,result.reason};
-+  if (!caps.hdr10)
-+  {
-+    result.reason = OutputReason::NoHDR10Transport;
-+    return result;
-+  }
-+  candidate = admission(DVBRIDGE_MODE_HDR10_BASIC);
-+  if (!candidate.usable)
-+  {
-+    result.reason = candidate.reason;
-+    return result;
-+  }
-+  policy.mode = DVBRIDGE_MODE_HDR10_BASIC;
-+  policy.master_ipt = false;
-+  policy.adaptive = DVBRIDGE_ADAPTIVE_A;
-+  policy.tv = {};
-+  return {OutputRoute::HDR10, policy, result.reason};
++  return {OutputRoute::Vanilla, policy, result.reason};
 +}
 +} // namespace DVBRIDGE
 +#endif
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
-@@ -0,0 +1,283 @@
+@@ -0,0 +1,312 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -1824,6 +1802,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#include <cmath>
 +#include <cstdint>
 +#include <mutex>
++#include <optional>
 +#ifdef HAVE_DVBRIDGE
 +#include "dvbridge_policy.h"
 +#include "cb1_cmv40.h"
@@ -1863,10 +1842,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  double expertPeak{}, expertBlack{};
 +  int expertGamut{};
 +  bool optimizedDV{true};
-+  bool optimizedGUI{false};
-+  bool masterIPT{false}, allowMasterFallback{false};
++  bool masterIPT{false};
 +  bool disableL2Trims{false};
-+  bool encodedActiveArea{false};
 +  int cmv40Mode{}, cmv40Trigger{}, cmv40Headroom{20};
 +  int felUpscaling{0};
 +  bool processingOptimizations{false};
@@ -1894,9 +1871,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        std::bit_cast<uint64_t>(sdrGamma) == std::bit_cast<uint64_t>(other.sdrGamma) &&
 +        std::bit_cast<uint64_t>(sdrBlack) == std::bit_cast<uint64_t>(other.sdrBlack) && method == other.method &&
 +        panel == other.panel && gamut == other.gamut && optimizedDV == other.optimizedDV &&
-+        optimizedGUI == other.optimizedGUI &&
-+        masterIPT == other.masterIPT && allowMasterFallback == other.allowMasterFallback &&
-+        disableL2Trims == other.disableL2Trims && encodedActiveArea == other.encodedActiveArea &&
++        masterIPT == other.masterIPT &&
++        disableL2Trims == other.disableL2Trims &&
 +        cmv40Mode == other.cmv40Mode && cmv40Trigger == other.cmv40Trigger &&
 +        cmv40Headroom == other.cmv40Headroom &&
 +        felUpscaling == other.felUpscaling &&
@@ -1992,6 +1968,46 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return mutex;
 +}
 +
++// Protected by OutputSettingsMutex. The settings store remains the sole default owner.
++struct OutputSelectors
++{
++  OutputMode output{OutputMode::Standard};
++  HDR10SourceMode hdr10Source{HDR10SourceMode::Native}, hdr10PlusSource{HDR10SourceMode::Native};
++  HLGSourceMode hlgSource{HLGSourceMode::Native};
++  int method{};
++  void Apply(OutputPreferences& preferences) const
++  {
++    preferences.output=output;
++    preferences.method=method;
++    preferences.hdr10Source=hdr10Source;
++    preferences.hdr10PlusSource=hdr10PlusSource;
++    preferences.hlgSource=hlgSource;
++  }
++};
++inline std::optional<OutputSelectors> activeOutputSelectors;
++
++// Caller holds OutputSettingsMutex; no selector-setting callbacks take this lock.
++inline OutputSelectors ReadDefaultOutputSelectors()
++{
++  OutputSelectors result;
++  const auto component=CServiceBroker::GetSettingsComponent();
++  const auto settings=component ? component->GetSettings() : nullptr;
++  if (!settings) return result;
++  const int output=settings->GetInt("dvbridge.outputmode");
++  result.output=output==3 ? OutputMode::AdaptiveB :
++      output>=0 && output<=6 ? static_cast<OutputMode>(output) : OutputMode::Standard;
++  const int method=settings->GetInt("dvbridge.hdr10method");
++  result.method=method>=0 && method<=2 ? method : 0;
++  const int hdr10=settings->GetInt("dvbridge.hdr10source");
++  result.hdr10Source=(hdr10>=0 && hdr10<=2) || hdr10==4 ?
++      static_cast<HDR10SourceMode>(hdr10) : HDR10SourceMode::Native;
++  const int plus=settings->GetInt("dvbridge.hdr10plussource");
++  result.hdr10PlusSource=plus==3 ? HDR10SourceMode::HDR10PlusDV :
++      plus==4 ? HDR10SourceMode::SDR : HDR10SourceMode::Native;
++  result.hlgSource=settings->GetInt("dvbridge.hlgsource")==1 ? HLGSourceMode::ReferenceDV : HLGSourceMode::Native;
++  return result;
++}
++
 +#ifdef CB1_HAS_HDR10_AI
 +// Protected by OutputSettingsMutex; confirmation retries without changing settings.
 +inline uint64_t hdr10Reselection{};
@@ -2006,24 +2022,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  std::lock_guard<std::mutex> lock(OutputSettingsMutex());
 +  const auto component = CServiceBroker::GetSettingsComponent();
 +  const auto settings = component ? component->GetSettings() : nullptr;
-+  const int mode = settings ? settings->GetInt("dvbridge.outputmode") : 0;
 +  OutputPreferences next;
-+  next.output = mode == 3 ? OutputMode::AdaptiveB :
-+      mode >= 0 && mode <= 6 ? static_cast<OutputMode>(mode) : OutputMode::Standard;
 +  if (settings)
 +  {
-+    const int hdr10 = settings->GetInt("dvbridge.hdr10source");
-+    next.hdr10Source = (hdr10 >= 0 && hdr10 <= 2) || hdr10 == 4 ?
-+        static_cast<HDR10SourceMode>(hdr10) : HDR10SourceMode::Native;
-+    const int plus=settings->GetInt("dvbridge.hdr10plussource");
-+    next.hdr10PlusSource = plus==3 ? HDR10SourceMode::HDR10PlusDV :
-+        plus==4 ? HDR10SourceMode::SDR : HDR10SourceMode::Native;
-+    next.hlgSource=settings->GetInt("dvbridge.hlgsource")==1 ? HLGSourceMode::ReferenceDV : HLGSourceMode::Native;
 +    next.sdrPreset=settings->GetInt("dvbridge.sdrpreset");
 +    next.sdrPeak=settings->GetNumber("dvbridge.sdrpeak");
 +    next.sdrGamma=settings->GetNumber("dvbridge.sdrgamma");
 +    next.sdrBlack=settings->GetNumber("dvbridge.sdrblack");
-+    next.method = settings->GetInt("dvbridge.hdr10method");
 +    {
 +      next.expertPeak=settings->GetNumber("dvbridge.expertpeak");
 +      next.expertGamut=settings->GetInt("dvbridge.expertgamut");
@@ -2036,10 +2041,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    next.gamut = settings->GetInt("dvbridge.tvgamut");
 +    next.felUpscaling = settings->GetInt("dvbridge.felupscaling");
 +    next.masterIPT = settings->GetInt("dvbridge.masteroutput")==1;
-+    next.allowMasterFallback = settings->GetBool("dvbridge.masterfallback");
 +    next.disableL2Trims = settings->GetBool("dvbridge.disablel2");
-+    next.encodedActiveArea = settings->GetBool("dvbridge.encodedactivearea");
-+    next.optimizedGUI = settings->GetBool("dvbridge.optimizedgui");
 +    next.cmv40Mode = settings->GetInt("dvbridge.cmv40");
 +    next.cmv40Trigger = settings->GetInt("dvbridge.cmv40trigger");
 +    next.cmv40Headroom = settings->GetInt("dvbridge.cmv40headroom");
@@ -2048,8 +2050,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (next.cmv40Trigger != 1000 && next.cmv40Trigger != 2000 &&
 +      next.cmv40Trigger != 4000 && next.cmv40Trigger != 10000) next.cmv40Trigger = 0;
 +  if (next.cmv40Headroom < 0 || next.cmv40Headroom > 50) next.cmv40Headroom = 20;
-+  if (next.method < 0 || next.method > 2) next.method = 0;
 +  if (next.felUpscaling < 0 || next.felUpscaling > 2) next.felUpscaling = 0;
++  // Only selectors belong to the file. Calibration and tuning stay live.
++  (activeOutputSelectors ? *activeOutputSelectors : ReadDefaultOutputSelectors()).Apply(next);
 +  next.revision = previous.revision;
 +  bool changed = !next.SameValues(previous);
 +#ifdef CB1_HAS_HDR10_AI
@@ -2071,6 +2074,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +inline void SelectOutputSettings()
 +{
++  {
++    std::lock_guard lock(OutputSettingsMutex());
++    activeOutputSelectors=ReadDefaultOutputSelectors();
++  }
 +  FrameOutputSettings();
 +}
 +
@@ -2259,7 +2266,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +};
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,105 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#ifdef HAVE_DVBRIDGE
@@ -2278,7 +2285,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +public:
 +  static bool Pending() { return m_pending.load(std::memory_order_relaxed); }
 +  static uint64_t Generation() { return Pending() ? m_generation.load(std::memory_order_relaxed) : 0; }
-+  static void ArmMasterRecovery() { m_masterRecovery.store(true); }
 +  static void StartVideo()
 +  {
 +    const auto component=CServiceBroker::GetSettingsComponent();
@@ -2286,7 +2292,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    const bool enabled=settings && settings->GetBool("dvbridge.startupmode");
 +    std::lock_guard lock(m_mutex);
 +    m_generation.fetch_add(1,std::memory_order_relaxed);
-+    m_masterRecovery.store(false);
 +    m_nativeFloor=nativeRevision.load(std::memory_order_relaxed);
 +    m_ordinaryFrame=false;
 +    m_nativeFrame={};
@@ -2298,7 +2303,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_ordinaryFrame=false;
 +    m_nativeFrame={};
 +    m_pending.store(false,std::memory_order_relaxed);
-+    m_masterRecovery.store(false);
 +  }
 +  static void RenderedOrdinary(uint64_t generation)
 +  {
@@ -2330,9 +2334,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  template<class Output> static void NativeOutputAccepted(const Output& output)
 +  {
-+    if ((output.flags & CDVPlaybackInfo::HDMI) && output.requested==5 && output.effective==1 &&
-+        m_masterRecovery.exchange(false))
-+      EmitMasterRecovery();
 +    if (!Pending()) return;
 +    if (!(output.flags & (CDVPlaybackInfo::HDMI | CDVPlaybackInfo::HDR10 | CDVPlaybackInfo::SDR))) return;
 +    {
@@ -2360,10 +2361,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  static void Emit(const std::string& text);
 +  static void EmitAI(int mode);
-+  static void HDR10Recovery();
-+  static void EmitMasterRecovery();
++  static void RenderingUnavailable(OutputReason reason);
 +private:
-+  inline static std::atomic<bool> m_masterRecovery{false};
 +  inline static std::atomic<bool> m_pending{false};
 +  inline static std::atomic<uint64_t> m_generation{0};
 +  inline static std::mutex m_mutex;
@@ -9711,7 +9710,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_outputSate != OUTPUT_DROPPED &&
          !(m_picture.iFlags & DVP_FLAG_DROPPED))
      {
-@@ -858,8 +1007,62 @@
+@@ -858,8 +1007,70 @@
    }
  }
  
@@ -9720,13 +9719,21 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
 +      CServiceBroker::GetWinSystem());
-+  if (!window || DVBRIDGE::FrameOutputSettings().output == DVBRIDGE::OutputMode::Disabled)
++  if (!window || !picture || !picture->stereoMode.empty()) return false;
++  const bool authoredDV=picture->doviSourceInfo.profile || picture->hdrType==StreamHdrType::HDR_TYPE_DOLBYVISION;
++  if (!authoredDV && picture->hdrType!=StreamHdrType::HDR_TYPE_HDR10 &&
++      picture->hdrType!=StreamHdrType::HDR_TYPE_HDR10PLUS && picture->hdrType!=StreamHdrType::HDR_TYPE_HLG)
 +    return false;
++  const auto preferences=DVBRIDGE::FrameOutputSettings(!authoredDV && picture->hdrType==StreamHdrType::HDR_TYPE_HDR10PLUS,
++      !authoredDV && picture->hdrType==StreamHdrType::HDR_TYPE_HLG);
++  if (authoredDV ? preferences.output==DVBRIDGE::OutputMode::Disabled :
++      preferences.hdr10Source==DVBRIDGE::HDR10SourceMode::Native) return false;
 +  const auto reason = window->ConsumeDVPlaybackFailure(picture->doviSourceBinding);
 +  if (reason == DVBRIDGE::OutputReason::None) return false;
 +  CLog::Log(LOGERROR, "Dolby Vision playback unavailable: stream={} source_revision={} profile={} reason={}",
 +      picture->doviSourceBinding.stream, picture->doviSourceBinding.revision,
 +      picture->doviSourceInfo.profile, static_cast<int>(reason));
++  DVBRIDGE::PlaybackNotification::RenderingUnavailable(reason);
 +  m_messageParent.Put(std::make_shared<CDVDMsgBool>(CDVDMsg::PLAYER_ABORT, true));
 +  return true;
 +}
@@ -9774,7 +9781,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bAbortOutput = false;
  
    if (m_processInfo.GetVideoStereoMode() != pPicture->stereoMode)
-@@ -927,7 +1130,25 @@
+@@ -927,7 +1138,25 @@
      }
    }
  
@@ -9801,7 +9808,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      m_droppingStats.AddOutputDropGain(pPicture->pts, 1);
      CLog::Log(LOGDEBUG, "{} - dropped in output", __FUNCTION__);
-@@ -944,6 +1165,9 @@
+@@ -944,6 +1173,9 @@
    int buffer = m_renderManager.WaitForBuffer(m_bAbortOutput, maxWaitTime);
    if (buffer < 0)
    {
@@ -10122,7 +10129,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2776 @@
+@@ -0,0 +1,2770 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -11697,18 +11704,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return FrameStatus::Busy;
 +  }
 +  // A selected policy already passed output admission, including compatibility routes.
-+  const bool fallback = !selected &&
-+      (policy.mode == DVBRIDGE_MODE_HDR10_EXPERT || policy.mode == DVBRIDGE_MODE_ENHANCED_DV) && !preferences.ProfileValid(policy.mode);
-+  if (fallback)
-+  {
-+    policy.mode = preferences.output == DVBRIDGE::OutputMode::HDR10 ?
-+        DVBRIDGE_MODE_HDR10_BASIC : DVBRIDGE_MODE_STANDARD;
-+    policy.tv = {};
-+    policy.adaptive = DVBRIDGE_ADAPTIVE_A;
-+  }
++  if (!selected &&
++      (policy.mode == DVBRIDGE_MODE_HDR10_EXPERT || policy.mode == DVBRIDGE_MODE_ENHANCED_DV) && !preferences.ProfileValid(policy.mode))
++    return FrameStatus::Unsupported;
 +  // Capture the proven observation key before geometry or refresh rekeys work.
 +  dvbridge_renderer_set_l2_trims_disabled(m_renderer, preferences.L2TrimsDisabled(policy.mode));
-+  const auto cmv40 = preferences.CMv40Options(fallback ? DVBRIDGE_MODE_DISABLED : policy.mode);
++  const auto cmv40 = preferences.CMv40Options(policy.mode);
 +  dvbridge_renderer_set_cmv40(m_renderer, &cmv40);
 +  const auto admissionIdentity = SelectionIdentity(base.binding, preferences,
 +      policy.mode);
@@ -11762,7 +11763,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      return PollReady() ? FrameStatus::Ready : FrameStatus::Pending;
 +    Cancel();
 +  }
-+  const bool eligible = allowAsync && asyncSetting && !fallback && !m_fallback && !m_pendingHDR10Fallback &&
++  const bool eligible = allowAsync && asyncSetting && !m_fallback && !m_pendingHDR10Fallback &&
 +      policy.mode != DVBRIDGE_MODE_DISABLED && m_hasCommitted && sameGeometry &&
 +      base.lease && (!enhancement || enhancement->lease) &&
 +      (m_directUsable || policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE) &&
@@ -11800,7 +11801,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  dvbridge_renderer_set_fel_filter(m_renderer, preferences.felUpscaling == 2 ? DVBRIDGE_FEL_REFERENCE : preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416) ? DVBRIDGE_FEL_BILINEAR : DVBRIDGE_FEL_DEFAULT);
 +  dvbridge_renderer_set_processing_optimizations(m_renderer,preferences.processingOptimizations);
 +  dvbridge_renderer_set_overlay_visible(m_renderer,m_overlayVisible);
-+  m_fallback = fallback;
++  m_fallback = false;
 +  m_asyncEligible = eligible;
 +  const auto previousMode=m_effectiveMode;
 +  m_effectiveMode = policy.mode;

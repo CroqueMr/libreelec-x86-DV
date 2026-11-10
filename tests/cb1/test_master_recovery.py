@@ -1,4 +1,4 @@
-"""A performance downgrade is announced once, only after Standard is presented."""
+"""Accepted startup notifications remain bounded without any circuit-downgrade message."""
 import os
 from pathlib import Path
 import subprocess
@@ -10,6 +10,7 @@ class MasterRecoveryTests(unittest.TestCase):
     def test_accepted_output_and_file_lifecycle(self):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         header=(tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h').read_text()
+        self.assertNotIn("ArmMasterRecovery",header)
         header='\n'.join(line for line in header.splitlines() if not line.startswith('#include'))
         program=r'''
 #include <atomic>
@@ -23,25 +24,24 @@ struct CServiceBroker{static Component* GetSettingsComponent(){return &component
 struct CDVPlaybackInfo{enum{HDMI=1,HDR10=8,SDR=32};template<class T> static std::string Mode(const T&){return "mode";}};
 namespace DVBRIDGE {
 inline std::atomic<unsigned long long> nativeRevision{0};
-enum class OutputMode{Disabled,Standard};
+enum class OutputMode{Disabled,Standard};enum class OutputReason{None};
 struct Preferences{OutputMode output=OutputMode::Standard;};
 inline Preferences FrameOutputSettings(){return {};}
 struct SourceBinding{unsigned long long stream{},picture{},revision{};bool Valid()const{return stream && picture && revision;}};
 }
 @@HEADER@@
-static int recoveries=0,notifications=0;static std::string notified;
-void DVBRIDGE::PlaybackNotification::EmitMasterRecovery(){++recoveries;}
+static int notifications=0;static std::string notified;
 void DVBRIDGE::PlaybackNotification::Emit(const std::string& text){++notifications;notified=text;}
 void DVBRIDGE::PlaybackNotification::EmitAI(int){}
 int main(){using N=DVBRIDGE::PlaybackNotification;
  struct Output{unsigned flags=1;int requested=5,effective=5;unsigned long long stream=1,picture=1;} out;
- N::StartVideo();N::ArmMasterRecovery();N::NativeOutputAccepted(out);assert(!recoveries);
- out.effective=1;out.flags=8;N::NativeOutputAccepted(out);assert(!recoveries);
- out.flags=1;out.requested=1;N::NativeOutputAccepted(out);assert(!recoveries);
- out.requested=5;N::NativeOutputAccepted(out);assert(recoveries==1);
- N::NativeOutputAccepted(out);assert(recoveries==1);
- N::ArmMasterRecovery();N::StopVideo();N::NativeOutputAccepted(out);assert(recoveries==1);
- N::ArmMasterRecovery();N::StartVideo();N::NativeOutputAccepted(out);assert(recoveries==1);
+ N::StartVideo();N::NativeOutputAccepted(out);assert(!notifications);
+ out.effective=1;out.flags=8;N::NativeOutputAccepted(out);assert(!notifications);
+ out.flags=1;out.requested=1;N::NativeOutputAccepted(out);assert(!notifications);
+ out.requested=5;N::NativeOutputAccepted(out);assert(notifications==0);
+ N::NativeOutputAccepted(out);assert(notifications==0);
+ N::StopVideo();N::NativeOutputAccepted(out);assert(notifications==0);
+ N::StartVideo();N::NativeOutputAccepted(out);assert(notifications==0);
  settings.enabled=true;N::StartVideo();assert(N::Pending());
  const auto generation=N::Generation();out.stream=3;out.picture=5;out.flags=32;out.requested=out.effective=8;
  N::RenderedNative(generation,{out.stream,out.picture,9});

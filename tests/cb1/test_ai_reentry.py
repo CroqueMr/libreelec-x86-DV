@@ -146,7 +146,7 @@ int main(){for(unsigned latency : {0,1,3}) {
 }
 '''.replace('STOP',stop).replace('BEGIN',begin).replace('SOURCE',source))
 
-    def test_rejected_guided_snapshot_latches_active_source_and_retries_new_source(self):
+    def test_rejected_guided_snapshot_signals_error_without_native_completion(self):
         window=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         prepare=body(window,'bool CWinSystemGbmGLESContext::PrepareHDR10AIQueue(')
         stop=prepare[:prepare.index('  // The ordinary commit retires')]
@@ -159,16 +159,18 @@ namespace DVBRIDGE{
 enum class HDR10SourceMode{Native,ReferenceDV,EnhancedDV,HDR10PlusDV,SDR};
 enum class OutputRoute{Vanilla,NativeDV};
 struct Preferences{unsigned revision=7;HDR10SourceMode hdr10Source=HDR10SourceMode::HDR10PlusDV;};
-struct Caps{bool isHLG=false,isHDR10=true,hdr10PlusSource=true,nativeDV=true,eligible=false;};
+enum class OutputReason{None,ProcessingPending,SourceIneligible};
+struct Caps{bool sourceKnown=true,isHLG=false,isHDR10=true,hdr10PlusSource=true,nativeDV=true,eligible=false,stereoSource=false;};
 inline Preferences prefs;inline auto FrameOutputSettings(bool=false,bool=false){return prefs;}
-struct Selection{OutputRoute route;};
+struct Selection{OutputRoute route;OutputReason reason=OutputReason::SourceIneligible;};
 // The real selector has separate source/admission controls; this fixture owns teardown only.
 auto SelectOutput(const Preferences&,const Caps& c){return Selection{c.eligible?OutputRoute::NativeDV:OutputRoute::Vanilla};}
 }
 struct Context{bool stopped=true;unsigned calls=0;bool StopHDR10AI(){++calls;return stopped;}};
 struct Window{
  Context context;Context* m_dvContext=&context;DVBRIDGE::Caps caps;
- bool m_aiActive=true,m_aiReady=true,m_aiFallback=false;
+ bool m_aiActive=true,m_aiReady=true,m_aiFallback=false,m_dvFatalConsumed=false;
+ DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None;
  struct Binding{unsigned stream{},revision{},picture{};}m_aiActivation{11,2,17};
  enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
  struct Picture{struct{int profile=0;}doviSourceInfo;Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;}picture{{},{11,2,17}};
@@ -178,20 +180,21 @@ struct Window{
  bool Stop(){PREFIX return false;}
 };
 int main(){
- Window rejected;assert(rejected.Stop());
- assert(!rejected.m_aiReady && !rejected.m_aiActive && rejected.m_aiFallback);
- assert(!rejected.Pending()); // Same activation must not alternate HDMI output.
+ Window rejected;assert(!rejected.Stop());
+ assert(!rejected.m_aiReady && !rejected.m_aiActive);
+ assert(rejected.m_dvFatalReason==DVBRIDGE::OutputReason::SourceIneligible);
+ assert(!rejected.Pending()); // A failure is not successful native completion.
  rejected.caps.eligible=true;assert(!rejected.Pending() && !rejected.m_aiReady);
  rejected.caps.eligible=false;++rejected.picture.doviSourceBinding.stream;
- assert(rejected.Stop() && rejected.Pending() && !rejected.m_aiFallback);
+ assert(!rejected.Stop() && !rejected.m_aiFallback); // New source gets its own admission error, not a native circuit.
  Window busy;busy.context.stopped=false;assert(!busy.Stop());assert(!busy.m_aiReady);
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;
  Window native;assert(native.Stop() && !native.Pending() && !native.m_aiReady);
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::ReferenceDV;
- Window saved;assert(saved.Stop() && !saved.Pending() && !saved.m_aiReady);
+ Window saved;assert(!saved.Stop() && !saved.Pending() && !saved.m_aiReady);
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::HDR10PlusDV;
  Window absent;absent.m_dvContext=nullptr;absent.m_aiActive=absent.m_aiReady=false;
- assert(absent.Stop() && absent.Pending());
+ assert(!absent.Stop());assert(absent.m_dvFatalReason==DVBRIDGE::OutputReason::SourceIneligible);
 }
 '''.replace('PENDING',pending).replace('PREFIX',stop.lstrip()[1:]))
 
@@ -294,12 +297,13 @@ int main(){
 #include <mutex>
 namespace DVBRIDGE {
 enum class OutputMode{Disabled,Standard,MasterReference};
-enum class OutputRoute{Vanilla,DV};enum class OutputReason{None,SourceIneligible};
+enum class OutputRoute{Vanilla,DV};enum class OutputReason{None,SourceIneligible,ProcessingPending};
+enum class HDR10SourceMode{Native,ReferenceDV};
 }
 struct Window {
  struct Preferences{DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;
-  bool allowMasterFallback=false;}preferences;
- struct Caps{bool isDV=false,processingKnown=true;}capabilities;
+  bool allowMasterFallback=false;DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
+ struct Caps{bool sourceKnown=true,isDV=false,isHDR10=true,isHLG=false,stereoSource=false,processingKnown=true;}capabilities;
  struct Picture{struct{int profile=0,compatibility=1;bool el=false;}doviSourceInfo;
   bool doviEnhancement=false;}picture;
  struct{DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
@@ -317,11 +321,11 @@ int main(){
  Window dv;dv.capabilities.isDV=true;dv.picture.doviSourceInfo.profile=7;
  assert(!dv.Prepare());assert(dv.m_dvFatalReason==DVBRIDGE::OutputReason::SourceIneligible);
  Window standard;standard.capabilities.isDV=true;standard.picture.doviSourceInfo.profile=7;
- standard.preferences.output=DVBRIDGE::OutputMode::Standard;assert(standard.Prepare());
+ standard.preferences.output=DVBRIDGE::OutputMode::Standard;assert(!standard.Prepare()); // Unavailable chosen circuit cannot use ordinary BL.
  Window p5;p5.capabilities.isDV=true;p5.picture.doviSourceInfo.profile=5;
  p5.picture.doviSourceInfo.compatibility=0;p5.preferences.output=DVBRIDGE::OutputMode::Standard;
  assert(!p5.Prepare());
- Window pending;pending.capabilities.isDV=true;pending.capabilities.processingKnown=false;
+ Window pending;pending.capabilities.isDV=true;pending.capabilities.processingKnown=false;pending.m_dvSelection.reason=DVBRIDGE::OutputReason::ProcessingPending;
  assert(pending.Prepare());
  Window disabled;disabled.capabilities.isDV=true;disabled.preferences.output=DVBRIDGE::OutputMode::Disabled;
  assert(disabled.Prepare());
@@ -676,14 +680,16 @@ namespace DVBRIDGE {
 enum class HDR10SourceMode{Native,ReferenceDV,HDR10PlusDV,SDR};enum class OutputRoute {Vanilla,DV,NativeDV=DV};
 struct Preferences {int revision=1;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;inline auto FrameOutputSettings(bool=false,bool=false){return prefs;}
-struct Caps{bool isHLG=false,isHDR10=true,hdr10PlusSource=false,nativeDV=true;};
-struct Selection{OutputRoute route;};
+enum class OutputReason{None,ProcessingPending};
+struct Caps{bool sourceKnown=true,isHLG=false,isHDR10=true,hdr10PlusSource=false,nativeDV=true,stereoSource=false;};
+struct Selection{OutputRoute route;OutputReason reason=OutputReason::None;};
 inline Selection SelectOutput(Preferences p,Caps){return {p.hdr10Source==HDR10SourceMode::Native?OutputRoute::Vanilla:OutputRoute::DV};}
 }
 struct Context{int stops=0;bool ready=true;bool StopHDR10AI(){++stops;return ready;}};
 struct Window{
  std::mutex m_dvCapabilityMutex;bool m_aiActive=true;int m_aiPolicy=17,m_aiSelectionPolicy=0;
- bool m_aiReady=true,m_aiFallback=false;
+ bool m_aiReady=true,m_aiFallback=false,m_dvFatalConsumed=false;
+ DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None;
  struct Binding{int stream{},revision{},picture{};}m_aiActivation{7,17,1};
  enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
  struct Picture{struct{int profile=0;}doviSourceInfo;Binding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;}picture{{},{7,17,1}};

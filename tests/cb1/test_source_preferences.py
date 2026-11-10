@@ -21,7 +21,7 @@ class SourcePreferencesTests(unittest.TestCase):
         self.assertEqual(plain.findtext('default'), '0')
         self.assertEqual(plus.findtext('default'), '0')
 
-    def test_paired_snapshots_preserve_requested_modes_through_fallback(self):
+    def test_paired_snapshots_preserve_defaults_and_independent_live_choices(self):
         header = (TREE / 'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         header = '\n'.join(line for line in header.splitlines() if not line.startswith('#include'))
         selector = body((TREE / 'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h').read_text(),
@@ -31,7 +31,7 @@ class SourcePreferencesTests(unittest.TestCase):
         definitions=re.search(r'struct Choice.*?dvChoices\[\].*?;',source,re.S).group()
         choices = definitions+menu[menu.index('  const auto nativeSource='):
                                    menu.index('  const auto choiceSetting=')]
-        writes = menu[menu.index('    const auto& choice=choices[selected];'):menu.index('    settings->Save();')]
+        writes = menu[menu.index('    const auto& choice=choices[selected];'):menu.index('    if (settingsMenu) settings->Save();')]
         program = r'''
 #include <atomic>
 #include <bit>
@@ -39,6 +39,7 @@ class SourcePreferencesTests(unittest.TestCase):
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <string>
 #include <cassert>
@@ -125,7 +126,7 @@ int main(){
  caps.hdr10=true;
  assert(SelectOutput(FrameOutputSettings(),caps).policy.mode==DVBRIDGE_MODE_HDR10_EXPERT);
  assert(stored->ints["dvbridge.outputmode"]==1 && stored->ints["dvbridge.hdr10method"]==1);
- // Exercise the real quick-switch choices and save path, alternating input families.
+ // Exercise actual live writes: stored defaults stay independent for every family.
  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,5));
  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,0));
  assert(choose(StreamHdrType::HDR_TYPE_HDR10,1));
@@ -136,12 +137,16 @@ int main(){
  assert(FrameOutputSettings(true).hdr10Source==HDR10SourceMode::Native);
  assert(FrameOutputSettings().hdr10Source==HDR10SourceMode::EnhancedDV);
  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));
+ assert(stored->ints["dvbridge.outputmode"]==1 && stored->ints["dvbridge.hdr10method"]==1);
+ assert(stored->ints["dvbridge.hdr10source"]==2 && stored->ints["dvbridge.hdr10plussource"]==0);
  assert(FrameOutputSettings().output==OutputMode::MasterReference);
  assert(FrameOutputSettings().hdr10Source==HDR10SourceMode::EnhancedDV);
- // The same native dialog can set DV preferences while stopped or on HDR input.
+ // Settings edit the next-file default, preserving this file's live Master choice.
  assert(choose(StreamHdrType::HDR_TYPE_NONE,5,true));
- assert(FrameOutputSettings().output==OutputMode::HDR10 && FrameOutputSettings().method==1);
+ assert(FrameOutputSettings().output==OutputMode::MasterReference);
  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,6,true));
+ assert(FrameOutputSettings().output==OutputMode::MasterReference);
+ SelectOutputSettings();
  assert(FrameOutputSettings().output==OutputMode::HDR10 && FrameOutputSettings().method==2);
  // Kodi default bypasses CB1 independently for all three input families.
  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,3));

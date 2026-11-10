@@ -36,7 +36,7 @@ int main(){bool m_continuousFrameEligible=true;uint64_t m_masterFramePeriodNs=0;
  assert(m_masterFramePeriodNs==0);
  m_continuousFrameEligible=true;preferences.allowMasterFallback=false;
  ASSIGNMENT
- assert(m_masterFramePeriodNs==0);
+ assert(m_masterFramePeriodNs==16683350); // Timing diagnostics ignore obsolete fallback preference.
  preferences.allowMasterFallback=true;m_dvSelection.policy.mode=0;
  ASSIGNMENT
  assert(m_masterFramePeriodNs==0);

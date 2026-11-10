@@ -150,7 +150,7 @@ struct CDVBridgeGLES {
   bool FenceLastUse(){++fences;return fenceOK;}
   bool Close(){++closed;gl=false;return true;}
  };
- enum class FrameStatus {Ready,Pending,Busy,Failed,Reused};
+ enum class FrameStatus {Ready,Pending,Busy,Failed,Reused,Unsupported};
  struct Layer {Binding binding;double pts=0;bool lease=true;int scalingMethod=0;struct {unsigned profile=8;}sourceInfo;};
  bool m_submissionAsync=false,m_asyncEligible=false,m_hdr10plusSubmits=false;
  struct {bool asyncEligible=false;}m_submission;

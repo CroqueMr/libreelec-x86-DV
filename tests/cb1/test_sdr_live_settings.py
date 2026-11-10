@@ -102,6 +102,7 @@ int main(int argc,char**argv){assert(argc==2);std::string test=argv[1];Window w;
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <string>
 #include <cassert>

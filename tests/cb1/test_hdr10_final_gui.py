@@ -22,7 +22,7 @@ class HDR10FinalGUI(unittest.TestCase):
                    'bool direct(bool overlayFree,bool nativeSubtitles,bool m_hdrConversion,bool capturing,bool optimized=true)'
                    '{struct{bool optimizedGUI;}preferences{optimized};return ' + argument[1] + ';}\n'
                    'int main(){assert(direct(false,false,true,false));'
-                   'assert(!direct(false,false,true,true));assert(!direct(false,false,true,false,false));'
+                   'assert(!direct(false,false,true,true));assert(direct(false,false,true,false,false));'
                    'assert(!direct(false,false,false,false));'
                    'assert(direct(true,false,false,false));assert(direct(false,true,false,false));}\n')
         with tempfile.TemporaryDirectory() as temporary:
