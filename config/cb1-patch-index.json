@@ -2483,5 +2483,21 @@
       "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py.",
       "xbmc/windowing/gbm/WinSystemGbmGLContext.h": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-03-shaders-screenshots.patch": {
+    "summary": "DV screenshots and float-output clamps for the GL shaders",
+    "component": "kodi",
+    "files": {
+      "system/shaders/GL/1.2/gl_output.glsl": "Clamp float output in the GLSL 1.20 output stage.",
+      "system/shaders/GL/1.2/gl_videofilter_frag.glsl": "Clamp float output in the GLSL 1.20 video filter.",
+      "system/shaders/GL/1.5/gl_output.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_videofilter_frag.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_yuv2rgb_basic.glsl": "Clamp on a floating-point output; keep black pixels black in tone mapping.",
+      "system/shaders/GL/4.0/gl_yuv2rgb_filter4.glsl": "Guard Reinhard tone mapping against black pixels, as GLES does.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Accept desktop GL's BGRA readback in Master Reference screenshots.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/rendering/gl/ScreenshotSurfaceGL.cpp": "Read DV screenshots from the bridge and pass on whether their colour encoding is verified."
+    }
   }
 }
