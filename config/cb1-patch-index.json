@@ -1243,12 +1243,14 @@
     }
   },
   "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": {
-    "summary": "Retry an HDMI link check deferred by a pending commit while preserving immediate hotplug notification",
+    "summary": "Resume HDMI link checks from native commit completion while preserving ordinary hotplug detection",
     "component": "linux",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_ddi.c": "Preserve the explicit pending-commit reason and request a bounded native HDMI link recheck.",
-      "drivers/gpu/drm/i915/display/intel_display_types.h": "Distinguish deferred link checks and combined changed notifications from ordinary retries.",
-      "drivers/gpu/drm/i915/display/intel_hotplug.c": "Keep immediate changed notifications and explicit deferred checks on the existing bounded hotplug queue."
+      "drivers/gpu/drm/i915/display/intel_ddi.c": "Arm or cancel the current HDMI completion check under existing modeset guards; preserve native hotplug detection retries.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Capture participating pipes before DRM publication and hand off completion without reading published CRTC state.",
+      "drivers/gpu/drm/i915/display/intel_display_core.h": "Store bounded per-pipe and encoder HPD request masks under the existing IRQ lock.",
+      "drivers/gpu/drm/i915/display/intel_hotplug.c": "Coalesce completion requests on the native HPD worker with current-target checks and existing enable, block and cancellation lifecycle.",
+      "drivers/gpu/drm/i915/display/intel_hotplug.h": "Declare the native HPD completion-request lifecycle helpers."
     }
   }
 }
