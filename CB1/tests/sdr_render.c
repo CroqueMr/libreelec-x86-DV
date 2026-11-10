@@ -155,6 +155,45 @@ static void native_pair(struct reference_gpu *gpu,struct dvbridge_renderer *stag
     dvbridge_gl_frame_release(&el);dvbridge_gl_frame_release(&frame);
     glDeleteTextures(3,residual.textures);glDeleteTextures(3,planes.textures);
 }
+static void raster_regression(struct reference_gpu *gpu,struct dvbridge_renderer *r)
+{
+    struct native_planes planes=native_planes(DVBRIDGE_P010,false);
+    struct dvbridge_gl_frame imported={0};
+    assert(dvbridge_gl_frame_import(&imported,gpu->gl->gpu,DVBRIDGE_P010,W,H,planes.planes));
+    imported.frame.repr.sys=PL_COLOR_SYSTEM_BT_2020_NC;
+    imported.frame.repr.levels=PL_COLOR_LEVELS_LIMITED;
+    imported.frame.color=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,
+        .transfer=PL_COLOR_TRC_PQ,.hdr={.min_luma=.01,.max_luma=1000}};
+    assert(imported.frame.repr.alpha==PL_ALPHA_UNKNOWN);
+    size_t bytes;AVDOVIMetadata *dv=task3_fixture(&bytes);
+    const struct dvbridge_policy p={.revision=3,.mode=DVBRIDGE_MODE_SDR};
+    const struct dvbridge_geometry g={W,H,0,0,W,H,W,H};
+    const int sizes[][2]={{W/2,H},{W*2,H},{W,H/2},{W,H*2}};unsigned cases=0;
+    for(unsigned origin=0;origin<2;origin++){
+        const void *metadata=origin?dv:NULL;size_t n=origin?bytes:0;
+        struct dvbridge_identity id={9,1,3};pl_tex matched=reference_texture(gpu->gl->gpu,W,H,NULL);
+        assert(dvbridge_render_sdr_policy_direct_eligible(r,&p,&id,&imported.frame,metadata,n,1,1,g,matched,8));
+        assert(dvbridge_render_hdr10_policy_direct(r,&p,&id,&imported.frame,metadata,n,1,1,g,matched,false,false,8));
+        assert(dvbridge_render_policy_commit(r,&id,matched));
+        struct dvbridge_hdr10_policy_output accepted;assert(dvbridge_render_policy_committed(r,&accepted));
+        ++id.picture;
+        for(unsigned size=0;size<4;size++){
+            pl_tex invalid=reference_texture(gpu->gl->gpu,sizes[size][0],sizes[size][1],NULL);
+            struct pl_frame saved=imported.frame;
+            assert(!dvbridge_render_sdr_policy_direct_eligible(r,&p,&id,&imported.frame,metadata,n,1,1,g,invalid,8));
+            assert(!memcmp(&saved,&imported.frame,sizeof(saved)));
+            assert(!dvbridge_render_hdr10_policy_direct(r,&p,&id,&imported.frame,metadata,n,1,1,g,invalid,false,false,8));
+            assert(!dvbridge_render_policy_output(r));
+            struct dvbridge_hdr10_policy_output after;assert(dvbridge_render_policy_committed(r,&after));
+            assert(dvbridge_identity_equal(&accepted.identity,&after.identity)&&after.final_target==matched);
+            printf("RASTER NORMAL %s %dx%d rejected retained\n",origin?"DV":"raw",sizes[size][0],sizes[size][1]);
+            ++cases;pl_tex_destroy(gpu->gl->gpu,&invalid);
+        }
+        pl_tex_destroy(gpu->gl->gpu,&matched);
+    }
+    assert(cases==8);printf("COMPLETE %u registered raster rejections\n",cases);
+    av_free(dv);dvbridge_gl_frame_release(&imported);glDeleteTextures(3,planes.textures);
+}
 static void direct_regression(void)
 {
     struct reference_gpu gpu=reference_gpu_create();
@@ -208,6 +247,7 @@ static void direct_regression(void)
         if(variant<3)memcpy(controls[variant][processing][p],last_expected,sizeof(last_expected));
     }
     av_free(m);assert(comparisons==555);printf("COMPLETE %u staged/direct SDR comparisons\n",comparisons);
+    raster_regression(&gpu,direct);
     dvbridge_renderer_destroy(staged);dvbridge_renderer_destroy(direct);reference_gpu_destroy(&gpu);
 }
 

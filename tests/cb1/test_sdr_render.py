@@ -42,6 +42,8 @@ class SDRRenderTests(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertEqual(len(re.findall(r'^PAIR \d+ max=',result.stdout,re.M)),555)
             self.assertIn('COMPLETE 555 staged/direct SDR comparisons',result.stdout)
+            self.assertEqual(len(re.findall(r'^RASTER NORMAL ',result.stdout,re.M)),8)
+            self.assertIn('COMPLETE 8 registered raster rejections',result.stdout)
             self.assertNotIn('UNAVAILABLE',result.stdout)
 
 
