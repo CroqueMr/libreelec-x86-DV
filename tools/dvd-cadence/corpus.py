@@ -8,10 +8,13 @@ frames can be regenerated for quality comparisons (see measure.py).
 With --containers, the soft-telecine sample is also written as Matroska, as a DVD-Video
 VIDEO_TS folder and as an ISO image (requires mkvpropedit, dvdauthor and xorriso).
 
+When x264 is installed, an H.264 soft-telecine sample is also written as Matroska.
+
 usage: corpus.py OUTPUT_DIR [--seconds N] [--containers]
 """
 import argparse
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +22,7 @@ import sys
 NTSC = (720, 480)
 PAL = (720, 576)
 FILM = "24000/1001"
+REPEAT_FILM = "25000/1001"
 
 
 def source(size, rate, seconds):
@@ -95,6 +99,16 @@ def make_soft(out_dir, seconds):
     m2v.unlink()
 
 
+def make_h264(out_dir, seconds):
+    """H.264 soft telecine: x264 writes the 3:2 pattern as pic_struct SEI (requires x264)."""
+    y4m = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", source(NTSC, FILM, seconds),
+                          "-f", "yuv4mpegpipe", "-"], check=True, capture_output=True).stdout
+    subprocess.run(["x264", "--quiet", "--demuxer", "y4m", "--fps", FILM, "--pulldown", "32",
+                    "--fake-interlaced", "--bframes", "0", "-o",
+                    str(out_dir / "ntsc_soft32_h264.mkv"), "-"], input=y4m, check=True,
+                   capture_output=True)
+
+
 def make_containers(out_dir):
     """The soft-telecine sample as Matroska, VIDEO_TS folder and ISO image."""
     # Matroska remux with the 3:2 timestamps that states the film rate, the average
@@ -126,6 +140,11 @@ SAMPLES = {
     "pal_22_progressive": lambda s: (source(PAL, "25", s), ()),
     # True interlaced PAL video (50 fields/s).
     "pal_video": lambda s: (source(PAL, "50", s) + ",interlace=scan=tff", INTERLACED),
+    # 25 fps film converted to 29.97 progressive by repeating one frame in six. The film
+    # is slowed by 1000/1001 so that the repeat keeps its place in the cycle.
+    "ntsc_repeat": lambda s: (source(NTSC, REPEAT_FILM, s) + ",fps=30000/1001", ()),
+    # Native 29.97p video: every frame is a different instant.
+    "ntsc_progressive": lambda s: (source(NTSC, "30000/1001", s), ()),
 }
 
 
@@ -170,6 +189,8 @@ def main(argv=None):
     make_mixed(args.output, args.seconds)
     if args.containers:
         make_containers(args.output)
+    if shutil.which("x264"):
+        make_h264(args.output, args.seconds)
     return sorted(args.output.glob("*.mpg"))
 
 

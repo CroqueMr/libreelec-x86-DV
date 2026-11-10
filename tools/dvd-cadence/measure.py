@@ -28,6 +28,7 @@ METHODS = {
             "bwdif=mode=send_frame:parity=auto:deint=interlaced,decimate",
     "fieldmatch": "fieldmatch=order=auto:combmatch=full,"
                   "bwdif=mode=send_frame:parity=auto:deint=interlaced",
+    "decimate6": "decimate=cycle=6",
 }
 
 # Progressive frames each sample was made from: (size, rate).
@@ -38,6 +39,8 @@ REFERENCE = {
     "pal_22": (corpus.PAL, "25"),
     "pal_22_progressive": (corpus.PAL, "25"),
     "pal_video": (corpus.PAL, "50"),
+    "ntsc_repeat": (corpus.NTSC, corpus.REPEAT_FILM),
+    "ntsc_progressive": (corpus.NTSC, "30000/1001"),
 }
 
 

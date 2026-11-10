@@ -168,14 +168,24 @@ class SoftTelecineTests(unittest.TestCase):
                              check=True).stdout
         return self.parse(out.splitlines())
 
-    def assert_film_rate(self, shown, name):
+    def assert_film_rate(self, shown, name, tolerance=1000):
         self.assertEqual(len(shown), 96, name)
         first = next(i for i, (active, _) in enumerate(shown) if active)
         self.assertLessEqual(first, 12, name)  # decided within half a second
         self.assertTrue(all(active for active, _ in shown[first:]), name)
         times = [pts for _, pts in shown[first:]]
         steps = [b - a for a, b in zip(times, times[1:])]
-        self.assertTrue(all(abs(step - FILM) < 1000 for step in steps), (name, steps[:10]))
+        self.assertTrue(all(abs(step - FILM) < tolerance for step in steps), (name, steps[:10]))
+
+    def test_h264_soft_telecine_is_shown_at_the_film_rate(self):
+        path = self.samples / 'ntsc_soft32_h264.mkv'
+        if not path.is_file():
+            self.skipTest('requires x264')
+        rate, shown = self.play(path)
+        self.assertAlmostEqual(rate, 23.976, places=3)
+        # x264 orders the pic_struct pattern so that timestamps deviate from the even
+        # film time by up to one field; the retimer follows 1/16 of the deviation.
+        self.assert_film_rate(shown, 'h264', tolerance=1500)
 
     def test_soft_telecine_film_frames_are_evenly_spaced_at_the_film_rate(self):
         rate, shown = self.play(self.samples / 'ntsc_soft32.mpg')

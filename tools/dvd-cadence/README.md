@@ -18,6 +18,8 @@ python3 tools/dvd-cadence/measure.py /tmp/dvd-cadence --json /tmp/dvd-cadence/re
 | `pal_22` | 25p film | 2:2, flagged interlaced, 25i |
 | `pal_22_progressive` | 25p film | flagged progressive |
 | `pal_video` | 50p video | every field a different instant, 25i |
+| `ntsc_repeat` | 24.975p film (25 fps slowed by 1000/1001) | progressive 29.97, one frame repeated in six |
+| `ntsc_progressive` | 29.97p video | progressive, every frame a different instant |
 
 With `--containers` (requires `mkvpropedit`, `dvdauthor` and `xorriso`), the
 soft-telecine sample is also written in other containers:
@@ -27,6 +29,9 @@ soft-telecine sample is also written in other containers:
 | `ntsc_soft32.mkv` | Matroska remux with the 3:2 timestamps; states 23.976, their average rate |
 | `ntsc_soft32_dvd/VIDEO_TS` | DVD-Video folder, title 1 |
 | `ntsc_soft32.iso` | ISO image of that folder |
+
+When `x264` is installed, `ntsc_soft32_h264.mkv` holds the soft-telecine film as H.264
+with the 3:2 pattern in `pic_struct` SEI (`x264 --pulldown 32`).
 
 The pattern is rendered at twice the size and filtered down. Unfiltered one-pixel edges
 look like combing to field detectors.
@@ -39,6 +44,7 @@ look like combing to field detectors.
 | `bwdif` | `bwdif=mode=send_field` | FFmpeg software deinterlace; VAAPI methods are similar field-rate deinterlacers |
 | `fieldmatch` | `fieldmatch,bwdif=deint=interlaced` | rebuild frames from matching fields, interpolate orphans |
 | `ivtc` | `fieldmatch,bwdif=deint=interlaced,decimate` | inverse telecine |
+| `decimate6` | `decimate=cycle=6` | repeated frame removal |
 
 `fps` is the output frames per second of the sample. PSNR (dB) compares with the
 progressive source. An output with the source frame count is compared frame by frame;
@@ -65,6 +71,10 @@ Findings:
 - True video: field-rate deinterlacing is best; inverse telecine and field matching
   are wrong. One fixed method cannot serve every disc, so the method must follow the
   detected cadence.
+- Repeated frames (`ntsc_repeat`, 8 s): the coded stream has 240 frames, 40 of them
+  repeats. `decimate=cycle=6` gives the 200 source frames at 24.975 fps, 50.93 dB frame
+  by frame. Native 29.97p (`ntsc_progressive`) loses 22.5 dB with it, so the repeat
+  pattern must be detected first.
 - Soft telecine: the decoder already outputs the 192 film frames (`weave`). Only the
   presentation timing is wrong: the stream states 29.97, so Kodi keeps that rate and
   the 3:2 field repeats.

@@ -1,6 +1,7 @@
 """The DVD cadence corpus has the coding that the cadence tests rely on."""
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -65,6 +66,30 @@ class DvdCadenceCorpusTests(unittest.TestCase):
             self.assertEqual(len(frames), 60, name)
             self.assertTrue(all(interlaced for interlaced, _, _ in frames), name)
             self.assertFalse(any(repeat for _, repeat, _ in frames), name)
+
+    def test_25_fps_film_repeats_one_progressive_frame_in_six(self):
+        frames = self.frames('ntsc_repeat')
+        self.assertEqual(len(frames), 60)  # 2 s at 29.97
+        self.assertFalse(any(interlaced or repeat for interlaced, repeat, _ in frames))
+        # The repeat is the smallest frame difference of its cycle, always at one position.
+        out = subprocess.run(
+            ['ffmpeg', '-v', 'error', '-i', str(Path(self.directory.name) / 'ntsc_repeat.mpg'),
+             '-vf', 'scdet,metadata=print:key=lavfi.scd.mafd:file=-', '-f', 'null', '-'],
+            check=True, capture_output=True, text=True).stdout
+        diffs = [float(l.split('=')[1]) for l in out.split() if l.startswith('lavfi.scd.mafd=')]
+        cycles = [diffs[i:i + 6] for i in range(6, len(diffs) - 5, 6)]
+        positions = {cycle.index(min(cycle)) for cycle in cycles}
+        self.assertEqual(len(positions), 1, cycles)
+        self.assertTrue(all(min(c) < 0.5 * sorted(c)[3] for c in cycles), cycles)
+
+    def test_h264_soft_telecine_carries_alternating_field_repeats(self):
+        path = Path(self.directory.name) / 'ntsc_soft32_h264.mkv'
+        if not path.is_file():
+            self.skipTest('requires x264')
+        frames = measure.frames(path)
+        self.assertEqual(len(frames), 48)
+        self.assertFalse(any(interlaced for interlaced, _, _ in frames))
+        self.assertEqual([repeat for _, repeat, _ in frames[:6]], [1, 0, 1, 0, 1, 0])
 
     def test_pal_film_is_flagged_interlaced_or_progressive(self):
         self.assertTrue(all(i for i, _, _ in self.frames('pal_22')))

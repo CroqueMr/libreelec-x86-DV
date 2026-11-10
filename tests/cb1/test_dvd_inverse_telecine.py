@@ -113,7 +113,8 @@ int main(int argc, char** argv)
         std::printf("graph %s\n", FilterGraph(cadence).c_str());
         std::printf("duration %.3f\n", FilmFrameDuration(cadence, 1e6 / av_q2d(rate)));
       }
-      // Kodi hands decoded timestamps to its graphs in AV_TIME_BASE units.
+      // CDVDVideoCodecFFmpeg::FilterProcess gives the cadence graphs the best-effort
+      // timestamp (DVD pictures often have none), in AV_TIME_BASE units.
       frame->pts = av_rescale_q(frame->best_effort_timestamp, stream->time_base, AV_TIME_BASE_Q);
       frame->best_effort_timestamp = frame->pts;
       av_buffersrc_add_frame(in, frame);

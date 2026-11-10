@@ -1255,7 +1255,7 @@
     }
   },
   "projects/Generic/patches/kodi/kodi-9995-dvd-cadence.patch": {
-    "summary": "DVD cadence: soft telecine, inverse telecine and film detection",
+    "summary": "DVD cadence: soft telecine, inverse telecine, film detection and 25 fps frame repeats",
     "component": "kodi",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Name the inverse telecine and film detection deinterlace methods.",
@@ -1263,18 +1263,18 @@
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt": "Build the film cadence graphs and the field analysis.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp": "Reset the film frame duration and coded frame rate of a picture.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h": "Mark pictures that are complete film frames and carry the coded frame rate.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Pass the coded frame rate with each picture; run the cadence graphs on the software path and time their film frames.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Pass the coded frame rate with each picture; run the cadence graphs on the software path, including repeated-frame removal on progressive 29.97, feed them best-effort timestamps and time their film frames.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Hold the cadence graph and field analysis state of the software path.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.cpp": "Run idet on decoded frames and feed the cadence detector.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.cpp": "Run idet and scdet on decoded frames and feed the cadence detector.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.h": "Field analysis of decoded frames.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.cpp": "Field matching, orphan deinterlacing and 3:2 decimation graphs; classify telecine, 2:2 and video cadences.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.cpp": "Field matching, orphan deinterlacing, 3:2 and 1-in-6 decimation graphs; classify telecine, 2:2, video and repeated-frame cadences.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.h": "Film cadence graphs, their buffer source and the cadence detector.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp": "Offer inverse telecine and film detection through the VAAPI FFmpeg post-processing and time its film frames.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h": "Carry the stream frame rate, the cadence and the field analysis of the post-processing.",
       "xbmc/cores/VideoPlayer/FilmTiming.cpp": "Detect soft telecine, take the coded frame rate before the container rate and space film frames evenly.",
       "xbmc/cores/VideoPlayer/FilmTiming.h": "Soft telecine detection and film frame retiming.",
       "xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp": "Offer inverse telecine and film detection on the software path.",
-      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Show film frames once, evenly spaced, and request the film rate from the renderer.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Show film frames once, evenly spaced, and request the film rate from the renderer (the 25 Hz family for 24.975).",
       "xbmc/cores/VideoPlayer/VideoPlayerVideo.h": "Hold the soft telecine and film timing state.",
       "xbmc/cores/VideoSettings.h": "Add the inverse telecine and film detection deinterlace methods.",
       "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "List inverse telecine and film detection in the video settings."

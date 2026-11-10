@@ -127,8 +127,15 @@ class FilmDetectionTests(unittest.TestCase):
             self.assertEqual(set(decisions[first:]), {cadence}, name)
 
     def test_progressive_coding_is_left_to_the_decoder(self):
-        for name in ('ntsc_soft32', 'pal_22_progressive'):
-            self.assertEqual({c for c, _ in self.detect(name)}, {'-'}, name)
+        for name in ('ntsc_soft32', 'pal_22_progressive', 'ntsc_progressive'):
+            self.assertLessEqual({c for c, _ in self.detect(name)}, {'-', 'progressive'}, name)
+
+    def test_repeated_frames_of_25_fps_film_are_removed_within_six_seconds(self):
+        decisions = [c for c, _ in self.detect('ntsc_repeat')]
+        first = decisions.index('frame repeat removal')
+        self.assertLessEqual(first, 180)
+        self.assertEqual(set(decisions[first:]), {'frame repeat removal'})
+        self.assertLessEqual(set(decisions[:first]), {'-', 'progressive'})
 
     def test_mixed_film_and_video_switches_once_after_the_change(self):
         decisions = [c for c, _ in self.detect('ntsc_mixed')]
@@ -138,7 +145,7 @@ class FilmDetectionTests(unittest.TestCase):
         self.assertTrue(middle <= changes[1][0] <= middle + 75, changes)
 
     def test_the_selected_graph_is_the_best_measured_method(self):
-        for name in ('ntsc_hard32', 'ntsc_video', 'pal_22', 'pal_video'):
+        for name in ('ntsc_hard32', 'ntsc_video', 'pal_22', 'pal_video', 'ntsc_repeat'):
             graph = self.detect(name)[-1][1]
             path = self.samples / f'{name}.mpg'
             reference = measure.REFERENCE[name]
