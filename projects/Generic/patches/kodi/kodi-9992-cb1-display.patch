@@ -1700,6 +1700,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    virtual void EndGuiComposite() {}
    virtual void CompositeGui() {}
  
+@@ -280,6 +285,8 @@
+   // yields wrong transparency. When true, GUI draws select a compensated
+   // alpha blend (see CGUIFontTTFGLES::FirstBegin).
+   virtual bool IsHdrComposite() const { return false; }
++  // Native HDR keeps its perceived-translucency compensation by default.
++  virtual bool UseGuiCoverageAlpha() const { return !IsHdrComposite(); }
+ 
+   /*!
+    * \brief Gets debug info from video renderer for use in "Debug Info OSD" (Alt + O)
 --- a/xbmc/windowing/gbm/CMakeLists.txt
 +++ b/xbmc/windowing/gbm/CMakeLists.txt
 @@ -24,3 +24,7 @@
@@ -6151,7 +6160,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,20 +53,138 @@
+@@ -41,20 +53,148 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -6173,6 +6182,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void EndGuiComposite() override;
    void CompositeGui() override;
    bool IsHdrComposite() const override { return m_guiCompositing; }
++  bool UseGuiCoverageAlpha() const override
++  {
++#ifdef HAVE_DVBRIDGE
++    // Captured DV state survives until ordinary restoration is acknowledged.
++    if (!m_cb1RestoringPreferences && !m_dvOrdinaryFrame &&
++        (m_dvState.Captured() || m_hdrConversion))
++      return true;
++#endif
++    return CWinSystemBase::UseGuiCoverageAlpha();
++  }
 +#ifdef HAVE_DVBRIDGE
 +  static bool DVBridgeRequested(const VideoPicture* picture);
 +  bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res) override;
@@ -6290,7 +6309,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +193,97 @@
+@@ -63,8 +203,97 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};

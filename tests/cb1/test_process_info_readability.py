@@ -1,6 +1,7 @@
 """Regression for clipped static metadata captions and grouped pixel dimensions."""
 from pathlib import Path
 import itertools
+import json
 import os
 import re
 import subprocess
@@ -12,6 +13,43 @@ from test_native_video_source import TREE
 
 
 class ProcessInfoReadability(unittest.TestCase):
+    def test_current_block_positions_order_and_row_bindings_are_retained(self):
+        panel=ET.parse(Path(__file__).resolve().parents[2]/
+            'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
+        expected=json.loads(Path(__file__).with_name('process_info_structure.json').read_text())
+        for name,structure in expected.items():
+            include=panel.find('./include[@name="'+name+'"]')
+            actual={
+                'includes':[{'name':node.get('content') or (node.text or '').strip(),
+                    'params':{p.get('name'):p.get('value') for p in node.findall('param')}}
+                    for node in include.iter('include')],
+                'coordinates':[{'tag':node.tag,'value':node.text}
+                    for node in include.iter() if node.tag in
+                    {'left','right','top','bottom','width','height'}]}
+            self.assertEqual(actual,structure,name)
+
+    def test_current_panel_uses_original_rounded_assets_with_solid_metadata(self):
+        panel=ET.parse(Path(__file__).resolve().parents[2]/
+            'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
+        shapes=[('DVProcessLayout','texture','cb1-glass.png','60'),
+                ('DVMeters','texture','cb1-card.png','16'),
+                ('DVBlockChip','texture','cb1-chip.png','6'),
+                ('DVMeterBar','texturebg','cb1-bar.png','2,0,2,0'),
+                ('DVMeterBar','midtexture','cb1-bar.png','2,0,2,0')]
+        for include,tag,asset,border in shapes:
+            node=panel.find('./include[@name="'+include+'"]//'+tag)
+            self.assertEqual(node.text,'special://xbmc/media/'+asset)
+            self.assertEqual(node.get('border'),border)
+        surface=panel.find('./include[@name="DVProcessLayout"]//texture')
+        self.assertIsNone(surface.get('colordiffuse'))
+        chips=panel.find('./include[@name="DVBlockChips"]')
+        for name in ['fill','color']:
+            self.assertTrue(chips.find('./param[@name="'+name+'"]').get('default').startswith('FF'))
+        used=panel.find('./include[@name="DVUsageChips"]')
+        for param in used.findall('.//param[@name="fill"]')+used.findall('.//param[@name="color"]'):
+            self.assertTrue(param.get('value').startswith('FF'))
+        self.assertNotIn('DV.UnappliedBlocks',ET.tostring(used,encoding='unicode'))
+
     def test_native_topbar_is_hidden_only_while_process_info_is_visible(self):
         name='addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml'
         panel=ET.parse(TREE/name).getroot()

@@ -1,0 +1,169 @@
+{
+  "DVProcessLayout": {
+    "includes": [
+      {"name": "", "params": {"height": null, "panel": null, "surface": null, "col1": null, "col2": null, "col3": null, "dv": null, "gauge": null, "memory": null}},
+      {"name": "DVColumnHeading", "params": {"left": "40", "title": "Input", "primary": "$VAR[DVSourceFormat]", "secondary": "$VAR[DVInputAudio]"}},
+      {"name": "DVColumnHeading", "params": {"left": "654", "title": "Processing", "primary": "$VAR[DVPanelMode]", "secondary": "$VAR[DVModeDetail]"}},
+      {"name": "DVColumnHeading", "params": {"left": "1268", "title": "Output", "primary": "$VAR[DVOutputFormat]", "secondary": "$VAR[DVOutputAudio]"}},
+      {"name": "DVColumnSpacer", "params": {}},
+      {"name": "DVInputFields", "params": {}},
+      {"name": "DVInputDolbyVisionFields", "params": {}},
+      {"name": "DVStaticMetadataFields", "params": {}},
+      {"name": "DVHDR10PlusFields", "params": {}},
+      {"name": "DVColumnEnd", "params": {}},
+      {"name": "DVColumnSpacer", "params": {}},
+      {"name": "DVRenderingFields", "params": {}},
+      {"name": "DVSourceMetadataFields", "params": {}},
+      {"name": "DVUsedHDRFields", "params": {}},
+      {"name": "DVUsedHDR10PlusFields", "params": {}},
+      {"name": "DVReconstructionFields", "params": {}},
+      {"name": "DVUsageFields", "params": {}},
+      {"name": "DVColumnEnd", "params": {}},
+      {"name": "DVColumnSpacer", "params": {}},
+      {"name": "DVOutputFields", "params": {}},
+      {"name": "DVColumnEnd", "params": {}},
+      {"name": "DVMeters", "params": {"gauge": "$PARAM[gauge]", "memory": "$PARAM[memory]"}}
+    ],
+    "coordinates": [
+      {"tag": "left", "value": "32"},
+      {"tag": "right", "value": "32"},
+      {"tag": "bottom", "value": "24"},
+      {"tag": "height", "value": "$PARAM[height]"},
+      {"tag": "left", "value": "0"},
+      {"tag": "top", "value": "0"},
+      {"tag": "width", "value": "1856"},
+      {"tag": "height", "value": "$PARAM[height]"},
+      {"tag": "left", "value": "40"},
+      {"tag": "top", "value": "108"},
+      {"tag": "width", "value": "548"},
+      {"tag": "height", "value": "1500"},
+      {"tag": "left", "value": "654"},
+      {"tag": "top", "value": "108"},
+      {"tag": "width", "value": "548"},
+      {"tag": "height", "value": "1500"},
+      {"tag": "left", "value": "1268"},
+      {"tag": "top", "value": "108"},
+      {"tag": "width", "value": "548"},
+      {"tag": "height", "value": "1500"}
+    ]
+  },
+  "DVInputFields": {
+    "includes": [
+      {"name": "", "params": {}},
+      {"name": "DVSection", "params": {"label": "Video"}},
+      {"name": "DVInfoRow", "params": {"label": "Stream", "value": "$INFO[Player.Process(videowidth)]x$INFO[Player.Process(videoheight)]$INFO[Player.Process(videoscantype)]$INFO[Player.Process(videofps), / , fps]"}},
+      {"name": "DVInfoRow", "params": {"label": "Codec / decoder", "value": "$VAR[DVCodecDecoder]"}},
+      {"name": "DVInfoRow", "params": {"label": "Pixel format", "value": "$VAR[DVPixelFormat]", "visible": "[!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourcePixelFormat)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourcePixelFormat),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceBits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.SourceBits),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"label": "Colour", "value": "$INFO[Window(playerprocessinfo).Property(DV.SourceColour)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.SourceColour))"}},
+      {"name": "DVInfoRow", "params": {"label": "Aspect ratio", "value": "$INFO[Player.Process(videodar)]"}},
+      {"name": "DVInfoRow", "params": {"label": "Bitrate", "value": "$INFO[Player.Process(videolivebitrate)]"}},
+      {"name": "DVSection", "params": {"label": "Audio", "visible": "Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"}},
+      {"name": "DVInfoRow", "params": {"label": "Format", "value": "$VAR[DVAudioFormat]", "visible": "!String.IsEmpty(Player.Process(audiosourcechannels)) | !String.IsEmpty(Player.Process(audiosourceformat))"}},
+      {"name": "DVInfoRow", "params": {"label": "$INFO[Player.Process(audiobedobjectslabel)]", "value": "$INFO[Player.Process(audiobedobjects)]", "visible": "!String.IsEmpty(Player.Process(audiobedobjects))"}},
+      {"name": "DVInfoRow", "params": {"label": "Dialnorm", "value": "$INFO[Player.Process(audiodialnorm)]", "visible": "!String.IsEmpty(Player.Process(audiodialnorm))"}},
+      {"name": "DVInfoRow", "params": {"label": "Bitrate", "value": "$INFO[Player.Process(audiosourcebitrate)]", "visible": "!String.IsEmpty(Player.Process(audiosourcebitrate))"}}
+    ],
+    "coordinates": [
+    ]
+  },
+  "DVInputDolbyVisionFields": {
+    "includes": [
+      {"name": "", "params": {}},
+      {"name": "DVSection", "params": {"label": "Dolby Vision", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Profile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Profile),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "Profile / level", "value": "$INFO[Window(playerprocessinfo).Property(DV.ProfileDetail)] / $INFO[Window(playerprocessinfo).Property(DV.Level)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Profile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Profile),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "Version / CM", "value": "$VAR[DVVersion]", "visible": "[!String.IsEmpty(Window(playerprocessinfo).Property(DV.Version)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Version),N/A)] | [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CM)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CM),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"label": "Layers", "value": "$VAR[DVLayers]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.RPU)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.RPU),N/A)"}},
+      {"name": "DVSection", "params": {"label": "File metadata", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))"}},
+      {"name": "DVBlockChips", "params": {"list": "DV.ParsedBlocks"}},
+      {"name": "DVInfoRow", "params": {"label": "L6 max / min", "value": "$INFO[Window(playerprocessinfo).Property(DV.Mastering)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.UsedL6Max))"}},
+      {"name": "DVInfoRow", "params": {"label": "L6 MaxCLL / MaxFALL", "value": "$INFO[Window(playerprocessinfo).Property(DV.CLL)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.UsedL6Max))"}}
+    ],
+    "coordinates": [
+    ]
+  },
+  "DVSourceMetadataFields": {
+    "includes": [
+      {"name": "", "params": {}},
+      {"name": "DVSection", "params": {"label": "Source metadata", "visible": "[[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L1 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L1 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L3 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L3)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L3))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L4 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L4)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L4))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L5 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L5)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L6 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L6 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L9 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L9)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L9))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L10 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L10)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L10))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L11 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L11)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L11))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L254 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L254)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L254))]] | [[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L255 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L255)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L255))]]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "$VAR[DVAppliedL1PQLabel]", "value": "$VAR[DVAppliedL1PQ]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L1 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1PQ)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1PQ),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "$VAR[DVAppliedL1NitsLabel]", "value": "$VAR[DVAppliedL1Nits]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L1 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L1)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L1Nits)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L1Nits),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "$VAR[DVAppliedL3Label]", "value": "$VAR[DVAppliedL3]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L3 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L3)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L3))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L4 anchor PQ / power", "value": "$INFO[Window(playerprocessinfo).Property(DV.L4)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L4 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L4)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L4))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L5 L/R/T/B", "value": "$INFO[Window(playerprocessinfo).Property(DV.L5)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L5 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L5)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L5)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.L5),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "$VAR[DVAppliedL6Label]", "value": "$VAR[DVAppliedL6]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L6 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mastering)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mastering),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L6 CLL / FALL", "value": "$INFO[Window(playerprocessinfo).Property(DV.CLL)]", "visible": "String.IsEmpty(Window(playerprocessinfo).Property(DV.UsedL6Max)) + [String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L6 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L6)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CLL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CLL),N/A)]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L9 source primaries", "value": "$INFO[Window(playerprocessinfo).Property(DV.L9)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L9 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L9)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L9))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L10 target displays", "value": "$INFO[Window(playerprocessinfo).Property(DV.L10)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L10 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L10)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L10))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L11 content type", "value": "$INFO[Window(playerprocessinfo).Property(DV.L11)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L11 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L11)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L11))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L254 DM mode / version", "value": "$INFO[Window(playerprocessinfo).Property(DV.L254)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L254 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L254)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L254))]"}},
+      {"name": "DVInfoRow", "params": {"labelcolor": "FFEEF2F3", "label": "L255 run mode / version", "value": "$INFO[Window(playerprocessinfo).Property(DV.L255)]", "visible": "[String.Contains(Window(playerprocessinfo).Property(DV.AppliedBlocks),\"L255 \") | String.EndsWith(Window(playerprocessinfo).Property(DV.AppliedBlocks),L255)] + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.L255))]"}}
+    ],
+    "coordinates": [
+    ]
+  },
+  "DVRenderingFields": {
+    "includes": [
+      {"name": "", "params": {}},
+      {"name": "DVSection", "params": {"label": "Rendering", "visible": "String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default) | !String.IsEmpty(Player.Process(pixformat)) | String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target)) |[String.IsEqual(VideoPlayer.HdrType,dolbyvision) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)]]]"}},
+      {"name": "DVInfoRow", "params": {"label": "CB1", "value": "Not active", "visible": "String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)"}},
+      {"name": "DVInfoRow", "params": {"label": "Decoded surface", "value": "$INFO[Player.Process(pixformat)]", "visible": "!String.IsEmpty(Player.Process(pixformat))"}},
+      {"name": "DVInfoRow", "params": {"label": "Deinterlacing", "value": "$INFO[Player.Process(deintmethod)]", "visible": "String.IsEqual(Player.Process(videoscantype),i) + !String.IsEmpty(Player.Process(deintmethod))"}},
+      {"name": "DVInfoRow", "params": {"label": "Creative trims", "value": "$INFO[Window(playerprocessinfo).Property(DV.CreativeTrims)]", "visible": "String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "FEL / upscaling", "value": "$INFO[Window(playerprocessinfo).Property(DV.FEL)]$INFO[Window(playerprocessinfo).Property(DV.FELUpscaling), · ]", "visible": "String.IsEqual(VideoPlayer.HdrType,dolbyvision) + String.IsEqual(Window(playerprocessinfo).Property(DV.EL),Yes) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "$VAR[DVMappingLabel]", "value": "$INFO[Window(playerprocessinfo).Property(DV.TVProfile)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "Black level", "value": "$INFO[Window(playerprocessinfo).Property(DV.DisplayBlack)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "$INFO[Window(playerprocessinfo).Property(DV.HDR10TargetLabel)]", "value": "$INFO[Window(playerprocessinfo).Property(DV.HDR10Target)]$INFO[Window(playerprocessinfo).Property(DV.HDR10TargetOrigin), · ]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target))"}},
+      {"name": "DVInfoRow", "params": {"label": "Render warning", "value": "$INFO[Window(playerprocessinfo).Property(DV.ReferenceWarning)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A)"}}
+    ],
+    "coordinates": [
+    ]
+  },
+  "DVOutputFields": {
+    "includes": [
+      {"name": "", "params": {}},
+      {"name": "DVSection", "params": {"label": "Video"}},
+      {"name": "DVInfoRow", "params": {"label": "Display output", "value": "$INFO[Window(playerprocessinfo).Property(DV.Display)]"}},
+      {"name": "DVInfoRow", "params": {"label": "Signal intent", "value": "$INFO[Window(playerprocessinfo).Property(DV.SignalIntent)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.SignalIntent))"}},
+      {"name": "DVInfoRow", "params": {"label": "Scanout container", "value": "$INFO[Window(playerprocessinfo).Property(DV.Transport)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"}},
+      {"name": "DVInfoRow", "params": {"label": "$VAR[DVPrecisionLabel]", "value": "$INFO[Window(playerprocessinfo).Property(DV.Precision)]$INFO[Window(playerprocessinfo).Property(DV.MinimumLinkBits), / ]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Precision)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Precision),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "Committed source", "value": "$INFO[Window(playerprocessinfo).Property(DV.Committed)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Committed))"}},
+      {"name": "DVModeChangeFields", "params": {}},
+      {"name": "DVSection", "params": {"label": "Sent to TV", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks)) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL1)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.OutputL1),N/A)"}},
+      {"name": "DVBlockChips", "params": {"list": "DV.TransmittedBlocks"}},
+      {"name": "DVInfoRow", "params": {"label": "Levels", "value": "As authored in the file", "visible": "String.Contains(Window(playerprocessinfo).Property(DV.TransmittedBlocks),authored)"}},
+      {"name": "DVInfoRow", "params": {"label": "Out L1 min/max/avg", "value": "$INFO[Window(playerprocessinfo).Property(DV.OutputL1)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL1)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.OutputL1),N/A)"}},
+      {"name": "DVInfoRow", "params": {"label": "L2 trim targets", "value": "$INFO[Window(playerprocessinfo).Property(DV.OutputL2Targets)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL2Targets))"}},
+      {"name": "DVInfoRow", "params": {"label": "L8 trim targets", "value": "$INFO[Window(playerprocessinfo).Property(DV.OutputL8Targets)]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.OutputL8Targets))"}},
+      {"name": "DVSection", "params": {"label": "Audio", "visible": "!String.IsEmpty(Player.Process(audiooutputtransport))"}},
+      {"name": "DVInfoRow", "params": {"label": "Transport", "value": "$INFO[Player.Process(audiooutputtransport)]", "visible": "!String.IsEmpty(Player.Process(audiooutputtransport))"}},
+      {"name": "DVInfoRow", "params": {"label": "Sent codec", "value": "$INFO[Player.Process(audiooutputcodec)]", "visible": "!String.IsEmpty(Player.Process(audiooutputcodec))"}},
+      {"name": "DVInfoRow", "params": {"label": "Data", "value": "$INFO[Player.Process(audiooutputdata)]", "visible": "!String.IsEmpty(Player.Process(audiooutputdata))"}},
+      {"name": "DVInfoRow", "params": {"label": "Output channels", "value": "$INFO[Player.Process(audiooutputchannels)]", "visible": "!String.IsEmpty(Player.Process(audiooutputchannels))"}},
+      {"name": "DVInfoRow", "params": {"label": "Decoder", "value": "$INFO[Player.Process(audiodecoder)]", "visible": "!String.IsEmpty(Player.Process(audiooutputtransport)) + !String.IsEmpty(Player.Process(audiodecoder))"}},
+      {"name": "DVInfoRow", "params": {"label": "Buffers V / A", "value": "$INFO[Player.Process(videoqueuelevel)]/$INFO[Player.Process(videoqueuedatalevel)] % · $INFO[Player.Process(audioqueuelevel)]/$INFO[Player.Process(audioqueuedatalevel)] %"}}
+    ],
+    "coordinates": [
+    ]
+  },
+  "DVMeters": {
+    "includes": [
+      {"name": "", "params": {"gauge": null, "memory": null}},
+      {"name": "DVMeterBar", "params": {"label": "Render engine", "value": "$INFO[Window(playerprocessinfo).Property(DV.GPURender)]", "id": "$PARAM[gauge]", "color": "$VAR[DVRenderMeterColor]", "visible": "String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)"}},
+      {"name": "DVMeterBar", "params": {"label": "CPU", "value": "$INFO[Window(playerprocessinfo).Property(DV.CPU)]", "info": "System.CPUUsage", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.CPU)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CPU),N/A)"}},
+      {"name": "DVMeterBar", "params": {"label": "Memory", "value": "$INFO[Window(playerprocessinfo).Property(DV.Memory)]", "id": "$PARAM[memory]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.Memory)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Memory),N/A)"}},
+      {"name": "DVMeterBar", "params": {"label": "Player cache", "value": "$INFO[Player.CacheLevel] %", "info": "Player.CacheLevel"}},
+      {"name": "DVMeterText", "params": {"label": "Drop / skip", "value": "$VAR[DVDroppedSkipped]", "visible": "!String.IsEmpty(Window(playerprocessinfo).Property(DV.DroppedSkipped)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DroppedSkipped),N/A)"}},
+      {"name": "DVMeterText", "params": {"label": "Temperature", "value": "$INFO[System.CPUTemperature]", "visible": "!String.IsEmpty(System.CPUTemperature) + !String.IsEqual(System.CPUTemperature,$LOCALIZE[10005])"}}
+    ],
+    "coordinates": [
+      {"tag": "left", "value": "72"},
+      {"tag": "top", "value": "942"},
+      {"tag": "right", "value": "72"},
+      {"tag": "height", "value": "82"},
+      {"tag": "left", "value": "96"},
+      {"tag": "top", "value": "954"},
+      {"tag": "right", "value": "72"},
+      {"tag": "height", "value": "58"}
+    ]
+  }
+}
