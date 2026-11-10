@@ -1513,5 +1513,12 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Read scanout bit depths from the GL_BACK_LEFT attachment on desktop GL."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": {
+    "summary": "Treat Mesa's sRGB-capable scanout as linear on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Treat an sRGB-capable scanout as linear while GL_FRAMEBUFFER_SRGB is off."
+    }
   }
 }

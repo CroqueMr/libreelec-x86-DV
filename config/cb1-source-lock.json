@@ -354,7 +354,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "cb10842197ea6a6eb93ad43d8219d6280feed6bea2960f1db98439806b09db40",
+    "config/cb1-patch-index.json": "34a93e5e6e20562a4e3fc35dee7f9238520dc37ea176d7c33ba2b8a2ce8db613",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "34c90917984ba79d48a20f6ea542f48f9bdc4044da1f50ec0ed7989cd47b4858",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": "7187a58b3678178b6608e03e5e81a912ac2a4c8a0b6b8fbcdcb2168347f1c02c",
@@ -363,7 +363,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-05-vaapi-gl-renderer.patch": "d135c0140baf83c662445104dfb4ca57b1cb3c238e8e5f3e845194198f12ba62",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": "bc6befc161cf95d91702e55266d49af8056e5fc441b8e546e45af771a7272be3",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": "f24bb04a2626514b6ecebd852c433f7d3414486cb1996ca92ce99aae82ad2e52",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": "74c008478d871582c93a70437da12d9cf24b5e58a8205f5de6875ce35ed8d433"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": "74c008478d871582c93a70437da12d9cf24b5e58a8205f5de6875ce35ed8d433",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": "813afda06f8282ec834baf1504b1a5e4e949b2b45024e6752f581b47edf9ad4c"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
