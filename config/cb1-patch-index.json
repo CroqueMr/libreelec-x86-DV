@@ -1435,5 +1435,18 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": {
+    "summary": "Reach the DV GBM context through a GL/GLES alias",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Cast to the DV context alias.",
+      "xbmc/settings/SettingConditions.cpp": "Cast to the DV context alias.",
+      "xbmc/windowing/gbm/WinSystemGbmDVContext.h": "Name the GBM context that carries DV output in GL and GLES builds."
+    }
   }
 }

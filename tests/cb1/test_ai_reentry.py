@@ -725,6 +725,7 @@ int main(){
         selection=source[at:source.index('#endif',at)]
         execute(r'''
 #include <cassert>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 constexpr double DVD_NOPTS_VALUE=-1e20;
 namespace DVBRIDGE {
 enum class HDR10SourceMode{Native,ReferenceDV,SDR};

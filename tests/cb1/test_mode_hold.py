@@ -137,6 +137,7 @@ int main(){
         program=r'''
 #define HAVE_DVBRIDGE
 #include <atomic>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 #include <cassert>
 #include <optional>
 #include <string>
