@@ -135,8 +135,8 @@
           <font>CB1.InfoMetric</font><textcolor>FFF2F5F6</textcolor><label>$PARAM[value]</label><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
         </control>
         <control type="progress" id="$PARAM[id]"><left>104</left><top>38</top><width>156</width><height>4</height><info>$PARAM[info]</info>
-          <texturebg colordiffuse="FF353B3F">special://xbmc/media/cb1-white.png</texturebg>
-          <lefttexture/><midtexture colordiffuse="$PARAM[color]">special://xbmc/media/cb1-white.png</midtexture><righttexture/><overlaytexture/>
+          <texturebg border="2,0,2,0" colordiffuse="FF353B3F">special://xbmc/media/cb1-bar.png</texturebg>
+          <lefttexture/><midtexture border="2,0,2,0" colordiffuse="$PARAM[color]">special://xbmc/media/cb1-bar.png</midtexture><righttexture/><overlaytexture/>
         </control>
       </control>
     </definition>
@@ -145,7 +145,7 @@
        1056, so the strip stays in its footer, above the space DVColumnEnd reserves. -->
   <include name="DVMeters"><param name="gauge"/><param name="memory"/><definition>
       <control type="image"><left>72</left><top>942</top><right>72</right><height>82</height>
-        <texture colordiffuse="FF1C2327">special://xbmc/media/cb1-white.png</texture>
+        <texture border="16" colordiffuse="FF1C2327">special://xbmc/media/cb1-card.png</texture>
       </control>
       <control type="grouplist"><left>96</left><top>954</top><right>72</right><height>58</height><orientation>horizontal</orientation><itemgap>0</itemgap>
         <include content="DVMeterBar"><param name="label" value="Render engine"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.GPURender)]"/><param name="id" value="$PARAM[gauge]"/><param name="color" value="$VAR[DVRenderMeterColor]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)"/></include>
@@ -188,7 +188,7 @@
       <control type="group"><width>$PARAM[width]</width><height>30</height>
         <visible>String.Contains(Window(playerprocessinfo).Property($PARAM[list]),"$PARAM[level] ") | String.EndsWith(Window(playerprocessinfo).Property($PARAM[list]),$PARAM[level])</visible>
         <control type="image"><width>$PARAM[width]</width><height>30</height>
-          <texture colordiffuse="$PARAM[fill]">special://xbmc/media/cb1-white.png</texture>
+          <texture border="6" colordiffuse="$PARAM[fill]">special://xbmc/media/cb1-chip.png</texture>
         </control>
         <control type="label"><width>$PARAM[width]</width><height>30</height><align>center</align><aligny>center</aligny>
           <font>CB1.InfoBody</font><textcolor>$PARAM[color]</textcolor><label>$PARAM[level]</label>
@@ -368,7 +368,7 @@
       <control type="group" id="$PARAM[panel]">
         <left>32</left><right>32</right><bottom>24</bottom><height>$PARAM[height]</height>
         <control type="image" id="$PARAM[surface]"><left>0</left><top>0</top><width>1856</width><height>$PARAM[height]</height>
-          <texture colordiffuse="FF101518">special://xbmc/media/cb1-white.png</texture>
+          <texture border="60">special://xbmc/media/cb1-glass.png</texture>
         </control>
         <include content="DVColumnHeading"><param name="left" value="40"/><param name="title" value="Input"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
         <include content="DVColumnHeading"><param name="left" value="654"/><param name="title" value="Processing"/><param name="primary" value="$VAR[DVPanelMode]"/><param name="secondary" value="$VAR[DVModeDetail]"/></include>
