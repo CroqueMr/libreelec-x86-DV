@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Pack transport bytes with isolated GL state; never apply ordinary RGB color processing. */
 #include "dvbridge_gl_pack.h"
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl3.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <EGL/egl.h>

@@ -10,7 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 extern enum cb1_ai_status cb1_hdr10_statistics_queue_pending(struct cb1_hdr10_statistics *,pl_tex,pl_tex,struct cb1_ai_identity);
 extern enum cb1_ai_status cb1_hdr10_quantiles_queue_pending(struct cb1_hdr10_quantiles *,pl_tex,pl_tex,struct cb1_ai_identity);
 

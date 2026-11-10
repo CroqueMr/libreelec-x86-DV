@@ -3,7 +3,11 @@
 #include "cb1_hdr10_ingress.h"
 #include "cb1_hdr10_grid.h"
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 #include <fenv.h>
 #include <math.h>
 #include <stdlib.h>

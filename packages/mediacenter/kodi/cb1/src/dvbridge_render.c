@@ -27,8 +27,14 @@
 #include <libplacebo/filters.h>
 #include <libplacebo/dispatch.h>
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#define DVBRIDGE_BUFFER_STORAGE "glBufferStorage"
+#else
 #include <GLES3/gl31.h>
 #include <GLES2/gl2ext.h>
+#define DVBRIDGE_BUFFER_STORAGE "glBufferStorageEXT"
+#endif
 #include <EGL/egl.h>
 #include <math.h>
 #include <stdlib.h>
@@ -2944,7 +2950,7 @@ static bool dv_gpu_requirements(pl_gpu gpu)
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS,&bindings);
     glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,&storage);
     if(invocations<128 || size<128 || groups<16200 || bindings<3 || storage<259200 || glGetError()!=GL_NO_ERROR)return false;
-    return eglGetProcAddress("glBufferStorageEXT") && eglGetProcAddress("glClientWaitSync") &&
+    return eglGetProcAddress(DVBRIDGE_BUFFER_STORAGE) && eglGetProcAddress("glClientWaitSync") &&
            eglGetProcAddress("glDeleteSync") && eglGetProcAddress("glFenceSync") &&
            eglGetProcAddress("glMapBufferRange") && eglGetProcAddress("glDispatchCompute") &&
            eglGetProcAddress("glMemoryBarrier");
@@ -3028,7 +3034,7 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
     struct dvbridge_dv_slot *s=&r->dv;
     bool reuse=r->enhanced_authored && r->reuse_authored_storage;
     if(reuse && (s->active || s->fence || s->mapped || s->buffers[0] || s->sampler))return false;
-    s->buffer_storage=(PFNGLBUFFERSTORAGEEXTPROC)eglGetProcAddress("glBufferStorageEXT");
+    s->buffer_storage=(PFNGLBUFFERSTORAGEEXTPROC)eglGetProcAddress(DVBRIDGE_BUFFER_STORAGE);
     s->wait_sync=(PFNGLCLIENTWAITSYNCPROC)eglGetProcAddress("glClientWaitSync");
     s->delete_sync=(PFNGLDELETESYNCPROC)eglGetProcAddress("glDeleteSync");
     s->fence_sync=(PFNGLFENCESYNCPROC)eglGetProcAddress("glFenceSync");
