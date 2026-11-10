@@ -2516,5 +2516,14 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.h": "Declare the VAAPI DV hooks.",
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Hand DV and HDR10 output over between GL VAAPI renderers, wait for an output restore, and stage the video source on GL too."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": {
+    "summary": "Report subtitle bounds from the GL overlay renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Rebuild cached HDR bitmap subtitles on GL when the palette output changes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp": "Record subtitle bounds and textures for the DV composite, and convert a UHD disc's BD-J menus from PQ.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h": "Keep the ASS glyph extent."
+    }
   }
 }
