@@ -161,7 +161,7 @@ int main(){
     def test_sdr_composition_uses_resolved_target_before_gui(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         prepare=body(source,'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
-        start=prepare.index('    if (m_prepared && policy.mode==DVBRIDGE_MODE_SDR)')
+        start=prepare.index('    if (m_prepared && policy.mode==DVBRIDGE_MODE_SDR && !m_direct)')
         resolve=prepare[start:prepare.index('    const bool fenced',start)]
         header=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h').read_text()
         target=body(header,'bool GetHDR10OutputTarget(')
