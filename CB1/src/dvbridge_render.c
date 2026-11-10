@@ -2115,6 +2115,7 @@ bool dvbridge_render_sdr_policy_direct_eligible(const struct dvbridge_renderer *
     struct dvbridge_geometry geometry,pl_tex target,unsigned bits)
 {
     double peak,gamma,black;float crop[4];unsigned margins[4];
+    int width,height;
     if(!r || !policy || policy->mode!=DVBRIDGE_MODE_SDR || !id ||
        id->revision!=policy->revision || dvbridge_policy_validate(policy)!=DVBRIDGE_POLICY_VALID ||
        !dvbridge_sdr_target(&policy->sdr,&peak,&gamma,&black) || !effective_no_alpha(source) ||
@@ -2124,7 +2125,9 @@ bool dvbridge_render_sdr_policy_direct_eligible(const struct dvbridge_renderer *
        !dvbridge_geometry_source(geometry,crop) || crop[0] || crop[1] ||
        crop[2]!=geometry.source_width || crop[3]!=geometry.source_height ||
        source->crop.x0 || source->crop.y0 || source->crop.x1!=geometry.source_width ||
-       source->crop.y1!=geometry.source_height || !direct_target_valid_min(r,target,bits,8))return false;
+       source->crop.y1!=geometry.source_height || !direct_target_valid_min(r,target,bits,8) ||
+       !dvbridge_geometry_raster(geometry,&width,&height) ||
+       target->params.w!=width || target->params.h!=height)return false;
     const struct pl_frame *el=source->enhancement_layer;
     if(el && (pts!=el_pts || el->rotation || el->num_overlays || el->enhancement_layer ||
         el->profile.len || el->icc || el->lut || !effective_no_alpha(el)))return false;
