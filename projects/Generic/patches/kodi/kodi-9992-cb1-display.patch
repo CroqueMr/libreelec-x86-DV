@@ -6,7 +6,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticLog.h
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,227 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include "DVBridgeDiagnosticState.h"
@@ -85,6 +85,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return WriteDiagnosticLocked(DiagnosticEvent::Normal, level, format, std::forward<Args>(args)...);
 +  }
 +  catch (...) { return false; } // Diagnostics cannot escape into a C callback or playback.
++}
++
++// Summary owns the periodic and reset-coalescing bounds for these counters.
++template<class... Args>
++bool DiagnosticRendererCounterLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
++{
++  if (!DiagnosticsEnabled()) return false;
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    return WriteDiagnosticLocked(DiagnosticEvent::RendererCounter, level, format, std::forward<Args>(args)...);
++  }
++  catch (...) { return false; }
 +}
 +
 +inline void DiagnosticReserveProgress() noexcept
@@ -223,7 +236,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeDiagnosticState.h
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,245 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <chrono>
@@ -265,7 +278,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool operator==(const DiagnosticProperty&) const = default;
 +};
 +
-+enum class DiagnosticEvent { Normal, Failure, Final, Connection, Progress };
++enum class DiagnosticEvent { Normal, Failure, Final, Connection, Progress, RendererCounter };
 +
 +// One active native stream, shared by every producer. Pure observation: none of
 +// these facts are consumed by output selection, retry, or GPU synchronization.
@@ -303,6 +316,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  bool Admit(uint64_t now, DiagnosticEvent event)
 +  {
++    // The renderer owner bounds these observations independently of Normal.
++    if (event == DiagnosticEvent::RendererCounter) return true;
 +    if (event == DiagnosticEvent::Final)
 +    {
 +      if ((!m_stream && !m_requested) || m_ended) return false;

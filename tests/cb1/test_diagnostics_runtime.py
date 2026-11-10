@@ -25,6 +25,159 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_renderer_counters_survive_normal_budget_and_bound_real_reset_lifetime(self):
+        from test_native_video_source import body
+        relative='xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp'
+        header=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h').read_text()
+        state=(TREE/'xbmc/utils/DVBridgeDiagnosticState.h').read_text()
+        state=state.replace(body(state,'inline bool DiagnosticsEnabled()'),'{ return testEnabled; }')
+        state=state.replace(body(state,'inline uint64_t DiagnosticNowMs()'),'{ return testNow; }')
+        state=state.replace('namespace DVBRIDGE\n{','namespace DVBRIDGE\n{\ninline bool testEnabled=true;\ninline uint64_t testNow=1000;',1)
+        member=''
+        if 'using ResetDiagnosticSnapshot' in header:
+            start=header.index('  using ResetDiagnosticSnapshot')
+            member=header[start:header.index('m_lastResetReported;',start)+len('m_lastResetReported;')]
+        source='\n'.join(function(relative, signature) for signature in (
+            'void CDVBridgeGLES::Summary(', 'void CDVBridgeGLES::CountPresentation(',
+            'void CDVBridgeGLES::BeginDiagnosticStream(', 'void CDVBridgeGLES::Reset()',
+            'void CDVBridgeGLES::Cancel()', 'CDVBridgeGLES::~CDVBridgeGLES()'))
+        log=(TREE/'xbmc/utils/DVBridgeDiagnosticLog.h').read_text()
+        counter_log='DiagnosticRendererCounterLog' if 'bool DiagnosticRendererCounterLog(' in log else 'DiagnosticLog'
+        self.run_cpp(r'''
+#define CB1_HAS_HDR10_AI
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+#include <array>
+#include <memory>
+#include <optional>
+#include <tuple>
+#include <vector>
+unsigned resets=0,cancels=0,driverEpoch=0;
+void cb1_hdr10plus_analysis_reset(int*){++cancels;}
+void cb1_hdr10plus_analysis_destroy(int**p){*p=nullptr;}
+void dvbridge_render_dv_policy_cancel(int*){++driverEpoch;}
+void dvbridge_render_policy_cancel(int*){++driverEpoch;}
+void dvbridge_renderer_reset(int*){++resets;++driverEpoch;}
+void glDeleteFramebuffers(int,unsigned*){}
+void dvbridge_gl_packer_destroy(int*){}
+void pl_tex_destroy(int,int*){}
+struct CDVBridgeGLES {
+ struct Context{unsigned epoch=1;void ClearNextHDR10AI(){++epoch;}void Detach(int*){}};
+ std::shared_ptr<Context>m_context=std::make_shared<Context>();
+ struct GL{int gpu=1;}gl;GL*m_gl=&gl;
+ struct{int texture=1,degamma=2,pq=3;}m_nativeOverlay;
+ int m_scanout=1,*m_renderer=nullptr,*m_packer=nullptr,*m_hdr10plusAnalysis=nullptr;
+ unsigned m_framebuffer=0,m_pendingInfo=8;bool m_live=true,m_advanced=true,m_dvPolicyActive=false;
+ bool m_prepared=true,m_packed=true,m_pending=true,m_asyncEligible=true,m_direct=true;
+ bool m_aiOutputAccepted=true,m_aiFrame=true,m_firstFrame=false;
+ std::optional<int>m_aiGuidance=1,m_hdr10plusMetadata=1;
+ struct{unsigned sequence=0;}m_submission{99};
+ std::vector<int>m_rawELCache{1,2};
+ uint64_t m_diagnosticStream=7,m_prepares=0,m_directFrames=0,m_presentations=120,m_failedPresentations=0;
+ uint64_t m_lastSummary=0,m_lastReported=0,m_rawELImports=0,m_rawELHits=0;
+ struct Binding{uint64_t stream=7,picture=31,revision=11;}m_pendingBinding;
+ struct{uint64_t revision=13;}m_requested;
+ int m_effectiveMode=8;
+ DVBRIDGE::DiagnosticFailures m_failures;
+ int m_hdr10plusDiagnostics=0,m_hdr10plusAnalyzed=0,m_hdr10plusGenerated=0,m_hdr10plusAccepted=0;
+ unsigned m_hdr10plusSubmits=0,m_pendingHDR10Fallback=6;std::array<double,4>m_hdr10plusLight{};
+ @MEMBER@
+ void ClearFELPrefetch(){}
+ void Summary(const char*);void CountPresentation(bool);void BeginDiagnosticStream(uint64_t);
+ void Reset();void Cancel();~CDVBridgeGLES();
+};
+namespace DVBRIDGE{struct StreamTelemetry{static void ClearOutput(){}};}
+@SOURCE@
+void full(bool reserve=false){
+ using namespace DVBRIDGE;
+ DiagnosticOpen();ObserveDiagnostic(7,31,11,13,"prepare",true,false);
+ if(reserve)DiagnosticReserveProgress();
+ for(unsigned i=0;i<(reserve?18:24);++i)assert(DiagnosticLog(LOGINFO,"menu/setup {}",i));
+ if(reserve)for(unsigned i=0;i<6;++i)assert(DiagnosticProgressLog(LOGINFO,"progress {}",i));
+ assert(!DiagnosticLog(LOGINFO,"full"));
+}
+void has(const std::string&s,const char*part){assert(s.find(part)!=std::string::npos);}
+int main(){
+ using namespace DVBRIDGE;
+ for(bool reserve:{false,true}){
+  testNow=1000;full(reserve);auto count=CLog::lines.size();
+  {
+   CDVBridgeGLES r;r.CountPresentation(true); // Not120 boundary yet.
+   assert(CLog::lines.size()==count);
+   r.m_presentations=119;testNow=30000;r.CountPresentation(true);
+   assert(CLog::lines.size()==++count && "Actual renderer periodic summary must survive full Normal/Progress ring");
+   has(CLog::lines.back(),"advanced renderer summary: presented=120");
+   has(CLog::lines.back(),"counter_stream=7 stream=7 picture=31 revision=11 policy=13");
+   assert(!DiagnosticLog(LOGINFO,"Normal still full") && CLog::lines.size()==count);
+   r.Summary("summary");assert(CLog::lines.size()==count); // Same count is not a new periodic report.
+   testNow=30001;r.m_presentations=239;r.CountPresentation(true);
+   assert(CLog::lines.size()==count); // No new30s opportunity.
+   DiagnosticFinal("close-file");assert(CLog::lines.size()==++count);
+   DiagnosticFinal("duplicate");assert(CLog::lines.size()==count);
+   const auto suppressed=diagnosticSession.Suppressed();
+   r.Reset();assert(CLog::lines.size()==++count);has(CLog::lines.back(),"renderer reset:");
+   assert(diagnosticSession.Suppressed()==suppressed);
+   const auto calls=resets,epoch=driverEpoch,contextEpoch=r.m_context->epoch;
+   for(int i=0;i<1000;++i)r.Reset();
+   assert(CLog::lines.size()==count && resets==calls+1000 && driverEpoch>epoch && r.m_context->epoch>contextEpoch);
+   assert(!r.m_prepared&&!r.m_pending&&!r.m_packed&&!r.m_direct&&!r.m_aiFrame&&r.m_firstFrame);
+   assert(r.m_presentations==240 && r.m_submission.sequence==0 && r.m_rawELCache.empty());
+   // Each persistent work/counter component independently permits a later reset.
+   auto changed=[&]{r.Reset();assert(CLog::lines.size()==++count);r.Reset();assert(CLog::lines.size()==count);};
+   ++r.m_presentations;changed();++r.m_failedPresentations;changed();
+   r.m_failures.Record(testNow,"actual-stage");changed();
+   ++r.m_diagnosticStream;changed();++r.m_pendingBinding.stream;changed();++r.m_pendingBinding.revision;changed();
+   ++r.m_requested.revision;changed();++r.m_effectiveMode;changed();
+   r.m_advanced=false;changed();has(CLog::lines.back(),"DVBridge renderer reset: prepared=0");
+   ++r.m_prepares;changed();++r.m_directFrames;changed();++r.m_rawELImports;changed();++r.m_rawELHits;changed();
+   ++r.m_pendingBinding.picture;r.Reset();assert(CLog::lines.size()==count); // Decoder picture alone is not new diagnostic work.
+   testEnabled=false;++r.m_presentations;r.Reset();assert(CLog::lines.size()==count);
+   testEnabled=true;r.Reset();assert(CLog::lines.size()==++count); // Disabled call consumed no key.
+   CLog::throws=true;++r.m_presentations;r.Reset();assert(CLog::lines.size()==count);
+   CLog::throws=false;r.Reset();assert(CLog::lines.size()==++count); // Failed emit consumed no key.
+  }
+  assert(CLog::lines.size()==++count);has(CLog::lines.back(),"renderer closed:");
+  assert(!DiagnosticLog(LOGINFO,"Normal unchanged after terminal"));
+  const auto failed=CLog::lines.size();DiagnosticFailureLog("first",true,LOGERROR,"real failure");
+  assert(CLog::lines.size()==failed+1);DiagnosticFailureLog("first",false,LOGERROR,"duplicate failure");
+  assert(CLog::lines.size()==failed+1);testNow=31000;assert(DiagnosticLog(LOGINFO,"native30s refill"));
+ }
+ // A real source change reports old counters with the truthful current suffix.
+ testNow=100000;DiagnosticOpen();ObserveDiagnostic(7,31,11,13,"old",true,false);
+ {
+  CDVBridgeGLES r;r.Reset();auto count=CLog::lines.size();
+  ObserveDiagnostic(9,1,17,19,"successor",true,false);r.BeginDiagnosticStream(9);
+  assert(CLog::lines.size()==count+1);has(CLog::lines.back(),"renderer stream-end:");
+  has(CLog::lines.back(),"counter_stream=7 stream=9 picture=1 revision=17 policy=19");
+  assert(r.m_diagnosticStream==9&&r.m_presentations==0&&r.m_failedPresentations==0&&r.m_failures.Count()==0);
+  r.Reset();assert(CLog::lines.size()==count+2); // New domain cannot reuse prior reset key.
+  r.BeginDiagnosticStream(0);r.BeginDiagnosticStream(9);assert(CLog::lines.size()==count+2);
+ }
+ // All counter records retain the one formatter's byte/newline/suffix limits.
+ std::string longEvent(10000,'x');longEvent[1]='\n';longEvent[2]='\r';longEvent[3]='\0';
+ assert(@COUNTER_LOG@(LOGINFO,"{}",longEvent));const auto& bounded=CLog::lines.back();
+ assert(bounded.size()<896 && bounded.find('\n')==std::string::npos && bounded.find('\r')==std::string::npos && bounded.find('\0')==std::string::npos);
+ has(bounded,"[truncated]");has(bounded,"stream=9 picture=1 revision=17 policy=19 suppressed=");has(bounded,"truncations=1");
+ testEnabled=false;auto count=CLog::lines.size();assert(!@COUNTER_LOG@(LOGINFO,"disabled"));assert(CLog::lines.size()==count);
+ // No new callback means no synthetic record or timer-driven retry.
+ testNow+=100000;assert(CLog::lines.size()==count);
+}
+'''.replace('@MEMBER@',member).replace('@SOURCE@',source).replace('@COUNTER_LOG@',counter_log),
+            {'utils/DVBridgeDiagnosticState.h':state,'utils/DVBridgeDiagnosticLog.h':log,'utils/log.h':r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+#include <stdexcept>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+ inline static std::vector<std::string>lines;inline static bool throws=false;
+ template<class...T>static void Log(int,fmt::format_string<T...>f,T&&...a){
+  if(throws)throw std::runtime_error("controlled logger failure");
+  lines.push_back(fmt::format(f,std::forward<T>(a)...));}
+};
+'''})
+
     def test_fel_dma_witness_reports_exported_pitch_offset_and_modifier(self):
         text=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         marker=text.find('"CB1 FEL DMA:')
