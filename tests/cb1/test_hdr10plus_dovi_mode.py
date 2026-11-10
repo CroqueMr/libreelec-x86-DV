@@ -109,7 +109,7 @@ int main(){
             program = re.sub(r'\b'+name+r'\b',lambda unused:value,program)
         self.compile_run(program)
 
-    def test_missing_snapshot_keeps_the_existing_activation_fallback(self):
+    def test_missing_snapshot_refuses_the_requested_circuit_and_preserves_native_stop(self):
         headers=TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video'
         settings=(headers/'DVOutputSettings.h').read_text()
         enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',settings))
@@ -117,7 +117,7 @@ int main(){
         selector=body((headers/'DVOutputSelection.h').read_text(),'inline OutputSelection SelectOutput(')
         preparation=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),
             'bool CWinSystemGbmGLESContext::PrepareHDR10AIQueue(')
-        ingress=preparation[:preparation.index('  // The ordinary commit')]+ 'return false;\n}'
+        ingress=preparation[:preparation.index('  // The ordinary commit')]+ '(void)binding;return false;\n}'
         self.compile_run(r'''
 #define HAVE_DVBRIDGE
 #include "dvbridge_policy.h"
@@ -138,12 +138,13 @@ OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=pre
 }
 enum class StreamHdrType{HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
 struct Picture {struct{int profile=0;}doviSourceInfo;DVBRIDGE::SourceBinding doviSourceBinding;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;};
-struct Context {unsigned stops{};bool StopHDR10AI(){++stops;return true;}};
+struct Context {unsigned stops{};bool ready=true;bool StopHDR10AI(){++stops;return ready;}};
 struct Window {
  DVBRIDGE::OutputCapabilities caps;
  DVBRIDGE::SourceBinding m_aiActivation;
  uint64_t m_aiPolicy{},m_aiSelectionPolicy{};
  bool m_aiActive{},m_aiReady{},m_aiFallback{};
+ bool m_dvFatalConsumed{};DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::None;
  std::mutex m_dvCapabilityMutex;std::shared_ptr<Context> m_dvContext=std::make_shared<Context>();
  auto GetDVOutputCapabilities(const Picture*,const DVBRIDGE::OutputPreferences&){return caps;}
  bool prepare(const Picture& picture) INGRESS
@@ -154,14 +155,28 @@ int main(){
  w.caps.sourceKnown=w.caps.isHDR10=w.caps.hdr10PlusSource=w.caps.nativeDV=true;
  w.m_aiActivation=p.doviSourceBinding;w.m_aiPolicy=prefs.revision;
  w.m_aiActive=w.m_aiReady=true;
- assert(w.prepare(p) && w.m_aiFallback && !w.m_aiReady && !w.m_aiActive);
+ assert(!w.prepare(p) && !w.m_aiFallback && !w.m_aiReady && !w.m_aiActive);
+ assert(w.m_dvFatalReason==OutputReason::SourceIneligible);
  assert(w.m_aiSelectionPolicy==prefs.revision && w.m_aiActivation==p.doviSourceBinding);
- assert(w.prepare(p) && w.m_aiFallback); // repeated rejection cannot clear it
+ assert(!w.prepare(p) && w.m_dvFatalReason==OutputReason::SourceIneligible);
+ assert(w.m_aiActivation==p.doviSourceBinding); // Repeated refusal cannot become native completion.
  w.caps.isHDR10Plus=w.caps.processingKnown=true;for(auto& v:w.caps.processing)v={true,OutputReason::None};
- assert(!w.prepare(p) && w.m_aiFallback); // valid snapshot does not reset activation
+ assert(!w.prepare(p) && w.m_dvFatalReason==OutputReason::SourceIneligible);
+ assert(w.m_aiActivation==p.doviSourceBinding); // This prefix does not execute the epoch-reset owner.
  w.caps.isHDR10Plus=false;++p.doviSourceBinding.stream;
- assert(w.prepare(p) && !w.m_aiFallback && !w.m_aiActivation.Valid());
- assert(w.m_aiSelectionPolicy==0); // a genuine new source may retry
+ assert(!w.prepare(p) && w.m_dvFatalReason==OutputReason::SourceIneligible);
+ assert(w.m_aiActivation.stream!=p.doviSourceBinding.stream); // Missing new-source metadata is still refused.
+ Window pending;pending.caps=w.caps;pending.caps.isHDR10Plus=true;pending.caps.processingKnown=false;
+ assert(!pending.prepare(p) && pending.m_dvFatalReason==OutputReason::None);
+ assert(pending.m_aiSelectionPolicy==0 && !pending.m_aiActivation.Valid());
+ prefs.hdr10PlusSource=HDR10SourceMode::Native;
+ Window native;native.caps=w.caps;native.m_aiActivation=p.doviSourceBinding;
+ native.m_aiPolicy=prefs.revision;native.m_aiActive=native.m_aiReady=true;
+ native.m_dvContext->ready=false;assert(!native.prepare(p));
+ assert(native.m_aiPolicy==0 && !native.m_aiActivation.Valid() && native.m_aiSelectionPolicy==0);
+ native.m_dvContext->ready=true;assert(native.prepare(p));
+ assert(native.m_dvContext->stops==2 && !native.m_aiReady && !native.m_aiActive);
+ assert(native.m_aiSelectionPolicy==prefs.revision && native.m_dvFatalReason==OutputReason::None);
 }
 '''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('SELECTOR',selector).replace('INGRESS',ingress))
 
@@ -456,10 +471,11 @@ PREFERENCES
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
 struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
-OutputSelection gated(const OutputPreferences& preferences,OutputCapabilities caps,bool m_aiReady){
+OutputSelection gated(const OutputPreferences& preferences,OutputCapabilities caps,bool m_aiReady,bool m_aiFallback=false,bool current=true){
  auto result=select(preferences,caps);
  SourceBinding binding{7,14,11},m_aiActivation=binding;
- uint64_t m_aiPolicy=preferences.revision;bool m_aiFallback=false;std::mutex m_dvCapabilityMutex;
+ if(!current)++m_aiActivation.stream;
+ uint64_t m_aiPolicy=preferences.revision;std::mutex m_dvCapabilityMutex;
  GATE
  return result;
 }
@@ -474,7 +490,9 @@ int main(){
  assert(gated(p,c,false).reason==OutputReason::NoDVTransport);
  c.nativeDV=true;assert(gated(p,c,true).route==OutputRoute::NativeDV);
  c.hdr10PlusSource=false;p.hdr10Source=HDR10SourceMode::ReferenceDV;
- assert(gated(p,c,false).route==OutputRoute::Vanilla && gated(p,c,false).reason==OutputReason::None);
+ assert(gated(p,c,false).route==OutputRoute::Vanilla && gated(p,c,false).reason==OutputReason::ProcessingPending);
+ assert(gated(p,c,true,true).reason==OutputReason::ActivationFailed);
+ assert(gated(p,c,true,true,false).reason==OutputReason::ProcessingPending); // Old failure cannot cross activation identity.
 }
 '''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('SELECTOR',selector).replace('GATE',gate))
 
