@@ -1528,5 +1528,12 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Report which setup step failed and why an attach was refused.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Expose the attach refusal reason."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-11-inherited-gl-errors.patch": {
+    "summary": "Clear inherited GL errors before handing libplacebo control",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing at bridge entry points."
+    }
   }
 }

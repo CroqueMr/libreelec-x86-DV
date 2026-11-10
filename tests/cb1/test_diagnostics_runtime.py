@@ -122,6 +122,7 @@ void glDeleteFramebuffers(int,unsigned*){}
 void glDeleteTextures(int,unsigned*){}
 void dvbridge_gl_packer_destroy(int*){}
 void pl_tex_destroy(int,int*){}
+inline void ClearInheritedGLErrors() {}
 struct CDVBridgeGLES {
  struct Context{unsigned epoch=1;void ClearNextHDR10AI(){++epoch;}void Detach(int*){}};
  struct {void reset(){}} m_playerLedCpu;

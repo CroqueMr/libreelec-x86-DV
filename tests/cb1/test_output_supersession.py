@@ -140,6 +140,7 @@ struct CEGLContextUtils{
  bool CreatePlatformSurface(void*,uintptr_t){m_eglSurface=nextSurface++;surfaces[m_eglSurface]=m_eglConfig;return true;}
  void DestroySurface(){}bool BindContext(){currentSurface=m_eglSurface;return true;}bool TrySwapBuffers(){return true;}
 };
+inline void ClearInheritedGLErrors() {}
 struct CDVBridgeGLES {
  explicit CDVBridgeGLES(bool playerLed=false):m_playerLed(playerLed){}
  bool m_playerLed{};

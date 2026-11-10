@@ -340,6 +340,7 @@ int main(){
         cancel=body(source,'void CDVBridgeGLES::Cancel()')
         execute(r'''
 #include <cassert>
+inline void ClearInheritedGLErrors() {}
 #include <optional>
 #include <vector>
 #define CB1_HAS_HDR10_AI
