@@ -319,7 +319,7 @@
     "tests/cb1/test_native_video_telemetry.py": "c10e8392d2a917064aa75cc84e2344209c1529779ab111a1cd32585aaee40128",
     "tests/cb1/test_sdr_live_settings.py": "fd3413decd7c54663875bb385d7a979fe2927667656eb513444d8fa293d3ba0c",
     "tests/cb1/test_sdr_applied_metadata.py": "828d531ee9d0c6418f7d600b4947691b51ce487b6265c1b3c2b7e67eacd5cf85",
-    "tests/cb1/test_output_supersession.py": "1eddd71a48178fb83961b2b1c92d42a044a557223ee8c535979d51e45208da4f",
+    "tests/cb1/test_output_supersession.py": "5a0e1975f13b71dc6e2515926e0d4bd4172a073915add9d5a1cf4fe77873bf96",
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
     "tests/cb1/test_hdmi_scdc_diagnostics.py": "b82425e1906205f8e6d6685a634f3fa8b3c83def89660c13a7bb691f04612bd2",
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "e73a5a3c32a8a83781dcf693bf6f096921526b910ab7373a17ddde8b62bb425b",
@@ -354,7 +354,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "34a93e5e6e20562a4e3fc35dee7f9238520dc37ea176d7c33ba2b8a2ce8db613",
+    "config/cb1-patch-index.json": "8c1f5dbeab84be37cf74391092a360b06071ff1b0c03f25d3832bdf4d1e7ad27",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "34c90917984ba79d48a20f6ea542f48f9bdc4044da1f50ec0ed7989cd47b4858",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": "7187a58b3678178b6608e03e5e81a912ac2a4c8a0b6b8fbcdcb2168347f1c02c",
@@ -364,7 +364,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": "bc6befc161cf95d91702e55266d49af8056e5fc441b8e546e45af771a7272be3",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": "f24bb04a2626514b6ecebd852c433f7d3414486cb1996ca92ce99aae82ad2e52",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": "74c008478d871582c93a70437da12d9cf24b5e58a8205f5de6875ce35ed8d433",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": "813afda06f8282ec834baf1504b1a5e4e949b2b45024e6752f581b47edf9ad4c"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": "813afda06f8282ec834baf1504b1a5e4e949b2b45024e6752f581b47edf9ad4c",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-10-renderer-setup-reasons.patch": "3f267bfe386ee6685f586a39c6c0aba976c2f18544dfa955f7d27a757c39e016"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

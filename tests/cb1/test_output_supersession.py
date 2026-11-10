@@ -157,6 +157,7 @@ struct CDVBridgeGLES {
   bool Quarantined()const{return false;}bool AsyncPreparation(unsigned)const{return true;}
   pl_opengl GL() const {return gl?&fakeGL:nullptr;}pl_log Log(){return nullptr;}pl_renderer Attach(){return &rendererToken;} int Poll(bool=false){return pollFailed?DVBRIDGE_DV_FAILED:ready ? DVBRIDGE_DV_IDLE : DVBRIDGE_DV_BUSY;}void SourceReadComplete(){}
   bool Initialize(bool){++initialized;gl=true;return true;}
+  const char* AttachRefusal() const {return "renderer-create";}
   bool FenceLastUse(){++fences;return fenceOK;}
   bool Close(){++closed;gl=false;return true;}
  };

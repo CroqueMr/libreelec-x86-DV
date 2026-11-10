@@ -1520,5 +1520,13 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Treat an sRGB-capable scanout as linear while GL_FRAMEBUFFER_SRGB is off."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-10-renderer-setup-reasons.patch": {
+    "summary": "Say why the DV bridge renderer could not be set up",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Report which setup step failed and why an attach was refused.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Expose the attach refusal reason."
+    }
   }
 }
