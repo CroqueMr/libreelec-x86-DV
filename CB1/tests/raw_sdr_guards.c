@@ -5,6 +5,57 @@
 #include "dvbridge_gl_frame.h"
 extern bool raw_native_import(struct dvbridge_gl_frame*,pl_gpu,enum dvbridge_gl_layout,
     int,int,const struct dvbridge_gl_plane[3],unsigned,bool,unsigned,unsigned*);
+
+static unsigned raster_controls(struct reference_gpu* gpu,struct dvbridge_renderer* r,
+                               const struct pl_frame* raw)
+{
+    uint16_t y[64],uv[32];for(unsigned i=0;i<64;i++)y[i]=400u<<6;
+    for(unsigned i=0;i<32;i++)uv[i]=512u<<6;
+    GLuint ids[2];glGenTextures(2,ids);
+    for(unsigned i=0;i<2;i++){
+        glBindTexture(GL_TEXTURE_2D,ids[i]);glTexImage2D(GL_TEXTURE_2D,0,i?0x822C:0x822A,
+            i?4:8,i?4:8,0,i?GL_RG:GL_RED,GL_UNSIGNED_SHORT,i?uv:y);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    }
+    struct dvbridge_gl_plane planes[3]={{ids[0],8,8},{ids[1],4,4}};
+    struct dvbridge_gl_frame dv={0};unsigned used;
+    assert(raw_native_import(&dv,gpu->gl->gpu,DVBRIDGE_P010,8,8,planes,100,false,AVCHROMA_LOC_LEFT,&used));
+    size_t bytes;AVDOVIMetadata* metadata=task3_fixture(&bytes);
+    const struct dvbridge_policy p={.revision=3,.mode=DVBRIDGE_MODE_SDR};
+    const struct dvbridge_identity id={9,1,3};const struct dvbridge_geometry g={8,8,0,0,8,8,8,8};
+    const int sizes[][2]={{4,8},{16,8},{8,4},{8,16}};unsigned failures=0;
+    for(unsigned origin=0;origin<2;origin++){
+        const struct pl_frame* frame=origin?&dv.frame:raw;
+        const void* m=origin?metadata:NULL;size_t n=origin?bytes:0;
+        assert(frame->repr.alpha==PL_ALPHA_UNKNOWN);
+        pl_tex matched=reference_texture(gpu->gl->gpu,8,8,NULL);
+        assert(dvbridge_render_sdr_policy_direct_eligible(r,&p,&id,frame,m,n,1,1,g,matched,8));
+        assert(dvbridge_render_hdr10_policy_direct(r,&p,&id,frame,m,n,1,1,g,matched,false,false,8));
+        assert(dvbridge_render_policy_commit(r,&id,matched));
+        struct dvbridge_hdr10_policy_output accepted;assert(dvbridge_render_policy_committed(r,&accepted));
+        for(unsigned size=0;size<4;size++){
+            pl_tex target=reference_texture(gpu->gl->gpu,sizes[size][0],sizes[size][1],NULL);
+            struct pl_frame saved=*frame;struct dvbridge_renderer before=*r;
+            bool eligible=dvbridge_render_sdr_policy_direct_eligible(r,&p,&id,frame,m,n,1,1,g,target,8);
+            bool pure=!memcmp(&saved,frame,sizeof(saved))&&!memcmp(&before,r,sizeof(before));
+            unsigned prior=draws;
+            bool prepared=dvbridge_render_hdr10_policy_direct(r,&p,&id,frame,m,n,1,1,g,target,false,false,8);
+            bool pending=dvbridge_render_policy_output(r)!=NULL;
+            struct dvbridge_hdr10_policy_output after;
+            bool retained=dvbridge_render_policy_committed(r,&after)&&
+                dvbridge_identity_equal(&accepted.identity,&after.identity)&&after.final_target==matched;
+            bool failed=eligible||!pure||draws!=prior||prepared||pending||!retained;
+            failures+=failed;
+            printf("RASTER %s %dx%d eligible=%d pure=%d draws=%u prepared=%d pending=%d retained=%d %s\n",
+                origin?"DV":"raw",sizes[size][0],sizes[size][1],eligible,pure,draws-prior,
+                prepared,pending,retained,failed?"FAIL":"PASS");fflush(stdout);
+            dvbridge_render_policy_cancel(r);pl_tex_destroy(gpu->gl->gpu,&target);
+        }
+        pl_tex_destroy(gpu->gl->gpu,&matched);
+    }
+    av_free(metadata);dvbridge_gl_frame_release(&dv);glDeleteTextures(2,ids);return failures;
+}
 int main(void)
 {
     struct reference_gpu gpu=reference_gpu_create();
@@ -57,6 +108,9 @@ int main(void)
     float retained[256];reference_read(gpu.gl->gpu,r->rgb,0,0,8,8,retained);assert(!memcmp(backing,retained,sizeof(backing)));
     assert(!r->dv.output.intermediate&&dvbridge_render_texture(r)==NULL);checks++;
     printf("PASS %u raw pure-query/alpha/failure/P5 controls\n",checks);
+    unsigned failures=raster_controls(&gpu,r,&imported.frame);
+    printf("RASTER SUMMARY invalid=8 matched_positive=2 failures=%u\n",failures);fflush(stdout);
+    assert(!failures);
     dvbridge_gl_frame_release(&imported);glDeleteTextures(2,ids);pl_tex_destroy(gpu.gl->gpu,&output);
     dvbridge_renderer_destroy(r);reference_gpu_destroy(&gpu);return 0;
 }
