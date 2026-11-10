@@ -1535,5 +1535,12 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing at bridge entry points."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-12-fence-gl-errors.patch": {
+    "summary": "Clear inherited GL errors before fencing the DV context's last use",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing before fencing."
+    }
   }
 }

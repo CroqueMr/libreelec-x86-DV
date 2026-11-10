@@ -354,7 +354,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "f7e5119426198d01c3609ed7af1468c1ce437c576db0fa031ec5adf15a5e999e",
+    "config/cb1-patch-index.json": "a6a6275cecc10a55c5cf377c0d98bdecaeda2c3a0607b6f05d4e0aa83a384087",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": "34c90917984ba79d48a20f6ea542f48f9bdc4044da1f50ec0ed7989cd47b4858",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": "7187a58b3678178b6608e03e5e81a912ac2a4c8a0b6b8fbcdcb2168347f1c02c",
@@ -366,7 +366,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": "74c008478d871582c93a70437da12d9cf24b5e58a8205f5de6875ce35ed8d433",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": "813afda06f8282ec834baf1504b1a5e4e949b2b45024e6752f581b47edf9ad4c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-10-renderer-setup-reasons.patch": "3f267bfe386ee6685f586a39c6c0aba976c2f18544dfa955f7d27a757c39e016",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-11-inherited-gl-errors.patch": "5e50dbe12d3b90e7f40a11fd7b5d18aa6e02f4c7c36825deaba962e793125312"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-11-inherited-gl-errors.patch": "5e50dbe12d3b90e7f40a11fd7b5d18aa6e02f4c7c36825deaba962e793125312",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-12-fence-gl-errors.patch": "a8cd4dddfa9f8da7cd9ee86213337e19a40170e608be7a803d351341ea4159ef"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
