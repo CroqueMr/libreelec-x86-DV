@@ -10122,7 +10122,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +endif()
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -0,0 +1,2693 @@
+@@ -0,0 +1,2705 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVBridgeGLES.h"
 +#include "VideoShaders/VideoFilterShaderGLES.h"
@@ -11864,6 +11864,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    // Reserve the film's representable ceiling before the GUI is composed.
 +    policy.expert_output_bits=m_outputBits;
 +    policy.expert_output_limited=m_hdr10Limited;
++    // Original decoded DV and original raw HDR are distinct from generated RPU work.
++    const bool originalDV = base.sourceInfo.profile && base.sourceInfo.rpu && metadata.Data();
++    const bool originalHDR = !base.sourceInfo.profile && !base.sourceInfo.rpu &&
++        !base.sourceInfo.el && !base.hlg && !metadata.Data() && !enhancement;
++    const bool attemptedSDR = policy.mode == DVBRIDGE_MODE_SDR &&
++        (originalDV || originalHDR) && allowPacked && m_directUsable && m_scanout &&
++        dvbridge_render_sdr_policy_direct_eligible(m_renderer,&policy,&m_pendingIdentity,
++            &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,m_outputBits);
++    if (attemptedSDR)
++      m_direct = dvbridge_render_hdr10_policy_direct(m_renderer,&policy,&m_pendingIdentity,
++          &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,
++          true,m_hdr10Limited,m_outputBits);
 +    if (policy.mode != DVBRIDGE_MODE_SDR && allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
 +        geometry.width == geometry.target_width && geometry.height == geometry.target_height)
 +    {
@@ -11880,9 +11892,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    }
 +    const auto renderPolicy = policy.mode == DVBRIDGE_MODE_SDR ?
 +        dvbridge_render_sdr_policy_rgb : dvbridge_render_hdr10_policy_rgb;
-+    m_prepared = m_direct || renderPolicy(m_renderer,&policy,&m_pendingIdentity,
-+        &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry);
-+    if (m_prepared && policy.mode==DVBRIDGE_MODE_SDR)
++    m_prepared = m_direct || (!attemptedSDR && renderPolicy(m_renderer,&policy,&m_pendingIdentity,
++        &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry));
++    if (m_prepared && policy.mode==DVBRIDGE_MODE_SDR && !m_direct)
 +    {
 +      // Compose the GUI on the resolved BT.709 target, after movie tone mapping.
 +      // The direct-target accessor also marks paused GUI redraws for film refresh.
