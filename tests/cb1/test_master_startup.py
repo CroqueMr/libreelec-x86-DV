@@ -15,6 +15,9 @@ class MasterStartupTests(unittest.TestCase):
         signature = 'void CDVBridgeGLES::BeginDiagnosticStream('
         begin = body(source, signature) if signature in source else '{}'
         summary = body(source, 'void CDVBridgeGLES::Summary(')
+        header = (TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h').read_text()
+        start = header.index('  using ResetDiagnosticSnapshot')
+        reset_member = header[start:header.index('m_lastResetReported;',start)+len('m_lastResetReported;')]
         program = r'''
 #include <cassert>
 #include <cmath>
@@ -22,6 +25,8 @@ class MasterStartupTests(unittest.TestCase):
 #include <string>
 #include <vector>
 #include <string_view>
+#include <optional>
+#include <tuple>
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #include "utils/DVBridgeDiagnosticState.h"
@@ -42,6 +47,8 @@ inline void DiagnosticStage(const char* value){stage=value;}
 inline void DiagnosticReserveProgress(){}
 template<class...T>void DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
  messages.push_back(fmt::format(f,std::forward<T>(a)...));}
+template<class...T>bool DiagnosticRendererCounterLog(int level,fmt::format_string<T...> f,T&&...a){
+ DiagnosticLog(level,f,std::forward<T>(a)...);return true;}
 }
 enum {LOGINFO};
 struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;} const void* Data()const{return this;}};
@@ -57,6 +64,9 @@ struct CDVBridgeGLES {
  uint64_t m_diagnosticStream=0,m_prepares=5,m_directFrames=5,m_presentations=4,
  m_failedPresentations=1,m_lastSummary=10,m_lastReported=5,m_rawELImports=3,m_rawELHits=7;
  DVBRIDGE::DiagnosticFailures m_failures;
+ RESET_MEMBER
+ DVBRIDGE::Binding m_pendingBinding;DVBRIDGE::OutputPreferences m_requested;
+ dvbridge_mode m_effectiveMode=DVBRIDGE_MODE_MASTER_REFERENCE;
  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
  DVBRIDGE::DiagnosticFrames m_hdr10plusAnalyzed,m_hdr10plusGenerated,m_hdr10plusAccepted;
  uint64_t m_hdr10plusSubmits{};std::array<double,4> m_hdr10plusLight{};
@@ -74,7 +84,7 @@ int main(){
  DVBRIDGE::OutputPreferences preferences;
  CHECKS
 }
-'''.replace('BEGIN', begin).replace('ENTRY', entry).replace('CHECKS', checks).replace('SUMMARY',summary)
+'''.replace('BEGIN', begin).replace('ENTRY', entry).replace('CHECKS', checks).replace('SUMMARY',summary).replace('RESET_MEMBER',reset_member)
         repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
