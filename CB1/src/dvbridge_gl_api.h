@@ -31,4 +31,8 @@ static inline void dvbridge_gl_color_bits(GLuint framebuffer, GLint bits[4], GLi
         glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment, sizes[i], &bits[i]);
     glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
         GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, encoding);
+    /* Mesa gives desktop default framebuffers sRGB formats; writes stay linear until
+     * GL_FRAMEBUFFER_SRGB is enabled. */
+    if (*encoding == GL_SRGB && !glIsEnabled(GL_FRAMEBUFFER_SRGB))
+        *encoding = GL_LINEAR;
 }

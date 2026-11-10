@@ -300,7 +300,7 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "15ba5081ed23eb8138bab7b6174031af517b6b33494ce9743f47053d9493f978",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "ed11c2b45c37386b5d8d1931061bc85c732e4023573968311986202b90538f25",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "53afffd0a8cf16ea74f7c7685acfcbe69f1868d0993d72ab5c4efc6a65b7c937",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "ae4ea71dfd0e6df8743fc2784ef11b88b7650340d74f2fb606882041485da6cc",
     "tests/cb1/test_diagnostics_runtime.py": "7788bc522c91d111195842c384f035df6f2c2c12ca3576deaee7bc22242503fd",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "190a638a6869952e78a43a1d08121c18447f815a21f5a4ab0302e690f9a058d6",
@@ -596,7 +596,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "53afffd0a8cf16ea74f7c7685acfcbe69f1868d0993d72ab5c4efc6a65b7c937"
+      "sha256": "ae4ea71dfd0e6df8743fc2784ef11b88b7650340d74f2fb606882041485da6cc"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -892,7 +892,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_gl_api.h": {
       "source": "src/dvbridge_gl_api.h",
-      "sha256": "7c716c104de155042bc14f24b31cf134365759677b2188f7249342b290d89ad4"
+      "sha256": "d841f661cb5602e854db988ac923f6f2ba8038cdbfcc99e1e190b117d21f031e"
     }
   }
 }
