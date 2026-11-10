@@ -109,7 +109,7 @@ int main(int argc,char**argv)
             curve->poly_order[0]=variant?2:1;curve->poly_coef[0][1]=variant?3500:4096;curve->poly_coef[0][2]=variant?512:0;
             if(mmr){
                 curve->mmr_order[0]=2;curve->mmr_constant[0]=128;
-                for(unsigned order=0;order<2;order++)for(unsigned axis=0;axis<7;axis++)
+                for(int order=0;order<2;order++)for(int axis=0;axis<7;axis++)
                     curve->mmr_coef[0][order][axis]=(axis&1?-1:1)*(25+axis*7+order*13);
                 curve->mmr_coef[0][0][c]+=3000;
             }
