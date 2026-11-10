@@ -9741,7 +9741,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#ifdef HAVE_DVBRIDGE
 +  if (HandleDVPlaybackFailure(pPicture)) return OUTPUT_ABORT;
 +  DVBRIDGE::StreamTelemetry::SourceBits(pPicture->colorBits,pPicture->pixelFormat,pPicture->doviSourceInfo);
-+  if (DVBRIDGE::DiagnosticsEnabled() && CDVPlaybackInfo::presented.load())
++  if (DVBRIDGE::DiagnosticsEnabled())
 +  {
 +    ++m_diagnosticPictures;
 +    const auto now = DVBRIDGE::DiagnosticNowMs();
