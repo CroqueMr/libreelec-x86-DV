@@ -1542,5 +1542,12 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing before fencing."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-13-font-batch-shader.patch": {
+    "summary": "Draw a GL font batch with the shader it began with",
+    "component": "kodi",
+    "files": {
+      "xbmc/guilib/GUIFontTTFGL.cpp": "Take attribute locations from the font shader, not the current one."
+    }
   }
 }
