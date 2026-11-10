@@ -1,9 +1,9 @@
 From: Codex <codex@openai.com>
-Subject: [PATCH] i915: defer HDMI link checks while preserving hotplug changes
+Subject: [PATCH] i915: resume pending HDMI checks from native commit completion
 
-Reuse the existing bounded HPD retry work when an active HDMI commit is
-still pending. Notify connection changes immediately and re-read current
-connector/CRTC state on the later check. Do not change SCDC recovery policy.
+Keep link checks in the native HPD worker. Coalesce encoder requests per
+pipe until hw_done, preserve current-state guards and existing SCDC policy,
+and cancel requests through the existing detection lifecycle.
 
 --- a/drivers/gpu/drm/i915/display/intel_ddi.c
 +++ b/drivers/gpu/drm/i915/display/intel_ddi.c
@@ -17,106 +17,368 @@ connector/CRTC state on the later check. Do not change SCDC recovery policy.
  {
  	struct intel_display *display = to_intel_display(encoder);
  	struct intel_hdmi *hdmi = enc_to_intel_hdmi(encoder);
-@@ -4756,6 +4757,8 @@
+@@ -4756,7 +4757,10 @@
  	u8 config;
  	int ret;
  
 +	*retry = false;
 +
  	if (connector->base.status != connector_status_connected) {
++		intel_hpd_hdmi_cancel(encoder);
  		drm_dbg_kms(display->drm,
  			    "HDMI SCDC reset-link: reason=not-connected connector=%u status=%d\n",
-@@ -4816,6 +4819,7 @@
- 			    "HDMI SCDC reset-link: reason=commit-pending connector=%u expected_scrambling=%d expected_ratio40=%d hw_done=0\n",
+ 			    connector->base.base.id, connector->base.status);
+@@ -4776,6 +4780,7 @@
+ 
+ 	crtc = to_intel_crtc(conn_state->crtc);
+ 	if (!crtc) {
++		intel_hpd_hdmi_cancel(encoder);
+ 		drm_dbg_kms(display->drm,
+ 			    "HDMI SCDC reset-link: reason=no-crtc connector=%u\n",
+ 			    connector->base.base.id);
+@@ -4796,6 +4801,7 @@
+ 		    !intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI));
+ 
+ 	if (!crtc_state->hw.active) {
++		intel_hpd_hdmi_cancel(encoder);
+ 		drm_dbg_kms(display->drm,
+ 			    "HDMI SCDC reset-link: reason=inactive connector=%u\n",
+ 			    connector->base.base.id);
+@@ -4804,18 +4810,20 @@
+ 
+ 	if (!crtc_state->hdmi_high_tmds_clock_ratio &&
+ 	    !crtc_state->hdmi_scrambling) {
++		intel_hpd_hdmi_cancel(encoder);
+ 		drm_dbg_kms(display->drm,
+ 			    "HDMI SCDC reset-link: reason=not-scrambled connector=%u expected_scrambling=0 expected_ratio40=0\n",
+ 			    connector->base.base.id);
+ 		return 0;
+ 	}
+ 
+-	if (conn_state->commit &&
+-	    !try_wait_for_completion(&conn_state->commit->hw_done)) {
++	if (intel_hpd_hdmi_wait_for_commit(encoder, crtc->pipe, conn_state->commit)) {
+ 		drm_dbg_kms(display->drm,
+-			    "HDMI SCDC reset-link: reason=commit-pending connector=%u expected_scrambling=%d expected_ratio40=%d hw_done=0\n",
++			    "HDMI SCDC reset-link: reason=check-deferred connector=%u expected_scrambling=%d expected_ratio40=%d hw_done=%d\n",
  			    connector->base.base.id, crtc_state->hdmi_scrambling,
- 			    crtc_state->hdmi_high_tmds_clock_ratio);
+-			    crtc_state->hdmi_high_tmds_clock_ratio);
++			    crtc_state->hdmi_high_tmds_clock_ratio,
++			    conn_state->commit && try_wait_for_completion(&conn_state->commit->hw_done));
 +		*retry = true;
  		return 0;
  	}
  
-@@ -4897,6 +4901,7 @@
+@@ -4897,6 +4905,7 @@
  	struct intel_digital_port *dig_port = enc_to_dig_port(encoder);
  	struct intel_dp *intel_dp = &dig_port->dp;
  	bool is_tc = intel_encoder_is_tc(encoder);
-+	bool hdmi_retry = false;
++	bool hdmi_pending = false;
  	struct drm_modeset_acquire_ctx ctx;
  	enum intel_hotplug_state state;
  	int ret;
-@@ -4909,7 +4914,7 @@
+@@ -4909,7 +4918,7 @@
  	if (!intel_tc_port_link_reset(dig_port)) {
  		if (connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA) {
  			intel_modeset_lock_ctx_retry(&ctx, NULL, 0, ret)
 -				ret = intel_hdmi_reset_link(encoder, &ctx);
-+				ret = intel_hdmi_reset_link(encoder, &ctx, &hdmi_retry);
++				ret = intel_hdmi_reset_link(encoder, &ctx, &hdmi_pending);
  			drm_WARN_ON(encoder->base.dev, ret);
  		} else {
  			intel_dp_check_link_state(intel_dp);
-@@ -4938,9 +4943,17 @@
+@@ -4938,7 +4947,7 @@
  	 * becomes functional. Retry the detection for 5 seconds on type-c
  	 * connectors to account for this delay.
  	 */
 -	if (state == INTEL_HOTPLUG_UNCHANGED &&
--	    connector->hotplug_retries < (is_tc ? 5 : 1) &&
--	    !dig_port->dp.is_mst)
-+	/* A pending HDMI commit needs a later check, independently of the
-+	 * immediate connection-change notification. Reuse the native one-second
-+	 * retry once; never spin on hw_done or retain its commit/CRTC pointer.
-+	 */
-+	if (hdmi_retry &&
-+	    connector->hotplug_retries < 1 && !dig_port->dp.is_mst)
-+		state = state == INTEL_HOTPLUG_CHANGED ?
-+			INTEL_HOTPLUG_CHANGED_RETRY : INTEL_HOTPLUG_DEFERRED;
-+	else if (state == INTEL_HOTPLUG_UNCHANGED &&
-+		 connector->hotplug_retries < (hdmi_retry ? 1 : (is_tc ? 5 : 1)) &&
-+		 !dig_port->dp.is_mst)
++	if (!hdmi_pending && state == INTEL_HOTPLUG_UNCHANGED &&
+ 	    connector->hotplug_retries < (is_tc ? 5 : 1) &&
+ 	    !dig_port->dp.is_mst)
  		state = INTEL_HOTPLUG_RETRY;
- 
- 	return state;
 --- a/drivers/gpu/drm/i915/display/intel_hotplug.c
 +++ b/drivers/gpu/drm/i915/display/intel_hotplug.c
-@@ -472,7 +472,7 @@
- 	struct intel_hotplug *hotplug = &display->hotplug;
- 	struct drm_connector_list_iter conn_iter;
- 	struct intel_connector *connector;
--	u32 changed = 0, retry = 0;
-+	u32 changed = 0, retry = 0, deferred = 0;
+@@ -21,7 +21,9 @@
+  * IN THE SOFTWARE.
+  */
+ 
++#include <linux/completion.h>
+ #include <linux/debugfs.h>
++#include <linux/string.h>
+ #include <linux/kernel.h>
+ 
+ #include <drm/drm_print.h>
+@@ -387,6 +389,84 @@
+ 	return hpd_pin_mask;
+ }
+ 
++static void hdmi_clear_check(struct intel_display *display, u32 encoder_mask)
++{
++	struct intel_hotplug *hotplug = &display->hotplug;
++	int pipe;
++
++	lockdep_assert_held(&display->irq.lock);
++	for (pipe = 0; pipe < I915_MAX_PIPES; pipe++)
++		hotplug->hdmi_wait_encoders[pipe] &= ~encoder_mask;
++	hotplug->hdmi_ready_encoders &= ~encoder_mask;
++}
++
++static u32 hdmi_ready_encoders(struct intel_display *display)
++{
++	struct intel_encoder *encoder;
++	u32 ready = 0;
++
++	lockdep_assert_held(&display->irq.lock);
++	for_each_intel_encoder(display->drm, encoder) {
++		if (encoder->hpd_pin != HPD_NONE &&
++		    !hpd_pin_is_blocked(display, encoder->hpd_pin))
++			ready |= display->hotplug.hdmi_ready_encoders &
++				drm_encoder_mask(&encoder->base);
++	}
++	return ready;
++}
++
++void intel_hpd_hdmi_cancel(struct intel_encoder *encoder)
++{
++	struct intel_display *display = to_intel_display(encoder);
++
++	spin_lock_irq(&display->irq.lock);
++	hdmi_clear_check(display, drm_encoder_mask(&encoder->base));
++	spin_unlock_irq(&display->irq.lock);
++}
++
++bool intel_hpd_hdmi_wait_for_commit(struct intel_encoder *encoder, enum pipe pipe,
++				    struct drm_crtc_commit *commit)
++{
++	struct intel_display *display = to_intel_display(encoder);
++	struct intel_hotplug *hotplug = &display->hotplug;
++	u32 encoder_mask = drm_encoder_mask(&encoder->base);
++	bool pending = commit && !try_wait_for_completion(&commit->hw_done);
++
++	spin_lock_irq(&display->irq.lock);
++	hdmi_clear_check(display, encoder_mask);
++	if (hotplug->hdmi_cancelled_encoders & encoder_mask) {
++		/* clear-and-unblock cancelled this still-running callback. */
++		pending = true;
++	} else if (pending) {
++		/* Pair registration with the post-hw_done hook: no lost wakeup. */
++		pending = !try_wait_for_completion(&commit->hw_done);
++		if (pending)
++			hotplug->hdmi_wait_encoders[pipe] |= encoder_mask;
++	}
++	spin_unlock_irq(&display->irq.lock);
++
++	return pending;
++}
++
++void intel_hpd_hdmi_commit_done(struct intel_display *display, u8 pipe_mask)
++{
++	struct intel_hotplug *hotplug = &display->hotplug;
++	u32 ready = 0;
++	int pipe;
++
++	spin_lock_irq(&display->irq.lock);
++	for (pipe = 0; pipe < I915_MAX_PIPES; pipe++) {
++		if (!(pipe_mask & BIT(pipe)))
++			continue;
++		ready |= hotplug->hdmi_wait_encoders[pipe];
++		hotplug->hdmi_wait_encoders[pipe] = 0;
++	}
++	hotplug->hdmi_ready_encoders |= ready;
++	if (ready && hdmi_ready_encoders(display))
++		queue_delayed_detection_work(display, &hotplug->hotplug_work, 0);
++	spin_unlock_irq(&display->irq.lock);
++}
++
+ static void i915_digport_work_func(struct work_struct *work)
+ {
+ 	struct intel_display *display =
+@@ -475,6 +555,8 @@
+ 	u32 changed = 0, retry = 0;
  	u32 hpd_event_bits;
  	u32 hpd_retry_bits;
++	u32 hdmi_ready, hdmi_running = 0;
++	struct intel_encoder *encoder;
  	struct drm_connector *first_changed_connector = NULL;
-@@ -529,6 +529,12 @@
- 			switch (encoder->hotplug(encoder, connector)) {
- 			case INTEL_HOTPLUG_UNCHANGED:
+ 	int changed_connectors = 0;
+ 	u32 blocked_hpd_pin_mask;
+@@ -489,6 +571,17 @@
+ 	hotplug->event_bits &= ~hpd_event_bits;
+ 	hpd_retry_bits = hotplug->retry_bits & ~blocked_hpd_pin_mask;
+ 	hotplug->retry_bits &= ~hpd_retry_bits;
++	hdmi_ready = hotplug->ignore_long_hpd ? 0 : hdmi_ready_encoders(display);
++	hotplug->hdmi_ready_encoders &= ~hdmi_ready;
++	if (!hotplug->ignore_long_hpd) {
++		for_each_intel_encoder(display->drm, encoder) {
++			if (encoder->hpd_pin != HPD_NONE &&
++			    (((hpd_event_bits | hpd_retry_bits) & BIT(encoder->hpd_pin)) ||
++			     (hdmi_ready & drm_encoder_mask(&encoder->base))))
++				hdmi_running |= drm_encoder_mask(&encoder->base);
++		}
++	}
++	hotplug->hdmi_running_encoders |= hdmi_running;
+ 
+ 	/* Enable polling for connectors which had HPD IRQ storms */
+ 	intel_hpd_irq_storm_switch_to_polling(display);
+@@ -512,13 +605,15 @@
+ 			continue;
+ 
+ 		hpd_bit = BIT(pin);
+-		if ((hpd_event_bits | hpd_retry_bits) & hpd_bit) {
++		if (((hpd_event_bits | hpd_retry_bits) & hpd_bit) ||
++		    (connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA &&
++		     (hdmi_ready & drm_encoder_mask(&intel_attached_encoder(connector)->base)))) {
+ 			struct intel_encoder *encoder =
+ 				intel_attached_encoder(connector);
+ 
+ 			if (hpd_event_bits & hpd_bit)
+ 				connector->hotplug_retries = 0;
+-			else
++			else if (hpd_retry_bits & hpd_bit)
+ 				connector->hotplug_retries++;
+ 
+ 			drm_dbg_kms(display->drm,
+@@ -538,12 +633,17 @@
+ 				}
  				break;
-+			case INTEL_HOTPLUG_DEFERRED:
-+				deferred |= hpd_bit;
-+				break;
-+			case INTEL_HOTPLUG_CHANGED_RETRY:
-+				deferred |= hpd_bit;
-+				fallthrough;
- 			case INTEL_HOTPLUG_CHANGED:
- 				changed |= hpd_bit;
- 				changed_connectors++;
-@@ -554,8 +560,10 @@
- 	if (first_changed_connector)
- 		drm_connector_put(first_changed_connector);
+ 			case INTEL_HOTPLUG_RETRY:
+-				retry |= hpd_bit;
++				if ((hpd_event_bits | hpd_retry_bits) & hpd_bit)
++					retry |= hpd_bit;
+ 				break;
+ 			}
+ 		}
+ 	}
+ 	drm_connector_list_iter_end(&conn_iter);
++	spin_lock_irq(&display->irq.lock);
++	hotplug->hdmi_running_encoders &= ~hdmi_running;
++	hotplug->hdmi_cancelled_encoders &= ~hdmi_running;
++	spin_unlock_irq(&display->irq.lock);
+ 	mutex_unlock(&display->drm->mode_config.mutex);
  
--	/* Remove shared HPD pins that have changed */
--	retry &= ~changed;
-+	/* Remove obsolete shared-pin retries, but preserve an explicit HDMI
-+	 * check deferred until its pending commit can complete.
-+	 */
-+	retry = (retry & ~changed) | deferred;
- 	if (retry) {
- 		spin_lock_irq(&display->irq.lock);
- 		display->hotplug.retry_bits |= retry;
---- a/drivers/gpu/drm/i915/display/intel_display_types.h
-+++ b/drivers/gpu/drm/i915/display/intel_display_types.h
-@@ -160,6 +160,8 @@
- 	INTEL_HOTPLUG_UNCHANGED,
- 	INTEL_HOTPLUG_CHANGED,
- 	INTEL_HOTPLUG_RETRY,
-+	INTEL_HOTPLUG_CHANGED_RETRY,
-+	INTEL_HOTPLUG_DEFERRED,
- };
+ 	if (changed_connectors == 1)
+@@ -970,23 +1070,26 @@
+ 	if (!HAS_DISPLAY(display))
+ 		return;
  
- struct intel_encoder {
+-	spin_lock_irq(&display->irq.lock);
+-
++	/* Stop new queueing before synchronizing callbacks that may arm checks. */
++	spin_lock_irq(&display->irq.lock);
++	display->hotplug.detection_work_enabled = false;
++	spin_unlock_irq(&display->irq.lock);
++
++	cancel_work_sync(&display->hotplug.dig_port_work);
++	if (cancel_all_detection_work(display))
++		drm_dbg_kms(display->drm, "Hotplug detection work still active\n");
++
++	spin_lock_irq(&display->irq.lock);
+ 	display->hotplug.long_hpd_pin_mask = 0;
+ 	display->hotplug.short_hpd_pin_mask = 0;
+ 	display->hotplug.event_bits = 0;
+ 	display->hotplug.retry_bits = 0;
+-
+-	spin_unlock_irq(&display->irq.lock);
+-
+-	cancel_work_sync(&display->hotplug.dig_port_work);
+-
+-	/*
+-	 * All other work triggered by hotplug events should be canceled by
+-	 * now.
+-	 */
+-	if (cancel_all_detection_work(display))
+-		drm_dbg_kms(display->drm, "Hotplug detection work still active\n");
++	memset(display->hotplug.hdmi_wait_encoders, 0,
++	       sizeof(display->hotplug.hdmi_wait_encoders));
++	display->hotplug.hdmi_ready_encoders = 0;
++	display->hotplug.hdmi_running_encoders = 0;
++	display->hotplug.hdmi_cancelled_encoders = 0;
++	spin_unlock_irq(&display->irq.lock);
+ }
+ 
+ static void queue_work_for_missed_irqs(struct intel_display *display)
+@@ -999,7 +1102,8 @@
+ 	lockdep_assert_held(&display->irq.lock);
+ 
+ 	blocked_hpd_pin_mask = get_blocked_hpd_pin_mask(display);
+-	if ((hotplug->event_bits | hotplug->retry_bits) & ~blocked_hpd_pin_mask)
++	if (((hotplug->event_bits | hotplug->retry_bits) & ~blocked_hpd_pin_mask) ||
++	    hdmi_ready_encoders(display))
+ 		queue_hp_work = true;
+ 
+ 	for_each_hpd_pin(pin) {
+@@ -1134,6 +1238,9 @@
+ 
+ 	spin_lock_irq(&display->irq.lock);
+ 
++	hdmi_clear_check(display, drm_encoder_mask(&encoder->base));
++	hotplug->hdmi_cancelled_encoders |= hotplug->hdmi_running_encoders &
++		drm_encoder_mask(&encoder->base);
+ 	if (unblock_hpd_pin(display, pin)) {
+ 		hotplug->event_bits &= ~BIT(pin);
+ 		hotplug->retry_bits &= ~BIT(pin);
+@@ -1141,6 +1248,9 @@
+ 		hotplug->long_hpd_pin_mask &= ~BIT(pin);
+ 	}
+ 
++	/* A sibling sharing this pin may still own a completed check. */
++	if (hdmi_ready_encoders(display))
++		queue_delayed_detection_work(display, &hotplug->hotplug_work, 0);
+ 	spin_unlock_irq(&display->irq.lock);
+ }
+ 
+--- a/drivers/gpu/drm/i915/display/intel_hotplug.h
++++ b/drivers/gpu/drm/i915/display/intel_hotplug.h
+@@ -9,6 +9,8 @@
+ #include <linux/types.h>
+ 
+ enum port;
++enum pipe;
++struct drm_crtc_commit;
+ struct intel_connector;
+ struct intel_digital_port;
+ struct intel_display;
+@@ -25,6 +27,10 @@
+ void intel_hpd_init(struct intel_display *display);
+ void intel_hpd_init_early(struct intel_display *display);
+ void intel_hpd_cancel_work(struct intel_display *display);
++bool intel_hpd_hdmi_wait_for_commit(struct intel_encoder *encoder, enum pipe pipe,
++				    struct drm_crtc_commit *commit);
++void intel_hpd_hdmi_cancel(struct intel_encoder *encoder);
++void intel_hpd_hdmi_commit_done(struct intel_display *display, u8 pipe_mask);
+ enum hpd_pin intel_hpd_pin_default(enum port port);
+ void intel_hpd_block(struct intel_encoder *encoder);
+ void intel_hpd_unblock(struct intel_encoder *encoder);
+--- a/drivers/gpu/drm/i915/display/intel_display_core.h
++++ b/drivers/gpu/drm/i915/display/intel_display_core.h
+@@ -177,6 +177,11 @@
+ 	} stats[HPD_NUM_PINS];
+ 	u32 event_bits;
+ 	u32 retry_bits;
++	/* HDMI checks coalesced by encoder, protected by display->irq.lock. */
++	u32 hdmi_wait_encoders[I915_MAX_PIPES];
++	u32 hdmi_ready_encoders;
++	u32 hdmi_running_encoders;
++	u32 hdmi_cancelled_encoders;
+ 	struct delayed_work reenable_work;
+ 
+ 	u32 long_hpd_pin_mask;
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -7732,7 +7732,16 @@
+ 	intel_set_cdclk_post_plane_update(state);
+ 	intel_pmdemand_post_plane_update(state);
+ 
+-	drm_atomic_helper_commit_hw_done(&state->base);
++	/* Capture pipe identities before hw_done publishes the new states. */
++	{
++		u8 hpd_pipes = 0;
++
++		for_each_new_intel_crtc_in_state(state, crtc, new_crtc_state)
++			if (new_crtc_state->uapi.commit)
++				hpd_pipes |= BIT(crtc->pipe);
++		drm_atomic_helper_commit_hw_done(&state->base);
++		intel_hpd_hdmi_commit_done(display, hpd_pipes);
++	}
+ 	intel_atomic_global_state_commit_done(state);
+ 
+ 	if (state->modeset) {

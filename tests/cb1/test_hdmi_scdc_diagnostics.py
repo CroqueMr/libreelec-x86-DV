@@ -58,6 +58,10 @@ bool try_wait_for_completion(bool*done){return *done;}
 int lock_error=0;
 int drm_modeset_lock(int*lock,drm_modeset_acquire_ctx*){return *lock==lock_error?-EDEADLK:0;}
 int intel_modeset_commit_pipes(intel_display*d,unsigned,drm_modeset_acquire_ctx*){++d->resets;return d->result;}
+// HPD lifecycle/registration is exercised with its real owners by the separate
+// native completion fixture; this test isolates diagnostic return/I2C behavior.
+void intel_hpd_hdmi_cancel(intel_encoder*){}
+bool intel_hpd_hdmi_wait_for_commit(intel_encoder*,int,commit*c){return c&&!try_wait_for_completion(&c->hw_done);}
 static int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx,bool*retry) OWNER
 struct Fixture{
  drm_device device;intel_display display{&device};i2c_adapter bus;intel_crtc_state state;
@@ -81,7 +85,7 @@ int main(){int failures=0,cases=0;auto check=[&](bool good,const std::string&nam
    case 7:f.conn.crtc=nullptr;expected_config_reads=0;reason="no-crtc";break;
    case 8:f.state.hw.active=false;expected_config_reads=0;reason="inactive";break;
    case 9:f.state.hdmi_scrambling=f.state.hdmi_high_tmds_clock_ratio=false;expected_config_reads=0;reason="not-scrambled";break;
-   case 10:f.commit.hw_done=false;expected_config_reads=0;reason="commit-pending";break;
+   case 10:f.commit.hw_done=false;expected_config_reads=0;reason="check-deferred";break;
    case 11:lock_error=1;expected_config_reads=0;expected_return=-EDEADLK;reason="connection-lock";break;
    case 12:lock_error=2;expected_config_reads=0;expected_return=-EDEADLK;reason="crtc-lock";break;
    case 13:f.conn.commit=nullptr;reason="config-match";break;
