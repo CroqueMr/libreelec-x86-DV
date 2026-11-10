@@ -318,7 +318,9 @@
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
     "tests/cb1/test_hdmi_scdc_diagnostics.py": "4a2115d345369ccc4089c02ab7d8e5ed3a98ddc0f0ad22b1e79e8dd1449b69fb",
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "9cf86d55b00ba34e84569aea75278e9452a61e15090deb60b1df9a54aee03c43",
-    "tests/cb1/test_hdmi_deferred_hotplug.py": "d86cb7004524ec1ad0c9cfb9d1b966e3d7d8f8672066e052bbc8441c7fda8c68"
+    "tests/cb1/test_hdmi_deferred_hotplug.py": "d86cb7004524ec1ad0c9cfb9d1b966e3d7d8f8672066e052bbc8441c7fda8c68",
+    "packages/mediacenter/kodi-theme-Estuary/package.mk": "2f360b508a0fd05a9b6eee81469875f840882e01f7a60df3f162c365c1fe40f7",
+    "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
