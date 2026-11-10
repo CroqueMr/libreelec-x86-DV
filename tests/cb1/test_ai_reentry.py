@@ -567,7 +567,8 @@ struct Source{bool guided=false;bool MetadataOnly(){return false;}bool HDR10Plus
  bool Current(int binding,DVBRIDGE::Preferences p){return binding==7 && p.revision==1 &&
  p.hdr10Source==(guided?DVBRIDGE::HDR10SourceMode::HDR10PlusDV:DVBRIDGE::HDR10SourceMode::ReferenceDV);}};
 struct Context{Source source;Source& HDR10AI(){return source;}};
-struct Bridge{std::optional<int> committed=1;const auto& CommittedHDR10AI(){return committed;}};
+struct Bridge{std::optional<int> committed=1;bool HDR10AISourceHLG(){return false;}
+ const auto& CommittedHDR10AI(){return committed;}};
 struct Window{Context context;Context* m_dvContext=&context;Bridge bridge;Bridge* m_dvBridge=&bridge;
  int m_aiActivation=7,m_aiPolicy=17,m_aiSelectionPolicy=1;mutable std::mutex m_dvCapabilityMutex;
  bool Committed()const BODY

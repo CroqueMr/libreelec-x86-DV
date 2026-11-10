@@ -12809,7 +12809,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,338 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -12929,6 +12929,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  HDR10AISource::Decision PredictHDR10AI(DVBRIDGE::SourceBinding binding,
 +      const DVBRIDGE::OutputPreferences& preferences, uint64_t now, cb1_ai_result* result);
 +  const std::optional<cb1_ai_result>& CommittedHDR10AI() const;
++  bool HDR10AISourceHLG() const { return m_sourceHLG; }
 +  FrameStatus PrepareHDR10AIFrame(const Layer& base, dvbridge_geometry geometry,
 +      const DVBRIDGE::OutputPreferences& preferences, const cb1_ai_result& prediction,
 +      dvbridge_policy policy, bool allowAsync = false, bool allowPacked = false);
