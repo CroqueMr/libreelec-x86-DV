@@ -205,6 +205,12 @@ bool dvbridge_render_sdr_policy_rgb(struct dvbridge_renderer *renderer,
     double pts,double el_pts,struct dvbridge_geometry geometry);
 bool dvbridge_render_sdr_policy_resolve(struct dvbridge_renderer *renderer,
     pl_tex target,bool flip_y,bool limited,unsigned bits);
+/* Read-only structural eligibility, not source provenance or retirement.
+ * The native caller still owns the original-source binding and GPU lifetime. */
+bool dvbridge_render_sdr_policy_direct_eligible(const struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct dvbridge_identity *identity,
+    const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
+    struct dvbridge_geometry geometry,pl_tex target,unsigned bits);
 /* Raw-video final target path: render and quantize in one FP32-precision pass.
  * Basic session and Expert policy remain separate mapping contracts. */
 bool dvbridge_render_hdr10_direct(struct dvbridge_renderer *renderer,
