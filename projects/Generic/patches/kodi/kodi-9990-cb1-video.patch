@@ -11197,11 +11197,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +{
 +  DVBRIDGE::StreamTelemetry::NativeStage({m_pendingIdentity.stream,m_pendingIdentity.picture,
 +      m_pendingIdentity.revision},"Prepared");
++  // An unevaluated SDR selector leaves both the epoch and retry limiter pending.
++  if (m_effectiveMode==DVBRIDGE_MODE_SDR && sdr.empty()) return;
 +  if (m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DiagnosticsEnabled() &&
 +      m_auditPrepared.Record(DVBRIDGE::DiagnosticNowMs(),"prepared",m_auditSerial))
 +  {
-+    // An SDR observation is useful only with its actual decision context.
-+    if (m_effectiveMode==DVBRIDGE_MODE_SDR && sdr.empty()) return;
 +    try
 +    {
 +      const auto message=fmt::format("DVBridge policy prepared: source={}/{}/{} policy={} mode={}{}",
@@ -11970,7 +11970,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    const bool fenced = m_context->FenceLastUse();
 +    m_pending = m_prepared && fenced;
 +    result = m_pending ? FrameStatus::Ready : FrameStatus::Failed;
-+    if (result==FrameStatus::Ready && policy.mode==DVBRIDGE_MODE_SDR &&
++    if (result==FrameStatus::Ready && policy.mode==DVBRIDGE_MODE_SDR && directQuery>=0 &&
 +        m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DiagnosticsEnabled())
 +      sdrAudit=SDRPreparationAudit(bl.frame,enhancement ? &el.frame : nullptr,metadata,
 +          geometry,m_scanout,m_outputBits,m_hdr10Limited,base.pts,elPts,

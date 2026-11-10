@@ -64,10 +64,11 @@ int main(){
 '''.replace('@AUDIT@',audit)
         limits=r'''
  r.m_effectiveMode=7;++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==19);
- testNow+=30001;r.PreparedAudit(std::string(650,'x'));assert(r.m_auditPreparedSerial==19&&CLog::lines.size()==27);
- testNow+=30001;r.PreparedAudit(std::string(560,'x'));assert(r.m_auditPreparedSerial==20&&CLog::lines.size()==28);
+ testNow+=650;r.PreparedAudit(" sdr=2,1,1,1,0,0,-1");assert(r.m_auditPreparedSerial==20&&CLog::lines.size()==28);
+ ++r.m_auditSerial;testNow+=30001;r.PreparedAudit(std::string(650,'x'));assert(r.m_auditPreparedSerial==20&&CLog::lines.size()==28);
+ testNow+=30001;r.PreparedAudit(std::string(560,'x'));assert(r.m_auditPreparedSerial==21&&CLog::lines.size()==29);
  assert(CLog::lines.back().find("[truncated]")==std::string::npos);
- for(unsigned i=0;i<1000;++i){r.PreparedAudit(" sdr=retry");}assert(CLog::lines.size()==28);
+ for(unsigned i=0;i<1000;++i){r.PreparedAudit(" sdr=retry");}assert(CLog::lines.size()==29);
 '''
         program=program.replace('@SDR_LIMITS@',limits if 'std::string_view sdr' in audit else '')
         self.run_cpp(program,{'utils/DVBridgeDiagnosticState.h':state,

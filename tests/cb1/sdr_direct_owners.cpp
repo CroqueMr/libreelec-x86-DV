@@ -158,6 +158,33 @@ static void setup(CDVBridgeGLES& r){
 @PROVENANCE@
 static void audit_cases(){
  using namespace DVBRIDGE;testEnabled=true;
+ // A startup GUI exclusion must not consume the only useful observation.
+ // Advance only picture/time; source/settings and the audit epoch stay fixed.
+ for(bool eligible:{false,true})for(int admission=0;admission<3;++admission){
+  CDVBridgeGLES r;setup(r);CDVBridgeGLES::Layer base{};base.binding={120,1,1};base.pts=1;base.lease=std::make_shared<int>(1);
+  OutputPreferences prefs;prefs.output=OutputMode::SDR;prefs.revision=120;auto policy=prefs.Policy();CDVMetadataBuffer none;
+  queryOK=eligible;auditAdmit=true;auto logs=auditLines.size();auto queries=queryCalls;
+  assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,false,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
+  const auto epoch=r.m_auditSerial;assert(queryCalls==queries&&r.m_auditPreparedSerial!=epoch&&auditLines.size()==logs);
+  r.Cancel();++base.binding.picture;testNow+=650;
+  auditAdmit=admission!=1;testEnabled=admission!=2;
+  assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
+  assert(queryCalls==queries+1&&r.m_auditSerial==epoch);
+  if(admission){
+   assert(r.m_auditPreparedSerial!=epoch&&auditLines.size()==logs);
+   r.Cancel();++base.binding.picture;auditAdmit=testEnabled=true;testNow+=admission==1?30001:650;
+   assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
+   assert(queryCalls==queries+2&&r.m_auditSerial==epoch);
+  }
+  assert(r.m_auditPreparedSerial==epoch&&auditLines.size()==logs+1&&auditLines.back().size()<=640);
+  assert(auditLines.back().find(eligible?"sdr=2,1,1,1,1,1,1":"sdr=2,1,1,1,0,0,-1")!=std::string::npos);
+  assert(auditLines.back().find("source=120/"+std::to_string(base.binding.picture)+"/1 policy=")!=std::string::npos);
+  queries=queryCalls;
+  for(int i=0;i<8;++i){r.Cancel();++base.binding.picture;
+   assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
+  }
+  assert(queryCalls==queries+8&&auditLines.size()==logs+1&&r.m_auditSerial==epoch);
+ }
  for(int scenario=0;scenario<5;scenario++){
   CDVBridgeGLES r;setup(r);CDVBridgeGLES::Layer base{};base.binding={90,1,1};base.pts=1;base.lease=std::make_shared<int>(1);
   CDVMetadataBuffer metadata;uint8_t byte=1;
@@ -169,14 +196,16 @@ static void audit_cases(){
   assert(r.PrepareFrame(base,nullptr,metadata,{8,8,0,0,8,8,8,8},prefs,allow,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
   const bool evaluated=scenario!=1&&scenario!=3;assert(queryCalls==queries+evaluated);
   assert(directCalls==direct+(scenario==0)&&stagedCalls==staged+(scenario!=0));
-  assert(auditLines.size()==logs+1&&r.m_auditPreparedSerial==r.m_auditSerial);
-  const auto&line=auditLines.back();assert(line.size()<=640);
-  assert(line.find(scenario==0?"sdr=2,1,1,1,1,1,1":scenario==1?"sdr=2,0,1,1,-1,0,-1":scenario==2?"sdr=2,1,1,1,0,0,-1":scenario==3?"sdr=0,1,1,1,-1,0,-1":"sdr=1,1,1,1,0,0,-1")!=std::string::npos);
+  assert(auditLines.size()==logs+evaluated);
+  assert((r.m_auditPreparedSerial==r.m_auditSerial)==evaluated);
+  if(evaluated){const auto&line=auditLines.back();assert(line.size()<=640);
+  assert(line.find(scenario==0?"sdr=2,1,1,1,1,1,1":scenario==2?"sdr=2,1,1,1,0,0,-1":"sdr=1,1,1,1,0,0,-1")!=std::string::npos);
   assert(line.find(" t=8,8,")!=std::string::npos&&line.find(" g=8,8,0,0,8,8,8,8")!=std::string::npos);
   assert(line.find(scenario>=3?" l5=0,0,42,42/false":" l5=na/false")!=std::string::npos);
+  }
   r.Cancel();++base.binding.picture;if(metadata.Data())assert(metadata.Assign(&byte,1,base.binding));
   assert(r.PrepareFrame(base,nullptr,metadata,{8,8,0,0,8,8,8,8},prefs,allow,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
-  assert(auditLines.size()==logs+1); // Same source/settings epoch never spams.
+  assert(auditLines.size()==logs+evaluated); // Same source/settings epoch never spams.
  }
  // Exercise the real formatter with 4K native two-plane BL/EL and fractional
  // coordinates. It must fit without hiding a float mismatch or a source alias.
