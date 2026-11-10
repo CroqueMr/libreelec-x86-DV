@@ -27,6 +27,100 @@ template<class...T>void DiagnosticFailureLog(const char* stage,bool,int level,fm
 
 
 class PlaybackStallDiagnostics(unittest.TestCase):
+    def test_native_health_uses_current_worker_not_prior_cb1_flags(self):
+        source = (runtime.TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
+        start = source.index('  if (DVBRIDGE::DiagnosticsEnabled()',
+                             source.index('CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture('))
+        health = source[start:source.index('  DVBRIDGE::StreamTelemetry::Counters(', start)]
+        start = source.index('  m_diagnosticRender.Reset();', source.index('void CVideoPlayerVideo::OpenStream('))
+        reset = source[start:source.index('#endif', start)]
+        runtime.DiagnosticsRuntime.run_cpp(self, r'''
+#include <fmt/format.h>
+#include <atomic>
+#include <cassert>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+constexpr int LOGINFO=1;
+constexpr double DVD_NOPTS_VALUE=-1e20,DVD_TIME_BASE=1000000;
+struct CLog {
+ inline static std::vector<std::string> lines;
+ template<class...T>static void Log(int,fmt::format_string<T...>f,T&&...a){
+  lines.push_back(fmt::format(f,std::forward<T>(a)...));}
+};
+namespace StringUtils {
+ template<class...T>auto Format(fmt::format_string<T...>f,T&&...a){return fmt::format(f,std::forward<T>(a)...);}
+}
+namespace DVBRIDGE {
+ bool enabled=true;uint64_t now=1000;
+ bool DiagnosticsEnabled(){return enabled;}
+ uint64_t DiagnosticNowMs(){return now;}
+}
+struct CDVPlaybackInfo {inline static std::atomic<unsigned>presented{0};};
+struct Worker {
+ struct Sampler {unsigned samples=0,resets=0;bool available=false;
+  void Reset(){++resets;samples=0;}
+  std::optional<double> Sample(uint64_t window){assert(window==60000000000ULL);++samples;
+   return available ? std::optional<double>{42.5} : std::nullopt;}}m_diagnosticRender;
+ uint64_t m_diagnosticTime=999999,m_diagnosticPictures=99;
+ int m_diagnosticDropped=20,m_diagnosticSkipped=20,m_diagnosticTransitions=20;
+ int m_speed=1000,m_iDroppedFrames=3;double m_fFrameRate=25;
+ std::atomic<bool>m_stalled{false};
+ struct Renderer{int skipped=2;int GetSkippedFrames(){return skipped;}}m_renderManager;
+ struct ProcessInfo{int GetLevelVQ(){return 50;}}m_processInfo;
+ struct Queue{double GetTimeSize(){return 3;}}m_messageQueue;
+ double GetVideoBitrate(){return 12500000;}
+ struct Picture{double pts=4000000;}picture;
+ void OpenStream(){@RESET@}
+ void OutputPicture(){auto*pPicture=&picture;@HEALTH@}
+};
+void contains(const std::string&line,const char*part){assert(line.find(part)!=std::string::npos);}
+int main(){
+ using namespace DVBRIDGE;
+ Worker native;native.OpenStream();native.OutputPicture();
+ assert(CLog::lines.size()==1 && "Native flags0 must emit current-worker health without CB1 priming");
+ const auto first=CLog::lines.back();
+ for(auto part:{"interval_ms=0 ","output_attempts=1 ","source_fps=25.000 ","speed=1000 ",
+               "stalled=false ","pts_s=4.000 ","drop_total=3 ","skip_total=2 ",
+               "drop_delta=3 ","skip_delta=2 ","counters_reset=false ","video_queue_pct=50 ",
+               "video_queue_s=3.000 ","bitrate_mbps=12.50 ","render_avg_pct=unavailable ",
+               "transitions=0 ","pts_valid=true ","attempts are not display flips"})contains(first,part);
+ assert(CDVPlaybackInfo::presented==0 && native.m_diagnosticRender.samples==1);
+ now=10999;native.OutputPicture();assert(CLog::lines.size()==1); // Exact boundary not reached.
+ now=11000;native.picture.pts=14000000;native.m_iDroppedFrames=4;
+ native.m_renderManager.skipped=5;native.m_diagnosticTransitions=3;
+ native.m_speed=0;native.m_stalled=true;native.m_diagnosticRender.available=true;
+ native.OutputPicture();assert(CLog::lines.size()==2);
+ for(auto part:{"interval_ms=10000 ","output_attempts=2 ","speed=0 ","stalled=true ",
+               "pts_s=14.000 ","drop_delta=1 ","skip_delta=3 ","counters_reset=false ",
+               "render_avg_pct=42.5 ","transitions=3 ","pts_valid=true "})contains(CLog::lines.back(),part);
+ assert(native.m_speed==0 && native.m_stalled && native.m_diagnosticTransitions==0);
+ native.OutputPicture();assert(CLog::lines.size()==2 && native.m_diagnosticRender.samples==2);
+ now=21000;native.m_iDroppedFrames=0;native.m_renderManager.skipped=0;
+ native.picture.pts=DVD_NOPTS_VALUE;native.OutputPicture();
+ for(auto part:{"counters_reset=true ","drop_delta=0 ","skip_delta=0 ","pts_valid=false "})
+  contains(CLog::lines.back(),part);
+ const auto beforeDisabled=CLog::lines.size();const auto beforeSamples=native.m_diagnosticRender.samples;
+ const auto beforeTime=native.m_diagnosticTime;const auto beforePictures=native.m_diagnosticPictures;
+ enabled=false;now=50000;native.OutputPicture();
+ assert(CLog::lines.size()==beforeDisabled && native.m_diagnosticRender.samples==beforeSamples);
+ assert(native.m_diagnosticTime==beforeTime && native.m_diagnosticPictures==beforePictures);
+ enabled=true;now=60000;native.OpenStream();native.OutputPicture();
+ contains(CLog::lines.back(),"interval_ms=0 ");contains(CLog::lines.back(),"counters_reset=false ");
+ assert(native.m_diagnosticRender.resets==2 && native.m_diagnosticRender.samples==1);
+ assert(native.m_diagnosticTime==60000 && native.m_diagnosticPictures==0);
+ // Accepted CB1 bits and stale bits must not change the same worker's diagnostics.
+ for(unsigned flags:{0u,1u,8u,32u,63u}){
+  CDVPlaybackInfo::presented=flags;now=1000;Worker current;current.OpenStream();current.OutputPicture();
+  assert(CLog::lines.back()==first && CDVPlaybackInfo::presented==flags);
+ }
+ // No OutputPicture invocation means no synthetic heartbeat, including after worker lifetime.
+ const auto stopped=CLog::lines.size();now+=60000;{Worker idle;idle.OpenStream();}
+ assert(CLog::lines.size()==stopped);
+}
+'''.replace('@RESET@',reset).replace('@HEALTH@',health))
+
     def test_pause_is_visible_without_enabling_kodi_debug(self):
         text = (runtime.TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
         start = text.index('      m_paused = std::static_pointer_cast<CDVDMsgBool>')

@@ -249,7 +249,7 @@ index d971bb4..7258639 100644
 +  DVBRIDGE::StreamTelemetry::SourceBits(pPicture->colorBits,pPicture->pixelFormat,pPicture->doviSourceInfo,
 +      {static_cast<int>(pPicture->color_primaries),static_cast<int>(pPicture->color_transfer),
 +       pPicture->colorPrimariesGuessed,pPicture->color_range==1,pPicture->strDVELType});
-   if (DVBRIDGE::DiagnosticsEnabled() && CDVPlaybackInfo::presented.load())
+   if (DVBRIDGE::DiagnosticsEnabled())
    {
      ++m_diagnosticPictures;
 diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
