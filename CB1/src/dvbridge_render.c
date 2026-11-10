@@ -3882,12 +3882,17 @@ static bool dv_final_framebuffer(unsigned framebuffer,unsigned alpha_bits)
     GLint draw,read,bits[4],encoding=0;
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&draw);glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&read);
     glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
-    const GLenum channels[4]={GL_RED_BITS,GL_GREEN_BITS,GL_BLUE_BITS,GL_ALPHA_BITS};
     bool valid=glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE;
     if(valid){
+#if defined(DVBRIDGE_DESKTOP_GL)
+        dvbridge_gl_color_bits(framebuffer,bits,&encoding);
+        for(unsigned i=0;i<4;i++)valid=valid && bits[i]==(i==3?alpha_bits:8);
+#else
+        const GLenum channels[4]={GL_RED_BITS,GL_GREEN_BITS,GL_BLUE_BITS,GL_ALPHA_BITS};
         for(unsigned i=0;i<4;i++){glGetIntegerv(channels[i],&bits[i]);valid=valid && bits[i]==(i==3?alpha_bits:8);}
         glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER,framebuffer?GL_COLOR_ATTACHMENT0:GL_BACK,
             GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING,&encoding);
+#endif
         valid=valid && encoding==GL_LINEAR;
     }
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER,draw);glBindFramebuffer(GL_READ_FRAMEBUFFER,read);

@@ -134,13 +134,21 @@ static bool pack(struct dvbridge_gl_packer *p, unsigned texture, unsigned frameb
     bool ok = false;
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
     GLint red, green, blue, samples, encoding;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    GLint bits[4];
+    dvbridge_gl_color_bits(framebuffer, bits, &encoding);
+    red = bits[0];
+    green = bits[1];
+    blue = bits[2];
+#else
     glGetIntegerv(GL_RED_BITS, &red);
     glGetIntegerv(GL_GREEN_BITS, &green);
     glGetIntegerv(GL_BLUE_BITS, &blue);
-    glGetIntegerv(GL_SAMPLES, &samples);
     glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER,
         framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK,
         GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
+#endif
+    glGetIntegerv(GL_SAMPLES, &samples);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE ||
         red != 8 || green != 8 || blue != 8 || samples > 1 || encoding != GL_LINEAR)
         goto restore;

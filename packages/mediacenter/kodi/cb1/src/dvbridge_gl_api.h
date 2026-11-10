@@ -18,3 +18,17 @@
 #define GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT_EXT GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT
 #endif
 typedef PFNGLBUFFERSTORAGEPROC PFNGLBUFFERSTORAGEEXTPROC;
+
+/* Core profiles dropped GL_RED_BITS and friends and call the default colour buffer
+ * GL_BACK_LEFT, so read the sizes and the encoding from the bound colour attachment. */
+static inline void dvbridge_gl_color_bits(GLuint framebuffer, GLint bits[4], GLint *encoding)
+{
+    static const GLenum sizes[4] = {GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE,
+        GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE,
+        GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE};
+    const GLenum attachment = framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK_LEFT;
+    for (int i = 0; i < 4; ++i)
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment, sizes[i], &bits[i]);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
+        GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, encoding);
+}
