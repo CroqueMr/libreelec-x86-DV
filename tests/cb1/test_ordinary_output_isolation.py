@@ -38,10 +38,11 @@ struct VideoPicture {
 };
 namespace DVBRIDGE {
  enum class OutputMode {Disabled=2,Standard=0,HDR10=1,MasterReference=4,SDR=6}; enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
- enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired};
+ enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired,ProcessingPending};
+ enum class HDR10SourceMode {Native,ReferenceDV};
  struct Policy {int mode=0;};
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
-   double peak=1000;int panel=0,gamut=2;
+   double peak=1000;int panel=0,gamut=2;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
    ::DVBRIDGE::Policy Policy()const{return {};}};
  Preferences FrameOutputSettings(bool=false,bool=false){return {};}
  bool DiagnosticsEnabled(){return false;}
@@ -59,7 +60,7 @@ namespace DVBRIDGE {
   template<class... T> static void NativeSelection(T...){}
  };
 }
-struct Capabilities {bool isDV=false,processingKnown=true,sourceKnown=false,nativeDV=true;};
+struct Capabilities {bool isDV=false,isHDR10=false,isHLG=false,stereoSource=false,processingKnown=true,sourceKnown=false,nativeDV=true;};
 struct Selection {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
  DVBRIDGE::Policy policy;DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;};
 struct CDVBridgeGLES {

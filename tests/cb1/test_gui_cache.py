@@ -154,7 +154,7 @@ int main(){
   if(bad==9)capture->video=true;
   assert(!invalid.CanReuseGuiComposite());capture->video=capture->composite=false;
  }
- DVBRIDGE::optimized=false;assert(!w.CanReuseGuiComposite());DVBRIDGE::optimized=true;
+ DVBRIDGE::optimized=false;assert(w.CanReuseGuiComposite());DVBRIDGE::optimized=true; // Obsolete off cannot disable eligible caching.
  // Caption appearance, change and disappearance all retain the live GUI/reset path.
  player.visible=true;assert(!w.CanReuseGuiComposite());
  assert(w.BeginGuiComposite(true));assert(w.m_dvSubtitleDraws==0 && !w.m_dvPQSubtitleCleared);

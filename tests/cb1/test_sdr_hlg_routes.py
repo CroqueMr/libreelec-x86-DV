@@ -22,6 +22,7 @@ class SDRHLGRoutes(unittest.TestCase):
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <string>
 #include <cassert>

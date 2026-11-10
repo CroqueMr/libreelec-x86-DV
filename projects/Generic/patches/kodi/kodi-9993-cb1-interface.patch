@@ -27,7 +27,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +#: system/settings/settings.xml
 +msgctxt "#40811"
-+msgid "Dolby Vision playback"
++msgid "Dolby Vision default playback"
 +msgstr ""
 +
 +#: system/settings/settings.xml
@@ -47,7 +47,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +#: system/settings/settings.xml
 +msgctxt "#40815"
-+msgid "Choose playback for Dolby Vision sources: Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering or Kodi default. Kodi default bypasses CB1 processing. Changes apply at a video frame boundary."
++msgid "Choose the default playback circuit for Dolby Vision sources, including HLG-based Dolby Vision. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
 +msgstr ""
 +
 +#: system/settings/settings.xml
@@ -71,7 +71,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40820"
-+msgid "HDR10 conversion method"
++msgid " - HDR10 conversion method"
 +msgstr ""
 +
 +msgctxt "#40821"
@@ -87,7 +87,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40925"
-+msgid "Disable L2 trims"
++msgid " - Disable L2 trims"
 +msgstr ""
 +
 +msgctxt "#40926"
@@ -103,7 +103,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40829"
-+msgid "TV peak luminance (nits)"
++msgid " - TV peak luminance (nits)"
 +msgstr ""
 +
 +msgctxt "#40830"
@@ -111,7 +111,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40831"
-+msgid "TV panel type"
++msgid " - TV panel type"
 +msgstr ""
 +
 +msgctxt "#40832"
@@ -131,7 +131,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40836"
-+msgid "TV color gamut"
++msgid " - TV color gamut"
 +msgstr ""
 +
 +msgctxt "#40837"
@@ -200,7 +200,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40853"
-+msgid "Configure TV profile"
++msgid " - Configure TV profile"
 +msgstr ""
 +
 +msgctxt "#40854"
@@ -232,7 +232,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40865"
-+msgid "HDR10 playback"
++msgid "HDR10 default playback"
 +msgstr ""
 +
 +msgctxt "#40866"
@@ -240,7 +240,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40867"
-+msgid "Dolby Vision Rendering"
++msgid "Dolby Vision rendering (AI)"
 +msgstr ""
 +
 +msgctxt "#40868"
@@ -248,11 +248,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40870"
-+msgid "Remember playback for HDR10 sources: Dolby Vision Rendering with AI, Adaptive HDR Mapping with AI or Kodi default. Kodi default bypasses CB1 processing. Adaptive requires a TV profile. Automatic fallback does not change this choice."
++msgid "Choose the default playback circuit for HDR10 sources. New files use this default. Playback-menu choices apply only to the current file. Adaptive requires a TV profile. Kodi default uses native Kodi playback."
 +msgstr ""
 +
 +msgctxt "#40875"
-+msgid "Rendering unavailable. Using native Kodi playback."
++msgid "Requested rendering is unavailable. Playback stopped."
 +msgstr ""
 +
 +msgctxt "#40876"
@@ -300,7 +300,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40916"
-+msgid "Master Reference output"
++msgid " - Master Reference output"
 +msgstr ""
 +
 +msgctxt "#40917"
@@ -328,11 +328,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41012"
-+msgid "HDR10+ playback"
++msgid "HDR10+ default playback"
 +msgstr ""
 +
 +msgctxt "#41013"
-+msgid "Remember playback for HDR10+ sources: Dolby Vision Rendering or Kodi default. Kodi default bypasses CB1 processing. Automatic fallback does not change this choice."
++msgid "Choose the default playback circuit for HDR10+ sources. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
 +msgstr ""
 +
 +msgctxt "#41014"
@@ -436,7 +436,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40980"
-+msgid "Add CM4.0 metadata"
++msgid " - Add CM4.0 metadata"
 +msgstr ""
 +
 +msgctxt "#40981"
@@ -460,7 +460,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40986"
-+msgid "CM4.0 Auto trigger"
++msgid " - CM4.0 Auto trigger"
 +msgstr ""
 +
 +msgctxt "#40987"
@@ -488,7 +488,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40993"
-+msgid "CM4.0 Auto 2 headroom (%)"
++msgid " - CM4.0 Auto 2 headroom (%)"
 +msgstr ""
 +
 +msgctxt "#40994"
@@ -496,7 +496,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41030"
-+msgid "HDR10 Rendering Reference peak brightness (nits)"
++msgid " - HDR10 rendering peak brightness"
 +msgstr ""
 +
 +msgctxt "#41031"
@@ -504,7 +504,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41032"
-+msgid "HDR10 Rendering Reference display black level"
++msgid " - HDR10 rendering display black level"
 +msgstr ""
 +
 +msgctxt "#41033"
@@ -528,7 +528,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41038"
-+msgid "HDR10 Rendering Reference custom black level (nits)"
++msgid " - HDR10 rendering custom black level (nits)"
 +msgstr ""
 +
 +msgctxt "#41039"
@@ -536,7 +536,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41040"
-+msgid "HDR10 Rendering Reference target color gamut"
++msgid " - HDR10 rendering target color gamut"
 +msgstr ""
 +
 +msgctxt "#41041"
@@ -564,19 +564,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41131"
-+msgid "HLG rendering"
++msgid "HLG default playback"
 +msgstr ""
 +
 +msgctxt "#41132"
-+msgid "Choose Dolby Vision Reference rendering or Kodi default for original HLG video."
++msgid "Choose the default playback circuit for original HLG video. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
 +msgstr ""
 +
 +msgctxt "#41133"
-+msgid "SDR rendering target"
++msgid "HDR/DV to SDR target"
 +msgstr ""
 +
 +msgctxt "#41134"
-+msgid "Independent BT.709 rendering target, not measured screen brightness. Custom values set peak luminance, gamma and black floor."
++msgid "BT.709 target for HDR10, HDR10+ and Dolby Vision to SDR conversion only. Native SDR playback is unchanged. Custom values set peak luminance, gamma and black floor."
 +msgstr ""
 +
 +msgctxt "#41135"
@@ -592,11 +592,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41138"
-+msgid "SDR target peak (nits)"
++msgid " - SDR target peak (nits)"
 +msgstr ""
 +
 +msgctxt "#41139"
-+msgid "SDR target gamma"
++msgid " - SDR target gamma"
 +msgstr ""
 +
 +msgctxt "#41142"
@@ -608,7 +608,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#41140"
-+msgid "SDR target black (nits)"
++msgid " - SDR target black (nits)"
 +msgstr ""
 --- a/system/keymaps/keyboard.xml
 +++ b/system/keymaps/keyboard.xml
@@ -626,7 +626,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <period>NextPicture</period>
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -2,6 +2,224 @@
+@@ -2,6 +2,211 @@
  <settings version="1">
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
@@ -782,24 +782,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
 +          <control type="toggle" />
 +        </setting>
-+        <setting id="dvbridge.optimizedgui" type="boolean" label="41100" help="41101">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
-+          <control type="toggle" />
-+        </setting>
 +        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
 +          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
 +          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
 +          <control type="list" format="string" />
-+        </setting>
-+        <setting id="dvbridge.masterfallback" type="boolean" label="40920" help="40921">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
-+          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
-+          <control type="toggle" />
-+        </setting>
-+        <setting id="dvbridge.encodedactivearea" type="boolean" label="41120" help="41121">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
-+          <control type="toggle" />
 +        </setting>
 +        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
@@ -851,7 +838,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        <group id="1" label="14230">
          <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
            <constraints>
-@@ -649,6 +867,48 @@
+@@ -649,6 +854,48 @@
        </group>
      </category>
      <category id="subtitles" label="287" help="37033">
@@ -1163,7 +1150,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +}
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,292 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#include "DVPlaybackModes.h"
 +#ifdef HAVE_DVBRIDGE
@@ -1257,7 +1244,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const auto settings=component ? component->GetSettings() : nullptr;
 +  auto* dialog=CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
 +  if (!settings || !dialog) return false;
-+  const auto preferences=DVBRIDGE::FrameOutputSettings();
++  auto preferences=DVBRIDGE::FrameOutputSettings();
++  {
++    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++    DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
++  }
 +  const bool expert=preferences.output==DVBRIDGE::OutputMode::HDR10 && preferences.method==1;
 +  const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
 +  std::string peak=StringUtils::Format("{:g}",expert?preferences.expertPeak:preferences.peak);
@@ -1297,6 +1288,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return true;
 +}
 +
++std::string CDVPlaybackModes::DefaultPlaybackLabel()
++{
++  std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++  const auto defaults=DVBRIDGE::ReadDefaultOutputSelectors();
++  for (const auto& choice : dvChoices)
++    if (int(defaults.output)==choice.output &&
++        (choice.output!=1 || defaults.method==choice.method))
++      return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(choice.label);
++  return {};
++}
++
 +bool CDVPlaybackModes::ShowMenu(bool settingsMenu)
 +{
 +  if (!settingsMenu && !MenuEnabled()) return false;
@@ -1325,7 +1327,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const auto choiceSetting=std::make_shared<CSettingInt>(settingsMenu ? "dvbridge.playback" : hlgSource ? "dvbridge.hlgplaybackchoice" : hdr10PlusSource ? "dvbridge.hdr10plusplaybackchoice" :
 +      hdr10Source ? "dvbridge.hdr10playbackchoice" : "dvbridge.playbackchoice");
 +  {
-+    const auto preferences=DVBRIDGE::FrameOutputSettings(hdr10PlusSource);
++    auto preferences=DVBRIDGE::FrameOutputSettings(hdr10PlusSource);
++    if (settingsMenu)
++    {
++      std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++      DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
++    }
 +    std::vector<IntegerSettingOption> options;
 +    int current=-1;
 +    for(int i=0;i<count;++i)
@@ -1371,23 +1378,36 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    const auto& choice=choices[selected];
 +    {
 +      std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
-+      const int priorOutput=settings->GetInt("dvbridge.outputmode");
-+      const int priorHDR10=settings->GetInt(sourceSetting);
-+      const int priorMethod=settings->GetInt("dvbridge.hdr10method");
-+      if (!((hdr10Source || hlgSource) ? settings->SetInt(sourceSetting,choice.output) :
-+          (settings->SetInt("dvbridge.outputmode",choice.output) &&
-+           settings->SetInt("dvbridge.hdr10method",choice.method))))
++      if (settingsMenu)
 +      {
-+        settings->SetInt("dvbridge.outputmode",priorOutput);
-+        settings->SetInt(sourceSetting,priorHDR10);
-+        settings->SetInt("dvbridge.hdr10method",priorMethod);
-+        return true;
++        const int priorOutput=settings->GetInt("dvbridge.outputmode");
++        const int priorHDR10=settings->GetInt(sourceSetting);
++        const int priorMethod=settings->GetInt("dvbridge.hdr10method");
++        if (!((hdr10Source || hlgSource) ? settings->SetInt(sourceSetting,choice.output) :
++            (settings->SetInt("dvbridge.outputmode",choice.output) &&
++             settings->SetInt("dvbridge.hdr10method",choice.method))))
++        {
++          settings->SetInt("dvbridge.outputmode",priorOutput);
++          settings->SetInt(sourceSetting,priorHDR10);
++          settings->SetInt("dvbridge.hdr10method",priorMethod);
++          return true;
++        }
++      }
++      else
++      {
++        if (!DVBRIDGE::activeOutputSelectors)
++          DVBRIDGE::activeOutputSelectors=DVBRIDGE::ReadDefaultOutputSelectors();
++        auto& active=*DVBRIDGE::activeOutputSelectors;
++        if (hlgSource) active.hlgSource=static_cast<DVBRIDGE::HLGSourceMode>(choice.output);
++        else if (hdr10PlusSource) active.hdr10PlusSource=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
++        else if (hdr10Source) active.hdr10Source=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
++        else {active.output=static_cast<DVBRIDGE::OutputMode>(choice.output);active.method=choice.method;}
 +      }
 +#ifdef CB1_HAS_HDR10_AI
-+      if (hdr10Source && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
++      if (!settingsMenu && hdr10Source && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
 +#endif
 +    }
-+    settings->Save();
++    if (settingsMenu) settings->Save();
 +    return true;
 +  }
 +}
@@ -1415,26 +1435,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const int label=mode==1 ? 40867 : 40868;
 +  Emit(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(label));
 +}
-+void DVBRIDGE::PlaybackNotification::HDR10Recovery()
++void DVBRIDGE::PlaybackNotification::RenderingUnavailable(OutputReason reason)
 +{
 +  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
 +  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
-+      localizer.Get(40863),localizer.Get(40875),3000,false);
-+}
-+void DVBRIDGE::PlaybackNotification::EmitMasterRecovery()
-+{
-+  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
-+  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
-+      localizer.Get(40863),localizer.Get(40915),3000,false);
++      localizer.Get(40863),localizer.Get(40875)+(reasonId ? " "+localizer.Get(reasonId) : ""),3000,false);
 +}
 +#endif
 --- /dev/null
 +++ b/xbmc/dialogs/DVPlaybackModes.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,24 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#ifdef HAVE_DVBRIDGE
 +#include "settings/lib/ISettingCallback.h"
++#include <string>
 +#include "settings/lib/ISettingsHandler.h"
 +enum class StreamHdrType;
 +
@@ -1446,6 +1462,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  static StreamHdrType SourceType();
 +  static bool ShowMenu(bool settingsMenu = false);
 +  static bool ConfigureProfile();
++  static std::string DefaultPlaybackLabel();
 +  void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
 +  void OnSettingsLoaded() override;
 +  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
@@ -3129,17 +3146,18 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
                                                  std::string& current);
 --- a/xbmc/settings/windows/GUIControlSettings.cpp
 +++ b/xbmc/settings/windows/GUIControlSettings.cpp
-@@ -35,6 +35,9 @@
+@@ -35,6 +35,10 @@
  #include "settings/MediaSourceSettings.h"
  #include "settings/SettingAddon.h"
  #include "settings/SettingControl.h"
 +#ifdef HAVE_DVBRIDGE
 +#include "settings/SettingConditions.h"
++#include "dialogs/DVPlaybackModes.h"
 +#endif
  #include "settings/SettingDateTime.h"
  #include "settings/SettingPath.h"
  #include "settings/SettingUtils.h"
-@@ -175,6 +178,12 @@
+@@ -175,6 +179,12 @@
      }
    }
  
@@ -3152,6 +3170,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    switch (pSettingInt->GetOptionsSort())
    {
      case SettingOptionsSort::Ascending:
+@@ -1124,7 +1134,12 @@
+           // CSettingAction.
+           // Note: This can be removed once all settings use a proper control & format combination.
+           // CSettingAction is strictly speaking not designed to have a label2, it does not even have a value.
+-          strText = m_pButton->GetLabel2();
++#ifdef HAVE_DVBRIDGE
++          if (m_pSetting->GetId()=="dvbridge.playback")
++            strText=CDVPlaybackModes::DefaultPlaybackLabel();
++          else
++#endif
++            strText = m_pButton->GetLabel2();
+ 
+           break;
+         }
 --- a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
 +++ b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
 @@ -11,6 +11,8 @@

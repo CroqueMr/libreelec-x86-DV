@@ -7,14 +7,23 @@ modes appear during playback. Unavailable modes show their blocking reason.
 | Source | Available processing |
 | --- | --- |
 | Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering, SDR Rendering or Kodi default |
-| HDR10 | Dolby Vision Rendering (AI), Adaptive HDR Mapping (AI), SDR Rendering or Kodi default |
+| HDR10 | Dolby Vision rendering (AI), Adaptive HDR Mapping (AI), SDR Rendering or Kodi default |
 | HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion; SDR Rendering |
-| HLG | Dolby Vision Reference Rendering (AI) or Kodi default |
+| HLG | Dolby Vision rendering (AI) or Kodi default |
 | SDR / 3D | Native Kodi playback |
 
-The **Dolby Vision playback**, **HDR10 playback**, **HDR10+ playback** and **HLG playback** selectors
-remember independent preferences. **Kodi default** bypasses CB1 image processing.
-Automatic fallback does not overwrite the saved choice for the next file.
+The **Dolby Vision default playback**, **HDR10 default playback**, **HDR10+ default playback**
+and **HLG default playback** selectors store independent defaults. Their right-hand
+values show the saved choices, including the Dolby Vision conversion method.
+Opening or reopening a file, restarting playback or advancing the playlist uses
+that source's default. HLG-based Dolby Vision with RPU uses the Dolby Vision default.
+
+Quick rendering selection through **O** or the video-settings button changes only
+the current playback session. Pause, seek, decoder reopening and display recreation
+retain that choice. These live choices never save over a default. Editing a default
+during playback affects the next file; calibration and other tuning still apply live.
+**Kodi default** uses native Kodi playback. An unavailable requested circuit shows
+its reason and cannot silently switch to another circuit; preparation can remain pending.
 
 ## TV profile
 
@@ -38,17 +47,18 @@ its Dolby Vision display mapping.
 
 [Compare FEL upscalers: VAAPI, Bilinear, Reference and former Nearest neighbour](FEL-UPSCALING.md).
 
-## Rendering and Master recovery
+## Rendering and Master diagnostics
 
 Each mode uses one fixed rendering recipe. Reference and conversions retain
 their qualified performance optimizations. Master Reference keeps its exact
 reconstruction and dedicated filters. There is no quality On/Off/Auto selector.
 
-**Allow Master Reference to switch to Reference** is off by default. When enabled,
-sustained presentation margin below 2.5 ms can switch the current playback to
-Reference. A notification confirms the accepted switch; the saved Master selection
-is retained. GUI, capture, pause and discontinuous pictures are excluded from
-the decision. Recovery state resets for a new video or manual mode change.
+Master Reference retains its requested circuit when rendering headroom is low.
+Presentation-margin diagnostics remain available. GUI, capture, pause and
+discontinuous pictures are excluded from those measurements.
+
+**HDR/DV to SDR target** configures HDR10, HDR10+ and Dolby Vision conversion to
+BT.709 SDR. It does not change native SDR playback.
 
 ## FEL upscaling and frame preparation
 
@@ -114,9 +124,8 @@ TV, including live CM2.9-to-CM4 Auto/Auto 2 status.
 Unknown audio fields are hidden. Atmos source metadata does not imply Atmos
 output when Kodi decodes to PCM. [Audio field definitions](AUDIO-INFORMATION.md).
 
-**Optimized GUI rendering** optionally reduces compositing work on compatible
-Dolby Vision paths. Movie pixels and metadata are unchanged; very small GUI
-differences are possible. Off keeps the existing rendering path.
+GUI compositing optimizations apply automatically on eligible CB1 paths through
+their existing capability and safety checks. Movie pixels and metadata are unchanged.
 
 ## Geometry, scaling and display modes
 
@@ -126,9 +135,9 @@ there is no separate 1080p/1440p upscale option or custom bilinear selector.
 Reconstruction and processing precede final spatial scaling and tunnel packing.
 FEL upscaling is a separate enhancement-layer operation.
 
-**Use encoded frame as Dolby Vision active area** is an explicit override for
-already-cropped files with incorrect L5 margins. Off preserves authored margins;
-it does not automatically correct aspect ratio. Kodi zoom and placement still apply.
+Dolby Vision processing respects authored L5 active-area margins, including when an
+old configuration saved the former encoded-frame override. Kodi zoom and placement
+still apply; no automatic aspect-ratio correction is inferred.
 
 **Normal** fits the picture using Kodi's normal aspect-ratio rules.
 **Original size** keeps source-sized placement within the selected HDMI mode;

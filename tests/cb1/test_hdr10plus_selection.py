@@ -110,7 +110,7 @@ int main(){
  c.sourceKnown=c.isDV=c.processingKnown=c.hdr10=c.nativeDV=true;
  for(auto& mode:c.processing)mode={true,OutputReason::None};
  auto r=select(p,c);
- assert(r.route==OutputRoute::HDR10 && r.policy.mode==DVBRIDGE_MODE_HDR10_BASIC && r.reason!=OutputReason::None);
+ assert(r.route==OutputRoute::Vanilla && r.policy.mode==DVBRIDGE_MODE_HDR10PLUS && r.reason==OutputReason::NoHDR10PlusTransport);
  c.hdr10plus=true;r=select(p,c);
  assert(r.route==OutputRoute::HDR10 && r.policy.mode==DVBRIDGE_MODE_HDR10PLUS && r.reason==OutputReason::None);
  c.hdr10=false;r=select(p,c);assert(r.route==OutputRoute::Vanilla);

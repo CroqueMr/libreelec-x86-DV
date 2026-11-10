@@ -127,6 +127,7 @@ int main() {
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <string>
 #include <cassert>
@@ -145,7 +146,7 @@ struct CServiceBroker{static auto GetSettingsComponent(){return &component;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t id=1;return ++id;}}
 @HEADER@
 int main(){using namespace DVBRIDGE;
- assert(!OutputPreferences{}.allowMasterFallback);
+ // Obsolete fallback values cannot change requested output or frame revision.
  for(int saved:{0,1,2,3,4,5})for(int ai:{0,1,2}){
   stored->ints["dvbridge.outputmode"]=saved;stored->ints["dvbridge.hdr10source"]=ai;
   auto initial=FrameOutputSettings();
@@ -157,10 +158,11 @@ int main(){using namespace DVBRIDGE;
    assert(current.HDR10Policy().mode==initial.HDR10Policy().mode);
   }
  }
+ auto strict=FrameOutputSettings();
  stored->ints["dvbridge.masterfallback"]=1;
- assert(FrameOutputSettings().allowMasterFallback);
+ assert(FrameOutputSettings().SameValues(strict) && FrameOutputSettings().revision==strict.revision);
  stored->ints["dvbridge.masterfallback"]=0;
- assert(!FrameOutputSettings().allowMasterFallback);
+ assert(FrameOutputSettings().SameValues(strict) && FrameOutputSettings().revision==strict.revision);
  auto original=FrameOutputSettings();
  stored->ints["dvbridge.disablel2"]=1;
  auto stripped=FrameOutputSettings();

@@ -83,7 +83,7 @@ int main(){
  Admission lease;lease.base.lease=false;lease.run();assert(!lease.result);
  Admission mode;mode.m_committedMode=1;mode.run();assert(!mode.result);
  Admission disabled;disabled.asyncSetting=false;disabled.run();assert(!disabled.result);
- Admission fallback;fallback.fallback=true;fallback.run();assert(!fallback.result);
+ Admission fallback;fallback.m_fallback=true;fallback.run();assert(!fallback.result);
  Admission composed;composed.m_committedPacked=false;composed.run();assert(!composed.result);
  Admission unpacked;unpacked.allowPacked=false;unpacked.run();assert(!unpacked.result);
  std::cout<<"1000 panel redraws retain async; transition/lease guards retained\n";

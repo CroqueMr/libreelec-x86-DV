@@ -12,7 +12,8 @@ class AsyncOutputAdmissionTests(unittest.TestCase):
         prepare = body(source, 'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
         start=prepare.index('  auto policy = selected ?')
         selection=prepare[start:prepare.index(';',start)+1]
-        selection+=prepare[prepare.index('  const bool fallback ='):prepare.index('  // Capture the proven observation key')]
+        start=prepare.index('  const bool fallback =') if '  const bool fallback =' in prepare else prepare.index('  if (!selected &&')
+        selection+=prepare[start:prepare.index('  // Capture the proven observation key')]
         program = r'''
 #include <cassert>
 constexpr int DVBRIDGE_MODE_STANDARD=0,DVBRIDGE_MODE_HDR10_BASIC=2,
@@ -22,17 +23,19 @@ struct TestPolicy {int mode=6,tv=1,adaptive=1;};
 struct Preferences {DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::HDR10;
  bool allowMasterFallback=false,valid=true;TestPolicy requested;
  TestPolicy Policy()const{return requested;}bool ProfileValid(int=0)const{return valid;}};
-bool internalFallback(const Preferences& preferences,const TestPolicy* selected){
+struct CDVBridgeGLES {enum class FrameStatus{Ready,Unsupported};};
+using FrameStatus=CDVBridgeGLES::FrameStatus;
+auto internalFallback(const Preferences& preferences,const TestPolicy* selected){
  BODY
- return fallback;
+ return CDVBridgeGLES::FrameStatus::Ready;
 }
 int main(){
  Preferences p;TestPolicy basic;basic.mode=DVBRIDGE_MODE_HDR10_BASIC;
- assert(!internalFallback(p,&basic));
- p.valid=false;assert(!internalFallback(p,&basic));
- p.requested.mode=DVBRIDGE_MODE_HDR10_EXPERT;assert(internalFallback(p,nullptr));
- p.requested.mode=DVBRIDGE_MODE_ENHANCED_DV;assert(internalFallback(p,nullptr));
- p.valid=true;assert(!internalFallback(p,nullptr));
+ assert(internalFallback(p,&basic)==CDVBridgeGLES::FrameStatus::Ready);
+ p.valid=false;assert(internalFallback(p,&basic)==CDVBridgeGLES::FrameStatus::Ready);
+ p.requested.mode=DVBRIDGE_MODE_HDR10_EXPERT;assert(internalFallback(p,nullptr)==CDVBridgeGLES::FrameStatus::Unsupported);
+ p.requested.mode=DVBRIDGE_MODE_ENHANCED_DV;assert(internalFallback(p,nullptr)==CDVBridgeGLES::FrameStatus::Unsupported);
+ p.valid=true;assert(internalFallback(p,nullptr)==CDVBridgeGLES::FrameStatus::Ready);
 }
 '''.replace('BODY', selection)
         with tempfile.TemporaryDirectory() as temporary:

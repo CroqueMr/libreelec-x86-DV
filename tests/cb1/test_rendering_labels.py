@@ -17,10 +17,7 @@ class RenderingLabelsTests(unittest.TestCase):
                 labels[key]=value
         settings=ET.parse(TREE/'system/settings/settings.xml')
         safety=settings.find(".//setting[@id='dvbridge.masterfallback']")
-        self.assertEqual(labels[safety.get('label')],
-                         'Allow Master Reference to switch to Reference')
-        self.assertEqual(labels[safety.get('help')],
-                         'Switch when sustained rendering headroom is insufficient. Off keeps Master Reference strict.')
+        self.assertIsNone(safety, 'A saved switch must never replace Master with another circuit')
         method=settings.find(".//setting[@id='dvbridge.hdr10method']")
         dynamic=next(option for option in method.findall('./constraints/options/option')
                      if option.text=='2')
@@ -37,7 +34,7 @@ class RenderingLabelsTests(unittest.TestCase):
         settings=ET.parse(TREE/'system/settings/settings.xml')
         playback=settings.find(".//setting[@id='dvbridge.playback']")
         self.assertIsNotNone(playback,'Expose all DV-input modes in one native selector')
-        self.assertEqual(labels[playback.get('label')],'Dolby Vision playback')
+        self.assertEqual(labels[playback.get('label')],'Dolby Vision default playback')
         self.assertEqual(playback.findtext('level'),'0')
         self.assertEqual(playback.get('type'),'action')
         self.assertEqual(playback.find('control').get('format'),'action')
@@ -74,6 +71,28 @@ class RenderingLabelsTests(unittest.TestCase):
             self.assertEqual(node.find(f"constraints/options/option[@label='{label}']").text,'0')
         self.assertIn(('2','0','40814'),re.findall(r'\{(\d+),(\d+),(\d+)\}',
             (TREE/'xbmc/dialogs/DVPlaybackModes.cpp').read_text()))
+
+    def test_source_defaults_and_conversion_copy_use_localized_labels(self):
+        catalog=(TREE/'addons/resource.language.en_gb/resources/strings.po').read_text()
+        labels=dict(re.findall(r'msgctxt "#(\d+)"\s+msgid "([^"\n]*)"',catalog))
+        settings=ET.parse(TREE/'system/settings/settings.xml')
+        for key,title in [('dvbridge.hdr10source','HDR10 default playback'),
+                          ('dvbridge.hdr10plussource','HDR10+ default playback'),
+                          ('dvbridge.hlgsource','HLG default playback')]:
+            self.assertEqual(labels[settings.find(f".//setting[@id='{key}']").get('label')],title)
+        self.assertEqual(labels['40867'],'Dolby Vision rendering (AI)')
+        self.assertEqual(labels['40970'],'Dolby Vision Rendering')
+        self.assertEqual(labels['40823'],'HDR10 Rendering Reference')
+        self.assertEqual(labels['41133'],'HDR/DV to SDR target')
+        self.assertIn('HDR10',labels['41134']);self.assertIn('Dolby Vision',labels['41134'])
+        for key in ('dvbridge.optimizedgui','dvbridge.encodedactivearea'):
+            self.assertIsNone(settings.find(f".//setting[@id='{key}']"))
+        for key in ('dvbridge.expertpeak','dvbridge.expertblack','dvbridge.expertblackcustom',
+                    'dvbridge.expertgamut','dvbridge.tvpeak','dvbridge.tvpanel','dvbridge.tvgamut',
+                    'dvbridge.sdrpeak','dvbridge.sdrgamma','dvbridge.sdrblack'):
+            label=labels[settings.find(f".//setting[@id='{key}']").get('label')]
+            self.assertTrue(label.startswith(' - '),label)
+            self.assertNotIn('Reference',label)
 
 
 if __name__=='__main__':unittest.main()

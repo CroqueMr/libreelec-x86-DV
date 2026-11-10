@@ -133,6 +133,7 @@ int main(){
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <map>
 #include <string>
 #include <cassert>
@@ -172,7 +173,7 @@ int main(){
   assert(SelectOutput(p,caps).policy.mode==5);
  }
  assert(p.output==OutputMode::MasterReference && p.Policy().mode==5);
- assert(!p.masterIPT && !p.allowMasterFallback);
+ assert(!p.masterIPT);
  stored->ints["dvbridge.masteroutput"]=1;p=FrameOutputSettings();
  assert(p.masterIPT && p.Policy().master_ipt && p.revision!=revision);
  const auto iptRevision=p.revision;
@@ -182,13 +183,13 @@ int main(){
  assert(!p.masterIPT && !p.Policy().master_ipt && p.revision!=iptRevision);
  assert(SelectOutput(p,caps).policy.mode==5);
  caps.processing[5]={false,OutputReason::SourceIneligible};
- p.allowMasterFallback=true;
- out=SelectOutput(p,caps);assert(out.route==OutputRoute::HDR10 && out.policy.mode==2);
+ stored->ints["dvbridge.masterfallback"]=1;
+ out=SelectOutput(p,caps);assert(out.route==OutputRoute::Vanilla && out.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
  assert(out.reason==OutputReason::SourceIneligible);
- p.allowMasterFallback=false;out=SelectOutput(p,caps);
+ stored->ints["dvbridge.masterfallback"]=0;out=SelectOutput(p,caps);
  assert(out.route==OutputRoute::Vanilla && out.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE);
  assert(out.reason==OutputReason::SourceIneligible);
- p.allowMasterFallback=true;
+ stored->ints["dvbridge.masterfallback"]=1;
  caps.isDV=false;caps.isHDR10=true;
  out=SelectOutput(p,caps);assert(out.route==OutputRoute::Vanilla);
  p.hdr10Source=HDR10SourceMode::ReferenceDV;
