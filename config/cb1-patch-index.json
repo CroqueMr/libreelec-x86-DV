@@ -1483,5 +1483,13 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Retain DV sources per buffer, build bridge layers, render through the bridge and report frame receipts.",
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Declare the DV hooks and per-buffer source retention."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-05-vaapi-gl-renderer.patch": {
+    "summary": "DV output and AI queue hooks in the VAAPI GL renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.cpp": "Build bridge layers from VAAPI DMA-BUF surfaces and size the HDR10 AI queue.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.h": "Declare the VAAPI DV hooks."
+    }
   }
 }
