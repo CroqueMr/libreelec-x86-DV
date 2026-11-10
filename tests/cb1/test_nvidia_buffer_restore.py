@@ -26,6 +26,7 @@ class NvidiaBufferRestore(unittest.TestCase):
 #include <cstdint>
 #include <memory>
 #include <queue>
+#include <optional>
 struct gbm_bo {unsigned format=1;};
 constexpr unsigned DRM_FORMAT_XRGB8888=1,DRM_FORMAT_ARGB8888=2;
 constexpr unsigned DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
@@ -75,10 +76,12 @@ struct Window {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
  CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
+ std::optional<uint64_t>m_hdrDeepColorPrevious;
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
- bool StageOrdinaryDVOutput(void*){return true;}
+ bool PrepareOrdinaryDVOutput(void*){return true;}
  bool CompleteDVBridgePage(){return true;}bool SupportsDVOutputMode(){return true;}
  bool StageTransportPreferences(){return true;}
+ bool StageCB1ConnectorPreferences(bool){return true;}
  bool RequeueOutputProperties(){return true;}bool FloatOutputUsable(){return true;}
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  @SIGNATURE@

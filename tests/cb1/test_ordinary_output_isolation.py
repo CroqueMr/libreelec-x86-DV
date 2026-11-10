@@ -11,7 +11,7 @@ class OrdinaryOutputIsolationTests(unittest.TestCase):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         signatures = (
             'bool CWinSystemGbmGLESContext::SetVideoOutput(const VideoPicture* picture)',
-            'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)',
+            'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(const VideoPicture* picture)',
             'bool CWinSystemGbmGLESContext::RetireDVContext()',
             'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)',
         )
@@ -142,7 +142,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool SetGuiCompositing(int color){m_guiCompositing=color!=0;return true;}
  bool SetVideoOutput(const VideoPicture*);
  bool StageCB1ConnectorPreferences(bool){return true;}
- bool StageOrdinaryDVOutput(const VideoPicture*);
+ bool PrepareOrdinaryDVOutput(const VideoPicture*);
  bool RetireDVContext();
  bool PrepareDVOutputFrame(const VideoPicture&);
  bool ConfigureSDRConversion(const VideoPicture&){m_sdrConversion=m_hdrConversion=true;return true;}
@@ -263,6 +263,8 @@ int main(){
   window.m_dvState.captured=kind==0;window.m_hdrConversion=kind==1;window.pending=kind==2;
   expect(window.PrepareDVOutputFrame(picture) && window.m_dvOrdinaryFrame,
          "Prepare retains actual ordinary successor kind="+std::to_string(kind));
+  expect(window.ordinaryStages==1,
+         "ordinary successor initializes native metadata exactly once kind="+std::to_string(kind));
  }
  CWinSystemGbmGLESContext pending;pending.requested=true;pending.pending=true;VideoPicture picture;
  expect(!pending.SetVideoOutput(&picture) && pending.native==0,"pending transaction cannot be overwritten");

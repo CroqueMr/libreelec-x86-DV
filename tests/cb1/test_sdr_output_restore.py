@@ -7,13 +7,196 @@ from test_native_video_source import TREE, body
 
 
 class SDRRestoreTests(unittest.TestCase):
+    def test_retryable_native_restore_does_not_become_a_gpu_rollback_failure(self):
+        source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
+        ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
+                           present.index('  if (m_hdrConversion)')]
+        prepare = body(source, 'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(')
+        guard = prepare[prepare.index('  if (m_dvRollbackFailed || !RecoverDVActivation())'):
+                        prepare.index('  ResetDVActivation(&picture);')]
+        program = r'''
+#include <cassert>
+#include <cerrno>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <map>
+#include <vector>
+constexpr int DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3,AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16;
+namespace DVBRIDGE {
+ enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR};
+ enum class OutputReason{None,ProcessingPending,RestoreFailed,ActivationFailed};
+ struct StreamTelemetry{
+  struct Value{struct{OutputReason reason=OutputReason::None;}transaction;};
+  static Value Read(){return {};}
+  template<class... T>static void NativeFailure(T...){}
+  static void PublishNativePending(unsigned){}static void ClearOutput(){}
+ };
+ struct PlaybackNotification{static void OrdinaryOutputAccepted(bool){}};
+}
+struct CServiceBroker{struct Cache{unsigned GetVideoProcessingGeneration(){return 1;}
+ Cache& GetWindowManager(){return *this;}void MarkDirty(){}};
+ static Cache* GetGUI(){return &GetDataCacheCore();}
+ static Cache& GetDataCacheCore(){static Cache c;return c;}};
+struct DRM{virtual ~DRM()=default;};
+struct CDRMAtomic:DRM{
+ bool accept=false;unsigned commits=0,failures=0;
+ std::map<std::string,uint64_t> request;
+ std::vector<std::map<std::string,uint64_t>> attempts;
+ CDRMAtomic* GetConnector(){return this;}bool SupportsProperty(const char*){return true;}
+ bool AddProperty(void*,const char* name,uint64_t value){request[name]=value;return true;}
+ void AllowModeset(){}
+ unsigned DVActivationFailures(){return failures;}int DVActivationError(){return EINVAL;}
+ void FailDVActivation(int){++failures;}bool CanRetryDVActivation(bool){return true;}
+ bool FlipPageTransactional(void*,bool){++commits;attempts.push_back(request);request.clear();return accept;}
+};
+struct CDVBridgeState{enum class Backend{KERNEL,NVIDIA};bool captured=true;
+ bool Captured(){return captured;}
+ bool Stage(CDRMAtomic&drm,bool restore){assert(restore);return drm.AddProperty(&drm,"DV",0);}
+ Backend CapturedBackend(){return Backend::KERNEL;}void Restored(){captured=false;}};
+struct Context{bool fence=true;int status=DVBRIDGE_DV_IDLE;
+ bool FenceLastUse(){return fence;}int Poll(){return status;}};
+struct Bridge{void Cancel(){}void Reset(){}bool RebindOutputSurface(bool,bool){return true;}};
+struct Surface{Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
+ void* LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
+ void EndTransactionalMode(){}};
+struct Picture{int color_transfer=16;struct{unsigned informationGeneration=1;}doviSourceInfo;};
+struct Window{
+ bool m_dvOrdinaryFrame=true,m_dvStopPending=false,m_dvRollbackFailed=false;
+ bool m_dvActivating=false,m_dvRecoveryPending=false,m_dvSuperseded=false,m_dvRejectedSurface=false;
+ bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
+ bool m_hdrConversion=false,m_sdrConversion=false,m_dvFatalConsumed=false,m_dvFallbackActive=false;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false;
+ bool pending=true,complete=true,bind=true,restore=false;unsigned restores=0;
+ unsigned m_dvAttemptFailures=0,m_dvFailedStream=0,m_dvFailedPolicy=0;
+ unsigned m_dvActivationStream=1,m_dvActivationPolicy=1,m_hdr10SessionStream=1;
+ float m_dvPriorGuiSDRGamma=2.4f;int m_videoSourceSideData=0;
+ std::mutex m_dvCapabilityMutex;
+ DVBRIDGE::OutputReason m_dvActivationReason{},m_dvFatalReason{};
+ DVBRIDGE::OutputRoute m_dvRejectedRoute{};
+ struct{DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
+ DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;}m_dvSelection;
+ std::optional<int>m_hdr10Signal,m_hdr10Session,m_hdr10BasicSignal,m_hdrDeepColorPrevious;
+ std::optional<int>m_dvConfiguredOutput,m_dvPriorConfiguredOutput;
+ std::optional<uint64_t>m_queuedHdrMetadata,m_queuedColorspace;
+ std::shared_ptr<DRM>m_DRM=std::make_shared<CDRMAtomic>();
+ std::shared_ptr<Surface>m_GBM=std::make_shared<Surface>();
+ std::unique_ptr<Context>m_dvContext=std::make_unique<Context>();
+ std::unique_ptr<Bridge>m_dvBridge=std::make_unique<Bridge>();
+ CDVBridgeState m_dvState;
+ struct EGL{Window*w;bool TrySwapBuffers(){return true;}bool BindPriorOutputSurface(){return w->bind;}}m_eglContext{this};
+ bool HasPendingDVOutputSurface(){return pending;}
+ bool CompleteDVOutputSurface(bool){if(!complete)return false;pending=false;return true;}
+ bool ConfigureGuiCompositing(int,float){return true;}
+ bool EndDVBridge(){++restores;if(!restore)return false;m_dvState.Restored();return true;}
+ void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
+ void CompleteCB1ConnectorRestore(){}void PublishVideoSource(bool,int){}
+ void SetColorimetry(const Picture*p){m_queuedColorspace=p?9:0;
+  auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);drm->AddProperty(drm.get(),"Colorspace",*m_queuedColorspace);}
+ bool SetHDR(const Picture*p){m_queuedHdrMetadata=p?12:0;
+  auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);drm->AddProperty(drm.get(),"HDR_OUTPUT_METADATA",*m_queuedHdrMetadata);return p;}
+ void SetGuiCompositing(int){}
+ bool StageCB1ConnectorPreferences(bool){
+  auto drm=std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+  return drm->AddProperty(drm.get(),"max bpc",12) && drm->AddProperty(drm.get(),"Broadcast RGB",3);
+ }
+ bool RequeueOutputProperties() @REQUEUE@
+ bool PrepareOrdinaryDVOutput(const Picture* picture) @ORDINARY_PREPARE@
+ bool FlipDVBridgePage(CDVBridgeState&,bool,bool,bool,void*){assert(false);return false;}
+ bool RejectDVOutputSurface() @REJECT@
+ bool PollRejectedDVSurface() @POLL@
+ bool RecoverDVActivation() @RECOVER@
+ bool Prepare(){Picture picture;auto deferred=[](const char*){return false;};@GUARD@ return true;}
+ void Present(bool rendered){@ORDINARY@}
+};
+int main(int argc,char**argv){
+ assert(argc==2);std::string scenario=argv[1];Window w;
+ auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);
+ if(scenario=="missing-drm"){
+  w.m_DRM.reset();w.Present(true);
+  assert(w.m_dvOrdinaryFrame && w.pending && w.m_dvState.captured && !w.Prepare());
+  assert(drm->commits==0 && !w.m_dvRollbackFailed);
+ }else if(scenario=="live-retry" || scenario=="stop-retry"){
+  Picture picture;w.m_dvOrdinaryFrame=false;w.m_hdrDeepColorPrevious=5;
+  assert(w.PrepareOrdinaryDVOutput(&picture));
+  w.m_dvStopPending=scenario=="stop-retry";
+  w.Present(true);w.Present(true);drm->accept=true;w.Present(true);
+  assert(drm->attempts.size()==3);
+  for(const auto&attempt:drm->attempts){
+   assert(attempt.contains("DV") && attempt.at("DV")==0 && "Retry lost the native DV-disable intent");
+   assert(attempt.at("HDR_OUTPUT_METADATA")==uint64_t(scenario=="stop-retry"?0:12));
+   assert(attempt.at("Colorspace")==uint64_t(scenario=="stop-retry"?0:9));
+   assert(attempt.at("DVBRIDGE_HDR10_DEEP_COLOR")==5);
+   assert(attempt.at("max bpc")==12 && attempt.at("Broadcast RGB")==3);
+  }
+  assert(w.Prepare() && !w.m_dvOrdinaryFrame);
+ }else if(scenario=="ordinary" || scenario=="stop" || scenario=="completion"){
+  w.m_dvStopPending=scenario=="stop";
+  w.Present(true);w.Present(true);
+  assert(w.m_dvOrdinaryFrame && w.pending && w.m_dvState.captured);
+  assert(!w.Prepare() && "An unaccepted native restore cannot admit a successor");
+  drm->accept=true;
+  if(scenario=="completion"){
+   w.complete=false;w.Present(true);
+   assert(w.m_dvOrdinaryFrame && w.pending && !w.Prepare());w.complete=true;
+  }
+  w.Present(true);
+  assert(!w.m_dvOrdinaryFrame && !w.m_dvStopPending && !w.pending && !w.m_dvState.captured);
+  assert(w.Prepare() && "Accepted ordinary restore poisoned later playback");
+ }else if(scenario=="recovery"){
+  w.m_dvOrdinaryFrame=false;w.pending=false;w.m_dvRecoveryPending=true;
+  assert(!w.Prepare() && w.m_dvRecoveryPending && w.m_dvState.captured);
+  w.restore=true;
+  assert(w.Prepare() && !w.m_dvRecoveryPending && !w.m_dvState.captured);
+  assert(w.restores==2 && "Rejected restoration must retry through its original owner");
+ }else{
+  w.m_dvOrdinaryFrame=false;w.m_dvActivating=true;
+  if(scenario=="fence")w.m_dvContext->fence=false;
+  if(scenario=="rebind")w.bind=false;
+  if(scenario=="poll")w.m_dvContext->status=DVBRIDGE_DV_FAILED;
+  assert(!w.RejectDVOutputSurface() && w.m_dvRollbackFailed);
+  w.m_dvContext->fence=true;w.bind=true;w.m_dvContext->status=DVBRIDGE_DV_IDLE;
+  w.restore=true;drm->accept=true;
+  assert(!w.Prepare() && w.m_dvRollbackFailed && w.m_dvRejectedSurface);
+  assert(w.restores==0 && "A genuine failed GPU retirement must remain blocked");
+ }
+}
+'''
+        for token, signature in (
+                ('@REJECT@', 'bool CWinSystemGbmGLESContext::RejectDVOutputSurface()'),
+                ('@POLL@', 'bool CWinSystemGbmGLESContext::PollRejectedDVSurface()'),
+                ('@RECOVER@', 'bool CWinSystemGbmGLESContext::RecoverDVActivation()')):
+            program = program.replace(token, body(source, signature))
+        program = program.replace('@GUARD@', guard).replace('@ORDINARY@', ordinary)
+        program = program.replace('@ORDINARY_PREPARE@', body(
+            source, 'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput('))
+        program = program.replace('@REQUEUE@', body(
+            (TREE/'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text(),
+            'bool CWinSystemGbm::RequeueOutputProperties()'))
+        with tempfile.TemporaryDirectory(prefix='native-restore-reentry-') as temporary:
+            root = Path(temporary)
+            code, binary = root / 'check.cpp', root / 'check'
+            code.write_text(program)
+            built = subprocess.run(['c++', '-std=c++20', '-Wall', '-Wextra', '-Werror',
+                                    '-fsanitize=address,undefined', str(code), '-o', str(binary)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            for scenario in ('ordinary', 'stop', 'completion', 'recovery', 'fence', 'rebind', 'poll',
+                             'live-retry', 'stop-retry', 'missing-drm'):
+                with self.subTest(scenario=scenario):
+                    run = subprocess.run([str(binary), scenario], capture_output=True, text=True)
+                    self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
     def test_stop_successor_survives_resize_rejection_and_idle_gui_retries(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
         wake = present[1:present.index('#ifdef HAVE_DVBRIDGE')]
         ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
                            present.index('  if (m_hdrConversion)')]
-        stage = body(source, 'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(')
+        stage = body(source, 'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(')
         stop = body(source, 'bool CWinSystemGbmGLESContext::StopDVBridgePlayback()')
         destroy = body(source, 'bool CWinSystemGbmGLESContext::DestroyWindow()')
         retry = 'if (m_dvStopPending && !m_dvOrdinaryFrame)' + body(
@@ -86,10 +269,11 @@ struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
  bool SetHDR(const VideoPicture* picture){if(!picture){++hdrClears;
    std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)->pending=true;}return picture!=nullptr;}
  void SetGuiCompositing(int value){gui=value;}
- bool RejectDVOutputSurface(){++rejects;rollback=true;return false;}
+ bool RejectDVOutputSurface(){++rejects;return false;}
+ bool RequeueOutputProperties(){return true;}
  bool StageCB1ConnectorPreferences(bool){return true;}
  void CompleteCB1ConnectorRestore(){}
- bool StageOrdinaryDVOutput(const VideoPicture* picture) STAGE
+ bool PrepareOrdinaryDVOutput(const VideoPicture* picture) STAGE
  bool HoldCB1Stop(){return false;}bool HasPendingDVOutputSurface(){return surfacePending;}
  bool SetVideoOutput(const VideoPicture*){if(outputRefused){--outputRefused;return false;}m_dvState.captured=false;return true;}
  bool StopDVBridgePlayback() @STOP_BODY@
@@ -123,12 +307,13 @@ int main(){
  assert(CServiceBroker::GetGUI()->dirty==dirty);
  CWinSystemGbmGLESContext staged;
  auto stagedDRM=std::dynamic_pointer_cast<CDRMAtomic>(staged.m_DRM);stagedDRM->stageOK=false;
- assert(!staged.StageOrdinaryDVOutput(nullptr) && !staged.rollback);
+ staged.Present(true);
+ assert(staged.m_dvOrdinaryFrame && staged.m_dvStopPending && !staged.rollback);
  stagedDRM->stageOK=true;staged.Present(true);
  assert(!staged.m_dvStopPending && !staged.rollback);
  CWinSystemGbmGLESContext transition;transition.m_dvStopPending=false;
  auto td=std::dynamic_pointer_cast<CDRMAtomic>(transition.m_DRM);td->reject=1;
- transition.Present(true);assert(transition.rejects==1 && transition.rollback);
+ transition.Present(true);assert(transition.rejects==1 && !transition.rollback);
  CWinSystemGbmGLESContext recovered;
  recovered.m_dvStopPending=recovered.m_dvOrdinaryFrame=false;recovered.gui=16;
  auto rd=std::dynamic_pointer_cast<CDRMAtomic>(recovered.m_DRM);rd->pending=false;
