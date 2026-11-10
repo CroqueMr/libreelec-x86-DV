@@ -111,6 +111,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
  std::optional<int> m_hdr10Session;
  struct {template<class... T> void Begin(T...){}} m_masterSafety;
+ bool m_cb1RestoringPreferences=false;
  int ordinaryStages=0;
  std::optional<int> m_dvPriorConfiguredOutput,m_dvConfiguredOutput,m_hdr10Signal;
  std::optional<unsigned> m_hdrDeepColorPrevious;

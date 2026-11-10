@@ -65,6 +65,7 @@ struct Surface{Surface& GetDevice(){return *this;}Surface& GetSurface(){return *
  void EndTransactionalMode(){}};
 struct Picture{int color_transfer=16;struct{unsigned informationGeneration=1;}doviSourceInfo;};
 struct Window{
+ bool m_cb1RestoringPreferences=false;
  bool m_dvOrdinaryFrame=true,m_dvStopPending=false,m_dvRollbackFailed=false;
  bool m_dvActivating=false,m_dvRecoveryPending=false,m_dvSuperseded=false,m_dvRejectedSurface=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
@@ -245,6 +246,7 @@ struct CWinSystemGbmEGLContext{
 };
 struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
  struct {DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;}m_dvSelection;
+ bool m_cb1RestoringPreferences=false;
  bool m_dvOrdinaryFrame=true,m_dvStopPending=true,rollback=false;
  unsigned rejects=0,gui=0,swaps=0;
  unsigned colorClears=0,hdrClears=0;

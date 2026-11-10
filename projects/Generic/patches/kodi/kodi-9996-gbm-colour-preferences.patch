@@ -1630,7 +1630,15 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
    m_compositeShader.reset();
    const bool ready = SetGuiCompositing(sdr ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084);
    if (ready) m_dvConfiguredOutput = m_dvSelection.policy.mode;
-@@ -2950,17 +3066,19 @@
+@@ -2291,6 +2407,7 @@
+ {
+   // Keep the current native metadata blob alive until its commit is accepted.
+   if (m_dvOrdinaryFrame && !m_dvStopPending) return true;
++  m_cb1RestoringPreferences = true;
+   if (m_dvStopPending)
+   {
+     SetGuiCompositing(0);
+@@ -2950,17 +3067,19 @@
    }
    if (m_failedHDR10SetupRestore && !RestoreFailedHDR10Setup())
      return false;
@@ -1653,7 +1661,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
      glDisable(GL_SCISSOR_TEST);
      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-@@ -2979,6 +3097,7 @@
+@@ -2979,6 +3098,7 @@
        return false;
      surface.EndTransactionalMode();
      m_hdrDeepColorPrevious.reset();
@@ -1661,7 +1669,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      if (DVBRIDGE::DiagnosticsEnabled())
        DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge HDR10: native link policy restored");
    }
-@@ -3001,6 +3120,8 @@
+@@ -3001,6 +3121,8 @@
      glClear(GL_COLOR_BUFFER_BIT);
      if (!m_dvBridge || !m_dvBridge->Advanced()) glFinish();
      AnnounceCB1Mode(false);
@@ -1670,7 +1678,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      const bool restored=m_eglContext.TrySwapBuffers() && FlipDVBridgePage(m_dvState, true);
      CompleteCB1Mode(restored,false);
      if (!restored)
-@@ -3022,6 +3143,7 @@
+@@ -3022,6 +3144,7 @@
    m_hdr10SessionStream = 0;
    m_hdrConversion = false;
    m_sdrConversion = false;

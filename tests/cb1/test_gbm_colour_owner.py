@@ -19,34 +19,37 @@ def method(source, name):
     return source[match.start():end]
 
 
+def native_owner_program(root):
+    source = (root / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
+    header = (root / "xbmc/windowing/gbm/WinSystemGbm.h").read_text()
+    names = ["ApplyMaxBpcSetting", "GetEffectiveMaxBpc", "ApplyColorFormatSetting",
+             "IsColorFormatOffered", "GetColorFormat", "GetRequestedColorFormat",
+             "IsHdmiFrlLink", "ContentNeedsSubsampling", "IsYuvRequested",
+             "IsYuvFormatCommitted", "IsYuvFormat", "ApplyColorRangeSetting", "GetColorRange",
+             "MigrateLimitedRangeSetting", "DeferConnectorPreferences", "ApplyConnectorProperties",
+             "ApplyBroadcastRange", "ApplyMaxBpc", "ApplyColorFormat", "IsRequestRejected",
+             "RequeueConnectorProperties", "RetryConnectorProperties", "UpdateDriverLimitedRange",
+             "UseLimitedColor", "ApplyColorspace", "SetColorimetry"]
+    bodies = "\n".join(method(source, "CWinSystemGbm::" + name) for name in names)
+    # The two QueueConnectorProperty overloads are adjacent in the actual owner.
+    start = source.index("bool CWinSystemGbm::QueueConnectorProperty(")
+    end = source.index("void CWinSystemGbm::ApplyMaxBpc()", start)
+    bodies += "\n" + source[start:end]
+    constants = source[source.index("constexpr const char* BROADCAST_RGB"):source.index("// These map")]+source[source.index("constexpr auto ColorimetryMap"):source.index("} // namespace")].replace("constexpr auto ColorimetryMap", "const auto ColorimetryMap")
+    enums = header[header.index("enum class ColorRange"):header.index("class CWinSystemGbm :")]
+    members = header[header.index("  static void ApplyColorRangeSetting"):header.index("  // Claim no 3D")]
+    program = (Path(__file__).with_name("gbm_colour_owner.cpp").read_text()
+               .replace("// NATIVE_CONSTANTS", constants + enums)
+               .replace("// NATIVE_MEMBERS", members)
+               .replace("// NATIVE_BODIES", bodies))
+    return program
+
 class GbmColourOwner(unittest.TestCase):
     def test_native_connector_policy(self):
         tree = os.environ.get("KODI_NATIVE_SOURCE_TREE")
         if not tree:
             self.skipTest("requires the fully prepared native Kodi tree")
-        root = Path(tree)
-        source = (root / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
-        header = (root / "xbmc/windowing/gbm/WinSystemGbm.h").read_text()
-        names = ["ApplyMaxBpcSetting", "GetEffectiveMaxBpc", "ApplyColorFormatSetting",
-                 "IsColorFormatOffered", "GetColorFormat", "GetRequestedColorFormat",
-                 "IsHdmiFrlLink", "ContentNeedsSubsampling", "IsYuvRequested",
-                 "IsYuvFormatCommitted", "IsYuvFormat", "ApplyColorRangeSetting", "GetColorRange",
-                 "MigrateLimitedRangeSetting", "DeferConnectorPreferences", "ApplyConnectorProperties",
-                 "ApplyBroadcastRange", "ApplyMaxBpc", "ApplyColorFormat", "IsRequestRejected",
-                 "RequeueConnectorProperties", "RetryConnectorProperties", "UpdateDriverLimitedRange",
-                 "UseLimitedColor", "ApplyColorspace", "SetColorimetry"]
-        bodies = "\n".join(method(source, "CWinSystemGbm::" + name) for name in names)
-        # The two QueueConnectorProperty overloads are adjacent in the actual owner.
-        start = source.index("bool CWinSystemGbm::QueueConnectorProperty(")
-        end = source.index("void CWinSystemGbm::ApplyMaxBpc()", start)
-        bodies += "\n" + source[start:end]
-        constants = source[source.index("constexpr const char* BROADCAST_RGB"):source.index("// These map")]+source[source.index("constexpr auto ColorimetryMap"):source.index("} // namespace")].replace("constexpr auto ColorimetryMap", "const auto ColorimetryMap")
-        enums = header[header.index("enum class ColorRange"):header.index("class CWinSystemGbm :")]
-        members = header[header.index("  static void ApplyColorRangeSetting"):header.index("  // Claim no 3D")]
-        program = (Path(__file__).with_name("gbm_colour_owner.cpp").read_text()
-                   .replace("// NATIVE_CONSTANTS", constants + enums)
-                   .replace("// NATIVE_MEMBERS", members)
-                   .replace("// NATIVE_BODIES", bodies))
+        program = native_owner_program(Path(tree))
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / "check"
             build = subprocess.run(["c++", "-std=c++20", "-x", "c++", "-", "-o", str(binary)],

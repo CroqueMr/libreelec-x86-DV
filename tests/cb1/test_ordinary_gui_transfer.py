@@ -26,6 +26,7 @@ struct State {bool Captured(){return false;} bool Stage(CDRMAtomic&,bool){return
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>(); State m_dvState;
  std::optional<int> m_hdrDeepColorPrevious; bool m_dvOrdinaryFrame=false,m_dvStopPending=false;
+ bool m_cb1RestoringPreferences=false;
  int gui=-1,hdrCalls=0; bool hdrAvailable=true; const VideoPicture* color{}; const VideoPicture* hdr{};
  void SetColorimetry(const VideoPicture* p){color=p;}
  bool SetHDR(const VideoPicture* p){++hdrCalls;hdr=p; return hdrAvailable && p &&
