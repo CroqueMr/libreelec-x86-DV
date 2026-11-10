@@ -46,7 +46,8 @@ pkg_check_modules(DVAvutil REQUIRED IMPORTED_TARGET libavutil>=59.12.100)
 pkg_check_modules(DVAvcodec REQUIRED IMPORTED_TARGET libavcodec>=62)
 # Kodi's render API decides which GL the bridge links: desktop OpenGL or OpenGL ES.
 if(TARGET ${APP_NAME_LC}::OpenGl)
-  pkg_check_modules(DVGles REQUIRED IMPORTED_TARGET gl)
+  # glvnd ships desktop GL as opengl.pc; Mesa without glvnd as gl.pc.
+  pkg_search_module(DVGles REQUIRED IMPORTED_TARGET gl opengl)
   set(DVBRIDGE_DESKTOP_GL ON)
 else()
   pkg_check_modules(DVGles REQUIRED IMPORTED_TARGET glesv2)
