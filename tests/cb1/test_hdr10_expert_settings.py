@@ -79,6 +79,7 @@ int main(){
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include "dvbridge_policy.h"
 #include "cb1_cmv40.h"

@@ -131,6 +131,12 @@ int main(){
   panel=ET.parse(PANEL)
   dialog=ET.parse(PANEL.with_name('DialogPlayerProcessInfo.xml'))
   self.assertFalse(dialog.findall('.//animation'))
+  rounded={('DVProcessLayout','texture'):('cb1-glass.png','60'),
+           ('DVMeters','texture'):('cb1-card.png','16'),
+           ('DVBlockChip','texture'):('cb1-chip.png','6'),
+           ('DVMeterBar','texturebg'):('cb1-bar.png','2,0,2,0'),
+           ('DVMeterBar','midtexture'):('cb1-bar.png','2,0,2,0')}
+  seen=[]
   # The playback-mode chooser is a separate dialog, outside the information panel.
   for include in panel.findall('./include'):
    if include.get('name','').startswith('CB1PlaybackMode'):continue
@@ -139,8 +145,15 @@ int main(){
      if color and not color.startswith('$'):
       self.assertTrue(color.startswith('FF'),(include.get('name'),color))
     if node.tag in ('texture','texturebg','midtexture') and node.text:
-     self.assertEqual(node.text,'special://xbmc/media/cb1-white.png')
+     key=(include.get('name'),node.tag)
+     if key in rounded:
+      asset,border=rounded[key]
+      self.assertEqual(node.text,'special://xbmc/media/'+asset)
+      self.assertEqual(node.get('border'),border)
+      seen.append(key)
+     else:self.assertEqual(node.text,'special://xbmc/media/cb1-white.png')
    self.assertFalse(include.findall('.//animation'))
+  self.assertEqual(sorted(seen),sorted(rounded))
  def test_source_metadata_details_remain_applied_and_neutral(self):
   panel=ET.parse(PANEL)
   source=panel.find('./include[@name="DVSourceMetadataFields"]')

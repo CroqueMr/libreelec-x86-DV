@@ -60,12 +60,16 @@ int main(){
         self.assertEqual((margin.findtext('default'),margin.findtext('constraints/minimum'),margin.findtext('constraints/maximum')),('20','0','50'))
 
     def test_frame_preferences_exclude_non_authored_modes_and_track_revisions(self):
+        from test_native_video_source import body
         repo=Path(__file__).resolve().parents[2]
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         s=(tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         enums='\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;',s))
         preferences=s.split('struct OutputPreferences',1)[1].split('inline std::mutex&',1)[0]
         render=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        prepare=body(render,'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
+        selection=re.search(r'  auto policy = selected \?[^;]+;',prepare).group()
+        rejection=prepare[prepare.index('  if (!selected &&'):prepare.index('  // Capture the proven observation key')]
         admission=re.search(r'const auto cmv40 = ([^;]+);',render).group(1)
         program='''
 #include "cb1_cmv40.h"
@@ -81,9 +85,21 @@ int main(){
  OutputPreferences p;
  assert(p.CMv40Options(DVBRIDGE_MODE_STANDARD).mode==CB1_CMV40_DISABLED);
  p.cmv40Mode=4;p.cmv40Headroom=20;p.peak=1234;p.disableL2Trims=true;
- auto prepareOptions=[&](bool fallback){auto preferences=p;dvbridge_policy policy{};policy.mode=DVBRIDGE_MODE_STANDARD;return ADMISSION;};
- assert(prepareOptions(false).mode==CB1_CMV40_AUTO2);
- assert(prepareOptions(true).mode==CB1_CMV40_DISABLED);
+ enum class FrameStatus{Ready,Unsupported};
+ cb1_cmv40_options prepared{};unsigned preparations=0;
+ auto prepareOptions=[&](const dvbridge_policy* selected){auto preferences=p;
+  SELECTION
+  REJECTION
+  prepared=ADMISSION;++preparations;return FrameStatus::Ready;
+ };
+ assert(prepareOptions(nullptr)==FrameStatus::Ready && prepared.mode==CB1_CMV40_AUTO2);
+ const auto authored=p;
+ p.output=OutputMode::HDR10;p.method=1; // Unconfigured Expert is refused before CM4 preparation.
+ assert(!p.ProfileValid(DVBRIDGE_MODE_HDR10_EXPERT));
+ assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==1);
+ p.output=OutputMode::AdaptiveB;p.peak=0;
+ assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==1);
+ p=authored;
  for(auto mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_MASTER_REFERENCE}){
   auto o=p.CMv40Options(mode);
   assert(o.mode==CB1_CMV40_AUTO2 && o.headroom==20 && o.tv_peak==1234);
@@ -97,7 +113,7 @@ int main(){
  other.cmv40Trigger=4000;assert(!p.SameValues(other));other=p;
  other.cmv40Headroom=30;assert(!p.SameValues(other));
 }
-'''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('ADMISSION',admission)
+'''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('SELECTION',selection).replace('REJECTION',rejection).replace('ADMISSION',admission)
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);(root/'test.cpp').write_text(program)
             prefix=Path(os.environ['FFMPEG_TEST_PREFIX'])
