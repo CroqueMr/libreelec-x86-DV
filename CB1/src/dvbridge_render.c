@@ -90,6 +90,14 @@ struct direct_output {
 };
 static struct pl_hook_res reference_quantize(void *priv, const struct pl_hook_params *p);
 static struct pl_hook_res sdr_gamma(void *priv,const struct pl_hook_params *p);
+static struct pl_hook_res sdr_intermediate(void *priv,const struct pl_hook_params *p)
+{
+    (void)priv;
+    bool ok=pl_shader_custom(p->sh,&(struct pl_custom_shader){
+        .input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .body="color.rgb=clamp(color.rgb,0.0,1.0);"});
+    return (struct pl_hook_res){.failed=!ok,.output=PL_HOOK_SIG_NONE};
+}
 static bool render_sdr_direct(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct dvbridge_identity *id,
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
@@ -1511,6 +1519,8 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         params.num_hooks=1;
     }
     const struct pl_hook *direct_hooks[4];
+    const struct pl_hook sdr_intermediate_hook={.stages=PL_HOOK_SCALED,.input=PL_HOOK_SIG_COLOR,
+        .hook=sdr_intermediate,.signature=0x4342315344520002ULL};
     if (direct) {
         unsigned count=0;
         if(policy) {
@@ -1518,6 +1528,7 @@ static bool render_picture(struct dvbridge_renderer *r, const struct pl_frame *s
         } else {
             direct_hooks[count++]=&hook;
         }
+        if(direct->sdr_target)direct_hooks[count++]=&sdr_intermediate_hook;
         if(direct->custom_quantize)direct_hooks[count++]=&direct->hook;
         if(direct->custom_gamma)direct_hooks[count++]=&direct->hook;
         params.hooks=direct_hooks;
