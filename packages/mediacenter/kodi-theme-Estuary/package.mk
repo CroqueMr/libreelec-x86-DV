@@ -9,6 +9,11 @@ PKG_SITE="http://www.kodi.tv"
 PKG_URL=""
 PKG_DEPENDS_TARGET="kodi"
 PKG_DEPENDS_UNPACK="kodi"
+# PKG_DEPENDS_UNPACK already tracks Kodi's global package directory.
+PKG_NEED_UNPACK="${PROJECT_DIR}/${PROJECT}/patches/kodi ${PROJECT_DIR}/${PROJECT}/packages/kodi"
+if [ -n "${DEVICE}" ]; then
+  PKG_NEED_UNPACK+=" ${PROJECT_DIR}/${PROJECT}/devices/${DEVICE}/patches/kodi"
+fi
 PKG_LONGDESC="Kodi Mediacenter default theme."
 PKG_TOOLCHAIN="manual"
 
