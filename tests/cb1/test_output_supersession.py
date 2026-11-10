@@ -233,6 +233,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  std::optional<dvbridge_hdr10_session> m_hdr10Session;
  std::unique_ptr<VideoPicture>m_hdr10BasicSignal;
  struct {template<class... T> void Begin(T...){}template<class... T>bool Active(T...)const{return false;}} m_masterSafety;
+ bool m_cb1RestoringPreferences=false;
  int ordinaryStages=0;
  std::optional<dvbridge_mode>m_dvPriorConfiguredOutput,m_dvConfiguredOutput;std::optional<std::array<unsigned,5>>m_hdr10Signal;
  std::optional<unsigned> m_hdrDeepColorPrevious;

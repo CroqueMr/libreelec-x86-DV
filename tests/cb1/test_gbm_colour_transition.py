@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from test_gbm_colour_owner import method
+from test_gbm_colour_owner import method, native_owner_program
 
 
 def compile_run(test, program):
@@ -12,9 +12,9 @@ def compile_run(test, program):
         binary = Path(directory) / "check"
         result = subprocess.run(["c++", "-std=c++20", "-x", "c++", "-", "-o", str(binary)],
                                 input=program, capture_output=True, text=True)
-        test.assertEqual(result.returncode, 0, result.stderr)
+        test.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         result = subprocess.run([str(binary)], capture_output=True, text=True)
-        test.assertEqual(result.returncode, 0, result.stderr)
+        test.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class GbmColourTransition(unittest.TestCase):
@@ -23,6 +23,107 @@ class GbmColourTransition(unittest.TestCase):
         if not tree:
             self.skipTest("requires the fully prepared native Kodi tree")
         self.root = Path(tree)
+
+    def test_native_successor_selects_saved_color_and_range_before_first_render(self):
+        controller = (self.root / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        native = (self.root / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
+        program = native_owner_program(self.root).split('int main() {', 1)[0]
+        for signature in ('bool ConnectorPreferencesAllowed()',
+                          'std::optional<bool> TransportLimitedColor()',
+                          'std::optional<uint64_t> RestoredConnectorProperty('):
+            program = program.replace(signature, 'virtual ' + signature)
+        program = program.replace('struct VideoPicture {', 'struct VideoPicture {int color_transfer=16;')
+        program = program.replace(' bool rangeTransition=false;', r'''
+ std::vector<std::map<std::string,uint64_t>> attempts;bool accept=false;
+ bool HasPendingCB1Page()const{return false;}
+ void AllowModeset(){}
+ bool FlipPageTransactional(void*,bool){attempts.push_back(pending);Commit(accept);return accept;}
+ bool rangeTransition=false;''')
+        present = method(controller, 'CWinSystemGbmGLESContext::PresentFrame')
+        ordinary = present.split('\n  if (m_dvOrdinaryFrame)\n', 1)[1]
+        ordinary = ordinary[ordinary.index('{') + 1:ordinary.index('    if (!submitted)')]
+        ordinary = ordinary.replace('return;', 'return false;') + '\nreturn submitted;'
+        methods = '\n'.join(method(controller, 'CWinSystemGbmGLESContext::' + name) for name in
+                            ('PrepareOrdinaryDVOutput', 'StageCB1ConnectorPreferences',
+                             'ConnectorPreferencesAllowed', 'TransportLimitedColor',
+                             'RestoredConnectorProperty'))
+        program += r'''
+#include <iostream>
+struct State{
+ bool captured=false;std::map<std::string,uint64_t> before;
+ bool Captured()const{return captured;}
+ std::optional<uint64_t> Before(const char*name)const{
+  auto it=before.find(name);return it==before.end()?std::optional<uint64_t>{}:it->second;}
+ bool Stage(CDRMAtomic&d,bool restore){assert(restore);
+  for(const auto&[name,value]:before)if(!d.AddProperty(d.GetConnector(),name.c_str(),value))return false;
+  return true;}
+ enum class Backend{KERNEL,NVIDIA};Backend CapturedBackend(){return Backend::KERNEL;}
+};
+using CDVBridgeState=State;
+struct Surface{Surface&GetDevice(){return *this;}Surface&GetSurface(){return *this;}
+ void*LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}};
+struct CWinSystemGbmGLESContext:CWinSystemGbm{
+ State m_cb1ConnectorState,m_dvState;
+ bool m_cb1RestoringPreferences=false,m_dvOrdinaryFrame=false,m_dvStopPending=false;
+ bool m_dvOutputSurface=false,m_dvEndPending=false;
+ std::shared_ptr<void>m_nativeDVProperties;
+ std::optional<uint64_t>m_hdrDeepColorPrevious,m_queuedHdrMetadata;
+ std::optional<bool>m_cb1LimitedRange,m_cb1OrdinaryLimitedRange;
+ unsigned hdrPreparations=0;bool guiLimited=false;
+ std::shared_ptr<Surface>m_GBM=std::make_shared<Surface>();
+ struct EGL{bool TrySwapBuffers(){return true;}}m_eglContext;
+ bool HasPendingDVBridgeRestore()const{return m_cb1ConnectorState.Captured();}
+ bool HasPendingDVOutputSurface()const{return true;}
+ bool SetHDR(const VideoPicture*){++hdrPreparations;m_queuedHdrMetadata=99;return true;}
+ void SetGuiCompositing(int){guiLimited=UseLimitedColor();}
+ bool PrepareOrdinaryDVOutput(const VideoPicture*);
+ bool StageCB1ConnectorPreferences(bool);
+ bool ConnectorPreferencesAllowed()const override;
+ std::optional<bool>TransportLimitedColor()const override;
+ std::optional<uint64_t>RestoredConnectorProperty(const char*)const override;
+ bool RequeueOutputProperties() @REQUEUE@
+ void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
+ bool FlipDVBridgePage(State&,bool,bool,bool,void*){assert(false);return false;}
+ bool Ordinary(bool rendered){@ORDINARY@}
+};
+@METHODS@
+int main(){unsigned failed=0;
+ for(bool yuv:{true,false}){
+  CWinSystemGbmGLESContext w;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);
+  auto&con=drm->connector;
+  con.cache["color format"]=1;con.cache["Broadcast RGB"]=1;con.cache["Colorspace"]=0;
+  con.cache["HDR_OUTPUT_METADATA"]=0;
+  con.enums["Colorspace"]={{"Default",0},{"BT2020_RGB",1},{"BT2020_YCC",2},{"BT709_YCC",3}};
+  w.m_cb1ConnectorState.captured=true;
+  w.m_cb1ConnectorState.before={{"color format",yuv?3U:1U},{"Broadcast RGB",yuv?2U:1U},{"max bpc",8}};
+  w.m_cb1LimitedRange=yuv;w.m_cb1OrdinaryLimitedRange=!yuv;
+  assert(w.UseLimitedColor()==yuv);
+  VideoPicture picture;
+  assert(w.PrepareOrdinaryDVOutput(&picture));
+  const bool prepared=w.m_queuedColorspace==(yuv?2:1) && w.UseLimitedColor()==!yuv && w.guiLimited==!yuv;
+  std::cout<<"prepared "<<(yuv?"saved-YUV":"saved-RGB")<<" color="<<*w.m_queuedColorspace
+           <<" shader_limited="<<w.UseLimitedColor()<<" gui_limited="<<w.guiLimited<<std::endl;
+  failed+=!prepared;
+  assert(w.PrepareOrdinaryDVOutput(&picture) && w.hdrPreparations==1);
+  assert(!w.Ordinary(true));assert(!w.Ordinary(true));drm->accept=true;assert(w.Ordinary(true));
+  assert(w.hdrPreparations==1 && drm->attempts.size()==3);
+  for(const auto&attempt:drm->attempts){
+   const bool correct=attempt.at("Colorspace")==uint64_t(yuv?2:1) &&
+      attempt.at("color format")==uint64_t(yuv?3:1) &&
+      attempt.at("Broadcast RGB")==uint64_t(yuv?2:1) &&
+      attempt.at("HDR_OUTPUT_METADATA")==99;
+   std::cout<<"commit saved_"<<(yuv?"YUV":"RGB")<<" colorspace="<<attempt.at("Colorspace")
+            <<" format="<<attempt.at("color format")<<" range="<<attempt.at("Broadcast RGB")<<std::endl;
+   failed+=!correct;
+  }
+ }
+ assert(failed==0 && "Native color/range policy must be selected before first render and preserved by every attempt");
+}
+'''
+        requeue = method(native, 'CWinSystemGbm::RequeueOutputProperties')
+        program = program.replace('@METHODS@', methods).replace('@ORDINARY@', ordinary).replace(
+            '@REQUEUE@', requeue[requeue.index('{'):])
+        compile_run(self, program)
 
     def test_snapshot_accepted_rejected_restore_and_missing_properties(self):
         base = self.root / "xbmc/windowing/gbm/drm"
