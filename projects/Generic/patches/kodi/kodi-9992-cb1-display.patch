@@ -3577,7 +3577,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (m_dvOrdinaryFrame)
 +  {
 +    if (!rendered || !m_eglContext.TrySwapBuffers()) return;
-+    if (m_dvStopPending && !StageOrdinaryDVOutput(nullptr)) return;
++    if (m_dvStopPending && !PrepareOrdinaryDVOutput(nullptr)) return;
 +    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
 +    auto& surface = m_GBM->GetDevice().GetSurface();
 +    auto* bo = surface.LockTransactionalBuffer();
@@ -4189,7 +4189,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1147,1947 @@
+@@ -397,13 +1147,1937 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4772,7 +4772,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const bool superseded = m_dvSuperseded;
 +  if (!EndDVBridge())
 +  {
-+    m_dvRollbackFailed = true;
 +    std::lock_guard lock(m_dvCapabilityMutex);
 +    m_dvActivationReason = DVBRIDGE::OutputReason::RestoreFailed;
 +    return false;
@@ -5154,7 +5153,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_hdrConversion = false;
 +    m_sdrConversion = false;
 +    m_dvConfiguredOutput.reset();
-+    if (!requested && !StageOrdinaryDVOutput(picture)) return false;
++    if (!requested && !PrepareOrdinaryDVOutput(picture)) return false;
 +    return true;
 +  }
 +  // Restore with the current surface before EGL replaces its buffers.
@@ -5332,24 +5331,20 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (!ready) { RejectDVOutputSurface(); return false; }
 +  }
 +  else if ((HasPendingDVOutputSurface() || m_dvOrdinaryFrame) &&
-+           !StageOrdinaryDVOutput(&picture)) return false;
++           !PrepareOrdinaryDVOutput(&picture)) return false;
 +  m_dvConfiguredOutput = m_dvSelection.policy.mode;
 +  return true;
 +}
 +
-+bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)
++bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(const VideoPicture* picture)
 +{
++  // Keep the current native metadata blob alive until its commit is accepted.
++  if (m_dvOrdinaryFrame && !m_dvStopPending) return true;
 +  if (m_dvStopPending)
 +  {
-+    m_dvOrdinaryFrame = true;
 +    SetGuiCompositing(0);
 +    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
 +  }
-+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
-+  if (!drm || (m_dvState.Captured() && !m_dvState.Stage(*drm,true)) ||
-+      (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
-+          "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
-+  { if (!m_dvStopPending) RejectDVOutputSurface(); return false; }
 +  SetColorimetry(picture);
 +  const bool hdr = SetHDR(picture);
 +  SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
@@ -5360,13 +5355,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +bool CWinSystemGbmGLESContext::RejectDVOutputSurface()
 +{
 +  m_hdr10Signal.reset();
-+  if (m_dvOrdinaryFrame)
-+  {
-+    m_dvRollbackFailed = true;
-+    std::lock_guard lock(m_dvCapabilityMutex);
-+    m_dvActivationReason = DVBRIDGE::OutputReason::RestoreFailed;
-+    return false;
-+  }
++  // Ordinary commit rejection stays retryable through its pending frame owner.
++  if (m_dvOrdinaryFrame) return false;
 +  if (!m_dvActivating && !HasPendingDVOutputSurface()) return true;
 +  if (!m_dvStopPending && !m_dvRecoveryPending)
 +  {
@@ -6140,7 +6130,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3101,16 @@
+@@ -417,5 +3091,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6362,7 +6352,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool m_dvShutdownFence{};
 +  bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
 +  bool PollRejectedDVSurface();
-+  bool StageOrdinaryDVOutput(const VideoPicture* picture);
++  bool PrepareOrdinaryDVOutput(const VideoPicture* picture);
 +  bool RecoverDVActivation();
 +  void ResetDVActivation(const VideoPicture* picture);
 +  bool m_dvSuperseded{}; // Benign cancellation still uses the complete recovery owner.

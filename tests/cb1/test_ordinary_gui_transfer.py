@@ -9,7 +9,7 @@ from test_native_video_source import TREE, body
 class OrdinaryGUITransferTests(unittest.TestCase):
     def test_only_hdr_video_enables_hdr_gui_compositing(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        function = body(source, 'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(')
+        function = body(source, 'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(')
         program = r'''
 #include <cassert>
 #include <memory>
@@ -26,16 +26,16 @@ struct State {bool Captured(){return false;} bool Stage(CDRMAtomic&,bool){return
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>(); State m_dvState;
  std::optional<int> m_hdrDeepColorPrevious; bool m_dvOrdinaryFrame=false,m_dvStopPending=false;
- int gui=-1; bool hdrAvailable=true; const VideoPicture* color{}; const VideoPicture* hdr{};
+ int gui=-1,hdrCalls=0; bool hdrAvailable=true; const VideoPicture* color{}; const VideoPicture* hdr{};
  void SetColorimetry(const VideoPicture* p){color=p;}
- bool SetHDR(const VideoPicture* p){hdr=p; return hdrAvailable && p &&
+ bool SetHDR(const VideoPicture* p){++hdrCalls;hdr=p; return hdrAvailable && p &&
    (p->color_transfer==AVCOL_TRC_SMPTE2084 || p->color_transfer==AVCOL_TRC_ARIB_STD_B67);}
  void SetGuiCompositing(int transfer){gui=transfer;}
  bool RejectDVOutputSurface(){return false;}
  bool StageCB1ConnectorPreferences(bool){return true;}
- bool StageOrdinaryDVOutput(const VideoPicture* picture);
+ bool PrepareOrdinaryDVOutput(const VideoPicture* picture);
 };
-bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture) BODY
+bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(const VideoPicture* picture) BODY
 int main() {
  CWinSystemGbmGLESContext window;
  for(bool available : {true,false}) {
@@ -43,14 +43,16 @@ int main() {
  for(int transfer : {AVCOL_TRC_BT709,AVCOL_TRC_UNSPECIFIED,
                     AVCOL_TRC_SMPTE2084,AVCOL_TRC_ARIB_STD_B67}) {
    VideoPicture picture{transfer};
-   assert(window.StageOrdinaryDVOutput(&picture));
+   window.m_dvOrdinaryFrame=false;
+   assert(window.PrepareOrdinaryDVOutput(&picture));
    assert(window.gui == ((available && (transfer==16 || transfer==18)) ? transfer : 0));
    assert(window.hdr==&picture && window.color==&picture && window.m_dvOrdinaryFrame);
+   const auto prepared=window.hdrCalls;
+   assert(window.PrepareOrdinaryDVOutput(&picture) && window.hdrCalls==prepared);
  }
  }
- assert(window.StageOrdinaryDVOutput(nullptr) && window.gui==0);
- window.m_DRM.reset(); window.gui=-1;
- assert(!window.StageOrdinaryDVOutput(nullptr) && window.gui==-1);
+ window.m_dvStopPending=true;
+ assert(window.PrepareOrdinaryDVOutput(nullptr) && window.gui==0 && !window.hdr && !window.color);
 }
 '''.replace('BODY', function)
         with tempfile.TemporaryDirectory() as temporary:

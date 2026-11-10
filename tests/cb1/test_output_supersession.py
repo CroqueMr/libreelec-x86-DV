@@ -264,7 +264,7 @@ bool StopDVBridgePlayback();bool HoldCB1Stop(){return false;}uint64_t m_masterFr
  bool SetGuiCompositing(int color){m_guiCompositing=color!=0;if(color)m_compositeShader=std::make_unique<int>(1);return true;}
  bool SetVideoOutput(const VideoPicture*);
  bool StageCB1ConnectorPreferences(bool){return true;}
- bool StageOrdinaryDVOutput(const VideoPicture*);
+ bool PrepareOrdinaryDVOutput(const VideoPicture*);
  bool RetireDVContext();
  bool PrepareDVOutputFrame(const VideoPicture&);
  bool ConfigureSDRConversion(const VideoPicture&){return BeginDVBridge();}
@@ -292,7 +292,7 @@ bool RestoreFailedHDR10Setup(){m_failedHDR10SetupRestore=false;return true;}void
 
 };
 bool CWinSystemGbmGLESContext::SetVideoOutput(const VideoPicture* picture)__ACTUAL_BODY_4_END__
-bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)__ACTUAL_BODY_5_END__
+bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(const VideoPicture* picture)__ACTUAL_BODY_5_END__
 bool CWinSystemGbmGLESContext::RetireDVContext()__ACTUAL_BODY_6_END__
 bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)__ACTUAL_BODY_7_END__
 bool CWinSystemGbmGLESContext::BeginDVBridge()__ACTUAL_BODY_8_END__
@@ -412,7 +412,7 @@ int main(){
   program=program.replace('__ACTUAL_BODY_2_END__',body(render,'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(').split('  m_live = true;')[0]+'\nreturn FrameStatus::Ready;}')
   program=program.replace('__ACTUAL_BODY_3_END__',body(window,'int CWinSystemGbmGLESContext::VideoOutputBitDepth('))
   program=program.replace('__ACTUAL_BODY_4_END__',body(window,'bool CWinSystemGbmGLESContext::SetVideoOutput(const VideoPicture* picture)'))
-  program=program.replace('__ACTUAL_BODY_5_END__',body(window,'bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture)'))
+  program=program.replace('__ACTUAL_BODY_5_END__',body(window,'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(const VideoPicture* picture)'))
   program=program.replace('__ACTUAL_BODY_6_END__',body(window,'bool CWinSystemGbmGLESContext::RetireDVContext()'))
   program=program.replace('__ACTUAL_BODY_7_END__',body(window,'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)'))
   program=program.replace('__ACTUAL_BODY_8_END__',body(window,'bool CWinSystemGbmGLESContext::BeginDVBridge()'))
