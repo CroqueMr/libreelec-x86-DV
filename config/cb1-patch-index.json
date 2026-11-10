@@ -1491,5 +1491,13 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.cpp": "Build bridge layers from VAAPI DMA-BUF surfaces and size the HDR10 AI queue.",
       "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.h": "Declare the VAAPI DV hooks."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": {
+    "summary": "Report subtitle bounds from the GL overlay renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp": "Record subtitle bounds and textures for the DV composite.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h": "Keep the ASS glyph extent."
+    }
   }
 }
