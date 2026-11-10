@@ -25,6 +25,66 @@ def function(relative, signature):
 
 
 class DiagnosticsRuntime(unittest.TestCase):
+    def test_prepared_audit_retries_admission_without_consuming_epoch(self):
+        from test_native_video_source import body
+        state=(TREE/'xbmc/utils/DVBridgeDiagnosticState.h').read_text()
+        state=state.replace(body(state,'inline bool DiagnosticsEnabled()'),'{ return testEnabled; }')
+        state=state.replace(body(state,'inline uint64_t DiagnosticNowMs()'),'{ return testNow; }')
+        state=state.replace('namespace DVBRIDGE\n{','namespace DVBRIDGE\n{\ninline bool testEnabled=true; inline uint64_t testNow=1000;',1)
+        audit=function('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp','void CDVBridgeGLES::PreparedAudit(')
+        audit=audit.replace('void CDVBridgeGLES::','void ')
+        audit=audit.replace('std::string_view sdr)', 'std::string_view sdr = {})')
+        program=r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+namespace DVBRIDGE {
+struct Binding {uint64_t stream=1,picture=1,revision=3;};
+struct StreamTelemetry {inline static unsigned stages=0;static void NativeStage(Binding,const char*){++stages;}};
+}
+struct CDVBridgeGLES {
+ DVBRIDGE::Binding m_pendingIdentity,m_pendingBinding;
+ static constexpr int DVBRIDGE_MODE_SDR=7;
+ int m_auditPreparedSerial=0,m_auditSerial=17,m_effectiveMode=3;
+ DVBRIDGE::DiagnosticFailures m_auditPrepared;
+ @AUDIT@
+};
+int main(){
+ using namespace DVBRIDGE;DiagnosticOpen();ObserveDiagnostic(1,1,3,17,"prepare",true,false);
+ for(unsigned i=0;i<24;++i)assert(DiagnosticLog(LOGINFO,"startup {}",i));
+ CDVBridgeGLES r;r.PreparedAudit();
+ assert(r.m_auditPreparedSerial==0&&CLog::lines.size()==24&&StreamTelemetry::stages==1);
+ testNow+=30001;r.PreparedAudit();assert(r.m_auditPreparedSerial==17&&CLog::lines.size()==25);
+ for(unsigned i=0;i<1000;++i){r.PreparedAudit();}assert(CLog::lines.size()==25);
+ ++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==18&&CLog::lines.size()==26);
+ testEnabled=false;++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==18&&CLog::lines.size()==26);
+ testEnabled=true;CLog::throws=true;r.PreparedAudit();assert(r.m_auditPreparedSerial==18);
+ CLog::throws=false;testNow+=30001;r.PreparedAudit();assert(r.m_auditPreparedSerial==19&&CLog::lines.size()==27);
+ @SDR_LIMITS@
+}
+'''.replace('@AUDIT@',audit)
+        limits=r'''
+ r.m_effectiveMode=7;++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==19);
+ testNow+=650;r.PreparedAudit(" sdr=2,1,1,1,0,0,-1");assert(r.m_auditPreparedSerial==20&&CLog::lines.size()==28);
+ ++r.m_auditSerial;testNow+=30001;r.PreparedAudit(std::string(650,'x'));assert(r.m_auditPreparedSerial==20&&CLog::lines.size()==28);
+ testNow+=30001;r.PreparedAudit(std::string(560,'x'));assert(r.m_auditPreparedSerial==21&&CLog::lines.size()==29);
+ assert(CLog::lines.back().find("[truncated]")==std::string::npos);
+ for(unsigned i=0;i<1000;++i){r.PreparedAudit(" sdr=retry");}assert(CLog::lines.size()==29);
+'''
+        program=program.replace('@SDR_LIMITS@',limits if 'std::string_view sdr' in audit else '')
+        self.run_cpp(program,{'utils/DVBridgeDiagnosticState.h':state,
+            'utils/DVBridgeDiagnosticLog.h':(TREE/'xbmc/utils/DVBridgeDiagnosticLog.h').read_text(),'utils/log.h':r'''
+#pragma once
+#include <fmt/format.h>
+#include <string>
+#include <vector>
+#include <stdexcept>
+constexpr int LOGINFO=1,LOGWARNING=2,LOGERROR=3;
+struct CLog {
+ inline static bool throws=false;inline static std::vector<std::string>lines;
+ template<class...T>static void Log(int,fmt::format_string<T...>f,T&&...a){if(throws)throw std::runtime_error("offline");lines.push_back(fmt::format(f,std::forward<T>(a)...));}
+};
+'''})
+
     def test_renderer_counters_survive_normal_budget_and_bound_real_reset_lifetime(self):
         from test_native_video_source import body
         relative='xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp'
