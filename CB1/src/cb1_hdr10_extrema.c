@@ -4,7 +4,11 @@
 #include <libplacebo/dispatch.h>
 #include <libplacebo/shaders/custom.h>
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl3.h>
+#endif
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>

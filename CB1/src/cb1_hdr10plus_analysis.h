@@ -3,7 +3,11 @@
 #define CB1_HDR10PLUS_ANALYSIS_H
 #include <libplacebo/gpu.h>
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 #include "dvbridge_policy.h"
 #include "cb1_hdr10plus.h"
 #ifdef __cplusplus

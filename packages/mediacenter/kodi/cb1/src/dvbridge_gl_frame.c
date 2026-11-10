@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Map native decoded planes to renderer textures while preserving layout and bit depth. */
 #include "dvbridge_gl_frame.h"
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl3.h>
+#endif
 #include <string.h>
 
 void dvbridge_gl_frame_set_chroma(struct dvbridge_gl_frame *frame, enum pl_chroma_location location)
