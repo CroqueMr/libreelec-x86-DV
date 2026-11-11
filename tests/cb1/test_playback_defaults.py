@@ -90,12 +90,13 @@ struct CDVPlaybackModes {
  static bool MenuEnabled(){return true;}static StreamHdrType SourceType(){return source;}
  static bool ShowMenu(bool settingsMenu=false) MENU
  static std::string DefaultPlaybackLabel();
+ static std::string LldvPreferenceLabel(){return "LLDV format";}
 };
 LABEL
 struct Button {std::string label;std::string GetLabel2(){return label;}} button;
 enum class SettingType{Action};
-std::string actionValue(){std::string strText;auto m_pButton=&button;
- auto m_pSetting=std::make_shared<CSetting>();m_pSetting->id="dvbridge.playback";
+std::string actionValue(const char* setting="dvbridge.playback"){std::string strText;auto m_pButton=&button;
+ auto m_pSetting=std::make_shared<CSetting>();m_pSetting->id=setting;
  switch(SettingType::Action){case SettingType::Action: ACTION}return strText;}
 bool choose(StreamHdrType type,int index,bool settings=false){CDVPlaybackModes::source=type;dialog.selected=index;return CDVPlaybackModes::ShowMenu(settings);}
 int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::string scenario=argv[1];
@@ -140,6 +141,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   for(int method=0;method<3;++method){stored->ints["dvbridge.hdr10method"]=method;
    assert(actionValue()==std::to_string(method==0?40822:method==1?40823:40922));}
   stored->ints["dvbridge.outputmode"]=2;assert(actionValue()=="40814");
+  assert(actionValue("dvbridge.lldvformat")=="LLDV format");
  }
  if(scenario=="legacy-toggles"){
   auto before=FrameOutputSettings();stored->ints["dvbridge.encodedactivearea"]=1;stored->ints["dvbridge.masterfallback"]=1;

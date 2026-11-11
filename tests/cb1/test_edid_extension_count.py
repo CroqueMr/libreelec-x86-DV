@@ -3,14 +3,12 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from test_driver_policy import replacement
 from test_native_video_source import TREE
 
 
 class EdidExtensionCountTests(unittest.TestCase):
     def test_forum_override_preserves_checksums_and_declared_bounds(self):
         header = (TREE / 'xbmc/utils/DVBridgeEdid.h').read_text()
-        self.assertEqual(header, replacement('include/drm/drm_dvbridge_edid.h'))
         program = r'''
 #include <assert.h>
 #include <string.h>

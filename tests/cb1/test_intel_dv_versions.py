@@ -41,7 +41,7 @@ struct drm_connector{struct drm_display_info display_info;struct drm_property_bl
 struct intel_connector{struct drm_connector base;struct dvbridge_sink_caps dv_sink_caps;};
 #define to_intel_connector(p) ((struct intel_connector *)(p))
 struct drm_connector_state{struct drm_connector*connector;
- struct drm_property_blob*hdr10plus_metadata;bool dv_lab_standard;};
+ struct drm_property_blob*hdr10plus_metadata;bool dv_lab_standard;unsigned lldv_format;};
 #define to_intel_digital_connector_state(p) (p)
 #define intel_dv_lab_avi_vic drm_dvbridge_avi_vic
 #define DRM_MODE_FLAG_3D_MASK 8
@@ -94,6 +94,15 @@ int main(void){
  }
  crtc.hw.adjusted_mode.flags=DRM_MODE_FLAG_3D_MASK;
  assert(!intel_hdmi_compute_hdmi_infoframe(&encoder,&crtc,&state));
+ crtc.hw.adjusted_mode=(struct drm_display_mode){.vic=93};
+ state.dv_lab_standard=false;
+ golden[3]=0x4a;golden[7]=3;
+ for(state.lldv_format=1;state.lldv_format<=2;state.lldv_format++){
+  assert(intel_hdmi_compute_hdmi_infoframe(&encoder,&crtc,&state));
+  assert(hdmi_dolby_vendor_infoframe_pack(&crtc.infoframes.hdmi.vendor.dolby,
+    wire,sizeof(wire))==31);
+  assert(!memcmp(wire,golden,sizeof(wire)));
+ }
 }
 '''.replace("@@PACKERS@@","\n".join(function(hdmi,n) for n in names))
         program=program.replace("@@OWNER@@",function(intel,"intel_hdmi_compute_hdmi_infoframe"))
