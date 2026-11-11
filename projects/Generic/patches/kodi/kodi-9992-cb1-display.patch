@@ -3749,6 +3749,36 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (rendered || videoLayer)
    {
+@@ -144,6 +611,29 @@
+     bool async = !videoLayer && m_eglFence;
+     if (rendered)
+     {
++      if (GetGfxContext().GetStereoMode() == RenderStereoMode::SPLIT_HORIZONTAL)
++      {
++        const auto mode = m_DRM->GetCurrentMode();
++        if (mode.iBlanking > 0 && mode.iScreenHeight == m_nHeight)
++        {
++          // The two eye passes leave HDMI active space untouched.
++          GLint scissor[4];
++          GLfloat clearColor[4];
++          glGetIntegerv(GL_SCISSOR_BOX, scissor);
++          glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
++          const bool scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
++          if (!scissorEnabled)
++            glEnable(GL_SCISSOR_TEST);
++          glScissor(0, (m_nHeight - mode.iBlanking) / 2, m_nWidth, mode.iBlanking);
++          glClearColor(0, 0, 0, 1);
++          glClear(GL_COLOR_BUFFER_BIT);
++          glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
++          glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
++          if (!scissorEnabled)
++            glDisable(GL_SCISSOR_TEST);
++        }
++      }
++
+ #if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
+       if (async)
+       {
 @@ -175,27 +642,153 @@
  #endif
      }
