@@ -1,0 +1,132 @@
+Subject: [PATCH] VideoPlayer: shift bitmap subtitles with subtitleshiftup/down
+
+With "Bitmap subtitle position" set to "Manual offset", the
+subtitleshiftup and subtitleshiftdown actions now step the bitmap
+subtitle vertical offset while a PGS, VobSub or DVB subtitle stream
+plays. The renderer already applies a changed setting on the next
+frame, so the visible subtitle moves at once. Text subtitles keep
+their own positioning.
+
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 878b04f..2d6367c 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26279,7 +26279,7 @@ msgid "Bitmap subtitle vertical offset"
+ msgstr ""
+ 
+ msgctxt "#40955"
+-msgid "Positive values move bitmap subtitles upwards. The complete block stays within the screen. Zero preserves the chosen position."
++msgid "Positive values move bitmap subtitles upwards. The complete block stays within the screen. Zero preserves the chosen position. With Manual offset, the subtitleshiftup and subtitleshiftdown actions change this value during playback."
+ msgstr ""
+ 
+ msgctxt "#40956"
+diff --git a/xbmc/video/PlayerController.cpp b/xbmc/video/PlayerController.cpp
+index 88bddc1..19a2975 100644
+--- a/xbmc/video/PlayerController.cpp
++++ b/xbmc/video/PlayerController.cpp
+@@ -41,10 +41,46 @@
+ #include "windowing/WinSystem.h"
+ 
+ #include <algorithm>
++#include <optional>
++
++#ifdef HAVE_DVBRIDGE
++extern "C"
++{
++#include <libavcodec/codec_desc.h>
++}
++#endif
+ 
+ using namespace KODI;
+ using namespace UTILS;
+ 
++#ifdef HAVE_DVBRIDGE
++namespace
++{
++constexpr int BITMAP_PLACEMENT_MANUAL = 5;
++constexpr int BITMAP_OFFSET_LABEL = 40954;
++
++//! Steps subtitles.bitmapoffset while a bitmap subtitle stream plays with Manual offset placement.
++//! Returns the new offset, or nothing when text subtitle positioning applies instead.
++std::optional<int> ShiftBitmapSubtitles(const CApplicationPlayer& player, int steps)
++{
++  const auto settingsComponent = CServiceBroker::GetSettingsComponent();
++  const auto options = settingsComponent->GetSubtitlesSettings()->GetBitmapOptions();
++  if (options.placement != BITMAP_PLACEMENT_MANUAL)
++    return {};
++
++  SubtitleStreamInfo info;
++  player.GetSubtitleStreamInfo(CURRENT_STREAM, info);
++  const AVCodecDescriptor* codec = avcodec_descriptor_get_by_name(info.codecName.c_str());
++  if (!codec || !(codec->props & AV_CODEC_PROP_BITMAP_SUB))
++    return {};
++
++  const int offset = std::clamp(options.offset + steps, -60, 60);
++  settingsComponent->GetSettings()->SetInt("subtitles.bitmapoffset", offset);
++  return offset;
++}
++} // namespace
++#endif
++
+ CPlayerController::CPlayerController()
+ {
+   MOVING_SPEED::EventCfg eventCfg{100.0f, 300.0f, 200};
+@@ -400,6 +436,14 @@ bool CPlayerController::OnAction(const CAction &action)
+ 
+       case ACTION_SUBTITLE_VSHIFT_UP:
+       {
++#ifdef HAVE_DVBRIDGE
++        if (const auto offset = ShiftBitmapSubtitles(*appPlayer, 1))
++        {
++          ShowSlider(action.GetID(), BITMAP_OFFSET_LABEL, static_cast<float>(*offset), -60.0f, 1.0f,
++                     60.0f);
++          return true;
++        }
++#endif
+         const auto settings{CServiceBroker::GetSettingsComponent()->GetSubtitlesSettings()};
+         SUBTITLES::Align subAlign{settings->GetAlignment()};
+         if (subAlign != SUBTITLES::Align::BOTTOM_OUTSIDE && subAlign != SUBTITLES::Align::MANUAL)
+@@ -430,6 +474,14 @@ bool CPlayerController::OnAction(const CAction &action)
+ 
+       case ACTION_SUBTITLE_VSHIFT_DOWN:
+       {
++#ifdef HAVE_DVBRIDGE
++        if (const auto offset = ShiftBitmapSubtitles(*appPlayer, -1))
++        {
++          ShowSlider(action.GetID(), BITMAP_OFFSET_LABEL, static_cast<float>(*offset), -60.0f, 1.0f,
++                     60.0f);
++          return true;
++        }
++#endif
+         const auto settings{CServiceBroker::GetSettingsComponent()->GetSubtitlesSettings()};
+         SUBTITLES::Align subAlign{settings->GetAlignment()};
+         if (subAlign != SUBTITLES::Align::BOTTOM_OUTSIDE && subAlign != SUBTITLES::Align::MANUAL)
+@@ -650,6 +702,7 @@ bool CPlayerController::NextAudioStream()
+ void CPlayerController::ShowSlider(int action, int label, float value, float min, float delta, float max, bool modal)
+ {
+   m_sliderAction = action;
++  m_sliderLabel = label;
+   if (modal)
+     CGUIDialogSlider::ShowAndGetInput(
+         CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(label), value, min, delta,
+@@ -673,7 +726,8 @@ void CPlayerController::OnSliderChange(void *data, CGUISliderControl *slider)
+   else if (m_sliderAction == ACTION_SUBTITLE_VSHIFT_UP ||
+            m_sliderAction == ACTION_SUBTITLE_VSHIFT_DOWN)
+   {
+-    std::string strValue = StringUtils::Format("{:.0f}px", slider->GetFloatValue());
++    std::string strValue =
++        StringUtils::Format("{:.0f}{}", slider->GetFloatValue(), m_sliderLabel == 277 ? "px" : "");
+     slider->SetTextValue(strValue);
+   }
+   else if (m_sliderAction == ACTION_VOLAMP_UP ||
+diff --git a/xbmc/video/PlayerController.h b/xbmc/video/PlayerController.h
+index 731b52c..695df78 100644
+--- a/xbmc/video/PlayerController.h
++++ b/xbmc/video/PlayerController.h
+@@ -58,5 +58,6 @@ private:
+   bool NextAudioStream();
+ 
+   int m_sliderAction = 0; ///< \brief set to the action id for a slider being displayed \sa ShowSlider
++  int m_sliderLabel = 0; ///< \brief label id of the slider being displayed \sa ShowSlider
+   KODI::UTILS::MOVING_SPEED::CMovingSpeed m_movingSpeed;
+ };
