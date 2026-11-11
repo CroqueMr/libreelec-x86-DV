@@ -5,6 +5,7 @@ foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
 target_link_options(hdr10plus_analysis PRIVATE "-Wl,--wrap=glClientWaitSync")
+target_link_options(player_led_pack PRIVATE "-Wl,--wrap=glDispatchCompute")
 set_tests_properties(hdr10plus_analysis PROPERTIES ENVIRONMENT
   "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=halt_on_error=1")
 target_include_directories(trim_contract PRIVATE "${DVBRIDGE_SOURCE_DIR}")

@@ -106,10 +106,17 @@ static bool render_sdr_direct(struct dvbridge_renderer *r,
 
 #include "cb1_processing.h"
 
+struct player_led_compute {
+    GLuint program, sampler;
+    GLint matrix, scale, flip, padding;
+    bool tried;
+};
+
 struct dvbridge_renderer {
     pl_gpu gpu;
     pl_renderer renderer;
     pl_dispatch player_led_dispatch;
+    struct player_led_compute player_led_compute;
     int target_width, target_height;
     bool target_identity;
     dvbridge_spatial_fit spatial_fit;
@@ -953,6 +960,9 @@ static void renderer_free(struct dvbridge_renderer *r)
     pl_tex_destroy(r->gpu, &r->ai_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_input);
     dve_release_images(r);
+    glDeleteProgram(r->player_led_compute.program);
+    if (r->player_led_compute.sampler)
+        glDeleteSamplers(1, &r->player_led_compute.sampler);
     pl_dispatch_destroy(&r->player_led_dispatch);
     pl_renderer_destroy(&r->renderer);
     pl_shader_obj_destroy(&r->creative_state);
@@ -1971,6 +1981,138 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     return CB1_MASTER_READY;
 }
 
+#define PLAYER_LED_COLOR_GLSL \
+    CB1_CARRIER_GLSL \
+    "const vec3 lldv_luma=vec3(.2627,.6780,.0593);\n" \
+    "vec2 lldv_chroma(vec3 left,vec3 center,vec3 right){\n" \
+    "    vec3 rgb=(left+2.0*center+right)*.25;\n" \
+    "    float y=dot(rgb,lldv_luma);\n" \
+    "    return vec2((rgb.b-y)/1.8814,(rgb.r-y)/1.4746);\n" \
+    "}\n" \
+    "vec4 lldv_code(float y,float c,uint padding){\n" \
+    "    vec2 limited=vec2(256.0+3504.0*clamp(y,0.0,1.0),2048.0+3584.0*clamp(c,-.5,.5));\n" \
+    "    return cb1_carrier(uvec2(floor(limited/float(1u<<padding)+.5))<<padding);\n" \
+    "}\n"
+
+static bool player_led_compute_init(struct player_led_compute *c, pl_gpu gpu)
+{
+    if (c->tried)
+        return c->program != 0;
+    c->tried = true;
+
+    /* Reuse libplacebo's stable PQ realization in the GLES compute stage. */
+    pl_shader pq = pl_shader_alloc(NULL, pl_shader_params(.gpu=gpu,.cb1_stable_pq=true));
+    if (!pq)
+        return false;
+    pl_shader_delinearize(pq, &pl_color_space_hdr10);
+    const struct pl_shader_res *function = pl_shader_finalize(pq);
+    if (!function || function->num_variables || function->num_descriptors ||
+        function->num_vertex_attribs || function->num_constants ||
+        function->input != PL_SHADER_SIG_COLOR || function->output != PL_SHADER_SIG_COLOR) {
+        pl_shader_free(&pq);
+        return false;
+    }
+    const char *parts[] = {
+        "#version 310 es\nprecision highp float;precision highp int;\n"
+        "layout(local_size_x=16,local_size_y=8) in;\n"
+        "layout(binding=0) uniform highp sampler2D lldv_input;\n"
+        "layout(rgba8,binding=0) uniform highp writeonly image2D lldv_output;\n"
+        "uniform mat3 lldv_matrix;uniform float lldv_scale;uniform int lldv_flip;uniform uint lldv_padding;\n",
+        function->glsl,
+        PLAYER_LED_COLOR_GLSL
+        "vec3 lldv_sample(ivec2 pos){\n"
+        "    vec3 rgb=texelFetch(lldv_input,pos,0).rgb;\n"
+        "    return ", function->name,
+        "(vec4(clamp(lldv_matrix*rgb,0.0,1.0)*lldv_scale,1.0)).rgb;\n"
+        "}\n"
+        "void main(){\n"
+        "    ivec2 out_pos=ivec2(gl_GlobalInvocationID.xy)*ivec2(2,1);\n"
+        "    ivec2 size=textureSize(lldv_input,0);\n"
+        "    if(any(greaterThanEqual(out_pos,size)))return;\n"
+        "    ivec2 pos=out_pos;if(lldv_flip!=0)pos.y=size.y-1-pos.y;\n"
+        "    vec3 left=lldv_sample(ivec2(max(pos.x-1,0),pos.y));\n"
+        "    vec3 center=lldv_sample(pos),right=lldv_sample(pos+ivec2(1,0));\n"
+        "    vec2 c=lldv_chroma(left,center,right);\n"
+        "    imageStore(lldv_output,out_pos,lldv_code(dot(center,lldv_luma),c.x,lldv_padding));\n"
+        "    imageStore(lldv_output,out_pos+ivec2(1,0),lldv_code(dot(right,lldv_luma),c.y,lldv_padding));\n"
+        "}\n",
+    };
+    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+    GLint compiled = 0, linked = 0;
+    if (shader) {
+        glShaderSource(shader, sizeof(parts)/sizeof(*parts), parts, NULL);
+        glCompileShader(shader);
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    }
+    pl_shader_free(&pq);
+
+    GLuint program = compiled ? glCreateProgram() : 0;
+    if (program) {
+        glAttachShader(program, shader);
+        glLinkProgram(program);
+        glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    }
+    glDeleteShader(shader);
+    if (linked) {
+        glGenSamplers(1, &c->sampler);
+        glSamplerParameteri(c->sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glSamplerParameteri(c->sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        c->matrix = glGetUniformLocation(program, "lldv_matrix");
+        c->scale = glGetUniformLocation(program, "lldv_scale");
+        c->flip = glGetUniformLocation(program, "lldv_flip");
+        c->padding = glGetUniformLocation(program, "lldv_padding");
+    }
+    if (glGetError() != GL_NO_ERROR || !linked || !c->sampler ||
+        c->matrix < 0 || c->scale < 0 || c->flip < 0 || c->padding < 0) {
+        glDeleteProgram(program);
+        if (c->sampler)
+            glDeleteSamplers(1, &c->sampler);
+        c->sampler = 0;
+        return false;
+    }
+    c->program = program;
+    return true;
+}
+
+static bool player_led_compute_pack(const struct player_led_compute *c, GLuint src, GLuint dst,
+    int w, int h, const float *matrix, float scale, int flip, unsigned padding)
+{
+    GLint active, texture, sampler, program, image, level, layered, layer, access, format;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+    glGetIntegeri_v(GL_IMAGE_BINDING_NAME, 0, &image);
+    glGetIntegeri_v(GL_IMAGE_BINDING_LEVEL, 0, &level);
+    glGetIntegeri_v(GL_IMAGE_BINDING_LAYERED, 0, &layered);
+    glGetIntegeri_v(GL_IMAGE_BINDING_LAYER, 0, &layer);
+    glGetIntegeri_v(GL_IMAGE_BINDING_ACCESS, 0, &access);
+    glGetIntegeri_v(GL_IMAGE_BINDING_FORMAT, 0, &format);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+    glGetIntegerv(GL_SAMPLER_BINDING, &sampler);
+
+    glUseProgram(c->program);
+    glUniformMatrix3fv(c->matrix, 1, GL_FALSE, matrix);
+    glUniform1f(c->scale, scale);
+    glUniform1i(c->flip, flip);
+    glUniform1ui(c->padding, padding);
+    glBindTexture(GL_TEXTURE_2D, src);
+    glBindSampler(0, c->sampler);
+    glBindImageTexture(0, dst, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+    bool ok = glGetError() == GL_NO_ERROR;
+    if (ok) {
+        glDispatchCompute((w/2+15)/16, (h+7)/8, 1);
+        glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT |
+                        GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        ok = glGetError() == GL_NO_ERROR;
+    }
+    glBindImageTexture(0, image, level, layered, layer, access, format);
+    glBindSampler(0, sampler);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUseProgram(program);
+    glActiveTexture(active);
+    return glGetError() == GL_NO_ERROR && ok;
+}
+
 bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
     unsigned bits, bool flip_y)
@@ -2020,13 +2162,6 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
         draw_buffer != GL_COLOR_ATTACHMENT0 || (GLuint) attachment != dst_name || level)
         return false;
 
-    if (!r->player_led_dispatch) {
-        r->player_led_dispatch = pl_dispatch_create(NULL, r->gpu);
-        if (!r->player_led_dispatch)
-            return false;
-        pl_dispatch_mark_cb1_stable_pq(r->player_led_dispatch, true);
-    }
-
     enum pl_color_primaries prim = policy->tv.gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 :
         policy->tv.gamut == DVBRIDGE_GAMUT_P3_D65 ? PL_COLOR_PRIM_DISPLAY_P3 : PL_COLOR_PRIM_BT_2020;
     /* An exact identity keeps zero channels at zero before the PQ curve. */
@@ -2041,6 +2176,28 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     const float scale = policy->tv.peak_nits / PL_COLOR_SDR_WHITE;
     const int flip = flip_y;
     const unsigned padding = 12 - bits;
+    /* GLES image stores require immutable textures. Mutable framebuffer
+     * targets keep the raster pass with the same layout and quantization. */
+    if (r->gpu->glsl.gles && r->gpu->glsl.version >= 310) {
+        GLint bound, immutable;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+        glBindTexture(GL_TEXTURE_2D, dst_name);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_IMMUTABLE_FORMAT, &immutable);
+        glBindTexture(GL_TEXTURE_2D, bound);
+        if (glGetError() != GL_NO_ERROR)
+            return false;
+        if (immutable && player_led_compute_init(&r->player_led_compute, r->gpu))
+            return player_led_compute_pack(&r->player_led_compute, src_name, dst_name,
+                src->w, src->h, &columns[0][0], scale, flip, padding);
+    }
+
+    if (!r->player_led_dispatch) {
+        r->player_led_dispatch = pl_dispatch_create(NULL, r->gpu);
+        if (!r->player_led_dispatch)
+            return false;
+        pl_dispatch_mark_cb1_stable_pq(r->player_led_dispatch, true);
+    }
+
     const struct pl_shader_var vars[] = {
         {.var=pl_var_mat3("lldv_matrix"), .data=columns, .dynamic=true},
         {.var=pl_var_float("lldv_scale"), .data=&scale, .dynamic=true},
@@ -2060,7 +2217,7 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
         .output_w=src->w, .output_h=src->h,
         .descriptors=&input, .num_descriptors=1, .variables=vars, .num_variables=4,
         .description="LLDV 4:2:2 carrier",
-        .header=CB1_CARRIER_GLSL
+        .header=PLAYER_LED_COLOR_GLSL
             "ivec2 lldv_pos; int lldv_even; vec3 lldv_left, lldv_center;\n"
             "vec3 lldv_sample(int x){\n"
             "    vec3 rgb=texelFetch(lldv_input,ivec2(x,lldv_pos.y),0).rgb;\n"
@@ -2078,16 +2235,10 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     const char *steps[] = {
         "lldv_left=color.rgb; color.rgb=lldv_sample(lldv_even);\n",
         "lldv_center=color.rgb; color.rgb=lldv_sample(lldv_even+1);\n",
-        "const vec3 luma=vec3(.2627,.6780,.0593);\n"
         "bool odd=(lldv_pos.x&1)!=0;\n"
-        "float y=dot(odd?color.rgb:lldv_center,luma);\n"
-        "vec3 filtered=(lldv_left+2.0*lldv_center+color.rgb)*.25;\n"
-        "float fy=dot(filtered,luma);\n"
-        "float c=odd?(filtered.r-fy)/1.4746:(filtered.b-fy)/1.8814;\n"
-        "vec2 limited=vec2(256.0+3504.0*clamp(y,0.0,1.0),"
-                          "2048.0+3584.0*clamp(c,-.5,.5));\n"
-        "uvec2 code=uvec2(floor(limited/float(1u<<lldv_padding)+.5))<<lldv_padding;\n"
-        "color=cb1_carrier(code);\n",
+        "float y=dot(odd?color.rgb:lldv_center,lldv_luma);\n"
+        "vec2 c=lldv_chroma(lldv_left,lldv_center,color.rgb);\n"
+        "color=lldv_code(y,odd?c.y:c.x,lldv_padding);\n",
     };
     for (int i = 0; ok && i < 3; i++) {
         pl_shader_delinearize(shader, &pl_color_space_hdr10);
@@ -2112,6 +2263,8 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     pl_dispatch_abort(dispatch, &shader);
     return ok;
 }
+
+#undef PLAYER_LED_COLOR_GLSL
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
 {

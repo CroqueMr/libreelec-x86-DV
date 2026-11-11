@@ -1,6 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "reference_test.h"
 
+static unsigned compute_dispatches;
+void __real_glDispatchCompute(GLuint x, GLuint y, GLuint z);
+void __wrap_glDispatchCompute(GLuint x, GLuint y, GLuint z)
+{
+    compute_dispatches++;
+    __real_glDispatchCompute(x, y, z);
+}
+
 enum { WIDTH = 8, HEIGHT = 4, SIZE = WIDTH * HEIGHT * 4 };
 
 static double pq(double linear, double peak)
@@ -189,6 +197,67 @@ int main(void)
     assert(dvbridge_pack_player_led_422(renderer, &policy, source, carrier, 10, false));
     read_carrier(gpu, carrier, bytes);
     assert(!memcmp(bytes, baseline, SIZE));
+
+    assert(!compute_dispatches);
+    if (gpu->glsl.gles && gpu->glsl.version >= 310) {
+        GLuint packed_name, other_image, sampler;
+        glGenTextures(1, &packed_name);
+        glBindTexture(GL_TEXTURE_2D, packed_name);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, WIDTH, HEIGHT);
+        pl_tex packed = pl_opengl_wrap(gpu, pl_opengl_wrap_params(
+            .width=WIDTH,.height=HEIGHT,.texture=packed_name,
+            .target=GL_TEXTURE_2D,.iformat=GL_RGBA8));
+        assert(packed);
+        glGenTextures(1, &other_image);
+        glBindTexture(GL_TEXTURE_2D, other_image);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, WIDTH, HEIGHT);
+        glBindImageTexture(0, other_image, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
+        glGenSamplers(1, &sampler);
+        glBindSampler(0, sampler);
+        glActiveTexture(GL_TEXTURE1);
+        assert(glGetError() == GL_NO_ERROR);
+
+        unsigned before_compute = compute_dispatches;
+        assert(dvbridge_pack_player_led_422(renderer, &policy, source, packed, 10, false));
+        assert(compute_dispatches == before_compute + 1);
+        GLint binding;
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &binding);
+        assert(binding == GL_TEXTURE1);
+        glGetIntegeri_v(GL_IMAGE_BINDING_NAME, 0, &binding);
+        assert((GLuint)binding == other_image);
+        glGetIntegeri_v(GL_IMAGE_BINDING_ACCESS, 0, &binding);
+        assert(binding == GL_READ_ONLY);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+        assert((GLuint)binding == other_image);
+        glGetIntegerv(GL_SAMPLER_BINDING, &binding);
+        assert((GLuint)binding == sampler);
+        read_carrier(gpu, packed, bytes);
+        assert(!memcmp(bytes, baseline, SIZE));
+
+        policy.tv.gamut = DVBRIDGE_GAMUT_P3_D65;
+        policy.tv.peak_nits = 1000;
+        assert(dvbridge_pack_player_led_422(renderer, &policy, source, packed, 12, true));
+        assert(compute_dispatches == before_compute + 2);
+        read_carrier(gpu, packed, bytes);
+        reference_codes(pixels, p3, 1000, 12, codes);
+        compare(bytes, codes, true);
+
+        policy.tv.gamut = DVBRIDGE_GAMUT_BT709;
+        policy.tv.peak_nits = 100;
+        assert(dvbridge_pack_player_led_422(renderer, &policy, source, packed, 10, false));
+        assert(compute_dispatches == before_compute + 3);
+        read_carrier(gpu, packed, bytes);
+        reference_codes(pixels, bt709, 100, 10, codes);
+        assert(!compare(bytes, codes, false));
+
+        glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
+        glBindSampler(0, 0);
+        glDeleteSamplers(1, &sampler);
+        pl_tex_destroy(gpu, &packed);
+        glDeleteTextures(1, &packed_name);
+        glDeleteTextures(1, &other_image);
+    }
 
     pl_tex_destroy(gpu, &wrong_size);
     pl_tex_destroy(gpu, &carrier);

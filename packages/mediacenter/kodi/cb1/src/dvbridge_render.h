@@ -48,7 +48,8 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *rend
 /* Offline byte carrier. The input must be the successful linear mapping for
  * this policy, fitted to the final even-width raster. The output is a separate
  * linear RGBA8 texture with 12-bit fields and 10 or 12 useful bits. Both
- * surfaces are GLES 2D textures on the renderer's current context. No RPU,
+ * surfaces are GLES 2D textures on the renderer's current context. GLES
+ * 3.1 with an immutable carrier allows paired compute packing. No RPU,
  * presentation state or HDMI signalling is generated. Use only on success. */
 bool dvbridge_pack_player_led_422(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
