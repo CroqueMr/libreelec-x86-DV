@@ -50,6 +50,7 @@ struct CDRMAtomic:DRM {
    ++accepted;acceptedBuffer=bo;return true;
  }
  void StageHDR10Plus(int,int){}
+ void SetCB1PresentationPts(double){}
  bool HDR10PlusActive(){return false;}
 };
 struct CDVBridgeState {
@@ -76,6 +77,7 @@ struct Window {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
  CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
+ double m_preparedRenderPts{};
  std::optional<uint64_t>m_hdrDeepColorPrevious;
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
  bool PrepareOrdinaryDVOutput(void*){return true;}

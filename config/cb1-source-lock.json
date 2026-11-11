@@ -57,7 +57,7 @@
     "tests/cb1/test_nvidia_refresh_cycle.py": "5b54bc8d6f299fe2146e59540076f7dd0e80ffc086cf29c08508009318b91720",
     "tests/cb1/test_gui_viewport.py": "adb73580900dd2ffe6aa39a27b4237ed56a24283d608548e2a2d933e62f03042",
     "tests/cb1/test_gui_composite_clip.py": "af4b58fc4a7295fde74806dd80acfb7b372f67362dd93e2787349fbafcce463d",
-    "tests/cb1/test_nvidia_buffer_restore.py": "2c5e05fb05e3e1a5e8000b3fcc1d11499e7722aef871d232cdd24dd6eff9eb15",
+    "tests/cb1/test_nvidia_buffer_restore.py": "f9f4faf0894ff567d603fc060f75dc7598dd4d330379519e3dae8b6ae2546195",
     "tests/cb1/test_sdr_output_restore.py": "17bcd1ce2589233a924650f0dca1f1efd422a8529010f27b5449e9edd737bd70",
     "tests/cb1/test_nvidia_transitions.py": "266bf0147142144b2697fb906c37f3a0166badf30139626c59c87b286cf21089",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
