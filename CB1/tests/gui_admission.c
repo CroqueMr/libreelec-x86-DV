@@ -59,7 +59,7 @@ int main(void)
             assert(packets && count);
             assert(dve_pack_overlay(r,input,output,false,packets,count,false));
         }else{
-            assert(ai_render_pixels(r,&source,geometry,output,false,&overlay));
+            assert(ai_render_pixels(r,&source,geometry,output,false,&overlay,NULL));
         }
         assert(seen && optimized==(variant==1?seen:0));
     }

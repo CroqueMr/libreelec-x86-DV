@@ -57,7 +57,7 @@ static void test_p5_ai_transition(struct reference_gpu *g,struct dvbridge_render
         assert(ensure_rgb(current));
         dvbridge_renderer_reset(current);
         dvbridge_destroy(current->context);current->context=dvbridge_create();assert(current->context);
-        assert(ai_render_pixels(current,&ai,screen,NULL,false,NULL));
+        assert(ai_render_pixels(current,&ai,screen,NULL,false,NULL,NULL));
         dvbridge_renderer_reset(current);
         assert(dvbridge_render_master_reference(current,&cropped,m,bytes,0,NAN,placed,output,false,NULL)==CB1_MASTER_READY);
         GLuint fbo;glGenFramebuffers(1,&fbo);glBindFramebuffer(GL_FRAMEBUFFER,fbo);
