@@ -12,7 +12,7 @@ struct dvbridge_native_overlay;
 
 struct cb1_ai_result;
 #define DVBRIDGE_L2_TRIMS_API 1
-/* Next-picture authored Standard/Master output only (default false).
+/* Next-picture Standard/Master metadata and offline player-led mapping.
  * Reconstruction still consumes the original metadata. Adaptive/AI clears it. */
 void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *renderer,bool disabled);
 #define DVBRIDGE_CMV40_API 1
@@ -39,7 +39,8 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     const struct dvbridge_native_overlay *overlay);
 /* Offline source-size RGBA32F. RGB is linear in the target gamut, with
  * 1.0 at policy->tv.peak_nits. Pixels and applied metadata are usable only on
- * CB1_MASTER_READY. Use a dedicated renderer and reset it after a GPU failure. */
+ * CB1_MASTER_READY. CM4 and L2 options affect mapping only. Use a dedicated
+ * renderer and reset it after a GPU failure. */
 enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,

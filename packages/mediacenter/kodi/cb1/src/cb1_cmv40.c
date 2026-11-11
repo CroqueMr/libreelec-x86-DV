@@ -98,6 +98,7 @@ bool cb1_cmv40_output(const struct cb1_cmv40_options *o,const AVDOVIMetadata *m,
         b->level=defaults[i].level;b->dvbridge_raw_magic=0x41424456;
         b->dvbridge_original_length=defaults[i].length;
         memcpy(b->dvbridge_original_bytes,defaults[i].data,defaults[i].length);
+        if(b->level==3)b->l3.min_pq_offset=b->l3.max_pq_offset=b->l3.avg_pq_offset=2048;
     }
     *copy=out;*copy_bytes=capacity;return true;
 }

@@ -438,20 +438,81 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
     texture.initial_data=chroma;
     pl_tex colored=pl_tex_create(gpu,&texture);assert(colored);
     source.planes[1].texture=colored;
-    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
     reference_read(gpu,output,0,0,8,8,pixels);
     for(int c=0;c<3;c++)
         assert(fabsf(pixels[16+c]-player_led_reference_rgb(c,2048,-64,64))<3e-4f);
-    av_dovi_get_ext(m,0)->l1.max_pq=3650;
+    const uint64_t source_hash=applied.source_hash;
+    const uint32_t source_levels=applied.preserved_levels;
+    const struct cb1_cmv40_options always={.mode=CB1_CMV40_ALWAYS};
+    dvbridge_renderer_set_cmv40(renderer,&always);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.cmv40_status==CB1_CMV40_APPEND);
+    assert(applied.cm4 && applied.l3_present && applied.mastering_primaries_present);
+    assert(pl_raw_primaries_equal(&applied.mastering_primaries,pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3)));
+    assert(!(applied.applied_levels&((1u<<3)|(1u<<8))) && m->num_ext_blocks==1);
+    assert(applied.source_hash==source_hash && applied.source_bytes==bytes && applied.preserved_levels==source_levels);
+
     *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3079,
         .trim_slope=3072,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,
         .trim_saturation_gain=2048,.ms_weight=-1}};
+    m->num_ext_blocks=2;
+    av_dovi_get_ext(m,0)->l1.max_pq=3100;
+    void *saved=av_memdup(m,bytes);assert(saved);
+    const struct {
+        struct cb1_cmv40_options options;
+        enum cb1_cmv40_status expected;
+    } choices[]={
+        {{.mode=CB1_CMV40_DISABLED},CB1_CMV40_OFF},
+        {{.mode=CB1_CMV40_NO_L2},CB1_CMV40_NOT_SELECTED},
+        {{.mode=CB1_CMV40_ALWAYS},CB1_CMV40_APPEND},
+        {{.mode=CB1_CMV40_AUTO,.trigger=2000},CB1_CMV40_NOT_SELECTED},
+        {{.mode=CB1_CMV40_AUTO,.trigger=4000},CB1_CMV40_APPEND},
+        {{.mode=CB1_CMV40_AUTO2},CB1_CMV40_NOT_SELECTED},
+        {{.mode=CB1_CMV40_AUTO2,.headroom=20},CB1_CMV40_APPEND},
+    };
+    for(unsigned i=0;i<sizeof(choices)/sizeof(*choices);i++){
+        dvbridge_renderer_set_cmv40(renderer,&choices[i].options);
+        assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+        assert(applied.cmv40_status==choices[i].expected && applied.cm4==(choices[i].expected==CB1_CMV40_APPEND));
+        assert((applied.applied_levels&(1u<<2)) && !(applied.applied_levels&(1u<<8)));
+        assert(!memcmp(m,saved,bytes));
+    }
+    dvbridge_renderer_set_cmv40(renderer,&choices[1].options);
+    dvbridge_renderer_set_l2_trims_disabled(renderer,true);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.cmv40_status==CB1_CMV40_NOT_SELECTED && !(applied.applied_levels&(1u<<2)));
+    assert((applied.preserved_levels&(1u<<2)) && !memcmp(m,saved,bytes));
+    av_free(saved);
+    av_dovi_get_ext(m,1)->l2.target_max_pq=0;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_INVALID);
+    av_dovi_get_ext(m,1)->l2.target_max_pq=3079;
+    dvbridge_renderer_set_l2_trims_disabled(renderer,false);
+
+    m->num_ext_blocks=AV_DOVI_MAX_EXT_BLOCKS;
+    dvbridge_renderer_set_cmv40(renderer,NULL);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,original);
+    dvbridge_renderer_set_cmv40(renderer,&always);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.cmv40_status==CB1_CMV40_REJECTED && (applied.applied_levels&(1u<<2)));
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(!memcmp(original,pixels,sizeof(original)));
+    dvbridge_renderer_set_l2_trims_disabled(renderer,true);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.cmv40_status==CB1_CMV40_REJECTED && !(applied.applied_levels&(1u<<2)));
+    assert(m->num_ext_blocks==AV_DOVI_MAX_EXT_BLOCKS);
+    dvbridge_renderer_set_l2_trims_disabled(renderer,false);
+
+    av_dovi_get_ext(m,0)->l1.max_pq=3650;
     *av_dovi_get_ext(m,2)=player_led_l3();
     *av_dovi_get_ext(m,3)=player_led_l8(3072,2048);
     m->num_ext_blocks=4;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.cmv40_status==CB1_CMV40_EXISTING && !applied.mastering_primaries_present);
     assert(applied.applied_levels&(1u<<3));
     assert(applied.l8_coverage.applied==0xdf && !applied.l2_coverage.applied);
+    dvbridge_renderer_set_cmv40(renderer,NULL);
     reference_read(gpu,output,0,0,8,8,original);
     av_dovi_get_ext(m,1)->level=0;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
@@ -572,9 +633,34 @@ static void fel_spatial(void)
     *av_dovi_get_ext(m,1)=player_led_l8(3072,2048);
     m->num_ext_blocks=2;
     float untrimmed=values[0];
-    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
+    struct dvbridge_creative_plan applied;
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,&applied)==CB1_MASTER_READY);
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     assert(fabsf(values[0]-1.25f*untrimmed)<1e-5f);
+    assert(applied.reason==DVBRIDGE_CREATIVE_SPATIAL_UNQUALIFIED && (applied.l8_coverage.preserved&32));
+    float reference[8*8*4];memcpy(reference,values,sizeof(reference));
+    AVDOVIDmData *l8=av_dovi_get_ext(m,1);
+    l8->l8.ms_weight=2048;
+    l8->dvbridge_original_bytes[8]=8;
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,&applied)==CB1_MASTER_READY);
+    reference_read(g.gl->gpu,output,0,0,8,8,values);
+    assert(!memcmp(reference,values,sizeof(reference)) && !(applied.l8_coverage.applied&32));
+
+    AVDOVIDmData *lower=av_dovi_get_ext(m,1),*upper=av_dovi_get_ext(m,2);
+    *lower=(AVDOVIDmData){.level=2,.l2={.target_max_pq=2800,
+        .trim_slope=2048,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,
+        .trim_saturation_gain=2048,.ms_weight=-1}};
+    *upper=*lower;upper->l2.target_max_pq=3500;
+    m->num_ext_blocks=3;
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,&applied)==CB1_MASTER_READY);
+    assert(applied.l2_detail.state==DVBRIDGE_DETAIL_SENTINEL);
+    reference_read(g.gl->gpu,output,0,0,8,8,reference);
+    lower->l2.ms_weight=512;upper->l2.ms_weight=4095;
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,&applied)==CB1_MASTER_READY);
+    assert(applied.l2_detail.state==DVBRIDGE_DETAIL_NUMERIC && !applied.l2_detail.executed);
+    assert(applied.l2_detail.code>512 && applied.l2_detail.code<4095 && (applied.l2_coverage.preserved&32));
+    reference_read(g.gl->gpu,output,0,0,8,8,values);
+    assert(!memcmp(reference,values,sizeof(reference)));
     dvbridge_renderer_destroy(offline);
     /* Matching top-left grids retain Annex B reconstruction and their output phase. */
     frames[0].planes[1].shift_y=frames[1].planes[1].shift_y=-.5f;

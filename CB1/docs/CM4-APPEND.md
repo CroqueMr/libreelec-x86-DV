@@ -1,8 +1,9 @@
 # Optional CM4 metadata
 
-Player > Videos > CB1, Advanced level. Off by default. Applies only to
-authored DV Reference and Master Reference, including the IPT output.
-It does not change reconstructed pixels or synthesize L8 creative trims.
+Player > Videos > CB1, Advanced level. Off by default. The connected circuits
+are authored DV Reference and Master Reference, including the IPT output.
+They append metadata after reconstruction. The offline LLDV engine also uses
+the options for its local display mapping.
 
 | Choice | Append condition on original source metadata |
 | --- | --- |
@@ -31,9 +32,10 @@ presence, before an output copy removes L2. L8 and the reconstruction input
 remain untouched. Enabling either setting deliberately modifies Master output
 metadata; disable both for the original reference output.
 
-Only dynamic metadata changes, with no new pixel pass, queue or HDMI modeset.
-Output changes take effect on the next prepared frame. Player information keeps
-source classification unchanged and reports appended blocks only after the
+For the connected TV-led circuits, only dynamic metadata changes, with no new
+pixel pass, queue or HDMI modeset. Output changes take effect on the next
+prepared frame. Player information keeps source classification unchanged and
+reports appended blocks only after the
 corresponding output frame is committed. Transition diagnostics are rate-limited.
 The TV's visual response, including Auto 2 threshold transitions, requires
 physical display qualification; adding CM4 is not a recovered CM4 grading.
@@ -43,3 +45,13 @@ the original metadata and logs result 6 (rejected). Explicit L2 removal remains
 independent. Malformed original input is never made eligible by either option.
 Diagnostic result codes: 0 off, 1 existing CM4, 2 not selected, 3 missing TV peak,
 4 appended, 5 invalid configuration/input, 6 optional append rejected.
+
+## Offline LLDV
+
+The player-led mapper uses the same decisions with its configured target peak
+and resolves a temporary copy. Neutral L3 leaves L1 values intact. The default
+P3-D65 L9 can affect gamut mapping. Existing CM4 takes precedence and legacy
+L2 remains usable unless explicitly disabled. The original metadata drives
+BL/EL reconstruction and supplies the source identity in the result. The
+offline result exposes the decision in `applied.cmv40_status`. L8 can only come
+from the source.

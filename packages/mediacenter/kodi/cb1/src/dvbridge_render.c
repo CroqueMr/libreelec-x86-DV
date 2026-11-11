@@ -1894,14 +1894,52 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
     return (struct pl_hook_res){.failed=!render->rendered,.output=PL_HOOK_SIG_NONE};
 }
 
+static bool player_led_options(struct player_led_render *render,struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const void *metadata,size_t bytes,bool paired)
+{
+    if(!r->cmv40.mode && !r->l2_trims_disabled)return true;
+    struct cb1_cmv40_options options=r->cmv40;
+    options.tv_peak=policy->tv.peak_nits;
+    struct dvbridge_creative_plan *creative=&render->plan.creative;
+    const uint64_t source_hash=creative->source_hash;
+    const uint32_t source_levels=creative->preserved_levels;
+    bool rejected=false;
+    for(;;){
+        AVDOVIMetadata *effective=NULL;
+        size_t effective_bytes=0;
+        enum cb1_cmv40_status decision;
+        bool ok=cb1_cmv40_output(&options,metadata,bytes,r->l2_trims_disabled,
+                                 &effective,&effective_bytes,&decision);
+        if(ok && effective)
+            ok=cb1_player_led_prepare(&render->plan,&render->cm4,policy,effective,effective_bytes,paired);
+        av_free(effective);
+        if(ok){
+            creative->source_hash=source_hash;
+            creative->source_bytes=bytes;
+            creative->preserved_levels=source_levels;
+            creative->cmv40_status=rejected?CB1_CMV40_REJECTED:decision;
+            return true;
+        }
+        if(!r->l2_trims_disabled){
+            creative->cmv40_status=CB1_CMV40_REJECTED;
+            return true;
+        }
+        if(!options.mode)return false;
+        /* A rejected optional append must not restore explicitly disabled L2. */
+        options=(struct cb1_cmv40_options){0};
+        rejected=true;
+    }
+}
+
 enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
     size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
 {
     if(!r || !source)return CB1_MASTER_INVALID;
     struct player_led_render render={.state=&r->creative_state};
-    if(!cb1_player_led_prepare(&render.plan,&render.cm4,policy,metadata,bytes,
-                               source->enhancement_layer && pts==el_pts))
+    const bool paired=source->enhancement_layer && pts==el_pts;
+    if(!cb1_player_led_prepare(&render.plan,&render.cm4,policy,metadata,bytes,paired) ||
+       !player_led_options(&render,r,policy,metadata,bytes,paired))
         return CB1_MASTER_INVALID;
     render.depth=av_dovi_get_header(metadata)->vdr_bit_depth;
     const struct pl_hook hook={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
