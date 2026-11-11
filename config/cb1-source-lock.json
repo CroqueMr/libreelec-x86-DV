@@ -338,10 +338,10 @@
     "tests/cb1/test_playback_defaults.py": "6be0957eb52413d1af4ecb43e77f415cd75df95745bd03f43fa8edb4a21fe7c7",
     "tests/cb1/test_playback_layout_ownership.py": "a8b321151e6b4270d75dc59858617d214d09d4b8e7a3488a0e60ea25f227e581",
     "tests/cb1/test_strict_playback_admission.py": "dff50603134dc4a2597e82ffad95b115a59bcbc1c698ecc3dd9c967c1e0f71ea",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "916ebb115ae513fffdca67b4bf0d1001d564c10fcbe29a4493581461560ac56e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "76f83ebb3d0ac52e99b958fbe6b86777948e089736d9a981925382026538a19a",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "bbc9b200bca0fbba416a9d15d053cd1d0bee5d7cf207df434eadab7460283a98",
-    "tests/cb1/test_lldv_format.py": "a924381d36773f5dea24f1de6105471529039e25ddaa9a389d06f6b85f658404",
-    "tests/cb1/test_lldv_player_info.py": "d0105687298869b388881e2b006d0da43bafae3b2ca1f8d2794d9a1d200f361e"
+    "tests/cb1/test_lldv_format.py": "772eb9ff951e46f0dd206e2a4821e84712ecf9ec603a281fcd24c2e501655849",
+    "tests/cb1/test_lldv_player_info.py": "dc63255c9f7b2a68fe63bc3722dafdbe04ba5bea259e0222da0802ab486fa557"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

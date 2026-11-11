@@ -97,6 +97,14 @@ int main()
   assert(LldvFormatReason(sink, LldvFormat::Y422_12, LLDV_422, false) == LldvReason::Timing);
   assert(ChooseLldvFormat(sink, LLDV_422, true) == LldvFormat::Y422_10);
   assert(ChooseLldvFormat(sink, 0, true) == LldvFormat::Auto);
+  assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true, true) == LldvReason::Ready);
+  assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, false, true) == LldvReason::Timing);
+  assert(LldvFormatReason(sink, LldvFormat::Y422_12, 0, true, true) == LldvReason::Driver);
+  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), true, true) == LldvFormat::Y422_10);
+  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), false, true) == LldvFormat::Auto);
+  assert(LldvRequiresForcing(LldvFormat::Y422_10, 0, true));
+  assert(!LldvRequiresForcing(LldvFormat::Y422_10, LLDV_422, true));
+  assert(ChooseLldvFormat(sink, LLDV_422, true, true) == LldvFormat::Y422_10);
 
   cta[11] = 0xb5; // Low Latency only, with the extra HDMI interface.
   cta[13] |= 1;  // 10-bit 4:4:4.
@@ -104,6 +112,7 @@ int main()
   assert(sink.status == DV_EDID_LLDV_ONLY && dvbridge_lldv_422(sink));
   assert(dvbridge_lldv_444_bits(sink) == 10);
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb10), true) == LldvFormat::Rgb10);
+  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb10), true, true) == LldvFormat::Rgb10);
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb12), true) == LldvFormat::Auto);
   cta[13] &= ~1;
   cta[12] |= 1; // 12-bit 4:4:4.
@@ -112,7 +121,10 @@ int main()
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y444_12), true) == LldvFormat::Y444_12);
   cta[12] &= ~1;
   cta[9] = 0x20; // Short V1 with the LL bit clear, then set.
-  assert(!dvbridge_lldv_422(caps()));
+  sink = caps();
+  assert(!dvbridge_lldv_422(sink));
+  assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true, true) == LldvReason::Display);
+  assert(ChooseLldvFormat(sink, 0, true, true) == LldvFormat::Auto);
   cta[12] |= 1;
   assert(dvbridge_lldv_422(caps()));
 

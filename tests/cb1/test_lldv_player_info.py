@@ -62,6 +62,17 @@ int main()
   connector.currentTiming=true;
   connector.driverFormats=0;
   assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  connector.forced42210=true; // Advertised capability alone cannot describe the active route.
+  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  connector.activeForced=true;
+  auto forced=PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true);
+  assert(forced && forced->bits==10 && forced->minimumLinkBits==12);
+  connector.active=LldvFormat::Y422_12;
+  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  connector.active=LldvFormat::Y422_10;
+  connector.forced42210=false;
+  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  connector.activeForced=false;
   connector.driverFormats=LLDV_422;
   connector.sink.lldv_422=false;
   assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
