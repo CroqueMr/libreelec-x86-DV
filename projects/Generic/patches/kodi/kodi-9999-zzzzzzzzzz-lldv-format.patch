@@ -1,0 +1,407 @@
+diff --git a/xbmc/utils/DVBridgeEdid.h b/xbmc/utils/DVBridgeEdid.h
+--- a/xbmc/utils/DVBridgeEdid.h
++++ b/xbmc/utils/DVBridgeEdid.h
+@@ -20,7 +20,8 @@
+ struct dvbridge_sink_caps {
+ 	enum dvbridge_edid_status status;
+ 	unsigned int version, offset, length;
+-	bool legacy_vsif, supports_2160p60;
++	bool legacy_vsif, supports_2160p60, lldv_422;
++	unsigned int lldv_444_bits;
+ };
+ 
+ static inline const char *dvbridge_edid_reason(enum dvbridge_edid_status status)
+@@ -38,11 +39,22 @@
+ 	return "unknown";
+ }
+ 
++/* Capabilities are usable only after parsing the complete EDID. */
++static inline bool dvbridge_lldv_422(struct dvbridge_sink_caps caps)
++{
++	return (caps.status == DV_EDID_STANDARD || caps.status == DV_EDID_LLDV_ONLY) && caps.lldv_422;
++}
++
++static inline unsigned int dvbridge_lldv_444_bits(struct dvbridge_sink_caps caps)
++{
++	return dvbridge_lldv_422(caps) ? caps.lldv_444_bits : 0;
++}
++
+ static inline struct dvbridge_sink_caps
+ dvbridge_parse_edid(const unsigned char *edid, size_t size)
+ {
+ 	static const unsigned char magic[8] = {0, 255, 255, 255, 255, 255, 255, 0};
+-	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false};
++	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false, false, 0};
+ 	unsigned int block, i, blocks, found = 0;
+ 
+ 	if (!edid || !size)
+@@ -114,15 +126,19 @@
+ 						return result;
+ 					/* Long V1 and short V1 without LL use HDMI-1.4b
+ 					 * signaling, not the modern Dolby-OUI packet. */
+-					result.legacy_vsif = len == 14 || !(data[7] & 1);
++					result.lldv_422 = len == 11 && (data[7] & 1);
++					result.legacy_vsif = !result.lldv_422;
+ 					result.supports_2160p60 = (data[4] & 2) != 0;
+ 					break;
+ 				case 2:
+ 					if (len < 11)
+ 						return result;
+-					if ((data[6] & 3) < 2) {
+-						result.status = DV_EDID_LLDV_ONLY;
+-						return result;
++					/* V2 includes LL 4:2:2. Its 4:4:4 variant also needs the
++					 * Low Latency HDMI interface bit and a defined depth. */
++					result.lldv_422 = true;
++					if (data[6] & 1) {
++						unsigned int depth = ((data[7] & 1) << 1) | (data[8] & 1);
++						result.lldv_444_bits = depth == 1 ? 10 : depth == 2 ? 12 : 0;
+ 					}
+ 					result.supports_2160p60 = true;
+ 					break;
+@@ -130,7 +146,8 @@
+ 					result.status = DV_EDID_VERSION;
+ 					return result;
+ 				}
+-				result.status = DV_EDID_STANDARD;
++				result.status = result.version == 2 && (data[6] & 3) < 2 ?
++					DV_EDID_LLDV_ONLY : DV_EDID_STANDARD;
+ 			}
+ 			pos += len + 1;
+ 		}
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+new file mode 100644
+--- /dev/null
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -0,0 +1,52 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++
++#include "DVBridgeEdid.h"
++
++namespace DVBRIDGE
++{
++// Stable preference values. A request of zero means off in the driver.
++enum class LldvFormat { Auto, Y422_10, Y422_12, Rgb10, Rgb12, Y444_10, Y444_12 };
++enum class LldvReason { Ready, Edid, Display, Driver, Timing };
++
++constexpr unsigned LldvBit(LldvFormat format)
++{
++  return 1U << static_cast<unsigned>(format);
++}
++
++constexpr unsigned LLDV_422 = LldvBit(LldvFormat::Y422_10) | LldvBit(LldvFormat::Y422_12);
++constexpr LldvFormat LLDV_PREFERRED[] = {LldvFormat::Y422_10, LldvFormat::Rgb10,
++                                        LldvFormat::Y444_10, LldvFormat::Y422_12,
++                                        LldvFormat::Rgb12, LldvFormat::Y444_12};
++
++inline LldvReason LldvFormatReason(dvbridge_sink_caps sink, LldvFormat format,
++                                   unsigned driverFormats, bool currentTiming)
++{
++  if (sink.status != DV_EDID_STANDARD && sink.status != DV_EDID_LLDV_ONLY &&
++      sink.status != DV_EDID_NO_DV)
++    return LldvReason::Edid;
++  const bool y422 = (LldvBit(format) & LLDV_422) != 0;
++  const unsigned bits = format == LldvFormat::Rgb10 || format == LldvFormat::Y444_10 ? 10 : 12;
++  if (y422 ? !dvbridge_lldv_422(sink) : dvbridge_lldv_444_bits(sink) != bits)
++    return LldvReason::Display;
++  if (!(driverFormats & LldvBit(format)))
++    return LldvReason::Driver;
++  return currentTiming ? LldvReason::Ready : LldvReason::Timing;
++}
++
++inline LldvFormat ChooseLldvFormat(dvbridge_sink_caps sink, unsigned driverFormats, bool currentTiming)
++{
++  for (const auto format : LLDV_PREFERRED)
++    if (LldvFormatReason(sink, format, driverFormats, currentTiming) == LldvReason::Ready)
++      return format;
++  return LldvFormat::Auto;
++}
++
++struct LldvConnectorStatus
++{
++  dvbridge_sink_caps sink{};
++  unsigned driverFormats{0};
++  bool currentTiming{false};
++  LldvFormat active{LldvFormat::Auto};
++};
++} // namespace DVBRIDGE
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -7,6 +7,10 @@
+  */
+ 
+ #pragma once
++
++#ifdef HAVE_DVBRIDGE
++#include "utils/DVBridgeLldv.h"
++#endif
+ 
+ #include "VideoLayerBridge.h"
+ #include "messaging/ApplicationMessenger.h"
+@@ -105,6 +109,9 @@
+   bool SetHDR(const VideoPicture* videoPicture) override;
+   bool IsHDRDisplay() override;
+   CHDRCapabilities GetDisplayHDRCapabilities() const override;
++#ifdef HAVE_DVBRIDGE
++  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const;
++#endif
+ 
+   // holding the returned reference defers video plane teardown until it is released
+   std::shared_ptr<CVideoLayerBridge> GetVideoLayerBridge() const { return m_videoLayerBridge; }
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1554,6 +1554,27 @@
+          m_info->SupportsHDRStaticMetadataType1();
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
++{
++  DVBRIDGE::LldvConnectorStatus status;
++  if (const auto* display = GetDisplayInfo())
++    status.sink = display->GetDolbyVisionCaps();
++  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (connector && connector->SupportsProperty("CB1_LLDV_FORMAT"))
++  {
++    status.driverFormats = DVBRIDGE::LLDV_422;
++    const auto* mode = m_DRM->GetSelectedMode();
++    status.currentTiming = mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
++                           mode->clock == 297000 && mode->htotal == 5500 && mode->vtotal == 2250;
++    const auto active = connector->ReadPropertyValue("CB1_LLDV_FORMAT");
++    if (active && *active <= static_cast<unsigned>(DVBRIDGE::LldvFormat::Y422_12))
++      status.active = static_cast<DVBRIDGE::LldvFormat>(*active);
++  }
++  return status;
++}
++#endif
++
+ CHDRCapabilities CWinSystemGbm::GetDisplayHDRCapabilities() const
+ {
+   if (!m_info)
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -27,6 +27,10 @@
+ #include "utils/JSONVariantParser.h"
+ #include "utils/Variant.h"
+ #include "utils/DVBridgeDiagnosticLog.h"
++#include "utils/DVBridgeLldv.h"
++#ifdef HAVE_GBM
++#include "windowing/gbm/WinSystemGbm.h"
++#endif
+ #include "utils/log.h"
+ #include "threads/IRunnable.h"
+ #include <cstdio>
+@@ -259,10 +263,79 @@
+   }
+ }
+ 
++namespace
++{
++int LldvFormatLabel(DVBRIDGE::LldvFormat format)
++{
++  return 41202 + static_cast<int>(format);
++}
++
++DVBRIDGE::LldvConnectorStatus ReadLldvConnector()
++{
++#ifdef HAVE_GBM
++  const auto* gbm = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbm*>(CServiceBroker::GetWinSystem());
++  if (gbm)
++    return gbm->GetLldvConnectorStatus();
++#endif
++  return {};
++}
++
++void ShowLldvFormatMenu()
++{
++  using namespace DVBRIDGE;
++  const auto status = ReadLldvConnector();
++  const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  auto* dialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
++  if (!dialog)
++    return;
++
++  const auto preferred = ChooseLldvFormat(status.sink, status.driverFormats, status.currentTiming);
++  const auto saved = settings->GetInt("dvbridge.lldvformatvalue");
++  dialog->Reset();
++  dialog->SetHeading(strings.Get(41200));
++  dialog->SetUseDetails(true);
++  for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
++  {
++    const auto format = static_cast<LldvFormat>(i);
++    const auto reason = i ? LldvFormatReason(status.sink, format, status.driverFormats, status.currentTiming)
++                         : LldvReason::Ready;
++    const bool disabled = reason != LldvReason::Ready;
++    const auto label = strings.Get(LldvFormatLabel(format));
++    CFileItem item(disabled ? "[COLOR grey]" + label + "[/COLOR]" : label);
++    item.SetProperty("disabled", disabled);
++    if (i == 0)
++      item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
++                                                  : strings.Get(LldvFormatLabel(preferred)));
++    else if (disabled)
++      item.SetLabel2(strings.Get(41208 + static_cast<int>(reason)));
++    else
++      item.SetLabel2(strings.Get(format == status.active ? 41214 :
++                                  format == LldvFormat::Y422_10 ? 41216 : 41215));
++    dialog->Add(item);
++  }
++  dialog->SetSelected(saved);
++  dialog->Open();
++  if (dialog->IsConfirmed() && settings->SetInt("dvbridge.lldvformatvalue", dialog->GetSelectedItem()))
++    settings->Save();
++}
++} // namespace
++
++std::string CDVPlaybackModes::LldvPreferenceLabel()
++{
++  using namespace DVBRIDGE;
++  const auto status = ReadLldvConnector();
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  const auto format = status.active == LldvFormat::Auto ?
++      static_cast<LldvFormat>(settings->GetInt("dvbridge.lldvformatvalue")) : status.active;
++  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(LldvFormatLabel(format));
++}
++
+ void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
+ {
+   if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
+   else if (setting && setting->GetId()=="dvbridge.playback") ShowMenu(true);
++  else if (setting && setting->GetId()=="dvbridge.lldvformat") ShowLldvFormatMenu();
+ }
+ 
+ 
+diff --git a/xbmc/dialogs/DVPlaybackModes.h b/xbmc/dialogs/DVPlaybackModes.h
+--- a/xbmc/dialogs/DVPlaybackModes.h
++++ b/xbmc/dialogs/DVPlaybackModes.h
+@@ -15,6 +15,7 @@
+   static bool ShowMenu(bool settingsMenu = false);
+   static bool ConfigureProfile();
+   static std::string DefaultPlaybackLabel();
++  static std::string LldvPreferenceLabel();
+   void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
+   void OnSettingsLoaded() override;
+   void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
+diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/windows/GUIControlSettings.cpp
+--- a/xbmc/settings/windows/GUIControlSettings.cpp
++++ b/xbmc/settings/windows/GUIControlSettings.cpp
+@@ -1137,6 +1137,8 @@
+ #ifdef HAVE_DVBRIDGE
+           if (m_pSetting->GetId()=="dvbridge.playback")
+             strText=CDVPlaybackModes::DefaultPlaybackLabel();
++          else if (m_pSetting->GetId()=="dvbridge.lldvformat")
++            strText=CDVPlaybackModes::LldvPreferenceLabel();
+           else
+ #endif
+             strText = m_pButton->GetLabel2();
+diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -672,7 +672,7 @@
+ #ifdef HAVE_DVBRIDGE
+   GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
+       {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
+-       "dvbridge.playback"});
++       "dvbridge.playback", "dvbridge.lldvformat"});
+ #endif
+   // register any ISettingCallback implementations
+   GetSettingsManager()->RegisterCallback(
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -49,6 +49,15 @@
+         <setting id="dvbridge.playback" type="action" label="40811" help="40815">
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+           <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.lldvformat" type="action" label="41200" help="41201">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
++          <default>0</default><constraints><minimum>0</minimum><maximum>6</maximum></constraints>
++          <control type="list" format="integer" />
+         </setting>
+         <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
+           <requirement>HAVE_DVBRIDGE</requirement>
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26485,3 +26485,72 @@
+ msgctxt "#41140"
+ msgid " - SDR target black (nits)"
+ msgstr ""
++
++msgctxt "#41200"
++msgid "LLDV output format"
++msgstr ""
++
++msgctxt "#41201"
++msgid "Choose the format preference for Dolby Vision Player-Led. Availability depends on the display, driver and current HDMI timing."
++msgstr ""
++
++msgctxt "#41202"
++msgid "Automatic"
++msgstr ""
++
++msgctxt "#41203"
++msgid "YCbCr 4:2:2 · 10 useful bits"
++msgstr ""
++
++msgctxt "#41204"
++msgid "YCbCr 4:2:2 · 12 bits"
++msgstr ""
++
++msgctxt "#41205"
++msgid "RGB 4:4:4 · 10 bits"
++msgstr ""
++
++msgctxt "#41206"
++msgid "RGB 4:4:4 · 12 bits"
++msgstr ""
++
++msgctxt "#41207"
++msgid "YCbCr 4:4:4 · 10 bits"
++msgstr ""
++
++msgctxt "#41208"
++msgid "YCbCr 4:4:4 · 12 bits"
++msgstr ""
++
++msgctxt "#41209"
++msgid "Display capabilities unavailable or invalid"
++msgstr ""
++
++msgctxt "#41210"
++msgid "Not advertised by the display for LLDV"
++msgstr ""
++
++msgctxt "#41211"
++msgid "LLDV format not qualified on this driver"
++msgstr ""
++
++msgctxt "#41212"
++msgid "Unavailable at the current HDMI timing"
++msgstr ""
++
++msgctxt "#41213"
++msgid "No compatible LLDV format at this timing"
++msgstr ""
++
++msgctxt "#41214"
++msgid "Active on HDMI"
++msgstr ""
++
++msgctxt "#41215"
++msgid "Available as a format preference"
++msgstr ""
++
++msgctxt "#41216"
++msgid "HDMI transport uses 12-bit fields"
++msgstr ""
++

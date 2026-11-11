@@ -28,7 +28,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "5ded5441420e96dc910ae691e1c85ac28456718f22e7ec33107fcc5426219711",
-    "config/cb1-patch-index.json": "9fa64f735a53b3c7a40d15c9d1de8fe49855b6694664042571adc21a9f4db47d",
+    "config/cb1-patch-index.json": "e57bbd427643c3176a692851d44a5907129b390182900668d2991fe693c06c90",
     "packages/graphics/nvidia/package.mk": "9898721633ebdf315f5040c0d6329ffaa4d71ee92c3515025ce0b338fcdf260b",
     "packages/graphics/nvidia/files/select-driver": "5e1c7a5974f54976d37bd7b4e07486ee9708ee1fb671e839281fbf03dca94e1b",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
@@ -337,7 +337,10 @@
     "tests/cb1/test_master_reference.py": "16a3d03e02c2b3841d7e6a7c5ee3a28a2c848d1bb63ec91ec843f9a6bfc5bfcd",
     "tests/cb1/test_playback_defaults.py": "6a2ca5bdeafda9b68ebb8bccf8b4deb8e1cf27df89eb1fd72f30779c57882357",
     "tests/cb1/test_playback_layout_ownership.py": "a8b321151e6b4270d75dc59858617d214d09d4b8e7a3488a0e60ea25f227e581",
-    "tests/cb1/test_strict_playback_admission.py": "dff50603134dc4a2597e82ffad95b115a59bcbc1c698ecc3dd9c967c1e0f71ea"
+    "tests/cb1/test_strict_playback_admission.py": "dff50603134dc4a2597e82ffad95b115a59bcbc1c698ecc3dd9c967c1e0f71ea",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "81277115650676bf9198707325bcf51e309685fc61e506339de340adbc0e229b",
+    "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "fedfc82ada878beb9e8884ef497cfa00bc3cbcded3fb9849d7b60c72480aca6e",
+    "tests/cb1/test_lldv_format.py": "e6659af2677068d21b7240314b05eee1a9d5fed9dc20ada0602376f723cca41d"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
