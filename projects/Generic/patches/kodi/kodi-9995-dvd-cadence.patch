@@ -1,0 +1,2826 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 878b04f..89c20b7 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -9685,6 +9685,16 @@ msgctxt "#16330"
+ msgid "Bicubic (0,1.)"
+ msgstr ""
+ 
++#: xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++msgctxt "#16331"
++msgid "Inverse telecine (film)"
++msgstr ""
++
++#: xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++msgctxt "#16332"
++msgid "Auto - film detection"
++msgstr ""
++
+ #empty strings from id 16331 to 16333
+ 
+ #. Description of OSD video settings for deinterlace method with label #16334
+diff --git a/xbmc/cores/VideoPlayer/CMakeLists.txt b/xbmc/cores/VideoPlayer/CMakeLists.txt
+index 4fe99db..cb08b5e 100644
+--- a/xbmc/cores/VideoPlayer/CMakeLists.txt
++++ b/xbmc/cores/VideoPlayer/CMakeLists.txt
+@@ -14,7 +14,9 @@ set(SOURCES AudioSinkAE.cpp
+             Edl/EdlParsers/MultipleEpisodeEdlParser.cpp
+             Edl/EdlParsers/PvrEdlParser.cpp
+             Edl/EdlParsers/VideoReDoParser.cpp
++            FilmTiming.cpp
+             PTSTracker.cpp
++            TitleCadence.cpp
+             VideoPlayer.cpp
+             VideoPlayerAudio.cpp
+             VideoPlayerAudioID3.cpp
+@@ -43,7 +45,9 @@ set(HEADERS AudioSinkAE.h
+             Edl/EdlParsers/PvrEdlParser.h
+             Edl/EdlParsers/VideoReDoParser.h
+             IVideoPlayer.h
++            FilmTiming.h
+             PTSTracker.h
++            TitleCadence.h
+             VideoPlayer.h
+             VideoPlayerAudio.h
+             VideoPlayerAudioID3.h
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt b/xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt
+index da574ad..a4736a4 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/CMakeLists.txt
+@@ -1,13 +1,19 @@
+ set(SOURCES AddonVideoCodec.cpp
+             DVDVideoCodec.cpp
+             DVDVideoCodecFFmpeg.cpp
+-            MultiviewFramePairer.cpp)
++            FieldAnalysis.cpp
++            FilmCadence.cpp
++            MultiviewFramePairer.cpp
++            TitleScan.cpp)
+ 
+ set(HEADERS AddonVideoCodec.h
+             DVDVideoCodec.h
+             DVDVideoCodecFFmpeg.h
+             DVDVideoPP.h
+-            MultiviewFramePairer.h)
++            FieldAnalysis.h
++            FilmCadence.h
++            MultiviewFramePairer.h
++            TitleScan.h)
+ 
+ if(TARGET ffmpeg::libpostproc)
+   list(APPEND SOURCES DVDVideoPPFFmpeg.cpp)
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+index 3d1e583..4aa3016 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
+@@ -34,6 +34,8 @@ void VideoPicture::Reset()
+   iFlags = 0;
+   iRepeatPicture = 0;
+   iDuration = 0;
++  filmFrameDuration = 0;
++  codedFrameRate = 0;
+   iFrameType = 0;
+   color_space = AVCOL_SPC_UNSPECIFIED;
+   color_range = 0;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
+index 726f8c1..a4f3470 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h
+@@ -52,6 +52,10 @@ public:
+   unsigned int iFlags;
+   double iRepeatPicture;
+   double iDuration;
++  //! >0: picture is a complete film frame of this duration, shown at the film rate
++  double filmFrameDuration = 0;
++  //! frame rate coded in the video stream (MPEG-2 sequence header), 0 if unknown
++  double codedFrameRate = 0;
+   unsigned int iFrameType         : 4;  //< see defines above // 1->I, 2->P, 3->B, 0->Undef
+   AVColorSpace color_space;
+   unsigned int color_range        : 1;  //< 1 indicate if we have a full range of color
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+index ef221ef..57c4688 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -439,7 +439,12 @@ bool CDVDVideoCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
+       num_threads = std::max(1, std::min(num_threads, 16));
+       m_pCodecContext->thread_count = num_threads;
+       m_decoderState = STATE_SW_MULTI;
+-      CLog::Log(LOGDEBUG, "CDVDVideoCodecFFmpeg - open frame threaded with {} threads",
++      // Frame threads lose the interlaced flag of H.264 pictures coded with a pic_struct
++      // (soft telecine): the flag alternates between frames. SD decodes fast on slices.
++      if (hints.codec == AV_CODEC_ID_H264 && hints.height > 0 && hints.height <= 576)
++        m_pCodecContext->thread_type = FF_THREAD_SLICE;
++      CLog::Log(LOGDEBUG, "CDVDVideoCodecFFmpeg - open {} threaded with {} threads",
++                m_pCodecContext->thread_type == FF_THREAD_SLICE ? "slice" : "frame",
+                 num_threads);
+     }
+   }
+@@ -603,6 +608,15 @@ void CDVDVideoCodecFFmpeg::Dispose()
+   FilterClose();
+ }
+ 
++AVRational CDVDVideoCodecFFmpeg::StreamFrameRate() const
++{
++  if (m_pCodecContext->framerate.num > 0 && m_pCodecContext->framerate.den > 0)
++    return m_pCodecContext->framerate;
++  if (m_hints.fpsrate > 0 && m_hints.fpsscale > 0)
++    return {m_hints.fpsrate, m_hints.fpsscale};
++  return {0, 1};
++}
++
+ void CDVDVideoCodecFFmpeg::SetFilters()
+ {
+   // ask codec to do deinterlacing if possible
+@@ -657,6 +671,45 @@ void CDVDVideoCodecFFmpeg::SetFilters()
+     if (filters & FILTER_DEINTERLACE_FLAGGED)
+       m_filters_next += ":1";
+   }
++
++  // A cadence graph stays up once an interlaced frame was seen: rebuilding it on
++  // per-frame flags would restart field matching in streams that mix them.
++  m_cadenceNext.reset();
++  const bool detect = mInt == VS_INTERLACEMETHOD_CADENCE_AUTO;
++  // Film detection starts each title from the cadence decided before playback.
++  uint64_t generation = 0;
++  const auto plan = m_processInfo.GetTitlePlan(generation);
++  if (generation != m_titlePlanGeneration)
++  {
++    m_titlePlanGeneration = generation;
++    if (plan && detect)
++      m_fieldAnalysis.Seed(plan->cadence);
++  }
++  if ((mInt != VS_INTERLACEMETHOD_INVERSE_TELECINE && !detect) || !m_filters_next.empty())
++    return;
++  if (!(m_interlaced || m_seenInterlaced))
++  {
++    // Progressive 29.97: 25 fps film converted by repeating one frame in six.
++    if (!detect || !FILM_CADENCE::CanRepeatFrames(av_q2d(StreamFrameRate())))
++      return;
++    m_fieldAnalysis.Analyse(m_pDecodedFrame);
++    if (m_fieldAnalysis.Confirmed() == FILM_CADENCE::Cadence::REPEATED_FRAME)
++    {
++      m_cadenceNext = FILM_CADENCE::Cadence::REPEATED_FRAME;
++      m_filters_next = FILM_CADENCE::FilterGraph(*m_cadenceNext);
++    }
++    return;
++  }
++  m_seenInterlaced = true;
++  if (detect)
++  {
++    // Until a cadence is known, deinterlace as video: nothing is lost on film.
++    m_fieldAnalysis.Analyse(m_pDecodedFrame);
++    m_cadenceNext = FILM_CADENCE::InterlacedCadence(m_fieldAnalysis.Confirmed());
++  }
++  else
++    m_cadenceNext = FILM_CADENCE::InverseTelecineCadence(av_q2d(StreamFrameRate()));
++  m_filters_next = FILM_CADENCE::FilterGraph(*m_cadenceNext);
+ }
+ 
+ void CDVDVideoCodecFFmpeg::UpdateName()
+@@ -1182,10 +1235,14 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(VideoPicture* pVid
+     if (m_multiview && m_filterEof)
+       need_reopen = true;
+ 
++    if (m_cadence != m_cadenceNext)
++      need_reopen = true;
++
+     // try to setup new filters
+     if (need_reopen || ((need_scale || m_multiview) && m_pFilterGraph == nullptr))
+     {
+       m_filters = m_filters_next;
++      m_cadence = m_cadenceNext;
+ 
+       if (FilterOpen(m_filters, need_scale) < 0)
+         FilterClose();
+@@ -1201,6 +1258,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(VideoPicture* pVid
+     {
+       av_frame_unref(m_pFrame);
+       av_frame_move_ref(m_pFrame, m_pDecodedFrame);
++      m_filmPts = DVD_NOPTS_VALUE;
+     }
+ 
+     if (!SetPictureParams(pVideoPicture))
+@@ -1281,6 +1339,10 @@ void CDVDVideoCodecFFmpeg::Reset()
+     m_pHardware->Reset();
+ 
+   m_filters = "";
++  m_cadence.reset();
++  m_cadenceNext.reset();
++  m_seenInterlaced = false;
++  m_filmPts = DVD_NOPTS_VALUE;
+   m_multiviewPairer.Reset();
+   FilterClose();
+   m_dropCtrl.Reset(false);
+@@ -1406,6 +1468,10 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+     pVideoPicture->stereoMode.clear();
+ 
+   pVideoPicture->iRepeatPicture = 0.5 * m_pFrame->repeat_pict;
++  pVideoPicture->codedFrameRate =
++      m_pCodecContext->framerate.num > 0 && m_pCodecContext->framerate.den > 0
++          ? av_q2d(m_pCodecContext->framerate)
++          : 0;
+   pVideoPicture->iFlags = 0;
+   pVideoPicture->iFlags |= m_pFrame->flags & AV_FRAME_FLAG_INTERLACED ? DVP_FLAG_INTERLACED : 0;
+   pVideoPicture->iFlags |=
+@@ -1671,6 +1737,18 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
+   else
+     pVideoPicture->pts = DVD_NOPTS_VALUE;
+ 
++  if (m_filmPts != DVD_NOPTS_VALUE && m_cadence && FILM_CADENCE::IsFilm(*m_cadence))
++  {
++    const AVRational rate = StreamFrameRate();
++    pVideoPicture->pts = m_filmPts;
++    pVideoPicture->dts = DVD_NOPTS_VALUE;
++    pVideoPicture->iRepeatPicture = 0;
++    pVideoPicture->iFlags &= ~(DVP_FLAG_INTERLACED | DVP_FLAG_TOP_FIELD_FIRST);
++    if (rate.num > 0)
++      pVideoPicture->filmFrameDuration =
++          FILM_CADENCE::FilmFrameDuration(*m_cadence, DVD_TIME_BASE / av_q2d(rate));
++  }
++
+   if (pVideoPicture->pts != DVD_NOPTS_VALUE)
+     m_decoderPts = pVideoPicture->pts;
+ 
+@@ -1727,6 +1805,14 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
+       m_pCodecContext->time_base.num ? m_pCodecContext->time_base.den : 1,
+       m_pCodecContext->sample_aspect_ratio.num != 0 ? m_pCodecContext->sample_aspect_ratio.num : 1,
+       m_pCodecContext->sample_aspect_ratio.num != 0 ? m_pCodecContext->sample_aspect_ratio.den : 1);
++  if (m_cadence)
++  {
++    const AVRational rate = StreamFrameRate();
++    args = FILM_CADENCE::BufferSourceArgs(
++        m_pCodecContext->width, m_pCodecContext->height, m_pCodecContext->pix_fmt,
++        m_pCodecContext->sample_aspect_ratio.num, m_pCodecContext->sample_aspect_ratio.den,
++        rate.num, rate.den);
++  }
+ 
+   if (!((m_pFilterOut = avfilter_graph_alloc_filter(m_pFilterGraph, outFilter, "out"))))
+   {
+@@ -1813,7 +1899,11 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
+       return result;
+     }
+ 
+-    if (filters.compare(0,5,"bwdif") == 0)
++    if (m_cadence)
++    {
++      m_processInfo.SetVideoDeintMethod(FILM_CADENCE::Name(*m_cadence));
++    }
++    else if (filters.compare(0,5,"bwdif") == 0)
+     {
+       m_processInfo.SetVideoDeintMethod(filters);
+     }
+@@ -1879,6 +1969,11 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)
+   {
+     // A multiview graph is fed through the pairer, which holds a base view frame back
+     // until it knows whether a dependent view is coming, and drains both of its inputs.
++    // DVD streams carry a timestamp on some pictures only; the cadence graphs time
++    // their output from the input timestamps, so give them the decoder's best guess.
++    if (frame && m_cadence)
++      frame->pts = frame->best_effort_timestamp;
++
+     if (m_pFilterIn2)
+       result =
+           frame ? m_multiviewPairer.AddFrame(frame, m_stereoMode) : m_multiviewPairer.Drain();
+@@ -1921,6 +2016,24 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)
+     UpdateDropControl(pts);
+   }
+ 
++  // Decimated frames keep the time of the coded frame they came from; the graph's own
++  // timestamps are evenly spaced film times.
++  m_filmPts = DVD_NOPTS_VALUE;
++  if (m_cadence && FILM_CADENCE::IsFilm(*m_cadence) && m_pFilterFrame->pts != AV_NOPTS_VALUE)
++  {
++    const int64_t film = av_rescale_q(m_pFilterFrame->pts,
++                                      av_buffersink_get_time_base(m_pFilterOut), AV_TIME_BASE_Q);
++    const int64_t source = m_pFilterFrame->best_effort_timestamp;
++    if (source != AV_NOPTS_VALUE && std::abs(film - source) > AV_TIME_BASE / 2)
++    {
++      // The stream timeline jumped: restart the graph from the new timestamps.
++      CLog::Log(LOGDEBUG, "CDVDVideoCodecFFmpeg::FilterProcess - restart the cadence graph");
++      m_filters.clear();
++    }
++    else
++      m_filmPts = static_cast<double>(film) * DVD_TIME_BASE / AV_TIME_BASE;
++  }
++
+   av_frame_unref(m_pFrame);
+   av_frame_move_ref(m_pFrame, m_pFilterFrame);
+ 
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+index 1b78361..1d6d1a8 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+@@ -10,6 +10,8 @@
+ 
+ #include "DVDVideoCodec.h"
+ #include "DVDVideoPP.h"
++#include "FieldAnalysis.h"
++#include "FilmCadence.h"
+ #include "MultiviewFramePairer.h"
+ #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
+ #include "cores/VideoPlayer/DVDStreamInfo.h"
+@@ -92,6 +94,7 @@ protected:
+   static enum AVPixelFormat GetFormat(struct AVCodecContext * avctx, const AVPixelFormat * fmt);
+ 
+   int  FilterOpen(const std::string& filters, bool scale);
++  AVRational StreamFrameRate() const;
+   void FilterClose();
+   CDVDVideoCodec::VCReturn FilterProcess(AVFrame* frame);
+   void SetFilters();
+@@ -109,6 +112,13 @@ protected:
+ 
+   std::string m_filters;
+   std::string m_filters_next;
++  //! film cadence rebuilt by the next/open filter graph, empty for other graphs
++  std::optional<FILM_CADENCE::Cadence> m_cadenceNext;
++  std::optional<FILM_CADENCE::Cadence> m_cadence;
++  bool m_seenInterlaced = false; //!< a cadence graph stays up for the rest of the stream
++  CFieldAnalysis m_fieldAnalysis; //!< kept across seeks: the disc cadence rarely changes
++  double m_filmPts = DVD_NOPTS_VALUE; //!< film time of m_pFrame from the cadence graph
++  uint64_t m_titlePlanGeneration = 0; //!< title plan the film detection started from
+   AVFilterGraph* m_pFilterGraph = nullptr;
+   AVFilterContext* m_pFilterIn = nullptr;
+   AVFilterContext* m_pFilterIn2 = nullptr; //!< second view of a multiview stream
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.cpp
+new file mode 100644
+index 0000000..dd60bc8
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.cpp
+@@ -0,0 +1,141 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#include "FieldAnalysis.h"
++
++#include <cstdlib>
++#include <cstring>
++#include <tuple>
++
++#include "utils/log.h"
++
++extern "C"
++{
++#include <libavfilter/avfilter.h>
++#include <libavfilter/buffersink.h>
++#include <libavfilter/buffersrc.h>
++#include <libavutil/dict.h>
++}
++
++using namespace FILM_CADENCE;
++
++CFieldAnalysis::~CFieldAnalysis()
++{
++  Close();
++  av_frame_free(&m_result);
++}
++
++void CFieldAnalysis::Close()
++{
++  avfilter_graph_free(&m_graph);
++  m_coded.clear();
++  m_in = nullptr;
++  m_out = nullptr;
++}
++
++void CFieldAnalysis::Reset()
++{
++  Close();
++  m_detector.Reset();
++  m_failed = false;
++}
++
++bool CFieldAnalysis::Open(const AVFrame* frame)
++{
++  Close();
++  m_width = frame->width;
++  m_height = frame->height;
++  m_format = frame->format;
++
++  m_graph = avfilter_graph_alloc();
++  if (!m_graph)
++    return false;
++
++  const std::string args = BufferSourceArgs(frame->width, frame->height, frame->format,
++                                            frame->sample_aspect_ratio.num,
++                                            frame->sample_aspect_ratio.den, 0, 0);
++  if (avfilter_graph_create_filter(&m_in, avfilter_get_by_name("buffer"), "src", args.c_str(),
++                                   nullptr, m_graph) < 0 ||
++      avfilter_graph_create_filter(&m_out, avfilter_get_by_name("buffersink"), "out", nullptr,
++                                   nullptr, m_graph) < 0)
++    return false;
++
++  // scdet gives the mean absolute difference from the previous frame (repeated frames)
++  AVFilterContext* idet = nullptr;
++  AVFilterContext* scdet = nullptr;
++  if (avfilter_graph_create_filter(&idet, avfilter_get_by_name("idet"), "idet", nullptr, nullptr,
++                                   m_graph) < 0 ||
++      avfilter_graph_create_filter(&scdet, avfilter_get_by_name("scdet"), "scdet", nullptr,
++                                   nullptr, m_graph) < 0 ||
++      avfilter_link(m_in, 0, idet, 0) < 0 || avfilter_link(idet, 0, scdet, 0) < 0 ||
++      avfilter_link(scdet, 0, m_out, 0) < 0 ||
++      avfilter_graph_config(m_graph, nullptr) < 0)
++    return false;
++
++  if (!m_result)
++    m_result = av_frame_alloc();
++  return m_result != nullptr;
++}
++
++bool CFieldAnalysis::Analyse(const AVFrame* frame)
++{
++  if (m_failed || !frame)
++    return false;
++
++  if (!m_graph || frame->width != m_width || frame->height != m_height ||
++      frame->format != m_format)
++  {
++    if (!Open(frame))
++    {
++      CLog::LogF(LOGERROR, "unable to set up the field analysis, cadence detection disabled");
++      Close();
++      m_failed = true;
++      return false;
++    }
++  }
++
++  // KEEP_REF adds a new reference and leaves the caller's frame unchanged.
++  if (av_buffersrc_add_frame_flags(m_in, const_cast<AVFrame*>(frame),
++                                   AV_BUFFERSRC_FLAG_KEEP_REF) < 0)
++    return false;
++  m_coded.emplace_back(frame->flags & AV_FRAME_FLAG_INTERLACED, frame->repeat_pict > 0);
++
++  bool changed = false;
++  while (av_buffersink_get_frame(m_out, m_result) >= 0)
++  {
++    const AVDictionaryEntry* order =
++        av_dict_get(m_result->metadata, "lavfi.idet.multiple.current_frame", nullptr, 0);
++    const AVDictionaryEntry* repeated =
++        av_dict_get(m_result->metadata, "lavfi.idet.repeated.current_frame", nullptr, 0);
++
++    FrameObservation observation;
++    if (!m_coded.empty())
++    {
++      std::tie(observation.interlaced, observation.repeatFirstField) = m_coded.front();
++      m_coded.pop_front();
++    }
++    observation.order = ParseFieldOrder(order ? order->value : nullptr);
++    observation.repeatedField =
++        repeated && (!std::strcmp(repeated->value, "top") || !std::strcmp(repeated->value, "bottom"));
++    const AVDictionaryEntry* difference =
++        av_dict_get(m_result->metadata, "lavfi.scd.mafd", nullptr, 0);
++    if (difference)
++      observation.difference = std::strtod(difference->value, nullptr);
++    if (m_observer)
++      m_observer(observation);
++    if (m_detector.Add(observation))
++    {
++      // an observed analysis (the title scan) makes its own decision
++      if (!m_observer)
++        CLog::Log(LOGINFO, "CFieldAnalysis: detected cadence: {}", Name(*m_detector.Confirmed()));
++      changed = true;
++    }
++    av_frame_unref(m_result);
++  }
++  return changed;
++}
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.h
+new file mode 100644
+index 0000000..ff1f4e1
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FieldAnalysis.h
+@@ -0,0 +1,68 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++#include "FilmCadence.h"
++
++#include <deque>
++#include <functional>
++#include <optional>
++#include <utility>
++
++extern "C"
++{
++#include <libavutil/frame.h>
++}
++
++struct AVFilterGraph;
++struct AVFilterContext;
++
++/*!
++ * \brief Runs the FFmpeg idet filter on decoded frames and feeds a cadence detector.
++ *
++ * The analysis graph is separate from the processing graph, so every decoded frame is
++ * observed even when the processing graph buffers or drops frames.
++ */
++class CFieldAnalysis
++{
++public:
++  CFieldAnalysis() = default;
++  ~CFieldAnalysis();
++  CFieldAnalysis(const CFieldAnalysis&) = delete;
++  CFieldAnalysis& operator=(const CFieldAnalysis&) = delete;
++
++  //! \return true when the confirmed cadence changed
++  bool Analyse(const AVFrame* frame);
++  std::optional<FILM_CADENCE::Cadence> Confirmed() const { return m_detector.Confirmed(); }
++  void Reset();
++  //! start from a cadence decided before playback
++  void Seed(FILM_CADENCE::Cadence cadence) { m_detector.Seed(cadence); }
++  //! called with the observation of every analysed frame
++  void SetObserver(std::function<void(const FILM_CADENCE::FrameObservation&)> observer)
++  {
++    m_observer = std::move(observer);
++  }
++
++private:
++  bool Open(const AVFrame* frame);
++  void Close();
++
++  FILM_CADENCE::CCadenceDetector m_detector;
++  //! decoder flags (interlaced, repeated field); idet rewrites the frame flags
++  std::deque<std::pair<bool, bool>> m_coded;
++  std::function<void(const FILM_CADENCE::FrameObservation&)> m_observer;
++  AVFilterGraph* m_graph = nullptr;
++  AVFilterContext* m_in = nullptr;
++  AVFilterContext* m_out = nullptr;
++  AVFrame* m_result = nullptr;
++  int m_width = 0;
++  int m_height = 0;
++  int m_format = -1;
++  bool m_failed = false;
++};
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.cpp
+new file mode 100644
+index 0000000..67fe904
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.cpp
+@@ -0,0 +1,475 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#include "FilmCadence.h"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <complex>
++#include <cstring>
++#include <functional>
++#include <numbers>
++
++namespace FILM_CADENCE
++{
++
++bool IsFilm(Cadence cadence)
++{
++  return cadence == Cadence::TELECINE || cadence == Cadence::FIELD_PAIRED ||
++         cadence == Cadence::REPEATED_FRAME;
++}
++
++Cadence InterlacedCadence(std::optional<Cadence> cadence)
++{
++  if (cadence == Cadence::TELECINE || cadence == Cadence::FIELD_PAIRED)
++    return *cadence;
++  return Cadence::INTERLACED;
++}
++
++bool CanRepeatFrames(double framesPerSecond)
++{
++  return std::abs(framesPerSecond - 30000.0 / 1001.0) < 0.1 ||
++         std::abs(framesPerSecond - 30.0) < 0.1;
++}
++
++std::string FilterGraph(Cadence cadence)
++{
++  if (cadence == Cadence::INTERLACED)
++    return "bwdif=mode=send_field:parity=auto:deint=all";
++  if (cadence == Cadence::REPEATED_FRAME)
++    return "decimate=cycle=6"; // drop the most similar frame of every six
++  if (cadence == Cadence::PROGRESSIVE)
++    return "";
++
++  // fieldmatch rebuilds frames from matching fields and flags the frames it could not
++  // match; bwdif then interpolates only those orphan frames.
++  std::string graph = "fieldmatch=order=auto:combmatch=full,"
++                      "bwdif=mode=send_frame:parity=auto:deint=interlaced";
++  if (cadence == Cadence::TELECINE)
++    graph += ",decimate"; // drop the fifth frame, a duplicate after 3:2 field matching
++  return graph;
++}
++
++Cadence InverseTelecineCadence(double framesPerSecond)
++{
++  return std::abs(framesPerSecond - 30000.0 / 1001.0) < 0.1 ||
++                 std::abs(framesPerSecond - 30.0) < 0.1
++             ? Cadence::TELECINE
++             : Cadence::FIELD_PAIRED;
++}
++
++double FilmFrameDuration(Cadence cadence, double codedFrameDuration)
++{
++  switch (cadence)
++  {
++    case Cadence::TELECINE:
++      return codedFrameDuration * 5 / 4;
++    case Cadence::FIELD_PAIRED:
++      return codedFrameDuration;
++    case Cadence::REPEATED_FRAME:
++      return codedFrameDuration * 6 / 5;
++    case Cadence::INTERLACED:
++    case Cadence::PROGRESSIVE:
++      break;
++  }
++  return 0;
++}
++
++const char* Name(Cadence cadence)
++{
++  switch (cadence)
++  {
++    case Cadence::TELECINE:
++      return "inverse telecine";
++    case Cadence::FIELD_PAIRED:
++      return "field matching";
++    case Cadence::REPEATED_FRAME:
++      return "frame repeat removal";
++    case Cadence::PROGRESSIVE:
++      return "progressive";
++    case Cadence::INTERLACED:
++      break;
++  }
++  return "video deinterlacing";
++}
++
++std::string BufferSourceArgs(int width,
++                             int height,
++                             int pixelFormat,
++                             int aspectNum,
++                             int aspectDen,
++                             int rateNum,
++                             int rateDen)
++{
++  constexpr int timeBase = 1000000; // AV_TIME_BASE
++  if (aspectNum <= 0 || aspectDen <= 0)
++    aspectNum = aspectDen = 1;
++  if (rateNum <= 0 || rateDen <= 0)
++  {
++    rateNum = 30000;
++    rateDen = 1001;
++  }
++  return "video_size=" + std::to_string(width) + "x" + std::to_string(height) +
++         ":pix_fmt=" + std::to_string(pixelFormat) + ":time_base=1/" + std::to_string(timeBase) +
++         ":pixel_aspect=" + std::to_string(aspectNum) + "/" + std::to_string(aspectDen) +
++         ":frame_rate=" + std::to_string(rateNum) + "/" + std::to_string(rateDen);
++}
++
++FieldOrder ParseFieldOrder(const char* idetValue)
++{
++  if (!idetValue)
++    return FieldOrder::UNDETERMINED;
++  if (!std::strcmp(idetValue, "tff"))
++    return FieldOrder::TFF;
++  if (!std::strcmp(idetValue, "bff"))
++    return FieldOrder::BFF;
++  if (!std::strcmp(idetValue, "progressive"))
++    return FieldOrder::PROGRESSIVE;
++  return FieldOrder::UNDETERMINED;
++}
++
++CCadenceDetector::CCadenceDetector(std::size_t window)
++  : m_window(std::max<std::size_t>(window, 10))
++{
++}
++
++void CCadenceDetector::Reset()
++{
++  m_frames.clear();
++  m_differences.clear();
++  m_index = 0;
++  m_repeatPhase = 0;
++  m_repeatRun = 0;
++  m_confirmed.reset();
++  m_candidate.reset();
++  m_agree = 0;
++}
++
++std::optional<Cadence> CCadenceDetector::Classify(std::size_t& repeatPhase) const
++{
++  const std::size_t needed = m_confirmed ? m_window : m_window / 2;
++  if (m_frames.size() < needed)
++    return std::nullopt;
++
++  FieldCounts counts;
++  for (const auto& [observation, index] : m_frames)
++    counts.Add(observation, index);
++  if (counts.interlaced * 2 < counts.frames)
++    return ClassifyProgressive(repeatPhase);
++  return ClassifyFields(counts);
++}
++
++void FieldCounts::Add(const FrameObservation& observation, uint64_t index)
++{
++  ++frames;
++  interlaced += observation.interlaced;
++  if (observation.repeatedField)
++  {
++    ++repeated;
++    ++phase[index % phase.size()];
++  }
++  progressive += observation.order == FieldOrder::PROGRESSIVE;
++  combed += observation.order == FieldOrder::TFF || observation.order == FieldOrder::BFF;
++}
++
++std::optional<Cadence> ClassifyFields(const FieldCounts& counts)
++{
++  const double frames = static_cast<double>(counts.frames);
++  const double repeated = static_cast<double>(counts.repeated);
++  // 3:2 pulldown repeats a top and a bottom field in every five frames, at the same two
++  // positions of the cycle while the cadence is unbroken.
++  if (repeated >= 0.3 * frames && repeated <= 0.5 * frames)
++  {
++    std::array<std::size_t, 5> phase = counts.phase;
++    std::ranges::sort(phase, std::greater<>());
++    if (static_cast<double>(phase[0] + phase[1]) >= 0.8 * repeated)
++      return Cadence::TELECINE;
++  }
++  if (repeated <= 0.1 * frames)
++  {
++    if (static_cast<double>(counts.progressive) >= 0.8 * frames)
++      return Cadence::FIELD_PAIRED;
++    if (static_cast<double>(counts.combed) >= 0.6 * frames)
++      return Cadence::INTERLACED;
++  }
++  return std::nullopt;
++}
++
++std::optional<Cadence> CCadenceDetector::ClassifyProgressive(std::size_t& phase) const
++{
++  constexpr std::size_t cycle = 6;
++  constexpr std::size_t cycles = 10;
++  // Below this mean difference (8-bit levels) a cycle is static and says nothing.
++  constexpr double motion = 0.2;
++  if (m_differences.size() < cycle * cycles)
++    return std::nullopt;
++
++  std::array<std::size_t, cycle> lowest{};
++  std::array<double, cycle> ratio{};
++  std::size_t moving = 0;
++  std::array<double, cycle> values{};
++  std::array<std::size_t, cycle> positions{};
++  std::size_t count = 0;
++  for (const auto& [observation, index] : m_differences)
++  {
++    if (count == 0 && index % cycle != 0)
++      continue; // start on a complete cycle
++    values[count] = observation.difference;
++    positions[count] = index % cycle;
++    if (++count < cycle)
++      continue;
++    count = 0;
++    if (std::ranges::any_of(values, [](double value) { return value < 0; }))
++      continue;
++    std::array<double, cycle> sorted = values;
++    std::ranges::sort(sorted);
++    const double median = (sorted[cycle / 2 - 1] + sorted[cycle / 2]) / 2;
++    if (median < motion)
++      continue;
++    const auto smallest = std::ranges::min_element(values) - values.begin();
++    ++moving;
++    ++lowest[positions[smallest]];
++    ratio[positions[smallest]] += values[smallest] / median;
++  }
++  if (moving < cycles * 6 / 10)
++    return std::nullopt; // mostly static: keep the current decision
++
++  const auto mode = std::ranges::max_element(lowest) - lowest.begin();
++  // 25 fps film repeats a frame at the same position of every cycle; the repeat is the
++  // smallest difference of its cycle, well below the others.
++  if (lowest[mode] * 10 >= moving * 6 && ratio[mode] / lowest[mode] <= 0.8)
++  {
++    phase = static_cast<std::size_t>(mode);
++    return Cadence::REPEATED_FRAME;
++  }
++  return Cadence::PROGRESSIVE;
++}
++
++bool CCadenceDetector::Add(const FrameObservation& observation)
++{
++  m_differences.push_back({observation, m_index});
++  while (m_differences.size() > 6 * 10)
++    m_differences.pop_front();
++  m_frames.push_back({observation, m_index++});
++  while (m_frames.size() > m_window)
++    m_frames.pop_front();
++
++  std::size_t phase = 0;
++  std::optional<Cadence> cadence = Classify(phase);
++  if (cadence == Cadence::REPEATED_FRAME)
++  {
++    m_repeatRun = phase == m_repeatPhase ? m_repeatRun + 1 : 1;
++    m_repeatPhase = phase;
++    // Animation and edited video also have duplicates, at changing positions.
++    if (m_confirmed != Cadence::REPEATED_FRAME && m_repeatRun < 3 * m_window)
++      cadence = m_confirmed ? m_confirmed : std::optional<Cadence>(Cadence::PROGRESSIVE);
++  }
++  else
++    m_repeatRun = 0;
++  if (!cadence || cadence == m_confirmed)
++  {
++    m_agree = 0;
++    return false;
++  }
++  if (cadence != m_candidate)
++  {
++    m_candidate = cadence;
++    m_agree = 0;
++  }
++  // Repeats of real film are not exact and edits move them in the cycle, so a film can
++  // look like plain progressive video for several seconds: leaving repeat removal needs
++  // twenty windows (20 s).
++  const std::size_t needed =
++      m_confirmed == Cadence::REPEATED_FRAME && cadence == Cadence::PROGRESSIVE ? 20 * m_window
++                                                                              : m_window;
++  if (m_confirmed && ++m_agree < needed)
++    return false;
++  m_confirmed = cadence;
++  m_agree = 0;
++  return true;
++}
++
++void CCadenceDetector::Seed(Cadence cadence)
++{
++  Reset();
++  m_confirmed = cadence;
++}
++
++double DisplayRate(const TitlePlan& plan)
++{
++  const double rate = plan.frameRate;
++  if (plan.softTelecine)
++    return CanRepeatFrames(rate) ? rate * 4 / 5 : rate;
++  switch (plan.cadence)
++  {
++    case Cadence::TELECINE:
++      return rate * 4 / 5;
++    case Cadence::REPEATED_FRAME:
++      // 25 fps film slowed to 24.975 by the 29.97 conversion: no display mode has that
++      // rate, the 25 Hz family repeats a frame about every 40 s.
++      return 25;
++    case Cadence::INTERLACED:
++      return rate * 2;
++    case Cadence::FIELD_PAIRED:
++    case Cadence::PROGRESSIVE:
++      break;
++  }
++  return rate;
++}
++
++CTitleScan::CTitleScan(double frameRate, bool canRemoveRepeats)
++  : m_frameRate(frameRate), m_canRemoveRepeats(canRemoveRepeats && CanRepeatFrames(frameRate))
++{
++}
++
++void CTitleScan::StartSegment()
++{
++  if (const auto vote = Classify(m_segment))
++  {
++    ++m_counts[static_cast<std::size_t>(*vote)];
++    if (*vote == Vote::PROGRESSIVE)
++    {
++      std::vector<double> differences;
++      for (const auto& frame : m_segment)
++        differences.push_back(frame.difference);
++      m_progressive.push_back(std::move(differences));
++    }
++  }
++  m_segment.clear();
++}
++
++void CTitleScan::Add(const FrameObservation& observation)
++{
++  m_segment.push_back(observation);
++}
++
++std::optional<CTitleScan::Vote> CTitleScan::Classify(
++    const std::vector<FrameObservation>& frames) const
++{
++  constexpr std::size_t minimum = 24;
++  if (frames.size() < minimum)
++    return std::nullopt;
++  FieldCounts counts;
++  std::size_t repeatFlags = 0;
++  for (std::size_t i = 0; i < frames.size(); ++i)
++  {
++    counts.Add(frames[i], i);
++    repeatFlags += !frames[i].interlaced && frames[i].repeatFirstField;
++  }
++  if (counts.interlaced * 2 >= counts.frames)
++  {
++    switch (ClassifyFields(counts).value_or(Cadence::PROGRESSIVE))
++    {
++      case Cadence::TELECINE:
++        return Vote::TELECINE;
++      case Cadence::FIELD_PAIRED:
++        return Vote::FIELD_PAIRED;
++      case Cadence::INTERLACED:
++        return Vote::INTERLACED;
++      default:
++        return std::nullopt; // static fields say nothing
++    }
++  }
++  // 3:2 soft telecine flags two frames in four; the flags do not need motion.
++  const double progressive = static_cast<double>(counts.frames - counts.interlaced);
++  const double flagged = static_cast<double>(repeatFlags);
++  if (flagged >= 0.3 * progressive && flagged <= 0.7 * progressive)
++    return Vote::SOFT_TELECINE;
++  return Vote::PROGRESSIVE;
++}
++
++double CTitleScan::RepeatPattern() const
++{
++  constexpr double motion = 0.2; // mean difference of a static frame (8-bit levels)
++  constexpr std::size_t half = 3; // the local level is the median of six differences
++  constexpr std::size_t minimum = 36; // moving frames for a segment to count
++  double power = 0;
++  std::array<double, 2> harmonic{}; // at 1/6 and 1/3 of the frame rate
++  std::size_t segments = 0;
++  for (const auto& differences : m_progressive)
++  {
++    // Differences relative to the local level, so that the amount of motion does not
++    // matter. The first difference of a segment is from an unrelated frame.
++    std::vector<double> z;
++    std::vector<bool> valid;
++    for (std::size_t i = 1 + half; i + half <= differences.size(); ++i)
++    {
++      std::array<double, 2 * half> local{};
++      std::copy(differences.begin() + static_cast<std::ptrdiff_t>(i - half),
++                differences.begin() + static_cast<std::ptrdiff_t>(i + half), local.begin());
++      std::ranges::sort(local);
++      const double level = (local[half - 1] + local[half]) / 2;
++      const bool ok = level >= motion && local[0] >= 0;
++      z.push_back(ok ? std::min(differences[i] / level, 2.0) : 0);
++      valid.push_back(ok);
++    }
++    const auto count = static_cast<std::size_t>(std::ranges::count(valid, true));
++    if (count < minimum)
++      continue;
++    double mean = 0;
++    for (std::size_t i = 0; i < z.size(); ++i)
++      mean += valid[i] ? z[i] : 0;
++    mean /= static_cast<double>(count);
++    std::array<std::complex<double>, 2> sum{};
++    for (std::size_t i = 0; i < z.size(); ++i)
++    {
++      const double value = valid[i] ? z[i] - mean : 0;
++      power += value * value;
++      for (std::size_t h = 0; h < harmonic.size(); ++h)
++        sum[h] += value * std::polar(1.0, -2 * std::numbers::pi * static_cast<double>(i) *
++                                              static_cast<double>(h + 1) / 6);
++    }
++    for (std::size_t h = 0; h < harmonic.size(); ++h)
++      harmonic[h] += std::norm(sum[h]);
++    ++segments;
++  }
++  if (!segments || power <= 0)
++    return 0;
++  // Noise has a relative power of 1 at every frequency, with a spread that falls with the
++  // square root of the number of segments.
++  const double relative = std::min(harmonic[0], harmonic[1]) / power;
++  return (relative - 1) * std::sqrt(static_cast<double>(segments));
++}
++
++std::optional<TitlePlan> CTitleScan::Decide()
++{
++  StartSegment();
++  m_votes = 0;
++  for (const std::size_t count : m_counts)
++    m_votes += count;
++  m_repeatScore = RepeatPattern();
++  const auto winner = std::ranges::max_element(m_counts) - m_counts.begin();
++  if (!m_votes || m_counts[winner] * 2 <= m_votes)
++    return std::nullopt;
++
++  TitlePlan plan;
++  plan.frameRate = m_frameRate;
++  switch (static_cast<Vote>(winner))
++  {
++    case Vote::SOFT_TELECINE:
++      plan.softTelecine = true;
++      break;
++    case Vote::TELECINE:
++      plan.cadence = Cadence::TELECINE;
++      break;
++    case Vote::FIELD_PAIRED:
++      plan.cadence = Cadence::FIELD_PAIRED;
++      break;
++    case Vote::INTERLACED:
++      plan.cadence = Cadence::INTERLACED;
++      break;
++    default:
++      if (m_canRemoveRepeats && m_repeatScore >= 3)
++        plan.cadence = Cadence::REPEATED_FRAME;
++      break;
++  }
++  return plan;
++}
++
++} // namespace FILM_CADENCE
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.h
+new file mode 100644
+index 0000000..e1880c0
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/FilmCadence.h
+@@ -0,0 +1,223 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++/*!
++ * \file FilmCadence.h
++ * \brief Reconstruction of film frames from interlaced DVD video (inverse telecine).
++ * Free of FFmpeg and Kodi dependencies.
++ */
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <deque>
++#include <optional>
++#include <string>
++#include <vector>
++
++namespace FILM_CADENCE
++{
++
++enum class Cadence
++{
++  TELECINE, //!< 3:2 pulldown recorded in interlaced fields (hard telecine)
++  FIELD_PAIRED, //!< both fields of a frame come from the same instant (2:2, e.g. PAL film)
++  INTERLACED, //!< every field is a different instant (video)
++  //! progressive frames, one repeated in every six (25 fps film converted to 29.97)
++  REPEATED_FRAME,
++  PROGRESSIVE, //!< progressive frames without a repeat pattern, nothing to rebuild
++};
++
++//! true if the graph of the cadence outputs complete film frames
++bool IsFilm(Cadence cadence);
++
++//! libavfilter graph that rebuilds the film frames of the cadence, or deinterlaces video
++std::string FilterGraph(Cadence cadence);
++
++//! Cadence the inverse telecine method assumes for a stream frame rate
++Cadence InverseTelecineCadence(double framesPerSecond);
++
++//! The cadence to use for interlaced frames: progressive cadences deinterlace as video
++Cadence InterlacedCadence(std::optional<Cadence> cadence);
++
++//! true if the stream frame rate can carry repeated frames of 25 fps film (29.97 or 30)
++bool CanRepeatFrames(double framesPerSecond);
++
++/*!
++ * \brief Duration of an output frame of the filter graph
++ * \param codedFrameDuration duration of a coded frame of the stream
++ */
++double FilmFrameDuration(Cadence cadence, double codedFrameDuration);
++
++const char* Name(Cadence cadence);
++
++/*!
++ * \brief Arguments of the libavfilter "buffer" source of a cadence graph.
++ *
++ * Decoded timestamps are in AV_TIME_BASE units, and decimate needs the real frame rate
++ * of the stream to time its output.
++ */
++std::string BufferSourceArgs(int width,
++                             int height,
++                             int pixelFormat,
++                             int aspectNum,
++                             int aspectDen,
++                             int rateNum,
++                             int rateDen);
++
++//! Field order of a frame, as classified by the FFmpeg idet filter ("multiple" detection)
++enum class FieldOrder
++{
++  UNDETERMINED,
++  TFF,
++  BFF,
++  PROGRESSIVE,
++};
++
++FieldOrder ParseFieldOrder(const char* idetValue);
++
++struct FrameObservation
++{
++  bool interlaced = false; //!< frame is flagged interlaced by the decoder
++  FieldOrder order = FieldOrder::UNDETERMINED;
++  bool repeatedField = false; //!< idet found a field repeated from the previous frame
++  double difference = -1; //!< mean absolute difference from the previous frame, -1 if unknown
++  bool repeatFirstField = false; //!< the frame is coded with a repeated field (soft telecine)
++};
++
++//! Field analysis of a run of frames, for the classification of interlaced-coded frames
++struct FieldCounts
++{
++  std::size_t frames = 0;
++  std::size_t interlaced = 0; //!< frames coded as interlaced
++  std::size_t repeated = 0; //!< frames with a field repeated from the previous frame
++  std::size_t progressive = 0; //!< frames idet finds progressive
++  std::size_t combed = 0; //!< frames idet finds interlaced
++  std::array<std::size_t, 5> phase{}; //!< repeated fields by position in the 5-frame cycle
++
++  void Add(const FrameObservation& observation, uint64_t index);
++};
++
++//! Cadence of interlaced-coded frames, empty if the fields do not tell
++std::optional<Cadence> ClassifyFields(const FieldCounts& counts);
++
++/*!
++ * \brief Classifies the cadence of decoded video from per-frame field analysis.
++ *
++ * Interlaced frames are classified on the window. Progressive frames are classified on
++ * the frame differences of the last ten 6-frame cycles: repeated frames of 25 fps film
++ * are the smallest difference of their cycle, at the same position in most cycles.
++ * Repeat removal starts only when that position holds for three windows, and any moving
++ * window without the pattern counts towards leaving it.
++ *
++ * The first decision is made on half a window. A later change needs a full window of
++ * agreement, so that a short scene does not toggle the processing.
++ */
++class CCadenceDetector
++{
++public:
++  explicit CCadenceDetector(std::size_t window = 30);
++
++  //! \return true when the confirmed cadence changed
++  bool Add(const FrameObservation& observation);
++  std::optional<Cadence> Confirmed() const { return m_confirmed; }
++  void Reset();
++  //! Start from a cadence decided before playback; later changes need the usual evidence.
++  void Seed(Cadence cadence);
++
++private:
++  //! \param repeatPhase set to the cycle position of the repeats for REPEATED_FRAME
++  std::optional<Cadence> Classify(std::size_t& repeatPhase) const;
++  std::optional<Cadence> ClassifyProgressive(std::size_t& phase) const;
++
++  struct Entry
++  {
++    FrameObservation observation;
++    uint64_t index;
++  };
++  const std::size_t m_window;
++  std::deque<Entry> m_frames;
++  std::deque<Entry> m_differences; //!< last ten 6-frame cycles
++  uint64_t m_index = 0;
++  std::optional<Cadence> m_confirmed;
++  std::optional<Cadence> m_candidate;
++  std::size_t m_agree = 0;
++  std::size_t m_repeatPhase = 0; //!< cycle position of the repeated frames
++  std::size_t m_repeatRun = 0; //!< frames classified as repeats at that position in a row
++};
++
++/*!
++ * \brief Cadence of a whole title, decided before playback.
++ *
++ * The display mode is chosen once from this plan, before the first frame is shown.
++ */
++struct TitlePlan
++{
++  Cadence cadence = Cadence::PROGRESSIVE; //!< processing to start with
++  bool softTelecine = false; //!< progressive film frames with repeat flags (3:2 soft telecine)
++  double frameRate = 0; //!< coded frame rate of the stream
++};
++
++//! Refresh rate that shows every output frame of the plan for the same time
++double DisplayRate(const TitlePlan& plan);
++
++/*!
++ * \brief Decides the cadence of a title from frames decoded at several points of it.
++ *
++ * Each segment of contiguous frames votes for a cadence; a cadence needs more than half
++ * of the votes. Segments without motion do not vote. Repeated frames of 25 fps film are
++ * not exact copies on real discs, so they are found on all progressive segments
++ * together: the frame differences of such film have a period of six frames, which shows
++ * as power at 1/6 and 1/3 of the frame rate. The power is measured relative to the mean,
++ * independent of where the repeat is in the cycle, so edits do not hide it.
++ */
++class CTitleScan
++{
++public:
++  /*!
++   * \param frameRate coded frame rate of the stream
++   * \param canRemoveRepeats the processing can remove repeated frames of 25 fps film
++   */
++  CTitleScan(double frameRate, bool canRemoveRepeats);
++
++  //! the next frames do not follow the previous ones
++  void StartSegment();
++  void Add(const FrameObservation& observation);
++  //! \return the plan, empty if no cadence has a majority of the segments that vote
++  std::optional<TitlePlan> Decide();
++
++  //! segments that voted in the last decision
++  std::size_t Votes() const { return m_votes; }
++  //! significance of the repeated-frame pattern in the last decision (repeats from 3)
++  double RepeatScore() const { return m_repeatScore; }
++
++private:
++  enum class Vote
++  {
++    SOFT_TELECINE,
++    TELECINE,
++    FIELD_PAIRED,
++    INTERLACED,
++    PROGRESSIVE,
++    COUNT,
++  };
++  std::optional<Vote> Classify(const std::vector<FrameObservation>& frames) const;
++  double RepeatPattern() const;
++
++  const double m_frameRate;
++  const bool m_canRemoveRepeats;
++  std::vector<FrameObservation> m_segment;
++  std::array<std::size_t, static_cast<std::size_t>(Vote::COUNT)> m_counts{};
++  std::vector<std::vector<double>> m_progressive; //!< frame differences of progressive segments
++  std::size_t m_votes = 0;
++  double m_repeatScore = 0;
++};
++
++} // namespace FILM_CADENCE
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.cpp
+new file mode 100644
+index 0000000..9b62024
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.cpp
+@@ -0,0 +1,250 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#include "TitleScan.h"
++
++#include "FieldAnalysis.h"
++
++#include <algorithm>
++#include <chrono>
++#include <cstring>
++
++extern "C"
++{
++#include <libavcodec/avcodec.h>
++#include <libavformat/avformat.h>
++#include <libavutil/mem.h>
++}
++
++using namespace FILM_CADENCE;
++
++namespace
++{
++constexpr int IO_BUFFER = 64 * 1024;
++//! a sample point gives up when its video does not start within this many bytes
++constexpr int64_t SEGMENT_BYTES = 8 * 1024 * 1024;
++
++int ReadPacket(void* opaque, uint8_t* buffer, int size)
++{
++  const int read = static_cast<ITitleData*>(opaque)->Read(buffer, size);
++  if (read == 0)
++    return AVERROR_EOF;
++  return read < 0 ? AVERROR(EIO) : read;
++}
++
++int64_t SeekData(void* opaque, int64_t offset, int whence)
++{
++  auto* data = static_cast<ITitleData*>(opaque);
++  if (whence == AVSEEK_SIZE)
++    return data->Size() > 0 ? data->Size() : -1;
++  if ((whence & ~AVSEEK_FORCE) != SEEK_SET)
++    return -1;
++  return data->Seek(offset);
++}
++
++class CScan
++{
++public:
++  CScan(ITitleData& data, const ScanLimits& limits) : m_data(data), m_limits(limits) {}
++  ~CScan()
++  {
++    av_frame_free(&m_frame);
++    av_packet_free(&m_packet);
++    avcodec_free_context(&m_decoder);
++    avformat_close_input(&m_format);
++    if (m_io)
++      av_freep(&m_io->buffer);
++    avio_context_free(&m_io);
++  }
++
++  ScanResult Run()
++  {
++    m_deadline = m_start + std::chrono::milliseconds(m_limits.budgetMs);
++    if (Open())
++      Sample();
++    m_result.elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
++                                              std::chrono::steady_clock::now() - m_start)
++                                              .count());
++    return m_result;
++  }
++
++private:
++  bool Open()
++  {
++    auto* buffer = static_cast<uint8_t*>(av_malloc(IO_BUFFER));
++    m_io = avio_alloc_context(buffer, IO_BUFFER, 0, &m_data, ReadPacket, nullptr, SeekData);
++    m_format = avformat_alloc_context();
++    m_packet = av_packet_alloc();
++    m_frame = av_frame_alloc();
++    if (!m_io || !m_format || !m_packet || !m_frame)
++    {
++      if (!m_io)
++        av_free(buffer);
++      return false;
++    }
++    m_format->pb = m_io;
++    m_format->flags |= AVFMT_FLAG_CUSTOM_IO;
++    m_format->probesize = 2 * 1024 * 1024;
++    m_format->max_analyze_duration = AV_TIME_BASE / 2;
++    // the end of a program stream is not read for its duration: it is sampled by bytes
++    m_format->skip_estimate_duration_from_pts = 1;
++    // reading and decoding stop at the deadline
++    m_format->interrupt_callback = {&CScan::Interrupted, this};
++    if (avformat_open_input(&m_format, nullptr, nullptr, nullptr) < 0 ||
++        avformat_find_stream_info(m_format, nullptr) < 0)
++      return false;
++
++    m_stream = av_find_best_stream(m_format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
++    if (m_stream < 0)
++      return false;
++    const AVCodecParameters* parameters = m_format->streams[m_stream]->codecpar;
++    m_result.codec = parameters->codec_id;
++    m_result.height = parameters->height;
++    if (parameters->codec_id != AV_CODEC_ID_MPEG2VIDEO && parameters->codec_id != AV_CODEC_ID_H264)
++      return false;
++    for (unsigned int i = 0; i < m_format->nb_streams; ++i)
++      m_format->streams[i]->discard = static_cast<int>(i) == m_stream ? AVDISCARD_DEFAULT
++                                                                       : AVDISCARD_ALL;
++
++    const AVCodec* codec = avcodec_find_decoder(parameters->codec_id);
++    m_decoder = codec ? avcodec_alloc_context3(codec) : nullptr;
++    if (!m_decoder || avcodec_parameters_to_context(m_decoder, parameters) < 0)
++      return false;
++    // slice threads keep the frame order and add no delay at the end of a sample point
++    m_decoder->thread_count = 0;
++    m_decoder->thread_type = FF_THREAD_SLICE;
++    return avcodec_open2(m_decoder, codec, nullptr) >= 0;
++  }
++
++  double FrameRate() const
++  {
++    if (m_decoder->framerate.num > 0 && m_decoder->framerate.den > 0)
++      return av_q2d(m_decoder->framerate);
++    const AVRational rate = m_format->streams[m_stream]->avg_frame_rate;
++    return rate.num > 0 && rate.den > 0 ? av_q2d(rate) : 0;
++  }
++
++  bool ByBytes() const
++  {
++    const char* name = m_format->iformat->name;
++    return !std::strcmp(name, "mpeg") || !std::strcmp(name, "mpegts");
++  }
++
++  //! true if the title is long enough to be sampled at spread points
++  bool Spread() const
++  {
++    // Program streams state their peak mux rate only, and their end is not read: a title
++    // is spread if each point has 1 MiB of its own. Points of a short title can overlap.
++    if (ByBytes())
++      return m_data.Size() >= std::max(1, m_limits.segments) * int64_t{1024 * 1024};
++    const double duration =
++        m_format->duration > 0 ? static_cast<double>(m_format->duration) / AV_TIME_BASE : 0;
++    return duration >= m_limits.segments * m_limits.seconds * 1.5;
++  }
++
++  //! seek to a fraction of the title; program and transport streams by bytes
++  bool SeekTo(double fraction)
++  {
++    if (ByBytes())
++    {
++      const int64_t size = m_data.Size();
++      return size > 0 &&
++             av_seek_frame(m_format, -1, static_cast<int64_t>(fraction * size),
++                           AVSEEK_FLAG_BYTE) >= 0;
++    }
++    const int64_t begin = m_format->start_time != AV_NOPTS_VALUE ? m_format->start_time : 0;
++    const int64_t target = begin + static_cast<int64_t>(fraction * m_format->duration);
++    return avformat_seek_file(m_format, -1, INT64_MIN, target, target, 0) >= 0;
++  }
++
++  //! decode up to frames frames from the current position into the analysis
++  static int Interrupted(void* opaque)
++  {
++    return std::chrono::steady_clock::now() > static_cast<CScan*>(opaque)->m_deadline;
++  }
++
++  void Decode(CFieldAnalysis& analysis, int frames)
++  {
++    avcodec_flush_buffers(m_decoder);
++    int decoded = 0;
++    int64_t bytes = 0;
++    bool eof = false;
++    while (decoded < frames && !eof && !Interrupted(this))
++    {
++      if (av_read_frame(m_format, m_packet) < 0)
++      {
++        eof = true;
++        avcodec_send_packet(m_decoder, nullptr);
++      }
++      else
++      {
++        bytes += m_packet->size;
++        if (m_packet->stream_index == m_stream)
++          avcodec_send_packet(m_decoder, m_packet);
++        av_packet_unref(m_packet);
++        if (!decoded && bytes > SEGMENT_BYTES)
++          break;
++      }
++      while (decoded < frames && avcodec_receive_frame(m_decoder, m_frame) >= 0)
++      {
++        analysis.Analyse(m_frame);
++        av_frame_unref(m_frame);
++        ++decoded;
++      }
++    }
++    m_result.frames += decoded;
++  }
++
++  void Sample()
++  {
++    // The stream information was read from decoded frames: the rate is the coded one.
++    const double rate = FrameRate() > 0 ? FrameRate() : 30000.0 / 1001;
++    CTitleScan scan(rate, true);
++    CFieldAnalysis analysis;
++    analysis.SetObserver([&scan](const FrameObservation& observation) { scan.Add(observation); });
++
++    const int segments = std::max(1, m_limits.segments);
++    const bool spread = Spread();
++    for (int i = 0; i < (spread ? segments : 1) && !Interrupted(this); ++i)
++    {
++      // In bit-reversed order, the points decoded before the deadline are spread over
++      // the whole title.
++      int point = 0;
++      for (int bits = i, width = segments - 1; width > 0; bits >>= 1, width >>= 1)
++        point = (point << 1) | (bits & 1);
++      if (spread && !SeekTo((std::min(point, segments - 1) + 0.5) / segments))
++        continue;
++      analysis.Reset();
++      scan.StartSegment();
++      const double seconds = spread ? m_limits.seconds : segments * m_limits.seconds;
++      Decode(analysis, static_cast<int>(seconds * rate));
++      ++m_result.segments;
++    }
++    m_result.plan = scan.Decide();
++    m_result.votes = scan.Votes();
++    m_result.repeatScore = scan.RepeatScore();
++  }
++
++  ITitleData& m_data;
++  const ScanLimits m_limits;
++  const std::chrono::steady_clock::time_point m_start = std::chrono::steady_clock::now();
++  std::chrono::steady_clock::time_point m_deadline;
++  ScanResult m_result;
++  AVIOContext* m_io = nullptr;
++  AVFormatContext* m_format = nullptr;
++  AVCodecContext* m_decoder = nullptr;
++  AVPacket* m_packet = nullptr;
++  AVFrame* m_frame = nullptr;
++  int m_stream = -1;
++};
++} // namespace
++
++ScanResult FILM_CADENCE::ScanTitle(ITitleData& data, const ScanLimits& limits)
++{
++  return CScan(data, limits).Run();
++}
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.h
+new file mode 100644
+index 0000000..a812a37
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/TitleScan.h
+@@ -0,0 +1,66 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++/*!
++ * \file TitleScan.h
++ * \brief Cadence of a title, decided before playback from frames decoded at several
++ * points of it, so that the display mode is set once.
++ */
++
++#include "FilmCadence.h"
++
++#include <cstdint>
++#include <optional>
++
++namespace FILM_CADENCE
++{
++
++//! Seekable bytes of a title: a file, or the program stream of a DVD title
++class ITitleData
++{
++public:
++  virtual ~ITitleData() = default;
++  //! \return bytes read, 0 at the end, negative on error
++  virtual int Read(uint8_t* buffer, int size) = 0;
++  //! \return the new position, negative on error
++  virtual int64_t Seek(int64_t position) = 0;
++  //! \return the size in bytes, 0 if unknown
++  virtual int64_t Size() = 0;
++};
++
++struct ScanLimits
++{
++  int segments = 8; //!< sample points, spread over the title (a power of two)
++  double seconds = 2; //!< decoded per sample point
++  //! the scan stops after this time and decides on what it decoded (slow media)
++  int budgetMs = 1500;
++};
++
++struct ScanResult
++{
++  std::optional<TitlePlan> plan;
++  int codec = 0; //!< AVCodecID of the video stream, 0 if none
++  int height = 0;
++  int frames = 0; //!< decoded frames
++  int segments = 0; //!< sample points decoded
++  std::size_t votes = 0; //!< segments that voted for a cadence
++  double repeatScore = 0;
++  int elapsedMs = 0;
++};
++
++/*!
++ * \brief Decodes frames at several points of a title and decides its cadence.
++ *
++ * Program and transport streams are sampled at byte positions, other containers at
++ * times. A title too short for the sample points is decoded from its start.
++ */
++ScanResult ScanTitle(ITitleData& data, const ScanLimits& limits);
++
++} // namespace FILM_CADENCE
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
+index 20e6327..8c74087 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.cpp
+@@ -582,6 +582,7 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
+   m_vaapiConfig.surfaceWidth = avctx->coded_width;
+   m_vaapiConfig.surfaceHeight = avctx->coded_height;
+   m_vaapiConfig.aspect = avctx->sample_aspect_ratio;
++  m_vaapiConfig.frameRate = avctx->framerate;
+   m_vaapiConfig.bitDepth = avctx->bits_per_raw_sample;
+   // get_format's software format describes the decoded samples. Add-on hints
+   // can still say 8 bits for a 10-bit stream; retain the old fallback if absent.
+@@ -2247,7 +2248,9 @@ void COutput::InitCycle()
+     if (!m_pp)
+     {
+       if (method == VS_INTERLACEMETHOD_DEINTERLACE ||
+-          method == VS_INTERLACEMETHOD_RENDER_BOB)
++          method == VS_INTERLACEMETHOD_RENDER_BOB ||
++          method == VS_INTERLACEMETHOD_INVERSE_TELECINE ||
++          method == VS_INTERLACEMETHOD_CADENCE_AUTO)
+       {
+         CLog::Log(LOGDEBUG, LOGVIDEO, "VAAPI output: Initializing ffmpeg postproc");
+         m_pp = new CFFmpegPostproc();
+@@ -3115,11 +3118,33 @@ bool CFFmpegPostproc::PreInit(CVaapiConfig &config, SDiMethods *methods)
+     {
+       methods->diMethods[methods->numDiMethods++] = VS_INTERLACEMETHOD_DEINTERLACE;
+       methods->diMethods[methods->numDiMethods++] = VS_INTERLACEMETHOD_RENDER_BOB;
++      methods->diMethods[methods->numDiMethods++] = VS_INTERLACEMETHOD_INVERSE_TELECINE;
++      methods->diMethods[methods->numDiMethods++] = VS_INTERLACEMETHOD_CADENCE_AUTO;
+     }
+   }
+   return use_filter;
+ }
+ 
++double CFFmpegPostproc::StreamFps() const
++{
++  if (m_config.frameRate.num > 0 && m_config.frameRate.den > 0)
++    return av_q2d(m_config.frameRate);
++  return static_cast<double>(m_config.processInfo->GetVideoFps());
++}
++
++bool CFFmpegPostproc::ApplyTitlePlan()
++{
++  uint64_t generation = 0;
++  const auto plan = m_config.processInfo->GetTitlePlan(generation);
++  if (generation == m_titlePlanGeneration)
++    return false;
++  m_titlePlanGeneration = generation;
++  if (!plan)
++    return false;
++  m_fieldAnalysis.Seed(plan->cadence);
++  return true;
++}
++
+ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
+ {
+   if (!(m_pFilterGraph = avfilter_graph_alloc()))
+@@ -3136,6 +3161,19 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
+                           m_config.vidWidth, m_config.vidHeight, AV_PIX_FMT_NV12, 1, 1,
+                           (m_config.aspect.num != 0) ? m_config.aspect.num : 1,
+                           (m_config.aspect.num != 0) ? m_config.aspect.den : 1);
++  m_cadence.reset();
++  if (method == VS_INTERLACEMETHOD_CADENCE_AUTO)
++    ApplyTitlePlan();
++  if (method == VS_INTERLACEMETHOD_INVERSE_TELECINE || method == VS_INTERLACEMETHOD_CADENCE_AUTO)
++  {
++    // Until film detection knows the cadence, deinterlace as video.
++    m_cadence = method == VS_INTERLACEMETHOD_CADENCE_AUTO
++                    ? FILM_CADENCE::InterlacedCadence(m_fieldAnalysis.Confirmed())
++                    : FILM_CADENCE::InverseTelecineCadence(StreamFps());
++    args = FILM_CADENCE::BufferSourceArgs(m_config.vidWidth, m_config.vidHeight, AV_PIX_FMT_NV12,
++                                          m_config.aspect.num, m_config.aspect.den,
++                                          m_config.frameRate.num, m_config.frameRate.den);
++  }
+ 
+   if (avfilter_graph_create_filter(&m_pFilterIn, srcFilter, "src", args.c_str(), NULL, m_pFilterGraph) < 0)
+   {
+@@ -3183,11 +3221,9 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
+   inputs->pad_idx = 0;
+   inputs->next    = NULL;
+ 
+-  if (method == VS_INTERLACEMETHOD_DEINTERLACE)
++  if (method == VS_INTERLACEMETHOD_DEINTERLACE || m_cadence)
+   {
+-    std::string filter;
+-
+-    filter = "bwdif=1:-1";
++    const std::string filter = m_cadence ? FILM_CADENCE::FilterGraph(*m_cadence) : "bwdif=1:-1";
+ 
+     if (avfilter_graph_parse_ptr(m_pFilterGraph, filter.c_str(), &inputs, &outputs, NULL) < 0)
+     {
+@@ -3206,7 +3242,8 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
+       return false;
+     }
+ 
+-    m_config.processInfo->SetVideoDeintMethod("bwdif");
++    m_config.processInfo->SetVideoDeintMethod(m_cadence ? FILM_CADENCE::Name(*m_cadence)
++                                                        : "bwdif");
+   }
+   else if (method == VS_INTERLACEMETHOD_RENDER_BOB ||
+            method == VS_INTERLACEMETHOD_NONE)
+@@ -3225,8 +3262,11 @@ bool CFFmpegPostproc::Init(EINTERLACEMETHOD method)
+   }
+   m_diMethod = method;
+ 
+-  m_pFilterFrameIn = av_frame_alloc();
+-  m_pFilterFrameOut = av_frame_alloc();
++  // Init also rebuilds the graph (Flush, cadence change); keep the frames.
++  if (!m_pFilterFrameIn)
++    m_pFilterFrameIn = av_frame_alloc();
++  if (!m_pFilterFrameOut)
++    m_pFilterFrameOut = av_frame_alloc();
+   return true;
+ }
+ 
+@@ -3288,7 +3328,19 @@ bool CFFmpegPostproc::AddPicture(CVaapiDecodedPicture &inPic)
+   CheckSuccess(vaUnmapBuffer(m_config.dpy, image.buf), "vaUnmapBuffer");
+   CheckSuccess(vaDestroyImage(m_config.dpy, image.image_id), "vaDestroyImage");
+ 
+-  if (m_diMethod == VS_INTERLACEMETHOD_DEINTERLACE)
++  if (m_diMethod == VS_INTERLACEMETHOD_CADENCE_AUTO)
++  {
++    // a new title plan or a detected change rebuilds the graph
++    const bool planned = ApplyTitlePlan();
++    if (m_fieldAnalysis.Analyse(m_pFilterFrameIn) || planned)
++    {
++      Close();
++      if (!Init(m_diMethod))
++        goto error;
++    }
++  }
++
++  if (m_diMethod == VS_INTERLACEMETHOD_DEINTERLACE || m_cadence)
+   {
+     if (av_buffersrc_add_frame(m_pFilterIn, m_pFilterFrameIn) < 0)
+     {
+@@ -3314,7 +3366,7 @@ error:
+ bool CFFmpegPostproc::Filter(CVaapiProcessedPicture &outPic)
+ {
+   outPic.DVDPic.SetParams(m_DVDPic);
+-  if (m_diMethod == VS_INTERLACEMETHOD_DEINTERLACE)
++  if (m_diMethod == VS_INTERLACEMETHOD_DEINTERLACE || m_cadence)
+   {
+     int result;
+     result = av_buffersink_get_frame(m_pFilterOut, m_pFilterFrameOut);
+@@ -3352,6 +3404,23 @@ bool CFFmpegPostproc::Filter(CVaapiProcessedPicture &outPic)
+   else
+     outPic.DVDPic.pts = DVD_NOPTS_VALUE;
+ 
++  // A film frame takes the evenly spaced film time of the graph; decimated frames keep
++  // the time of the coded frame they came from.
++  if (m_cadence && FILM_CADENCE::IsFilm(*m_cadence) && outPic.frame->pts != AV_NOPTS_VALUE)
++  {
++    const int64_t film = av_rescale_q(outPic.frame->pts, av_buffersink_get_time_base(m_pFilterOut),
++                                      AV_TIME_BASE_Q);
++    outPic.DVDPic.pts = static_cast<double>(film) * DVD_TIME_BASE / AV_TIME_BASE;
++    outPic.DVDPic.dts = DVD_NOPTS_VALUE;
++    outPic.DVDPic.iRepeatPicture = 0;
++    const double fps = StreamFps();
++    if (fps > 0)
++      outPic.DVDPic.filmFrameDuration =
++          FILM_CADENCE::FilmFrameDuration(*m_cadence, DVD_TIME_BASE / fps);
++    m_lastOutPts = outPic.DVDPic.pts;
++    return true;
++  }
++
+   double pts = outPic.DVDPic.pts;
+   if (m_lastOutPts != DVD_NOPTS_VALUE && m_lastOutPts == pts)
+   {
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h
+index d38256d..bf87d46 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/VAAPI.h
+@@ -9,6 +9,8 @@
+ #pragma once
+ 
+ #include "DVDVideoCodec.h"
++#include "FieldAnalysis.h"
++#include "FilmCadence.h"
+ #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
+ #include "cores/VideoSettings.h"
+ #include "threads/CriticalSection.h"
+@@ -25,6 +27,7 @@
+ #include <map>
+ #include <memory>
+ #include <mutex>
++#include <optional>
+ #include <set>
+ #include <string>
+ #include <utility>
+@@ -185,6 +188,7 @@ struct CVaapiConfig
+   int outWidth;
+   int outHeight;
+   AVRational aspect;
++  AVRational frameRate{0, 1}; //!< coded frame rate of the stream, if known
+   VAConfigID configId;
+   CVaapiBufferStats *stats;
+   int upscale;
+@@ -733,6 +737,9 @@ public:
+ protected:
+   bool CheckSuccess(VAStatus status, const std::string& function);
+   void Close();
++  double StreamFps() const;
++  //! \return true if a new title plan was applied to the film detection
++  bool ApplyTitlePlan();
+   DllLibSSE4 m_dllSSE4;
+   uint8_t *m_cache;
+   AVFilterGraph* m_pFilterGraph;
+@@ -741,6 +748,9 @@ protected:
+   AVFrame *m_pFilterFrameIn;
+   AVFrame *m_pFilterFrameOut;
+   EINTERLACEMETHOD m_diMethod;
++  std::optional<FILM_CADENCE::Cadence> m_cadence; //!< cadence graph
++  CFieldAnalysis m_fieldAnalysis; //!< for film detection; kept across seeks
++  uint64_t m_titlePlanGeneration = 0; //!< title plan the film detection started from
+   VideoPicture m_DVDPic;
+   double m_frametime;
+   double m_lastOutPts;
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.cpp b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.cpp
+index de3d6b7..46d9d81 100644
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.cpp
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "DVDInputStreamNavigator.h"
+ 
++#include "../DVDCodecs/Video/TitleScan.h"
+ #include "../DVDDemuxSPU.h"
+ #include "LangInfo.h"
+ #include "ServiceBroker.h"
+@@ -33,7 +34,9 @@
+ #include "platform/darwin/osx/CocoaInterface.h"
+ #endif
+ 
++#include <algorithm>
+ #include <chrono>
++#include <cstring>
+ #include <memory>
+ #include <string>
+ 
+@@ -88,6 +91,123 @@ constexpr int DVD_AUDIO_LANG_EXT_DIRECTORSCOMMENTS1 = 3;
+ constexpr int DVD_AUDIO_LANG_EXT_DIRECTORSCOMMENTS2 = 4;
+ } // namespace
+ 
++namespace
++{
++//! The sectors of the first program chain of a title, read through a navigator of its own
++class CDVDTitleData : public FILM_CADENCE::ITitleData
++{
++public:
++  CDVDTitleData(DllDvdNav& dll, dvdnav_t* navigator, std::unique_ptr<CDVDInputStreamFile> stream)
++    : m_dll(dll), m_stream(std::move(stream)), m_navigator(navigator)
++  {
++  }
++  ~CDVDTitleData() override { m_dll.dvdnav_close(m_navigator); }
++
++  //! start the title and stop at its first cell
++  bool Start(int title)
++  {
++    if (m_dll.dvdnav_set_PGC_positioning_flag(m_navigator, 1) != DVDNAV_STATUS_OK ||
++        m_dll.dvdnav_title_play(m_navigator, title) != DVDNAV_STATUS_OK)
++      return false;
++    for (int i = 0; i < 1024; ++i)
++    {
++      int32_t event = 0;
++      int32_t length = 0;
++      if (m_dll.dvdnav_get_next_block(m_navigator, m_block, &event, &length) != DVDNAV_STATUS_OK ||
++          event == DVDNAV_STOP)
++        return false;
++      if (event == DVDNAV_STILL_FRAME)
++        m_dll.dvdnav_still_skip(m_navigator);
++      else if (event == DVDNAV_WAIT)
++        m_dll.dvdnav_wait_skip(m_navigator);
++      else if (event == DVDNAV_CELL_CHANGE && m_dll.dvdnav_is_domain_vts(m_navigator))
++      {
++        uint32_t position = 0;
++        return m_dll.dvdnav_get_position(m_navigator, &position, &m_sectors) ==
++                   DVDNAV_STATUS_OK &&
++               m_sectors > 0;
++      }
++    }
++    return false;
++  }
++
++  int Read(uint8_t* buffer, int size) override
++  {
++    int done = 0;
++    while (done < size && !m_end)
++    {
++      if (m_offset >= DVD_VIDEO_LB_LEN && !NextBlock())
++        break;
++      const int count = std::min(size - done, DVD_VIDEO_LB_LEN - m_offset);
++      std::memcpy(buffer + done, m_block + m_offset, count);
++      m_offset += count;
++      done += count;
++    }
++    return done;
++  }
++
++  int64_t Seek(int64_t position) override
++  {
++    m_end = position == Size();
++    if (m_end)
++      return position;
++    if (position < 0 || position > Size() ||
++        m_dll.dvdnav_sector_search(m_navigator, position / DVD_VIDEO_LB_LEN, SEEK_SET) !=
++            DVDNAV_STATUS_OK)
++      return -1;
++    m_offset = DVD_VIDEO_LB_LEN;
++    m_skip = static_cast<int>(position % DVD_VIDEO_LB_LEN);
++    return position;
++  }
++
++  int64_t Size() override { return static_cast<int64_t>(m_sectors) * DVD_VIDEO_LB_LEN; }
++
++private:
++  bool NextBlock()
++  {
++    // a few events (cell, stream or still changes) can come between two blocks
++    for (int i = 0; i < 64; ++i)
++    {
++      int32_t event = 0;
++      int32_t length = 0;
++      if (m_dll.dvdnav_get_next_block(m_navigator, m_block, &event, &length) != DVDNAV_STATUS_OK)
++        return false;
++      switch (event)
++      {
++        case DVDNAV_BLOCK_OK:
++        case DVDNAV_NAV_PACKET:
++          m_offset = m_skip;
++          m_skip = 0;
++          return true;
++        case DVDNAV_STILL_FRAME:
++          m_dll.dvdnav_still_skip(m_navigator);
++          break;
++        case DVDNAV_WAIT:
++          m_dll.dvdnav_wait_skip(m_navigator);
++          break;
++        case DVDNAV_STOP:
++          return false;
++        default:
++          break;
++      }
++      // the end of the title can lead to a menu
++      if (!m_dll.dvdnav_is_domain_vts(m_navigator))
++        return false;
++    }
++    return false;
++  }
++
++  DllDvdNav& m_dll;
++  std::unique_ptr<CDVDInputStreamFile> m_stream; //!< the image file of a disc image
++  dvdnav_t* m_navigator;
++  uint32_t m_sectors = 0;
++  uint8_t m_block[DVD_VIDEO_LB_LEN];
++  int m_offset = DVD_VIDEO_LB_LEN; //!< read position in m_block
++  int m_skip = 0; //!< bytes of the next block before the seek position
++  bool m_end = false; //!< positioned at the end of the title
++};
++} // namespace
++
+ static int dvd_inputstreamnavigator_cb_seek(void * p_stream, uint64_t i_pos);
+ static int dvd_inputstreamnavigator_cb_read(void * p_stream, void * buffer, int i_read);
+ static int dvd_inputstreamnavigator_cb_readv(void * p_stream, void * p_iovec, int i_blocks);
+@@ -122,6 +242,21 @@ CDVDInputStreamNavigator::~CDVDInputStreamNavigator()
+   Close();
+ }
+ 
++std::string CDVDInputStreamNavigator::NavigatorPath(const CFileItem& item)
++{
++  // libdvdcss fails if the file path contains VIDEO_TS.IFO or VIDEO_TS/VIDEO_TS.IFO
++  // libdvdnav is still able to play without, so strip them.
++
++  std::string path = item.GetDynPath();
++  if(URIUtils::GetFileName(path) == "VIDEO_TS.IFO")
++    path = URIUtils::GetParentPath(path);
++  URIUtils::RemoveSlashAtEnd(path);
++  if(URIUtils::GetFileName(path) == "VIDEO_TS")
++    path = URIUtils::GetParentPath(path);
++  URIUtils::RemoveSlashAtEnd(path);
++  return path;
++}
++
+ bool CDVDInputStreamNavigator::Open()
+ {
+   m_item.SetMimeType("video/x-dvd-mpeg");
+@@ -139,16 +274,7 @@ bool CDVDInputStreamNavigator::Open()
+   if (!m_dll.Load())
+     return false;
+ 
+-  // libdvdcss fails if the file path contains VIDEO_TS.IFO or VIDEO_TS/VIDEO_TS.IFO
+-  // libdvdnav is still able to play without, so strip them.
+-
+-  std::string path = m_item.GetDynPath();
+-  if(URIUtils::GetFileName(path) == "VIDEO_TS.IFO")
+-    path = URIUtils::GetParentPath(path);
+-  URIUtils::RemoveSlashAtEnd(path);
+-  if(URIUtils::GetFileName(path) == "VIDEO_TS")
+-    path = URIUtils::GetParentPath(path);
+-  URIUtils::RemoveSlashAtEnd(path);
++  std::string path = NavigatorPath(m_item);
+ 
+ #if defined(TARGET_DARWIN_OSX)
+   // if physical DVDs, libdvdnav wants "/dev/rdiskN" device name for OSX,
+@@ -1296,6 +1422,32 @@ bool CDVDInputStreamNavigator::SeekChapter(int iChapter)
+   return true;
+ }
+ 
++std::unique_ptr<FILM_CADENCE::ITitleData> CDVDInputStreamNavigator::OpenTitleData()
++{
++  if (!m_dvdnav || m_bInMenu || m_iTitle <= 0)
++    return {};
++  // A second navigator, as dvdnav_dup fails on a navigator opened on stream callbacks.
++  std::unique_ptr<CDVDInputStreamFile> stream;
++  dvdnav_t* navigator = nullptr;
++  if (m_item.IsDiscImage())
++  {
++    stream = std::make_unique<CDVDInputStreamFile>(m_item, XFILE::READ_TRUNCATED);
++    if (!stream->Open() ||
++        m_dll.dvdnav_open_stream(&navigator, stream.get(), &m_dvdnav_stream_cb) !=
++            DVDNAV_STATUS_OK)
++      return {};
++  }
++  else if (m_dll.dvdnav_open(&navigator, NavigatorPath(m_item).c_str()) != DVDNAV_STATUS_OK)
++    return {};
++  auto data = std::make_unique<CDVDTitleData>(m_dll, navigator, std::move(stream));
++  int32_t mask = 0;
++  if (m_dll.dvdnav_get_region_mask(m_dvdnav, &mask) == DVDNAV_STATUS_OK)
++    m_dll.dvdnav_set_region_mask(navigator, mask);
++  if (!data->Start(m_iTitle))
++    return {};
++  return data;
++}
++
+ float CDVDInputStreamNavigator::GetVideoAspectRatio()
+ {
+   int iAspect = m_dll.dvdnav_get_video_aspect(m_dvdnav);
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.h b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.h
+index c7afeb5..5099555 100644
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.h
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamNavigator.h
+@@ -21,6 +21,7 @@
+ #include "video/VideoInfoTag.h"
+ 
+ #include <chrono>
++#include <memory>
+ #include <string>
+ #include <vector>
+ 
+@@ -42,6 +43,11 @@ class CDVDOverlayPicture;
+ 
+ struct dvdnav_s;
+ 
++namespace FILM_CADENCE
++{
++class ITitleData;
++}
++
+ class CDVDInputStreamNavigator
+   : public CDVDInputStream
+   , public CDVDInputStream::IDisplayTime
+@@ -95,6 +101,13 @@ public:
+   MenuType GetSupportedMenuType() override { return MenuType::NATIVE; }
+ 
+   bool IsInMenu() override { return m_bInMenu; }
++  int GetTitle() const { return m_iTitle; }
++  /*!
++   * \brief The program stream of the current title, read through a navigator of its own:
++   * the playback position does not move.
++   * \return empty if the title cannot be read
++   */
++  std::unique_ptr<FILM_CADENCE::ITitleData> OpenTitleData();
+   double GetTimeStampCorrection() override { return (double)(m_iVobUnitCorrection * 1000) / 90; }
+ 
+   int GetActiveSubtitleStream();
+@@ -152,6 +165,8 @@ public:
+ protected:
+ 
+   int ProcessBlock(uint8_t* buffer, int* read);
++  //! path libdvdnav opens for a DVD folder
++  static std::string NavigatorPath(const CFileItem& item);
+ 
+   static void SetAudioStreamName(AudioStreamInfo &info, const audio_attr_t &audio_attributes);
+   static void SetSubtitleStreamName(SubtitleStreamInfo &info, const subp_attr_t &subp_attributes);
+diff --git a/xbmc/cores/VideoPlayer/FilmTiming.cpp b/xbmc/cores/VideoPlayer/FilmTiming.cpp
+new file mode 100644
+index 0000000..f60de17
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/FilmTiming.cpp
+@@ -0,0 +1,106 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#include "FilmTiming.h"
++
++#include <algorithm>
++#include <cmath>
++
++namespace FILM_TIMING
++{
++
++CSoftTelecineDetector::CSoftTelecineDetector(std::size_t window)
++  : m_window(std::max<std::size_t>(window, 8))
++{
++}
++
++void CSoftTelecineDetector::Reset()
++{
++  m_repeated.clear();
++  m_agree = 0;
++  m_active = false;
++  m_decided = false;
++}
++
++void CSoftTelecineDetector::Seed(bool active)
++{
++  Reset();
++  m_active = active;
++  m_decided = true;
++}
++
++bool CSoftTelecineDetector::Add(bool interlaced, double repeatFields)
++{
++  bool pattern = false;
++  if (interlaced)
++  {
++    m_repeated.clear();
++  }
++  else
++  {
++    m_repeated.push_back(repeatFields > 0);
++    if (m_repeated.size() > m_window)
++      m_repeated.pop_front();
++    // The first decision is made on half a window, so that film frames are soon shown
++    // at the film rate.
++    const std::size_t needed = m_decided ? m_window : m_window / 2;
++    // a partial window is no evidence against the current decision
++    if (m_repeated.size() < needed)
++      return false;
++    const std::size_t frames = m_repeated.size();
++    const auto repeats = static_cast<std::size_t>(std::ranges::count(m_repeated, true));
++    // 3:2 is one repeat every two frames; also never two repeats in a row.
++    bool consecutive = false;
++    for (std::size_t i = 1; i < m_repeated.size(); ++i)
++      consecutive = consecutive || (m_repeated[i] && m_repeated[i - 1]);
++    pattern = !consecutive && repeats * 5 >= frames * 2 && repeats * 5 <= frames * 3;
++  }
++
++  if (pattern == m_active)
++  {
++    m_agree = 0;
++    m_decided = m_decided || m_repeated.size() >= m_window / 2;
++    return false;
++  }
++  // Entering on the first decision and leaving at an interlaced picture are immediate;
++  // any other change needs a full window of agreement.
++  if (!m_decided || interlaced || ++m_agree >= m_window)
++  {
++    m_active = pattern;
++    m_agree = 0;
++    m_decided = true;
++    return true;
++  }
++  return false;
++}
++
++double CodedFrameDuration(double timeBase, double codedRate, double containerRate)
++{
++  if (codedRate > 0)
++    return timeBase / codedRate;
++  if (containerRate > 0)
++    return timeBase / containerRate;
++  return timeBase * 1001 / 30000;
++}
++
++std::optional<double> CFilmRetimer::Retime(std::optional<double> pts, double frameDuration)
++{
++  std::optional<double> out;
++  if (m_next && pts && std::abs(*pts - *m_next) <= frameDuration)
++    out = *m_next + (*pts - *m_next) / 16; // follow the source clock, not its 3:2 steps
++  else if (pts)
++    out = pts;
++  else
++    out = m_next;
++
++  if (out)
++    m_next = *out + frameDuration;
++  return out;
++}
++
++} // namespace FILM_TIMING
+diff --git a/xbmc/cores/VideoPlayer/FilmTiming.h b/xbmc/cores/VideoPlayer/FilmTiming.h
+new file mode 100644
+index 0000000..0cf523e
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/FilmTiming.h
+@@ -0,0 +1,91 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++/*!
++ * \file FilmTiming.h
++ * \brief Presentation of film frames at their own rate (23.976 for NTSC film).
++ * Free of FFmpeg and Kodi dependencies.
++ */
++
++#include <cstddef>
++#include <deque>
++#include <optional>
++
++namespace FILM_TIMING
++{
++
++/*!
++ * \brief Detects soft telecine: progressive film frames with MPEG-2 repeat_first_field
++ * flags in a 3:2 pattern (one repeated field on every second frame).
++ *
++ * The first decision is made after half a window. Later changes need a full window of
++ * agreement, so that an occasional irregular flag does not toggle the output rate.
++ */
++class CSoftTelecineDetector
++{
++public:
++  explicit CSoftTelecineDetector(std::size_t window = 24);
++
++  /*!
++   * \param interlaced picture is coded as interlaced
++   * \param repeatFields extra fields to display, VideoPicture::iRepeatPicture (0.5 per field)
++   * \return true when the decision changed
++   */
++  bool Add(bool interlaced, double repeatFields);
++  bool Active() const { return m_active; }
++  void Reset();
++  //! Start from a decision made before playback; a change needs a full window.
++  void Seed(bool active);
++
++private:
++  const std::size_t m_window;
++  std::deque<bool> m_repeated; //!< empty after an interlaced picture
++  std::size_t m_agree = 0;
++  bool m_active = false;
++  bool m_decided = false; //!< a first decision was made
++};
++
++/*!
++ * \brief Duration of a coded frame (two fields) of a pulldown stream
++ *
++ * The rate coded in the video stream is preferred. A container can give the film rate
++ * of a soft-telecined stream: Matroska gives the average frame rate, 23.976.
++ * \param timeBase units per second of the result
++ * \param codedRate frame rate coded in the video stream, 0 if unknown
++ * \param containerRate frame rate given by the container, 0 if unknown
++ */
++double CodedFrameDuration(double timeBase, double codedRate, double containerRate);
++
++/*!
++ * \brief Duration of a film frame recovered from a 3:2 cadence
++ * \param codedFrameDuration duration of a coded frame (two fields) of the stream
++ */
++constexpr double PulldownFilmFrameDuration(double codedFrameDuration)
++{
++  return codedFrameDuration * 5 / 4;
++}
++
++/*!
++ * \brief Evenly spaced presentation times for film frames.
++ *
++ * 3:2 timestamps are within one film frame of the even film time. A larger difference is
++ * a discontinuity and restarts the timeline at the given timestamp.
++ */
++class CFilmRetimer
++{
++public:
++  std::optional<double> Retime(std::optional<double> pts, double frameDuration);
++  void Reset() { m_next.reset(); }
++
++private:
++  std::optional<double> m_next;
++};
++
++} // namespace FILM_TIMING
+diff --git a/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp b/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
+index c6cee90..40afd3c 100644
+--- a/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
++++ b/xbmc/cores/VideoPlayer/Process/ProcessInfo.cpp
+@@ -291,6 +291,20 @@ float CProcessInfo::GetVideoDAR()
+   return m_videoDAR;
+ }
+ 
++void CProcessInfo::SetTitlePlan(std::optional<FILM_CADENCE::TitlePlan> plan)
++{
++  std::unique_lock lock(m_titlePlanSection);
++  m_titlePlan = plan;
++  ++m_titlePlanGeneration;
++}
++
++std::optional<FILM_CADENCE::TitlePlan> CProcessInfo::GetTitlePlan(uint64_t& generation) const
++{
++  std::unique_lock lock(m_titlePlanSection);
++  generation = m_titlePlanGeneration;
++  return m_titlePlan;
++}
++
+ void CProcessInfo::SetVideoInterlaced(bool interlaced)
+ {
+   std::unique_lock lock(m_videoCodecSection);
+@@ -319,6 +333,8 @@ void CProcessInfo::SetSwDeinterlacingMethods()
+   methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_NONE);
+   methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
+   methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE_HALF);
++  methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_CADENCE_AUTO);
++  methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_INVERSE_TELECINE);
+ 
+   UpdateDeinterlacingMethods(methods);
+   SetDeinterlacingMethodDefault(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
+diff --git a/xbmc/cores/VideoPlayer/Process/ProcessInfo.h b/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
+index 2e193a3..936ce5c 100644
+--- a/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
++++ b/xbmc/cores/VideoPlayer/Process/ProcessInfo.h
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/FilmCadence.h"
+ #include "cores/VideoPlayer/VideoRenderers/RenderInfo.h"
+ #include "cores/VideoSettings.h"
+ #include "threads/CriticalSection.h"
+@@ -17,6 +18,7 @@
+ #include <list>
+ #include <memory>
+ #include <map>
++#include <optional>
+ #include <string>
+ 
+ class CProcessInfo;
+@@ -62,6 +64,9 @@ public:
+   int GetVideoQueueDataLevel();
+   void SetVideoInterlaced(bool interlaced);
+   bool GetVideoInterlaced();
++  //! Cadence of the title decided before playback; every call starts a new generation.
++  void SetTitlePlan(std::optional<FILM_CADENCE::TitlePlan> plan);
++  std::optional<FILM_CADENCE::TitlePlan> GetTitlePlan(uint64_t& generation) const;
+   virtual EINTERLACEMETHOD GetFallbackDeintMethod();
+   virtual void SetSwDeinterlacingMethods();
+   void UpdateDeinterlacingMethods(std::list<EINTERLACEMETHOD> &methods);
+@@ -214,6 +219,10 @@ protected:
+ 
+   // settings
+   CCriticalSection m_settingsSection;
++
++  mutable CCriticalSection m_titlePlanSection;
++  std::optional<FILM_CADENCE::TitlePlan> m_titlePlan;
++  uint64_t m_titlePlanGeneration = 0;
+   CVideoSettings m_videoSettings;
+   std::unique_ptr<CVideoSettingsLocked> m_videoSettingsLocked;
+ };
+diff --git a/xbmc/cores/VideoPlayer/TitleCadence.cpp b/xbmc/cores/VideoPlayer/TitleCadence.cpp
+new file mode 100644
+index 0000000..95cb826
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/TitleCadence.cpp
+@@ -0,0 +1,96 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#include "TitleCadence.h"
++
++#include "DVDStreamInfo.h"
++#include "filesystem/File.h"
++#include "utils/log.h"
++
++#include <algorithm>
++
++extern "C"
++{
++#include <libavcodec/codec_id.h>
++}
++
++namespace FILM_CADENCE
++{
++namespace
++{
++class CFileTitleData : public ITitleData
++{
++public:
++  bool Open(const std::string& path) { return m_file.Open(path, XFILE::READ_TRUNCATED); }
++  int Read(uint8_t* buffer, int size) override
++  {
++    return static_cast<int>(m_file.Read(buffer, static_cast<size_t>(size)));
++  }
++  int64_t Seek(int64_t position) override { return m_file.Seek(position, SEEK_SET); }
++  int64_t Size() override { return std::max<int64_t>(m_file.GetLength(), 0); }
++
++private:
++  XFILE::CFile m_file;
++};
++} // namespace
++
++bool IsScanCandidate(const CDVDStreamInfo& hint)
++{
++  return (hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_H264) &&
++         hint.height > 0 && hint.height <= 576 && !hint.stills;
++}
++
++std::optional<TitlePlan> ScanTitlePlan(ITitleData& data,
++                                       EINTERLACEMETHOD method,
++                                       const std::string& name)
++{
++  const ScanResult result = ScanTitle(data, ScanLimits{});
++  std::optional<TitlePlan> plan = result.plan;
++  if (plan && !plan->softTelecine)
++  {
++    switch (plan->cadence)
++    {
++      case Cadence::TELECINE:
++      case Cadence::FIELD_PAIRED:
++      case Cadence::INTERLACED:
++        // the output rate of the other deinterlacing methods is theirs to choose
++        if (method == VS_INTERLACEMETHOD_INVERSE_TELECINE)
++          plan->cadence = InverseTelecineCadence(plan->frameRate);
++        else if (method != VS_INTERLACEMETHOD_CADENCE_AUTO)
++          plan.reset();
++        break;
++      case Cadence::REPEATED_FRAME:
++        // only film detection on decoded frames removes repeats; H.264 can be decoded by
++        // VAAPI, whose processing does not
++        if (method != VS_INTERLACEMETHOD_CADENCE_AUTO || result.codec != AV_CODEC_ID_MPEG2VIDEO)
++          plan->cadence = Cadence::PROGRESSIVE;
++        break;
++      case Cadence::PROGRESSIVE:
++        break;
++    }
++  }
++
++  CLog::Log(LOGINFO,
++            "TitleScan: {}: {}, display {:.3f} Hz ({} frames at {} points, {} votes, repeat "
++            "score {:.1f}, {} ms)",
++            name,
++            !plan ? "no decision" : plan->softTelecine ? "soft telecine" : Name(plan->cadence),
++            plan ? DisplayRate(*plan) : 0.0, result.frames, result.segments, result.votes,
++            result.repeatScore, result.elapsedMs);
++  return plan;
++}
++
++std::unique_ptr<ITitleData> OpenFileTitleData(const std::string& path)
++{
++  auto data = std::make_unique<CFileTitleData>();
++  if (!data->Open(path))
++    return {};
++  return data;
++}
++
++} // namespace FILM_CADENCE
+diff --git a/xbmc/cores/VideoPlayer/TitleCadence.h b/xbmc/cores/VideoPlayer/TitleCadence.h
+new file mode 100644
+index 0000000..7e66551
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/TitleCadence.h
+@@ -0,0 +1,37 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++#include "DVDCodecs/Video/TitleScan.h"
++#include "cores/VideoSettings.h"
++
++#include <memory>
++#include <optional>
++#include <string>
++
++class CDVDStreamInfo;
++
++namespace FILM_CADENCE
++{
++
++//! true for SD MPEG-2 and H.264 video, the content the title scan is made for
++bool IsScanCandidate(const CDVDStreamInfo& hint);
++
++/*!
++ * \brief Scans a title and adapts the plan to the processing that will run.
++ * \return the plan, empty if the display mode is left to the stream
++ */
++std::optional<TitlePlan> ScanTitlePlan(ITitleData& data,
++                                       EINTERLACEMETHOD method,
++                                       const std::string& name);
++
++//! A file opened through the Kodi file system, empty if it cannot be opened
++std::unique_ptr<ITitleData> OpenFileTitleData(const std::string& path);
++
++} // namespace FILM_CADENCE
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+index cfcb899..6664355 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -40,6 +40,7 @@
+ #include "FileItem.h"
+ #include "LangInfo.h"
+ #include "ServiceBroker.h"
++#include "TitleCadence.h"
+ #include "URL.h"
+ #include "Util.h"
+ #include "VideoPlayerAudio.h"
+@@ -958,6 +959,8 @@ bool CVideoPlayer::OpenInputStream()
+   if (m_pInputStream.use_count() > 1)
+     throw std::runtime_error("m_pInputStream reference count is greater than 1");
+   m_pInputStream.reset();
++  m_titleScanned = -1;
++  m_processInfo->SetTitlePlan(std::nullopt);
+ 
+   CLog::Log(LOGINFO, "Creating InputStream");
+ 
+@@ -4584,6 +4587,18 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+   if (hint.flags & AV_DISPOSITION_ATTACHED_PIC)
+     return false;
+ 
++  // Decide the cadence of the file before playback, so that the display mode is set once.
++  if (m_titleScanned < 0 && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_FILE) &&
++      FILM_CADENCE::IsScanCandidate(hint))
++  {
++    m_titleScanned = 0;
++    std::optional<FILM_CADENCE::TitlePlan> plan;
++    if (auto data = FILM_CADENCE::OpenFileTitleData(m_item.GetDynPath()))
++      plan = FILM_CADENCE::ScanTitlePlan(*data, m_processInfo->GetVideoSettings().m_InterlaceMethod,
++                                         CURL::GetRedacted(m_item.GetDynPath()));
++    m_processInfo->SetTitlePlan(plan);
++  }
++
+   // set desired refresh rate
+   if (m_CurrentVideo.id < 0 && m_playerOptions.fullscreen &&
+       CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot() && hint.fpsrate != 0 &&
+@@ -4591,9 +4606,12 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+   {
+     if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+     {
+-      const double framerate = DVD_TIME_BASE / CDVDCodecUtils::NormalizeFrameduration(
+-                                                   (double)DVD_TIME_BASE * hint.fpsscale /
+-                                                   (hint.fpsrate * (hint.interlaced ? 2 : 1)));
++      double framerate = DVD_TIME_BASE / CDVDCodecUtils::NormalizeFrameduration(
++                                             (double)DVD_TIME_BASE * hint.fpsscale /
++                                             (hint.fpsrate * (hint.interlaced ? 2 : 1)));
++      uint64_t generation = 0;
++      if (const auto plan = m_processInfo->GetTitlePlan(generation))
++        framerate = FILM_CADENCE::DisplayRate(*plan);
+ 
+       const bool nativeDV = WantsNativePresentation(hint);
+       RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+@@ -5162,6 +5180,20 @@ int CVideoPlayer::OnDiscNavResult(void* pData, int iMessage)
+ 
+         if (m_dvd.state != DVDSTATE_STILL)
+           m_dvd.state = DVDSTATE_NORMAL;
++
++        // A new title: decide its cadence before its first frame, from a copy of the
++        // navigator, so that the display mode is set once for the title.
++        if (!pStream->IsInMenu() && pStream->GetTitle() > 0 &&
++            pStream->GetTitle() != m_titleScanned)
++        {
++          m_titleScanned = pStream->GetTitle();
++          std::optional<FILM_CADENCE::TitlePlan> plan;
++          if (auto data = pStream->OpenTitleData())
++            plan = FILM_CADENCE::ScanTitlePlan(
++                *data, m_processInfo->GetVideoSettings().m_InterlaceMethod,
++                StringUtils::Format("DVD title {}", m_titleScanned));
++          m_processInfo->SetTitlePlan(plan);
++        }
+       }
+       break;
+     case DVDNAV_NAV_PACKET:
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.h b/xbmc/cores/VideoPlayer/VideoPlayer.h
+index c2e5cee..413949b 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.h
+@@ -675,6 +675,8 @@ protected:
+     int iSelectedVideoStream; // mpeg stream id or angle, -1 if disabled
+   } m_dvd;
+ 
++  int m_titleScanned = -1; //!< DVD title (0 for a file) whose cadence was decided
++
+   SPlayerState m_State;
+   mutable CCriticalSection m_StateSection;
+   XbmcThreads::EndTime<> m_syncTimer;
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+index 9813b77..1e85343 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -222,6 +222,14 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
+     m_processInfo.SetVideoFps(0);
+   }
+ 
++  m_streamFrameRate = m_fFrameRate;
++  m_streamFpsInvalid = m_bFpsInvalid;
++  m_softTelecine.Reset();
++  m_filmRetimer.Reset();
++  m_titlePlanGeneration = 0;
++  m_titleDisplayRate = 0;
++  m_configRate = 0;
++
+   m_ptsTracker.ResetVFRDetection();
+   ResetFrameRateCalc();
+ 
+@@ -575,6 +583,7 @@ void CVideoPlayerVideo::Process()
+       m_rewindStalled = false;
+ 
+       m_ptsTracker.Flush();
++      m_filmRetimer.Reset();
+       //we need to recalculate the framerate
+       //! @todo this needs to be set on a streamchange instead
+       ResetFrameRateCalc();
+@@ -896,6 +905,10 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
+       pts = m_picture.pts;
+     }
+ 
++    PresentFilmFrame();
++    if (m_picture.pts != DVD_NOPTS_VALUE)
++      pts = m_picture.pts;
++
+     double extraDelay = 0.0;
+     if (m_picture.iRepeatPicture)
+     {
+@@ -1087,13 +1100,27 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
+   }
+ 
+   double config_framerate = m_bFpsInvalid ? 0.0 : m_fFrameRate;
+-  if (m_processInfo.GetVideoInterlaced())
++  // 25 fps film recovered from a 29.97 stream runs at 24.975, a rate no display mode has:
++  // ask for the 25 Hz family, a frame is then repeated about every 40 s.
++  if (pPicture->filmFrameDuration > 0 &&
++      MathUtils::FloatEquals(config_framerate, 25000.0 / 1001.0, 0.01))
++    config_framerate = 25.0;
++  // a film frame is shown once, whatever the coding of the stream
++  if (m_processInfo.GetVideoInterlaced() && pPicture->filmFrameDuration <= 0)
+   {
+     if (MathUtils::FloatEquals(config_framerate, 25.0, 0.02))
+       config_framerate = 50.0;
+     else if (MathUtils::FloatEquals(config_framerate, 29.97, 0.02))
+       config_framerate = 59.94;
+   }
++  // The display mode of a title is chosen before playback, from the title plan. Film
++  // processing that starts or ends during playback must not change it.
++  if (m_titleDisplayRate > 0)
++    config_framerate = m_titleDisplayRate;
++  else if (pPicture->filmFrameDuration > 0 && m_configRate > 0)
++    config_framerate = m_configRate;
++  if (config_framerate > 0)
++    m_configRate = config_framerate;
+ 
+   int sorient = m_processInfo.GetVideoSettings().m_Orientation;
+   int orientation = sorient != 0 ? (sorient + m_hints.orientation) % 360
+@@ -1110,7 +1137,8 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
+ 
+   //try to calculate the framerate
+   m_ptsTracker.Add(pPicture->pts);
+-  if (!m_stalled)
++  // film frames are retimed to their own rate, the stream's timestamps are not used
++  if (!m_stalled && pPicture->filmFrameDuration <= 0)
+     CalcFrameRate();
+ 
+   // signal to clock what our framerate is, it may want to adjust it's
+@@ -1239,6 +1267,73 @@ int CVideoPlayerVideo::GetVideoBitrate()
+   return (int)m_videoStats.GetBitrate();
+ }
+ 
++void CVideoPlayerVideo::ApplyTitlePlan()
++{
++  uint64_t generation = 0;
++  const auto plan = m_processInfo.GetTitlePlan(generation);
++  if (generation == m_titlePlanGeneration)
++    return;
++  m_titlePlanGeneration = generation;
++  m_titleDisplayRate = plan ? FILM_CADENCE::DisplayRate(*plan) : 0;
++  if (plan)
++    m_softTelecine.Seed(plan->softTelecine);
++  CLog::Log(LOGDEBUG, "CVideoPlayerVideo - title plan: display rate {:.3f}", m_titleDisplayRate);
++}
++
++void CVideoPlayerVideo::PresentFilmFrame()
++{
++  ApplyTitlePlan();
++  const bool interlaced = m_picture.iFlags & DVP_FLAG_INTERLACED;
++  if (m_softTelecine.Add(interlaced, m_picture.iRepeatPicture))
++  {
++    CLog::Log(LOGINFO, "CVideoPlayerVideo - soft telecine {}",
++              m_softTelecine.Active() ? "detected, showing film frames at the film rate"
++                                      : "ended");
++    if (!m_softTelecine.Active())
++    {
++      m_fFrameRate = m_streamFrameRate;
++      m_bFpsInvalid = m_streamFpsInvalid;
++      m_processInfo.SetVideoFps(m_bFpsInvalid ? 0.0f : static_cast<float>(m_fFrameRate));
++      m_ptsTracker.Flush();
++      ResetFrameRateCalc();
++    }
++  }
++
++  if (m_softTelecine.Active() && !interlaced && m_picture.filmFrameDuration <= 0)
++    m_picture.filmFrameDuration =
++        FILM_TIMING::PulldownFilmFrameDuration(FILM_TIMING::CodedFrameDuration(
++            DVD_TIME_BASE, m_picture.codedFrameRate,
++            m_hints.fpsrate > 0 && m_hints.fpsscale > 0
++                ? static_cast<double>(m_hints.fpsrate) / m_hints.fpsscale
++                : 0));
++
++  const double duration = m_picture.filmFrameDuration;
++  if (duration <= 0)
++  {
++    m_filmRetimer.Reset();
++    return;
++  }
++
++  // The repeated fields of the 3:2 pattern are not shown: every film frame lasts the same.
++  m_picture.iRepeatPicture = 0;
++  m_picture.iDuration = duration;
++  // m_picture.pts is the predicted time when the picture has no timestamp
++  const auto retimed = m_filmRetimer.Retime(
++      m_picture.pts != DVD_NOPTS_VALUE ? std::optional<double>(m_picture.pts) : std::nullopt,
++      duration);
++  if (retimed)
++    m_picture.pts = *retimed;
++
++  const double rate = DVD_TIME_BASE / duration;
++  if (m_bFpsInvalid || std::abs(m_fFrameRate - rate) > 0.01)
++  {
++    CLog::Log(LOGDEBUG, "CVideoPlayerVideo - film frame rate {:.3f}", rate);
++    m_fFrameRate = rate;
++    m_bFpsInvalid = false;
++    m_processInfo.SetVideoFps(static_cast<float>(rate));
++  }
++}
++
+ void CVideoPlayerVideo::ResetFrameRateCalc()
+ {
+   m_fStableFrameRate = 0.0;
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.h b/xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+index a1579ff..54f07c3 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+@@ -13,6 +13,7 @@
+ #include "DVDMessageQueue.h"
+ #include "DVDOverlayContainer.h"
+ #include "DVDStreamInfo.h"
++#include "FilmTiming.h"
+ #include "IVideoPlayer.h"
+ #include "PTSTracker.h"
+ #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
+@@ -114,6 +115,8 @@ protected:
+ 
+   void ResetFrameRateCalc();
+   void CalcFrameRate();
++  void PresentFilmFrame();
++  void ApplyTitlePlan();
+   int CalcDropRequirement(double pts);
+ 
+   double m_iSubtitleDelay;
+@@ -155,6 +158,13 @@ protected:
+   CDVDStreamInfo m_hints;
+   std::unique_ptr<CDVDVideoCodec> m_pVideoCodec;
+   CPtsTracker m_ptsTracker;
++  FILM_TIMING::CSoftTelecineDetector m_softTelecine;
++  FILM_TIMING::CFilmRetimer m_filmRetimer;
++  double m_streamFrameRate = 25; //!< frame rate stated by the stream
++  bool m_streamFpsInvalid = true;
++  uint64_t m_titlePlanGeneration = 0; //!< title plan applied to this stream
++  double m_titleDisplayRate = 0; //!< display rate of the title plan, 0 without a plan
++  double m_configRate = 0; //!< frame rate the renderer was last configured with
+   std::list<DVDMessageListItem> m_packets;
+   CDroppingStats m_droppingStats;
+   CRenderManager& m_renderManager;
+diff --git a/xbmc/cores/VideoSettings.h b/xbmc/cores/VideoSettings.h
+index 6c41e33..9ca15af 100644
+--- a/xbmc/cores/VideoSettings.h
++++ b/xbmc/cores/VideoSettings.h
+@@ -38,6 +38,8 @@ enum EINTERLACEMETHOD
+   VS_INTERLACEMETHOD_VAAPI_MADI = 23,
+   VS_INTERLACEMETHOD_VAAPI_MACI = 24,
+   VS_INTERLACEMETHOD_DXVA_AUTO = 32,
++  VS_INTERLACEMETHOD_INVERSE_TELECINE = 33, //!< field matching, orphan deinterlacing, 3:2 decimation
++  VS_INTERLACEMETHOD_CADENCE_AUTO = 34, //!< field analysis selects field matching, IVTC or bwdif
+   VS_INTERLACEMETHOD_MAX // do not use and keep as last enum value.
+ };
+ 
+@@ -79,6 +81,8 @@ private:
+       {VS_INTERLACEMETHOD_VAAPI_MADI, "vaapi madi"},
+       {VS_INTERLACEMETHOD_VAAPI_MACI, "vaapi maci"},
+       {VS_INTERLACEMETHOD_DXVA_AUTO, "dxva auto"},
++      {VS_INTERLACEMETHOD_INVERSE_TELECINE, "inverse telecine"},
++      {VS_INTERLACEMETHOD_CADENCE_AUTO, "film detection"},
+   });
+ };
+ 
+diff --git a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+index 58e72b4..ad20bc7 100644
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -362,6 +362,8 @@ void CGUIDialogVideoSettings::InitializeSettings()
+   entries.emplace_back(16328, VS_INTERLACEMETHOD_VAAPI_MADI);
+   entries.emplace_back(16329, VS_INTERLACEMETHOD_VAAPI_MACI);
+   entries.emplace_back(16320, VS_INTERLACEMETHOD_DXVA_AUTO);
++  entries.emplace_back(16332, VS_INTERLACEMETHOD_CADENCE_AUTO);
++  entries.emplace_back(16331, VS_INTERLACEMETHOD_INVERSE_TELECINE);
+ 
+   /* remove unsupported methods */
+   for (TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
