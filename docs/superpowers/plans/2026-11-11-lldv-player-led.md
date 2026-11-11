@@ -215,6 +215,26 @@ Le test compare les codes dépaquetés à un calcul indépendant en double préc
 
 Les trois essais ciblés passent aussi sur l’iGPU Intel du N100 (Mesa 26.2.3) avec un contexte EGL hors écran. Sur une mire RGB linéaire 4K déjà en mémoire, le packing seul prend 17,32 ms GPU de médiane aux deux profondeurs. Le P95 est de 17,35 ms en 10 bits et 17,32 ms en 12 bits sur 48 mesures par profondeur après échauffement. La cadence du circuit complet reste à qualifier. Les 12 bits reçus par la LG et les couleurs de la dalle restent à mesurer avant le raccordement à HDMI.
 
+### Optimisation du packing et cadence mesurée sur le N100
+
+Le commit `e2d54a9` calcule les deux pixels d’une paire dans une seule invocation GLES 3.1 quand la texture RGBA8 de sortie est immuable. Il réutilise le shader PQ stable de libplacebo et les mêmes règles YCbCr et d’arrondi que le packing raster. La médiane murale sur la mire 4K passe de **17,97 à 10,77 ms** aux deux profondeurs, sur 48 mesures par profondeur avec synchronisation GPU. L’essai à deux passes avec une texture PQ intermédiaire coûtait 22,42 ms GPU contre 17,32 ms pour le raster. L’essai avec mémoire partagée coûtait 15,20 ms en moyenne murale. [Documentation GLES](https://registry.khronos.org/OpenGL-Refpages/es3.1/html/glBindImageTexture.xhtml)
+
+Deux images 4K P5 et deux images 4K FEL ont été comparées à 10 et 12 bits sur ADL-N. Les 132 710 400 mots Y/C du raster restent identiques. Le calcul par paire change 19 mots, d’un code utile chacun. Sur ces 19 positions, l’oracle CPU en double précision situe chaque valeur à moins de 0,0025 code du seuil de demi-arrondi. Les mires vérifient aussi le padding 10 bits, la phase de chroma, les trois gamuts, l’inversion verticale, les refus et la restauration des états GL sur le N100 et llvmpipe.
+
+Le banc VAAPI/EGL couvre le décodage, l’import, la reconstruction, le mapping et le packing à la résolution native. Il conserve jusqu’à trois images en vol. Après 120 images d’échauffement, les échéances sont dérivées des PTS avec 100 ms d’avance et vérifiées à l’observation des fences. Les mesures couvrent trois fenêtres de 300 images, avant composition Kodi et présentation HDMI.
+
+| Extrait 4K | Moteur seul | Raster 10 bits | Par paire 10 bits | Par paire 12 bits | Fences observées après l’échéance |
+| --- | ---: | ---: | ---: | ---: | --- |
+| P5 à 30 i/s | 57,31 i/s | 27,49 i/s | 34,29 i/s | 33,30 i/s | 0/900 à chaque profondeur |
+| P7 FEL lourd · 1917 à 30 i/s | 28,06 i/s | 18,66 i/s | 20,82 i/s | 20,80 i/s | 897/900 à chaque profondeur |
+| P7 FEL lourd · 1917 original | — | — | — | 21,21 i/s | 891/900 |
+| P7 FEL · mire CM4 V4 | — | — | — | 24,66 i/s | 0/900 à la cadence de la source |
+| P8.4 · Sol Levante | — | — | — | 29,07 i/s | 0/900 à la cadence de la source |
+
+La grille de reconstruction chroma FEL coûte environ 10 ms dans le profil sérialisé, devant les passes verticales EL à environ 3,4 ms en luma et 1,9 ms en chroma et la passe de résolution chroma à 2,4 ms. Les prototypes de stockage vertical FP16 exact, de table de prédiction luma, de dépaquetage fusionné et de regroupement des lectures horizontales ont donné respectivement 21,01, 21,27, 20,94 et 20,56 i/s pour le FEL lourd avec packing. La cible de 30 i/s sur cet extrait reste ouverte. Les décisions de fidélité attendent toujours les mesures physiques de A.
+
+Le commit `ee86cb0` prépare le sélecteur Kodi à distinguer les valeurs natives et forcées exposées par DRM. L’option forcée est identifiée à partir de l’enum `YCbCr 4:2:2 10 bits forced` et la route active vient de la valeur relue sur le connecteur. Les tests simulent les deux annonces, vérifient l’ordre du choix automatique et refusent une annonce sans état actif correspondant. La programmation du forçage par pilote reste dans l’étape E.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
