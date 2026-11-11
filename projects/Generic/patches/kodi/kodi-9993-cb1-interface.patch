@@ -324,7 +324,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40971"
-+msgid "Source pixels unchanged. HDR10+ curve and saturation are not translated. Requires full-source analysis."
++msgid "Pixels unchanged. No HDR10+ curve or saturation."
 +msgstr ""
 +
 +msgctxt "#41012"
