@@ -522,7 +522,11 @@ static void fel_spatial(void)
     frames[0].enhancement_layer=&frames[1];
     assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_UNSUPPORTED);
     h->el_spatial_resampling_filter_flag=1;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
+    /* Software and hardware imports initially carry the base-layer YCbCr repr. */
+    struct pl_frame decoded=frames[0];
+    decoded.repr.sys=PL_COLOR_SYSTEM_BT_2020_NC;
+    decoded.repr.dovi=NULL;
+    assert(cb1_master_reconstruct(renderer,&decoded,m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
     /* Literal arrays from the independent Python oracle, contract 1. */
     const int ycodes[8][8]={
         {1984,1984,1984,1984,1984,1984,1984,1984},
@@ -550,8 +554,8 @@ static void fel_spatial(void)
     struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_HDR10_EXPERT,
         .tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
     struct dvbridge_renderer *offline=dvbridge_renderer_create(g.gl->gpu);assert(offline);
-    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,.5,output,NULL)==CB1_MASTER_INVALID);
-    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,.5,output,NULL)==CB1_MASTER_INVALID);
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     const int probes[2][2]={{0,0},{7,7}};
     for(int i=0;i<2;i++){
@@ -563,7 +567,7 @@ static void fel_spatial(void)
     *av_dovi_get_ext(m,1)=player_led_l8(3072,2048);
     m->num_ext_blocks=2;
     float untrimmed=values[0];
-    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
+    assert(dvbridge_render_player_led(offline,&policy,&decoded,m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     assert(fabsf(values[0]-1.25f*untrimmed)<1e-5f);
     dvbridge_renderer_destroy(offline);

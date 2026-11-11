@@ -69,6 +69,27 @@ Ce résultat établit que chaque perturbation influence le chemin vidéo captur�
 
 Les offsets L3 utilisables modifient le maximum et la moyenne de scène L1. Le minimum participe à la validation des statistiques. Un L8 compatible sélectionne les contrôles HDR ponctuels du modèle CB1 CM4. En l’absence de cible L8 compatible, le moteur reprend les trims L2 disponibles. Le détail spatial et les secondaires SDR restent hors du rendu. Les essais hors ligne couvrent les couleurs, le noir, les hautes lumières, les résiduels FEL et les changements de trims. La comparaison à un rendu Dolby externe et les mesures sur la LG restent à faire.
 
+### Qualification sur les extraits du catalogue
+
+Le premier essai avec des images FFmpeg YCbCr a révélé que libplacebo écartait l’EL avant la reconstruction. Le moteur associe maintenant la représentation Dolby du RPU validé à sa copie locale de l’image FEL, avec les bits de stockage du décodeur. Le test `master_spatial` reproduit cet import et compare le résultat entier à son oracle.
+
+FFmpeg logiciel et llvmpipe ont traité les extraits ci-dessous vers une cible BT.2020 de 1 000 nits, sauf cible P3-D65 indiquée. Pour chaque extrait FEL, 61 paires BL/EL ont été vérifiées sur leur PTS. Six images ont été rendues et huit lignes RGB ont été lues par image. Les écarts FEL sont des maxima par composante entre le résultat et le contrôle avec résiduel désactivé.
+
+| Extrait | Profil | Résultat hors ligne |
+| --- | --- | --- |
+| DV-001 · 1917 | P7 FEL | 6/6 images, écart maximal de 1,72 nit avec le résiduel. Le décodeur a signalé des avertissements sur l’extrait. |
+| DV-073 · Transformers | P7 FEL | 6/6 images, écart maximal de 41,56 nits avec le résiduel. |
+| DV-018 · Mire CM4 | P7 FEL | 6/6 images, écart maximal de 172,48 nits avec le résiduel. Le L8 de cible SDR reste exclu du rendu HDR. |
+| DV-008 · Mire CM4 en MP4 | P7 FEL | 6/6 images, écart maximal de 188,75 nits avec le résiduel pour la cible P3-D65 de 1 000 nits. |
+| DV-010 · Gemini Man | P7 MEL | 6/6 images 4K sur la BL, RPU joint depuis les deux pistes par `CBlurayDovi`. Le rendu réussit sans surface EL. |
+| DV-026 et DV-028 · Sol Levante | P5 et P8.4 | 6/6 images par profil au même PTS après l’introduction. Les deux encodages donnent un écart moyen de 2,43 nits par composante sur les lignes sondées. |
+| DV-063 · P8.1 à 25 i/s | P8.1 CM4 | 6/6 images avec L3 et L2 pour la cible P3-D65 de 1 000 nits. |
+| DV-065 · P8.4 à 25 i/s | P8.4 CM4 | 6/6 images avec L3 et L2. Désactiver L2/L3 change le résultat jusqu’à 21,20 nits sur les lignes sondées. |
+
+Le test injecte aussi un PTS EL décalé sur chaque extrait FEL. Le moteur le rejette avant rendu. Les extraits CM4 DV-022 et DV-030 sélectionnent le L8 P3-D65 à 600 nits, et DV-030 accepte aussi une cible intermédiaire à 800 nits. Les scènes sondées y donnent les mêmes pixels que le contrôle sans trims, ce qui confirme la sélection sans démontrer un effet créatif sur ces extraits. L’effet non neutre reste couvert par les mires de test.
+
+Ces essais couvrent les images échantillonnées et la contribution du résiduel. La fidélité à un rendu Dolby externe, la cadence soutenue et l’import matériel restent à qualifier.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
