@@ -14,6 +14,7 @@ static bool track_reference_render(pl_renderer,const struct pl_frame *,const str
 #include "../src/dvbridge_render.c"
 #undef pl_render_image
 #include "reference/master_vectors.h"
+#include "hdr10_expert_fixture.h"
 extern bool pl_shader_dovi_reference_component(pl_shader,const struct pl_cb1_dovi_reference *,
     int,pl_shader,pl_shader) __attribute__((weak));
 #endif
@@ -360,6 +361,128 @@ static void spatial_case(int storage,int shift,bool top,bool interleaved,int mmr
 #endif
 }
 
+static void player_led_fixture_color(AVDOVIMetadata *m)
+{
+    AVDOVIColorMetadata *color=av_dovi_get_color(m);
+    const AVRational matrix[9]={{1,1},{0,1},{1,2},{1,1},{-1,4},{-1,4},{1,1},{1,2},{0,1}};
+    memcpy(color->ycc_to_rgb_matrix,matrix,sizeof(matrix));
+    for(int i=1;i<3;i++)color->ycc_to_rgb_offset[i]=(AVRational){1,2};
+}
+
+static float player_led_reference_rgb(unsigned channel,int y,int u,int v)
+{
+    const float hpe_to_rgb[3][3]={{3.06441879,-2.16597676,.10155818},
+        {-.65612108,1.78554118,-.12943749},{.01736321,-.04725154,1.03004253}};
+    float q[3]={(y+.5f*v)/4096,(y-.25f*(u+v))/4096,(y+.5f*u)/4096};
+    float expected=0;
+    for(int i=0;i<3;i++)
+        expected+=hpe_to_rgb[channel][i]*pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,q[i])/1000;
+    return expected;
+}
+
+static struct pl_hook_res player_led_fail_hook(void *priv,const struct pl_hook_params *params)
+{
+    (void)priv;(void)params;
+    return (struct pl_hook_res){.failed=true};
+}
+
+static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
+{
+    size_t bytes;
+    AVDOVIMetadata *m=expert_fixture(&bytes,false);
+    av_dovi_get_header(m)->bl_video_full_range_flag=1;
+    AVDOVIColorMetadata *color=av_dovi_get_color(m);
+    color->signal_color_space=2;
+    color->signal_full_range_flag=1;
+    color->signal_bit_depth=12;
+    player_led_fixture_color(m);
+    const unsigned ramp[8]={0,16,64,256,512,640,740,980};
+    uint16_t codes[64];
+    for(int i=0;i<64;i++)codes[i]=ramp[i%8]<<6;
+    struct pl_tex_params texture=source.planes[0].texture->params;
+    texture.initial_data=codes;
+    source.planes[0].texture=pl_tex_create(gpu,&texture);assert(source.planes[0].texture);
+    struct dvbridge_renderer *renderer=dvbridge_renderer_create(gpu);assert(renderer);
+    struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_HDR10_EXPERT,
+        .tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+    struct dvbridge_creative_plan applied;
+    float original[64*4],pixels[64*4];
+    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={0,3079,1500}};
+    m->num_ext_blocks=1;
+    const struct pl_hook fail={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
+        .hook=player_led_fail_hook,.signature=player_led_hook_signature};
+    cb1_master_reconstruct(renderer->renderer,&source,m,bytes,1,NAN,output,&fail);
+    applied.applied_levels=UINT32_MAX;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_FAILED);
+    assert(applied.applied_levels==UINT32_MAX);
+    dvbridge_renderer_reset(renderer);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    for(int c=0;c<3;c++){
+        assert(pixels[c]==0);
+        assert(pixels[4+c]>0 && pixels[4+c]<pixels[8+c]);
+        float gray=pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,0.5f)/1000;
+        float bright=pl_hdr_rescale(PL_HDR_PQ,PL_HDR_NITS,0.625f)/1000;
+        assert(fabsf(pixels[16+c]-gray)<2e-4f && fabsf(pixels[20+c]-bright)<2e-4f);
+        assert(pixels[20+c]>.203f && pixels[20+c]<pixels[24+c] && pixels[24+c]<pixels[28+c]);
+    }
+    pl_tex neutral=source.planes[1].texture;
+    uint16_t chroma[32];
+    for(int i=0;i<32;i++)chroma[i]=(i%2?528:496)<<6;
+    texture=neutral->params;
+    texture.initial_data=chroma;
+    pl_tex colored=pl_tex_create(gpu,&texture);assert(colored);
+    source.planes[1].texture=colored;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    for(int c=0;c<3;c++)
+        assert(fabsf(pixels[16+c]-player_led_reference_rgb(c,2048,-64,64))<3e-4f);
+    av_dovi_get_ext(m,0)->l1.max_pq=3650;
+    *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=2,.l2={.target_max_pq=3079,
+        .trim_slope=3072,.trim_offset=2048,.trim_power=2048,.trim_chroma_weight=2048,
+        .trim_saturation_gain=2048,.ms_weight=-1}};
+    *av_dovi_get_ext(m,2)=player_led_l3();
+    *av_dovi_get_ext(m,3)=player_led_l8(3072,2048);
+    m->num_ext_blocks=4;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_READY);
+    assert(applied.applied_levels&(1u<<3));
+    assert(applied.l8_coverage.applied==0xdf && !applied.l2_coverage.applied);
+    reference_read(gpu,output,0,0,8,8,original);
+    av_dovi_get_ext(m,1)->level=0;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(!memcmp(original,pixels,sizeof(original)));
+    AVDOVIDmData *l8=av_dovi_get_ext(m,3);
+    memset(l8->l8.saturation_vector_field,255,6);
+    memset(l8->l8.hue_vector_field,0,6);
+    memset(l8->dvbridge_original_bytes+13,255,6);
+    memset(l8->dvbridge_original_bytes+19,0,6);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(!memcmp(original,pixels,sizeof(original)));
+    av_dovi_get_ext(m,2)->level=0;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(fabsf(original[16]-pixels[16])>1e-4f);
+    memcpy(original,pixels,sizeof(original));
+    *l8=player_led_l8(2048,2048);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(fabsf(original[16]-pixels[16])>1e-4f);
+    source.planes[1].texture=neutral;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(pixels[0]==0);
+    *l8=player_led_l8(2048,2052);
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(fabsf(pixels[0]-4.f/4096)<1e-6f);
+    dvbridge_renderer_destroy(renderer);
+    pl_tex_destroy(gpu,&source.planes[0].texture);
+    pl_tex_destroy(gpu,&colored);
+    av_free(m);
+}
+
 static void fel_spatial(void)
 {
     struct reference_gpu g=reference_gpu_create();pl_renderer renderer=pl_renderer_create(g.log,g.gl->gpu);
@@ -393,11 +516,13 @@ static void fel_spatial(void)
     struct pl_render_params params=pl_render_default_params;
     params.cb1_dovi_reference=&raw;params.cb1_dovi_transport=true;params.min_fbo_precision=32;
     params.disable_linear_scaling=true;params.peak_detect_params=NULL;params.dither_params=NULL;params.sigmoid_params=NULL;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,0.5,output)==CB1_MASTER_INVALID);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,0.5,output,NULL)==CB1_MASTER_INVALID);
     frames[0].enhancement_layer=NULL;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output)==CB1_MASTER_INVALID);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_INVALID);
     frames[0].enhancement_layer=&frames[1];
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output)==CB1_MASTER_READY);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_UNSUPPORTED);
+    h->el_spatial_resampling_filter_flag=1;
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
     /* Literal arrays from the independent Python oracle, contract 1. */
     const int ycodes[8][8]={
         {1984,1984,1984,1984,1984,1984,1984,1984},
@@ -418,6 +543,30 @@ static void fel_spatial(void)
         if(got!=expected)fprintf(stderr,"FEL %d,%d,%d: %d expected %d\n",x,y,c,got,expected);
         assert(got==expected);
     }
+    /* The same spatial FEL pixels must reach grading, with no second NLQ. */
+    player_led_fixture_color(m);
+    *av_dovi_get_ext(m,0)=(AVDOVIDmData){.level=1,.l1={0,3079,1500}};
+    m->num_ext_blocks=1;
+    struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_HDR10_EXPERT,
+        .tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+    struct dvbridge_renderer *offline=dvbridge_renderer_create(g.gl->gpu);assert(offline);
+    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,.5,output,NULL)==CB1_MASTER_INVALID);
+    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
+    reference_read(g.gl->gpu,output,0,0,8,8,values);
+    const int probes[2][2]={{0,0},{7,7}};
+    for(int i=0;i<2;i++){
+        int x=probes[i][0],y=probes[i][1];
+        int chroma=ccodes[y][x/2]-2048;
+        for(int c=0;c<3;c++)
+            assert(fabsf(values[(y*8+x)*4+c]-player_led_reference_rgb(c,ycodes[y][x],chroma,chroma))<3e-4f);
+    }
+    *av_dovi_get_ext(m,1)=player_led_l8(3072,2048);
+    m->num_ext_blocks=2;
+    float untrimmed=values[0];
+    assert(dvbridge_render_player_led(offline,&policy,&frames[0],m,bytes,1,1,output,NULL)==CB1_MASTER_READY);
+    reference_read(g.gl->gpu,output,0,0,8,8,values);
+    assert(fabsf(values[0]-1.25f*untrimmed)<1e-5f);
+    dvbridge_renderer_destroy(offline);
     /* Matching top-left grids retain Annex B reconstruction and their output phase. */
     frames[0].planes[1].shift_y=frames[1].planes[1].shift_y=-.5f;
     assert(pl_render_image(renderer,&frames[0],&target,&params));
@@ -441,6 +590,9 @@ static void fel_spatial(void)
     }
     frames[0].enhancement_layer=&same_size;
     frames[0].planes[1].shift_y=same_size.planes[1].shift_y=-.5f;
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_UNSUPPORTED);
+    h->el_spatial_resampling_filter_flag=0;
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
     assert(pl_render_image(renderer,&frames[0],&target,&params));
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     for(int i=0;i<8*8;i++)for(int c=0;c<3;c++){
@@ -465,10 +617,11 @@ static void fel_spatial(void)
     curve->poly_order[0]=2;
     curve->poly_coef[0][1]=0;
     curve->poly_coef[0][2]=1<<23;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,NAN,output)==CB1_MASTER_READY);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,NAN,output,NULL)==CB1_MASTER_READY);
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     for(int i=0;i<8*8;i++)for(int c=0;c<3;c++)
         assert(roundf(values[i*4+c]*4095)==(c?2048:1024));
+    player_led_pixels(g.gl->gpu,frames[0],output);
     for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&same_size.planes[p].texture);
     for(int f=0;f<2;f++)for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&frames[f].planes[p].texture);
     pl_tex_destroy(g.gl->gpu,&output);pl_renderer_destroy(&renderer);av_free(m);reference_gpu_destroy(&g);

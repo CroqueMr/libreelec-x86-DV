@@ -1822,6 +1822,89 @@ enum cb1_master_status dvbridge_render_master_reference_ipt(struct dvbridge_rend
     return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,true);
 }
 
+static const uint64_t player_led_hook_signature=0x434231504c440001ULL;
+
+struct player_led_render {
+    struct cb1_hdr10_expert_plan plan;
+    struct dvbridge_cm4_coefficients cm4;
+    pl_shader_obj *state;
+    unsigned depth;
+    bool rendered;
+};
+
+static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params *p)
+{
+    struct player_led_render *render=priv;
+    const struct cb1_hdr10_expert_plan *plan=&render->plan;
+    struct pl_dovi_metadata dovi=plan->source.dovi;
+    struct pl_color_repr repr={.sys=PL_COLOR_SYSTEM_DOLBYVISION,.levels=PL_COLOR_LEVELS_FULL,
+        .bits={.sample_depth=render->depth,.color_depth=render->depth},.dovi=&dovi};
+    /* Raw storage is code/(2^depth-1). RPU matrices work in code/2^depth,
+     * and libplacebo normally scales RPU offsets to the storage domain. */
+    float scale=1-ldexpf(1,-(int)render->depth);
+    for(int i=0;i<3;i++){
+        dovi.comp[i].num_pivots=0;
+        dovi.nonlinear_offset[i]*=scale;
+    }
+    dovi.nlq_active=false;
+    struct pl_shader_var storage={.var=pl_var_float("player_led_scale"),.data=&scale,.dynamic=true};
+    const struct pl_custom_shader normalize={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .variables=&storage,.num_variables=1,.body="color.rgb*=player_led_scale;\n",
+        .description="Normalize reconstructed Dolby Vision codes"};
+    if(!pl_shader_custom(p->sh,&normalize))return (struct pl_hook_res){.failed=true};
+    pl_shader_decode_color_ex(p->sh,&(struct pl_color_decode_args){.repr=&repr,.cb1_dovi_linear=true});
+    const struct pl_custom_shader capture={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .header="bool player_led_black;\n",
+        .body="player_led_black=all(lessThanEqual(color.rgb,vec3(0.0)));\n",
+        .description="Remember exact signal black"};
+    if(!pl_shader_custom(p->sh,&capture))return (struct pl_hook_res){.failed=true};
+    struct pl_color_map_params mapper=pl_color_map_default_params;
+    mapper.metadata=PL_HDR_METADATA_HDR10;
+    mapper.gamut_expansion=false;
+    mapper.force_tone_mapping_lut=true;
+    mapper.lut_size=plan->tone.lut_size;
+    mapper.cb1_fp32_tone_lut=true;
+    pl_shader_color_map_ex(p->sh,&mapper,pl_color_map_args(.src=plan->source.color,.dst=plan->target,
+        .state=render->state,.prelinearized=true,.cb1_tone_map=&plan->tone,
+        .cb1_tone_shape={plan->tone_shape[0],plan->tone_shape[1],plan->tone_shape[2]}));
+    const struct pl_custom_shader zero={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .body="if(player_led_black)color.rgb=vec3(0.0);\n",
+        .description="Restore signal black before creative grading"};
+    if(!plan->tone.output_min && !pl_shader_custom(p->sh,&zero))
+        return (struct pl_hook_res){.failed=true};
+    if(plan->creative.backend==DVBRIDGE_CREATIVE_CM4 && !dvbridge_creative_cm4_shader(p->sh,&render->cm4))
+        return (struct pl_hook_res){.failed=true};
+    /* libplacebo's final plane swizzle clips to [0,1], even on float targets. */
+    float relative=PL_COLOR_SDR_WHITE/plan->creative.policy.tv.peak_nits;
+    struct pl_shader_var output_scale={.var=pl_var_float("player_led_relative"),.data=&relative,.dynamic=true};
+    const struct pl_custom_shader output={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .variables=&output_scale,.num_variables=1,
+        .body="color.rgb*=player_led_relative;\n",
+        .description="Store linear RGB relative to target peak"};
+    render->rendered=cb1_hdr10_expert_trim(p->sh,&plan->creative,plan->target.primaries) &&
+        pl_shader_custom(p->sh,&output);
+    return (struct pl_hook_res){.failed=!render->rendered,.output=PL_HOOK_SIG_NONE};
+}
+
+enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
+{
+    if(!r || !source)return CB1_MASTER_INVALID;
+    struct player_led_render render={.state=&r->creative_state};
+    if(!cb1_player_led_prepare(&render.plan,&render.cm4,policy,metadata,bytes,
+                               source->enhancement_layer && pts==el_pts))
+        return CB1_MASTER_INVALID;
+    render.depth=av_dovi_get_header(metadata)->vdr_bit_depth;
+    const struct pl_hook hook={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
+        .priv=&render,.hook=player_led_map,.signature=player_led_hook_signature};
+    enum cb1_master_status status=cb1_master_reconstruct(r->renderer,source,metadata,bytes,pts,el_pts,target,&hook);
+    if(status!=CB1_MASTER_READY)return status;
+    if(!render.rendered)return CB1_MASTER_FAILED;
+    if(applied)*applied=render.plan.creative;
+    return CB1_MASTER_READY;
+}
+
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)
 {
     if(r && r->dv.active && (r->dv.ai_direct_lean || r->enhanced_skip_aux) && !r->dv.output.intermediate)return NULL;

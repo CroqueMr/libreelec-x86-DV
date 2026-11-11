@@ -17,10 +17,11 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
     const void *metadata,size_t bytes,bool enhancement_layer_paired);
 bool cb1_master_reference_transport(const void *metadata,size_t bytes);
 /* Native-size RGBA32F. RGB lanes carry reconstructed source-domain codes
- * divided by (2^vdr_bit_depth - 1), before colour conversion or display mapping. */
+ * divided by (2^vdr_bit_depth - 1). An optional output hook can consume the
+ * codes in the same pass before they are written to the target. */
 enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,
-    double pts,double el_pts,pl_tex target);
+    double pts,double el_pts,pl_tex target,const struct pl_hook *finish);
 #ifdef __cplusplus
 }
 #endif

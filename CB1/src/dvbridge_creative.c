@@ -730,6 +730,7 @@ enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative
             for(int j=0;j<3;j++)effective[j]=0;
         }
         for(int j=0;j<3;j++)p.analysis[j]=(uint16_t)floor(effective[j]+.5);
+        p.analysis_valid=!invalid;
         p.l1_present=policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT || p.analysis[1]>0;
         p.l3_present=l3!=NULL;
     }

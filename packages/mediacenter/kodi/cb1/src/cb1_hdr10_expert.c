@@ -24,7 +24,24 @@ float cb1_hdr10_expert_ceiling(const struct dvbridge_policy *policy)
     return result>ceiling?nextafterf(result,0):result;
 }
 
-bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
+static void player_led_trims(struct dvbridge_creative_plan *p,
+                             struct dvbridge_cm4_coefficients *cm4)
+{
+    *cm4=(struct dvbridge_cm4_coefficients){0};
+    if(!dvbridge_creative_cm4_coefficients(cm4,p))return;
+    p->status=DVBRIDGE_CREATIVE_READY;
+    p->backend=DVBRIDGE_CREATIVE_CM4;
+    p->reason=cm4->detail_mix ? DVBRIDGE_CREATIVE_SPATIAL_UNQUALIFIED : DVBRIDGE_CREATIVE_OK;
+    p->applied_levels=(p->applied_levels&~(1u<<2))|(1u<<8);
+    p->l2_coverage.applied=0;
+    p->l2_coverage.preserved=p->l2_coverage.present;
+    /* Pointwise HDR controls: slope through saturation, mid contrast and clip. */
+    p->l8_coverage.applied=p->l8_coverage.present&0xdfu;
+    p->l8_coverage.preserved=p->l8_coverage.present&~p->l8_coverage.applied;
+    for(unsigned i=0;i<5;i++)p->codes[i]=2048;
+}
+
+static bool prepare(struct cb1_hdr10_expert_plan *out,struct dvbridge_cm4_coefficients *cm4,
     const struct dvbridge_policy *policy,const void *metadata,size_t bytes,bool paired)
 {
     if(!out || !policy || policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT ||
@@ -46,15 +63,24 @@ bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
     const AVDOVIDmData *l1=av_dovi_find_level(metadata,1);
     bool analysis=l1 && l1->l1.min_pq<=l1->l1.avg_pq &&
         l1->l1.avg_pq<=l1->l1.max_pq && l1->l1.max_pq<=4095;
-    unsigned maximum=analysis?l1->l1.max_pq:color->source_max_pq;
-    p.creative.analysis[0]=analysis?l1->l1.min_pq:0;
-    p.creative.analysis[1]=analysis?l1->l1.max_pq:0;
-    p.creative.analysis[2]=analysis?l1->l1.avg_pq:0;
-    p.creative.l1_present=analysis;p.creative.l3_present=false;
+    if(cm4 && p.creative.analysis_valid)analysis=true;
+    else{
+        p.creative.analysis[0]=analysis?l1->l1.min_pq:0;
+        p.creative.analysis[1]=analysis?l1->l1.max_pq:0;
+        p.creative.analysis[2]=analysis?l1->l1.avg_pq:0;
+        p.creative.analysis_valid=analysis;
+        if(!cm4)p.creative.l3_present=false;
+    }
+    unsigned maximum=analysis?p.creative.analysis[1]:color->source_max_pq;
+    p.creative.l1_present=analysis;
     p.creative.applied_levels&=~((1u<<1)|(1u<<3)|(1u<<8));
-    if(analysis)p.creative.applied_levels|=1u<<1;
-    p.creative.l8_coverage.applied=0;
-    p.creative.l8_coverage.preserved=p.creative.l8_coverage.present;
+    if(analysis){
+        p.creative.applied_levels|=1u<<1;
+        if(p.creative.l3_present &&
+           (p.creative.analysis[1]!=l1->l1.max_pq || p.creative.analysis[2]!=l1->l1.avg_pq))
+            p.creative.applied_levels|=1u<<3;
+    }
+    if(cm4)player_led_trims(&p.creative,cm4);
     for(unsigned i=0;i<3;i++)p.tone_shape[i]=(p.creative.codes[i]-2048)/2048;
     if(!analysis)p.creative.reason=l1?DVBRIDGE_CREATIVE_STATIC_UNUSABLE_L1:DVBRIDGE_CREATIVE_STATIC_MISSING_L1;
     else if(p.creative.reason==DVBRIDGE_CREATIVE_STATIC_UNUSABLE_L1 ||
@@ -71,7 +97,7 @@ bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
          * authored source minimum metadata. As compression vanishes, the
          * rational therefore tends to the same max(L,B) as native clip. */
         .input_min=black_pq,.input_max=fmaxf(maximum/4095.0f,target_pq),
-        .input_avg=analysis?l1->l1.avg_pq/4095.0f:0,
+        .input_avg=analysis?p.creative.analysis[2]/4095.0f:0,
         .output_min=black_pq,
         .output_max=target_pq,.lut_size=nits(maximum)<=peak?4096:1024};
     p.source.color.hdr.min_luma=PL_COLOR_HDR_BLACK;
@@ -89,6 +115,19 @@ bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
         .min_luminance=(unsigned)llround(black*10000)};
     *out=p;out->source.repr.dovi=&out->source.dovi;
     return true;
+}
+
+bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
+    const struct dvbridge_policy *policy,const void *metadata,size_t bytes,bool paired)
+{
+    return prepare(out,NULL,policy,metadata,bytes,paired);
+}
+
+bool cb1_player_led_prepare(struct cb1_hdr10_expert_plan *out,
+    struct dvbridge_cm4_coefficients *cm4,const struct dvbridge_policy *policy,
+    const void *metadata,size_t bytes,bool paired)
+{
+    return cm4 && prepare(out,cm4,policy,metadata,bytes,paired);
 }
 
 bool cb1_hdr10_expert_trim(pl_shader shader,const struct dvbridge_creative_plan *plan,

@@ -102,7 +102,7 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
 
 enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,
-    double pts,double el_pts,pl_tex target)
+    double pts,double el_pts,pl_tex target,const struct pl_hook *finish)
 {
     if(!renderer || !source || !target || !isfinite(pts))return CB1_MASTER_INVALID;
     const struct pl_frame *el=source->enhancement_layer;
@@ -112,6 +112,11 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     if(!pl_cb1_dovi_reference_frame_supported(source,raw.bl_depth) || source->num_overlays ||
        (raw.residual && (!pl_cb1_dovi_reference_frame_supported(el,raw.el_depth) || el->num_overlays)))
         return CB1_MASTER_UNSUPPORTED;
+    if(raw.residual){
+        int scale=av_dovi_get_header(metadata)->el_spatial_resampling_filter_flag?2:1;
+        if(el->crop.x1*scale!=source->crop.x1 || el->crop.y1*scale!=source->crop.y1)
+            return CB1_MASTER_UNSUPPORTED;
+    }
     const struct pl_tex_params *out=&target->params;
     const pl_fmt fmt=out->format;
     if(!out->renderable || out->w!=source->crop.x1 || out->h!=source->crop.y1 ||
@@ -135,5 +140,9 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     params.peak_detect_params=NULL;
     params.dither_params=NULL;
     params.frame_mixer=NULL;
+    if(finish){
+        params.hooks=&finish;
+        params.num_hooks=1;
+    }
     return pl_render_image(renderer,&image,&output,&params)?CB1_MASTER_READY:CB1_MASTER_FAILED;
 }

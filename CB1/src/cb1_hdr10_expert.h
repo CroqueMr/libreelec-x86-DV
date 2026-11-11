@@ -18,6 +18,10 @@ struct cb1_hdr10_expert_plan {
 };
 bool cb1_hdr10_expert_prepare(struct cb1_hdr10_expert_plan *out,
     const struct dvbridge_policy *policy,const void *metadata,size_t bytes,bool paired);
+/* Offline display target uses the Expert policy's luminance and gamut fields. */
+bool cb1_player_led_prepare(struct cb1_hdr10_expert_plan *out,
+    struct dvbridge_cm4_coefficients *cm4,const struct dvbridge_policy *policy,
+    const void *metadata,size_t bytes,bool paired);
 /* Finite validated Expert policy only. Native output/range is not a user trim. */
 float cb1_hdr10_expert_ceiling(const struct dvbridge_policy *policy);
 /* Linear target RGB chroma only; luminance trims execute in the tone LUT. */

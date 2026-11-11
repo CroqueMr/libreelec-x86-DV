@@ -37,6 +37,13 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
     const struct dvbridge_native_overlay *overlay);
+/* Offline source-size RGBA32F. RGB is linear in the target gamut, with
+ * 1.0 at policy->tv.peak_nits. Pixels and applied metadata are usable only on
+ * CB1_MASTER_READY. Use a dedicated renderer and reset it after a GPU failure. */
+enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
+    struct dvbridge_creative_plan *applied);
 #define CB1_AI_OVERLAY_API 1
 #define CB1_HDR10_AI_RENDER_API 1
 /* Borrowed intermediate. DV preparation may still need its existing poll;

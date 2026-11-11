@@ -63,6 +63,12 @@ Ce résultat établit que chaque perturbation influence le chemin vidéo captur�
 - [ ] Appliquer L3 à l’analyse L1 et sélectionner les trims HDR avec le résolveur existant, en tenant compte des descriptions L9 et L10 quand elles sont valides. Choisir le L8 applicable ou la compatibilité L2. Réutiliser les primitives et le shader CM4 lorsque le domaine et les mesures concordent. Le mapper reste le seul propriétaire des transformations créatives de luminance et de gamut.
 - [ ] Comparer les pixels à la référence et vérifier que les familles de trims ne se cumulent pas. Fixer les tolérances avant d’examiner les résultats. Les écarts HDR non expliqués restent ouverts jusqu’à résolution. Mettre à disposition l’état réellement appliqué pour le panneau Info. Commit local.
 
+### Moteur hors ligne
+
+`dvbridge_render_player_led()` produit une texture RGBA32F aux dimensions de la source. Les canaux RGB sont linéaires dans le gamut cible et 1,0 représente son pic en nits. La reconstruction P5 et P7 FEL réutilise les filtres entiers de Master Reference et les matrices du RPU. Une EL FEL absente, décalée ou de taille incompatible est rejetée.
+
+Les offsets L3 utilisables modifient le maximum et la moyenne de scène L1. Le minimum participe à la validation des statistiques. Un L8 compatible sélectionne les contrôles HDR ponctuels du modèle CB1 CM4. En l’absence de cible L8 compatible, le moteur reprend les trims L2 disponibles. Le détail spatial et les secondaires SDR restent hors du rendu. Les essais hors ligne couvrent les couleurs, le noir, les hautes lumières, les résiduels FEL et les changements de trims. La comparaison à un rendu Dolby externe et les mesures sur la LG restent à faire.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
