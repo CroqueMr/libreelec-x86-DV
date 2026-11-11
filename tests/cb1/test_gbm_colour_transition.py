@@ -7,10 +7,10 @@ import unittest
 from test_gbm_colour_owner import method, native_owner_program
 
 
-def compile_run(test, program):
+def compile_run(test, program, includes=()):
     with tempfile.TemporaryDirectory() as directory:
         binary = Path(directory) / "check"
-        result = subprocess.run(["c++", "-std=c++20", "-x", "c++", "-", "-o", str(binary)],
+        result = subprocess.run(["c++", "-std=c++20", *includes, "-x", "c++", "-", "-o", str(binary)],
                                 input=program, capture_output=True, text=True)
         test.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         result = subprocess.run([str(binary)], capture_output=True, text=True)
@@ -177,6 +177,8 @@ int main(){
     def test_mastering_luminance_compares_rational_values(self):
         source = (self.root / "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp").read_text()
         compare = method(source, "VideoPicture::CompareDisplayMetadata")
+        prefix = os.environ.get("FFMPEG_TEST_PREFIX")
+        includes = ("-I", str(Path(prefix) / "include")) if prefix else ()
         compile_run(self, r'''
 #include <cassert>
 extern "C" {
@@ -206,7 +208,7 @@ int main() {
  configured.displayMetadata.has_luminance = 0;
  assert(configured.CompareDisplayMetadata(incoming));
 }
-'''.replace("COMPARE", compare))
+'''.replace("COMPARE", compare), includes)
 
     def test_source_depth_change_requires_configuration_before_render(self):
         source = (self.root / "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp").read_text()
