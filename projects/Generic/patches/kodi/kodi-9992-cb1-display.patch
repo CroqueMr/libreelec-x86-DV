@@ -3718,7 +3718,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        if (drm) drm->StageHDR10Plus(submitted.hdr10plus, submitted.informationGeneration);
 +        AnnounceCB1Mode(true);
 +        const bool nvidiaRestore = m_dvState.CapturedBackend() == CDVBridgeState::Backend::NVIDIA;
-+        if (drm) drm->SetCB1PresentationPts(m_preparedSourcePts);
++        if (drm) drm->SetCB1PresentationPts(m_preparedRenderPts);
 +        presented = drm && (nvidiaRestore ? (valid && FlipDVBridgePage(m_dvState,true,false,true,bo)) :
 +                            drm->FlipPageTransactional(valid ? bo : nullptr, false, asynchronous));
 +        CompleteCB1Mode(presented,true);
@@ -3774,7 +3774,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          const bool plain = !asynchronous && !m_dvActivating && !drm->HasPendingRequest();
 +          AnnounceCB1Mode(true);
 +          const auto started = std::chrono::steady_clock::now();
-+          drm->SetCB1PresentationPts(m_preparedSourcePts);
++          drm->SetCB1PresentationPts(m_preparedRenderPts);
 +          presented = FlipDVBridgePage(m_dvState, false, asynchronous);
 +          CompleteCB1Mode(presented,true);
 +          if (presented)
@@ -4307,7 +4307,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1180,1906 @@
+@@ -397,13 +1180,1907 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -5635,6 +5635,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  m_preparedSourceStream = layer.binding.stream;
 +  m_preparedSourcePts = layer.pts;
++  m_preparedRenderPts = m_cb1RenderPts;
 +  geometry.ignore_l5=false;
 +  const bool mergedPQGUI = ComposeDVPQGUI();
 +  const bool subtitlesOnly = !capturing && guiAvailable && m_guiFbo.IsValid() &&
@@ -6216,7 +6217,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3093,16 @@
+@@ -417,5 +3094,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6268,7 +6269,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,20 +53,143 @@
+@@ -41,20 +53,145 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -6349,13 +6350,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool ConfigureHDR10Conversion(const VideoPicture& picture);
 +  bool SupportsHDR10Conversion(bool requireCurrentMode = true);
 +  void SetDVBridgeOverlays(bool visible) { m_dvOverlays = visible; }
++  // Kodi presentation timestamp of the picture the next CB1 render prepares.
++  void SetCB1RenderPts(double pts) { m_cb1RenderPts = pts; }
 +  bool CB1FramePending() const { return m_cb1FramePending; }
 +  bool CB1AsyncPlayback() const
 +  {
 +    return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
 +  }
 +  std::optional<double> CB1PresentationAge() const;
-+  // Source timestamp and KMS completion time of the latest presented CB1 picture.
++  // Kodi presentation timestamp and KMS completion time of the latest presented CB1 picture.
 +  std::optional<std::pair<double, uint64_t>> CB1PresentedPicture() const;
 +  void RecordDVSubtitle(const CRect& rect, unsigned texture);
 +  bool BeginDVPQSubtitle();
@@ -6412,7 +6415,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +198,97 @@
+@@ -63,8 +200,98 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
@@ -6440,6 +6443,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  double m_previousSourcePts{};
 +  uint64_t m_preparedSourceStream{};
 +  double m_preparedSourcePts{};
++  double m_cb1RenderPts{}, m_preparedRenderPts{};
 +  bool m_dvShutdownFence{};
 +  bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
 +  bool PollRejectedDVSurface();
@@ -7333,7 +7337,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool HasPendingRequest() const { return m_need_modeset || (m_req && !m_req->Empty()); }
 +  bool CompleteCB1Page(int timeoutMs = 0);
 +  uint64_t CB1PresentationTime() const { return m_cb1CompletedNs; }
-+  // Source timestamp of the picture carried by the next asynchronous commit.
++  // Kodi presentation timestamp of the picture carried by the next asynchronous commit.
 +  void SetCB1PresentationPts(double pts) { m_cb1NextPts = pts; }
 +  double CB1PresentationPts() const { return m_cb1CompletedPts; }
 +  uint64_t CB1PreviousPresentationTime() const { return m_cb1PreviousCompletedNs; }

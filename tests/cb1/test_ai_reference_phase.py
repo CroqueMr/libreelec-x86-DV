@@ -1,4 +1,4 @@
-"""Reference AI selects 30 FPS pictures on physical 60 Hz refresh boundaries."""
+"""CB1 picture selection uses one refresh rule for every source mode and driver."""
 from pathlib import Path
 import re
 import subprocess
@@ -8,7 +8,7 @@ from test_native_video_source import TREE, body
 
 
 class AIReferencePhaseTests(unittest.TestCase):
-    def test_reference_selection_does_not_start_halfway_through_refresh(self):
+    def test_selection_uses_one_refresh_rule_for_every_mode(self):
         source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
         function = body(source, 'void CRenderManager::PrepareNextRender()')
         source_mode = re.search(r'enum class HDR10SourceMode[^;]+;',
@@ -79,48 +79,31 @@ struct CRenderManager {
 void CRenderManager::PrepareNextRender()
 FUNCTION
 int main(){
- CRenderManager halfway;
- halfway.PrepareNextRender();
- assert(halfway.m_presentstep==PRESENT_READY);
- assert(halfway.m_queued.front()==2);
- window.age=16666.666666666668;
- CRenderManager boundary;boundary.m_dvdClock.now+=8279.547666666668;
- boundary.PrepareNextRender();
- assert(boundary.m_presentstep==PRESENT_FLIP);
- assert(boundary.m_presentsource==2);
- // Retained HDR10+ source stays phase-aligned after Configure releases its picture,
- // independently of all three plain-HDR10 choices.
- for(auto plain:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::ReferenceDV,
-                 DVBRIDGE::HDR10SourceMode::EnhancedDV}){
-  DVBRIDGE::prefs.hdr10Source=plain;
-  window.age=8387.119;CRenderManager guidedHalfway;
-  guidedHalfway.m_picture.hdrType=CRenderManager::StreamHdrType::HDR_TYPE_HDR10PLUS;
-  assert(!guidedHalfway.m_pConfigPicture);
-  guidedHalfway.PrepareNextRender();
-  assert(guidedHalfway.m_presentstep==PRESENT_READY && guidedHalfway.m_queued.front()==2);
-  window.age=16666.666666666668;CRenderManager guidedBoundary;
-  guidedBoundary.m_picture.hdrType=CRenderManager::StreamHdrType::HDR_TYPE_HDR10PLUS;
-  guidedBoundary.m_dvdClock.now+=8279.547666666668;guidedBoundary.PrepareNextRender();
-  assert(guidedBoundary.m_presentstep==PRESENT_FLIP && guidedBoundary.m_presentsource==2);
- }
- // Outside the AI reference phase, a picture after the refresh midpoint waits for its refresh.
- window.age=8387.119;
- for(auto mode:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
-   DVBRIDGE::prefs.hdr10Source=mode;CRenderManager other;
-   other.PrepareNextRender();assert(other.m_presentstep==PRESENT_READY && other.m_queued.front()==2);
- }
+ // Every CB1 source mode, AI lookahead or not, uses one refresh-midpoint rule:
+ // the completion age, source mode and HDR10+ guidance do not move the selection.
+ // The picture is not due at this clock and is due one source picture later.
+ const auto decide=[](double advance,DVBRIDGE::HDR10SourceMode mode,std::optional<double> age,
+                      bool lookahead,bool plus){
+   DVBRIDGE::prefs.hdr10Source=mode;window.age=age;
+   CRenderManager r;r.renderer.lookahead=lookahead;r.m_dvdClock.now+=advance;
+   if(plus)r.m_picture.hdrType=CRenderManager::StreamHdrType::HDR_TYPE_HDR10PLUS;
+   assert(!r.m_pConfigPicture);
+   r.PrepareNextRender();
+   return r.m_presentstep==PRESENT_FLIP ? r.m_presentsource : -r.m_queued.front();
+ };
+ for(std::optional<double> age:{std::optional<double>(8387.119),std::optional<double>(16666.666666666668),std::optional<double>()})
+  for(double advance=0;advance<=33400;advance+=200){
+   const int reference=decide(advance,DVBRIDGE::HDR10SourceMode::Native,age,false,false);
+   if(advance==0)assert(reference==-2);
+   if(advance>=33400-200)assert(reference==2);
+   for(auto mode:{DVBRIDGE::HDR10SourceMode::Native,DVBRIDGE::HDR10SourceMode::ReferenceDV,
+                  DVBRIDGE::HDR10SourceMode::EnhancedDV,DVBRIDGE::HDR10SourceMode::HDR10PlusDV})
+    for(bool lookahead:{true,false})for(bool plus:{false,true})
+     assert(decide(advance,mode,age,lookahead,plus)==reference);
+  }
  DVBRIDGE::prefs.hdr10Source=DVBRIDGE::HDR10SourceMode::ReferenceDV;
- CRenderManager authored;authored.renderer.lookahead=false;
- authored.PrepareNextRender();assert(authored.m_presentstep==PRESENT_READY);
- CRenderManager matched;matched.m_fps=60;
- matched.PrepareNextRender();assert(matched.m_presentstep==PRESENT_READY);
- window.age.reset();CRenderManager missing;
- missing.PrepareNextRender();assert(missing.m_presentstep==PRESENT_READY);
- window.age=8387.119;CRenderManager paused;paused.m_dvdClock.paused=true;
+ window.age=8387.119;CRenderManager paused;paused.m_dvdClock.paused=true;paused.m_dvdClock.now+=16700;
  paused.PrepareNextRender();assert(paused.m_presentstep==PRESENT_READY);
- // The same picture is presented once its refresh midpoint is reached.
- CRenderManager due;due.renderer.lookahead=false;due.m_dvdClock.now+=17000;
- due.PrepareNextRender();assert(due.m_presentstep==PRESENT_FLIP && due.m_presentsource==2);
  // CB1 one-ahead pictures use the same refresh-midpoint admission as Kodi on every driver.
  const auto edge=[] {
    CRenderManager r;r.renderer.lookahead=false;r.m_fps=60;r.m_displayLatency=0;
