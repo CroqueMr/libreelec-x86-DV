@@ -27,7 +27,7 @@ RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'VideoPlayer.AudioStreamCount','VideoPlayer.HdrType']
 # Kodi labels the panel adds to the RC3 set: scan type, codec, decoded surface, deinterlacer.
 ADDED_LABELS=['Player.Process(videoscantype)','Player.Process(pixformat)',
-              'Player.Process(deintmethod)','VideoPlayer.VideoCodec']
+              'Player.Process(deintmethod)','VideoPlayer.VideoCodec','Property(DV.LocalCM4)']
 
 
 
@@ -185,6 +185,11 @@ int main() {
  output.effective=4;output.gamut=3;output.manualPeak=2000;refresh();
  assert(properties["DV.TVProfile"]=="BT.2020 / 2000 nits");
  assert(properties["DV.DisplayBlack"].empty());
+ output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.gamut=2;
+ output.target=800;output.displayBlack=0.002;refresh();
+ assert(properties["DV.TVProfile"]=="P3-D65 / 800 nits");
+ assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
+ output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
  output.displayBlack=0;refresh();
  assert(properties["DV.TVProfile"]=="BT.709 / 100 nits / 2.4");
@@ -267,7 +272,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),71)
+        self.assertEqual(len(rows),72)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))

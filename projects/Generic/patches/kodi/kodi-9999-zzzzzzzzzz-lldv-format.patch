@@ -411,3 +411,338 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgid "HDMI transport uses 12-bit fields"
 +msgstr ""
 +
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+index 3f91e85..71a7dbc 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+@@ -43,6 +43,7 @@ struct CDVPlaybackInfo
+     return false;
+   }
+   enum : unsigned { HDMI = 1, FEL = 2, CM4 = 4, HDR10 = 8, HDR10PLUS = 16, SDR = 32 };
++  static constexpr int PlayerLedMode = 9; // Output identity, not a selectable mode yet.
+   inline static std::atomic<unsigned> presented{0};
+   static int ReasonLabel(DVBRIDGE::OutputReason reason)
+   { return reason == DVBRIDGE::OutputReason::ProcessingPending ? 41142 :
+@@ -109,6 +110,7 @@ struct CDVPlaybackInfo
+       case 6:return "Dolby Vision Adaptive HDR Mapping";
+       case 7:return "HDR10+ Rendering";
+       case 8:return "SDR Rendering";
++      case PlayerLedMode:return "Dolby Vision Player-Led";
+       default:return "";
+     }
+   }
+@@ -117,6 +119,8 @@ struct CDVPlaybackInfo
+   {
+     if (output.effective==8 && (output.flags & SDR)) return "SDR Rendering";
+     if (!output.flags) return "Kodi default";
++    if constexpr (requires { output.lldv; })
++      if (output.lldv) return RequestedPolicy(PlayerLedMode);
+     if (IsHDR10PlusDV(output)) return Policy(output);
+     std::string mode = output.flags & HDR10 ? Policy(output) :
+         output.effective == 6 ? "Dolby Vision Adaptive HDR Mapping" :
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+new file mode 100644
+index 0000000..70cba65
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+@@ -0,0 +1,73 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++
++#include "DVStreamTelemetry.h"
++#include "utils/DVBridgeLldv.h"
++#include "cb1_master_reference.h"
++#include "dvbridge_creative.h"
++
++namespace DVBRIDGE
++{
++// Call with the binding and connector readback of the successfully presented
++// framebuffer. The renderer's status alone cannot activate the panel.
++inline std::optional<StreamSnapshot::Output> PlayerLedOutput(
++    cb1_master_status rendered, SourceBinding mapped, SourceBinding presented,
++    const LldvConnectorStatus& connector,
++    const dvbridge_creative_plan& plan, bool fel, bool felUpscaled = false)
++{
++  const auto format = connector.active;
++  if (rendered != CB1_MASTER_READY || !presented.Valid() || mapped != presented ||
++      plan.status == DVBRIDGE_CREATIVE_INVALID || plan.status == DVBRIDGE_CREATIVE_UNSUPPORTED ||
++      (format != LldvFormat::Y422_10 && format != LldvFormat::Y422_12) ||
++      LldvFormatReason(connector.sink, format, connector.driverFormats, connector.currentTiming) !=
++          LldvReason::Ready)
++    return {};
++
++  using Trims = VideoProcessingInfo::PlayerLed;
++  constexpr unsigned l2 = 1u << 2, l8 = 1u << 8;
++  const unsigned family = plan.applied_levels & l8 ? l8 : plan.applied_levels & l2;
++  unsigned groups = 0;
++  if (family == l8)
++  {
++    dvbridge_cm4_coefficients cm4{};
++    if (dvbridge_creative_cm4_coefficients(&cm4, &plan))
++    {
++      if (cm4.sop[0] != 1 || cm4.sop[1] != 0 || cm4.sop[2] != 1) groups |= Trims::SOP;
++      if (cm4.chroma_base != 1 || cm4.saturation_gain != 1) groups |= Trims::Colour;
++      if (cm4.mid_exponent != 1) groups |= Trims::Mid;
++      if (cm4.clip_strength != 0) groups |= Trims::Clip;
++    }
++  }
++  else if (family == l2)
++  {
++    if (plan.codes[0] != 2048 || plan.codes[1] != 2048 || plan.codes[2] != 2048)
++      groups |= Trims::SOP;
++    // The Expert L2 colour shader gates both controls on non-neutral saturation.
++    if (plan.codes[4] != 2048) groups |= Trims::Colour;
++  }
++
++  StreamSnapshot::Output output;
++  output.flags = CDVPlaybackInfo::HDMI;
++  if (fel) output.flags |= CDVPlaybackInfo::FEL;
++  if (plan.cm4 || plan.cmv40_status == CB1_CMV40_APPEND) output.flags |= CDVPlaybackInfo::CM4;
++  output.requested = output.effective = CDVPlaybackInfo::PlayerLedMode;
++  output.stream = presented.stream;
++  output.picture = presented.picture;
++  output.revision = presented.revision;
++  output.target = static_cast<float>(plan.policy.tv.peak_nits);
++  output.panel = plan.policy.tv.panel;
++  output.gamut = plan.policy.tv.gamut;
++  output.displayBlack = plan.policy.expert_black_nits;
++  output.bits = format == LldvFormat::Y422_10 ? 10 : 12;
++  output.minimumLinkBits = 12;
++  output.ignoreL5 = true;
++  output.creativeKnown = true;
++  output.creativeApplied = (plan.applied_levels & ~(l2 | l8)) | (groups ? family : 0);
++  output.creativeStatus = plan.status;
++  output.creativeReason = plan.reason;
++  output.felUpscaling = fel && felUpscaled ? 2 : -1;
++  output.lldv = Trims{{plan.analysis[1], plan.analysis[2]}, groups,
++                      plan.cmv40_status == CB1_CMV40_APPEND};
++  return output;
++}
++} // namespace DVBRIDGE
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
+index 0e8bd4c..a1d83f3 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h
+@@ -30,6 +30,7 @@ inline VideoProcessingInfo NativeProcessingInfo(const StreamSnapshot& source)
+   accepted.creativeReason=output.creativeReason;
+   accepted.iptTransport=output.iptTransport;
+   accepted.felUpscaling=output.felUpscaling;
++  accepted.lldv=output.lldv;
+ #ifdef CB1_HAS_HDR10_AI
+   accepted.hdr10AI=output.hdr10AI; accepted.aiL1L3=output.aiL1L3;
+   accepted.aiModel=output.aiModel; accepted.aiBaseline=output.aiBaseline;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+index 06a469c..e4950aa 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+@@ -71,6 +71,7 @@ struct StreamSnapshot
+     bool ignoreL5{}; // Actual accepted frame geometry, independent of later preferences.
+     bool cmv40Appended{};
+     int felUpscaling{-1};
++    std::optional<VideoProcessingInfo::PlayerLed> lldv{};
+ #ifdef CB1_HAS_HDR10_AI
+     bool hdr10AI{};
+     bool hlgAI{}, sdrHDRSource{};
+@@ -84,6 +85,7 @@ struct StreamSnapshot
+     const char* Circuit() const
+     {
+       if (!flags) return "";
++      if (lldv) return cb1_circuit_version(CB1_DV_DV_LLDV);
+       if (effective==8) return cb1_circuit_version(sdrHDRSource ? CB1_HDR10_SDR : CB1_DV_SDR);
+       if (hdr10AI)
+       {
+@@ -146,7 +148,7 @@ struct StreamSnapshot
+   std::bitset<256> TransmittedBlocks() const
+   {
+     std::bitset<256> result;
+-    if (!(output.flags & CDVPlaybackInfo::HDMI) || !metadata) return result;
++    if (!(output.flags & CDVPlaybackInfo::HDMI) || output.lldv || !metadata) return result;
+     if (output.authoredLegacy) { result[1]=result[5]=true; return result; }
+     result=blocks;
+     if (output.l2TrimsDisabled) result[2]=false;
+@@ -258,11 +260,15 @@ public:
+   static void NativePresented(const SourceInfo& source,const CDVMetadataBuffer& metadata,
+                               const StreamSnapshot::Output& output)
+   {
++    const SourceBinding identity{output.stream,output.picture,output.revision};
++    if (output.lldv && (!metadata.Data() || metadata.Binding()!=identity))
++      return;
+     std::lock_guard<std::mutex> lock(m_mutex);
+     m_nativeActive = true;
+     m_nativeSource = source;
+     const auto now=std::chrono::steady_clock::now();
+-    if (metadata.Data() && (!m_snapshot.metadata || output.stream!=m_snapshot.output.stream ||
++    // A player-led plan and its source facts describe the same accepted picture.
++    if (metadata.Data() && (output.lldv || !m_snapshot.metadata || output.stream!=m_snapshot.output.stream ||
+         output.revision!=m_snapshot.output.revision || now>=m_next))
+     {
+       StoreMetadata(m_snapshot,reinterpret_cast<const AVDOVIMetadata*>(metadata.Data()),
+@@ -271,16 +277,17 @@ public:
+     }
+     if (!metadata.Data()) { m_snapshot.metadata=false; m_snapshot.blocks.reset(); }
+     m_snapshot.output = output;
+-    if (m_snapshot.transaction.identity==SourceBinding{output.stream,output.picture,output.revision})
++    if (m_snapshot.transaction.identity==identity)
+     {
+       if (output.effective!=7 || output.reason==OutputReason::None)
+         m_snapshot.output.reason=m_snapshot.transaction.reason;
+       m_snapshot.output.fallback |= m_snapshot.output.reason!=OutputReason::None;
+       m_snapshot.output.requested=m_snapshot.transaction.requested;
+-      m_snapshot.output.minimumLinkBits=(output.flags & CDVPlaybackInfo::HDR10) ? 10 : 0;
++      if (!output.lldv)
++        m_snapshot.output.minimumLinkBits=(output.flags & CDVPlaybackInfo::HDR10) ? 10 : 0;
+     }
+     m_snapshot.referenceWarning=false;
+-    if (m_snapshot.transaction.identity==SourceBinding{output.stream,output.picture,output.revision})
++    if (m_snapshot.transaction.identity==identity)
+       m_snapshot.transaction.stage="Committed";
+     CDVPlaybackInfo::presented.store(output.flags);
+   }
+@@ -457,13 +464,13 @@ private:
+ inline void DVBRIDGE::StreamTelemetry::PublishNativeInfo(uint64_t generation)
+ {
+   // Bounded summaries refresh at 2 Hz; accepted mode/format changes publish immediately.
+-  using Key=std::tuple<uint64_t,uint64_t,uint64_t,unsigned,int,uint32_t,bool,int>;
++  using Key=std::tuple<uint64_t,uint64_t,uint64_t,unsigned,int,uint32_t,unsigned,bool,int>;
+   static Key previous{};
+   static std::chrono::steady_clock::time_point next;
+   const auto source=Read();
+   const auto& output=source.output;
+   const Key key{generation,output.stream,output.revision,output.flags,output.effective,
+-      output.format,output.fallback,int(output.reason)};
++      output.format,output.bits,output.fallback,int(output.reason)};
+   const auto now=std::chrono::steady_clock::now();
+   if (now<next && key==previous) return;
+   if (CServiceBroker::GetDataCacheCore().SetVideoProcessingInfo(generation,NativeProcessingInfo(source)))
+diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
+index d10eb48..35a9f43 100644
+--- a/xbmc/cores/VideoProcessingInfo.h
++++ b/xbmc/cores/VideoProcessingInfo.h
+@@ -62,6 +62,13 @@ struct VideoProcessingInfo
+     bool restored{};
+     bool hdr10AI{};
+   } transaction;
++  struct PlayerLed
++  {
++    enum TrimGroup : unsigned { SOP = 1, Colour = 2, Mid = 4, Clip = 8 };
++    std::array<unsigned, 2> scenePQ{}; // effective max/avg after L3
++    unsigned trimGroups{};
++    bool cm4Appended{};
++  };
+   struct Output
+   {
+     unsigned flags{}, bits{};
+@@ -91,6 +98,7 @@ struct VideoProcessingInfo
+     std::array<unsigned,3> aiBaseline{};
+     std::array<unsigned,3> emittedL1{};
+     std::string engine, circuit;
++    std::optional<PlayerLed> lldv{};
+   } output;
+   std::optional<VideoOutputType> outputType;
+   uint64_t informationGeneration{};
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+index 8811ce7..ae01128 100644
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -149,6 +149,19 @@ bool InfoValueFits(const std::string& text)
+   return label.GetTextWidth() <= 284.0f;
+ }
+ 
++std::string LldvTrimText(unsigned levels, unsigned groups)
++{
++  using Trims = VideoProcessingInfo::PlayerLed;
++  if (!groups)
++    return {};
++  std::string text = levels & (1u << 8) ? "L8" : "L2";
++  if (groups & Trims::SOP) text += " · SOP";
++  if (groups & Trims::Colour) text += " · Colour";
++  if (groups & Trims::Mid) text += " · Mid";
++  if (groups & Trims::Clip) text += " · Clip";
++  return text;
++}
++
+ std::string PolicyText(std::string text)
+ {
+   if (text.starts_with("Dolby Vision "))
+@@ -282,6 +295,7 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+         data.tags.primariesGuessed, data.tags.fullRange));
+     const auto active = data.output.flags;
+     const bool hdr10 = active & CDVPlaybackInfo::HDR10;
++    const bool lldv = active && data.output.lldv.has_value();
+     const bool metadata = active && data.metadata;
+     const auto yesno = [](bool value) { return value ? "Yes" : "No"; };
+     const auto resolution = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
+@@ -387,7 +401,7 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
+         StringUtils::Format("{}-bit",data.output.minimumLinkBits) : "");
+     SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
+-    SetProperty("DV.SignalIntent", active & CDVPlaybackInfo::HDMI ?
++    SetProperty("DV.SignalIntent", lldv ? "LLDV / YCbCr 4:2:2" : active & CDVPlaybackInfo::HDMI ?
+         (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
+         active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
+         hdr10 ? "PQ / BT.2020" : "");
+@@ -419,12 +433,13 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
+     SetProperty("DV.TVProfile", active && data.output.effective==8 ?
+         StringUtils::Format("BT.709 / {:g} nits / {:g}", data.output.target,data.output.sdrGamma) :
+-        active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
++        active && (data.output.lldv || data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
+         StringUtils::Format("{}{} / {:g} nits",
+             data.output.panel==1 || data.output.panel==2 ? localizer.Get(40833+data.output.panel)+" · " : "",
+             data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
+-            data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
+-    SetProperty("DV.DisplayBlack", (hdr10 && data.output.effective==3 || active && data.output.effective==8) ?
++            data.output.lldv || data.output.effective==3 ? static_cast<double>(data.output.target) : data.output.manualPeak) : "");
++    SetProperty("DV.DisplayBlack", (active && (data.output.lldv || (hdr10 && data.output.effective==3) ||
++        data.output.effective==8)) ?
+         StringUtils::Format("{:g} nits", data.output.displayBlack) : "");
+     SetProperty("DV.HDR10Policy", hdr10 ? CDVPlaybackInfo::Policy(data.output) : "");
+     SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
+@@ -449,16 +464,22 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+           data.output.creativeEdited & (1u<<8) ? "HDR10+ curve from L8" :
+           data.output.creativeEdited & (1u<<2) ? "HDR10+ curve from L2" :
+           data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
++    if (lldv)
++      SetProperty("DV.CreativeTrims", LldvTrimText(data.output.creativeApplied, data.output.lldv->trimGroups));
++    SetProperty("DV.LocalCM4", lldv && data.output.lldv->cm4Appended ? "CM4 added locally" : "");
+     SetProperty("DV.Precision", active ? StringUtils::Format("{}-bit", data.output.bits) : "N/A");
+     SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
+     SetProperty("DV.L1Nits", metadata && data.l1 ? StringUtils::Format("{:.1f} | {:.1f} | {:.1f} nits",
+         PQNits(data.pq[0]), PQNits(data.pq[1]), PQNits(data.pq[2])) : "N/A");
+     // Use the accepted route's partial components, without changing the original source values.
+     const bool partialL1 = metadata && data.l1 && applied[1] &&
+-        (data.output.effective == 8 || (hdr10 && (data.output.effective == 2 || data.output.effective == 3)));
+-    SetProperty("DV.UsedL1PQ", partialL1 ? StringUtils::Format("{} | {}", data.pq[1], data.pq[2]) : "");
++        (data.output.lldv || data.output.effective == 8 ||
++         (hdr10 && (data.output.effective == 2 || data.output.effective == 3)));
++    const auto sceneMax = data.output.lldv ? data.output.lldv->scenePQ[0] : data.pq[1];
++    const auto sceneAvg = data.output.lldv ? data.output.lldv->scenePQ[1] : data.pq[2];
++    SetProperty("DV.UsedL1PQ", partialL1 ? StringUtils::Format("{} | {}", sceneMax, sceneAvg) : "");
+     std::string usedL1Nits = metadata && data.l1 && applied[1] ?
+-        (partialL1 ? StringUtils::Format("{:.1f} | {:.1f} nits", PQNits(data.pq[1]), PQNits(data.pq[2])) :
++        (partialL1 ? StringUtils::Format("{:.1f} | {:.1f} nits", PQNits(sceneMax), PQNits(sceneAvg)) :
+             StringUtils::Format("{:.1f} | {:.1f} | {:.1f} nits",
+                 PQNits(data.pq[0]), PQNits(data.pq[1]), PQNits(data.pq[2]))) : "";
+     if (!InfoValueFits(usedL1Nits) && usedL1Nits.ends_with(" nits"))
+@@ -483,7 +504,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.OutputL8Targets", active && forwarded[8] ? L8Targets(levels) : "");
+     SetProperty("DV.L3", carried(3) ? StringUtils::Format("{} | {} | {}",
+         levels.l3[0], levels.l3[1], levels.l3[2]) : "");
+-    SetProperty("DV.UsedL3", carried(3) && applied[3] && hdr10 && data.output.effective == 3 ?
++    SetProperty("DV.UsedL3", carried(3) && applied[3] &&
++        (data.output.lldv || (hdr10 && data.output.effective == 3)) ?
+         StringUtils::Format("{} | {}", levels.l3[1], levels.l3[2]) : "");
+     SetProperty("DV.L4", carried(4) ? StringUtils::Format("{} | {}", levels.l4[0], levels.l4[1]) : "");
+     SetProperty("DV.L8Targets", carried(8) ? L8Targets(levels) : "");
+diff --git a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+index de87970..d522e40 100644
+--- a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
++++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+@@ -13,6 +13,7 @@ struct VideoProcessingInfoGUI
+   {
+     if (!info.metadata) return "";
+     if (info.cm4) return "CM4.0 (original)";
++    if (info.output.lldv) return "CM2.9";
+     if ((info.output.flags & CDVPlaybackInfo::HDMI) && !info.output.hdr10AI &&
+         !info.output.authoredLegacy && (info.output.effective==1 || info.output.effective==5))
+       return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 (CM4 added)" : "CM2.9 (CM4 not added)";

@@ -52,6 +52,9 @@ class CServiceBroker {public: static CDataCacheCore& GetDataCacheCore() {static 
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
 #include <cassert>
 #include <memory>
+extern "C" {
+#include <libavutil/mem.h>
+}
 IMPLEMENTATIONS
 struct Submission {DVBRIDGE::SourceBinding identity; uint64_t informationGeneration;};
 DVBRIDGE::SourceBinding m_failedIdentity;
@@ -119,12 +122,39 @@ int main() {
  ++output.picture;DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
  compatibility=DVBRIDGE::StreamTelemetry::Read();
  assert(!compatibility.output.fallback && compatibility.output.reason==DVBRIDGE::OutputReason::None);
+ // LLDV binds its source values and signal precision to the accepted picture.
+ size_t bytes=0;AVDOVIMetadata* rpu=av_dovi_metadata_alloc(&bytes);assert(rpu);
+ rpu->num_ext_blocks=1;
+ auto* level=av_dovi_get_ext(rpu,0);level->level=1;level->l1={0,3000,1000};
+ output={};output.flags=CDVPlaybackInfo::HDMI;output.effective=CDVPlaybackInfo::PlayerLedMode;
+ output.stream=3;output.picture=20;output.revision=5;
+ output.bits=10;output.minimumLinkBits=12;output.lldv.emplace();
+ const DVBRIDGE::SourceBinding lldv{output.stream,output.picture,output.revision};
+ assert(metadata.Assign(reinterpret_cast<const uint8_t*>(rpu),bytes,lldv));
+ DVBRIDGE::StreamTelemetry::NativeSelection(lldv,{},output.effective,output.effective,DVBRIDGE::OutputReason::None);
+ DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
+ DVBRIDGE::StreamTelemetry::PublishNativeInfo(current);
+ auto accepted=cache.GetVideoProcessingInfo();
+ assert(accepted.output.lldv && accepted.output.bits==10 && accepted.output.minimumLinkBits==12);
+ assert(accepted.pq[1]==3000 && accepted.TransmittedBlocks().none());
+ assert(!failedCommit({lldv,current}));
+ assert(cache.GetVideoProcessingInfo().output.lldv && cache.GetVideoProcessingInfo().output.bits==10);
+ ++output.picture;output.bits=12;level->l1.max_pq=3100;
+ DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
+ assert(DVBRIDGE::StreamTelemetry::Read().output.picture==lldv.picture);
+ assert(metadata.Assign(reinterpret_cast<const uint8_t*>(rpu),bytes,{output.stream,output.picture,output.revision}));
+ DVBRIDGE::StreamTelemetry::NativePresented(dv,metadata,output);
+ DVBRIDGE::StreamTelemetry::PublishNativeInfo(current);
+ accepted=cache.GetVideoProcessingInfo();
+ assert(accepted.output.lldv && accepted.output.bits==12 && accepted.pq[1]==3100);
+ av_free(rpu);metadata.Reset();
  // Accepted SDR import facts survive a rejected newer frame, but never a source epoch reset.
  output={};output.flags=CDVPlaybackInfo::SDR;output.effective=8;
  output.stream=9;output.picture=1;output.revision=4;output.sdrHDRInputUsed=24;output.ignoreL5=true;
  DVBRIDGE::StreamTelemetry::NativePresented(sdr,metadata,output);
  DVBRIDGE::StreamTelemetry::PublishNativeInfo(current);
  assert(cache.GetVideoProcessingInfo().output.sdrHDRInputUsed==24);
+ assert(!cache.GetVideoProcessingInfo().output.lldv);
  assert(DVBRIDGE::StreamTelemetry::Read().output.ignoreL5);
  assert(!failedCommit({{9,2,4},current}));
  assert(DVBRIDGE::StreamTelemetry::Read().output.ignoreL5);

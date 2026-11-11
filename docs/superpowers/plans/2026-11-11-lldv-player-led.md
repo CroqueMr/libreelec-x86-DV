@@ -153,6 +153,10 @@ La qualification Dolby demande deux rendus de la même source à la même cible 
 - [ ] Réutiliser la restauration DRM et tester un refus de transaction, une déconnexion et une reprise, un seek, une pause, un arrêt et le passage au fichier suivant. Les bascules LLDV ↔ HDR10 et LLDV ↔ TV-led doivent rendre une image et récupérer le dernier état utilisable en cas d’échec. Vérifier aussi le retour SDR et l’absence de résidu LLDV sur les autres circuits.
 - [ ] Vérifier la composition des sous-titres et de l’interface. Dans le panneau Info via **O**, indiquer le circuit, le format actif et les trims appliqués avec les règles de lisibilité existantes. Commit local.
 
+Le panneau **O** et sa télémétrie LLDV sont préparés hors ligne. La synthèse demande une image rendue, la même identité côté présentation et une relecture du format actif. Elle utilise les données source de cette image. Le panneau indique le 4:2:2, distingue la précision utile des champs HDMI de 12 bits, affiche la cible et les trims actifs, et signale le CM4 ajouté localement à part. Les tests injectent une présentation simulée via le cache Kodi et couvrent le refus, une ancienne identité, les deux précisions et le retour aux circuits existants.
+
+Le N100 répond sur le build RC4 Preview Update 3. Son inventaire USB et celui du poste Windows ne montrent aucun périphérique de capture HDMI ni de mesure de la dalle. La vérification des codes reçus et des couleurs reste ouverte. La présentation LLDV réelle attend cette qualification.
+
 ## 5. Valider l’ensemble avant le PR
 
 - [ ] Rejouer les tests ciblés sur les sources appariées, la suite CB1 et les contrôles de staging. Rejouer les patches avec zéro fuzz, compiler le noyau et Kodi, puis démarrer le build local sur le N100.
