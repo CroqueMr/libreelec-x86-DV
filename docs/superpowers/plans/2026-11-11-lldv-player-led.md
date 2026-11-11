@@ -38,6 +38,14 @@ Le noyau d’essai a accepté les quatre combinaisons et restauré l’état DRM
 
 La différence des deux bits faibles a été vérifiée sur les rasters source. La capture interne de la LG montre les barres et les gris dans un PNG RGB 8 bits. Les modes natifs `SOURCE` et `VIDEO` ont refusé la capture. Restent la lecture des codes HDMI à 12 bits et les mesures optiques sur la dalle. Le passage à l’intégration du moteur attend ces preuves.
 
+### Essai différentiel avec le matériel existant
+
+À 4K24, le lanceur a gardé le format LLDV 12 bits actif et a uniquement changé le framebuffer. Il a alterné six fois la mire de base avec deux passages par bit faible et un contrôle à +32 codes. Les onze relevés Intel sont stables dans chaque phase et les quatre variantes ont des CRC distincts.
+
+Sur la capture interne RGB 8 bits de la LG, la perturbation de +1 a donné un écart reproductible dans 7 plages stables et celle de +2 dans 23. Ces écarts sont répartis sur les bandes de luma et de chroma. Aucun écart des deux bits faibles ne se répète dans la bande proche du noir. La capture YUV422 demandée à la TV a été refusée.
+
+Ce résultat établit que chaque perturbation influence le chemin vidéo capturé par la LG. Le traitement interne et sa quantification limitent la conclusion. Les codes HDMI natifs et les couleurs émises par la dalle restent à qualifier. La restauration DRM a réussi après l’essai.
+
 ## 2. Récupérer l’image Dolby Vision avant le mapping
 
 **Propriétaires.** `CB1/src/cb1_master_reference.c`, `CB1/src/dvbridge_render.c`, les tests `master_reference`, `master_ipt` et `CB1/tests/reference/test_dovi_master_reference.py`. Réutiliser les entrées BL, EL, RPU et l’identité flux, image et révision de CB1.
