@@ -144,6 +144,14 @@ Le filtre natif de récupération de contraste libplacebo a été essayé à par
 
 La qualification Dolby demande deux rendus de la même source à la même cible HDR, pour chaque famille, en ne changeant que Tone Detail. Les tests doivent mesurer le contraste local dans les hautes lumières, les écarts côté sombre d’un bord, les aplats, le noir et la stabilité sur une séquence. Le téléchargement de CM Offline requiert une session Dolby Customer. [Guide CM Offline](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools-v564/documentation/user-guide/cm-offline) · [Téléchargement Dolby](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools-v564/)
 
+### Packing 4:2:2 hors ligne
+
+Le packing convertit le RGB linéaire du moteur vers le BT.2020, puis applique le PQ à partir du pic de la cible. Le filtre horizontal à trois coefficients [1, 2, 1] est centré sur le pixel pair. Les mots Y et Cb/Cr sont quantifiés en plage limitée à 10 ou 12 bits. En 10 bits, l’arrondi précède l’ajout des deux zéros de poids faible. Le résultat reprend la disposition des octets des mires dans une texture RGBA8 linéaire. [ITU-R BT.2100](https://www.itu.int/rec/R-REC-BT.2100-3-202502-I/en)
+
+Le test compare les codes dépaquetés à un calcul indépendant en double précision. Il couvre les trois gamuts cibles, les noirs et blancs, les couleurs saturées, la phase de chroma, l’inversion verticale, les refus de format et le retour du 12 au 10 bits. Les tests hors écran comparent les pixels HDR10 et SDR avant et après le packing, puis le retour du framebuffer 4K au Dolby Vision TV-led. Le panneau est vérifié avec des présentations simulées.
+
+Les trois essais ciblés passent aussi sur l’iGPU Intel du N100 (Mesa 26.2.3) avec un contexte EGL hors écran. Sur une mire RGB linéaire 4K déjà en mémoire, le packing seul prend 17,32 ms GPU de médiane aux deux profondeurs. Le P95 est de 17,35 ms en 10 bits et 17,32 ms en 12 bits sur 48 mesures par profondeur après échauffement. La cadence du circuit complet reste à qualifier. Les 12 bits reçus par la LG et les couleurs de la dalle restent à mesurer avant le raccordement à HDMI.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.

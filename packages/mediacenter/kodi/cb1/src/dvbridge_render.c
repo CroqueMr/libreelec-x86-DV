@@ -109,6 +109,7 @@ static bool render_sdr_direct(struct dvbridge_renderer *r,
 struct dvbridge_renderer {
     pl_gpu gpu;
     pl_renderer renderer;
+    pl_dispatch player_led_dispatch;
     int target_width, target_height;
     bool target_identity;
     dvbridge_spatial_fit spatial_fit;
@@ -952,6 +953,7 @@ static void renderer_free(struct dvbridge_renderer *r)
     pl_tex_destroy(r->gpu, &r->ai_rgb);
     pl_tex_destroy(r->gpu, &r->enhanced_input);
     dve_release_images(r);
+    pl_dispatch_destroy(&r->player_led_dispatch);
     pl_renderer_destroy(&r->renderer);
     pl_shader_obj_destroy(&r->creative_state);
     free(r);
@@ -1699,6 +1701,36 @@ static bool overlay_valid(const struct dvbridge_native_overlay *overlay,int widt
         overlay->rect[1]<=overlay->rect[3] && !fmodf(overlay->rect[0],2) && !fmodf(overlay->rect[2],2);
 }
 
+/* The GUI's write state must never alter a byte of either DV carrier. */
+static const GLenum transport_caps[] = {
+    GL_BLEND, GL_DEPTH_TEST, GL_STENCIL_TEST, GL_SCISSOR_TEST, GL_DITHER,
+    GL_CULL_FACE, GL_RASTERIZER_DISCARD, GL_SAMPLE_ALPHA_TO_COVERAGE, GL_SAMPLE_COVERAGE,
+};
+struct transport_write_state {
+    GLboolean enabled[sizeof(transport_caps) / sizeof(*transport_caps)], mask[4];
+};
+
+static void transport_write_begin(struct transport_write_state *state)
+{
+    glGetBooleanv(GL_COLOR_WRITEMASK, state->mask);
+    for (size_t i = 0; i < sizeof(state->enabled) / sizeof(*state->enabled); i++) {
+        state->enabled[i] = glIsEnabled(transport_caps[i]);
+        glDisable(transport_caps[i]);
+    }
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+}
+
+static void transport_write_end(const struct transport_write_state *state)
+{
+    glColorMask(state->mask[0], state->mask[1], state->mask[2], state->mask[3]);
+    for (size_t i = 0; i < sizeof(state->enabled) / sizeof(*state->enabled); i++) {
+        if (state->enabled[i])
+            glEnable(transport_caps[i]);
+        else
+            glDisable(transport_caps[i]);
+    }
+}
+
 static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry,
     pl_tex target,bool flip,const struct dvbridge_native_overlay *overlay,bool force_refresh,
@@ -1717,23 +1749,11 @@ static bool render_packed_overlay(struct dvbridge_renderer *r,const struct pl_fr
     // enable state, just as the separate transport packer does.
     if (glGetError() != GL_NO_ERROR)
         return false;
-    const GLenum caps[] = {GL_BLEND, GL_DEPTH_TEST, GL_STENCIL_TEST, GL_SCISSOR_TEST,
-        GL_DITHER, GL_CULL_FACE, GL_RASTERIZER_DISCARD, GL_SAMPLE_ALPHA_TO_COVERAGE,
-        GL_SAMPLE_COVERAGE};
-    GLboolean enabled[sizeof(caps)/sizeof(*caps)], mask[4];
-    glGetBooleanv(GL_COLOR_WRITEMASK, mask);
-    for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
-        enabled[i] = glIsEnabled(caps[i]);
-        glDisable(caps[i]);
-    }
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    struct transport_write_state state;
+    transport_write_begin(&state);
     bool ok = render(r, source, metadata, bytes, pts, el_pts, geometry, target, flip, NULL, NULL, overlay,force_refresh,NULL,false,master,p5_standard,ipt);
     ok = glGetError() == GL_NO_ERROR && ok;
-    glColorMask(mask[0], mask[1], mask[2], mask[3]);
-    for (unsigned i=0; i<sizeof(caps)/sizeof(*caps); ++i) {
-        if (enabled[i]) glEnable(caps[i]);
-        else glDisable(caps[i]);
-    }
+    transport_write_end(&state);
     r->ready = ok && glGetError() == GL_NO_ERROR;
     return r->ready;
 }
@@ -1949,6 +1969,148 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     if(!render.rendered)return CB1_MASTER_FAILED;
     if(applied)*applied=render.plan.creative;
     return CB1_MASTER_READY;
+}
+
+bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
+    unsigned bits, bool flip_y)
+{
+    if (!r || !policy || policy->mode != DVBRIDGE_MODE_HDR10_EXPERT ||
+        dvbridge_policy_validate(policy) != DVBRIDGE_POLICY_VALID ||
+        (bits != 10 && bits != 12) || !linear || !carrier || linear == carrier)
+        return false;
+
+    const struct pl_tex_params *src = &linear->params, *dst = &carrier->params;
+    if (!src->sampleable || !dst->renderable || src->d || dst->d ||
+        src->w <= 0 || src->w % 2 || src->h <= 0 || src->w != dst->w || src->h != dst->h ||
+        !src->format || !dst->format || src->format->type != PL_FMT_FLOAT ||
+        dst->format->type != PL_FMT_UNORM || src->format->num_components != 4 ||
+        dst->format->num_components != 4)
+        return false;
+    for (int c = 0; c < 4; c++)
+        if (src->format->component_depth[c] != 32 || dst->format->component_depth[c] != 8)
+            return false;
+
+    /* Accept actual 2D textures only. A framebuffer-only wrapper can report
+     * four 8-bit components even when its encoding or sample count differs. */
+    GLenum src_target = 0, dst_target = 0;
+    GLint src_format = 0, dst_format = 0;
+    GLuint framebuffer = 0;
+    GLuint src_name = pl_opengl_unwrap(r->gpu, linear, &src_target, &src_format, NULL);
+    GLuint dst_name = pl_opengl_unwrap(r->gpu, carrier, &dst_target, &dst_format, &framebuffer);
+    if (!src_name || !dst_name || src_name == dst_name || !framebuffer ||
+        src_target != GL_TEXTURE_2D || dst_target != GL_TEXTURE_2D ||
+        src_format != GL_RGBA32F || dst_format != GL_RGBA8 || glGetError() != GL_NO_ERROR)
+        return false;
+
+    GLint draw, samples, encoding, attachment, level, draw_buffer;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+    bool complete = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glGetIntegerv(GL_SAMPLES, &samples);
+    glGetIntegerv(GL_DRAW_BUFFER0, &draw_buffer);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+        GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &attachment);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+        GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL, &level);
+    glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+        GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+    if (glGetError() != GL_NO_ERROR || !complete || samples || encoding != GL_LINEAR ||
+        draw_buffer != GL_COLOR_ATTACHMENT0 || (GLuint) attachment != dst_name || level)
+        return false;
+
+    if (!r->player_led_dispatch) {
+        r->player_led_dispatch = pl_dispatch_create(NULL, r->gpu);
+        if (!r->player_led_dispatch)
+            return false;
+        pl_dispatch_mark_cb1_stable_pq(r->player_led_dispatch, true);
+    }
+
+    enum pl_color_primaries prim = policy->tv.gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 :
+        policy->tv.gamut == DVBRIDGE_GAMUT_P3_D65 ? PL_COLOR_PRIM_DISPLAY_P3 : PL_COLOR_PRIM_BT_2020;
+    /* An exact identity keeps zero channels at zero before the PQ curve. */
+    pl_matrix3x3 matrix = prim == PL_COLOR_PRIM_BT_2020 ? pl_matrix3x3_identity :
+        pl_get_color_mapping_matrix(pl_raw_primaries_get(prim),
+            pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020), PL_INTENT_RELATIVE_COLORIMETRIC);
+    float columns[3][3];
+    for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+            columns[col][row] = matrix.m[row][col];
+
+    const float scale = policy->tv.peak_nits / PL_COLOR_SDR_WHITE;
+    const int flip = flip_y;
+    const unsigned padding = 12 - bits;
+    const struct pl_shader_var vars[] = {
+        {.var=pl_var_mat3("lldv_matrix"), .data=columns, .dynamic=true},
+        {.var=pl_var_float("lldv_scale"), .data=&scale, .dynamic=true},
+        {.var=pl_var_int("lldv_flip"), .data=&flip, .dynamic=true},
+        {.var=pl_var_uint("lldv_padding"), .data=&padding, .dynamic=true},
+    };
+    const struct pl_shader_desc input = {
+        .desc={.name="lldv_input", .type=PL_DESC_SAMPLED_TEX},
+        .binding={.object=linear, .sample_mode=PL_TEX_SAMPLE_NEAREST},
+    };
+
+    pl_dispatch dispatch = r->player_led_dispatch;
+    pl_dispatch_reset_frame(dispatch);
+    pl_shader shader = pl_dispatch_begin(dispatch);
+    bool ok = pl_shader_custom(shader, &(struct pl_custom_shader){
+        .input=PL_SHADER_SIG_NONE, .output=PL_SHADER_SIG_COLOR,
+        .output_w=src->w, .output_h=src->h,
+        .descriptors=&input, .num_descriptors=1, .variables=vars, .num_variables=4,
+        .description="LLDV 4:2:2 carrier",
+        .header=CB1_CARRIER_GLSL
+            "ivec2 lldv_pos; int lldv_even; vec3 lldv_left, lldv_center;\n"
+            "vec3 lldv_sample(int x){\n"
+            "    vec3 rgb=texelFetch(lldv_input,ivec2(x,lldv_pos.y),0).rgb;\n"
+            "    return clamp(lldv_matrix*rgb,0.0,1.0)*lldv_scale;\n"
+            "}\n",
+        .body=
+            "lldv_pos=ivec2(gl_FragCoord.xy);\n"
+            "if(lldv_flip!=0)lldv_pos.y=textureSize(lldv_input,0).y-1-lldv_pos.y;\n"
+            "lldv_even=lldv_pos.x&~1;\n"
+            "color=vec4(lldv_sample(max(lldv_even-1,0)),1.0);\n",
+    });
+
+    /* BT.2100 co-sites chroma at the even luma sample. Filter the three PQ
+     * samples about that position, with the left edge replicated. */
+    const char *steps[] = {
+        "lldv_left=color.rgb; color.rgb=lldv_sample(lldv_even);\n",
+        "lldv_center=color.rgb; color.rgb=lldv_sample(lldv_even+1);\n",
+        "const vec3 luma=vec3(.2627,.6780,.0593);\n"
+        "bool odd=(lldv_pos.x&1)!=0;\n"
+        "float y=dot(odd?color.rgb:lldv_center,luma);\n"
+        "vec3 filtered=(lldv_left+2.0*lldv_center+color.rgb)*.25;\n"
+        "float fy=dot(filtered,luma);\n"
+        "float c=odd?(filtered.r-fy)/1.4746:(filtered.b-fy)/1.8814;\n"
+        "vec2 limited=vec2(256.0+3504.0*clamp(y,0.0,1.0),"
+                          "2048.0+3584.0*clamp(c,-.5,.5));\n"
+        "uvec2 code=uvec2(floor(limited/float(1u<<lldv_padding)+.5))<<lldv_padding;\n"
+        "color=cb1_carrier(code);\n",
+    };
+    for (int i = 0; ok && i < 3; i++) {
+        pl_shader_delinearize(shader, &pl_color_space_hdr10);
+        ok = pl_shader_custom(shader, &(struct pl_custom_shader){
+            .input=PL_SHADER_SIG_COLOR, .output=PL_SHADER_SIG_COLOR, .body=steps[i],
+        });
+    }
+    if (ok) {
+        GLint viewport[4], scissor[4];
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        glGetIntegerv(GL_SCISSOR_BOX, scissor);
+        struct transport_write_state state;
+        transport_write_begin(&state);
+        ok = pl_dispatch_finish(dispatch, pl_dispatch_params(.shader=&shader, .target=carrier));
+        ok = glGetError() == GL_NO_ERROR && ok;
+        transport_write_end(&state);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+        ok = glGetError() == GL_NO_ERROR && ok;
+    }
+    pl_dispatch_abort(dispatch, &shader);
+    return ok;
 }
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)

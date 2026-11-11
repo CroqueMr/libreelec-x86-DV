@@ -807,6 +807,29 @@ static void transport(bool lifecycle,bool rows)
         if(memcmp(pixels+4*i,expected,4))fprintf(stderr,"carrier mismatch %u: %u %u %u\n",i,pixels[4*i],pixels[4*i+1],pixels[4*i+2]);
         assert(!memcmp(pixels+4*i,expected,4));
     }
+    if(lifecycle){
+        /* Switch the same 4K offscreen carrier to player-led, then restore
+         * Master. Use a fresh renderer for player-led mapping as in its API. */
+        uint8_t master[16*4];
+        memcpy(master,pixels,sizeof(master));
+        assert(dvbridge_render_commit(renderer));
+        struct dvbridge_renderer *lldv=dvbridge_renderer_create(g.gl->gpu);assert(lldv);
+        pl_tex linear=reference_texture(g.gl->gpu,3840,2160,NULL);
+        struct dvbridge_policy policy=reference_policy();
+        policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;
+        assert(dvbridge_render_player_led(lldv,&policy,&source,m,bytes,1,NAN,linear,NULL)==CB1_MASTER_READY);
+        assert(dvbridge_pack_player_led_422(lldv,&policy,linear,output,12,false));
+        assert(!dvbridge_render_candidate(lldv));
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glReadPixels(0,0,16,1,GL_RGBA,GL_UNSIGNED_BYTE,pixels);assert(glGetError()==GL_NO_ERROR);
+        assert(memcmp(master,pixels,sizeof(master)));
+        dvbridge_renderer_reset(renderer);
+        assert(dvbridge_render_master_reference(renderer,&source,m,bytes,1,NAN,geometry,output,false,NULL)==CB1_MASTER_READY);
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glReadPixels(0,0,16,1,GL_RGBA,GL_UNSIGNED_BYTE,pixels);assert(glGetError()==GL_NO_ERROR);
+        assert(!memcmp(master,pixels,sizeof(master)));
+        pl_tex_destroy(g.gl->gpu,&linear);dvbridge_renderer_destroy(lldv);
+    }
     free(pixels);glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&fbo);
     assert(dvbridge_render_commit(renderer));assert(!dvbridge_render_candidate(renderer));
     if(lifecycle){

@@ -1,5 +1,5 @@
 add_executable(trim_contract trim_contract.c)
-foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus_dovi cmv40 hdr10_expert_plan hdr10_expert_continuity hdr10_expert_composition)
+foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus_dovi cmv40 hdr10_expert_plan hdr10_expert_continuity hdr10_expert_composition player_led_pack)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   add_test(NAME ${name} COMMAND ${name})

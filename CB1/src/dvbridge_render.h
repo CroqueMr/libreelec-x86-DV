@@ -45,6 +45,14 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *rend
     const struct dvbridge_policy *policy,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
     struct dvbridge_creative_plan *applied);
+/* Offline byte carrier. The input must be the successful linear mapping for
+ * this policy, fitted to the final even-width raster. The output is a separate
+ * linear RGBA8 texture with 12-bit fields and 10 or 12 useful bits. Both
+ * surfaces are GLES 2D textures on the renderer's current context. No RPU,
+ * presentation state or HDMI signalling is generated. Use only on success. */
+bool dvbridge_pack_player_led_422(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
+    unsigned bits, bool flip_y);
 #define CB1_AI_OVERLAY_API 1
 #define CB1_HDR10_AI_RENDER_API 1
 /* Borrowed intermediate. DV preparation may still need its existing poll;
