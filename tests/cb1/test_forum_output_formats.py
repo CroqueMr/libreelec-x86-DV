@@ -1,10 +1,12 @@
 """Exercise accepted native output telemetry and its source/output bindings."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from test_native_video_source import TREE, body
+from test_process_info_metadata import run, statement
 
 
 class OutputFormats(unittest.TestCase):
@@ -63,6 +65,50 @@ int main(){
         self.assertIsNotNone(xml.find("variable[@name='DVOutputFormat']"))
         mode=xml.find("variable[@name='DVPanelMode']")
         self.assertIn('Property(DV.Mode)',ET.tostring(mode,encoding='unicode'))
+
+    def test_input_uses_decoded_hlg_when_the_stream_type_is_missing(self):
+        repo = Path(__file__).resolve().parents[2]
+        xml = ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
+        values = xml.findall("variable[@name='DVSourceFormat']/value")
+        fallback = values[-2]
+        self.assertEqual(fallback.text, 'HLG')
+        self.assertEqual(fallback.get('condition'),
+                         'String.IsEqual(Window(playerprocessinfo).Property(DV.DecodedHLG),true)')
+        self.assertEqual(values[-1].text, 'SDR')
+        self.assertEqual(values[-3].text, '$INFO[VideoPlayer.HdrType]')
+        program = r'''
+#include "cores/VideoProcessingInfo.h"
+#include <libavutil/pixfmt.h>
+#include <cassert>
+#include <string_view>
+int main()
+{
+  VideoProcessingInfo data;
+  bool decodedHLG = false;
+  const auto SetProperty = [&](std::string_view name, bool value) {
+    assert(name == "DV.DecodedHLG");
+    decodedHLG = value;
+  };
+  const auto refresh = [&] { DECODED_HLG };
+  data.tags.transfer = AVCOL_TRC_ARIB_STD_B67;
+  data.outputType = VideoOutputType::SDR;
+  refresh();
+  assert(decodedHLG);
+  data.profile = 8;
+  refresh();
+  assert(!decodedHLG);
+  data.profile = 0;
+  data.tags.transfer = AVCOL_TRC_SMPTE2084;
+  data.outputType = VideoOutputType::HLG;
+  refresh();
+  assert(!decodedHLG);
+  data = {};
+  refresh();
+  assert(!decodedHLG);
+}
+'''.replace('DECODED_HLG', statement('DV.DecodedHLG'))
+        prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
+        run(self, {'test.cpp': program}, ('-I' + str(prefix/'include'),))
 
     def test_settings_category_has_requested_engine_name(self):
         import re

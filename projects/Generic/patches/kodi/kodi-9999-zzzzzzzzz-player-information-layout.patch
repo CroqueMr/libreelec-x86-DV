@@ -579,10 +579,11 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
  void CGUIDialogPlayerProcessInfo::RefreshInfo()
  {
      const auto render = m_renderUsage.Sample();
-@@ -107,6 +274,11 @@
+@@ -107,6 +274,12 @@
      const auto data = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
      SetProperty("DV.SourcePixelFormat", DVBRIDGE::SourcePixelFormat(static_cast<AVPixelFormat>(data.sourceFormat)));
      SetProperty("DV.SourceBits", data.sourceBits ? StringUtils::Format("{}-bit", data.sourceBits) : "N/A");
++    SetProperty("DV.DecodedHLG", !data.profile && data.tags.transfer == AVCOL_TRC_ARIB_STD_B67);
 +    // Profiles 5 and 10.0 carry IPT-PQc2, which their colour tags leave unspecified and Kodi
 +    // would otherwise present as an assumed BT.709.
 +    SetProperty("DV.SourceColour", data.profile == 5 || (data.profile == 10 && !data.compatibility) ?
@@ -591,7 +592,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      const auto active = data.output.flags;
      const bool hdr10 = active & CDVPlaybackInfo::HDR10;
      const bool metadata = active && data.metadata;
-@@ -119,6 +291,17 @@
+@@ -119,6 +292,17 @@
            data.output.width,data.output.height,data.output.refresh));
      const auto cpu = CServiceBroker::GetCPUInfo();
      SetProperty("DV.CPU", cpu ? StringUtils::Format("{} %", cpu->GetUsedPercentage()) : "N/A");
@@ -609,7 +610,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      SetProperty("DV.DroppedSkipped", data.counters ?
          StringUtils::Format("{} / {}", data.dropped, data.skipped) : "N/A");
      SetProperty("DV.SourceMastering", data.sourceMastering ?
-@@ -126,6 +309,15 @@
+@@ -126,6 +310,15 @@
      SetProperty("DV.SourceLight", data.sourceLight ?
          StringUtils::Format("{} / {} nits", data.sourceCLL, data.sourceFALL) : "N/A");
      SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
@@ -625,7 +626,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
      SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
      SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
-@@ -170,12 +362,12 @@
+@@ -170,12 +363,12 @@
        }
        if (data.output.hdr10PlusDV)
          SetProperty("DV.Reconstruction", std::string(data.output.guidedSourceFields & 4u ?
@@ -643,7 +644,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
        SetProperty("DV.Level", "");
        SetProperty("DV.Version", "");
        const auto& raw=data.output.aiL1L3;
-@@ -192,7 +384,7 @@
+@@ -192,7 +385,7 @@
      };
      SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) : "");
      SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
@@ -652,7 +653,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
      SetProperty("DV.SignalIntent", active & CDVPlaybackInfo::HDMI ?
          (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
-@@ -214,20 +406,21 @@
+@@ -214,20 +407,21 @@
            data.transaction.reason!=data.output.reason) :
            (data.transaction.requested || data.transaction.reason!=VideoProcessingReason::None)));
      SetProperty("DV.ProcessingVisible", bool(active) || transaction);
@@ -680,7 +681,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
              data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
              data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
      SetProperty("DV.DisplayBlack", (hdr10 && data.output.effective==3 || active && data.output.effective==8) ?
-@@ -236,7 +429,10 @@
+@@ -236,7 +430,10 @@
      SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
      SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
          data.output.effective==7 ? "Curve reference" : "Mapping target") : "");
@@ -692,7 +693,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
          (data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Invalid) ||
           data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Unsupported) ?
              "Treatment unavailable" :
-@@ -252,20 +448,88 @@
+@@ -252,20 +449,88 @@
            data.output.creativeEdited & (1u<<8) ? "HDR10+ curve from L8" :
            data.output.creativeEdited & (1u<<2) ? "HDR10+ curve from L2" :
            data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
@@ -788,15 +789,6 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
  }
  #endif
  
-@@ -300,7 +564,7 @@
-       const float height = 108.0f + content + 16.0f;
-       panel->SetHeight(height);
-       panel->SetPosition(panel->GetXPosition(), GetCoordsRes().iHeight - 24.0f - height);
--      surface->SetHeight(height + 40.0f);
-+      surface->SetHeight(height);
-     }
-   }
- #endif
 diff --git a/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml b/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml
 --- a/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml
 +++ b/addons/skin.estuary/xml/Custom_1109_TopBarOverlay.xml

@@ -1,7 +1,7 @@
 {
   "DVProcessLayout": {
     "includes": [
-      {"name": "", "params": {"height": null, "panel": null, "surface": null, "col1": null, "col2": null, "col3": null, "dv": null, "gauge": null, "memory": null}},
+      {"name": "", "params": {"height": null, "background": null, "panel": null, "surface": null, "col1": null, "col2": null, "col3": null, "dv": null, "gauge": null, "memory": null}},
       {"name": "DVColumnHeading", "params": {"left": "40", "title": "Input", "primary": "$VAR[DVSourceFormat]", "secondary": "$VAR[DVInputAudio]"}},
       {"name": "DVColumnHeading", "params": {"left": "654", "title": "Processing", "primary": "$VAR[DVPanelMode]", "secondary": "$VAR[DVModeDetail]"}},
       {"name": "DVColumnHeading", "params": {"left": "1268", "title": "Output", "primary": "$VAR[DVOutputFormat]", "secondary": "$VAR[DVOutputAudio]"}},
@@ -29,10 +29,10 @@
       {"tag": "right", "value": "32"},
       {"tag": "bottom", "value": "24"},
       {"tag": "height", "value": "$PARAM[height]"},
-      {"tag": "left", "value": "0"},
-      {"tag": "top", "value": "0"},
-      {"tag": "width", "value": "1856"},
-      {"tag": "height", "value": "$PARAM[height]"},
+      {"tag": "left", "value": "-20"},
+      {"tag": "top", "value": "-20"},
+      {"tag": "width", "value": "1896"},
+      {"tag": "height", "value": "$PARAM[background]"},
       {"tag": "left", "value": "40"},
       {"tag": "top", "value": "108"},
       {"tag": "width", "value": "548"},
