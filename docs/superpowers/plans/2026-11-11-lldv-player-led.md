@@ -67,7 +67,7 @@ Ce résultat établit que chaque perturbation influence le chemin vidéo captur�
 
 `dvbridge_render_player_led()` produit une texture RGBA32F aux dimensions de la source. Les canaux RGB sont linéaires dans le gamut cible et 1,0 représente son pic en nits. La reconstruction P5 et P7 FEL réutilise les filtres entiers de Master Reference et les matrices du RPU. Une EL FEL absente, décalée ou de taille incompatible est rejetée.
 
-Les offsets L3 utilisables modifient le maximum et la moyenne de scène L1. Le minimum participe à la validation des statistiques. Un L8 compatible sélectionne les contrôles HDR ponctuels du modèle CB1 CM4. En l’absence de cible L8 compatible, le moteur reprend les trims L2 disponibles. Le détail spatial et les secondaires SDR restent hors du rendu. Les essais hors ligne couvrent les couleurs, le noir, les hautes lumières, les résiduels FEL et les changements de trims. La comparaison à un rendu Dolby externe et les mesures sur la LG restent à faire.
+Les offsets L3 utilisables modifient le maximum et la moyenne de scène L1. Le minimum participe à la validation des statistiques. Un L8 compatible sélectionne les contrôles HDR ponctuels du modèle CB1 CM4. En l’absence de cible L8 compatible, le moteur reprend les trims L2 disponibles. Le détail spatial et les secondaires SDR restent hors du rendu. Les essais hors ligne couvrent les couleurs, le noir, les hautes lumières, les résiduels FEL et les changements de trims.
 
 ### Qualification sur les extraits du catalogue
 
@@ -88,7 +88,41 @@ FFmpeg logiciel et llvmpipe ont traité les extraits ci-dessous vers une cible B
 
 Le test injecte aussi un PTS EL décalé sur chaque extrait FEL. Le moteur le rejette avant rendu. Les extraits CM4 DV-022 et DV-030 sélectionnent le L8 P3-D65 à 600 nits, et DV-030 accepte aussi une cible intermédiaire à 800 nits. Les scènes sondées y donnent les mêmes pixels que le contrôle sans trims, ce qui confirme la sélection sans démontrer un effet créatif sur ces extraits. L’effet non neutre reste couvert par les mires de test.
 
-Ces essais couvrent les images échantillonnées et la contribution du résiduel. La fidélité à un rendu Dolby externe, la cadence soutenue et l’import matériel restent à qualifier.
+Ces essais couvrent les images échantillonnées et la contribution du résiduel.
+
+### Comparaison avec la couche HDR10 publiée par Dolby
+
+Le P5 DV-026 et le P8.1 DV-027 de *Sol Levante* correspondent aux SHA-256 Git LFS publiés par Dolby. La couche de base du P8.1 `mapDynamic1000` est en YCbCr BT.2020 non constant, PQ, plage vidéo 10 bits. Le SEI annonce un écran de mastering P3-D65 de 1 000 nits. Le XML original Netflix décrit un master CM2.9 de 1 000 nits et une cible de trims SDR à 100 nits. Les paramètres du mapping HDR employé par Dolby pour ce fichier ne sont pas publiés. [Fichiers Dolby](https://github.com/DolbyLaboratories/dolby-vision-contents) · [XML de mastering Netflix](https://s3.amazonaws.com/download.opencontent.netflix.com/SolLevante/vdm/sollevante_lp_16b_hdr_p3d65pq_dolbyvision29.xml)
+
+FFmpeg logiciel a décodé les deux fichiers. CB1 a rendu le P5 en RGB linéaire BT.2020 pour une cible de 1 000 nits. Le contrôle a décodé le P8.1 en HDR10 depuis sa couche de base, avec la matrice BT.2020 et l’EOTF PQ. Les 24 PTS communs couvrent quatre passages entre 16 et 188,5 s. Huit lignes paires et un pixel horizontal sur deux par image donnent 1 105 920 composantes RGB comparées. Le contrôle utilise une interpolation chroma bilinéaire. CB1 emploie son filtre vertical à six coefficients pour cette phase. Un décodage séquentiel depuis l’image 0 a reproduit les trois séries à l’identique et les 24 images contrôlées ne portaient aucun indicateur FFmpeg de corruption.
+
+| Comparaison par composante RGB | Écart absolu moyen | P95 | Écart moyen en codes PQ 12 bits |
+| --- | ---: | ---: | ---: |
+| P5 via CB1 et couche HDR10 Dolby P8.1 | 2,92 nits | 14,00 nits | 17,93 |
+| P8.1 via CB1 et sa propre couche HDR10 | 0,20 nit | 0,76 nit | 0,53 |
+
+La couche HDR10 décodée comporte 140 pixels échantillonnés avec au moins une composante au-dessus de 1 000 nits. Onze dépassent 1 000 nits en luminance calculée. Après exclusion des 140 pixels, l’écart P5/HDR10 reste à 2,85 nits en moyenne et 13,93 nits au P95. Les écarts incluent l’encodage et le filtrage. Pour qualifier le mapping lui-même, il reste à rendre une source et ses métadonnées avec Dolby CM Offline à la même cible, notamment avec des trims HDR non neutres. Le téléchargement de CM Offline demande une connexion au portail Dolby. [Documentation Dolby CM Offline](https://professionalsupport.dolby.com/s/dolby-vision-professional-tools)
+
+### Cadence 4K sur le N100 hors écran
+
+Mesures avec le moteur du commit `79e75d3`, LibreELEC RC4 Preview Update 3, Mesa 26.2.3 et l’iGPU Intel ADL-N. Le banc lit les extraits locaux, décode en VAAPI, importe les surfaces P010 via DMA-BUF et rend en RGBA32F à 1 000 nits BT.2020 dans un contexte EGL sans surface d’affichage. Le FEL exige des PTS BL/EL identiques. Chaque série comprend 120 images d’échauffement et 900 images mesurées. Les délais en série sont mesurés entre deux fins de rendu. Le test avec trois images en vol attend les fences GPU avant de libérer les surfaces et relève le débit de trois fenêtres de 300 images.
+
+| Source 4K | Débit en série | P95 en série | Débit avec trois images en vol |
+| --- | ---: | ---: | ---: |
+| P5 · Jellyfin 60 i/s | 41,47 i/s | 24,93 ms | — |
+| P5 · fichier 30 i/s | — | — | 51,45 i/s |
+| P7 FEL · *1917* à 30 i/s | 20,83 i/s | 51,88 ms | 26,26 i/s |
+| P7 FEL · *1917* original à 23,976 i/s | 20,71 i/s | 52,33 ms | 26,27 i/s |
+| P7 FEL · mire CM4 à 23,976 i/s, L8 SDR écarté | 28,30 i/s | 40,76 ms | 34,33 i/s |
+| P8.4 · *Sol Levante* à 24 i/s | 32,43 i/s | 38,93 ms | 43,54 i/s |
+
+Le seuil demandé est de 30 i/s, soit 33,33 ms par image. Le P5 à 30 i/s dépasse ce débit dans les trois fenêtres. *1917* plafonne autour de 26 i/s même en chevauchant décodage et rendu. Sur une image préimportée de l’extrait original, la requête GPU donne 29,29 ms en moyenne pour la reconstruction seule et 35,23 ms avec le mapping. La série P8.4 dépasse 41,67 ms sur 32 intervalles en mode série. Les fenêtres avec trois images en vol mesurent le débit, sans comptabiliser les échéances individuelles.
+
+Les essais n’incluent pas la composition Kodi, le packing 4:2:2 ni la présentation HDMI. Le seuil de 30 i/s reste à atteindre sur le FEL lourd testé.
+
+Le commit `d8b7707` évite le mapping des pixels reconstruits à zéro quand la cible a un plancher nul et que le trim CM4 ne relève pas le noir. Le raster complet, le plancher calibré et les offsets créatifs positifs conservent leur traitement. Sur la même image préimportée de *1917*, deux alternances donnent une médiane GPU de 34,85/34,84 ms avant et 33,21/33,19 ms après. Avec le moteur compilé en mode optimisé et trois images en vol, les 900 images donnent **29,50 i/s** sur l’original et **29,40 i/s** sur le dérivé 30 i/s. La fenêtre la plus lente du dérivé reste à 29,26 i/s. L’essai avec la LUT PQ native a ralenti le rendu sur ce GPU.
+
+Le contrôle du moteur final donne **58,15 i/s** sur le P5 à 30 i/s. Les lignes lues sur 36 images P5, P7 FEL, P8.4 et CM4 sont identiques octet par octet à la version précédente. Les tests synthétiques couvrent également le noir neutre, le plancher de 0,01 nit et le relèvement créatif L8. Astra xhigh a relu les comparaisons, le banc de cadence et le raccourci de rendu.
 
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
