@@ -70,8 +70,7 @@ int main(){
   self.assertEqual(dimensions['valueleft'],'264')
   source=(TREE/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
   self.assertIn('const float height = 108.0f + content + 16.0f;',source)
-  self.assertIn('surface->SetHeight(height);',source)
-  self.assertNotIn('surface->SetHeight(height + 40.0f);',source)
+  self.assertIn('surface->SetHeight(height + 40.0f);',source)
   self.assertIn('0, 20, FONT_STYLE_NORMAL',source)
   self.assertNotIn('list->SetHeight',source)
  def test_processing_contains_only_applied_levels_in_numeric_order(self):

@@ -6,6 +6,7 @@
     <value condition="String.IsEqual(VideoPlayer.HdrType,hdr10)">HDR10</value>
     <value condition="String.IsEqual(VideoPlayer.HdrType,hlg)">HLG</value>
     <value condition="!String.IsEmpty(VideoPlayer.HdrType)">$INFO[VideoPlayer.HdrType]</value>
+    <value condition="String.IsEqual(Window(playerprocessinfo).Property(DV.DecodedHLG),true)">HLG</value>
     <value>SDR</value>
   </variable>
   <variable name="DVAppliedL1PQLabel"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.UsedL1PQ))">L1 PQ max/avg</value><value>L1 PQ min/max/avg</value></variable>
@@ -364,10 +365,10 @@
   <include name="DVColumnEnd"><definition>
       <control type="group"><height>130</height></control>
     </definition></include>
-  <include name="DVProcessLayout"><param name="height"/><param name="panel"/><param name="surface"/><param name="col1"/><param name="col2"/><param name="col3"/><param name="dv"/><param name="gauge"/><param name="memory"/><definition>
+  <include name="DVProcessLayout"><param name="height"/><param name="background"/><param name="panel"/><param name="surface"/><param name="col1"/><param name="col2"/><param name="col3"/><param name="dv"/><param name="gauge"/><param name="memory"/><definition>
       <control type="group" id="$PARAM[panel]">
         <left>32</left><right>32</right><bottom>24</bottom><height>$PARAM[height]</height>
-        <control type="image" id="$PARAM[surface]"><left>0</left><top>0</top><width>1856</width><height>$PARAM[height]</height>
+        <control type="image" id="$PARAM[surface]"><left>-20</left><top>-20</top><width>1896</width><height>$PARAM[background]</height>
           <texture border="60">special://xbmc/media/cb1-glass.png</texture>
         </control>
         <include content="DVColumnHeading"><param name="left" value="40"/><param name="title" value="Input"/><param name="primary" value="$VAR[DVSourceFormat]"/><param name="secondary" value="$VAR[DVInputAudio]"/></include>
@@ -401,10 +402,10 @@
     </definition></include>
   <include name="DVProcessPanel">
     <control type="group" id="9500"><visible>String.IsEqual(Window(playerprocessinfo).Property(DV.Enhanced),true) + String.IsEqual(VideoPlayer.HdrType,dolbyvision)</visible>
-      <include content="DVProcessLayout"><param name="height" value="860"/><param name="panel" value="9600"/><param name="surface" value="9610"/><param name="col1" value="9620"/><param name="col2" value="9621"/><param name="col3" value="9622"/><param name="dv" value="true"/><param name="gauge" value="9400"/><param name="memory" value="9402"/></include>
+      <include content="DVProcessLayout"><param name="height" value="860"/><param name="background" value="900"/><param name="panel" value="9600"/><param name="surface" value="9610"/><param name="col1" value="9620"/><param name="col2" value="9621"/><param name="col3" value="9622"/><param name="dv" value="true"/><param name="gauge" value="9400"/><param name="memory" value="9402"/></include>
     </control>
     <control type="group" id="9501"><visible>String.IsEqual(Window(playerprocessinfo).Property(DV.Enhanced),true) + !String.IsEqual(VideoPlayer.HdrType,dolbyvision)</visible>
-      <include content="DVProcessLayout"><param name="height" value="700"/><param name="panel" value="9601"/><param name="surface" value="9611"/><param name="col1" value="9630"/><param name="col2" value="9631"/><param name="col3" value="9632"/><param name="dv" value="false"/><param name="gauge" value="9401"/><param name="memory" value="9403"/></include>
+      <include content="DVProcessLayout"><param name="height" value="700"/><param name="background" value="740"/><param name="panel" value="9601"/><param name="surface" value="9611"/><param name="col1" value="9630"/><param name="col2" value="9631"/><param name="col3" value="9632"/><param name="dv" value="false"/><param name="gauge" value="9401"/><param name="memory" value="9403"/></include>
     </control>
   </include>
   <include name="CB1PlaybackModeLayout">
