@@ -77,7 +77,7 @@ diff --git a/src/renderer.c b/src/renderer.c
 +        if (!fmt) return false;
 +        pl_tex vertical = get_fbo(pass, c ? w/2 : w, c ? h : h*2, fmt, c ? 2 : 1, PL_DEBUG_TAG);
 +        pl_shader sh = pl_dispatch_begin(rr->dp);
-+        bool ok = vertical && sh_dovi_fel_vertical(sh, el, depth, c) &&
++        bool ok = vertical && sh_dovi_fel_vertical(sh, el, depth, c, false) &&
 +            pl_dispatch_finish(rr->dp, pl_dispatch_params(.shader=&sh, .target=vertical));
 +        pl_dispatch_abort(rr->dp, &sh);
 +        if (!ok) return false;
@@ -164,7 +164,7 @@ diff --git a/src/renderer.c b/src/renderer.c
  
          ident_t sub = sh_subpass(sh, plane_sh);
          pl_dispatch_abort(rr->dp, &plane_sh);
-@@ -1731,9 +1803,139 @@
+@@ -1731,9 +1803,145 @@
  }
  #endif // PL_HAVE_DOVI
  
@@ -242,11 +242,17 @@ diff --git a/src/renderer.c b/src/renderer.c
 +        if (!fmt) return false;
 +        pl_tex vertical=NULL;
 +        if (resize) {
-+            /* FP32 stores every rounded 16-bit intermediate exactly. */
-+            vertical=get_fbo(pass,c?w/4:w/2,c?h/2:h,fmt,c?2:1,PL_DEBUG_TAG);
++            const struct pl_bit_encoding bits=el->repr.bits;
++            int storage=bits.sample_depth?bits.sample_depth:data->el_depth;
++            // Bound all possible storage words, including out-of-range padding.
++            // Keep single rows when the renderer suppresses inactive rows.
++            bool packed_rows=data->contract==2 && bits.bit_shift>=0 && bits.bit_shift<storage &&
++                storage-bits.bit_shift<=10 && pass->cb1_active_rows[1]<=pass->cb1_active_rows[0];
++            int height=(c?h/2:h)/(packed_rows?2:1);
++            vertical=get_fbo(pass,c?w/4:w/2,height,fmt,c?2:1,PL_DEBUG_TAG);
 +            pl_shader sh=pl_dispatch_begin(pass->rr->dp);
 +            bool rows=c?skip_reference_chroma_rows(pass,sh):skip_inactive_rows(pass,sh,h,false);
-+            bool ok=vertical && rows && sh_dovi_reference_el_vertical(sh,data,image,c) &&
++            bool ok=vertical && rows && sh_dovi_reference_el_vertical(sh,data,image,c,packed_rows) &&
 +                pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=vertical));
 +            pl_dispatch_abort(pass->rr->dp,&sh);
 +            if (!ok) return false;
@@ -304,7 +310,7 @@ diff --git a/src/renderer.c b/src/renderer.c
      const struct pl_render_params *params = pass->params;
      struct pl_frame *image = &pass->image;
      pl_renderer rr = pass->rr;
-@@ -2132,6 +2334,10 @@
+@@ -2132,6 +2340,10 @@
          if (compose_el) {
              el_sh = sample_el(pass, image->enhancement_layer);
              if (!el_sh) {
@@ -315,7 +321,7 @@ diff --git a/src/renderer.c b/src/renderer.c
                  PL_ERR(rr, "Failed sampling enhancement layer; "
                             "falling back to base-layer-only rendering");
                  rr->errors |= PL_RENDER_ERR_SAMPLING;
-@@ -2139,7 +2345,8 @@
+@@ -2139,7 +2351,8 @@
          }
  #endif
          if (params->cb1_dovi_transport) {
@@ -457,7 +463,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  {
      if(!pl_cb1_dovi_reference_frame_supported(frame,depth))return false;
      int width=frame->crop.x1,height=frame->crop.y1;
-@@ -234,8 +300,11 @@
+@@ -234,58 +300,110 @@
              GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));",
                    raw[c], sw-1, shgt-1);
              if (plane->flipped) GLSLH("p.y=%d-p.y;", shgt-1);
@@ -471,17 +477,69 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
          }
      }
      return raw[0] && raw[1] && raw[2];
-@@ -261,10 +330,15 @@
+ }
+ 
+-static ident_t reference_el_vertical(pl_shader sh, ident_t raw, bool chroma)
+-{
+-    ident_t vertical = sh_fresh(sh,"ref_el_vertical");
+-    if (chroma) {
+-        GLSLH("int "$"(ivec2 p){int y=p.y/2;int s=(p.y&1)==0?"
+-              "64*"$"(ivec2(p.x,y-1))+192*"$"(ivec2(p.x,y)):"
+-              "192*"$"(ivec2(p.x,y))+64*"$"(ivec2(p.x,y+1));"
+-              "return clamp((s+128)>>8,0,65535);}\n",vertical,raw,raw,raw,raw);
++static ident_t reference_el_vertical(pl_shader sh, ident_t raw, bool chroma, bool packed_rows)
++{
++    static const int luma[2][5]={{-3,29,111,-9,0},{0,-9,111,29,-3}};
++    static const int uv[2][5]={{0,64,192,0,0},{0,0,192,64,0}};
++    const int (*weights)[5]=chroma?uv:luma;
++    const int shift=chroma?8:7, bias=1<<(shift-1);
++    ident_t vertical=sh_fresh(sh,"ref_el_vertical");
++    GLSLH("int "$"(ivec2 p){\n",vertical);
++    if (packed_rows) {
++        // Read each shared tap once and store the two phases exactly in FP32.
++        // For 10-bit samples the luma peak is (140 * 1023 + 64) >> 7 = 1119.
++        for (int i=0;i<5;i++)
++            if (weights[0][i] || weights[1][i])
++                GLSLH("int t%d="$"(p+ivec2(0,%d));\n",i,raw,i-2);
++        GLSLH("int s[2];\n");
++        for (int phase=0;phase<2;phase++) {
++            GLSLH("s[%d]=max(0,(%d",phase,bias);
++            for (int i=0;i<5;i++)
++                if (weights[phase][i]) GLSLH("+(%d)*t%d",weights[phase][i],i);
++            GLSLH(")>>%d);\n",shift);
++        }
++        GLSLH("return s[0]|(s[1]<<11);}\n");
+     } else {
+-        GLSLH("int "$"(ivec2 p){int y=p.y/2;int s=(p.y&1)==0?"
+-              "-3*"$"(ivec2(p.x,y-2))+29*"$"(ivec2(p.x,y-1))+111*"$"(ivec2(p.x,y))-9*"$"(ivec2(p.x,y+1)):"
+-              "-9*"$"(ivec2(p.x,y-1))+111*"$"(ivec2(p.x,y))+29*"$"(ivec2(p.x,y+1))-3*"$"(ivec2(p.x,y+2));"
+-              "return clamp((s+64)>>7,0,65535);}\n",vertical,raw,raw,raw,raw,raw,raw,raw,raw);
++        GLSLH("int y=p.y/2;int s=(p.y&1)==0?");
++        for (int phase=0;phase<2;phase++) {
++            GLSLH("%s(%d",phase?":":"",bias);
++            for (int i=0;i<5;i++)
++                if (weights[phase][i])
++                    GLSLH("+(%d)*"$"(ivec2(p.x,y+%d))",weights[phase][i],raw,i-2);
++            GLSLH(")");
++        }
++        GLSLH(";return clamp(s>>%d,0,65535);}\n",shift);
+     }
+     return vertical;
+ }
+ 
  bool sh_dovi_reference_el_vertical(pl_shader sh, const struct pl_cb1_dovi_reference *data,
-                                    const struct pl_frame *image, bool chroma)
- {
+-                                   const struct pl_frame *image, bool chroma)
+-{
 -    if (!data || !data->residual || !image || !image->enhancement_layer ||
 -        !sh_require(sh,PL_SHADER_SIG_NONE,0,0)) return false;
++                                   const struct pl_frame *image, bool chroma, bool packed_rows)
++{
 +    return data && data->residual && image && image->enhancement_layer &&
-+        sh_dovi_fel_vertical(sh,image->enhancement_layer,data->el_depth,chroma);
++        sh_dovi_fel_vertical(sh,image->enhancement_layer,data->el_depth,chroma,packed_rows);
 +}
 +
-+bool sh_dovi_fel_vertical(pl_shader sh,const struct pl_frame *el,unsigned depth,bool chroma)
++bool sh_dovi_fel_vertical(pl_shader sh,const struct pl_frame *el,unsigned depth,
++                          bool chroma,bool packed_rows)
 +{
 +    if (!el || !sh_require(sh,PL_SHADER_SIG_NONE,0,0)) return false;
      ident_t raw[3]={0};
@@ -489,17 +547,30 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
 +    if (!reference_planes(sh,el,depth,raw,false)) return false;
      GLSL("vec4 color=vec4(0.0,0.0,0.0,1.0);\n");
      for (int c=chroma?1:0;c<(chroma?3:1);c++) {
-         ident_t vertical=reference_el_vertical(sh,raw[c],chroma);
-@@ -273,7 +347,7 @@
+-        ident_t vertical=reference_el_vertical(sh,raw[c],chroma);
++        ident_t vertical=reference_el_vertical(sh,raw[c],chroma,packed_rows);
+         GLSL("color[%d]=float("$"(ivec2(gl_FragCoord.xy)));\n",chroma?c-1:0,vertical);
+     }
      return true;
  }
  
 -static ident_t reference_el_horizontal(pl_shader sh, pl_tex texture, ident_t sampler, int lane)
-+static ident_t reference_el_horizontal(pl_shader sh, pl_tex texture, ident_t sampler, int lane, bool paired)
++static ident_t reference_el_horizontal(pl_shader sh, pl_tex texture, ident_t sampler, int lane, bool paired, bool packed_rows)
  {
      ident_t vertical=sh_fresh(sh,"ref_el_cached");
-     GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));"
-@@ -282,10 +356,27 @@
+-    GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));"
+-          "return int(texelFetch("$",p,0)[%d]);}\n",
+-          vertical,texture->params.w-1,texture->params.h-1,sampler,lane);
++    if (packed_rows) {
++        GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));"
++              "uint codes=uint(texelFetch("$",ivec2(p.x,p.y>>1),0)[%d]);"
++              "return int((codes>>uint(11*(p.y&1)))&2047u);}\n",
++              vertical,texture->params.w-1,2*texture->params.h-1,sampler,lane);
++    } else {
++        GLSLH("int "$"(ivec2 p){p=clamp(p,ivec2(0),ivec2(%d,%d));"
++              "return int(texelFetch("$",p,0)[%d]);}\n",
++              vertical,texture->params.w-1,texture->params.h-1,sampler,lane);
++    }
      ident_t horizontal = sh_fresh(sh,"ref_el_horizontal");
      GLSLH("int "$"(ivec2 p){int x=p.x/2;if((p.x&1)==0)return "$"(ivec2(x,p.y));int s=0;\n",horizontal,vertical);
      const int weights[8] = {22,94,-524,2456,2456,-524,94,22};
@@ -521,14 +592,14 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
 +    if (!sampler) return false;
 +    GLSL("vec4 color=vec4(0.0,0.0,0.0,1.0);\n");
 +    for(int c=0;c<(chroma?2:1);c++){
-+        ident_t sample=reference_el_horizontal(sh,vertical,sampler,c,false);
++        ident_t sample=reference_el_horizontal(sh,vertical,sampler,c,false,false);
 +        GLSL("color[%d]=float("$"(ivec2(gl_FragCoord.xy)))/%u.0;\n",c,sample,(1u<<depth)-1);
 +    }
 +    return true;
  }
  
  static bool p5_fast_component(pl_shader sh, const struct pl_cb1_dovi_reference *data,
-@@ -332,15 +423,16 @@
+@@ -332,15 +450,16 @@
  }
  
  static bool reference_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
@@ -548,16 +619,20 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
          int phase[2]={-1,-1};
          for(int f=0;f<2;f++){
              const struct pl_frame *layer=f?enhancement:image;
-@@ -359,7 +451,7 @@
+@@ -358,8 +477,11 @@
+             ident_t sampler=sh_bind(sh,vertical,PL_TEX_ADDRESS_CLAMP,PL_TEX_SAMPLE_NEAREST,
                                      "ref_el_vertical",NULL,NULL,NULL);
              if (!sampler) return false;
++            // A texture at source height stores both row phases in each texel.
++            bool packed_rows=vertical->params.h==enhancement->crop.y1/(chroma?2:1);
              for (int c=chroma?1:0;c<(chroma?3:1);c++) {
 -                el[c]=reference_el_horizontal(sh,vertical,sampler,chroma?c-1:0);
-+                el[c]=reference_el_horizontal(sh,vertical,sampler,chroma?c-1:0,data->contract==2);
++                el[c]=reference_el_horizontal(sh,vertical,sampler,chroma?c-1:0,
++                                               data->contract==2,packed_rows);
              }
          }
      }
-@@ -385,6 +477,7 @@
+@@ -385,6 +507,7 @@
      ident_t bounds[2]={
          sh_var(sh,(struct pl_shader_var){.var=pl_var_uvec3("ref_low"),.data=lows,.dynamic=true}),
          sh_var(sh,(struct pl_shader_var){.var=pl_var_uvec3("ref_high"),.data=highs,.dynamic=true})};
@@ -565,7 +640,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
      for (int c=chroma?1:0;c<(chroma?3:1);c++) {
          ident_t esig=NULL_IDENT;
          if (data->residual) {
-@@ -392,25 +485,29 @@
+@@ -392,25 +515,29 @@
              GLSLH("vec4 "$"(){return vec4(float("$"(ivec2("$"))));}\n",esig,el[c],position);
          }
          if (fast ? !p5_fast_component(sh,data,c,signal,bounds) :
@@ -601,7 +676,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  }
  
  bool sh_dovi_p5_fast_output(pl_shader sh, pl_shader luma, pl_tex chroma, int w, int h)
-@@ -436,17 +533,100 @@
+@@ -436,17 +563,100 @@
      return true;
  }
  
@@ -704,7 +779,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
      for (int phase=0;phase<2;phase++) {
          GLSL("%s((p.y&1)==%d){\n",phase?"else if":"if",phase);
          int count=top_left?(phase?8:1):6;
-@@ -462,7 +642,7 @@
+@@ -462,7 +672,7 @@
      return true;
  }
  
@@ -713,7 +788,7 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
  {
      if ((depth!=10 && depth!=12) || !sh_require(sh,PL_SHADER_SIG_NONE,0,0)) return false;
      ident_t y=sh_subpass(sh,luma);
-@@ -470,7 +650,11 @@
+@@ -470,7 +680,11 @@
      if (!y || !c) return false;
      ident_t position=sh_attr_vec2(sh,"ref_position",&(pl_rect2df){0,0,w,h});
      if (!position) return false;
@@ -729,11 +804,14 @@ diff --git a/src/shaders/dovi_reference.c b/src/shaders/dovi_reference.c
 diff --git a/src/shaders.h b/src/shaders.h
 --- a/src/shaders.h
 +++ b/src/shaders.h
-@@ -246,10 +246,16 @@
+@@ -245,11 +245,18 @@
+ struct pl_cb1_dovi_reference;
  struct pl_frame;
  bool sh_dovi_reference_el_vertical(pl_shader sh, const struct pl_cb1_dovi_reference *data,
-     const struct pl_frame *image, bool chroma);
-+bool sh_dovi_fel_vertical(pl_shader sh,const struct pl_frame *el,unsigned depth,bool chroma);
+-    const struct pl_frame *image, bool chroma);
++    const struct pl_frame *image, bool chroma, bool packed_rows);
++bool sh_dovi_fel_vertical(pl_shader sh,const struct pl_frame *el,unsigned depth,
++                          bool chroma,bool packed_rows);
 +bool sh_dovi_fel_horizontal(pl_shader sh,pl_tex vertical,unsigned depth,bool chroma);
  bool sh_dovi_reference_grid(pl_shader sh, const struct pl_cb1_dovi_reference *data,
 -    const struct pl_frame *image, bool chroma, pl_tex vertical);

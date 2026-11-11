@@ -671,6 +671,43 @@ static void fel_spatial(void)
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     for(int y=0;y<8;y++)for(int x=0;x<8;x++)for(int c=0;c<3;c++)
         assert(roundf(values[(y*8+x)*4+c]*4095)==(c?topcodes[y][x/2]:ycodes[y][x]));
+    /* Compare the packed EL rows with a wider storage format carrying the same codes. */
+    struct pl_cb1_dovi_reference packed_raw=raw;
+    packed_raw.contract=2;
+    params.cb1_dovi_reference=&packed_raw;
+    for(int depth=8;depth<=10;depth+=2){
+        packed_raw.el_depth=depth;
+        for(int c=0;c<3;c++) packed_raw.nlq[c].offset=1<<(depth-1);
+        for(int wide=0;wide<2;wide++){
+            struct pl_frame el=frames[1];
+            const int storage=depth==8 && !wide?8:16;
+            const int shift=depth==10 && !wide?6:0;
+            el.repr.bits=(struct pl_bit_encoding){storage,depth,shift};
+            for(int p=0;p<2;p++){
+                const int size=p?2:4,lanes=p?2:1;
+                uint8_t samples8[16];
+                uint16_t samples16[16];
+                for(int i=0;i<size*size*lanes;i++){
+                    unsigned code=(i*251+19)&((1u<<depth)-1);
+                    samples8[i]=code;
+                    samples16[i]=code<<shift;
+                }
+                pl_fmt fmt=pl_find_fmt(g.gl->gpu,PL_FMT_UNORM,lanes,storage,storage,
+                    PL_FMT_CAP_SAMPLEABLE);assert(fmt);
+                const void *samples=storage==8?(const void *)samples8:samples16;
+                el.planes[p].texture=pl_tex_create(g.gl->gpu,pl_tex_params(.w=size,.h=size,
+                    .format=fmt,.sampleable=true,.initial_data=samples));
+                assert(el.planes[p].texture);
+            }
+            frames[0].enhancement_layer=&el;
+            assert(pl_render_image(renderer,&frames[0],&target,&params));
+            reference_read(g.gl->gpu,output,0,0,8,8,wide?values:reference);
+            for(int p=0;p<2;p++) pl_tex_destroy(g.gl->gpu,&el.planes[p].texture);
+        }
+        assert(!memcmp(reference,values,sizeof(reference)));
+    }
+    frames[0].enhancement_layer=&frames[1];
+    params.cb1_dovi_reference=&raw;
     for(int phases=1;phases<3;phases++){
         frames[0].planes[1].shift_y=(phases&1)?-.5f:0;
         frames[1].planes[1].shift_y=(phases&2)?-.5f:0;

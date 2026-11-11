@@ -235,6 +235,21 @@ La grille de reconstruction chroma FEL coûte environ 10 ms dans le profil séri
 
 Le commit `ee86cb0` prépare le sélecteur Kodi à distinguer les valeurs natives et forcées exposées par DRM. L’option forcée est identifiée à partir de l’enum `YCbCr 4:2:2 10 bits forced` et la route active vient de la valeur relue sur le connecteur. Les tests simulent les deux annonces, vérifient l’ordre du choix automatique et refusent une annonce sans état actif correspondant. La programmation du forçage par pilote reste dans l’étape E.
 
+### Phases verticales FEL regroupées
+
+Le shader commun calcule les deux phases verticales en réutilisant les taps de l’EL. Il stocke les deux codes sur 11 bits dans un texel FP32 à la hauteur de l’EL, puis le filtre horizontal récupère la phase de la ligne. La plage est bornée par la profondeur de stockage et le décalage déclarés. Les formats qui laissent plus de 10 bits accessibles et les rendus qui filtrent les lignes actives conservent le stockage par ligne. Les coefficients et les arrondis sont partagés.
+
+| 1917 FEL 4K à 30 i/s sur N100 | Avant | Après | Fences hors échéance après |
+| --- | ---: | ---: | ---: |
+| 4:2:2 10 bits | 20,83 i/s | 21,49 i/s | 896/900 |
+| 4:2:2 12 bits | 20,81 i/s | 21,55 i/s | 896/900 |
+
+Les mesures couvrent le décodage jusqu’au packing, sur 900 images après 120 d’échauffement, avec les mêmes conditions de file et d’échéance. Le gain est de 1,49 à 1,65 ms par image. Trois images 4K échantillonnées sont identiques octet pour octet dans le rendu linéaire et le packing, aux deux profondeurs. Le test spatial compare aussi les mêmes codes EL en 8 et 10 bits dans des formats de stockage qui exercent les deux chemins. Revue arithmétique Astra xhigh. La mesure Radeon reste à faire.
+
+En 12 bits sur 300 images après 60 d’échauffement, l’extrait FEL CM4 V4 passe de 24,64 à 26,82 i/s. L’extrait P5 reste à 33,6 i/s. Aucun des deux extraits ne dépasse son échéance à sa cadence source.
+
+Les deux fusions du rendu avec le packing ont ramené l’essai de 300 images à 17,29 et 15,75 i/s. La prédiction MMR en virgule flottante avec repli entier et le regroupement entier de Cb/Cr ont donné 20,38 et 21,44 i/s sur le même essai. Les trames analysées de 1917 emploient du MMR chroma d’ordre 3 et contiennent des variations BL et EL dans les marges signalées par L5. Le banc complet reste à environ 46,4 ms par image pour un budget de 33,3 ms à 30 i/s.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.

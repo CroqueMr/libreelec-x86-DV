@@ -566,7 +566,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/dependencies.json": {
       "source": "config/dependencies.json",
-      "sha256": "abc720aa0b30ea845ac421e67bcbd0ccbc57532b32085ff6e9c9dffce984d393"
+      "sha256": "4a78e020d71fa1a8aa0ce4a06a381cf74e346a162fb135bb42e7c0605c2dbe31"
     },
     "packages/mediacenter/kodi/cb1/config/extraction-origins.json": {
       "source": "config/extraction-origins.json",
@@ -726,7 +726,7 @@
     },
     "packages/addons/addon-depends/multimedia-tools-depends/libplacebo/patches/libplacebo-9916-fel-filter.patch": {
       "source": "patches/libplacebo/libplacebo-9916-fel-filter.patch",
-      "sha256": "f7d760b02043c0acef3685eff494ba3403eae6bbdf7f1ed9fc223720bb3d1cc1"
+      "sha256": "c6a022bd781a0ddb4957ca56767f30596b037db6b7ca53d0c51c1795c0f0d468"
     },
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch": {
       "source": "patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch",
