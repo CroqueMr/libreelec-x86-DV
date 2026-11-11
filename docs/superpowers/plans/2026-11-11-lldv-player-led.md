@@ -124,6 +124,12 @@ Le commit `d8b7707` évite le mapping des pixels reconstruits à zéro quand la 
 
 Le contrôle du moteur final donne **58,15 i/s** sur le P5 à 30 i/s. Les lignes lues sur 36 images P5, P7 FEL, P8.4 et CM4 sont identiques octet par octet à la version précédente. Les tests synthétiques couvrent également le noir neutre, le plancher de 0,01 nit et le relèvement créatif L8. Astra xhigh a relu les comparaisons, le banc de cadence et le raccourci de rendu.
 
+### Optimisations AMD préparées hors ligne
+
+`210e356` accélérait l’encodage PQ du circuit Adaptive sur radeonsi. Le moteur LLDV fournit du RGB linéaire à ce stade. L’essai de la table inverse native à 4 096 entrées donne au plus 0,355 code PQ 12 bits d’écart sur les huit lignes lues dans six images de chacun des extraits DV-001, DV-073 et DV-018. La mire FEL 4K saturée dépasse le seuil d’un code avec la table native (2,064 codes) et avec une adaptation de la table FP32 compacte de `fae3c37` (2,745 codes). Le décodage PQ analytique est conservé.
+
+Le shader CB1 applique directement la pente et l’offset CM4 quand la puissance est exactement unitaire. Il calcule la luminance uniquement pour les contrôles actifs de contraste médian et d’écrêtage. Le comparatif logiciel sur 408 cas CM4 BT.2020 et P3 donne un écart maximal de 0,000194 nit et moins de 0,0001 code PQ 12 bits. Le rendu des entrées noires est identique dans tous les cas comparés. La cadence à 30 i/s sur Radeon et sur le FEL lourd reste à qualifier sur matériel.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
