@@ -2020,8 +2020,7 @@ static bool player_led_compute_init(struct player_led_compute *c, pl_gpu gpu)
         "uniform mat3 lldv_matrix;uniform float lldv_scale;uniform int lldv_flip;uniform uint lldv_padding;\n",
         function->glsl,
         PLAYER_LED_COLOR_GLSL
-        "vec3 lldv_sample(ivec2 pos){\n"
-        "    vec3 rgb=texelFetch(lldv_input,pos,0).rgb;\n"
+        "vec3 lldv_encode(vec3 rgb){\n"
         "    return ", function->name,
         "(vec4(clamp(lldv_matrix*rgb,0.0,1.0)*lldv_scale,1.0)).rgb;\n"
         "}\n"
@@ -2030,8 +2029,17 @@ static bool player_led_compute_init(struct player_led_compute *c, pl_gpu gpu)
         "    ivec2 size=textureSize(lldv_input,0);\n"
         "    if(any(greaterThanEqual(out_pos,size)))return;\n"
         "    ivec2 pos=out_pos;if(lldv_flip!=0)pos.y=size.y-1-pos.y;\n"
-        "    vec3 left=lldv_sample(ivec2(max(pos.x-1,0),pos.y));\n"
-        "    vec3 center=lldv_sample(pos),right=lldv_sample(pos+ivec2(1,0));\n"
+        "    vec3 left=texelFetch(lldv_input,ivec2(max(pos.x-1,0),pos.y),0).rgb;\n"
+        "    vec3 center=texelFetch(lldv_input,pos,0).rgb;\n"
+        "    vec3 right=texelFetch(lldv_input,pos+ivec2(1,0),0).rgb;\n"
+        // PQ(0) rounds to limited-range black at both transport depths.
+        "    if(all(equal(left,vec3(0.0))) && all(equal(center,vec3(0.0))) && all(equal(right,vec3(0.0)))){\n"
+        "        vec4 black=cb1_carrier(uvec2(256u,2048u));\n"
+        "        imageStore(lldv_output,out_pos,black);\n"
+        "        imageStore(lldv_output,out_pos+ivec2(1,0),black);\n"
+        "        return;\n"
+        "    }\n"
+        "    left=lldv_encode(left);center=lldv_encode(center);right=lldv_encode(right);\n"
         "    vec2 c=lldv_chroma(left,center,right);\n"
         "    imageStore(lldv_output,out_pos,lldv_code(dot(center,lldv_luma),c.x,lldv_padding));\n"
         "    imageStore(lldv_output,out_pos+ivec2(1,0),lldv_code(dot(right,lldv_luma),c.y,lldv_padding));\n"

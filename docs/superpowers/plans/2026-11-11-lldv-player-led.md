@@ -250,6 +250,23 @@ En 12 bits sur 300 images après 60 d’échauffement, l’extrait FEL CM4 V4 pa
 
 Les deux fusions du rendu avec le packing ont ramené l’essai de 300 images à 17,29 et 15,75 i/s. La prédiction MMR en virgule flottante avec repli entier et le regroupement entier de Cb/Cr ont donné 20,38 et 21,44 i/s sur le même essai. Les trames analysées de 1917 emploient du MMR chroma d’ordre 3 et contiennent des variations BL et EL dans les marges signalées par L5. Le banc complet reste à environ 46,4 ms par image pour un budget de 33,3 ms à 30 i/s.
 
+### Packing des paires entièrement noires
+
+Le shader GLES commun écrit directement le noir de plage limitée lorsque les trois échantillons RGB qui contribuent à la paire valent exactement zéro. La valeur PQ de zéro donne un Y limité de 256,00256, arrondi à 256 aux deux précisions. Les deux chromas valent 2048. Le test du packing compare aussi un échantillon positif proche du noir au raster de référence et détecte sa suppression par un seuil arbitraire. Revue Astra xhigh.
+
+| 1917 FEL 4K à 30 i/s sur N100 | Contrôle | Packing noir | Fences hors échéance après |
+| --- | ---: | ---: | ---: |
+| 4:2:2 10 bits | 21,45 i/s | 22,07 i/s | 895/900 |
+| 4:2:2 12 bits | 21,49 i/s | 22,14 i/s | 895/900 |
+
+La mesure couvre 900 images après 120 d’échauffement. Les trois images 4K échantillonnées sont identiques octet pour octet aux deux profondeurs. Le gain est de 1,32 à 1,36 ms par image sur la chaîne complète.
+
+Le P5 à 30 i/s passe de 33,81 à 35,74 i/s en 12 bits, avec 0/300 échéance dépassée. Sur la mire 4K sans paire entièrement noire, la médiane du packing seul passe de 10,84 à 11,06 ms, sur 48 mesures par profondeur.
+
+Sur le court essai 4K à 12 bits, le contrôle à 21,90 i/s précède les variantes suivantes. Les tables PQ du packing et du mapping donnent respectivement 21,48 et 21,50 i/s. Le stockage compact des valeurs PQ atteint 21,97 i/s. Les groupes de taille puissance de deux dans le shader fusionné donnent entre 18,98 et 20,40 i/s. Le calcul du mot haut du MMR par arrondi de la somme normalisée, avec mot bas entier exact, atteint 22,01 à 22,13 i/s selon l’usage de la LUT des axes. Le filtre horizontal luma EL dans une passe séparée atteint 22,20 i/s. Leur combinaison avec le packing noir atteint 23,21 i/s sur 300 images. Le MMR flottant sans correction atteint 22,55 i/s et modifie jusqu’à deux codes utiles sur l’image comparée. Le raccourci avant décodage PQ, avec le packing noir, donne 22,17 i/s.
+
+Les 1 020 structures MMR chroma ont des signatures distinctes. La matrice linéaire garde la même signature. Le contrôle avec décodage et rendu, jusqu’à la texture linéaire, atteint 28,82 i/s même sans packing. La cadence de 30 i/s requiert donc aussi un gain dans le décodage ou le rendu. La mesure Radeon reste à faire.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
