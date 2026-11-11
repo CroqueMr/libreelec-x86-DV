@@ -174,6 +174,40 @@ int main(){
 '''.replace("FRAGMENT", fragment)
         compile_run(self, program)
 
+    def test_mastering_luminance_compares_rational_values(self):
+        source = (self.root / "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp").read_text()
+        compare = method(source, "VideoPicture::CompareDisplayMetadata")
+        compile_run(self, r'''
+#include <cassert>
+extern "C" {
+#include <libavutil/mastering_display_metadata.h>
+}
+struct VideoPicture {
+ bool hasDisplayMetadata = true;
+ AVMasteringDisplayMetadata displayMetadata{};
+ bool CompareDisplayMetadata(const VideoPicture& pic) const;
+};
+COMPARE
+int main() {
+ VideoPicture configured, incoming;
+ configured.displayMetadata.has_luminance = incoming.displayMetadata.has_luminance = 1;
+ configured.displayMetadata.max_luminance = {10000000, 10000};
+ configured.displayMetadata.min_luminance = {50, 10000};
+ incoming.displayMetadata.max_luminance = {1000, 1};
+ incoming.displayMetadata.min_luminance = {1, 200};
+ assert(configured.CompareDisplayMetadata(incoming));
+ incoming.displayMetadata.max_luminance = {4000, 1};
+ assert(!configured.CompareDisplayMetadata(incoming));
+ incoming.displayMetadata.max_luminance = {1000, 1};
+ incoming.displayMetadata.min_luminance = {1, 100};
+ assert(!configured.CompareDisplayMetadata(incoming));
+ incoming.displayMetadata.has_luminance = 0;
+ assert(!configured.CompareDisplayMetadata(incoming));
+ configured.displayMetadata.has_luminance = 0;
+ assert(configured.CompareDisplayMetadata(incoming));
+}
+'''.replace("COMPARE", compare))
+
     def test_source_depth_change_requires_configuration_before_render(self):
         source = (self.root / "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp").read_text()
         body = method(source, "VideoPicture::IsSameParams")
