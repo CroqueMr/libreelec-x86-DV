@@ -393,7 +393,11 @@ static void fel_spatial(void)
     struct pl_render_params params=pl_render_default_params;
     params.cb1_dovi_reference=&raw;params.cb1_dovi_transport=true;params.min_fbo_precision=32;
     params.disable_linear_scaling=true;params.peak_detect_params=NULL;params.dither_params=NULL;params.sigmoid_params=NULL;
-    assert(pl_render_image(renderer,&frames[0],&target,&params));
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,0.5,output)==CB1_MASTER_INVALID);
+    frames[0].enhancement_layer=NULL;
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output)==CB1_MASTER_INVALID);
+    frames[0].enhancement_layer=&frames[1];
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output)==CB1_MASTER_READY);
     /* Literal arrays from the independent Python oracle, contract 1. */
     const int ycodes[8][8]={
         {1984,1984,1984,1984,1984,1984,1984,1984},
@@ -448,6 +452,23 @@ static void fel_spatial(void)
         same_size.planes[1].shift_y=(phases&2)?-.5f:0;
         assert(!pl_render_image(renderer,&frames[0],&target,&params));
     }
+    frames[0].enhancement_layer=NULL;
+    frames[0].planes[1].shift_y=0;
+    h->disable_residual_flag=1;
+    h->bl_video_full_range_flag=1;
+    AVDOVIColorMetadata *color=av_dovi_get_color(m);
+    color->signal_color_space=2;
+    color->signal_full_range_flag=1;
+    color->signal_bit_depth=12;
+    for(int c=1;c<3;c++)color->ycc_to_rgb_offset[c]=(AVRational){1,2};
+    AVDOVIReshapingCurve *curve=&av_dovi_get_mapping(m)->curves[0];
+    curve->poly_order[0]=2;
+    curve->poly_coef[0][1]=0;
+    curve->poly_coef[0][2]=1<<23;
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,NAN,output)==CB1_MASTER_READY);
+    reference_read(g.gl->gpu,output,0,0,8,8,values);
+    for(int i=0;i<8*8;i++)for(int c=0;c<3;c++)
+        assert(roundf(values[i*4+c]*4095)==(c?2048:1024));
     for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&same_size.planes[p].texture);
     for(int f=0;f<2;f++)for(int p=0;p<2;p++)pl_tex_destroy(g.gl->gpu,&frames[f].planes[p].texture);
     pl_tex_destroy(g.gl->gpu,&output);pl_renderer_destroy(&renderer);av_free(m);reference_gpu_destroy(&g);

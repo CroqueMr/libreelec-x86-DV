@@ -4,6 +4,7 @@
 #include "dvbridge_metadata_bounds.h"
 #include "dvbridge_metadata.h"
 #include <libavutil/dovi_meta.h>
+#include <libplacebo/shaders/colorspace.h>
 #include <limits.h>
 #include <string.h>
 
@@ -97,4 +98,42 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
         }
     }
     *out=next;return CB1_MASTER_READY;
+}
+
+enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
+    const struct pl_frame *source,const void *metadata,size_t bytes,
+    double pts,double el_pts,pl_tex target)
+{
+    if(!renderer || !source || !target || !isfinite(pts))return CB1_MASTER_INVALID;
+    const struct pl_frame *el=source->enhancement_layer;
+    struct pl_cb1_dovi_reference raw;
+    enum cb1_master_status status=cb1_master_reference_map(&raw,metadata,bytes,el && pts==el_pts);
+    if(status!=CB1_MASTER_READY)return status;
+    if(!pl_cb1_dovi_reference_frame_supported(source,raw.bl_depth) || source->num_overlays ||
+       (raw.residual && (!pl_cb1_dovi_reference_frame_supported(el,raw.el_depth) || el->num_overlays)))
+        return CB1_MASTER_UNSUPPORTED;
+    const struct pl_tex_params *out=&target->params;
+    const pl_fmt fmt=out->format;
+    if(!out->renderable || out->w!=source->crop.x1 || out->h!=source->crop.y1 ||
+       fmt->type!=PL_FMT_FLOAT || fmt->num_components!=4 ||
+       fmt->component_depth[0]!=32 || fmt->component_depth[1]!=32 || fmt->component_depth[2]!=32)
+        return CB1_MASTER_UNSUPPORTED;
+
+    struct pl_frame image=*source;
+    image.enhancement_layer=raw.residual?el:NULL;
+    struct pl_frame output={.num_planes=1,.planes={{.texture=target,.components=4,
+        .component_mapping={0,1,2,3}}},.repr=pl_color_repr_rgb,.crop=source->crop};
+    /* Transport here only disables libplacebo colour conversion. The texture
+     * contains components, with no packing, HDMI signaling or metadata edits. */
+    raw.contract=2;
+    struct pl_render_params params=pl_render_default_params;
+    params.cb1_dovi_reference=&raw;
+    params.cb1_dovi_transport=true;
+    params.min_fbo_precision=32;
+    params.disable_linear_scaling=true;
+    params.sigmoid_params=NULL;
+    params.peak_detect_params=NULL;
+    params.dither_params=NULL;
+    params.frame_mixer=NULL;
+    return pl_render_image(renderer,&image,&output,&params)?CB1_MASTER_READY:CB1_MASTER_FAILED;
 }
