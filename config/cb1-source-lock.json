@@ -297,10 +297,10 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "3904de053cf6cd17a78877c8daecbde9c20a3e5e48c21dd40eb6e1aacd714f57",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "c04604e32a556f222ac3c80e51c43206aaa5aabf565e0aabc97bc0e603444c52",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "7913ede0ce68d76d5e5200939a215fa4f510185364ffd3cfef94c08ed359c105",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "10aca827117b89b17c2eb6d59bbdd95d2ba3759c7c9520cdbb68d4b2e08c1719",
     "tests/cb1/test_diagnostics_runtime.py": "9f569527d9eed10257dd8139e81928f0154c902a3232006e64613b5fc2fabc90",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
-    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "93ad3d860cc0cc5149834030b1d6e4d369997a327a583694ef0e39d9a4ed89b0",
+    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "4ee3f83f89e62024af706ba18fe47fca813279ad3c3156e0886adeae2b864762",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "86f87aca534cbd5554154ade22a30273dce9789ed71d9cff41dd2c320a7fc09a",
     "README.md": "c9142345089e9eb7a81f63542547032ba87cb82e997bf809b76cd45cff4d13de",
     "docs/cb1/README.md": "c9449ccf4729d7fb282c52e1f94cbf2cdf39a56b9708909fcab00d868b907fb5",
@@ -545,7 +545,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "93ad3d860cc0cc5149834030b1d6e4d369997a327a583694ef0e39d9a4ed89b0"
+      "sha256": "4ee3f83f89e62024af706ba18fe47fca813279ad3c3156e0886adeae2b864762"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -581,7 +581,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "7913ede0ce68d76d5e5200939a215fa4f510185364ffd3cfef94c08ed359c105"
+      "sha256": "10aca827117b89b17c2eb6d59bbdd95d2ba3759c7c9520cdbb68d4b2e08c1719"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

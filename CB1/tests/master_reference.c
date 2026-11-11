@@ -426,6 +426,11 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
         assert(fabsf(pixels[16+c]-gray)<2e-4f && fabsf(pixels[20+c]-bright)<2e-4f);
         assert(pixels[20+c]>.203f && pixels[20+c]<pixels[24+c] && pixels[24+c]<pixels[28+c]);
     }
+    policy.expert_black_nits=.01;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    for(int c=0;c<3;c++)assert(fabsf(pixels[c]-.01f/1000)<1e-6f);
+    policy.expert_black_nits=0;
     pl_tex neutral=source.planes[1].texture;
     uint16_t chroma[32];
     for(int i=0;i<32;i++)chroma[i]=(i%2?528:496)<<6;

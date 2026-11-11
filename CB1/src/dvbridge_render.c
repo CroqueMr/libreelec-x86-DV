@@ -1853,11 +1853,16 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
         .description="Normalize reconstructed Dolby Vision codes"};
     if(!pl_shader_custom(p->sh,&normalize))return (struct pl_hook_res){.failed=true};
     pl_shader_decode_color_ex(p->sh,&(struct pl_color_decode_args){.repr=&repr,.cb1_dovi_linear=true});
+    const bool preserve_black=!plan->tone.output_min;
+    const bool lift_black=plan->creative.backend==DVBRIDGE_CREATIVE_CM4 && render->cm4.sop[1]>0;
+    /* Exact signal black only needs the mapper when a calibrated floor is set.
+     * A positive CM4 offset still needs its creative stage on that pixel. */
     const struct pl_custom_shader capture={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
-        .header="bool player_led_black;\n",
-        .body="player_led_black=all(lessThanEqual(color.rgb,vec3(0.0)));\n",
-        .description="Remember exact signal black"};
-    if(!pl_shader_custom(p->sh,&capture))return (struct pl_hook_res){.failed=true};
+        .header=lift_black?"bool player_led_black;\n":NULL,
+        .body=lift_black?"player_led_black=all(lessThanEqual(color.rgb,vec3(0.0)));\n":
+            "if(all(lessThanEqual(color.rgb,vec3(0.0))))return vec4(0.0,0.0,0.0,1.0);\n",
+        .description="Preserve exact signal black"};
+    if(preserve_black && !pl_shader_custom(p->sh,&capture))return (struct pl_hook_res){.failed=true};
     struct pl_color_map_params mapper=pl_color_map_default_params;
     mapper.metadata=PL_HDR_METADATA_HDR10;
     mapper.gamut_expansion=false;
@@ -1870,7 +1875,7 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
     const struct pl_custom_shader zero={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .body="if(player_led_black)color.rgb=vec3(0.0);\n",
         .description="Restore signal black before creative grading"};
-    if(!plan->tone.output_min && !pl_shader_custom(p->sh,&zero))
+    if(preserve_black && lift_black && !pl_shader_custom(p->sh,&zero))
         return (struct pl_hook_res){.failed=true};
     if(plan->creative.backend==DVBRIDGE_CREATIVE_CM4 && !dvbridge_creative_cm4_shader(p->sh,&render->cm4))
         return (struct pl_hook_res){.failed=true};
