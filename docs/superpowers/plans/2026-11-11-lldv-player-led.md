@@ -10,11 +10,72 @@ Conserver le décodage et la présentation Kodi, la reconstruction de Master Ref
 
 ## Contraintes et points de revue
 
-- Partir de `work/lldv-handshake` et des commits `68adad3` et `6b134ab`. Garder les nouveaux commits en local. Publier le PR après la validation de bout en bout. Exclure le rebase et les changements de release.
+- Reprendre `work/lldv-handshake` à `dc13405`. Garder les commits locaux sur cette branche, sans rebase. La préparation du PR vient après la validation de bout en bout. La release reste hors de ce travail.
 - Le profil P5 conserve sa pleine plage IPT-PQ-C2 jusqu’à la conversion prévue par la chaîne couleur. Un FEL actif exige la couche d’amélioration de la même image, y compris après un seek. Le panneau Info rapporte le traitement de l’image présentée.
 - Le mapper choisit une seule famille de trims pour la cible HDR. Traiter explicitement les cibles manquantes ou ambiguës et les contrôles HDR dont la sémantique reste à qualifier. Réserver au SDR les corrections secondaires de teinte et saturation par couleur.
 - Le mode LLDV est propre à la sortie HDMI sélectionnée. Les circuits HDR10, HDR10+, SDR et Dolby Vision TV-led gardent leur comportement. Une transaction refusée doit conserver ou rétablir l’affichage et présenter la cause.
 - Distinguer préférence enregistrée, route demandée et route active. Un choix temporaire ne change pas le défaut. Une route ou une profondeur indisponible garde sa préférence et indique la cause.
+
+## Exécution autonome depuis `dc13405`
+
+La branche locale `work/lldv-handshake` dispose du handshake d’essai Intel, du moteur linéaire, du packing 4:2:2 et des informations à afficher via **O**. Les essais hors écran sur le N100 valident les octets produits aux deux profondeurs. Les étapes ci-dessous ordonnent le travail restant. Les sections suivantes conservent les résultats et les références de qualification.
+
+### A. Préparer les deux mesures physiques
+
+**Propriétaires** `linux-9945-lldv-format-lab.patch`, `kodi-9999-zzzzzzzzzz-lldv-format.patch`, `tests/cb1/test_lldv_format.py` et les mires `work/lldv-n100-hdmi-20261111` du projet local.
+
+- [ ] Inventorier les moyens déjà accessibles. Préparer un lot unique de rasters, codes attendus et commandes de capture. Inclure noir et gris, primaires et secondaires, phase de chroma et rampes autour des bits 0 et 1. Conserver le timing, le preset LG, la cible, les hachages des rasters et l’état restauré. La propriété DRM, les infoframes, les CRC et les PNG 8 bits servent de diagnostics.
+- [ ] Sur le N100 et la LG, rejouer les **mires autonomes** aux deux profondeurs à 23,976 et 24 Hz. Lire les mots Y/Cb/Cr sur un récepteur qui préserve les codes 12 bits et vérifier la signalisation au même passage. Exiger les mêmes mots que la mire, les deux bits faibles à zéro en 10 bits utiles et des transitions distinctes de +1 et +2 en 12 bits.
+- [ ] Mesurer les gris, le proche-noir, la luminance et les couleurs avec une sonde sur la LG. Comparer à une mire LLDV de référence à cible identique dans le même preset et fixer les tolérances à partir de l’incertitude de mesure et de la répétabilité avant le comparatif. Vérifier que l’insertion du récepteur de mesure conserve l’EDID et le mode observé sur la LG. Archiver les mesures de lien et de dalle avec l’état HDMI restauré.
+- [ ] Identifier 25, 29,97 et 30 Hz parmi les timings réellement exposés par la LG et proposés par Kodi. Le noyau et Kodi filtrent actuellement le **VIC 93**. Étendre leur contrat ensemble pour les timings qui passent le test atomique et les mêmes mesures physiques aux deux profondeurs. Le banc à 30 i/s mesure la cadence GPU indépendamment de cette admission HDMI.
+
+**Dépendance actuelle** Les inventaires n’ont trouvé ni lecture HDMI brute 12 bits ni sonde de dalle. Le raccordement du moteur attend ces deux mesures. Les travaux B et C avancent sur le N100 hors écran avec les ressources existantes. Une preuve externe reproductible sur le même couple et les mêmes mires peut lever la dépendance si elle devient disponible.
+
+### B. Tenir le budget 4K30 et qualifier la fidélité hors écran
+
+**Propriétaires** `CB1/src/dvbridge_render.c`, `CB1/src/cb1_hdr10_expert.c`, `CB1/src/dvbridge_creative.c`, `CB1/tests/player_led_pack.c`, `CB1/tests/master_reference.c` et le banc VAAPI/EGL N100 déjà utilisé.
+
+- [ ] Mesurer l’ensemble décodage, reconstruction FEL, mapping, ajustement de l’image et packing sur le N100. Utiliser le même commit, le même PTS et les mêmes clips pour comparer mapping seul, packing seul et chaîne complète. Mesurer la latence GPU par étape, le débit, les échéances manquées, la profondeur de file et l’effet de l’échauffement. Réutiliser le P5 30 i/s et le FEL lourd *1917*, avec contrôles MEL, P8.1 et P8.4.
+- [ ] Réduire en priorité la répétition du PQ dans le packing actuel. Essayer d’abord une conversion native vers PQ une fois par pixel **après** la mise à l’échelle et la composition linéaires, suivie du packing. Mesurer le coût de la texture intermédiaire. Si son coût annule le gain, comparer une invocation par paire qui écrit les deux pixels, avec les fonctions GPU déjà présentes. Garder une seule solution qualifiée pour le matériel admis. Comparer le raster complet des mires et des images choisies à l’oracle 10/12 bits sur llvmpipe et ADL-N. Vérifier les deux bits faibles, les gamuts, la phase, les aplats, les bords et les refus. Si le FEL reste au-dessus du budget après le gain sur le packing, profiler d’abord sa reconstruction.
+- [ ] Rejouer le banc sur 120 images d’échauffement puis trois fenêtres de 300 images. Le critère de cadence est le respect des échéances à 30 i/s sur les clips 30 et des échéances natives sur les autres. Les images perdues doivent être mesurées par timestamp. Le 60 i/s reste un résultat optionnel. Les mesures précédentes, 29,40 i/s pour le FEL lourd avant packing et 17,32 ms pour le packing seul, servent de référence de départ.
+- [ ] Préparer les vecteurs Dolby à même source, même image, même cible et même gamut. Couvrir P5, le résiduel FEL apparié, le MEL sur la BL, les trims HDR ponctuels L2/L8 et L3, et les cinq modes CM4. Isoler Tone Detail/MS Weight pour L2 et L8 avec des contrôles appariés et les codes réellement exportés. Fixer les tolérances avant comparaison. Mesurer détail des hautes lumières, halos côté sombre, aplats, noirs et stabilité temporelle. Si le rendu Dolby contrôlé reste inaccessible, consigner la limite de la comparaison publique et conserver MS Weight comme métadonnée préservée en attendant la preuve. Le panneau rapporte seulement les traitements exécutés. [Contrôles Dolby Vision](https://professionalsupport.dolby.com/s/article/The-Dolby-Vision-Trim-Controls)
+
+### C. Préparer le raccordement dans Kodi avec des transactions simulées
+
+**Propriétaires** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlayerLedOutput.h`, `CWinSystemGbmGLESContext` et `CDRMAtomic::FlipPageTransactional()` dans les patches Kodi. Réutiliser les préférences de lecture, la composition et la présentation existantes.
+
+- [ ] Écrire d’abord les tests sur le défaut, le sélecteur à la volée et les raisons de refus dans `test_playback_defaults.py`, `test_quickswitch_paused_source.py` et `test_lldv_format.py`. Préparer l’admission DV, le choix automatique du 4:2:2 10 bits, le choix manuel 12 bits, la conservation des préférences et les raisons distinctes côté écran, pilote, timing et source. Préparer la cible avec provenance EDID, calibration ou mesure explicite.
+- [ ] Simuler un changement de circuit dans le propriétaire de présentation existant. L’unité à présenter contient le framebuffer préparé avec la bonne image, l’identité flux/image/révision, le format de connecteur demandé et le retrait des signaux incompatibles. Publier les faits LLDV seulement après présentation confirmée et relecture du mode actif sur le bon connecteur. Le timing sélectionné sert à l’admission et le timing confirmé à la télémétrie. Le passage inverse retire la propriété et le VSIF LLDV avec le premier framebuffer du circuit suivant.
+- [ ] Tester les transitions dans les deux sens avec HDR10, TV-led et SDR, puis 10 ↔ 12. Injecter un refus `TEST_ONLY`, un échec de commit, une fence ou un page-flip tardif, une image devenue ancienne après seek, une perte de connexion entre test et commit et un échec de restauration. Le dernier état confirmé et ses buffers restent valides jusqu’au remplacement. Un refus de restauration reste signalé jusqu’à une nouvelle confirmation. Après reconnexion, retester le connecteur et reprendre un état d’affichage valide via la restauration Kodi. Réutiliser `presentation_transaction`, `test_native_video_telemetry.py` et `test_lldv_player_info.py`.
+- [ ] Vérifier la composition linéaire des sous-titres et de l’interface avant packing, sans remapper le film. Vérifier les bords, l’orientation et le panneau **O** sur la même image acceptée. Tester la cohérence entre circuit, profondeur active, cible, FEL, mode CM4 et trims appliqués. La préparation reste testable avec des sorties simulées pendant la qualification physique.
+
+### D. Raccorder et qualifier une version locale sur le N100 et la LG
+
+- [ ] Après validation physique A pour les deux profondeurs à 23,976/24 Hz et validation hors écran B/C aux cadences admises pour cette première intégration, rejouer les patches avec les sources appariées et zéro fuzz. Étendre la version locale aux cadences suivantes à mesure qu’elles passent A et B. Faire un build incrémental noyau/Kodi avec retour local au build précédent vérifié. Activer le LLDV pour les couples format/timing qualifiés. Vérifier le premier framebuffer et l’état HDMI actif, puis les relire après retour aux circuits existants.
+- [ ] Lire des extraits P5, P7 FEL/MEL, P8.1 et P8.4 aux timings admis, les deux profondeurs et les modes CM4 représentatifs. Vérifier reprise après pause, seek, changement de fichier, arrêt et débranchement/rebranchement. Pour la qualification 30 i/s, lire le FEL lourd au moins 30 minutes en cumulant les passages disponibles et relever séparément chaque transition de boucle. Exiger zéro image perdue après stabilisation, une file qui ne grossit pas, une synchro audio/vidéo stable, une restauration confirmée et la disparition du signal LLDV après sortie. Mesurer séparément le délai de resynchronisation HDMI des bascules.
+- [ ] Comparer les mires envoyées par Kodi aux mires de qualification et relever à nouveau codes et couleurs. Rejouer Kodi default, SDR, HDR10, HDR10+ et TV-led. Un échec déclenche le retour local vérifié et une correction ciblée avant reprise.
+
+### E. Élargir par pilote et préparer l’intégration
+
+- [ ] Établir la matrice Intel i915/xe, AMD amdgpu et NVIDIA, avec les valeurs du format réellement exposées par le pilote. Lier la qualification au GPU, au pilote, au port, à l’EDID de l’écran et au timing. Une entrée expose les limites de ce couple de matériel. Réutiliser le contrat commun du sélecteur et des transactions. Chaque extension se valide avec les mires, l’image et les retours aux circuits existants. Les combinaisons sans preuve restent grisées avec une raison.
+- [ ] À chaque étape, obtenir une revue Astra xhigh sur le diff et les preuves associées, corriger les écarts, puis consigner commandes, mesures et commit local. Faire une revue finale qui couvre fidélité, cadence, restauration et matrice des pilotes. Préparer un seul PR quand la qualification de bout en bout atteint le périmètre prévu, avec les limites mesurées et les procédures de test. Le travail se déroule en commits locaux sur la branche existante, sans rebase ni mise à jour de la release.
+
+### Vérifications à rejouer
+
+```sh
+EGL_PLATFORM=surfaceless ctest --test-dir <build-cb1> -R 'player_led_pack|master_lifecycle|master_spatial|hdr10_expert_composition|presentation_transaction' --output-on-failure
+python3 -m unittest discover -s tests/cb1 -p 'test_lldv_*.py'
+python3 -m unittest discover -s tests/cb1 -p 'test_native_video_telemetry.py'
+python3 -m unittest discover -s tests/cb1 -p 'test_playback_defaults.py'
+python3 -m unittest discover -s tests/cb1 -p 'test_quickswitch_paused_source.py'
+python3 scripts/cb1-stage.py --check
+python3 CB1/tools/verify.py
+git diff --check
+```
+
+Les tests Kodi utilisent l’arbre apparié préparé par `.github/scripts/prepare-test-sources.sh`. Consigner les tests ignorés et rejouer sur matériel ceux qui conditionnent l’admission du mode. Un blocage physique ou une référence Dolby indisponible reste documenté avec sa preuve manquante pendant que les autres tâches avancent.
+
+Les sections suivantes gardent le plan initial et les preuves recueillies avant ce découpage.
 
 ## 1. Qualifier le format HDMI et la cible
 
