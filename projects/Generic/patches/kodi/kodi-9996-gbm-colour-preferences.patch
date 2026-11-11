@@ -182,7 +182,25 @@ diff --git a/system/settings/linux.xml b/system/settings/linux.xml
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.cpp
-@@ -110,5 +110,6 @@
+@@ -99,17 +99,20 @@
+     return true;
+ 
+   // both this and pic has display metadata
+-  return this->displayMetadata.max_luminance.num == pic.displayMetadata.max_luminance.num &&
+-         this->displayMetadata.max_luminance.den == pic.displayMetadata.max_luminance.den &&
+-         this->displayMetadata.min_luminance.num == pic.displayMetadata.min_luminance.num &&
+-         this->displayMetadata.min_luminance.den == pic.displayMetadata.min_luminance.den;
++  if (displayMetadata.has_luminance != pic.displayMetadata.has_luminance)
++    return false;
++
++  return !displayMetadata.has_luminance ||
++         (av_cmp_q(displayMetadata.max_luminance, pic.displayMetadata.max_luminance) == 0 &&
++          av_cmp_q(displayMetadata.min_luminance, pic.displayMetadata.min_luminance) == 0);
+ }
+ 
+ bool VideoPicture::IsSameParams(const VideoPicture& pic) const
+ {
+   return this->iWidth == pic.iWidth && this->iHeight == pic.iHeight &&
           this->iDisplayWidth == pic.iDisplayWidth && this->iDisplayHeight == pic.iDisplayHeight &&
           this->stereoMode == pic.stereoMode && this->color_primaries == pic.color_primaries &&
           this->color_transfer == pic.color_transfer && this->hdrType == pic.hdrType &&
