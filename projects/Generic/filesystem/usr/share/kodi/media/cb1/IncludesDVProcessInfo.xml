@@ -431,10 +431,11 @@
         <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
-      <control type="textbox" id="9102">
-        <left>20</left><top>370</top><width>620</width><height>38</height>
+      <control type="label" id="9102">
+        <left>20</left><top>370</top><width>620</width><height>30</height>
         <font>CB1.SwitchHelp</font><textcolor>FFA0A0A0</textcolor>
-        <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
+        <label>$INFO[Container(6).ListItem.Label2]</label>
+        <aligny>center</aligny><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
     </control>
   </include>

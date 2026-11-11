@@ -13,6 +13,17 @@ MEDIA = ROOT / 'projects/Generic/filesystem/usr/share/kodi/media'
 
 
 class QuickSwitchResources(unittest.TestCase):
+    def test_footer_is_a_single_line_with_bottom_padding(self):
+        definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
+        group = definitions.find("./include[@name='CB1PlaybackModeLayout']/control")
+        footer = group.find("control[@id='9102']")
+        self.assertEqual(footer.get('type'), 'label')
+        self.assertEqual(footer.findtext('label'), '$INFO[Container(6).ListItem.Label2]')
+        self.assertEqual(footer.findtext('wrapmultiline'), 'false')
+        self.assertEqual(footer.findtext('scroll'), 'false')
+        bottom = int(footer.findtext('top')) + int(footer.findtext('height'))
+        self.assertGreaterEqual(int(group.findtext('height')) - bottom, 12)
+
     def test_app_window_has_a_closed_include_and_asset_graph(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml').getroot()
         includes = {node.attrib['name']: node for node in definitions.findall('include')}
