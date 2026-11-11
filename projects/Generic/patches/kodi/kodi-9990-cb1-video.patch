@@ -14524,6 +14524,44 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  bool CVaapi2Texture::TestEsh(VADisplay vaDpy, EGLDisplay eglDisplay, std::uint32_t rtFormat, std::int32_t pixelFormat)
+@@ -391,21 +398,23 @@
+     {
+       auto const& object = drmPrimeSurface.objects[layer.object_index[0]];
+-      EGLint attribs[] = {EGL_LINUX_DRM_FOURCC_EXT,
+-                          static_cast<EGLint>(drmPrimeSurface.layers[0].drm_format),
+-                          EGL_WIDTH,
+-                          width,
+-                          EGL_HEIGHT,
+-                          height,
+-                          EGL_DMA_BUF_PLANE0_FD_EXT,
+-                          static_cast<EGLint>(object.fd),
+-                          EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+-                          static_cast<EGLint>(layer.offset[0]),
+-                          EGL_DMA_BUF_PLANE0_PITCH_EXT,
+-                          static_cast<EGLint>(layer.pitch[0]),
+-                          EGL_NONE};
++      CEGLAttributes<8> attribs;
++      attribs.Add({{EGL_LINUX_DRM_FOURCC_EXT, static_cast<EGLint>(layer.drm_format)},
++                   {EGL_WIDTH, width},
++                   {EGL_HEIGHT, height},
++                   {EGL_DMA_BUF_PLANE0_FD_EXT, object.fd},
++                   {EGL_DMA_BUF_PLANE0_OFFSET_EXT, static_cast<EGLint>(layer.offset[0])},
++                   {EGL_DMA_BUF_PLANE0_PITCH_EXT, static_cast<EGLint>(layer.pitch[0])}});
++
++      if (CEGLUtils::HasExtension(eglDisplay, "EGL_EXT_image_dma_buf_import_modifiers"))
++      {
++        attribs.Add({{EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
++                      static_cast<EGLint>(object.drm_format_modifier)},
++                     {EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
++                      static_cast<EGLint>(object.drm_format_modifier >> 32)}});
++      }
+ 
+       EGLImageKHR eglImage =
+-          eglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attribs);
++          eglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attribs.Get());
+       if (eglImage)
+       {
+         eglDestroyImageKHR(eglDisplay, eglImage);
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.h
 @@ -18,6 +18,7 @@
