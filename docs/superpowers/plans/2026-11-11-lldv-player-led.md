@@ -267,6 +267,19 @@ Sur le court essai 4K à 12 bits, le contrôle à 21,90 i/s précède les varian
 
 Les 1 020 structures MMR chroma ont des signatures distinctes. La matrice linéaire garde la même signature. Le contrôle avec décodage et rendu, jusqu’à la texture linéaire, atteint 28,82 i/s même sans packing. La cadence de 30 i/s requiert donc aussi un gain dans le décodage ou le rendu. La mesure Radeon reste à faire.
 
+### Packing CPU et tampon GBM partagé
+
+Le [banc hors écran](../../../CB1/tools/fel-offscreen/README.md) réutilise le décodage BL/EL et le rendu player-led de référence. Le GPU écrit le RGB linéaire dans un tampon cohérent. Quatre workers AVX2 appliquent PQ, le filtre chroma et le packing 4:2:2 directement dans le tampon GBM importé par EGL. Le CPU et le GPU traitent des images différentes en parallèle. Les sources expérimentales sont appliquées dans une copie de build dédiée au banc.
+
+| 1917 FEL 4K sur N100 | Chaîne complète | Échéances dépassées à 27 i/s |
+| --- | ---: | ---: |
+| 4:2:2 10 bits | 28,00 i/s | 0/900 |
+| 4:2:2 12 bits | 27,66 i/s | 0/900 |
+
+Les temps couvrent 900 images après 120 d’échauffement, jusqu’au tampon GBM prêt, avec 100 ms de marge initiale. Le banc utilise la VA-API, GLES et GBM avec du code commun Intel et AMD x86. La mesure Radeon et la validation HDMI restent à faire.
+
+La relecture EGL des images 1, 120 et 300 est comparée au packing GPU de référence. Les écarts observés valent un code utile au voisinage du seuil d’arrondi. L’essai avec relecture par le GPU à chaque image garde plus de 27 i/s en moyenne, avec 89/300 échéances dépassées en 10 bits et 68/300 en 12 bits. Cet essai partage la file GLES avec le rendu. La cadence de présentation Kodi reste à mesurer.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.

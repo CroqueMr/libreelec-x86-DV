@@ -1,0 +1,28 @@
+--- a/src/dvbridge_render.c
++++ b/src/dvbridge_render.c
+@@ -1855,6 +1855,13 @@
+     return render_master_reference(r,source,metadata,bytes,pts,el_pts,geometry,target,flip,overlay,true);
+ }
+
++void cb1_host_frame_store(struct dvbridge_renderer *r,pl_buf buf)
++{
++    void (*set)(pl_renderer,pl_buf)=dlsym(RTLD_DEFAULT,"pl_cb1_host_frame_store");
++    if(!set)abort();
++    set(r->renderer,buf);
++}
++
+ static const uint64_t player_led_hook_signature=0x434231504c440001ULL;
+
+ struct player_led_render {
+--- a/src/cb1_master_reference.c
++++ b/src/cb1_master_reference.c
+@@ -127,8 +127,7 @@
+     const struct pl_tex_params *out=&target->params;
+     const pl_fmt fmt=out->format;
+     if(!out->renderable || out->w!=source->crop.x1 || out->h!=source->crop.y1 ||
+-       fmt->type!=PL_FMT_FLOAT || fmt->num_components!=4 ||
+-       fmt->component_depth[0]!=32 || fmt->component_depth[1]!=32 || fmt->component_depth[2]!=32)
++       fmt->type!=PL_FMT_UNORM || fmt->num_components!=4 || fmt->component_depth[0]!=8)
+         return CB1_MASTER_UNSUPPORTED;
+
+     struct pl_frame image=*source;
