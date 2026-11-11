@@ -25,6 +25,19 @@ Conserver le décodage et la présentation Kodi, la reconstruction de Master Ref
 - [ ] Étendre la matrice du test à 24,000 et 23,976 Hz. Vérifier qu’un timing incompatible, un EDID invalide, une TV sans ce format et un pilote sans la propriété reçoivent chacun la bonne raison. Essayer le 23,976 Hz sur le récepteur avant de l’annoncer dans Kodi. Le 4K60 reste désactivé tant qu’il échoue à la qualification.
 - [ ] Vérifier que **Automatique** préfère 10 bits utiles et que le choix manuel 12 bits est conservé. Les deux modes utilisent des champs HDMI de 12 bits. Vérifier le rejet sans modification du mode courant et le retour au mode d’origine après la mire. Commit local.
 
+### Mesures N100 et LG G5 du 11 novembre
+
+Le noyau d’essai a accepté les quatre combinaisons et restauré l’état DRM après chaque mire. Le lanceur a relu l’horloge et le format actifs. Sur HDMI 2, la LG a confirmé les trois voies TMDS verrouillées, le YCbCr 4:2:2 annoncé par l’AVI et le paquet Dolby Low Latency. Le test atomique 4K60 a rejeté le mode avant toute modification de l’affichage.
+
+| Horloge DRM | Précision de la mire source | Échantillons LG verrouillés |
+| --- | --- | --- |
+| 297000 kHz | 10 bits utiles | 25/29 |
+| 297000 kHz | 12 bits | 26/29 |
+| 296703 kHz | 10 bits utiles | 26/29 |
+| 296703 kHz | 12 bits | 26/29 |
+
+La différence des deux bits faibles a été vérifiée sur les rasters source. La capture interne de la LG montre les barres et les gris dans un PNG RGB 8 bits. Les modes natifs `SOURCE` et `VIDEO` ont refusé la capture. Restent la lecture des codes HDMI à 12 bits et les mesures optiques sur la dalle. Le passage à l’intégration du moteur attend ces preuves.
+
 ## 2. Récupérer l’image Dolby Vision avant le mapping
 
 **Propriétaires.** `CB1/src/cb1_master_reference.c`, `CB1/src/dvbridge_render.c`, les tests `master_reference`, `master_ipt` et `CB1/tests/reference/test_dovi_master_reference.py`. Réutiliser les entrées BL, EL, RPU et l’identité flux, image et révision de CB1.

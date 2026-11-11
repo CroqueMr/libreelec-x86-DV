@@ -153,7 +153,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -1554,6 +1554,27 @@
+@@ -1554,6 +1554,33 @@
           m_info->SupportsHDRStaticMetadataType1();
  }
  
@@ -169,7 +169,13 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
 +    status.driverFormats = DVBRIDGE::LLDV_422;
 +    const auto* mode = m_DRM->GetSelectedMode();
 +    status.currentTiming = mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
-+                           mode->clock == 297000 && mode->htotal == 5500 && mode->vtotal == 2250;
++                           mode->htotal == 5500 && mode->vtotal == 2250 &&
++                           mode->hsync_start == 5116 && mode->hsync_end == 5204 &&
++                           mode->vsync_start == 2168 && mode->vsync_end == 2178 &&
++                           mode->hskew == 0 && mode->vscan == 0 &&
++                           (mode->clock == 297000 || mode->clock == 296703) &&
++                           (mode->flags & ~DRM_MODE_FLAG_PIC_AR_16_9) ==
++                               (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC);
 +    const auto active = connector->ReadPropertyValue("CB1_LLDV_FORMAT");
 +    if (active && *active <= static_cast<unsigned>(DVBRIDGE::LldvFormat::Y422_12))
 +      status.active = static_cast<DVBRIDGE::LldvFormat>(*active);

@@ -9,6 +9,60 @@ import unittest
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'matched Kodi source required')
 class LldvFormat(unittest.TestCase):
+    def test_selector_accepts_both_2160p24_clocks(self):
+        kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        source = (kodi / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
+        timing = source.split('status.currentTiming = ', 1)[1].split(';', 1)[0]
+        code = r'''
+#include <cassert>
+#include <drm_mode.h>
+struct Mode
+{
+  int hdisplay, vdisplay, clock, htotal, vtotal;
+  int hsync_start, hsync_end, vsync_start, vsync_end, hskew, vscan;
+  unsigned flags;
+};
+bool supported(const Mode* mode) { return TIMING; }
+int main()
+{
+  const Mode integer{3840, 2160, 297000, 5500, 2250, 5116, 5204, 2168, 2178,
+                     0, 0, DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC};
+  Mode fractional = integer;
+  fractional.clock = 296703;
+  Mode fractional30 = fractional;
+  fractional30.htotal = 4400;
+  fractional30.hsync_start = 4016;
+  fractional30.hsync_end = 4104;
+  Mode integer60 = fractional30;
+  integer60.clock = 594000;
+  Mode wrongSync = fractional;
+  ++wrongSync.hsync_start;
+  Mode interlaced = fractional;
+  interlaced.flags |= DRM_MODE_FLAG_INTERLACE;
+  Mode widescreen = fractional;
+  widescreen.flags |= DRM_MODE_FLAG_PIC_AR_16_9;
+  Mode wrongAspect = fractional;
+  wrongAspect.flags |= DRM_MODE_FLAG_PIC_AR_4_3;
+  assert(supported(&integer));
+  assert(supported(&fractional));
+  assert(!supported(&fractional30));
+  assert(!supported(&integer60));
+  assert(!supported(&wrongSync));
+  assert(!supported(&interlaced));
+  assert(supported(&widescreen));
+  assert(!supported(&wrongAspect));
+  assert(!supported(nullptr));
+}
+'''.replace('TIMING', timing)
+        with tempfile.TemporaryDirectory() as work:
+            source = Path(work) / 'timing.cpp'
+            binary = Path(work) / 'timing'
+            source.write_text(code)
+            libdrm = subprocess.check_output(['pkg-config', '--cflags', 'libdrm'], text=True).split()
+            subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+                            *libdrm, str(source), '-o', str(binary)], check=True)
+            subprocess.run([binary], check=True)
+
     def test_edid_and_selection(self):
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         code = r'''
