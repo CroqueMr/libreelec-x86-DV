@@ -18,6 +18,7 @@ class PascalPackages(unittest.TestCase):
                 'nvidia-modeset/nv-modeset-kernel.o_binary',
             'src/nvidia-modeset/kapi/interface/nvkms-kapi.h': 'common/inc/nvkms-kapi.h',
             'src/common/inc/nvkms-cb1-vsif.h': 'common/inc/nvkms-cb1-vsif.h',
+            'src/common/inc/nvkms-dv-vsif.h': 'common/inc/nvkms-dv-vsif.h',
             'src/common/inc/nvkms-cb1-hdr10plus.h': 'common/inc/nvkms-cb1-hdr10plus.h',
         }
         for name in ('connector.c', 'connector.h', 'drv.c', 'priv.h', 'modeset.c', 'encoder.c', 'encoder.h'):

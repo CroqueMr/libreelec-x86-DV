@@ -61,8 +61,8 @@ struct CServiceBroker {static auto GetSettingsComponent(){return &component;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t id=1;return ++id;}}
 HEADER
 namespace DVBRIDGE {
-enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};
  static Snapshot Read(){return {};}};

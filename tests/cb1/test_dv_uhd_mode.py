@@ -11,8 +11,9 @@ class DVUHDModeTests(unittest.TestCase):
     def test_real_selector_preserves_whitelist_override_and_adjustment_off(self):
         resolution = (TREE/'xbmc/windowing/Resolution.cpp').read_text()
         resolution = re.sub(r'^#include[^\n]*', '', resolution, flags=re.M)
-        manager = body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text(),
-                       'RESOLUTION CRenderManager::GetResolution()')
+        manager_source = (TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
+        manager = body(manager_source, 'RESOLUTION CRenderManager::GetResolution()')
+        choice = body(manager_source, 'RESOLUTION ChoosePlaybackResolution(')
         gbm = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         eligible = body(gbm, 'bool NativeDVEligible(')
         wants = body(gbm, 'bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream)')
@@ -106,9 +107,11 @@ namespace DVBRIDGE {
 bool NativeDVEligible(bool source,bool software,bool interlaced,bool stereo) ELIGIBLE_CODE
 bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream) WANTS_CODE
 RESOLUTION_CODE
+struct Picture {int iWidth=3840,iHeight=2160;std::string stereoMode;};
+RESOLUTION ChoosePlaybackResolution(const Picture& picture,double fps,bool nativeDV) CHOICE_CODE
 struct CRenderManager {
  std::mutex m_statelock;int m_renderState=1;bool m_nativeDVRate=false;float m_fps=24000.f/1001;
- struct {int iWidth=3840,iHeight=2160;std::string stereoMode;} m_picture;
+ Picture m_picture;
  RESOLUTION GetResolution() MANAGER_CODE
 };
 int main() {
@@ -224,7 +227,7 @@ int main() {
  manager.m_picture.iWidth=3832;manager.m_picture.iHeight=1600;
  assert(manager.GetResolution()==RES_DESKTOP);
 }
-'''.replace('RESOLUTION_CODE', resolution).replace('MANAGER_CODE', manager).replace(
+'''.replace('RESOLUTION_CODE', resolution).replace('CHOICE_CODE',choice).replace('MANAGER_CODE', manager).replace(
             'ELIGIBLE_CODE', eligible).replace('WANTS_CODE', wants)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)

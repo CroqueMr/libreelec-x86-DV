@@ -31,7 +31,8 @@ enum{DRM_OUTPUT_COLOR_FORMAT_YCBCR420=3,INTEL_OUTPUT_FORMAT_RGB,
  INTEL_OUTPUT_FORMAT_YCBCR420,INTEL_OUTPUT_FORMAT_YCBCR444,HDMI_INFOFRAME_TYPE_AVI,
  HDMI_COLORSPACE_RGB,HDMI_COLORSPACE_YUV420,HDMI_COLORSPACE_YUV444,
  HDMI_QUANTIZATION_RANGE_LIMITED,HDMI_QUANTIZATION_RANGE_FULL,
- HDMI_QUANTIZATION_RANGE_DEFAULT,HDMI_YCC_QUANTIZATION_RANGE_LIMITED,HDMI_COLORIMETRY_NONE};
+ HDMI_QUANTIZATION_RANGE_DEFAULT,HDMI_YCC_QUANTIZATION_RANGE_LIMITED,HDMI_COLORIMETRY_NONE,
+ HDMI_COLORSPACE_YUV422,HDMI_COLORIMETRY_EXTENDED,HDMI_EXTENDED_COLORIMETRY_BT2020};
 struct hdmi_avi_infoframe{unsigned video_code,colorspace,colorimetry,extended_colorimetry,
  quantization_range,ycc_quantization_range;};
 struct drm_display_mode{u8 vic,hdmi_vic;unsigned flags;};
@@ -41,7 +42,8 @@ struct drm_display_info{struct{struct{bool supported;}scdc;}hdmi;
  unsigned color_formats;u8*vics;int vics_len;bool has_hdmi_infoframe;};
 struct drm_connector{struct drm_display_info display_info;};
 struct intel_connector{struct drm_connector base;struct dvbridge_sink_caps dv_sink_caps;};
-struct drm_connector_state{struct drm_connector*connector;void*hdr10plus_metadata;bool dv_lab_standard;};
+struct drm_connector_state{struct drm_connector*connector;void*hdr10plus_metadata;
+ bool dv_lab_standard;unsigned lldv_format;};
 struct intel_crtc_state{bool has_infoframe,limited_color_range;int output_format;
  struct{struct drm_display_mode adjusted_mode;}hw;
  struct{unsigned enable;struct{struct hdmi_avi_infoframe avi;}avi;}infoframes;};
@@ -89,6 +91,12 @@ int main(void){
  assert(intel_hdmi_compute_avi_infoframe(&e,&crtc,&s) && !crtc.infoframes.avi.avi.video_code);
  s.hdr10plus_metadata=NULL;crtc.hw.adjusted_mode=(struct drm_display_mode){.vic=95,.hdmi_vic=1};
  assert(intel_hdmi_compute_avi_infoframe(&e,&crtc,&s) && !crtc.infoframes.avi.avi.video_code);
+ s.lldv_format=1;crtc.hw.adjusted_mode=(struct drm_display_mode){.vic=93,.hdmi_vic=3};
+ assert(intel_hdmi_compute_avi_infoframe(&e,&crtc,&s));
+ const struct hdmi_avi_infoframe *avi=&crtc.infoframes.avi.avi;
+ assert(avi->video_code==93 && avi->colorspace==HDMI_COLORSPACE_YUV422);
+ assert(avi->extended_colorimetry==HDMI_EXTENDED_COLORIMETRY_BT2020 &&
+        avi->ycc_quantization_range==HDMI_YCC_QUANTIZATION_RANGE_LIMITED);
 }
 '''.replace('@@POLICY@@',policy).replace('@@OWNER@@',function(hdmi,'intel_hdmi_compute_avi_infoframe'))
         with tempfile.TemporaryDirectory() as tmp:

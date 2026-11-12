@@ -83,7 +83,9 @@ class AMDNativeStereo(unittest.TestCase):
         helper = (function(source, 'amdgpu_dm_stereo_mode_supported')
                   if 'amdgpu_dm_stereo_mode_supported(' in source else '')
         self.run_c(FLAGS + r'''
-struct dm_connector_state { bool dv_standard; };
+struct dm_connector_state { bool dv_standard; unsigned lldv_format; };
+static bool amdgpu_dm_dv_transport(const struct dm_connector_state *s)
+{ return s->dv_standard || s->lldv_format; }
 static int amdgpu_dm_hdr10_validate(const struct dm_connector_state *state)
 { (void)state; return 0; }
 ''' + helper + r'''
@@ -245,7 +247,7 @@ struct pool { struct pool_funcs *funcs; };
 struct dc { struct { bool unify_link_enc_assignment; } config; struct pool *res_pool; };
 struct dc_context { struct dc *dc; };
 struct dc_stream_state {
-    bool dv_standard,dpms_off,ignore_msa_timing_param;
+    bool dv_standard,dv_low_latency,dpms_off,ignore_msa_timing_param;
     int output_color_space,audio_info,signal;
     struct dc_crtc_timing timing;
     struct dc_info_packet vsp_infopacket;

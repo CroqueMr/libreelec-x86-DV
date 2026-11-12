@@ -47,13 +47,13 @@ int main(){
         program=r'''
 #include <cassert>
 #include "dvbridge_policy.h"
-struct CDVBridgeGLES {enum class FrameStatus{Pending,Busy,Ready,Failed};};
+struct CDVBridgeGLES {enum class FrameStatus{Pending,Busy,Ready,Failed};bool PlayerLed()const{return false;}};
 struct Metadata{bool authored=true;bool Data()const{return authored;}};
 struct Context{bool AsyncPreparation(int){return false;}};
 bool holds(dvbridge_mode mode,CDVBridgeGLES::FrameStatus status,bool authored=true){
  Metadata metadata{authored};struct{dvbridge_mode mode;}policy{mode};
  const bool allowAsync=false,m_dvFrame=false;bool m_cb1FramePending=false;
- Context ctx;auto*m_dvContext=&ctx;struct{struct{int stream;}binding;}layer{};
+ Context ctx;auto*m_dvContext=&ctx;CDVBridgeGLES bridge;auto*m_dvBridge=&bridge;struct{struct{int stream;}binding;}layer{};
  BODY
  return m_cb1FramePending;
 }

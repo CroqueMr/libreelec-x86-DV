@@ -23,7 +23,7 @@ make_target() {
 
   # Keep the in-kernel client and independently source-built NVKMS layout matched.
   cp src/nvidia-modeset/kapi/interface/nvkms-kapi.h kernel-open/common/inc/
-  cp src/common/inc/nvkms-cb1-hdr.h kernel-open/common/inc/
+  cp src/common/inc/nvkms-cb1-hdr.h src/common/inc/nvkms-dv-vsif.h kernel-open/common/inc/
 
   make modules \
     TARGET_ARCH=x86_64 \

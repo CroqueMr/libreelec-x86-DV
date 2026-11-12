@@ -14,8 +14,11 @@ class GbmColourBuffer(unittest.TestCase):
         program=Path(__file__).with_name('gbm_colour_buffer.cpp').read_text()
         owners={
             'FLIP':body(window,'void CWinSystemGbm::FlipPage('),
+            'LLDV':body(window,'bool CWinSystemGbm::FlipPlayerLedPage('),
+            'PAGE':body(window,'bool CWinSystemGbm::CompleteDVBridgePage('),
             'LOCK':body(surface,'    LockFrontBuffer()'),
             'PENDING':body(surface,'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::LockTransactionalBuffer('),
+            'ADOPT':body(surface,'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::AdoptTransactionalBuffer('),
             'COMPLETE':body(surface,'void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer('),
             'END':body(surface,'void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode('),
         }
@@ -24,6 +27,7 @@ class GbmColourBuffer(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='gbm-colour-buffer-') as tmp:
             binary=Path(tmp)/'check'
             built=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                                  '-I',str(TREE/'xbmc'),
                                   '-x','c++','-','-o',str(binary)],input=program,
                                  capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)

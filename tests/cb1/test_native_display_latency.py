@@ -24,7 +24,9 @@ struct Context {bool enabled=true;uint64_t stream=1;
  bool AsyncPreparationConfigured() const {return enabled && stream;}};
 struct Bridge {
  bool advanced=false;std::shared_ptr<Context> context=std::make_shared<Context>();
+ bool reserve=false;
  bool Advanced(){return advanced;}
+ bool PlayerLedCpuReserve(){return reserve;}
  auto GetContext(){return context;}
 };
 struct CWinSystemGbmEGLContext {float GetDisplayLatency(){return -1;}};
@@ -39,6 +41,11 @@ struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext {
 };
 int main(){
  CWinSystemGbmGLESContext active;assert(active.GetDisplayLatency()==50);
+ active.drm.mode.fRefreshRate=30;
+ active.m_dvBridge->reserve=true;
+ assert(std::abs(active.GetDisplayLatency()-100.0f)<0.01f);
+ active.m_dvBridge->reserve=false;
+ assert(std::abs(active.GetDisplayLatency()-66.6667f)<0.01f);
  for(int mode:{0,4}){
    CWinSystemGbmGLESContext transition;transition.active=false;
    transition.m_dvSelection.policy.mode=mode;

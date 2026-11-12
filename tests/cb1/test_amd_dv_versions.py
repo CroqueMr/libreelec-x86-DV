@@ -24,13 +24,15 @@ class AMDVersions(unittest.TestCase):
                "hdmi_dolby_vendor_infoframe_check", "hdmi_dolby_vendor_infoframe_pack")
         helpers=["dv_display_supported" if "dv_display_supported(" in amd else "dv_dcn_supported",
                  "dv_copy_packet", "dv_stream_edid"]
-        if "dv_sink_supported(" in amd: helpers.append("dv_sink_supported")
+        helpers.extend(("dv_sink_supported", "lldv_sink_supported"))
+        amdh=(kernel/"drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h").read_text()
         families=sorted(set(re.findall(r"\b(?:DCN|DCE)_VERSION_\w+", function(amd,helpers[0]))) |
                         {"DCN_VERSION_4_01", "DCN_VERSION_4_2", "DCN_VERSION_4_2B"})
         code=(Path(__file__).with_name("amd_dv_versions.c")).read_text()
         code=code.replace("@@FAMILIES@@", ",".join(families))
         code=code.replace("@@PACKERS@@", "\n".join(function(hdmi,n) for n in names))
-        code=code.replace("@@AMD@@", "\n".join(function(amd,n) for n in helpers)+
+        code=code.replace("@@AMD@@", function(amdh,"amdgpu_dm_dv_transport")+"\n"+
+                          "\n".join(function(amd,n) for n in helpers)+
                           "\n"+function(amd,"amdgpu_dm_dv_configure_stream"))
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

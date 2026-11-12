@@ -26,17 +26,17 @@ class PascalConnector(unittest.TestCase):
 #include <stddef.h>
 #include <stdlib.h>
 #include <errno.h>
-typedef unsigned NvU32;
+#include "nvkms-dv-vsif.h"
 #define connector_status_connected 1
 #define NVKMS_CONNECTOR_TYPE_HDMI 2
 #define NVKMS_CONNECTOR_TYPE_DP 3
 #define NVKMS_CONNECTOR_SIGNAL_FORMAT_TMDS 2
 #define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
 struct drm_property {int id;};
-struct drm_property_blob {struct {unsigned id;} base; unsigned length; int refs;};
+struct drm_property_blob {struct {unsigned id;} base; unsigned length; int refs; NvU8 data[27];};
 struct nv_drm_device {struct drm_property *cb1_vsif_property,*cb1_bpc_property,*cb1_dither_property;
  struct drm_property *cb1_output_bpc_property,*cb1_hdr10plus_status_property,*cb1_deep_color_property,
- *cb1_native_tmds_property;void*pDevice;};
+ *cb1_native_tmds_property,*cb1_lldv_format_property;void*pDevice;};
 struct drm_crtc {struct {int active;}*state;unsigned head;};
 struct drm_encoder {unsigned hDisplay;int signal_format;};
 #define nv_drm_encoder drm_encoder
@@ -53,7 +53,7 @@ struct drm_connector {struct drm_connector_state *state; struct nv_drm_device *d
 #define nv_drm_connector drm_connector
 #define to_nv_connector(c) (c)
 static bool alloc_fail;
-static struct drm_property_blob blob={{91},27,1};
+static struct drm_property_blob blob={{91},27,1,{}};
 static void *nv_drm_calloc(size_t n,size_t s){return alloc_fail?NULL:calloc(n,s);}
 static void nv_drm_free(void *p){free(p);}
 static struct nv_drm_device *to_nv_device(struct nv_drm_device *d){return d;}
@@ -65,10 +65,10 @@ static void __drm_atomic_helper_connector_reset(struct drm_connector *c,struct d
 static void __drm_atomic_helper_connector_duplicate_state(struct drm_connector *c,struct drm_connector_state *s){*s=*c->state;}
 '''+helpers+'\n'+struct+'\n'+source[start:end]+r'''
 int main(void){
- struct drm_property vsif={1},bpc={2},dither={3},other={4},deep={5},depth={6},status={7},tmds={8};
+ struct drm_property vsif={1},bpc={2},dither={3},other={4},deep={5},depth={6},status={7},tmds={8},lldv={9};
  struct nv_drm_device d={.cb1_vsif_property=&vsif,.cb1_bpc_property=&bpc,.cb1_dither_property=&dither,
  .cb1_deep_color_property=&deep,.cb1_output_bpc_property=&depth,.cb1_hdr10plus_status_property=&status,
- .cb1_native_tmds_property=&tmds};
+ .cb1_native_tmds_property=&tmds,.cb1_lldv_format_property=&lldv};
  struct drm_connector c={.dev=&d,.status=1};
  uint64_t value;
  nv_cb1_reset(&c);assert(c.state && c.state->max_requested_bpc==12);
@@ -76,9 +76,16 @@ int main(void){
  assert(nv_cb1_get_property(&c,c.state,&tmds,&value)==0 && value==1);
  assert(nv_cb1_set_property(&c,c.state,&tmds,0)==-EINVAL);
  c.status=0;assert(nv_cb1_get_property(&c,c.state,&tmds,&value)==0 && value==0);c.status=1;
+ assert(nv_cb1_get_property(&c,c.state,&lldv,&value)==0 && value==0);
+ assert(nv_cb1_set_property(&c,c.state,&lldv,2)==-EINVAL);
+ assert(nv_cb1_set_property(&c,c.state,&lldv,1)==0);
+ for(unsigned i=0;i<27;i++) blob.data[i]=nvDoviLowLatencyPayload[i];
+ assert(nv_cb1_set_property(&c,c.state,&vsif,91)==-EINVAL && blob.refs==1);
+ blob.data[3]=2;
  assert(nv_cb1_set_property(&c,c.state,&vsif,91)==0 && blob.refs==2);
  struct drm_connector_state *copy=nv_cb1_duplicate_state(&c);
  assert(copy && blob.refs==3);
+ assert(nv_cb1_get_property(&c,copy,&lldv,&value)==0 && value==1);
  assert(nv_cb1_set_property(&c,c.state,&vsif,999)==-EINVAL && blob.refs==3);
  assert(nv_cb1_get_property(&c,c.state,&vsif,&value)==0 && value==91);
  assert(nv_cb1_set_property(&c,c.state,&vsif,0)==0 && blob.refs==2);
@@ -97,14 +104,16 @@ int main(void){
  assert(nv_cb1_set_property(&c,c.state,&other,1)==-EINVAL);
  alloc_fail=true;assert(!nv_cb1_duplicate_state(&c));alloc_fail=false;
  nv_cb1_destroy_state(&c,copy);assert(blob.refs==1);
- nv_cb1_reset(&c);assert(c.state && !nv_cb1_state(c.state)->vsif && !nv_cb1_state(c.state)->dither_off);
+ nv_cb1_reset(&c);assert(c.state && !nv_cb1_state(c.state)->vsif && !nv_cb1_state(c.state)->dither_off && !nv_cb1_state(c.state)->lldv_format);
  alloc_fail=true;nv_cb1_reset(&c);assert(!c.state);alloc_fail=false;
  assert(blob.refs==1);
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'check.c'; path.write_text(code)
-            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Wno-unused-parameter',str(path),'-o',str(Path(tmp)/'check')],check=True)
+            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Wno-unused-parameter','-I'+str(root.parent.parent/'src/common/inc'),
+                '-I'+str(root.parent.parent/'src/common/sdk/nvidia/inc'),
+                str(path),'-o',str(Path(tmp)/'check')],check=True)
             subprocess.run([str(Path(tmp)/'check')],check=True)
 
 

@@ -74,6 +74,48 @@ int main(void)
         assert(lround(actual[c]*1023)==lround(.8*1023));
         assert(lround(actual[4+c]*1023)<=(long)floor(pq(50)*1023));
     }
+    /* Render HDR10, both LLDV depths, then HDR10 again on an offscreen surface. */
+    /* The packed test uses a known linear picture on the same renderer. */
+    pl_tex linear=pl_tex_create(gl->gpu,pl_tex_params(.w=2,.h=2,.format=fmt,.sampleable=true,.initial_data=pixels));
+    pl_fmt rgba8=pl_find_fmt(gl->gpu,PL_FMT_UNORM,4,8,8,PL_FMT_CAP_RENDERABLE);assert(rgba8);
+    pl_tex carrier=pl_tex_create(gl->gpu,pl_tex_params(.w=2,.h=2,.format=rgba8,.renderable=true));
+    assert(linear && carrier);
+    pl_tex sdr_target=pl_tex_create(gl->gpu,pl_tex_params(.w=2,.h=2,.format=fmt,.renderable=true));
+    assert(sdr_target);
+    const struct dvbridge_policy sdr={.revision=policy.revision,.mode=DVBRIDGE_MODE_SDR};
+    struct pl_frame sdr_frame=frame;sdr_frame.repr.alpha=PL_ALPHA_NONE;
+    const struct dvbridge_geometry native={2,2,0,0,2,2,2,2};
+    float sdr_before[8], sdr_after[8];
+    id.picture++;
+    assert(dvbridge_render_hdr10_policy_direct(r,&sdr,&id,&sdr_frame,m,bytes,0,0,native,sdr_target,false,true,10));
+    read_pixels(gl->gpu,sdr_target,sdr_before);
+    assert(dvbridge_render_policy_commit(r,&id,sdr_target));
+
+    policy.tv.peak_nits=1000;policy.expert_output_limited=true;
+    const struct dvbridge_geometry raster={2,2,0,0,3840,2160};
+    float before[8], after[8];
+    id.picture++;
+    assert(dvbridge_render_hdr10_policy_direct(r,&policy,&id,&frame,m,bytes,0,0,raster,output,false,true,10));
+    read_pixels(gl->gpu,output,before);
+    assert(dvbridge_render_policy_commit(r,&id,output));
+
+    assert(dvbridge_pack_player_led_422(r,&policy,linear,carrier,10,false));
+    assert(dvbridge_pack_player_led_422(r,&policy,linear,carrier,12,false));
+    assert(!dvbridge_render_candidate(r));
+
+    id.picture++;
+    assert(dvbridge_render_hdr10_policy_direct(r,&policy,&id,&frame,m,bytes,0,0,raster,output,false,true,10));
+    read_pixels(gl->gpu,output,after);
+    assert(!memcmp(before,after,sizeof(before)));
+    assert(dvbridge_render_policy_commit(r,&id,output));
+    id.picture++;
+    assert(dvbridge_render_hdr10_policy_direct(r,&sdr,&id,&sdr_frame,m,bytes,0,0,native,sdr_target,false,true,10));
+    read_pixels(gl->gpu,sdr_target,sdr_after);
+    assert(!memcmp(sdr_before,sdr_after,sizeof(sdr_before)));
+    assert(dvbridge_render_policy_commit(r,&id,sdr_target));
+    pl_tex_destroy(gl->gpu,&sdr_target);
+    pl_tex_destroy(gl->gpu,&carrier);pl_tex_destroy(gl->gpu,&linear);
+
     assert(!memcmp(m,original,bytes));
     av_free(original);av_free(m);dvbridge_renderer_destroy(r);
     pl_tex_destroy(gl->gpu,&input);pl_tex_destroy(gl->gpu,&output);pl_opengl_destroy(&gl);

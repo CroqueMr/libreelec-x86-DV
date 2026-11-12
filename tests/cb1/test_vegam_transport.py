@@ -140,9 +140,11 @@ struct amdgpu_device { struct { struct dc *dc; } dm; };
 struct link { int connector_signal; };
 struct amdgpu_dm_connector {
  struct { void *dev; int connector_type;struct {unsigned id;}base; } base;
- struct link *dc_link; void *dv_standard_property,*hdr10_deep_color_property;
+ struct link *dc_link; void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property;
 };
-static bool dv_standard;
+struct drm_prop_enum_list { unsigned value; const char *name; };
+#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
+static bool dv_standard,dv_lldv;
 static int dv_properties,hdr_properties;
 #define drm_info(...) ((void)0)
 #define drm_to_adev(p) ((struct amdgpu_device *)(p))
@@ -150,6 +152,9 @@ static void *drm_property_create_bool(void *dev,int flags,const char *name)
 { (void)dev;(void)flags; if (!strcmp(name,"DVBRIDGE_DV_STANDARD_LAB")) ++dv_properties;
  else if (!strcmp(name,"DVBRIDGE_HDR10_DEEP_COLOR")) ++hdr_properties;
  return &dv_properties; }
+static void *drm_property_create_enum(void *dev,int flags,const char *name,
+ const struct drm_prop_enum_list *formats,size_t count)
+{ (void)formats;(void)count;return drm_property_create_bool(dev,flags,name); }
 static void drm_object_attach_property(void *base,void *property,int value)
 { (void)base;(void)property;(void)value; }
 '''

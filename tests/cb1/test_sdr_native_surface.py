@@ -49,6 +49,7 @@ struct CDVBridgeGLES {
  std::shared_ptr<Context> m_context;pl_opengl m_gl{};pl_log m_log{};pl_renderer m_renderer{};
  dvbridge_gl_packer* m_packer{};pl_tex m_scanout{};
  bool m_hdr10=false,m_pending=false,m_prepared=false,m_live=true;
+ struct {void reset(){}} m_playerLedCpu;
  unsigned m_scanoutFramebuffer=99,m_outputBits=0;struct{}m_failedIdentity;
  bool Failure(const char*){return false;}
  bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context={},bool sdr=false) INITIALIZE

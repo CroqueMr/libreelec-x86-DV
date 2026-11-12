@@ -149,7 +149,9 @@ struct drm_connector { int connector_type; struct drm_display_info display_info;
 struct amdgpu_dm_connector { struct drm_connector base; void *hdr10_deep_color_property; };
 struct drm_connector_state { struct drm_connector *connector; void *crtc; unsigned max_requested_bpc;
  int colorspace; struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata; };
-struct dm_connector_state { struct drm_connector_state base; bool hdr10_deep_color,dv_standard; };
+struct dm_connector_state { struct drm_connector_state base; bool hdr10_deep_color,dv_standard; unsigned lldv_format; };
+static bool amdgpu_dm_dv_transport(const struct dm_connector_state *s)
+{ return s->dv_standard || s->lldv_format; }
 struct dc_link { enum signal_type connector_signal; };
 struct dc_crtc_timing { int pixel_encoding; enum dc_color_depth display_color_depth; unsigned pix_clk_100hz; };
 struct dc_stream_state { enum signal_type signal; struct dc_link *link; struct dc_crtc_timing timing; bool dv_standard; };
@@ -291,6 +293,7 @@ int main(void) {
                  'intel_hdmi_output_format', 'intel_hdmi_compute_output_format',
                  'intel_dvbridge_hdr_deep_requested', 'intel_hdmi_compute_formats')
         config = function(source, 'intel_hdmi_compute_config')
+        transport = next(line for line in config.splitlines() if 'lldv =' in line)
         admission = config.split('/* This opt-in', 1)[1].split('pipe_config->has_audio', 1)[0]
         admission = '/* This opt-in' + admission
         final_guard = config.split('\tret = intel_hdmi_compute_formats(', 1)[1]
@@ -303,6 +306,7 @@ int main(void) {
 #define min(a,b) ((a)<(b)?(a):(b))
 #define max(a,b) ((a)>(b)?(a):(b))
 #define DIV_ROUND_CLOSEST(a,b) (((a)+(b)/2)/(b))
+typedef unsigned char u8;
 #define DISPLAY_VER(d) ((d)->version)
 #define HAS_GMCH(d) (false)
 #define MISSING_CASE(x) ((void)(x))
@@ -323,7 +327,7 @@ struct drm_connector {struct drm_display_info display_info;bool ycbcr_420_allowe
 struct intel_connector {struct drm_connector base;int dv_log_limit;};
 struct drm_connector_state {struct drm_connector *connector;unsigned max_requested_bpc;int colorspace;
  struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata;};
-struct intel_digital_connector_state {struct drm_connector_state base;bool dv_hdr10_deep_color,dv_lab_standard;};
+struct intel_digital_connector_state {struct drm_connector_state base;bool dv_hdr10_deep_color,dv_lab_standard;unsigned lldv_format;};
 struct drm_display_mode {int crtc_clock,flags;};
 struct intel_display {int version;void *drm;struct{bool skylake,kabylake;}platform;};
 struct intel_encoder {int limit;struct intel_connector *connector;};
@@ -353,6 +357,7 @@ static int native_config(struct intel_encoder *encoder,struct intel_crtc_state *
  struct intel_display *display=&display_state;
  struct intel_connector *connector=encoder->connector;
  int ret;
+ @@TRANSPORT@@
  @@ADMISSION@@
  @@FINAL_GUARD@@
  return ret;
@@ -365,7 +370,7 @@ int main(void) {
  struct intel_digital_connector_state state={.base={&connector.base,10,DRM_MODE_COLORIMETRY_BT2020_RGB,&blob},
    .dv_hdr10_deep_color=true};
  struct intel_encoder encoder={600000,&connector};
- for(int scenario=0;scenario<30;++scenario) {
+ for(int scenario=0;scenario<31;++scenario) {
   struct intel_connector saved_connector=connector;
   struct intel_digital_connector_state saved_state=state;
   struct intel_crtc_state stream={.hw={.adjusted_mode={594000,0}},.pipe_bpp=30,
@@ -403,7 +408,7 @@ int main(void) {
   if(scenario>=24 && scenario<=25) {state.dv_hdr10_deep_color=false;state.base.hdr10plus_metadata=&state;}
   if(scenario==25) {display_state.version=10;state.base.max_requested_bpc=12;stream.pipe_bpp=36;
    connector.base.display_info.hdmi.y420_dc_modes=DRM_EDID_YCBCR420_DC_36;want_bpp=36;}
-  if(scenario>=26){
+  if(scenario>=26 && scenario<=29){
    display_state.version=9;display_state.platform.kabylake=true;state.base.max_requested_bpc=12;
    stream.pipe_bpp=36;stream.hw.adjusted_mode.crtc_clock=148500;encoder.limit=300000;
    connector.base.display_info.max_tmds_clock=300000;
@@ -414,6 +419,11 @@ int main(void) {
   if(scenario==28){connector.base.display_info.edid_hdmi_rgb444_dc_modes=0;want_result=-EINVAL;}
   if(scenario==29){stream.hw.adjusted_mode.crtc_clock=297000;
    connector.base.display_info.also420=false;want_result=-EINVAL;}
+  if(scenario==30){
+   state.lldv_format=1;state.dv_hdr10_deep_color=false;state.base.hdr_output_metadata=NULL;
+   state.base.max_requested_bpc=8;connector.base.display_info.also420=false;
+   connector.base.display_info.max_tmds_clock=340000;want_result=-EINVAL;
+  }
   int clock=stream.hw.adjusted_mode.crtc_clock;
   int result=native_config(&encoder,&stream,&state.base);
   if(result!=want_result) return 20+scenario;
@@ -431,6 +441,7 @@ int main(void) {
         functions = [f.replace('struct intel_hdmi *intel_hdmi =',
                                'struct intel_encoder *intel_hdmi =') for f in functions]
         self.compile_run(code.replace('@@FUNCTIONS@@', '\n'.join(functions))
+                         .replace('@@TRANSPORT@@', transport)
                          .replace('@@ADMISSION@@', admission)
                          .replace('@@FINAL_GUARD@@', final_guard))
 

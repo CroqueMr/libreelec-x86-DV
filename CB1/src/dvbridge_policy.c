@@ -33,13 +33,15 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
         tv->gamut < DVBRIDGE_GAMUT_UNSET || tv->gamut > DVBRIDGE_GAMUT_BT2020 ||
         !isfinite(tv->peak_nits) || tv->peak_nits < 0 || tv->peak_nits > 10000)
         return DVBRIDGE_POLICY_INVALID_VALUE;
+    const bool calibrated = policy->mode == DVBRIDGE_MODE_HDR10_EXPERT ||
+                            policy->mode == DVBRIDGE_MODE_PLAYER_LED;
     if (tv->peak_nits == 0 && tv->panel == DVBRIDGE_PANEL_UNSET &&
         tv->gamut == DVBRIDGE_GAMUT_UNSET)
-        return (policy->mode == DVBRIDGE_MODE_HDR10_EXPERT || policy->mode == DVBRIDGE_MODE_ENHANCED_DV) ?
+        return (calibrated || policy->mode == DVBRIDGE_MODE_ENHANCED_DV) ?
             DVBRIDGE_POLICY_TV_PROFILE_REQUIRED : DVBRIDGE_POLICY_VALID;
     if (tv->gamut == DVBRIDGE_GAMUT_UNSET)
         return DVBRIDGE_POLICY_TV_PROFILE_REQUIRED;
-    if(policy->mode==DVBRIDGE_MODE_HDR10_EXPERT &&
+    if(calibrated &&
        (tv->peak_nits<50 || !isfinite(policy->expert_black_nits) ||
         policy->expert_black_nits<0 || policy->expert_black_nits>.5 ||
         policy->expert_black_nits>=tv->peak_nits ||

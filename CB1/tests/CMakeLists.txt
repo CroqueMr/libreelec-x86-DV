@@ -1,17 +1,18 @@
 add_executable(trim_contract trim_contract.c)
-foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus_dovi cmv40 hdr10_expert_plan hdr10_expert_continuity hdr10_expert_composition)
+foreach(name hdr10plus hdr10plus_curve dv_hdr10plus hdr10plus_analysis hdr10plus_dovi cmv40 hdr10_expert_plan hdr10_expert_continuity hdr10_expert_composition player_led_pack)
   add_executable(${name} ${name}.c)
   target_link_libraries(${name} PRIVATE dvbridge_core)
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
 target_link_options(hdr10plus_analysis PRIVATE "-Wl,--wrap=glClientWaitSync")
+target_link_options(player_led_pack PRIVATE "-Wl,--wrap=glDispatchCompute")
 set_tests_properties(hdr10plus_analysis PROPERTIES ENVIRONMENT
   "LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;EGL_PLATFORM=surfaceless;ASAN_OPTIONS=detect_leaks=1;UBSAN_OPTIONS=halt_on_error=1")
 target_include_directories(trim_contract PRIVATE "${DVBRIDGE_SOURCE_DIR}")
 target_link_libraries(trim_contract PRIVATE m)
 add_test(NAME trim_contract COMMAND trim_contract)
 
-foreach(name master_spatial_storage source_chroma frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
+foreach(name player_led_cpu master_spatial_storage source_chroma frame_geometry task3_native metadata_transport overlay_metadata cm4_bounds presentation_transaction
              placebo_mapping gles_pack gles_reshape render_lifecycle fel_queue fel_source_time dmabuf_layout metadata_bounds
              policy candidate_identity metadata_eligibility hdr10_ai_contract hdr10_ai_wire_order creative_mapping creative_descriptors creative_cm4 shader_cache dmabuf_identity profile5_direct master_ipt)
   add_executable(${name} ${name}.c)
@@ -23,7 +24,7 @@ foreach(name master_spatial_storage source_chroma frame_geometry task3_native me
     add_test(NAME ${name} COMMAND ${name})
   endif()
 endforeach()
-set_tests_properties(master_spatial_storage PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(player_led_cpu master_spatial_storage PROPERTIES SKIP_RETURN_CODE 77)
 add_executable(gui_quad gui_quad.c)
 add_executable(gui_retry gui_retry.c)
 target_link_libraries(gui_retry PRIVATE dvbridge_core)

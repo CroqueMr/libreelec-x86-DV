@@ -54,6 +54,7 @@ enum {LOGINFO};
 struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;} const void* Data()const{return this;}};
 struct dvbridge_geometry {};
 struct CDVBridgeGLES {
+ bool m_playerLed{};
  enum class FrameStatus{Ready,Pending,Busy,Failed,Reused,Unsupported};
  struct Layer {DVBRIDGE::Binding binding;double pts=1;struct {int profile=7;}sourceInfo;};
  struct Context {bool bad=false;bool Quarantined()const{return bad;}
@@ -63,6 +64,7 @@ struct CDVBridgeGLES {
  bool m_asyncEligible=true,m_firstFrame=false,m_fallback=false,m_advanced=false;
  uint64_t m_diagnosticStream=0,m_prepares=5,m_directFrames=5,m_presentations=4,
  m_failedPresentations=1,m_lastSummary=10,m_lastReported=5,m_rawELImports=3,m_rawELHits=7;
+ uint64_t m_lastPresentedSourcePicture=13,m_nonadvancingSource=2,m_sourceGaps=7;
  DVBRIDGE::DiagnosticFailures m_failures;
  RESET_MEMBER
  DVBRIDGE::Binding m_pendingBinding;DVBRIDGE::OutputPreferences m_requested;
@@ -130,6 +132,7 @@ int main(){
  assert(renderer.m_prepares==0 && renderer.m_directFrames==0 && renderer.m_presentations==0);
  assert(renderer.m_failedPresentations==0 && renderer.m_failures.Count()==0 && renderer.m_firstFrame);
  assert(renderer.m_rawELImports==0 && renderer.m_rawELHits==0);
+ assert(renderer.m_lastPresentedSourcePicture==0 && renderer.m_nonadvancingSource==0 && renderer.m_sourceGaps==0);
 ''')
 
     def test_previous_file_summary_identifies_its_counter_owner(self):

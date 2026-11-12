@@ -25,7 +25,7 @@ class PascalBuild(unittest.TestCase):
                     path = root/name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(data)
             (closed/'kernel/nvidia-drm/nvidia-drm-linux.c').write_bytes(b'closed-flavour-license')
-            for name in ('nvkms-cb1-vsif.h', 'nvkms-cb1-hdr10plus.h'):
+            for name in ('nvkms-cb1-vsif.h', 'nvkms-cb1-hdr10plus.h', 'nvkms-dv-vsif.h'):
                 path = public/'src/common/inc'/name; path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b'private-header')
             path = public/'src/nvidia-modeset/kapi/interface/nvkms-kapi.h'

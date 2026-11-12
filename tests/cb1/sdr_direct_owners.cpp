@@ -31,6 +31,7 @@ extern "C" {
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 #include "utils/DVBridgeDiagnosticState.h"
 #include "utils/Crc32.h"
+#include "utils/DVBridgeLldv.h"
 #include "cores/VideoProcessingInfo.h"
 #include "cores/VideoSourceSideData.h"
 namespace KODI::RENDERING::CAPTURE {struct ReadbackBuffer;}
@@ -61,6 +62,8 @@ struct StreamTelemetry {
 };
 }
 class VideoSourceSideData;
+struct gbm_bo;
+struct gbm_device;
 @CLASS@
 namespace {
 unsigned directCalls=0,stagedCalls=0,resolveCalls=0,releaseCalls=0,commitCalls=0,queryCalls=0;
@@ -93,10 +96,16 @@ bool CDVBridgeGLES::Context::Quarantined()const{return m_state->quarantined;}
 bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
+struct CDVBridgeGLES::PlayerLedCpu {
+  DVBRIDGE::SourceBinding source;
+  uint64_t generation{}, revision{};
+  bool Backpressured() const {return false;}
+};
+CDVBridgeGLES::CDVBridgeGLES(bool playerLed):m_playerLed(playerLed){}
 CDVBridgeGLES::~CDVBridgeGLES()=default;
 bool CDVBridgeGLES::Failure(const char*){return false;}
 void CDVBridgeGLES::BeginDiagnosticStream(uint64_t){}
-void CDVBridgeGLES::CountPresentation(bool){}
+void CDVBridgeGLES::CountPresentation(bool,uint64_t,uint64_t){}
 void CDVBridgeGLES::ReportHDR10Plus(){}
 bool CDVBridgeGLES::Presented(bool){return false;}
 bool CDVBridgeGLES::PollReady(){return m_prepared;}
@@ -105,6 +114,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::BeginHDR10Plus(){return FrameStatus::F
 void CDVBridgeGLES::CaptureMetadata(const CDVMetadataBuffer&,bool){m_pendingInfo=CDVPlaybackInfo::SDR;}
 DVBRIDGE::SourceBinding CDVBridgeGLES::SelectionIdentity(DVBRIDGE::SourceBinding b,const DVBRIDGE::OutputPreferences&,dvbridge_mode)const{return b;}
 void CDVBridgeGLES::Cancel(){m_pending=m_prepared=m_packed=false;m_submission={};}
+bool CDVBridgeGLES::PreparePlayerLed(const pl_frame&,const CDVMetadataBuffer&,
+    dvbridge_geometry,const dvbridge_policy&,double,double){assert(false);return false;}
 const dvbridge_hdr10_policy_output*CDVBridgeGLES::HDR10Output()const{return &pending;}
 @METHODS@
 extern "C" {

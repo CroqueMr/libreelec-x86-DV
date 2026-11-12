@@ -119,14 +119,18 @@ void dvbridge_render_dv_policy_cancel(int*){++driverEpoch;}
 void dvbridge_render_policy_cancel(int*){++driverEpoch;}
 void dvbridge_renderer_reset(int*){++resets;++driverEpoch;}
 void glDeleteFramebuffers(int,unsigned*){}
+void glDeleteTextures(int,unsigned*){}
 void dvbridge_gl_packer_destroy(int*){}
 void pl_tex_destroy(int,int*){}
 struct CDVBridgeGLES {
  struct Context{unsigned epoch=1;void ClearNextHDR10AI(){++epoch;}void Detach(int*){}};
+ struct {void reset(){}} m_playerLedCpu;
  std::shared_ptr<Context>m_context=std::make_shared<Context>();
  struct GL{int gpu=1;}gl;GL*m_gl=&gl;
  struct{int texture=1,degamma=2,pq=3;}m_nativeOverlay;
  int m_scanout=1,*m_renderer=nullptr,*m_packer=nullptr,*m_hdr10plusAnalysis=nullptr;
+ int m_playerLedSource{},m_playerLedFitted{},m_playerLedCarrier{};
+ unsigned m_playerLedTexture{};
  unsigned m_framebuffer=0,m_pendingInfo=8;bool m_live=true,m_advanced=true,m_dvPolicyActive=false;
  bool m_prepared=true,m_packed=true,m_pending=true,m_asyncEligible=true,m_direct=true;
  bool m_aiOutputAccepted=true,m_aiFrame=true,m_firstFrame=false;
@@ -135,6 +139,7 @@ struct CDVBridgeGLES {
  std::vector<int>m_rawELCache{1,2};
  uint64_t m_diagnosticStream=7,m_prepares=0,m_directFrames=0,m_presentations=120,m_failedPresentations=0;
  uint64_t m_lastSummary=0,m_lastReported=0,m_rawELImports=0,m_rawELHits=0;
+ uint64_t m_lastPresentedSourcePicture=0,m_nonadvancingSource=0,m_sourceGaps=0;
  struct Binding{uint64_t stream=7,picture=31,revision=11;}m_pendingBinding;
  struct{uint64_t revision=13;}m_requested;
  int m_effectiveMode=8;
@@ -143,7 +148,7 @@ struct CDVBridgeGLES {
  unsigned m_hdr10plusSubmits=0,m_pendingHDR10Fallback=6;std::array<double,4>m_hdr10plusLight{};
  @MEMBER@
  void ClearFELPrefetch(){}
- void Summary(const char*);void CountPresentation(bool);void BeginDiagnosticStream(uint64_t);
+ void Summary(const char*);void CountPresentation(bool,uint64_t=0,uint64_t=0);void BeginDiagnosticStream(uint64_t);
  void Reset();void Cancel();~CDVBridgeGLES();
 };
 namespace DVBRIDGE{struct StreamTelemetry{static void ClearOutput(){}};}
@@ -164,11 +169,13 @@ int main(){
   {
    CDVBridgeGLES r;r.CountPresentation(true); // Not120 boundary yet.
    assert(CLog::lines.size()==count);
-   r.m_presentations=119;testNow=30000;r.CountPresentation(true);
+   r.m_presentations=119;r.m_prepared=false;testNow=30000;r.CountPresentation(true,7);r.m_prepared=true;
    assert(CLog::lines.size()==++count && "Actual renderer periodic summary must survive full Normal/Progress ring");
    has(CLog::lines.back(),"advanced renderer summary: presented=120");
-   has(CLog::lines.back(),"counter_stream=7 stream=7 picture=31 revision=11 policy=13");
+   has(CLog::lines.back(),"counter_stream=7 source_picture=0 nonadvancing_source=0 source_gaps=0 stream=7 picture=31 revision=11 policy=13");
    assert(!DiagnosticLog(LOGINFO,"Normal still full") && CLog::lines.size()==count);
+   r.CountPresentation(true,6);
+   assert(r.m_presentations==120 && CLog::lines.size()==count); // A retiring old stream is not new progress.
    r.Summary("summary");assert(CLog::lines.size()==count); // Same count is not a new periodic report.
    testNow=30001;r.m_presentations=239;r.CountPresentation(true);
    assert(CLog::lines.size()==count); // No new30s opportunity.
@@ -208,10 +215,13 @@ int main(){
   CDVBridgeGLES r;r.Reset();auto count=CLog::lines.size();
   ObserveDiagnostic(9,1,17,19,"successor",true,false);r.BeginDiagnosticStream(9);
   assert(CLog::lines.size()==count+1);has(CLog::lines.back(),"renderer stream-end:");
-  has(CLog::lines.back(),"counter_stream=7 stream=9 picture=1 revision=17 policy=19");
+  has(CLog::lines.back(),"counter_stream=7 source_picture=0 nonadvancing_source=0 source_gaps=0 stream=9 picture=1 revision=17 policy=19");
   assert(r.m_diagnosticStream==9&&r.m_presentations==0&&r.m_failedPresentations==0&&r.m_failures.Count()==0);
   r.Reset();assert(CLog::lines.size()==count+2); // New domain cannot reuse prior reset key.
   r.BeginDiagnosticStream(0);r.BeginDiagnosticStream(9);assert(CLog::lines.size()==count+2);
+  r.CountPresentation(true,9,20);r.CountPresentation(true,9,20);r.CountPresentation(true,9,23);
+  r.CountPresentation(true,7,900);
+  assert(r.m_lastPresentedSourcePicture==23&&r.m_nonadvancingSource==1&&r.m_sourceGaps==2);
  }
  // All counter records retain the one formatter's byte/newline/suffix limits.
  std::string longEvent(10000,'x');longEvent[1]='\n';longEvent[2]='\r';longEvent[3]='\0';
@@ -655,6 +665,8 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
+  int m_dvLldvStatus{};
+  int GetLldvConnectorStatus() const {return m_dvLldvStatus;}
   bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
   bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
   bool SupportsNativeDVOutput(bool current=true) const {return !current || m_DRM->rate<=60;}

@@ -77,8 +77,8 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t revision=1;return ++
  template<class... T>void DiagnosticLog(T...){}
  struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};static Snapshot Read(){return {};}};}
 HEADER
-namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
+namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR,PlayerLed};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 enum class StreamHdrType{HDR_TYPE_NONE,HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
@@ -90,12 +90,13 @@ struct CDVPlaybackModes {
  static bool MenuEnabled(){return true;}static StreamHdrType SourceType(){return source;}
  static bool ShowMenu(bool settingsMenu=false) MENU
  static std::string DefaultPlaybackLabel();
+ static std::string LldvPreferenceLabel(){return "LLDV format";}
 };
 LABEL
 struct Button {std::string label;std::string GetLabel2(){return label;}} button;
 enum class SettingType{Action};
-std::string actionValue(){std::string strText;auto m_pButton=&button;
- auto m_pSetting=std::make_shared<CSetting>();m_pSetting->id="dvbridge.playback";
+std::string actionValue(const char* setting="dvbridge.playback"){std::string strText;auto m_pButton=&button;
+ auto m_pSetting=std::make_shared<CSetting>();m_pSetting->id=setting;
  switch(SettingType::Action){case SettingType::Action: ACTION}return strText;}
 bool choose(StreamHdrType type,int index,bool settings=false){CDVPlaybackModes::source=type;dialog.selected=index;return CDVPlaybackModes::ShowMenu(settings);}
 int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::string scenario=argv[1];
@@ -140,10 +141,30 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   for(int method=0;method<3;++method){stored->ints["dvbridge.hdr10method"]=method;
    assert(actionValue()==std::to_string(method==0?40822:method==1?40823:40922));}
   stored->ints["dvbridge.outputmode"]=2;assert(actionValue()=="40814");
+  assert(actionValue("dvbridge.lldvformat")=="LLDV format");
  }
  if(scenario=="legacy-toggles"){
   auto before=FrameOutputSettings();stored->ints["dvbridge.encodedactivearea"]=1;stored->ints["dvbridge.masterfallback"]=1;
   stored->ints["dvbridge.optimizedgui"]=0;auto after=FrameOutputSettings();assert(before.SameValues(after)&&before.revision==after.revision);
+ }
+ if(scenario=="player-led"){
+  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,8,true));
+  assert(stored->ints["dvbridge.outputmode"]==7);
+  assert(actionValue()=="41221");
+  SelectOutputSettings();
+  stored->ints["dvbridge.cmv40"]=1;
+  auto preferences=FrameOutputSettings();
+  auto policy=preferences.Policy();
+  assert(PolicyCode(policy)==9 && preferences.ProfileValid(policy.mode));
+  assert(preferences.CMv40Options(policy.mode).mode==1);
+  OutputCapabilities caps;
+  caps.sourceKnown=caps.isDV=caps.processingKnown=caps.nativeDV=caps.hdr10=true;
+  for(auto& mode:caps.processing)mode={true,OutputReason::None};
+  assert(SelectOutput(preferences,caps).route==OutputRoute::Vanilla);
+  caps.playerLed=true;
+  assert(SelectOutput(preferences,caps).route==OutputRoute::PlayerLed);
+  caps.isDV=false;
+  assert(SelectOutput(preferences,caps).route==OutputRoute::Vanilla);
  }
  if(scenario=="strict"){
   OutputCapabilities caps;caps.sourceKnown=caps.isDV=caps.processingKnown=caps.hdr10=true;
@@ -164,7 +185,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
             for flags in ([],['-DCB1_TEST_NO_AI']):
                 built=subprocess.run(['c++','-std=c++20',*flags,'-I'+str(ROOT/'CB1/src'),'-I'+str(TREE/'xbmc'),str(code),'-o',str(binary)],capture_output=True,text=True)
                 self.assertEqual(built.returncode,0,built.stderr)
-                for scenario in ('default-edits','live','settings','label','legacy-toggles','strict'):
+                for scenario in ('default-edits','live','settings','label','legacy-toggles','strict','player-led'):
                     with self.subTest(flags=flags,scenario=scenario):
                         ran=subprocess.run([str(binary),scenario],capture_output=True,text=True)
                         self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)

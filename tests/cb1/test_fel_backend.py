@@ -35,7 +35,8 @@ enum pl_chroma_location {PL_CHROMA_UNKNOWN,PL_CHROMA_LEFT,PL_CHROMA_TOP_LEFT};
 enum AVChromaLocation {AVCHROMA_LOC_UNSPECIFIED,AVCHROMA_LOC_TOPLEFT};
 pl_chroma_location dvbridge_map_chroma(AVChromaLocation p) {return p==AVCHROMA_LOC_TOPLEFT?PL_CHROMA_TOP_LEFT:PL_CHROMA_UNKNOWN;}
 pl_chroma_location SourceChroma(AVChromaLocation source,unsigned profile) SOURCECHROMA
-constexpr int DVBRIDGE_MODE_STANDARD=0, DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_ENHANCED_DV=4;
+constexpr int DVBRIDGE_MODE_STANDARD=0, DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_ENHANCED_DV=4,
+              DVBRIDGE_MODE_PLAYER_LED=8;
 struct dvbridge_gl_plane {unsigned texture{};};
 struct AVBufferRef {unsigned char* data{};};
 AVBufferRef* av_buffer_ref(AVBufferRef* p) {return new AVBufferRef(*p);}

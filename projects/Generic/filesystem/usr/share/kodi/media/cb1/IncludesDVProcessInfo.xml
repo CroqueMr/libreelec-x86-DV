@@ -24,7 +24,7 @@
     <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.AdmissionReason))">$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]$INFO[Window(playerprocessinfo).Property(DV.AdmissionReason), · ]</value>
     <value>$INFO[Window(playerprocessinfo).Property(DV.RequestedPolicy)]$INFO[Window(playerprocessinfo).Property(DV.OutputStage), · ]</value>
   </variable>
-  <variable name="DVPrecisionLabel"><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.MinimumLinkBits))">Framebuffer / link min</value><value>Framebuffer</value></variable>
+  <variable name="DVPrecisionLabel"><value condition="String.StartsWith(Window(playerprocessinfo).Property(DV.SignalIntent),LLDV)">Useful / HDMI bits</value><value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.MinimumLinkBits))">Framebuffer / link min</value><value>Framebuffer</value></variable>
   <!-- Column headings: what the file carries, what CB1 does with it and what leaves the box. -->
   <variable name="DVInputAudio">
     <value condition="!Integer.IsGreater(VideoPlayer.AudioStreamCount,0)">No audio track</value>
@@ -45,6 +45,7 @@
   </variable>
   <!-- The output type the display accepted, as Kodi's native telemetry reports it. -->
   <variable name="DVOutputFormat">
+    <value condition="String.IsEqual(Player.Process(videooutputhdrtype),dolbyvision) + String.StartsWith(Window(playerprocessinfo).Property(DV.SignalIntent),LLDV)">Dolby Vision · Player-Led</value>
     <value condition="String.IsEqual(Player.Process(videooutputhdrtype),dolbyvision) + String.StartsWith(Window(playerprocessinfo).Property(DV.SignalIntent),TV-Led)">Dolby Vision · TV-Led</value>
     <value condition="String.IsEqual(Player.Process(videooutputhdrtype),dolbyvision)">Dolby Vision</value>
     <value condition="String.IsEqual(Player.Process(videooutputhdrtype),hdr10plus)">HDR10+</value>
@@ -265,6 +266,7 @@
       <include content="DVInfoRow"><param name="label" value="Decoded surface"/><param name="value" value="$INFO[Player.Process(pixformat)]"/><param name="visible" value="!String.IsEmpty(Player.Process(pixformat))"/></include>
       <include content="DVInfoRow"><param name="label" value="Deinterlacing"/><param name="value" value="$INFO[Player.Process(deintmethod)]"/><param name="visible" value="String.IsEqual(Player.Process(videoscantype),i) + !String.IsEmpty(Player.Process(deintmethod))"/></include>
       <include content="DVInfoRow"><param name="label" value="Creative trims"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CreativeTrims)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="Mapping metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.LocalCM4)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.LocalCM4))"/></include>
       <!-- The upscaler is set only while the FEL is reconstructed, so it shares the FEL row. -->
       <include content="DVInfoRow"><param name="label" value="FEL / upscaling"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FEL)]$INFO[Window(playerprocessinfo).Property(DV.FELUpscaling), · ]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + String.IsEqual(Window(playerprocessinfo).Property(DV.EL),Yes) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="$VAR[DVMappingLabel]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TVProfile)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A)"/></include>

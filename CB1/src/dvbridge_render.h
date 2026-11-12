@@ -12,7 +12,7 @@ struct dvbridge_native_overlay;
 
 struct cb1_ai_result;
 #define DVBRIDGE_L2_TRIMS_API 1
-/* Next-picture authored Standard/Master output only (default false).
+/* Next-picture Standard/Master metadata and offline player-led mapping.
  * Reconstruction still consumes the original metadata. Adaptive/AI clears it. */
 void dvbridge_renderer_set_l2_trims_disabled(struct dvbridge_renderer *renderer,bool disabled);
 #define DVBRIDGE_CMV40_API 1
@@ -37,6 +37,34 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     const struct pl_frame *source,const void *metadata,size_t bytes,double pts,double el_pts,
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
     const struct dvbridge_native_overlay *overlay);
+/* Offline source-size RGBA32F. RGB is linear in the target gamut, with
+ * 1.0 at policy->tv.peak_nits. L5 masks the source raster without changing
+ * its size or placement. Pixels and applied metadata are usable only on
+ * CB1_MASTER_READY. CM4 and L2 options affect mapping only. Use a dedicated
+ * renderer and reset it after a GPU failure. */
+enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,
+    const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
+    struct dvbridge_creative_plan *applied);
+/* The same full-raster render to a coherent RGBA32F host buffer.
+ * scratch is a 4K RGBA8 render target. The caller fences before reading host. */
+enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex scratch,pl_buf host,struct dvbridge_creative_plan *applied,
+    unsigned active_rows[2]);
+/* Fit the linear movie into the final raster, returning source on identity.
+ * The caller owns the optional fitted texture. */
+pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *renderer, pl_tex source,
+    pl_tex *fitted, struct dvbridge_geometry geometry);
+/* Offline byte carrier. The input must be the successful linear mapping for
+ * this policy, fitted to the final even-width raster. The output is a separate
+ * linear RGBA8 texture with 12-bit fields and 10 or 12 useful bits. Both
+ * surfaces are GLES 2D textures on the renderer's current context. GLES
+ * 3.1 with an immutable carrier allows paired compute packing. No RPU,
+ * presentation state or HDMI signalling is generated. Use only on success. */
+bool dvbridge_pack_player_led_422(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
+    unsigned bits, bool flip_y);
 #define CB1_AI_OVERLAY_API 1
 #define CB1_HDR10_AI_RENDER_API 1
 /* Borrowed intermediate. DV preparation may still need its existing poll;

@@ -11,7 +11,7 @@ class SinkRateTests(unittest.TestCase):
         source=(TREE/"xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp").read_text()
         start=source.index("    const auto sink = display->GetDolbyVisionCaps();",
                            source.index("bool CWinSystemGbmGLESContext::BeginDVBridge()"))
-        end=source.index("    if (!m_dvState.Capture",start)
+        end=source.index("    if (!(playerLed ? m_dvState.CapturePlayerLed",start)
         native=source[start:end]
         code=r'''
 #include <cassert>
@@ -22,6 +22,7 @@ struct Mode{unsigned clock,htotal,vtotal,vdisplay;};
 struct DRM{const Mode*mode;const Mode*GetSelectedMode()const{return mode;}};
 bool admitted(Display*display,const Mode*selected){
  DRM driver{selected};auto*drm=&driver;
+ const bool playerLed=false;
  const auto failure=[](const char*,const char*){return false;};
  BODY
  return true;

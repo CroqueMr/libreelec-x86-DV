@@ -133,7 +133,7 @@ int main(){
 #include <cassert>
 struct CDVPlaybackInfo {enum {HDMI=1};};
 struct S {
- struct {unsigned flags=1;bool authoredLegacy=false,l2TrimsDisabled=false,cmv40Appended=false;} output;
+ struct {unsigned flags=1;bool authoredLegacy=false,l2TrimsDisabled=false,cmv40Appended=false,lldv=false;} output;
  bool metadata=true;std::bitset<256> blocks;
  std::bitset<256> TransmittedBlocks()const BODY
 };
@@ -144,6 +144,8 @@ int main(){
  auto sent=s.TransmittedBlocks();assert(sent[1] && sent[2] && sent[3] && sent[9] && sent[11] && sent[254]);
  assert(!s.blocks[254]);
  s.output.l2TrimsDisabled=true;assert(!s.TransmittedBlocks()[2]);
+ s.output.lldv=true;assert(s.TransmittedBlocks().none());
+ s.output.lldv=false;
  s.output.flags=0;assert(s.TransmittedBlocks().none());
 }
 '''.replace('BODY',method)

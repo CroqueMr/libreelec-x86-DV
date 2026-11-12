@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <libplacebo/colorspace.h>
+#include "cb1_cmv40.h"
 #include "dvbridge_policy.h"
 #ifdef __cplusplus
 extern "C" {
@@ -110,12 +111,14 @@ struct dvbridge_creative_plan {
     uint64_t source_hash;
     size_t source_bytes;
     bool cm4, l1_present, l3_present, anchor_present, mastering_primaries_present;
+    bool analysis_valid; /* Effective L1 is usable, including an all-zero scene. */
     struct dvbridge_cm4_anchor cm4_lower, cm4_upper;
     struct dvbridge_cm4_target cm4_output;
     enum dvbridge_cm4_target_status cm4_targets;
     double cm4_weight; /* Bounded PQ distance between matching target anchors. */
     struct dvbridge_creative_coverage l2_coverage, l8_coverage;
     struct dvbridge_l2_detail l2_detail; /* Expert only; other modes retain zero. */
+    enum cb1_cmv40_status cmv40_status; /* Offline player-led metadata decision. */
 };
 enum dvbridge_creative_status dvbridge_creative_resolve(struct dvbridge_creative_plan *out,
     const void *metadata, size_t bytes, const struct dvbridge_policy *policy);

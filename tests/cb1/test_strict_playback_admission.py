@@ -139,13 +139,13 @@ int main(){using D=HDR10AISource::Decision;std::vector<CDVBridgeGLES::Layer> que
 #include <cassert>
 #include <mutex>
 #define CB1_HAS_HDR10_AI
-constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_SDR=7;
+constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_SDR=7,DVBRIDGE_MODE_PLAYER_LED=8;
 namespace DVBRIDGE {
 enum class OutputRoute{Vanilla,NativeDV};enum class OutputReason{None,ActivationFailed,ProcessingPending};
 enum class HDR10SourceMode{ReferenceDV,HDR10PlusDV};
 struct Binding{int stream=1,revision=2;bool Valid()const{return true;}};
 struct OutputCapabilities{bool nativeDV=true,hdr10=true,isHDR10=false,isHLG=false,hdr10PlusSource=false;
- struct{bool usable=true;OutputReason reason{};}processing[8];};
+ struct{bool usable=true;OutputReason reason{};}processing[9];};
 struct OutputPreferences{int revision=3;bool allowMasterFallback=true;auto HDR10Mode(bool)const{return HDR10SourceMode::ReferenceDV;}};
 struct OutputSelection{OutputRoute route=OutputRoute::NativeDV;struct{int mode=5;bool master_ipt=true;}policy;OutputReason reason{};};
 OutputSelection SelectOutput(const OutputPreferences&,const OutputCapabilities&){return {};}
@@ -154,7 +154,7 @@ using SourceBinding=Binding;
 struct VideoPicture{DVBRIDGE::Binding doviSourceBinding;struct{DVBRIDGE::Binding Binding()const{return {};}}doviMetadata;};
 struct Window{
  std::mutex m_dvCapabilityMutex;int m_dvActivationStream=1,m_dvActivationPolicy=3;
- bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false;
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
  struct{bool Active(int,int,int)const{return true;}}m_masterSafety;
  bool m_aiReady=false,m_aiFallback=false;DVBRIDGE::Binding m_aiActivation;int m_aiPolicy=3;
