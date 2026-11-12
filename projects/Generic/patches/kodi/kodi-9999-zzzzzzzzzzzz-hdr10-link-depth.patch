@@ -1,7 +1,7 @@
 Subject: [PATCH] Reject HDR10 conversion when HDMI depth is limited
 
 diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
-index bada925..66d8407 100644
+index bada925..f266655 100644
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26569,3 +26569,7 @@ msgstr ""
@@ -10,7 +10,7 @@ index bada925..66d8407 100644
  msgstr ""
 +
 +msgctxt "#41223"
-+msgid "HDR10 rendering requires 10-bit HDMI"
++msgid "Requires 10-bit HDMI"
 +msgstr ""
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
 index e4d6e95..c95ce75 100644
@@ -116,6 +116,23 @@ index cfcb899..1e0f77d 100644
    // set desired refresh rate
    if (m_CurrentVideo.id < 0 && m_playerOptions.fullscreen &&
        CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot() && hint.fpsrate != 0 &&
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+index 8e92033..5979ff0 100644
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -370,6 +370,12 @@ void DVBRIDGE::PlaybackNotification::RenderingUnavailable(OutputReason reason)
+ {
+   const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+   const int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
++  if (reason == OutputReason::HDR10LinkDepthTooLow)
++  {
++    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
++        localizer.Get(40822), localizer.Get(reasonId), 3500, false);
++    return;
++  }
+   CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
+       localizer.Get(40863),localizer.Get(40875)+(reasonId ? " "+localizer.Get(reasonId) : ""),3000,false);
+ }
 diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
 index 3552aba..dba4ddf 100644
 --- a/xbmc/settings/SettingConditions.cpp
