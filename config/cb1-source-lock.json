@@ -10,7 +10,7 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "67ad0dc98bdcea11da51a444bc5648a491a8134ff83109fc58fd24f41ca228b3",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "9a06bb80c990c85eef039eceb29e74399948d130f715ceb82553f799d43686f8",
     "tests/cb1/test_pascal_packages.py": "a67a019498903b10cf63d2336c887f44d594468b96d85214d6bfadb19b804d3a",
     "tests/cb1/test_nvidia_pascal_build.py": "b001ffa5a15086356fe7e7d49f3917ea40a75b0eeb36ed9a18a4885da8a1cbb8",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",

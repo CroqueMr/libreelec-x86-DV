@@ -346,7 +346,7 @@ index e4950aa..0fc38be 100644
      std::lock_guard<std::mutex> lock(m_mutex);
      m_nativeActive = true;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-index 46fd28f..bef834f 100644
+index 46fd28f..0510de8 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 @@ -1,5 +1,6 @@
@@ -356,7 +356,7 @@ index 46fd28f..bef834f 100644
  #include "VideoShaders/VideoFilterShaderGLES.h"
  #include "utils/DVBridgeDiagnosticLog.h"
  #include "DVBridgeShaders.h"
-@@ -21,6 +22,7 @@ extern "C"
+@@ -21,11 +22,13 @@ extern "C"
  #include "dvbridge_placebo.h"
  #include "dvbridge_cache.h"
  #include "cb1_hdr10plus_dovi.h"
@@ -364,7 +364,13 @@ index 46fd28f..bef834f 100644
  }
  
  #include <EGL/egl.h>
-@@ -35,6 +37,15 @@ extern "C"
+ #include <algorithm>
+ #include <chrono>
++#include <condition_variable>
+ #include <deque>
+ #include <filesystem>
+ #include <GLES3/gl3.h>
+@@ -35,6 +38,15 @@ extern "C"
  #include <thread>
  #include <vector>
  #include <fmt/ranges.h>
@@ -380,7 +386,7 @@ index 46fd28f..bef834f 100644
  
  #if !defined(DVBRIDGE_L2_TRIMS_API) || DVBRIDGE_L2_TRIMS_API < 1
  #error "Matching CB1 L2 output-trim API required"
-@@ -1213,8 +1224,191 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
+@@ -1213,8 +1225,228 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
    return FrameStatus::Ready;
  }
  
@@ -456,12 +462,18 @@ index 46fd28f..bef834f 100644
 +    scratch = pl_tex_create(gpu, &params);
 +    if (scratch) carriers[0] = Carrier::Create(device);
 +    if (carriers[0]) worker = cb1_lldv_cpu_create(4);
++    if (worker)
++      packer = std::jthread([this](std::stop_token stop) { Pack(stop); });
 +  }
 +
 +  ~PlayerLedCpu()
 +  {
++    if (packer.joinable())
++    {
++      packer.request_stop();
++      packer.join();
++    }
 +    cb1_lldv_cpu_destroy(worker);
-+    if (processing) slots[*processing].carrier->Sync(DMA_BUF_SYNC_END);
 +    for (auto& slot : slots)
 +    {
 +      if (slot.acquire >= 0) close(slot.acquire);
@@ -501,51 +513,77 @@ index 46fd28f..bef834f 100644
 +    return {};
 +  }
 +
-+  bool Poll()
-+  {
-+    if (processing && cb1_lldv_cpu_ready(worker, false))
-+    {
-+      auto& slot = slots[*processing];
-+      processing.reset();
-+      if (!slot.carrier->Sync(DMA_BUF_SYNC_END)) return false;
-+      slot.packed = true;
-+    }
-+    if (processing) return true;
-+    for (const auto index : queue)
-+    {
-+      auto& slot = slots[index];
-+      if (slot.packed) continue;
-+      pollfd fence{slot.acquire, POLLIN, 0};
-+      const int ready = poll(&fence, 1, 0);
-+      if (!ready || (ready < 0 && errno == EINTR)) return true;
-+      sync_file_info info{};
-+      if (ready < 0 || !(fence.revents & POLLIN) ||
-+          ioctl(slot.acquire, SYNC_IOC_FILE_INFO, &info) < 0 || info.status <= 0)
-+        return false;
-+      slot.carrier = LeaseCarrier();
-+      if (!slot.carrier)
-+        return std::all_of(carriers.begin(), carriers.end(), [](const auto& carrier) { return bool(carrier); });
-+      if (!slot.carrier->Sync(DMA_BUF_SYNC_START)) return false;
++  bool Full() const { return queue.size() == slots.size(); }
 +
-+      const auto gamut = slot.policy.tv.gamut;
-+      const bool identity = gamut == DVBRIDGE_GAMUT_BT2020;
-+      const auto primaries = gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 : PL_COLOR_PRIM_DISPLAY_P3;
-+      const auto matrix = identity ? pl_matrix3x3_identity : pl_get_color_mapping_matrix(
-+          pl_raw_primaries_get(primaries), pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
-+          PL_INTENT_RELATIVE_COLORIMETRIC);
-+      const cb1_lldv_cpu_frame input{reinterpret_cast<const float*>(slot.host->data),
-+          slot.carrier->data, slot.carrier->stride, identity ? nullptr : &matrix.m[0][0],
-+          slot.policy.tv.peak_nits,
-+          slot.frame->transport.format == DVBRIDGE::LldvFormat::Y422_10 ? 10u : 12u, true, true};
-+      if (!cb1_lldv_cpu_submit(worker, &input))
++  void Pack(std::stop_token stop)
++  {
++    std::unique_lock lock(mutex);
++    while (changed.wait(lock, stop, [&] {
++      return std::any_of(queue.begin(), queue.end(), [&](unsigned index) {
++        return slots[index].carrier && !slots[index].packed;
++      });
++    }))
++    {
++      if (stop.stop_requested()) break;
++      const auto next = std::find_if(queue.begin(), queue.end(), [&](unsigned index) {
++        return slots[index].carrier && !slots[index].packed;
++      });
++      auto& slot = slots[*next];
++      lock.unlock();
++      const auto gpuReady = std::chrono::steady_clock::now();
++      const bool ready = WaitForSource(slot.acquire, stop);
++      const auto begin = std::chrono::steady_clock::now();
++      const bool packed = ready && !stop.stop_requested() && Write(slot);
++      const auto end = std::chrono::steady_clock::now();
++      lock.lock();
++      if (!packed)
 +      {
-+        slot.carrier->Sync(DMA_BUF_SYNC_END);
-+        return false;
++        failed = !stop.stop_requested();
++        return;
 +      }
-+      processing = index;
-+      return true;
++      slot.packed = true;
++      waitMs += std::chrono::duration<double,std::milli>(begin - gpuReady).count();
++      packMs += std::chrono::duration<double,std::milli>(end - begin).count();
++      if (++samples == 120)
++      {
++        if (std::getenv("CB1_PRESENTATION_AUDIT"))
++          CLog::Log(LOGINFO, "CB1 LLDV packing: gpu_wait_ms={:.3f} cpu_ms={:.3f}", waitMs / samples, packMs / samples);
++        samples = 0;
++        waitMs = packMs = 0;
++      }
 +    }
-+    return true;
++  }
++
++  static bool WaitForSource(int fd, std::stop_token stop)
++  {
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
++    while (!stop.stop_requested() && std::chrono::steady_clock::now() < deadline)
++    {
++      pollfd fence{fd, POLLIN, 0};
++      const int ready = poll(&fence, 1, 5);
++      if (!ready || (ready < 0 && errno == EINTR)) continue;
++      sync_file_info info{};
++      return ready > 0 && (fence.revents & POLLIN) &&
++             ioctl(fd, SYNC_IOC_FILE_INFO, &info) == 0 && info.status > 0;
++    }
++    return false;
++  }
++
++  bool Write(const Slot& slot)
++  {
++    if (!slot.carrier->Sync(DMA_BUF_SYNC_START)) return false;
++    const auto gamut = slot.policy.tv.gamut;
++    const bool identity = gamut == DVBRIDGE_GAMUT_BT2020;
++    const auto primaries = gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 : PL_COLOR_PRIM_DISPLAY_P3;
++    const auto matrix = identity ? pl_matrix3x3_identity : pl_get_color_mapping_matrix(
++        pl_raw_primaries_get(primaries), pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
++        PL_INTENT_RELATIVE_COLORIMETRIC);
++    const cb1_lldv_cpu_frame input{reinterpret_cast<const float*>(slot.host->data),
++        slot.carrier->data, slot.carrier->stride, identity ? nullptr : &matrix.m[0][0],
++        slot.policy.tv.peak_nits,
++        slot.frame->transport.format == DVBRIDGE::LldvFormat::Y422_10 ? 10u : 12u, true, true};
++    const bool packed = cb1_lldv_cpu_submit(worker, &input) && cb1_lldv_cpu_ready(worker, true);
++    return slot.carrier->Sync(DMA_BUF_SYNC_END) && packed;
 +  }
 +
 +  pl_gpu gpu{};
@@ -556,8 +594,13 @@ index 46fd28f..bef834f 100644
 +  // Host storage is reusable after packing. A carrier remains leased by KMS.
 +  std::array<std::shared_ptr<Carrier>, 4> carriers;
 +  std::deque<unsigned> queue;
-+  std::optional<unsigned> prepared, processing;
-+  bool announced{};
++  std::optional<unsigned> prepared;
++  std::mutex mutex;
++  std::condition_variable_any changed;
++  std::jthread packer;
++  double waitMs{}, packMs{};
++  unsigned samples{};
++  bool announced{}, failed{};
 +  DVBRIDGE::SourceBinding source;
 +  uint64_t policyRevision{};
 +};
@@ -572,7 +615,7 @@ index 46fd28f..bef834f 100644
    cb1_hdr10plus_analysis_destroy(&m_hdr10plusAnalysis);
    ClearFELPrefetch();
    Summary("closed");
-@@ -1228,6 +1422,10 @@ CDVBridgeGLES::~CDVBridgeGLES()
+@@ -1228,6 +1460,10 @@ CDVBridgeGLES::~CDVBridgeGLES()
      pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.degamma);
      pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.pq);
      pl_tex_destroy(m_gl->gpu, &m_scanout);
@@ -583,7 +626,7 @@ index 46fd28f..bef834f 100644
    }
  }
  
-@@ -1311,6 +1509,7 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
+@@ -1311,6 +1547,7 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
  bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr)
  {
    if (!m_gl || m_pending || m_prepared) return false;
@@ -591,7 +634,7 @@ index 46fd28f..bef834f 100644
    pl_opengl_wrap_params output{};
    const auto display = eglGetCurrentDisplay();
    const auto surface = eglGetCurrentSurface(EGL_DRAW);
-@@ -1561,7 +1760,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1561,7 +1798,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    { Failure("source-association"); m_asyncEligible = false; return FrameStatus::Failed; }
    if (!m_renderer || !m_context || m_context->Quarantined())
    { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
@@ -600,7 +643,18 @@ index 46fd28f..bef834f 100644
    auto policy = selected ? *selected : preferences.Policy();
    if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !m_hdr10plusSubmits)
      DVBRIDGE::DiagnosticReserveProgress();
-@@ -1663,7 +1862,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1647,7 +1884,9 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+     m_dvPolicyActive = false;
+     m_context->SourceReadComplete();
+   }
+-  const auto retired = m_context->Poll(eligible);
++  if (m_playerLedCpu && m_playerLedCpu->Full())
++    return FrameStatus::Busy;
++  const auto retired = m_context->Poll(eligible || (m_playerLedCpuDevice && m_playerLedCpu));
+   if (retired != DVBRIDGE_DV_IDLE)
+     return retired == DVBRIDGE_DV_FAILED ? FrameStatus::Failed : FrameStatus::Busy;
+   if (m_hasCommitted && allowPacked && m_committedPacked &&
+@@ -1663,7 +1902,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    m_pendingOverlayVisible = m_overlayVisible;
    m_requested = preferences;
    m_spatialMethod = base.scalingMethod;
@@ -610,7 +664,7 @@ index 46fd28f..bef834f 100644
    policy.revision = revision;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
    dvbridge_renderer_set_fel_filter(m_renderer, preferences.felUpscaling == 2 ? DVBRIDGE_FEL_REFERENCE : preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416) ? DVBRIDGE_FEL_BILINEAR : DVBRIDGE_FEL_DEFAULT);
-@@ -1713,7 +1913,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1713,7 +1953,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
          CDVPlaybackInfo::RequestedPolicy(admission.requested),CDVPlaybackInfo::RequestedPolicy(admission.effective),
          CDVPlaybackInfo::Reason(admission.reason));
    }
@@ -620,7 +674,7 @@ index 46fd28f..bef834f 100644
    m_context->Retain(base.lease, enhancement ? enhancement->lease : nullptr);
    if (!m_advanced)
    {
-@@ -1749,7 +1950,14 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1749,7 +1990,14 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    FrameStatus result = FrameStatus::Failed;
    std::string sdrAudit;
    m_prepared = m_packed = m_direct = false;
@@ -636,7 +690,7 @@ index 46fd28f..bef834f 100644
    {
      auto status = DVBRIDGE_DV_UNSUPPORTED;
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
-@@ -1862,6 +2070,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1862,6 +2110,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
  
  void CDVBridgeGLES::Cancel()
  {
@@ -644,7 +698,7 @@ index 46fd28f..bef834f 100644
    cb1_hdr10plus_analysis_reset(m_hdr10plusAnalysis);
    m_hdr10plusMetadata.reset();
    ClearFELPrefetch();
-@@ -2167,7 +2376,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
+@@ -2167,7 +2416,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
    };
    std::shared_ptr<Import> imported;
    const auto mode = (selected ? *selected : preferences.Policy()).mode;
@@ -653,7 +707,7 @@ index 46fd28f..bef834f 100644
    const bool prefetchEnabled = allowAsync && allowPacked && m_context &&
        m_context->AsyncPreparation(base.binding.stream) &&
        mode == DVBRIDGE_MODE_ENHANCED_DV &&
-@@ -2359,6 +2568,247 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
+@@ -2359,6 +2608,263 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
    return m_packed || Failure("composition-pack");
  }
  
@@ -765,18 +819,33 @@ index 46fd28f..bef834f 100644
 +    Cancel();
 +    return false;
 +  }
-+  cpu.queue.push_back(index);
++  slot.carrier = cpu.LeaseCarrier();
++  if (!slot.carrier)
++  {
++    m_playerLedCpuUnavailable = true;
++    Cancel();
++    return false;
++  }
++  {
++    std::lock_guard lock(cpu.mutex);
++    cpu.queue.push_back(index);
++  }
++  cpu.changed.notify_one();
 +  if (!cpu.announced)
 +  {
 +    CLog::Log(LOGINFO, "CB1 LLDV: CPU packing to an XRGB8888 scanout buffer");
 +    cpu.announced = true;
 +  }
-+  return PollPlayerLedCpu();
++  return true;
 +}
 +
-+bool CDVBridgeGLES::PollPlayerLedCpu()
++bool CDVBridgeGLES::PlayerLedCpuHealthy()
 +{
-+  if (!m_playerLedCpu || m_playerLedCpu->Poll()) return true;
++  if (!m_playerLedCpu) return true;
++  {
++    std::lock_guard lock(m_playerLedCpu->mutex);
++    if (!m_playerLedCpu->failed) return true;
++  }
 +  m_playerLedCpuUnavailable = true;
 +  Cancel();
 +  return false;
@@ -786,6 +855,7 @@ index 46fd28f..bef834f 100644
 +{
 +  if (!PlayerLedCpuPending()) return {};
 +  auto& cpu = *m_playerLedCpu;
++  std::lock_guard lock(cpu.mutex);
 +  auto& slot = cpu.slots[cpu.queue.front()];
 +  if (!slot.packed) return {};
 +  PlayerLedCpuOutput output{std::move(*slot.frame), slot.pts, slot.carrier->buffer,
@@ -901,7 +971,7 @@ index 46fd28f..bef834f 100644
  bool CDVBridgeGLES::ResolveHDR10(bool limited)
  {
    if (m_hdr10 && m_prepared && m_direct)
-@@ -2389,7 +2839,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
+@@ -2389,7 +2895,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
  
  unsigned int CDVBridgeGLES::GetPQFramebuffer()
  {
@@ -912,7 +982,7 @@ index 46fd28f..bef834f 100644
      return 0;
    GLint previous;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-index 34fbd0c..828496b 100644
+index 34fbd0c..b79d7da 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 @@ -22,6 +22,7 @@ extern "C"
@@ -978,7 +1048,7 @@ index 34fbd0c..828496b 100644
 +  bool PlayerLedCpuPending() const;
 +  bool QueuePlayerLedCpu(DVBRIDGE::LldvTransport transport, double pts, int acquire,
 +                         std::shared_ptr<const VideoSourceSideData> source);
-+  bool PollPlayerLedCpu();
++  bool PlayerLedCpuHealthy();
 +  std::optional<PlayerLedCpuOutput> TakePlayerLedCpu();
 +  bool ConfirmPlayerLed(const PlayerLedFrame& frame, const DVBRIDGE::LldvConnectorStatus& connector);
    bool ResolveHDR10(bool limited);
@@ -1412,7 +1482,7 @@ index a2dbc15..56d2610 100644
  
    // holding the returned reference defers video plane teardown until it is released
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-index 6f3a0b8..4795aae 100644
+index 6f3a0b8..105fa3d 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 @@ -323,6 +323,12 @@ bool CWinSystemGbmGLESContext::HoldCB1Mode(RESOLUTION_INFO& res)
@@ -1432,8 +1502,8 @@ index 6f3a0b8..4795aae 100644
        drm && drm->IsSDRRestorePending())
      CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
  #ifdef HAVE_DVBRIDGE
-+  // CPU packing can advance independently of the previous KMS page.
-+  if (m_dvBridge && !m_dvBridge->PollPlayerLedCpu())
++  // Failures from the CPU packing worker return through normal output recovery.
++  if (m_dvBridge && !m_dvBridge->PlayerLedCpuHealthy())
 +  {
 +    m_dvActivating = true;
 +    RejectDVOutputSurface();
