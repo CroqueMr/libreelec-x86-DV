@@ -9,8 +9,9 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "17b82d6d2d30ea9bc4ac20e6176d69ffc9d13dd7be030ed46e3e8d221e9fcba4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
-    "tests/cb1/test_hdr10_link_depth.py": "f5719a55f963cdc6ea24f0240bcd19cf976153edc7a09323cd5d4e5977265b68",
+    "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
@@ -339,7 +340,7 @@
     "tests/cb1/test_master_reference.py": "16a3d03e02c2b3841d7e6a7c5ee3a28a2c848d1bb63ec91ec843f9a6bfc5bfcd",
     "tests/cb1/test_playback_defaults.py": "802c50f4bdb06f6f1db2162df2b51b86dec0bb477742b305706e8a644e401676",
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
-    "tests/cb1/test_strict_playback_admission.py": "9a113b7f5ab5b173a147a02e3865e3a77defe7391311a9d8a4a9c26dacecbb8a",
+    "tests/cb1/test_strict_playback_admission.py": "bc589c57394060ab18915ed0b10cda0f97deeb79b145b6008b2abe06c23f3f70",
     "tests/cb1/test_cb1_presentation_sync.py": "de1f170c9fe676fad3058137bedaf90ee64d899cbcffd07b9d5d7088b66716a2",
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzz-hdr10-link-depth.patch": "67534b69854296820633304c28bd4c170b4a99f2dee721b13ff20e4629ac18ac",
@@ -353,7 +354,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "5856f1eaef3b77f3376c0c7eb9d6556c30b42e1328b43e3b914cf53f3657ef71"
+    "config/cb1-patch-index.json": "be36260449d7f9a43c6f5bcea629e5633c1d6f65d9d6f1ac7c7a1b690b2176e0"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

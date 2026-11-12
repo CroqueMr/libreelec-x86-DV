@@ -17,14 +17,20 @@ class StrictPlaybackAdmissionTests(unittest.TestCase):
 #include <string>
 constexpr int LOGERROR=1;
 namespace DVBRIDGE {
-enum class OutputMode{Standard,Disabled};enum class HDR10SourceMode{Native,ReferenceDV};enum class OutputReason{None,ActivationFailed};
+enum class OutputMode{Standard,Disabled};enum class HDR10SourceMode{Native,ReferenceDV};enum class OutputReason{None,ActivationFailed,SourceIneligible};
 struct Binding{int stream=1,revision=2;bool Valid()const{return true;}};using SourceBinding=Binding;
 struct Preferences{OutputMode output=OutputMode::Disabled;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;inline Preferences FrameOutputSettings(bool=false,bool=false){return prefs;}
-struct PlaybackNotification{inline static int errors=0;static void RenderingUnavailable(OutputReason){++errors;}};
+struct PlaybackNotification{static void RenderingUnavailable(OutputReason){}};
+
 }
+struct CDVPlaybackInfo {
+ static int ReasonLabel(DVBRIDGE::OutputReason reason) {
+   return reason == DVBRIDGE::OutputReason::SourceIneligible ? 40844 : 40846;
+ }
+};
 enum class StreamHdrType{HDR_TYPE_NONE,HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
-struct VideoPicture{DVBRIDGE::Binding doviSourceBinding;struct{int profile=0;}doviSourceInfo;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;std::string stereoMode;};
+struct VideoPicture{DVBRIDGE::Binding doviSourceBinding;struct{int profile=0;}doviSourceInfo;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;std::string stereoMode;struct {size_t size=0; size_t Size()const{return size;}}doviMetadata;};
 struct Base{virtual ~Base()=default;};
 namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext:Base{
  std::mutex m_dvCapabilityMutex;DVBRIDGE::Binding m_dvFatalBinding;bool m_dvFatalConsumed=false;
@@ -34,8 +40,10 @@ namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext:Base{
 KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
 struct CServiceBroker{static Base* GetWinSystem(){return &window;}};
 struct CLog{template<class... T>static void Log(T...){}};
-struct CDVDMsg{enum{PLAYER_ABORT};};struct CDVDMsgBool{CDVDMsgBool(int,bool){}};
-struct Worker{struct{int aborts=0;void Put(std::shared_ptr<CDVDMsgBool>){++aborts;}}m_messageParent;
+struct CDVDMsg{enum{PLAYER_ABORT};};
+struct CDVDMsgInt{CDVDMsgInt(int,int label):m_value(label){}int m_value;};
+struct CDVDMsgBool{CDVDMsgBool(int,bool){}};
+struct Worker{struct{int aborts=0,label=0;void Put(std::shared_ptr<CDVDMsgInt> msg){++aborts;label=msg->m_value;}void Put(std::shared_ptr<CDVDMsgBool>){++aborts;}}m_messageParent;
  bool HandleDVPlaybackFailure(const VideoPicture* picture) HANDLE
 };
 int main(){VideoPicture picture;Worker worker;
@@ -43,7 +51,15 @@ int main(){VideoPicture picture;Worker worker;
   picture.hdrType=family;window.m_dvFatalConsumed=false;
   assert(worker.HandleDVPlaybackFailure(&picture));assert(!worker.HandleDVPlaybackFailure(&picture));
  }
- assert(worker.m_messageParent.aborts==3&&DVBRIDGE::PlaybackNotification::errors==3);
+ assert(worker.m_messageParent.aborts==3&&worker.m_messageParent.label==40846);
+ window.m_dvFatalReason=DVBRIDGE::OutputReason::SourceIneligible;
+ window.m_dvFatalConsumed=false;
+ DVBRIDGE::prefs.output=DVBRIDGE::OutputMode::Standard;
+ picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==41224);
+ window.m_dvFatalConsumed=false;
+ picture.doviMetadata.size=32;
+ assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==40844);
  window.m_dvFatalConsumed=false;DVBRIDGE::prefs.output=DVBRIDGE::OutputMode::Standard;
  picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;picture.stereoMode="left_right";
  assert(!worker.HandleDVPlaybackFailure(&picture));picture.stereoMode.clear();
@@ -54,6 +70,19 @@ int main(){VideoPicture picture;Worker worker;
  picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;assert(!worker.HandleDVPlaybackFailure(&picture));
 }
 '''.replace('CONSUME',consume).replace('HANDLE',source))
+
+    def test_error_detail_reaches_the_existing_dialog(self):
+        player = (TREE/'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
+        exit_player = body(player, 'void CVideoPlayer::OnExit(')
+        self.assertIn('cb->OnPlayBackError(errorDetail)', exit_player)
+        self.assertIn('m_errorDetail = 0;', body(player, 'void CVideoPlayer::Prepare('))
+        application = TREE/'xbmc/application'
+        callback = (application/'ApplicationPlayerCallback.cpp').read_text()
+        self.assertIn('GUI_MSG_PLAYBACK_ERROR, 0, 0, detail', callback)
+        handling = (application/'ApplicationMessageHandling.cpp').read_text()
+        self.assertIn('detail != 0 ? detail : 16027', handling)
+        self.assertIn('Dolby Vision picture metadata is missing or unusable.',
+                      (TREE/'addons/resource.language.en_gb/resources/strings.po').read_text())
 
     def test_failed_ai_engine_aborts_without_completing_native_output(self):
         queue=body((TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(),

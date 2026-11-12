@@ -1,4 +1,19 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": {
+    "owner": "Show one playback error with the selected circuit failure reason.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/application/ApplicationMessageHandling.cpp": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/application/ApplicationPlayerCallback.cpp": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/application/ApplicationPlayerCallback.h": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/cores/IPlayerCallback.h": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Carry the localized playback failure detail to the Kodi error dialog.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Carry the localized playback failure detail to the Kodi error dialog."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": {
     "owner": "R580 CB1 HDR10 scanout when EGL offers no deep-color window.",
     "files": {
