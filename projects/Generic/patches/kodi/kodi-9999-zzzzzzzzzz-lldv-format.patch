@@ -564,7 +564,7 @@ new file mode 100644
 index 0000000..70cba65
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,77 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -632,7 +632,6 @@ index 0000000..70cba65
 +  output.displayBlack = plan.policy.expert_black_nits;
 +  output.bits = format == LldvFormat::Y422_10 ? 10 : 12;
 +  output.minimumLinkBits = 12;
-+  output.ignoreL5 = true;
 +  output.creativeKnown = true;
 +  output.creativeApplied = (plan.applied_levels & ~(l2 | l8)) | (groups ? family : 0);
 +  output.creativeStatus = plan.status;

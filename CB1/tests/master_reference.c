@@ -426,6 +426,55 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
         assert(fabsf(pixels[16+c]-gray)<2e-4f && fabsf(pixels[20+c]-bright)<2e-4f);
         assert(pixels[20+c]>.203f && pixels[20+c]<pixels[24+c] && pixels[24+c]<pixels[28+c]);
     }
+    memcpy(original,pixels,sizeof(original));
+    *av_dovi_get_ext(m,1)=(AVDOVIDmData){.level=5,
+        .l5={.left_offset=2,.right_offset=1,.top_offset=1,.bottom_offset=2}};
+    m->num_ext_blocks=2;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    for(int y=0;y<8;y++)for(int x=0;x<8;x++){
+        size_t i=(y*8+x)*4;
+        if(x>=2 && x<7 && y>=1 && y<6)
+            assert(!memcmp(pixels+i,original+i,4*sizeof(float)));
+        else
+            assert(pixels[i]==0 && pixels[i+1]==0 && pixels[i+2]==0 && pixels[i+3]==1);
+    }
+    pl_fmt rgba8=pl_find_named_fmt(gpu,"rgba8");
+    assert(rgba8);
+    pl_tex carrier=pl_tex_create(gpu,pl_tex_params(.w=8,.h=8,.format=rgba8,.renderable=true));
+    assert(carrier);
+    GLuint fbo;
+    glGenFramebuffers(1,&fbo);
+    for(unsigned bits=10;bits<=12;bits+=2){
+        assert(dvbridge_pack_player_led_422(renderer,&policy,output,carrier,bits,true));
+        uint8_t packed[8*8*4];
+        glBindFramebuffer(GL_FRAMEBUFFER,fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,
+            pl_opengl_unwrap(gpu,carrier,NULL,NULL,NULL),0);
+        glReadPixels(0,0,8,8,GL_RGBA,GL_UNSIGNED_BYTE,packed);
+        assert(glGetError()==GL_NO_ERROR);
+        glBindFramebuffer(GL_FRAMEBUFFER,0);
+        const uint8_t black[]={128,16,0,255};
+        for(int y=0;y<8;y++){
+            if(y>=2 && y<7)continue;
+            for(int x=0;x<8;x++)assert(!memcmp(packed+(y*8+x)*4,black,sizeof(black)));
+        }
+        assert(memcmp(packed+(2*8+2)*4,black,sizeof(black)));
+    }
+    glDeleteFramebuffers(1,&fbo);
+    pl_tex_destroy(gpu,&carrier);
+    policy.expert_black_nits=.01;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    reference_read(gpu,output,0,0,8,8,pixels);
+    assert(pixels[4]==0 && pixels[(8+2)*4]>0 && pixels[(6*8+2)*4]==0);
+    policy.expert_black_nits=0;
+    *av_dovi_get_ext(m,2)=*av_dovi_get_ext(m,1);
+    m->num_ext_blocks=3;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_INVALID);
+    m->num_ext_blocks=2;
+    av_dovi_get_ext(m,1)->l5.top_offset=6;
+    assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_INVALID);
+    m->num_ext_blocks=1;
     policy.expert_black_nits=.01;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
     reference_read(gpu,output,0,0,8,8,pixels);

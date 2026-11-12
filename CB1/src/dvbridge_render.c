@@ -1860,14 +1860,26 @@ static const uint64_t player_led_hook_signature=0x434231504c440001ULL;
 struct player_led_render {
     struct cb1_hdr10_expert_plan plan;
     struct dvbridge_cm4_coefficients cm4;
+    float area[4];
     pl_shader_obj *state;
     unsigned depth;
-    bool rendered;
+    bool masked, rendered;
 };
 
 static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params *p)
 {
     struct player_led_render *render=priv;
+    if(render->masked){
+        const struct pl_shader_var area={.var=pl_var_vec4("player_led_area"),
+            .data=render->area,.dynamic=true};
+        const struct pl_custom_shader mask={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+            .variables=&area,.num_variables=1,
+            .body="vec2 pos=gl_FragCoord.xy;\n"
+                  "if(any(lessThan(pos,player_led_area.xy)) || "
+                  "any(greaterThanEqual(pos,player_led_area.zw)))return vec4(0.0,0.0,0.0,1.0);\n",
+            .description="Blank outside the Dolby Vision active picture"};
+        if(!pl_shader_custom(p->sh,&mask))return (struct pl_hook_res){.failed=true};
+    }
     const struct cb1_hdr10_expert_plan *plan=&render->plan;
     struct pl_dovi_metadata dovi=plan->source.dovi;
     struct pl_color_repr repr={.sys=PL_COLOR_SYSTEM_DOLBYVISION,.levels=PL_COLOR_LEVELS_FULL,
@@ -1965,12 +1977,17 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
     size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
 {
-    if(!r || !source)return CB1_MASTER_INVALID;
+    if(!r || !source || !target)return CB1_MASTER_INVALID;
     struct player_led_render render={.state=&r->creative_state};
     const bool paired=source->enhancement_layer && pts==el_pts;
+    const int w=target->params.w,h=target->params.h;
+    const struct dvbridge_geometry geometry={w,h,0,0,w,h,w,h};
     if(!cb1_player_led_prepare(&render.plan,&render.cm4,policy,metadata,bytes,paired) ||
+       !reference_area(render.area,metadata,geometry) ||
        !player_led_options(&render,r,policy,metadata,bytes,paired))
         return CB1_MASTER_INVALID;
+    const float *area=render.area;
+    render.masked=area[0]!=0 || area[1]!=0 || area[2]!=w || area[3]!=h;
     render.depth=av_dovi_get_header(metadata)->vdr_bit_depth;
     const struct pl_hook hook={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
         .priv=&render,.hook=player_led_map,.signature=player_led_hook_signature};

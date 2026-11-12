@@ -97,6 +97,7 @@ int main()
   connector.sink.lldv_422=true;
   auto output=outputFor(CB1_MASTER_READY,id,id,true);
   assert(output && output->lldv && output->bits==10 && output->minimumLinkBits==12);
+  assert(!output->ignoreL5);
   assert(output->stream==7 && output->picture==2 && output->revision==9);
   assert((output->flags & CDVPlaybackInfo::FEL) && output->felUpscaling==-1);
   assert(outputFor(CB1_MASTER_READY,id,id,true,true)->felUpscaling==2);
@@ -111,7 +112,7 @@ int main()
   source.output=*output;
   auto info=NativeProcessingInfo(source);
   assert(info.outputType==VideoOutputType::DolbyVision && info.output.lldv);
-  assert(info.AppliedBlocks()[2] && !info.AppliedBlocks()[5] && !info.AppliedBlocks()[8]);
+  assert(info.AppliedBlocks()[2] && info.AppliedBlocks()[5] && !info.AppliedBlocks()[8]);
   assert(info.TransmittedBlocks().none() && !info.cm4);
 
   plan.codes[0]=2048;

@@ -38,7 +38,8 @@ enum cb1_master_status dvbridge_render_master_reference(struct dvbridge_renderer
     struct dvbridge_geometry geometry,pl_tex target,bool flip_y,
     const struct dvbridge_native_overlay *overlay);
 /* Offline source-size RGBA32F. RGB is linear in the target gamut, with
- * 1.0 at policy->tv.peak_nits. Pixels and applied metadata are usable only on
+ * 1.0 at policy->tv.peak_nits. L5 masks the source raster without changing
+ * its size or placement. Pixels and applied metadata are usable only on
  * CB1_MASTER_READY. CM4 and L2 options affect mapping only. Use a dedicated
  * renderer and reset it after a GPU failure. */
 enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *renderer,

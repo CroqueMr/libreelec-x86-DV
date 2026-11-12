@@ -286,6 +286,14 @@ La relecture EGL des images 1, 120 et 300 est comparée au packing GPU de réfé
 
 Avec trois tampons en file, les allocations linéaires et les carriers passent d’environ 950 à 475 Mio hors surfaces de décodage. Le banc atteint 28,17 i/s en 10 bits et 27,74 i/s en 12 bits sur les mêmes fenêtres, avec 0/900 échéance dépassée aux deux profondeurs. Ces mesures s’arrêtent au tampon prêt. La relecture GPU systématique reste une charge distincte.
 
+### Zone active Dolby Vision L5
+
+Le player-led réutilise la géométrie L5 de HDR10 Rendering Reference. Le shader écrit le noir linéaire en dehors de cette zone avant le mapping et le packing. Les bandes restent au noir avec un plancher de luminance calibré ou avec CM4 Always. Le test spatial vérifie une zone asymétrique, l’inversion du carrier aux deux profondeurs et le refus de métadonnées L5 invalides.
+
+Sur les images 1, 120 et 300 de *1917*, les 2 123 520 pixels hors zone par image sont tous au noir de plage limitée en 10 et 12 bits, avec les trims source et avec CM4 Always. Dans l’image active, cinq pixels sur 74 050 560 diffèrent d’un code utile, tous avec CM4 Always. Les calculs en double précision sur les valeurs linéaires relues situent ces écarts à moins de 0,007 code d’un seuil de demi-arrondi. La rampe, le P5, le P8.1 et la mire FEL CM4 V4 échantillonnés sans marges L5 sont identiques octet pour octet.
+
+Le banc FEL 4K sur le N100 atteint 28,44 i/s en 10 bits et 28,04 i/s en 12 bits, avec 0/900 échéance dépassée à 27 i/s aux deux profondeurs. La fenêtre commence après 120 images d’échauffement et s’arrête au carrier prêt. Revue Astra xhigh. La précision du lien et les mesures de dalle restent à qualifier.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
