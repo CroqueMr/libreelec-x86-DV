@@ -1227,6 +1227,14 @@
       "xbmc/video/PlayerController.h": "Remember the slider label so the bitmap offset slider shows steps, not pixels."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9998-text-subtitle-shift-step.patch": {
+    "summary": "Move text subtitles one fixed step with SubtitleShiftUp/Down(step)",
+    "component": "kodi",
+    "files": {
+      "xbmc/interfaces/builtins/PlayerBuiltins.cpp": "Pass every SubtitleShiftUp/Down parameter to the action and document step.",
+      "xbmc/video/PlayerController.cpp": "Read save and step from the action text; step moves one thirty-second of the GUI height."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": {
     "summary": "Show original source, actual processing and accepted output in fixed single-line columns",
     "component": "kodi",

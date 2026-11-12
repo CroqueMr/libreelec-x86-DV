@@ -1,0 +1,113 @@
+Subject: [PATCH] VideoPlayer: fixed-step text subtitle shift
+
+SubtitleShiftUp and SubtitleShiftDown take "step" next to "save":
+SubtitleShiftUp(step) moves text subtitles one thirty-second of the GUI
+height at once. Without it, each action moves one pixel and speeds up
+only while a key repeats, which a menu cannot use. The builtins now
+pass all their parameters to the action.
+
+diff --git a/xbmc/interfaces/builtins/PlayerBuiltins.cpp b/xbmc/interfaces/builtins/PlayerBuiltins.cpp
+--- a/xbmc/interfaces/builtins/PlayerBuiltins.cpp
++++ b/xbmc/interfaces/builtins/PlayerBuiltins.cpp
+@@ -756,8 +756,7 @@
+ static int SubtitleShiftUp(const std::vector<std::string>& params)
+ {
+   CAction action{ACTION_SUBTITLE_VSHIFT_UP};
+-  if (!params.empty() && params[0] == "save")
+-    action.SetText("save");
++  action.SetText(StringUtils::Join(params, ","));
+   CPlayerController::GetInstance().OnAction(action);
+   return 0;
+ }
+@@ -765,8 +764,7 @@
+ static int SubtitleShiftDown(const std::vector<std::string>& params)
+ {
+   CAction action{ACTION_SUBTITLE_VSHIFT_DOWN};
+-  if (!params.empty() && params[0] == "save")
+-    action.SetText("save");
++  action.SetText(StringUtils::Join(params, ","));
+   CPlayerController::GetInstance().OnAction(action);
+   return 0;
+ }
+@@ -876,16 +874,18 @@
+ ///     @param[in] core                  Name of playback core.
+ ///   }
+ ///   \table_row2_l{
+-///     <b>`SubtitleShiftUp([save])`</b>
++///     <b>`SubtitleShiftUp([save]\,[step])`</b>
+ ///     ,
+ ///     Shift the subtitle position up.
+ ///     @param[in] save                  "save" to keep the change permanently (optional)
++///     @param[in] step                  "step" to move one fixed step (optional)
+ ///   }
+ ///   \table_row2_l{
+-///     <b>`SubtitleShiftDown([save])`</b>
++///     <b>`SubtitleShiftDown([save]\,[step])`</b>
+ ///     ,
+ ///     Shift the subtitle position down.
+ ///     @param[in] save                  "save" to keep the change permanently (optional)
++///     @param[in] step                  "step" to move one fixed step (optional)
+ ///   }
+ ///   \table_row2_l{
+ ///     <b>`Seek(seconds)`</b>
+diff --git a/xbmc/video/PlayerController.cpp b/xbmc/video/PlayerController.cpp
+--- a/xbmc/video/PlayerController.cpp
++++ b/xbmc/video/PlayerController.cpp
+@@ -53,6 +53,27 @@
+ using namespace KODI;
+ using namespace UTILS;
+ 
++namespace
++{
++//! "save" and "step" from SubtitleShiftUp/Down(save,step): keep the position, move one step.
++bool HasShiftOption(const CAction& action, const std::string& option)
++{
++  const auto options = StringUtils::Split(action.GetText(), ',');
++  return std::find(options.begin(), options.end(), option) != options.end();
++}
++
++//! A shift with "step" moves the text one thirty-second of the GUI height at once; a held key
++//! still accelerates from one pixel.
++int SubtitleShiftDistance(const CAction& action,
++                          KODI::UTILS::MOVING_SPEED::CMovingSpeed& speed,
++                          const RESOLUTION_INFO& resInfo)
++{
++  if (HasShiftOption(action, "step"))
++    return std::max(1, resInfo.iHeight / 32);
++  return static_cast<int>(speed.GetUpdatedDistance(action.GetID()));
++}
++} // namespace
++
+ #ifdef HAVE_DVBRIDGE
+ namespace
+ {
+@@ -460,12 +479,11 @@
+                                                          settings->GetVerticalMarginPerc());
+         }
+ 
+-        vs.m_subtitleVerticalPosition -=
+-            static_cast<int>(m_movingSpeed.GetUpdatedDistance(ACTION_SUBTITLE_VSHIFT_UP));
++        vs.m_subtitleVerticalPosition -= SubtitleShiftDistance(action, m_movingSpeed, resInfo);
+         if (vs.m_subtitleVerticalPosition < resInfo.Overscan.top)
+           vs.m_subtitleVerticalPosition = resInfo.Overscan.top;
+         appPlayer->SetSubtitleVerticalPosition(vs.m_subtitleVerticalPosition,
+-                                               action.GetText() == "save");
++                                               HasShiftOption(action, "save"));
+ 
+         ShowSlider(action.GetID(), 277, static_cast<float>(vs.m_subtitleVerticalPosition),
+                    static_cast<float>(resInfo.Overscan.top), 1.0f, static_cast<float>(maxPos));
+@@ -503,12 +521,11 @@
+                                                          settings->GetVerticalMarginPerc());
+         }
+ 
+-        vs.m_subtitleVerticalPosition +=
+-            static_cast<int>(m_movingSpeed.GetUpdatedDistance(ACTION_SUBTITLE_VSHIFT_DOWN));
++        vs.m_subtitleVerticalPosition += SubtitleShiftDistance(action, m_movingSpeed, resInfo);
+         if (vs.m_subtitleVerticalPosition > maxPos)
+           vs.m_subtitleVerticalPosition = maxPos;
+         appPlayer->SetSubtitleVerticalPosition(vs.m_subtitleVerticalPosition,
+-                                               action.GetText() == "save");
++                                               HasShiftOption(action, "save"));
+ 
+         ShowSlider(action.GetID(), 277, static_cast<float>(vs.m_subtitleVerticalPosition),
+                    static_cast<float>(resInfo.Overscan.top), 1.0f, static_cast<float>(maxPos));
