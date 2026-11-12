@@ -4,6 +4,9 @@
 PKG_NAME="externalhelper"
 PKG_VERSION="0"
 PKG_REV="13"
+if [ "${PROJECT}" = "Generic" ]; then
+  PKG_REV="14"
+fi
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://libreelec.tv"
 PKG_URL=""
