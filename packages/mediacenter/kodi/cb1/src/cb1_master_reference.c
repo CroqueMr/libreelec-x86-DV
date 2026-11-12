@@ -108,7 +108,7 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
 
 enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,
-    double pts,double el_pts,pl_tex target,const struct pl_hook *finish)
+    double pts,double el_pts,pl_tex target,const struct pl_hook *finish,const int active_rows[2])
 {
     if(!renderer || !source || !target || !isfinite(pts))return CB1_MASTER_INVALID;
     const struct pl_frame *el=source->enhancement_layer;
@@ -158,5 +158,10 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
         params.hooks=&finish;
         params.num_hooks=1;
     }
-    return pl_render_image(renderer,&image,&output,&params)?CB1_MASTER_READY:CB1_MASTER_FAILED;
+    const bool prune=finish && active_rows && out->w==3840 && out->h==2160 &&
+        !output.crop.x0 && !output.crop.y0 && !image.rotation &&
+        (active_rows[0]>0 || active_rows[1]<out->h);
+    const bool ok=prune?pl_render_image_cb1_active_rows(renderer,&image,&output,&params,
+        active_rows[0],active_rows[1]):pl_render_image(renderer,&image,&output,&params);
+    return ok?CB1_MASTER_READY:CB1_MASTER_FAILED;
 }

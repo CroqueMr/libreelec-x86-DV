@@ -1991,7 +1991,9 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     render.depth=av_dovi_get_header(metadata)->vdr_bit_depth;
     const struct pl_hook hook={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
         .priv=&render,.hook=player_led_map,.signature=player_led_hook_signature};
-    enum cb1_master_status status=cb1_master_reconstruct(r->renderer,source,metadata,bytes,pts,el_pts,target,&hook);
+    const int active_rows[]={area[1],area[3]};
+    enum cb1_master_status status=cb1_master_reconstruct(r->renderer,source,metadata,bytes,
+        pts,el_pts,target,&hook,active_rows);
     if(status!=CB1_MASTER_READY)return status;
     if(!render.rendered)return CB1_MASTER_FAILED;
     if(applied)*applied=render.plan.creative;

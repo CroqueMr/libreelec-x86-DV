@@ -173,11 +173,11 @@ diff --git a/src/renderer.c b/src/renderer.c
 +    return PL_CB1_FEL_FILTER_API;
 +}
 +
-+static bool skip_reference_chroma_rows(struct pass_state *pass, pl_shader sh)
++static bool skip_reference_rows(struct pass_state *pass, pl_shader sh, int divisor)
 +{
 +    if (pass->cb1_active_rows[1]<=pass->cb1_active_rows[0]) return true;
-+    float bounds[2]={floorf(pass->cb1_active_rows[0]/2)-4,
-+                     ceilf(pass->cb1_active_rows[1]/2)+4};
++    float bounds[2]={floorf(pass->cb1_active_rows[0]/divisor)-4,
++                     ceilf(pass->cb1_active_rows[1]/divisor)+4};
 +    enum pl_shader_sig signature=sh->output;
 +    if (!sh_require(sh,signature,0,0)) return false;
 +    sh->output=signature;
@@ -201,7 +201,7 @@ diff --git a/src/renderer.c b/src/renderer.c
 +                              PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_LINEAR);
 +        pl_tex chroma=fmt?get_fbo(pass,w/2,h/2,fmt,2,PL_DEBUG_TAG):NULL;
 +        pl_shader sh=pl_dispatch_begin(pass->rr->dp);
-+        bool ok=chroma && skip_reference_chroma_rows(pass,sh) &&
++        bool ok=chroma && skip_reference_rows(pass,sh,2) &&
 +            sh_dovi_p5_fast_grid(sh,data,image,true) &&
 +            pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=chroma));
 +        pl_dispatch_abort(pass->rr->dp,&sh);
@@ -245,13 +245,13 @@ diff --git a/src/renderer.c b/src/renderer.c
 +            const struct pl_bit_encoding bits=el->repr.bits;
 +            int storage=bits.sample_depth?bits.sample_depth:data->el_depth;
 +            // Bound all possible storage words, including out-of-range padding.
-+            // Keep single rows when the renderer suppresses inactive rows.
 +            bool packed_rows=data->contract==2 && bits.bit_shift>=0 && bits.bit_shift<storage &&
-+                storage-bits.bit_shift<=10 && pass->cb1_active_rows[1]<=pass->cb1_active_rows[0];
++                storage-bits.bit_shift<=10;
 +            int height=(c?h/2:h)/(packed_rows?2:1);
 +            vertical=get_fbo(pass,c?w/4:w/2,height,fmt,c?2:1,PL_DEBUG_TAG);
 +            pl_shader sh=pl_dispatch_begin(pass->rr->dp);
-+            bool rows=c?skip_reference_chroma_rows(pass,sh):skip_inactive_rows(pass,sh,h,false);
++            bool rows=packed_rows?skip_reference_rows(pass,sh,c?4:2):
++                c?skip_reference_rows(pass,sh,2):skip_inactive_rows(pass,sh,h,false);
 +            bool ok=vertical && rows && sh_dovi_reference_el_vertical(sh,data,image,c,packed_rows) &&
 +                pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=vertical));
 +            pl_dispatch_abort(pass->rr->dp,&sh);
@@ -266,7 +266,7 @@ diff --git a/src/renderer.c b/src/renderer.c
 +        if(!fmt)return false;
 +        planes[c]=get_fbo(pass,c?w/2:w,c?h/2:h,fmt,data->contract==2?1:c?2:1,PL_DEBUG_TAG);
 +        pl_shader sh=pl_dispatch_begin(pass->rr->dp);
-+        bool ok=planes[c] && skip_reference_chroma_rows(pass,sh) &&
++        bool ok=planes[c] && skip_reference_rows(pass,sh,2) &&
 +            sh_dovi_reference_grid(sh,data,image,c,vertical,&pass->rr->cb1_mmr_state) &&
 +            pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=planes[c]));
 +        pl_dispatch_abort(pass->rr->dp,&sh);
@@ -281,7 +281,7 @@ diff --git a/src/renderer.c b/src/renderer.c
 +    if (!fmt) return false;
 +    pl_tex chroma=get_fbo(pass,w/2,paired?h/2:h,fmt,2,PL_DEBUG_TAG);
 +    pl_shader sh=pl_dispatch_begin(pass->rr->dp);
-+    bool ok=chroma && (paired?skip_reference_chroma_rows(pass,sh):skip_inactive_rows(pass,sh,h,false)) &&
++    bool ok=chroma && (paired?skip_reference_rows(pass,sh,2):skip_inactive_rows(pass,sh,h,false)) &&
 +        sh_dovi_reference_chroma(sh,planes[1],data->output_depth,top_left,paired) &&
 +        pl_dispatch_finish(pass->rr->dp,pl_dispatch_params(.shader=&sh,.target=chroma));
 +    pl_dispatch_abort(pass->rr->dp,&sh);

@@ -35,6 +35,7 @@ static bool track_reference_render(pl_renderer renderer,const struct pl_frame *s
 }
 
 static bool full_reference_rows;
+static int reference_rows[2];
 static bool paired_reference_contract;
 static bool expect_identity_fusion;
 static bool expect_identity_quad;
@@ -71,6 +72,7 @@ bool __wrap_pl_render_image_cb1_active_rows(pl_renderer r,const struct pl_frame 
 {
     struct pl_render_params copy;
     struct pl_cb1_dovi_reference legacy;
+    reference_rows[0]=y0;reference_rows[1]=y1;
     params=reference_test_params(params,&copy,&legacy);
     return full_reference_rows?pl_render_image(r,source,target,params):
         __real_pl_render_image_cb1_active_rows(r,source,target,params,y0,y1);
@@ -411,7 +413,7 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
     m->num_ext_blocks=1;
     const struct pl_hook fail={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
         .hook=player_led_fail_hook,.signature=player_led_hook_signature};
-    cb1_master_reconstruct(renderer->renderer,&source,m,bytes,1,NAN,output,&fail);
+    cb1_master_reconstruct(renderer->renderer,&source,m,bytes,1,NAN,output,&fail,NULL);
     applied.applied_levels=UINT32_MAX;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,&applied)==CB1_MASTER_FAILED);
     assert(applied.applied_levels==UINT32_MAX);
@@ -657,17 +659,17 @@ static void fel_spatial(void)
     struct pl_render_params params=pl_render_default_params;
     params.cb1_dovi_reference=&raw;params.cb1_dovi_transport=true;params.min_fbo_precision=32;
     params.disable_linear_scaling=true;params.peak_detect_params=NULL;params.dither_params=NULL;params.sigmoid_params=NULL;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,0.5,output,NULL)==CB1_MASTER_INVALID);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,0.5,output,NULL,NULL)==CB1_MASTER_INVALID);
     frames[0].enhancement_layer=NULL;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_INVALID);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL,NULL)==CB1_MASTER_INVALID);
     frames[0].enhancement_layer=&frames[1];
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_UNSUPPORTED);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL,NULL)==CB1_MASTER_UNSUPPORTED);
     h->el_spatial_resampling_filter_flag=1;
     /* Software and hardware imports initially carry the base-layer YCbCr repr. */
     struct pl_frame decoded=frames[0];
     decoded.repr.sys=PL_COLOR_SYSTEM_BT_2020_NC;
     decoded.repr.dovi=NULL;
-    assert(cb1_master_reconstruct(renderer,&decoded,m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
+    assert(cb1_master_reconstruct(renderer,&decoded,m,bytes,1.0,1.0,output,NULL,NULL)==CB1_MASTER_READY);
     /* Literal arrays from the independent Python oracle, contract 1. */
     const int ycodes[8][8]={
         {1984,1984,1984,1984,1984,1984,1984,1984},
@@ -797,9 +799,9 @@ static void fel_spatial(void)
     }
     frames[0].enhancement_layer=&same_size;
     frames[0].planes[1].shift_y=same_size.planes[1].shift_y=-.5f;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_UNSUPPORTED);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL,NULL)==CB1_MASTER_UNSUPPORTED);
     h->el_spatial_resampling_filter_flag=0;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL)==CB1_MASTER_READY);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,1.0,output,NULL,NULL)==CB1_MASTER_READY);
     assert(pl_render_image(renderer,&frames[0],&target,&params));
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     for(int i=0;i<8*8;i++)for(int c=0;c<3;c++){
@@ -824,7 +826,7 @@ static void fel_spatial(void)
     curve->poly_order[0]=2;
     curve->poly_coef[0][1]=0;
     curve->poly_coef[0][2]=1<<23;
-    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,NAN,output,NULL)==CB1_MASTER_READY);
+    assert(cb1_master_reconstruct(renderer,&frames[0],m,bytes,1.0,NAN,output,NULL,NULL)==CB1_MASTER_READY);
     reference_read(g.gl->gpu,output,0,0,8,8,values);
     for(int i=0;i<8*8;i++)for(int c=0;c<3;c++)
         assert(roundf(values[i*4+c]*4095)==(c?2048:1024));
@@ -1104,6 +1106,17 @@ static void transport(bool lifecycle,bool rows)
             }
             assert(!memcmp(expected,actual,frame_bytes));
         }
+        struct dvbridge_renderer *lldv=dvbridge_renderer_create(g.gl->gpu);assert(lldv);
+        pl_tex linear=reference_texture(g.gl->gpu,3840,2160,NULL);
+        struct dvbridge_policy policy=reference_policy();
+        policy.tv.gamut=DVBRIDGE_GAMUT_BT2020;
+        av_dovi_get_ext(m,1)->l5.top_offset=277;
+        av_dovi_get_ext(m,1)->l5.bottom_offset=281;
+        h->disable_residual_flag=0;
+        reference_rows[0]=reference_rows[1]=0;
+        assert(dvbridge_render_player_led(lldv,&policy,&source,m,bytes,50,50,linear,NULL)==CB1_MASTER_READY);
+        assert(reference_rows[0]==277 && reference_rows[1]==1879);
+        pl_tex_destroy(g.gl->gpu,&linear);dvbridge_renderer_destroy(lldv);
         free(expected);free(actual);dvbridge_renderer_destroy(control);
         pl_tex_destroy(g.gl->gpu,&gui);pl_tex_destroy(g.gl->gpu,&decode);pl_tex_destroy(g.gl->gpu,&encode);
         puts("PASS 24 complete FEL/MMR/identity carriers: L5, flip, identity+GUI, both chroma phases, residual and pivot guards");
