@@ -1408,5 +1408,11 @@
       "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Rebuild the DC stream when the DV signalling mode changes.",
       "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Keep the low-latency identity with the candidate stream."
     }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": {
+    "owner": "Preserve an absent Dolby VSIF during Pascal DRM connector-state duplication.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Acquire a DRM blob reference only for a present VSIF."
+    }
   }
 }
