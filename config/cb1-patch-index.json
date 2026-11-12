@@ -1,4 +1,27 @@
 {
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9007-player-led-lab.patch": {
+    "owner": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "src/common/inc/nvkms-dv-vsif.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9007-player-led-lab.patch": {
+    "owner": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-connector.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "src/common/inc/nvkms-dv-vsif.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier."
+    }
+  },
   "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9006-infoframe-wire-length.patch": {
     "summary": "Transmit the complete native HDMI packet including inserted checksum",
     "component": "nvidia",
@@ -1280,12 +1303,12 @@
     }
   },
   "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": {
-    "summary": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
+    "summary": "Expose experimental forced player-led HDMI on supported Intel display engines.",
     "component": "linux",
     "files": {
       "include/drm/drm_dvbridge_edid.h": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
       "drivers/gpu/drm/i915/display/intel_atomic.c": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit experimental native HDMI carriers and keep 12 bits on Alder Lake-N.",
       "drivers/gpu/drm/i915/display/intel_display_types.h": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
       "drivers/gpu/drm/i915/display/intel_display_params.h": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
       "drivers/gpu/drm/i915/display/intel_display_params.c": "Add an opt-in LLDV format request to native Alder Lake-N HDMI."
@@ -1314,7 +1337,8 @@
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Commit the packed carrier with the selected connector property.",
       "xbmc/windowing/gbm/WinSystemGbm.h": "Expose the existing GBM transport transaction to the player.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present, retire and restore Player-Led through GBM.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Retain the accepted framebuffer receipt until scanout."
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Retain the accepted framebuffer receipt until scanout.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Preserve NVIDIA connector state while switching between player-led and TV-led."
     }
   },
   "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": {

@@ -43,6 +43,7 @@ make_target() {
        "${PKG_BUILD}/kernel/nvidia-modeset/nv-modeset-kernel.o_binary"
     cp "${public}/src/nvidia-modeset/kapi/interface/nvkms-kapi.h" \
        "${public}/src/common/inc/nvkms-cb1-vsif.h" \
+       "${public}/src/common/inc/nvkms-dv-vsif.h" \
        "${public}/src/common/inc/nvkms-cb1-hdr10plus.h" "${PKG_BUILD}/kernel/common/inc/"
     for name in nvidia-drm-connector.c nvidia-drm-connector.h nvidia-drm-drv.c nvidia-drm-priv.h nvidia-drm-modeset.c nvidia-drm-encoder.c nvidia-drm-encoder.h; do
       cp "${public}/kernel-open/nvidia-drm/${name}" "${PKG_BUILD}/kernel/nvidia-drm/${name}"
