@@ -1973,9 +1973,9 @@ static bool player_led_options(struct player_led_render *render,struct dvbridge_
     }
 }
 
-enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
+static enum cb1_master_status render_player_led(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
-    size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
+    size_t bytes,double pts,double el_pts,pl_tex target,pl_buf host,struct dvbridge_creative_plan *applied)
 {
     if(!r || !source || !target)return CB1_MASTER_INVALID;
     struct player_led_render render={.state=&r->creative_state};
@@ -1993,11 +1993,26 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
         .priv=&render,.hook=player_led_map,.signature=player_led_hook_signature};
     const int active_rows[]={area[1],area[3]};
     enum cb1_master_status status=cb1_master_reconstruct(r->renderer,source,metadata,bytes,
-        pts,el_pts,target,&hook,active_rows);
+        pts,el_pts,target,&hook,active_rows,host);
     if(status!=CB1_MASTER_READY)return status;
     if(!render.rendered)return CB1_MASTER_FAILED;
     if(applied)*applied=render.plan.creative;
     return CB1_MASTER_READY;
+}
+
+enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
+{
+    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,target,NULL,applied);
+}
+
+enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex scratch,pl_buf host,struct dvbridge_creative_plan *applied)
+{
+    if(!host)return CB1_MASTER_INVALID;
+    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,scratch,host,applied);
 }
 
 pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *r, pl_tex source,

@@ -46,6 +46,11 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *rend
     const struct dvbridge_policy *policy,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
     struct dvbridge_creative_plan *applied);
+/* The same full-raster render to a coherent RGBA32F host buffer.
+ * scratch is a 4K RGBA8 render target. The caller fences before reading host. */
+enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex scratch,pl_buf host,struct dvbridge_creative_plan *applied);
 /* Fit the linear movie into the final raster, returning source on identity.
  * The caller owns the optional fitted texture. */
 pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *renderer, pl_tex source,

@@ -57,6 +57,7 @@
     ]
   },
   "patches": {
+    "patches/libplacebo/libplacebo-9919-player-led-host.patch": "a6de071a3a0b8d9e4ce0e4e2dcb31dc5124838aaaf33948adc903346019cfb24",
     "patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch": "9fa035e84702ca1ee0db82bfcbfc1de029f7a2ca149b36950cf209cbc73aedc0",
     "patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch": "c86fe701ec00bb74fee4b7d8e87133d2d7cb43ce3d217f3ec128f8bcc9487fbb",
     "patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": "953cfb01339263c02c7932eb67e30ea6603613a1800fa4041f46b5f3ffb10fe0",
@@ -89,17 +90,18 @@
     "patches/libplacebo/libplacebo-9918-expert-tone.patch": "17177ad4fb82c8fc21df417bfdf142e56d131c84f7501c2cf1c7baccd781b6ee"
   },
   "modified_sources": {
+    "libplacebo/src/opengl/gpu_pass.c": "d5f66c58fb05c4464870b5882f65bd3bf646303cd22b63b354fd9b7fa3b9bcff",
     "ffmpeg/libavcodec/dovi_rpudec.c": "6d0770c5bc4c0626c439ddfb769c5b44fc5af181db179297cae4260fa3ab9818",
     "ffmpeg/libavformat/isom_tags.c": "9e93c484c91d4f6e8c6f97c7cbe22058821685ef04f2a0347c316f82ed9dcf4b",
     "ffmpeg/libavutil/dovi_meta.h": "f860511cb8be3c992b4ef7da6747d8dc9670d64d276aeab3a7e6867112857a02",
     "libplacebo/src/dispatch.c": "a1ad0fc629e7941774f03ea43cb68828d671cb676bceff3e9dd226cffe51ce23",
-    "libplacebo/src/opengl/gpu.c": "d76e0547129e142966c9825eb8173269ab9ff4f360f8851e2c3e9789b56a2182",
+    "libplacebo/src/opengl/gpu.c": "d8e046d0897c34a6800da88ad8e84845b5fcf6fcded5a1fdf2aa0bb1d734f477",
     "libplacebo/src/opengl/formats.c": "a57ec2a106860a6e7e2ffb0ed992556c9146a37295e5a4790633c93594f9e0c6",
-    "libplacebo/src/include/libplacebo/renderer.h": "27b121ce03768a11cb363e880fc97a94cd9a0db12cc7260009ede797421ab81a",
+    "libplacebo/src/include/libplacebo/renderer.h": "6d24ce9c6ace75599092b23b8ec67ad3ede0e7153da4278d488bfa364a66ca89",
     "libplacebo/src/include/libplacebo/shaders/sampling.h": "f04810908f907a5a16320b18b9222b0b5006647e2f0a1f66d1002bcdc2ad4496",
     "libplacebo/src/include/libplacebo/shaders.h": "bdc29cddb6545d09ce4b2c6602237cbb5d50c5ac2c1c55cecf9fa4794086bb60",
     "libplacebo/src/include/libplacebo/dispatch.h": "2208cbf66dc61069377d645309852319657be4b12fee6297315a2310ceb75d26",
-    "libplacebo/src/renderer.c": "9859710eb03cd01668e5c8abeadc5cddadd810fb1c8615ab9bc44877de19bd3e",
+    "libplacebo/src/renderer.c": "fc032b0ce70805e2cc1ade2f7095da4221b1ff33c69da19ca0adc1763e287c0b",
     "libplacebo/src/shaders/colorspace.c": "58e55f0fffe08a6e9b17b4176159fd01de1762c9cf067b1242b91e95e3d62234",
     "libplacebo/src/include/libplacebo/shaders/colorspace.h": "c232670e4f772f83807117396aab94d3701da57c765df627846cd2e0bbbbbbff",
     "libplacebo/src/shaders/sampling.c": "29f67f42d64d7a4f17eaa8e515a46809e8767a0111540b96900c506b80bd21ac",

@@ -22,7 +22,7 @@ bool cb1_master_reference_transport(const void *metadata,size_t bytes);
  * are optional and require the hook to blank all other rows. */
 enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,
-    double pts,double el_pts,pl_tex target,const struct pl_hook *finish,const int active_rows[2]);
+    double pts,double el_pts,pl_tex target,const struct pl_hook *finish,const int active_rows[2], pl_buf host);
 #ifdef __cplusplus
 }
 #endif

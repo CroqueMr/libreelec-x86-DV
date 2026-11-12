@@ -108,7 +108,7 @@ enum cb1_master_status cb1_master_reference_map(struct pl_cb1_dovi_reference *ou
 
 enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     const struct pl_frame *source,const void *metadata,size_t bytes,
-    double pts,double el_pts,pl_tex target,const struct pl_hook *finish,const int active_rows[2])
+    double pts,double el_pts,pl_tex target,const struct pl_hook *finish,const int active_rows[2], pl_buf host)
 {
     if(!renderer || !source || !target || !isfinite(pts))return CB1_MASTER_INVALID;
     const struct pl_frame *el=source->enhancement_layer;
@@ -126,10 +126,18 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     }
     const struct pl_tex_params *out=&target->params;
     const pl_fmt fmt=out->format;
-    if(!out->renderable || out->w!=source->crop.x1 || out->h!=source->crop.y1 ||
-       fmt->type!=PL_FMT_FLOAT || fmt->num_components!=4 ||
-       fmt->component_depth[0]!=32 || fmt->component_depth[1]!=32 || fmt->component_depth[2]!=32)
+    if(!out->renderable || !fmt || out->w!=source->crop.x1 || out->h!=source->crop.y1 ||
+       fmt->num_components!=4)
         return CB1_MASTER_UNSUPPORTED;
+    if(host){
+        if(!finish || fmt->type!=PL_FMT_UNORM || fmt->component_depth[0]!=8 ||
+           out->w!=3840 || out->h!=2160 || !host->data || !host->params.storable ||
+           host->params.size<3840ULL*2160*16)
+            return CB1_MASTER_UNSUPPORTED;
+    }else if(fmt->type!=PL_FMT_FLOAT || fmt->component_depth[0]!=32 ||
+             fmt->component_depth[1]!=32 || fmt->component_depth[2]!=32){
+        return CB1_MASTER_UNSUPPORTED;
+    }
 
     struct pl_frame image=*source;
     image.enhancement_layer=raw.residual?el:NULL;
@@ -147,6 +155,11 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     raw.contract=2;
     struct pl_render_params params=pl_render_default_params;
     params.cb1_dovi_reference=&raw;
+#ifdef PL_HAVE_CB1_LLDV_HOST
+    params.cb1_lldv_host=host;
+#else
+    if(host)return CB1_MASTER_UNSUPPORTED;
+#endif
     params.cb1_dovi_transport=true;
     params.min_fbo_precision=32;
     params.disable_linear_scaling=true;

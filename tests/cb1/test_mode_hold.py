@@ -55,6 +55,9 @@ struct Window {
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
  uint64_t m_dvFailedStream=0,m_dvFailedPolicy=0,m_dvActivationStream=9,m_dvActivationPolicy=2;
  int pastGate=0;
+ struct Bridge{bool PollPlayerLedCpu(){return true;}};Bridge* m_dvBridge=nullptr;
+ bool m_dvActivating=false;
+ void RejectDVOutputSurface(){assert(false);}
  bool CompleteDVBridgePage(int){return pageReady;}
  bool SupportsDVOutputMode(){return supported;}
  bool SupportsSDRConversion(){return supported;}

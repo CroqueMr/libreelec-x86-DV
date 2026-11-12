@@ -1,7 +1,7 @@
 # Offscreen 4K FEL benchmark
 
 This benchmark pairs and decodes both HEVC layers through VA-API, runs the CB1
-player-led renderer for a 1,000-nit BT.2020 target, then packs 10- or 12-bit
+player-led renderer for a BT.2020 target, then packs 10- or 12-bit
 4:2:2 into an EGL-imported GBM buffer. A coherent GPU buffer passes the linear
 image to four x86 packing workers. The workers write the final carrier directly
 into mapped DMA-BUF memory.
@@ -9,8 +9,7 @@ into mapped DMA-BUF memory.
 Build on x86-64 Linux with Python, GCC, Meson, Ninja, and development libraries
 for DRM, GBM, VA-API, EGL and GLES. Supply the libplacebo tree with the current
 CB1 patches already applied, the current CB1 Release build directory and its
-matching FFmpeg prefix. The script applies the experimental patches to copies
-of the sources in a new build directory.
+matching FFmpeg prefix. The script builds a copy of the patched libplacebo source and links the matching CB1 archive.
 
 ```sh
 python3 CB1/tools/fel-offscreen/build.py \
@@ -32,7 +31,8 @@ three linear images and three carriers is about 475 MiB, plus decoded surfaces.
 
 Set CB1_RENDER_NODE to change the VA-API and GBM node from
 /dev/dri/renderD128. On a multi-GPU host, select the same EGL device via the
-driver environment. CB1_CPU_THREADS accepts 1–4 workers.
+driver environment. CB1_CPU_THREADS accepts 1–4 workers. CB1_PEAK_NITS defaults to 1000.
+CB1_XRGB=1 writes flipped XRGB8888 carrier rows for direct scanout tests.
 
 CB1_CPU_DUMP=1 reads the last carrier back through EGL into
 pipeline-cpu.rgba. The compare-carrier executable takes the reference and

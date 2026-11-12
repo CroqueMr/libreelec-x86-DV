@@ -62,6 +62,8 @@ struct StreamTelemetry {
 };
 }
 class VideoSourceSideData;
+struct gbm_bo;
+struct gbm_device;
 @CLASS@
 namespace {
 unsigned directCalls=0,stagedCalls=0,resolveCalls=0,releaseCalls=0,commitCalls=0,queryCalls=0;
@@ -94,6 +96,8 @@ bool CDVBridgeGLES::Context::Quarantined()const{return m_state->quarantined;}
 bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
+struct CDVBridgeGLES::PlayerLedCpu {};
+CDVBridgeGLES::CDVBridgeGLES(bool playerLed):m_playerLed(playerLed){}
 CDVBridgeGLES::~CDVBridgeGLES()=default;
 bool CDVBridgeGLES::Failure(const char*){return false;}
 void CDVBridgeGLES::BeginDiagnosticStream(uint64_t){}

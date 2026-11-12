@@ -1,0 +1,165 @@
+diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
+index 0db0012..6e18a12 100644
+--- a/src/include/libplacebo/renderer.h
++++ b/src/include/libplacebo/renderer.h
+@@ -382,6 +382,10 @@ struct pl_render_params {
+     // Per-picture integer reference. Null preserves existing composition.
+     const struct pl_cb1_dovi_reference *cb1_dovi_reference;
+ 
++#define PL_HAVE_CB1_LLDV_HOST 1
++    // Optional coherent RGBA32F storage output for a full 4K player-led image.
++    pl_buf cb1_lldv_host;
++
+ 
+     // If this is true, all shaders will be generated as "dynamic" shaders,
+     // with any compile-time constants being replaced by runtime-adjustable
+diff --git a/src/opengl/gpu.c b/src/opengl/gpu.c
+index d153f04..9eb37f0 100644
+--- a/src/opengl/gpu.c
++++ b/src/opengl/gpu.c
+@@ -198,17 +198,18 @@ pl_gpu pl_gpu_create_gl(pl_log log, pl_opengl pl_gl, const struct pl_opengl_para
+     limits->thread_safe = params->make_current;
+     limits->callbacks = gl_test_ext(gpu, "GL_ARB_sync", 32, 30);
+     limits->align_vertex_stride = 1;
+-    if (gl_test_ext(gpu, "GL_ARB_pixel_buffer_object", 31, 0)) {
++    if (gl_test_ext(gpu, "GL_ARB_pixel_buffer_object", 31, 30)) {
+         limits->max_buf_size = SIZE_MAX; // no restriction imposed by GL
+-        if (gl_test_ext(gpu, "GL_ARB_uniform_buffer_object", 31, 0))
++        if (gl_test_ext(gpu, "GL_ARB_uniform_buffer_object", 31, 30))
+             get(GL_MAX_UNIFORM_BLOCK_SIZE, &limits->max_ubo_size);
+-        if (gl_test_ext(gpu, "GL_ARB_shader_storage_buffer_object", 43, 0) &&
++        if (gl_test_ext(gpu, "GL_ARB_shader_storage_buffer_object", 43, 31) &&
+             gpu->glsl.version >= 140)
+         {
+             get(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &limits->max_ssbo_size);
+         }
+         limits->max_vbo_size = limits->max_buf_size; // No additional restrictions
+-        if (gl_test_ext(gpu, "GL_ARB_buffer_storage", 44, 0)) {
++        if (gl_test_ext(gpu, "GL_ARB_buffer_storage", 44, 0) ||
++            gl_test_ext(gpu, "GL_EXT_buffer_storage", 0, 0)) {
+             limits->max_mapped_size = limits->max_buf_size;
+             limits->max_mapped_vram = limits->max_buf_size;
+             limits->host_cached = strcmp(vendor, "AMD") == 0 ||
+@@ -387,7 +388,17 @@ pl_buf gl_buf_create(pl_gpu gpu, const struct pl_buf_params *params)
+     gl->GenBuffers(1, &buf_gl->buffer);
+     gl->BindBuffer(target, buf_gl->buffer);
+ 
+-    if (gl_test_ext(gpu, "GL_ARB_buffer_storage", 44, 0) && !import) {
++    PFNGLBUFFERSTORAGEPROC storage=NULL;
++    if (gl_test_ext(gpu,"GL_ARB_buffer_storage",44,0)) {
++        storage=gl->BufferStorage;
++    } else if (gl_test_ext(gpu,"GL_EXT_buffer_storage",0,0)) {
++        const struct gl_ctx *ctx=PL_PRIV(p->gl);
++        if (ctx->params.get_proc_addr_ex)
++            storage=(PFNGLBUFFERSTORAGEPROC)ctx->params.get_proc_addr_ex(ctx->params.proc_ctx,"glBufferStorageEXT");
++        else if (ctx->params.get_proc_addr)
++            storage=(PFNGLBUFFERSTORAGEPROC)ctx->params.get_proc_addr("glBufferStorageEXT");
++    }
++    if (storage && !import) {
+ 
+         GLbitfield mapflags = 0, storflags = 0;
+         if (params->host_writable)
+@@ -399,7 +410,7 @@ pl_buf gl_buf_create(pl_gpu gpu, const struct pl_buf_params *params)
+         if (params->memory_type == PL_BUF_MEM_HOST)
+             storflags |= GL_CLIENT_STORAGE_BIT; // hopefully this works
+ 
+-        gl->BufferStorage(target, total_size, data, storflags | mapflags);
++        storage(target, total_size, data, storflags | mapflags);
+ 
+         if (params->host_mapped) {
+             buf_gl->mapped = true;
+diff --git a/src/opengl/gpu_pass.c b/src/opengl/gpu_pass.c
+index c5bcf52..2569494 100644
+--- a/src/opengl/gpu_pass.c
++++ b/src/opengl/gpu_pass.c
+@@ -305,6 +305,8 @@ pl_pass gl_pass_create(pl_gpu gpu, const struct pl_pass_params *params)
+             break;
+         }
+         case PL_DESC_BUF_STORAGE: {
++            if (p->gles_ver)
++                break; // GLSL ES specifies the binding in the shader.
+             GLuint idx = gl->GetProgramResourceIndex(pass_gl->program,
+                                                      GL_SHADER_STORAGE_BLOCK,
+                                                      desc->name);
+diff --git a/src/renderer.c b/src/renderer.c
+index 084181a..27d4c17 100644
+--- a/src/renderer.c
++++ b/src/renderer.c
+@@ -3025,6 +3025,30 @@ static void translate_srgb_color(float out_color[3], const float in_color[3],
+     pl_color_delinearize(csp, out_color);
+ }
+ 
++static bool cb1_dispatch_host_frame(pl_renderer rr, pl_shader *mapped, pl_tex target,
++                                    pl_buf buffer)
++{
++    int w=target->params.w,h=target->params.h;
++    pl_shader sh=pl_dispatch_begin_ex(rr->dp,true);
++    if(!sh_require(sh,PL_SHADER_SIG_NONE,0,0)){
++        pl_dispatch_abort(rr->dp,&sh);
++        return false;
++    }
++    struct pl_buffer_var data={.var=pl_var_vec4("cb1_linear")};
++    data.var.dim_a=w*h;
++    data.layout=pl_std430_layout(0,&data.var);
++    ident_t bind=sh_desc(sh,(struct pl_shader_desc){
++        .desc={.name="cb1_frame_data",.type=PL_DESC_BUF_STORAGE,.access=PL_DESC_ACCESS_WRITEONLY},
++        .binding={.object=buffer},.buffer_vars=&data,.num_buffer_vars=1});
++    ident_t pixel=sh_subpass(sh,*mapped);
++    pl_dispatch_abort(rr->dp,mapped);
++    if(!bind || !pixel){pl_dispatch_abort(rr->dp,&sh);return false;}
++    sh->output=PL_SHADER_SIG_COLOR;
++    GLSL("ivec2 pos=ivec2(gl_FragCoord.xy);cb1_linear[pos.y*%d+pos.x]="$"();"
++         "vec4 color=vec4(0.0);\n",w,pixel);
++    return pl_dispatch_finish(rr->dp,pl_dispatch_params(.shader=&sh,.target=target));
++}
++
+ static bool pass_output_target(struct pass_state *pass)
+ {
+     const struct pl_render_params *params = pass->params;
+@@ -3036,6 +3060,16 @@ static bool pass_output_target(struct pass_state *pass)
+     struct img *img = &pass->img;
+ 
+     bool need_clear = pl_frame_is_cropped(target);
++    if (params->cb1_lldv_host) {
++        const pl_buf buf = params->cb1_lldv_host;
++        const pl_tex tex = target->planes[0].texture;
++        if (!params->cb1_dovi_reference || target->num_planes != 1 ||
++            !tex || tex->params.w != 3840 || tex->params.h != 2160 ||
++            target->planes[0].flipped || target->num_overlays || need_clear ||
++            pass->rotation || params->blend_params || !buf->params.storable ||
++            !buf->data || buf->params.size < 3840ULL * 2160 * 16)
++            return false;
++    }
+     pl_tex border_tex = NULL;
+     if (need_clear && params->border == PL_CLEAR_BLUR &&
+         !(rr->errors & PL_RENDER_ERR_BLUR))
+@@ -3364,7 +3398,7 @@ static bool pass_output_target(struct pass_state *pass)
+         const int sample_depth = PL_DEF(target->repr.bits.sample_depth,
+                                         target->repr.bits.color_depth);
+ 
+-        if (sample_depth && type != PL_FMT_FLOAT) {
++        if (!params->cb1_lldv_host && sample_depth && type != PL_FMT_FLOAT) {
+             const char *comps = params->blend_params ? "rgb" : "rgba";
+             const int bit_shift = target->repr.bits.bit_shift;
+ 
+@@ -3401,12 +3435,14 @@ static bool pass_output_target(struct pass_state *pass)
+             tscale.c[1] += plane->texture->params.h;
+         }
+ 
+-        bool ok = pl_dispatch_finish(rr->dp, pl_dispatch_params(
+-            .shader = &sh,
+-            .target = plane->texture,
+-            .blend_params = params->blend_params,
+-            .rect = plane_rect,
+-        ));
++        bool ok = params->cb1_lldv_host ?
++            cb1_dispatch_host_frame(rr, &sh, plane->texture, params->cb1_lldv_host) :
++            pl_dispatch_finish(rr->dp, pl_dispatch_params(
++                .shader = &sh,
++                .target = plane->texture,
++                .blend_params = params->blend_params,
++                .rect = plane_rect,
++            ));
+ 
+         if (!ok)
+             return false;

@@ -18,6 +18,7 @@ class GbmColourBuffer(unittest.TestCase):
             'PAGE':body(window,'bool CWinSystemGbm::CompleteDVBridgePage('),
             'LOCK':body(surface,'    LockFrontBuffer()'),
             'PENDING':body(surface,'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::LockTransactionalBuffer('),
+            'ADOPT':body(surface,'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::AdoptTransactionalBuffer('),
             'COMPLETE':body(surface,'void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer('),
             'END':body(surface,'void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode('),
         }

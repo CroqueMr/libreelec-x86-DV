@@ -75,6 +75,7 @@ def verify(root, dependency_roots=None, prefix=None):
     if set(owned) != {'src/CMakeLists.txt', 'src/dvbridge_policy.c', 'src/dvbridge_policy.h',
                       'src/cb1_hdr10_expert.c', 'src/cb1_hdr10_expert.h',
                       'src/cb1_master_reference.c', 'src/cb1_master_reference.h',
+                      'src/cb1_lldv_cpu.c', 'src/cb1_lldv_cpu.h',
                       'src/cb1_master_ipt.c', 'src/cb1_master_ipt.h', 'src/cb1_master_ipt_shader.h',
                       'src/cb1_hdr10plus.c', 'src/cb1_hdr10plus.h',
                       'src/cb1_hdr10plus_analysis.c', 'src/cb1_hdr10plus_analysis.h',

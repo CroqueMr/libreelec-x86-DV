@@ -29,9 +29,10 @@ void gbm_surface_release_buffer(gbm_surface*,gbm_bo* bo) {
 std::once_flag flag;
 struct Surface {
   struct CGBMSurfaceBuffer {
-    gbm_surface* surface;gbm_bo* buffer;
+    gbm_surface* surface;gbm_bo* buffer;std::shared_ptr<void> lease;
     explicit CGBMSurfaceBuffer(gbm_surface* s):surface(s),buffer(gbm_surface_lock_front_buffer(s)){}
-    ~CGBMSurfaceBuffer(){if(buffer)gbm_surface_release_buffer(surface,buffer);}
+    CGBMSurfaceBuffer(gbm_bo* bo,std::shared_ptr<void> owner):surface(nullptr),buffer(bo),lease(std::move(owner)){}
+    ~CGBMSurfaceBuffer(){if(surface && buffer)gbm_surface_release_buffer(surface,buffer);}
     gbm_bo* Get(){return buffer;}
   };
   gbm_surface pool;gbm_surface* m_surface=&pool;
@@ -40,6 +41,7 @@ struct Surface {
   Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
   CGBMSurfaceBuffer& LockFrontBuffer() @LOCK@
   gbm_bo* LockTransactionalBuffer() @PENDING@
+  gbm_bo* AdoptTransactionalBuffer(gbm_bo* buffer,std::shared_ptr<void> lease) @ADOPT@
   void CompleteTransactionalBuffer(bool presented) @COMPLETE@
   void EndTransactionalMode() @END@
 };
@@ -136,7 +138,7 @@ struct Window {
     return status;
   }
   bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed,
-                         bool async=false) @LLDV@
+                         bool async=false,gbm_bo* carrier=nullptr,std::shared_ptr<void> lease={}) @LLDV@
 };
 int main(){
   Window window;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(window.m_DRM);
@@ -185,5 +187,22 @@ int main(){
   assert(!window.CompleteDVBridgePage() && displayed==twelve && twelve->locked);
   drm->fenceReady=true;
   assert(window.CompleteDVBridgePage() && displayed!=twelve && displayed->locked && !twelve->locked);
+  auto* egl=displayed;
+  auto cpu=std::make_shared<gbm_bo>();cpu->locked=true;
+  auto* cpuBO=cpu.get();std::weak_ptr<gbm_bo> displayedLease=cpu;
+  drm->fenceReady=false;
+  assert(window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false},true,cpuBO,std::move(cpu)));
+  assert(!displayedLease.expired() && displayed==egl && !window.CompleteDVBridgePage());
+  drm->fenceReady=true;
+  assert(window.CompleteDVBridgePage() && displayed==cpuBO && !displayedLease.expired() && !egl->locked);
+
+  auto refused=std::make_shared<gbm_bo>();refused->locked=true;
+  auto* refusedBO=refused.get();std::weak_ptr<gbm_bo> refusedLease=refused;
+  drm->accept=false;
+  assert(!window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false},true,refusedBO,std::move(refused)));
+  assert(refusedLease.expired() && !displayedLease.expired() && displayed==cpuBO);
+  drm->accept=true;
+  assert(window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false}));
+  assert(displayedLease.expired() && displayed!=cpuBO);
   displayed=nullptr;
 }

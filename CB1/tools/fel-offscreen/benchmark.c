@@ -5,6 +5,7 @@
 #include "dvbridge_fel.h"
 #include "dvbridge_metadata.h"
 #include "cb1_master_reference.h"
+#include "cb1_lldv_cpu.h"
 #include <libavformat/avformat.h>
 #include <libavutil/hwcontext.h>
 #include <time.h>
@@ -17,11 +18,10 @@
 #include <linux/dma-buf.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-void cb1_host_frame_store(struct dvbridge_renderer *,pl_buf);
-void cb1_cpu_init(unsigned,unsigned);
-void cb1_cpu_start(float *,uint32_t *);
-int cb1_cpu_ready(int);
-void cb1_cpu_destroy(void);
+static struct cb1_lldv_cpu *cpu;
+static float peak_nits;
+static unsigned depth;
+static bool xrgb;
 enum { SLOTS=3, WIDTH=3840, HEIGHT=2160 };
 
 static double clock_ms(void)
@@ -85,7 +85,8 @@ static void init_gbm(void)
 }
 static void create_carrier(struct pending *p)
 {
-    p->bo=gbm_bo_create(gbm,WIDTH,HEIGHT,GBM_FORMAT_ABGR8888,
+    const uint32_t format=xrgb?GBM_FORMAT_XRGB8888:GBM_FORMAT_ABGR8888;
+    p->bo=gbm_bo_create(gbm,WIDTH,HEIGHT,format,
         GBM_BO_USE_RENDERING|GBM_BO_USE_SCANOUT|GBM_BO_USE_LINEAR);
     assert(p->bo);
     unsigned stride=gbm_bo_get_stride(p->bo);
@@ -96,7 +97,7 @@ static void create_carrier(struct pending *p)
     p->pixels=mmap(NULL,(size_t)stride*HEIGHT,PROT_READ|PROT_WRITE,MAP_SHARED,p->dma_fd,0);
     assert(p->pixels!=MAP_FAILED);
     EGLint attrs[]={EGL_WIDTH,WIDTH,EGL_HEIGHT,HEIGHT,
-        EGL_LINUX_DRM_FOURCC_EXT,GBM_FORMAT_ABGR8888,
+        EGL_LINUX_DRM_FOURCC_EXT,format,
         EGL_DMA_BUF_PLANE0_FD_EXT,p->dma_fd,EGL_DMA_BUF_PLANE0_OFFSET_EXT,0,
         EGL_DMA_BUF_PLANE0_PITCH_EXT,stride,EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,0,
         EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,0,EGL_NONE};
@@ -179,7 +180,7 @@ static void pump(struct pending q[SLOTS],bool wait)
 {
     bool changed=false;
     for(;;){
-        if(cpu_slot && cb1_cpu_ready(0)){
+        if(cpu_slot && cb1_lldv_cpu_ready(cpu,false)){
             struct pending *p=cpu_slot;
             double t=clock_ms();
             cpu_observed_ms+=t-cpu_start_ms;
@@ -209,7 +210,9 @@ static void pump(struct pending q[SLOTS],bool wait)
                 if(!p->bo)create_carrier(p);
                 sync_carrier(p,DMA_BUF_SYNC_START);
                 cpu_start_ms=clock_ms();
-                cb1_cpu_start((float *)p->host->data,(uint32_t *)p->pixels);
+                const struct cb1_lldv_cpu_frame frame={.linear=(const float *)p->host->data,.carrier=p->pixels,
+                    .stride=WIDTH*4,.peak_nits=peak_nits,.bits=depth,.xrgb=xrgb,.flip_y=xrgb};
+                assert(cb1_lldv_cpu_submit(cpu,&frame));
                 p->phase=CPU;cpu_slot=p;to_cpu++;changed=true;
             }
         }
@@ -225,7 +228,7 @@ static void pump(struct pending q[SLOTS],bool wait)
         }
         if(changed || !wait || retired==submitted)return;
         if(cpu_slot){
-            cb1_cpu_ready(1);
+            cb1_lldv_cpu_ready(cpu,true);
         }else{
             // A consumer blit can be queued behind renders already ready for the CPU.
             unsigned next = to_cpu < submitted ? to_cpu : retired;
@@ -260,7 +263,7 @@ static void render(struct reference_gpu *g,struct dvbridge_renderer *renderer,pl
     const AVFrameSideData *sd=av_frame_get_side_data(base,AV_FRAME_DATA_DOVI_METADATA);
     assert(sd);
     const struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_HDR10_EXPERT,
-        .tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
+        .tv={peak_nits,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_BT2020}};
     double pts=base->pts*av_q2d(base->time_base);
     if(!slot->host){
         pl_gpu gpu=g->gl->gpu;
@@ -268,11 +271,9 @@ static void render(struct reference_gpu *g,struct dvbridge_renderer *renderer,pl
             .host_mapped=true,.storable=true,.memory_type=PL_BUF_MEM_HOST));
         assert(slot->host && slot->host->data);
     }
-    cb1_host_frame_store(renderer,slot->host);
-    enum cb1_master_status status=dvbridge_render_player_led(renderer,&policy,&frames[0].frame,
-        sd->data,sd->size,pts,el?pts:NAN,target,NULL);
+    enum cb1_master_status status=dvbridge_render_player_led_host(renderer,&policy,&frames[0].frame,
+        sd->data,sd->size,pts,el?pts:NAN,target,slot->host,NULL);
     if(status!=CB1_MASTER_READY){fprintf(stderr,"render status=%d pts=%.6f\n",status,pts);abort();}
-    cb1_host_frame_store(renderer,NULL);
     // The persistent SSBO is coherent. Wait for this draw before starting the CPU pack.
     slot->fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);assert(slot->fence);
     slot->phase=RENDERED;
@@ -287,7 +288,10 @@ int main(int argc,char **argv)
     if(!render_node)render_node="/dev/dri/renderD128";
     assert(argc==6 && (!strcmp(argv[1],"single") || !strcmp(argv[1],"fel")));
     bool paired=!strcmp(argv[1],"fel");
-    const unsigned bits=atoi(argv[5]);assert(bits==10 || bits==12);
+    depth=atoi(argv[5]);assert(depth==10 || depth==12);
+    const char *peak=getenv("CB1_PEAK_NITS");
+    peak_nits=peak?strtof(peak,NULL):1000;
+    xrgb=getenv("CB1_XRGB")!=NULL;
     unsigned samples=atoi(argv[3]),warmup=atoi(argv[4]);
     assert(samples && samples<=1800 && (samples%300==0 || getenv("CB1_CPU_DUMP")) && warmup<=500);
     AVBufferRef *device=NULL;
@@ -313,7 +317,7 @@ int main(int argc,char **argv)
     unsigned count=0,pictures=0,discarded=0;
     struct pending pending[SLOTS]={0};
     const char *worker_count=getenv("CB1_CPU_THREADS");
-    cb1_cpu_init(worker_count?atoi(worker_count):4,bits);
+    cpu=cb1_lldv_cpu_create(worker_count?atoi(worker_count):4);assert(cpu);
     double started=0,first_deadline=0;
     int64_t first_pts=AV_NOPTS_VALUE;
     double pace=getenv("CB1_TARGET_FPS")?atof(getenv("CB1_TARGET_FPS")):0;
@@ -371,7 +375,7 @@ int main(int argc,char **argv)
         }
     }
     drain(pending);
-    cb1_cpu_destroy();
+    cb1_lldv_cpu_destroy(cpu);
     fprintf(stderr,"CPU observed avg %.3f ms; carrier handoff avg %.3f ms\n",
         cpu_observed_ms/packed_frames,handoff_ms/packed_frames);
     assert(started);
