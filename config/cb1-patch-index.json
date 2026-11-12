@@ -1290,5 +1290,29 @@
       "drivers/gpu/drm/i915/display/intel_display_params.h": "Add an opt-in LLDV format request to native Alder Lake-N HDMI.",
       "drivers/gpu/drm/i915/display/intel_display_params.c": "Add an opt-in LLDV format request to native Alder Lake-N HDMI."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": {
+    "owner": "CB1 Player-Led Dolby Vision playback",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Label the Player-Led circuit and its transport prerequisite.",
+      "system/settings/settings.xml": "Expose the circuit and shared display calibration.",
+      "system/shaders/GLES/2.0/gles_gui_composite.frag": "Blend SDR GUI and PQ subtitles into the linear mapped picture.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Admit the Player-Led route from the same playback policy snapshot.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Persist default playback and revision format changes.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Describe Player-Led selection and availability.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Bind confirmed output facts to the decoded picture.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Render, fit, pack and bind the Player-Led framebuffer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Own the Player-Led textures and presentation receipt.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Choose a compatible 2160p timing for Player-Led playback.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Expose the default, live circuit and format choices.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.cpp": "Bind linear GUI output uniforms.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.h": "Pass the Player-Led target gamut and peak to the shader.",
+      "xbmc/settings/SettingConditions.cpp": "Report circuit admission without replacing the preference.",
+      "xbmc/utils/DVBridgeLldv.h": "Choose a format from sink, driver, timing and preference.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Commit the packed carrier with the selected connector property.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose the existing GBM transport transaction to the player.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present, retire and restore Player-Led through GBM.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Retain the accepted framebuffer receipt until scanout."
+    }
   }
 }

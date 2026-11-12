@@ -46,9 +46,9 @@ struct CGuiCompositeShaderGLES{
  std::vector<float>GenerateDegammaLUT(){return {0,1};}std::vector<float>GeneratePQLUT(float){return {0,1};}
  bool CreateLUTs(int colorTransfer,float sdrGamma) SHADER
 };
-namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR};}
+namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR, PlayerLed};}
 struct State{bool Captured()const{return false;}};
-struct Bridge{bool RebindOutputSurface(bool,bool){return true;}};
+struct Bridge{bool RebindOutputSurface(bool,bool){return true;}bool PlayerLed()const{return false;}};
 struct Context{int Poll(){return DVBRIDGE_DV_IDLE;}};
 struct FBO{void Cleanup(){}};
 struct Picture{};
@@ -123,8 +123,8 @@ struct CServiceBroker {static auto GetSettingsComponent(){return &component;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}}
 HEADER
 namespace DVBRIDGE {
-enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};};
+enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 

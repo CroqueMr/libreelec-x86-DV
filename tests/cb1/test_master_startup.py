@@ -54,6 +54,7 @@ enum {LOGINFO};
 struct CDVMetadataBuffer {DVBRIDGE::Binding binding;auto Binding()const{return binding;} const void* Data()const{return this;}};
 struct dvbridge_geometry {};
 struct CDVBridgeGLES {
+ bool m_playerLed{};
  enum class FrameStatus{Ready,Pending,Busy,Failed,Reused,Unsupported};
  struct Layer {DVBRIDGE::Binding binding;double pts=1;struct {int profile=7;}sourceInfo;};
  struct Context {bool bad=false;bool Quarantined()const{return bad;}

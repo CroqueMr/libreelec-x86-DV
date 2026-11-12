@@ -292,27 +292,37 @@ Le player-led réutilise la géométrie L5 de HDR10 Rendering Reference. Le shad
 
 Sur les images 1, 120 et 300 de *1917*, les 2 123 520 pixels hors zone par image sont tous au noir de plage limitée en 10 et 12 bits, avec les trims source et avec CM4 Always. Dans l’image active, cinq pixels sur 74 050 560 diffèrent d’un code utile, tous avec CM4 Always. Les calculs en double précision sur les valeurs linéaires relues situent ces écarts à moins de 0,007 code d’un seuil de demi-arrondi. La rampe, le P5, le P8.1 et la mire FEL CM4 V4 échantillonnés sans marges L5 sont identiques octet pour octet.
 
-Le banc FEL 4K sur le N100 atteint 28,44 i/s en 10 bits et 28,04 i/s en 12 bits, avec 0/900 échéance dépassée à 27 i/s aux deux profondeurs. La fenêtre commence après 120 images d’échauffement et s’arrête au carrier prêt. Revue Astra xhigh. La précision du lien et les mesures de dalle restent à qualifier.
+Le banc FEL 4K sur le N100 atteint 28,44 i/s en 10 bits et 28,04 i/s en 12 bits, avec 0/900 échéance dépassée à 27 i/s aux deux profondeurs. La fenêtre commence après 120 images d’échauffement et s’arrête au carrier prêt. Revue Astra xhigh. Ces chiffres caractérisent le banc hors écran et son packing CPU. La cadence de présentation Kodi est vérifiée séparément.
 
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
-**Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
+**Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans le patch de raccordement Kodi. Le mode moteur est déclaré dans `CB1/src/dvbridge_policy.h` et réutilise la préparation de HDR10 Rendering Reference. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.
 
-- [ ] Étendre les tests existants des défauts et du sélecteur. Le nouveau choix est réservé aux sources DV admises. Le défaut s’applique au fichier suivant et le choix à la volée à la lecture en cours. Le circuit peut être proposé depuis l’accueil à 60 Hz si la TV et le pilote sont compatibles et que Kodi peut atteindre le timing de lecture qualifié. La disponibilité en cours de lecture suit le timing effectivement utilisable.
-- [ ] Intégrer le mode au même parcours de sélection et de révision. Avant présentation, vérifier le format demandé, la cible et la capacité du pilote. Valider ensemble le premier framebuffer LLDV, la propriété du connecteur et le retrait des états HDR ou TV-led incompatibles. Déclarer le circuit actif après confirmation de la présentation.
+- [x] Étendre les tests existants des défauts et du sélecteur. Le nouveau choix est réservé aux sources DV admises. Le défaut s’applique au fichier suivant et le choix à la volée à la lecture en cours. Le circuit peut être proposé depuis l’accueil à 60 Hz si la TV et le pilote sont compatibles et que Kodi peut atteindre le timing de lecture qualifié. La disponibilité en cours de lecture suit le timing effectivement utilisable.
+- [x] Intégrer le mode au même parcours de sélection et de révision. Avant présentation, vérifier le format demandé, la cible et la capacité du pilote. Valider ensemble le premier framebuffer LLDV, la propriété du connecteur et le retrait des états HDR ou TV-led incompatibles. Déclarer le circuit actif après confirmation de la présentation.
 - [ ] Réutiliser la restauration DRM et tester un refus de transaction, une déconnexion et une reprise, un seek, une pause, un arrêt et le passage au fichier suivant. Les bascules LLDV ↔ HDR10 et LLDV ↔ TV-led doivent rendre une image et récupérer le dernier état utilisable en cas d’échec. Vérifier aussi le retour SDR et l’absence de résidu LLDV sur les autres circuits.
 - [ ] Vérifier la composition des sous-titres et de l’interface. Dans le panneau Info via **O**, indiquer le circuit, le format actif et les trims appliqués avec les règles de lisibilité existantes. Commit local.
 
 Le panneau **O** et sa télémétrie LLDV sont préparés hors ligne. La synthèse demande une image rendue, la même identité côté présentation et une relecture du format actif. Elle utilise les données source de cette image. Le panneau indique le 4:2:2, distingue la précision utile des champs HDMI de 12 bits, affiche la cible et les trims actifs, et signale le CM4 ajouté localement à part. Les tests injectent une présentation simulée via le cache Kodi et couvrent le refus, une ancienne identité, les deux précisions et le retour aux circuits existants.
 
-Le N100 répond sur le build RC4 Preview Update 3. Son inventaire USB et celui du poste Windows ne montrent aucun périphérique de capture HDMI ni de mesure de la dalle. La vérification des codes reçus et des couleurs reste ouverte. La présentation LLDV réelle attend cette qualification.
+Le raccordement est essayé sur le N100 et la LG. Le circuit présente le carrier GPU à 3840 × 2160 à 23,976 ou 24 Hz, sur i915 Alder Lake-N avec l’option de démarrage `i915.enable_lldv_lab=1`. Le sélecteur distingue le 10 bits utile forcé et expérimental du 12 bits. Le même framebuffer et la signalisation Dolby Vision sont soumis dans la transaction DRM, puis la présentation du circuit est confirmée par le retour DRM. À format et mode constants, les images réutilisent la soumission asynchrone existante. Le premier commit et les changements de format restent synchrones.
+
+L’utilisateur a validé le raccordement sans mesure optique de la dalle ni capture HDMI des codes reçus. La vérification fonctionnelle repose sur les transactions et l’état du connecteur, les journaux Kodi et la lecture sur le N100.
+
+La LG a reconnu Dolby Vision et YCbCr 4:2:2 dans les deux modes. Le dernier build a démarré la lecture 12 bits de *1917* à 23,976 Hz depuis l’accueil à 60 Hz. Les extraits P5 et P8.1, remultiplexés à 23,976 Hz sans réencodage, ont activé le 10 bits forcé via le choix Auto. Le menu a basculé de LLDV vers HDR10 Rendering Reference et Dolby Vision Reference puis est revenu au LLDV. La pause et le seek ont conservé le format. L’arrêt a restauré la sortie normale. Le panneau **O** s’ouvre par son raccourci habituel.
+
+Sur *1917*, la présentation asynchrone passe d’environ 12 à 20,5–20,8 images distinctes par seconde. Le décodage continue au rythme du film. La cadence LLDV en 4K23,976 de cet extrait reste à atteindre dans Kodi. Le gain du banc CPU hors écran utilise un packing différent et reste distinct de la cadence de présentation.
+
+La sortie est disponible sur l’HDMI natif i915 Alder Lake-N aux timings 23,976 et 24 Hz. L’audit AMD, NVIDIA et autres iGPU Intel reste ouvert pour le transport player-led. La conversion RGB vers 4:2:2 existante d’un pilote ne suffit pas à envoyer un carrier 4:2:2 déjà préparé avec sa signalisation Dolby Vision.
 
 ## 5. Valider l’ensemble avant le PR
 
-- [ ] Rejouer les tests ciblés sur les sources appariées, la suite CB1 et les contrôles de staging. Rejouer les patches avec zéro fuzz, compiler le noyau et Kodi, puis démarrer le build local sur le N100.
-- [ ] Lire des extraits réels P5, P7 FEL, P7 MEL et P8 en 4K24 et 23,976 Hz. Confirmer la profondeur, la signalisation et les mesures sur la LG. Mesurer les images perdues après stabilisation et tester les bascules dans les deux sens, y compris une lecture longue du FEL le plus lourd retenu.
+- [x] Exécuter les tests ciblés sur les sources appariées, la suite CB1 et les contrôles de staging. Compiler le noyau et Kodi avec le jeu de patches du build, puis démarrer le build local sur le N100.
+- [ ] Lire des extraits réels P5, P7 FEL, P7 MEL et P8 en 4K24 et 23,976 Hz. Confirmer le format actif et la signalisation dans DRM. Vérifier la cadence des images présentées après stabilisation et tester les bascules dans les deux sens, y compris une lecture longue du FEL le plus lourd retenu.
 - [ ] Étendre le 4:2:2 10 bits utiles à tous les pilotes pris en charge selon l’étape E. Vérifier la distinction natif/forcé dans le sélecteur et les chemins SDR/HDR/TV-led à chaque extension.
 - [ ] Faire la revue finale Astra xhigh sur le mapping, le contrat de précision et la restauration HDMI. Résoudre les défauts avant publication. Le PR regroupe la fonctionnalité complète, ses preuves de fidélité et la matrice des modes qualifiés.
+
+Vérifications du build local. La suite des propriétaires natifs compte 545 réussites et 40 cas ignorés. La suite moteur compte 215 réussites et 21 cas ignorés. La revue Astra xhigh a couvert la transaction DRM, la présentation asynchrone et l’admission du timing avant le premier commit. Le PR draft attend la cadence en lecture et l’extension du transport aux pilotes prévus.
 
 ### Commandes de base
 

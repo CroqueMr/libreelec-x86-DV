@@ -55,6 +55,8 @@ struct CDRMAtomic:DRM {
   bool range=false,accept=true,lastAccepted=false,lastAsync=false;
   int calls=0;
   bool clearHDR10Plus=false, modeset=false, pending=false;
+  bool fenceReady=false;
+  gbm_bo* queued=nullptr;
   uint64_t requested=0, active=0;
   struct Connector {
     std::optional<uint64_t> GetPropertyEnumValue(std::string_view key,std::string_view name) const
@@ -72,17 +74,29 @@ struct CDRMAtomic:DRM {
   void StageHDR10Plus(std::nullopt_t,uint64_t) {clearHDR10Plus=true;}
   bool FlipPageTransactional(gbm_bo* bo,bool restore=false,bool async=false)
   {
-    assert(!restore && !async);
+    assert(!restore);
     ++calls;
     const bool cleared=std::exchange(clearHDR10Plus,false);
     if(bo) assert(cleared);
     if(!bo || !accept) {requested=active;return false;}
     assert(bo->locked);
+    if(async)
+    {
+      assert(requested==active && !modeset);
+      pending=true;queued=bo;return true;
+    }
     if(requested!=active) assert(modeset);
     modeset=false;
     active=requested;
     displayed=bo;
     return true;
+  }
+  bool HasPendingCB1Page()const{return pending;}
+  bool CompleteCB1Page(int)
+  {
+    if(!fenceReady)return false;
+    assert(queued&&queued->locked);
+    displayed=std::exchange(queued,nullptr);pending=false;return true;
   }
   bool HasColorRangeTransition()const{return range;}
   bool LastPageAccepted()const{return lastAccepted;}
@@ -108,7 +122,7 @@ struct Window {
   void DeferConnectorPreferences(){assert(false);}
   void UpdateDriverLimitedRange(){}void RetryConnectorProperties(){}
   void FlipPage(bool rendered,bool videoLayer,bool async) @FLIP@
-  bool CompleteDVBridgePage() {return !static_cast<CDRMAtomic&>(*m_DRM).pending;}
+  bool CompleteDVBridgePage(int timeoutMs=0) @PAGE@
   bool StageTransportPreferences() {return true;}
   DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const
   {
@@ -121,7 +135,8 @@ struct Window {
     status.active=static_cast<LldvFormat>(drm.active);
     return status;
   }
-  bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed) @LLDV@
+  bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed,
+                         bool async=false) @LLDV@
 };
 int main(){
   Window window;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(window.m_DRM);
@@ -164,5 +179,11 @@ int main(){
   drm->accept=true;
   assert(window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false}));
   assert(!ten->locked && displayed->locked && drm->active==2);
+  auto* twelve=displayed;
+  assert(window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false},true));
+  assert(drm->pending && drm->queued && drm->queued->locked && displayed==twelve && twelve->locked);
+  assert(!window.CompleteDVBridgePage() && displayed==twelve && twelve->locked);
+  drm->fenceReady=true;
+  assert(window.CompleteDVBridgePage() && displayed!=twelve && displayed->locked && !twelve->locked);
   displayed=nullptr;
 }

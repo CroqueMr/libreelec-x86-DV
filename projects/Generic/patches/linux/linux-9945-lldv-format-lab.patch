@@ -226,7 +226,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
 +	if (display->params.enable_lldv_lab && display->platform.alderlake_p_alderlake_n &&
 +	    intel_dv_lab_platform_supported(DISPLAY_VER(display))) {
 +		static const struct drm_prop_enum_list formats[] = {
-+			{ 0, "Off" }, { 1, "YCbCr 4:2:2 10 useful bits" }, { 2, "YCbCr 4:2:2 12 bits" },
++			{ 0, "Off" }, { 1, "YCbCr 4:2:2 10 bits forced" }, { 2, "YCbCr 4:2:2 12 bits" },
 +		};
 +
 +		connector->lldv_format_property = drm_property_create_enum(display->drm,

@@ -463,6 +463,21 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
     }
     glDeleteFramebuffers(1,&fbo);
     pl_tex_destroy(gpu,&carrier);
+    pl_tex fitted=NULL;
+    const struct dvbridge_geometry same={8,8,0,0,8,8,8,8};
+    const struct dvbridge_geometry placed={8,8,2,1,8,8,12,10};
+    assert(dvbridge_fit_player_led(renderer,output,&fitted,same)==output && !fitted);
+    assert(dvbridge_fit_player_led(renderer,output,&fitted,placed)==fitted && fitted);
+    float placed_pixels[12*10*4];
+    reference_read(gpu,fitted,0,0,12,10,placed_pixels);
+    for(int y=0;y<10;y++)for(int x=0;x<12;x++){
+        const float *pixel=placed_pixels+(y*12+x)*4;
+        if(x>=2 && x<10 && y>=1 && y<9)
+            assert(fabsf(pixel[0]-pixels[((y-1)*8+x-2)*4])<1e-6f);
+        else
+            assert(pixel[0]==0 && pixel[1]==0 && pixel[2]==0);
+    }
+    pl_tex_destroy(gpu,&fitted);
     policy.expert_black_nits=.01;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
     reference_read(gpu,output,0,0,8,8,pixels);

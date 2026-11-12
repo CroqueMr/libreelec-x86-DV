@@ -31,6 +31,7 @@ extern "C" {
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 #include "utils/DVBridgeDiagnosticState.h"
 #include "utils/Crc32.h"
+#include "utils/DVBridgeLldv.h"
 #include "cores/VideoProcessingInfo.h"
 #include "cores/VideoSourceSideData.h"
 namespace KODI::RENDERING::CAPTURE {struct ReadbackBuffer;}
@@ -105,6 +106,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::BeginHDR10Plus(){return FrameStatus::F
 void CDVBridgeGLES::CaptureMetadata(const CDVMetadataBuffer&,bool){m_pendingInfo=CDVPlaybackInfo::SDR;}
 DVBRIDGE::SourceBinding CDVBridgeGLES::SelectionIdentity(DVBRIDGE::SourceBinding b,const DVBRIDGE::OutputPreferences&,dvbridge_mode)const{return b;}
 void CDVBridgeGLES::Cancel(){m_pending=m_prepared=m_packed=false;m_submission={};}
+bool CDVBridgeGLES::PreparePlayerLed(const pl_frame&,const CDVMetadataBuffer&,
+    dvbridge_geometry,const dvbridge_policy&,double,double){assert(false);return false;}
 const dvbridge_hdr10_policy_output*CDVBridgeGLES::HDR10Output()const{return &pending;}
 @METHODS@
 extern "C" {

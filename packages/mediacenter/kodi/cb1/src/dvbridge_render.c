@@ -1998,6 +1998,40 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     return CB1_MASTER_READY;
 }
 
+pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *r, pl_tex source,
+    pl_tex *fitted, struct dvbridge_geometry geometry)
+{
+    int width,height;
+    pl_rect2df crop;
+    struct active_mask mask={.exact_reference=true};
+    if(!r || !fitted || !picture_crop(&crop,geometry,source) ||
+       !dvbridge_geometry_raster(geometry,&width,&height) ||
+       !dvbridge_geometry_destination(geometry,mask.rect))return NULL;
+    if(source->params.w==width && source->params.h==height &&
+       !crop.x0 && !crop.y0 && crop.x1==width && crop.y1==height)return source;
+    if(!pl_tex_recreate(r->gpu,fitted,pl_tex_params(.w=width,.h=height,
+        .format=source->params.format,.sampleable=true,.renderable=true)))return NULL;
+    struct pl_frame image={.num_planes=1,
+        .planes={{.texture=source,.components=4,.component_mapping={0,1,2,3}}},
+        .repr=pl_color_repr_rgb,.color=pl_color_space_srgb,.crop=crop};
+    image.color.transfer=PL_COLOR_TRC_LINEAR;
+    struct pl_frame target=image;
+    target.planes[0].texture=*fitted;
+    target.crop=(pl_rect2df){0,0,width,height};
+    const struct pl_hook blank={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
+        .priv=&mask,.hook=mask_active_area,.signature=0x434231504c440002ULL};
+    const struct pl_hook *hooks[]={&blank};
+    struct pl_render_params params=pl_render_default_params;
+    params.min_fbo_precision=32;
+    params.peak_detect_params=NULL;
+    params.dither_params=NULL;
+    params.sigmoid_params=NULL;
+    params.skip_caching_single_frame=true;
+    params.hooks=hooks;
+    params.num_hooks=1;
+    return render_image(r,&image,&target,&params,&mask,NULL,false)?*fitted:NULL;
+}
+
 #define PLAYER_LED_COLOR_GLSL \
     CB1_CARRIER_GLSL \
     "const vec3 lldv_luma=vec3(.2627,.6780,.0593);\n" \
@@ -2142,7 +2176,8 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
     unsigned bits, bool flip_y)
 {
-    if (!r || !policy || policy->mode != DVBRIDGE_MODE_HDR10_EXPERT ||
+    if (!r || !policy || (policy->mode != DVBRIDGE_MODE_HDR10_EXPERT &&
+        policy->mode != DVBRIDGE_MODE_PLAYER_LED) ||
         dvbridge_policy_validate(policy) != DVBRIDGE_POLICY_VALID ||
         (bits != 10 && bits != 12) || !linear || !carrier || linear == carrier)
         return false;
@@ -2908,7 +2943,7 @@ bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *r,enum dvbridge_m
     if(!r || mode<=DVBRIDGE_MODE_DISABLED || mode>=DVBRIDGE_MODE_COUNT ||
        !r->gpu || !r->renderer ||
        !pl_find_fmt(r->gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE))return false;
-    if(mode==DVBRIDGE_MODE_MASTER_REFERENCE)
+    if(mode==DVBRIDGE_MODE_MASTER_REFERENCE || mode==DVBRIDGE_MODE_PLAYER_LED)
         return r->gpu->glsl.version >= (r->gpu->glsl.gles?310:400) &&
             pl_find_fmt(r->gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE) &&
             pl_find_fmt(r->gpu,PL_FMT_FLOAT,2,32,32,PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_SAMPLEABLE);

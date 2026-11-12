@@ -64,9 +64,20 @@ struct CompositeShader {
   GLint m_hOotfGamma=glGetUniformLocation(nativeProgram,"u_ootfGamma");
   GLint m_hInputPQ=glGetUniformLocation(nativeProgram,"u_inputPQ");
   GLint m_hOutputRange=glGetUniformLocation(nativeProgram,"u_outputRange");
+  GLint m_hPlayerLedScale=glGetUniformLocation(nativeProgram,"u_playerLedScale");
+  GLint m_hPlayerLedGui=glGetUniformLocation(nativeProgram,"u_playerLedGui");
+  GLint m_hPlayerLedSubtitles=glGetUniformLocation(nativeProgram,"u_playerLedSubtitles");
+  float m_playerLedScale{};
+  std::array<float,9> m_playerLedGui{},m_playerLedSubtitles{};
   void SetProjection(const GLfloat* p){m_proj=p;}
   void SetInputPQ(bool p){m_inputPQ=p;}
   void SetOutputRange(float s,float o){m_outputScale=s;m_outputOffset=o;}
+  void SetPlayerLed(float peak=0,const std::array<float,9>& guiMatrix={},
+                    const std::array<float,9>& subMatrix={})
+  {
+    m_playerLedScale=peak>0?10000/peak:0;
+    m_playerLedGui=guiMatrix;m_playerLedSubtitles=subMatrix;
+  }
   GLint GetPosLoc(){return glGetAttribLocation(nativeProgram,"a_pos");}
   GLint GetTexLoc(){return glGetAttribLocation(nativeProgram,"a_tex");}
   bool Enable(){
@@ -81,13 +92,22 @@ struct CompositeShader {
 };
 struct Bridge {
   bool m_hdr10=true,m_prepared=true,m_direct=true,m_live=true,m_guiComposed=false;
+  bool playerLed{};
+  bool PlayerLed()const{return playerLed;}
   void* m_scanout=this;
   unsigned m_outputBits=10,m_scanoutFramebuffer=finalFramebuffer,pqQueries=0;
   GLuint GetPQFramebuffer(){++pqQueries;return m_direct?0:pqFramebuffer;}
   bool GetHDR10OutputTarget(unsigned& framebuffer,unsigned& bits) GUI_HDR_TARGET_BODY
 };
 struct DRM {void* GetVideoPlane(){return nullptr;} void* GetGuiPlane(){return nullptr;}};
-struct State {bool Captured()const{return false;}};
+struct State {bool captured{};bool Captured()const{return captured;}};
+namespace DVBRIDGE {enum class OutputRoute{HDR10,PlayerLed};}
+enum {DVBRIDGE_GAMUT_BT709=1,DVBRIDGE_GAMUT_P3_D65=2,PL_INTENT_RELATIVE_COLORIMETRIC=0};
+enum pl_color_primaries {PL_COLOR_PRIM_BT_709,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_PRIM_BT_2020};
+auto pl_raw_primaries_get(pl_color_primaries primaries){return primaries;}
+struct ColorMatrix {float m[3][3];};
+ColorMatrix pl_get_color_mapping_matrix(pl_color_primaries,pl_color_primaries,int)
+{return {{{1,0,0},{0,1,0},{0,0,1}}};}
 struct CWinSystemGbmGLESContext {
   GUIFramebuffer m_guiFbo,m_dvPQSubtitleFbo;
   bool m_guiWillRender=true,m_guiFboClean=false,m_dvNativeGui=false;
@@ -95,6 +115,10 @@ struct CWinSystemGbmGLESContext {
   unsigned m_dvPQSubtitleDraws=0;bool m_dvPQGuiComposed=false;
   int m_guiFboWidth=width,m_guiFboHeight=height,m_nWidth=width,m_nHeight=height;
   State m_dvState;std::unique_ptr<DRM> m_DRM=std::make_unique<DRM>();
+  struct {
+    DVBRIDGE::OutputRoute route{DVBRIDGE::OutputRoute::HDR10};
+    struct {struct {int gamut{3};double peak_nits{1000};}tv;}policy;
+  }m_dvSelection;
   std::unique_ptr<Bridge> m_dvBridge=std::make_unique<Bridge>();
   std::unique_ptr<CompositeShader> m_compositeShader=std::make_unique<CompositeShader>();
   bool HasDVBridgeScreenshot()const{return m_dvPQSubtitleDraws!=0;}
@@ -175,6 +199,32 @@ int main(int argc,char** argv)
       const double source=inputPQ?gui[j*4+c]:.8*alpha;
       const double expected=(source*span+alpha*offset)/maximum+film[i*4+c]*(1-alpha);
       assert(std::abs(actual[i*4+c]-expected)*maximum<=1.01);
+    }
+  }
+  {
+    film.fill(.2f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D,pqTargetTexture);
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,width,height,GL_RGBA,GL_FLOAT,film.data());
+    glBindFramebuffer(GL_FRAMEBUFFER,finalFramebuffer);
+    CWinSystemGbmGLESContext window;
+    window.m_hdrConversion=false;
+    window.m_dvState.captured=true;
+    window.m_dvSelection.route=DVBRIDGE::OutputRoute::PlayerLed;
+    window.m_dvBridge->playerLed=true;
+    window.m_dvBridge->m_direct=false;
+    window.CompositeGui();
+    assert(window.m_dvFrame && window.m_dvNativeGui);
+    assert(window.m_compositeShader->m_playerLedScale==0);
+    glBindFramebuffer(GL_FRAMEBUFFER,pqFramebuffer);
+    std::array<float,width*height*4> actual{};
+    glReadPixels(0,0,width,height,GL_RGBA,GL_FLOAT,actual.data());
+    for(unsigned i=0;i<width*height;i++)
+    {
+      const unsigned j=(height-1-i/width)*width+i%width;
+      const float alpha=gui[j*4+3];
+      for(unsigned c=0;c<3;c++)
+        assert(std::abs(actual[i*4+c]-(.1015f*alpha+.2f*(1-alpha)))<1e-5f);
     }
   }
   // Execute the production compute compose function with transfer-fetch counters.

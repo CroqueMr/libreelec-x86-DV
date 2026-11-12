@@ -119,6 +119,7 @@ void dvbridge_render_dv_policy_cancel(int*){++driverEpoch;}
 void dvbridge_render_policy_cancel(int*){++driverEpoch;}
 void dvbridge_renderer_reset(int*){++resets;++driverEpoch;}
 void glDeleteFramebuffers(int,unsigned*){}
+void glDeleteTextures(int,unsigned*){}
 void dvbridge_gl_packer_destroy(int*){}
 void pl_tex_destroy(int,int*){}
 struct CDVBridgeGLES {
@@ -127,6 +128,8 @@ struct CDVBridgeGLES {
  struct GL{int gpu=1;}gl;GL*m_gl=&gl;
  struct{int texture=1,degamma=2,pq=3;}m_nativeOverlay;
  int m_scanout=1,*m_renderer=nullptr,*m_packer=nullptr,*m_hdr10plusAnalysis=nullptr;
+ int m_playerLedSource{},m_playerLedFitted{},m_playerLedCarrier{};
+ unsigned m_playerLedTexture{};
  unsigned m_framebuffer=0,m_pendingInfo=8;bool m_live=true,m_advanced=true,m_dvPolicyActive=false;
  bool m_prepared=true,m_packed=true,m_pending=true,m_asyncEligible=true,m_direct=true;
  bool m_aiOutputAccepted=true,m_aiFrame=true,m_firstFrame=false;
@@ -655,6 +658,8 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
+  int m_dvLldvStatus{};
+  int GetLldvConnectorStatus() const {return m_dvLldvStatus;}
   bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
   bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
   bool SupportsNativeDVOutput(bool current=true) const {return !current || m_DRM->rate<=60;}

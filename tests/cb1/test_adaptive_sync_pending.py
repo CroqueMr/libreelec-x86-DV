@@ -14,13 +14,14 @@ class AdaptiveSynchronousPending(unittest.TestCase):
 #include <cassert>
 constexpr int GL_FRAMEBUFFER=0,DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
 void glBindFramebuffer(int,int){}
-struct CDVBridgeGLES{enum class FrameStatus{Ready,Pending,Busy,Failed};};
+struct CDVBridgeGLES{enum class FrameStatus{Ready,Pending,Busy,Failed};bool PlayerLed()const{return false;}};
 using Status=CDVBridgeGLES::FrameStatus;
 bool run(bool authored,int mode,Status status,bool allowAsync=false,bool setting=false){
  struct Metadata{bool value;const void* Data(){return value?this:nullptr;}}metadata{authored};
  struct{int mode;}policy{mode};
  struct Context{bool value;bool AsyncPreparation(int){return value;}}context{setting};
  auto* m_dvContext=&context;struct{struct{int stream=1;}binding;}layer;
+ CDVBridgeGLES bridge;auto* m_dvBridge=&bridge;
  bool m_dvFrame=status==Status::Ready,m_cb1FramePending=false;
  @@BRANCH@@
  return m_cb1FramePending;

@@ -57,7 +57,8 @@ int main() {
   a.disableL2Trims=true;
   for(int mode=0;mode<DVBRIDGE_MODE_COUNT;++mode){
     assert(a.L2TrimsDisabled(static_cast<dvbridge_mode>(mode))==
-        (mode==DVBRIDGE_MODE_STANDARD || mode==DVBRIDGE_MODE_MASTER_REFERENCE));
+        (mode==DVBRIDGE_MODE_STANDARD || mode==DVBRIDGE_MODE_MASTER_REFERENCE ||
+         mode==DVBRIDGE_MODE_PLAYER_LED));
     assert(!a.L2TrimsDisabled(static_cast<dvbridge_mode>(mode),true));
   }
   auto b=a;b.disableL2Trims=false;assert(!a.SameValues(b));
@@ -110,11 +111,11 @@ int main() {
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings = ET.parse(tree / 'system/settings/settings.xml')
         options = settings.findall(".//setting[@id='dvbridge.outputmode']/constraints/options/option")
-        self.assertEqual([int(option.text) for option in options], [0, 4, 5, 2, 1, 6])
+        self.assertEqual([int(option.text) for option in options], [0, 4, 5, 2, 1, 6, 7])
         self.assertIsNone(settings.find(".//setting[@id='dvbridge.adaptivefp16']"))
         menu = (tree / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
-        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1, 1, 6])
+        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1, 1, 6, 7])
 
     def test_legacy_fast_values_cannot_change_output_policy(self):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

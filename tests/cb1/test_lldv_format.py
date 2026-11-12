@@ -31,11 +31,15 @@ struct Mode
   int hsync_start, hsync_end, vsync_start, vsync_end, hskew, vscan;
   unsigned flags;
 };
+using drmModeModeInfo = Mode;
 struct Connector
 {
   uint32_t id=17;
   std::optional<uint64_t> active=0;
   bool connected=true;
+  const Mode* advertised{};
+  int GetModesCount() const { return advertised ? 1 : 0; }
+  const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
   uint32_t* GetConnectorId() { return &id; }
   bool IsConnected() const { return connected; }
   bool SupportsProperty(std::string_view key) const { return key=="CB1_LLDV_FORMAT"; }
@@ -66,7 +70,13 @@ struct CDRMAtomic
 };
 struct Display
 {
-  dvbridge_sink_caps GetDolbyVisionCaps() const { return {}; }
+  dvbridge_sink_caps GetDolbyVisionCaps() const
+  {
+    dvbridge_sink_caps caps{};
+    caps.status=DV_EDID_LLDV_ONLY;
+    caps.lldv_422=true;
+    return caps;
+  }
 };
 struct Window
 {
@@ -111,6 +121,11 @@ int main()
   assert(supported(&widescreen));
   assert(!supported(&wrongAspect));
   assert(!supported(nullptr));
+  drm.connector.advertised=&fractional;
+  assert(!supported(&integer60) && window.Read().availableTiming);
+  assert(!SelectLldvTransport(window.Read(), 0).connectorId);
+  assert(SelectLldvTransport(window.Read(), 0, true).format==LldvFormat::Y422_10);
+  assert(!SelectLldvTransport(window.Read(), int(LldvFormat::Rgb10), true).connectorId);
   drm.mode=&fractional;
   drm.connector.active=2;
   assert(window.Read().currentTiming && !window.Read().timingCommitted);
@@ -124,6 +139,9 @@ int main()
   drm.connector.active=3;
   readback=window.Read();
   assert(readback.active==LldvFormat::Y422_10 && readback.activeForced);
+  readback.driverFormats &= ~LldvBit(LldvFormat::Y422_10);
+  const auto chosen=SelectLldvTransport(readback, 0);
+  assert(chosen.connectorId==17 && chosen.format==LldvFormat::Y422_10 && chosen.forced);
   drm.connector.active.reset();
   assert(window.Read().active==LldvFormat::Auto);
   drm.active=false;

@@ -46,6 +46,10 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *rend
     const struct dvbridge_policy *policy,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
     struct dvbridge_creative_plan *applied);
+/* Fit the linear movie into the final raster, returning source on identity.
+ * The caller owns the optional fitted texture. */
+pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *renderer, pl_tex source,
+    pl_tex *fitted, struct dvbridge_geometry geometry);
 /* Offline byte carrier. The input must be the successful linear mapping for
  * this policy, fitted to the final even-width raster. The output is a separate
  * linear RGBA8 texture with 12-bit fields and 10 or 12 useful bits. Both

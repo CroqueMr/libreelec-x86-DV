@@ -141,6 +141,9 @@ struct CEGLContextUtils{
  void DestroySurface(){}bool BindContext(){currentSurface=m_eglSurface;return true;}bool TrySwapBuffers(){return true;}
 };
 struct CDVBridgeGLES {
+ explicit CDVBridgeGLES(bool playerLed=false):m_playerLed(playerLed){}
+ bool m_playerLed{};
+ bool PlayerLed() const{return m_playerLed;}
  struct Context {
   static bool NewContextBlocked(){return false;}
   bool gl=true,ready=true,fenceOK=true,pollFailed=false; int initialized=0,closed=0,fences=0;
@@ -175,7 +178,7 @@ struct CDVBridgeGLES {
  void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false) __ACTUAL_BODY_19_END__
  template<class... T> Binding SelectionIdentity(T...){return {};}
 };
-struct State {bool Capture(...){captured=true;return true;}const char* CaptureFailure(){return "none";}void Restored(){captured=false;}bool captured=false; bool Captured()const{return captured;}
+struct State {bool CapturePlayerLed(...){captured=true;return true;}bool Capture(...){captured=true;return true;}const char* CaptureFailure(){return "none";}void Restored(){captured=false;}bool captured=false; bool Captured()const{return captured;}
  template<class T> bool Stage(T&,bool){return true;}};
 struct Mode {int hdisplay=3840,vdisplay=2160;unsigned clock=296703,htotal=4400,vtotal=2250;};
 struct Connector {bool SupportsProperty(const char*){return true;}std::optional<unsigned>GetPropertyValue(const char*){return 0;}};
@@ -248,6 +251,8 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
 
 bool StopDVBridgePlayback();bool HoldCB1Stop(){return false;}uint64_t m_masterFramePeriodNs=0,m_previousSourceStream=0;bool m_continuousFrameEligible=false;double m_previousSourcePts=0;
  bool SupportsDVOutputMode(){return modeOK;}
+ struct LldvStatus{bool currentTiming;};
+ LldvStatus GetLldvConnectorStatus(){return {modeOK};}
  bool SupportsSDRConversion(){return modeOK;}
  bool DVBridgeRequested(const VideoPicture* p){return p&&SelectedDVOutput(p).route!=DVBRIDGE::OutputRoute::Vanilla;}
  bool CompleteDVBridgePage(){return completeOK;}
@@ -272,7 +277,7 @@ bool StopDVBridgePlayback();bool HoldCB1Stop(){return false;}uint64_t m_masterFr
 bool RestoreFailedHDR10Setup(){m_failedHDR10SetupRestore=false;return true;}void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}bool FlipDVBridgePage(State& state,bool){state.Restored();return true;}
  bool ConfigureHDR10Conversion(const VideoPicture&);
  bool BeginDVBridge();
- bool m_dvHDR10Failed=false,m_dvSDRFailed=false;
+ bool m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false;
  unsigned m_dvActivationStream{},m_dvActivationPolicy{};
  DVBRIDGE::OutputRoute m_dvRejectedRoute=DVBRIDGE::OutputRoute::Vanilla;
  State m_cb1ConnectorState;

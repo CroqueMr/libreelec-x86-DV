@@ -37,7 +37,7 @@ struct VideoPicture {
  bool doviEnhancement=false; int color_transfer=0;double pts=0;
 };
 namespace DVBRIDGE {
- enum class OutputMode {Disabled=2,Standard=0,HDR10=1,MasterReference=4,SDR=6}; enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR};
+ enum class OutputMode {Disabled=2,Standard=0,HDR10=1,MasterReference=4,SDR=6}; enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR,PlayerLed};
  enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired,ProcessingPending};
  enum class HDR10SourceMode {Native,ReferenceDV};
  struct Policy {int mode=0;};
@@ -64,6 +64,7 @@ struct Capabilities {bool isDV=false,isHDR10=false,isHLG=false,stereoSource=fals
 struct Selection {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
  DVBRIDGE::Policy policy;DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;};
 struct CDVBridgeGLES {
+ bool PlayerLed()const{return false;}
  struct Context {
   static bool NewContextBlocked(){return false;}
   bool gl=true,ready=true; int initialized=0,closed=0,fences=0;

@@ -127,7 +127,12 @@ bool cb1_player_led_prepare(struct cb1_hdr10_expert_plan *out,
     struct dvbridge_cm4_coefficients *cm4,const struct dvbridge_policy *policy,
     const void *metadata,size_t bytes,bool paired)
 {
-    return cm4 && prepare(out,cm4,policy,metadata,bytes,paired);
+    if(!cm4 || !policy)return false;
+    if(policy->mode!=DVBRIDGE_MODE_PLAYER_LED)
+        return prepare(out,cm4,policy,metadata,bytes,paired);
+    struct dvbridge_policy mapping=*policy;
+    mapping.mode=DVBRIDGE_MODE_HDR10_EXPERT;
+    return prepare(out,cm4,&mapping,metadata,bytes,paired);
 }
 
 bool cb1_hdr10_expert_trim(pl_shader shader,const struct dvbridge_creative_plan *plan,

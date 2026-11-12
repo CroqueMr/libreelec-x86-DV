@@ -15,6 +15,7 @@ class GbmColourBuffer(unittest.TestCase):
         owners={
             'FLIP':body(window,'void CWinSystemGbm::FlipPage('),
             'LLDV':body(window,'bool CWinSystemGbm::FlipPlayerLedPage('),
+            'PAGE':body(window,'bool CWinSystemGbm::CompleteDVBridgePage('),
             'LOCK':body(surface,'    LockFrontBuffer()'),
             'PENDING':body(surface,'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::LockTransactionalBuffer('),
             'COMPLETE':body(surface,'void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer('),

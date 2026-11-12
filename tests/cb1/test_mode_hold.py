@@ -28,7 +28,7 @@ int64_t now=0;
 namespace DVBRIDGE {
  int64_t DiagnosticNowMs(){return now;}
  enum class OutputReason {None,ActivationFailed};
- enum class OutputRoute {NativeDV,HDR10,SDR};
+ enum class OutputRoute {NativeDV,HDR10,SDR,PlayerLed};
 }
 struct VideoPicture {};
 struct CDRMAtomic {
@@ -49,7 +49,7 @@ struct Window {
  CModeChangeHold m_modeHold;CHeldModeAnnouncement m_modeAnnouncement;
  std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
  State m_dvState;bool m_hdrConversion=false,m_dvFrame=false,pageReady=true,supported=true;
- bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvFallbackActive=false;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false,m_dvFallbackActive=false;
  struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::NativeDV;}m_dvSelection;
  std::mutex m_dvCapabilityMutex;Timer m_dispResetTimer;
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
@@ -58,6 +58,8 @@ struct Window {
  bool CompleteDVBridgePage(int){return pageReady;}
  bool SupportsDVOutputMode(){return supported;}
  bool SupportsSDRConversion(){return supported;}
+ struct LldvStatus{bool currentTiming;};
+ LldvStatus GetLldvConnectorStatus(){return {supported};}
  void ResetDVActivation(const VideoPicture*){}
  void tick(bool rendered=false,bool videoLayer=false) GATE
  bool complete(const VideoPicture& picture) COMPLETE
@@ -168,6 +170,7 @@ struct Port {int changes=0;void VideoParamsChange(){++changes;}};
 struct Manager {
  bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;float m_fps=24;Picture m_picture;
  Renderer renderer,*m_pRenderer=&renderer;Port port,*m_playerPort=&port;
+ int ChoosePlaybackResolution(const Picture& picture,float fps,bool)const{return CResolutionUtils::ChooseBestResolution(fps,picture.iWidth,picture.iHeight,!picture.stereoMode.empty());}
  void UpdateLatencyTweak(){}
  void update() METHOD
 };

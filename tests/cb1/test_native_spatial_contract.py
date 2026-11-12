@@ -11,20 +11,20 @@ class NativeSpatialContractTests(unittest.TestCase):
         text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp").read_text()
         signatures = ("CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(",
                       "CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHDR10AIFrame(")
-        calls = []
         for signature in signatures:
             implementation = body(text, signature)
-            calls.append(next(line.strip() for line in implementation.splitlines()
-                              if 'm_context->SetSpatialMethod(' in line))
-        self.run_program(r'''
+            start = implementation.index('m_context->SetSpatialMethod(')
+            call = implementation[start:implementation.index(';',start)+1]
+            player_led = 'PrepareFrame(' in signature
+            self.run_program(r'''
 #include <cassert>
 #include <initializer_list>
-constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5;
+constexpr int DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_PLAYER_LED=8;
 struct Context { bool exact=false; void SetSpatialMethod(int,bool value){exact=value;} };
 bool run(int mode){Context context;auto* m_context=&context;int m_spatialMethod=1;
  struct{int mode;}policy{mode}; CALL return context.exact;}
-int main(){for(int mode:{0,1,2,3,5})assert(run(mode)==(mode==5));}
-'''.replace('CALL', '\n'.join(calls)))
+int main(){for(int mode:{0,1,2,3,5,8})assert(run(mode)==(mode==5 || (PLAYER_LED && mode==8)));}
+'''.replace('CALL',call).replace('PLAYER_LED &&',('true' if player_led else 'false')+' &&'))
 
     def test_native_supported_hdr_types_include_advertised_hdr10plus(self):
         text = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
@@ -65,7 +65,7 @@ int main(){CWinSystemGbm w;assert(w.GetDisplayHDRCapabilities().flags==7);
         self.run_program(r'''
 #include <cassert>
 #include <cstddef>
-constexpr int CB1_MASTER_READY=0;
+constexpr int CB1_MASTER_READY=0,DVBRIDGE_MODE_MASTER_REFERENCE=0;
 struct pl_cb1_dovi_reference{};
 int mapping=0;bool transport=true;
 int cb1_master_reference_map(pl_cb1_dovi_reference*,const void*,size_t,bool){return mapping;}

@@ -11,7 +11,7 @@ class SDRRestoreTests(unittest.TestCase):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
         ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
-                           present.index('  if (m_hdrConversion)')]
+                           present.index('  if (PresentPlayerLedFrame())')]
         prepare = body(source, 'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(')
         guard = prepare[prepare.index('  if (m_dvRollbackFailed || !RecoverDVActivation())'):
                         prepare.index('  ResetDVActivation(&picture);')]
@@ -27,7 +27,7 @@ class SDRRestoreTests(unittest.TestCase):
 #include <vector>
 constexpr int DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3,AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16;
 namespace DVBRIDGE {
- enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR};
+ enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR,PlayerLed};
  enum class OutputReason{None,ProcessingPending,RestoreFailed,ActivationFailed};
  struct StreamTelemetry{
   struct Value{struct{OutputReason reason=OutputReason::None;}transaction;};
@@ -70,7 +70,7 @@ struct Window{
  bool m_dvActivating=false,m_dvRecoveryPending=false,m_dvSuperseded=false,m_dvRejectedSurface=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
  bool m_hdrConversion=false,m_sdrConversion=false,m_dvFatalConsumed=false,m_dvFallbackActive=false;
- bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false;
+ bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false;
  bool pending=true,complete=true,bind=true,restore=false;unsigned restores=0;
  unsigned m_dvAttemptFailures=0,m_dvFailedStream=0,m_dvFailedPolicy=0;
  unsigned m_dvActivationStream=1,m_dvActivationPolicy=1,m_hdr10SessionStream=1;
@@ -196,7 +196,7 @@ int main(int argc,char**argv){
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
         wake = present[1:present.index('#ifdef HAVE_DVBRIDGE')]
         ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
-                           present.index('  if (m_hdrConversion)')]
+                           present.index('  if (PresentPlayerLedFrame())')]
         stage = body(source, 'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(')
         stop = body(source, 'bool CWinSystemGbmGLESContext::StopDVBridgePlayback()')
         destroy = body(source, 'bool CWinSystemGbmGLESContext::DestroyWindow()')
