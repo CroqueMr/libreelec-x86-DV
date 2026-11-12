@@ -1,0 +1,207 @@
+Subject: [PATCH] Reject HDR10 conversion when HDMI depth is limited
+
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index bada925..66d8407 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26569,3 +26569,7 @@ msgstr ""
+ msgctxt "#41222"
+ msgid "No compatible LLDV output at this timing"
+ msgstr ""
++
++msgctxt "#41223"
++msgid "HDR10 rendering requires 10-bit HDMI"
++msgstr ""
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+index e4d6e95..4c33531 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+@@ -85,6 +85,9 @@ inline OutputSelection SelectOutput(const OutputPreferences& preferences,
+           caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
+     return {OutputRoute::SDR,policy,OutputReason::None};
+   }
++  if ((policy.mode == DVBRIDGE_MODE_HDR10_BASIC || policy.mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
++      caps.HDR10DepthLimited())
++    return {OutputRoute::Vanilla, policy, OutputReason::HDR10LinkDepthTooLow};
+   // Display configuration is known before the first GPU import.
+   if (preferences.output == OutputMode::HDR10 && policy.mode == DVBRIDGE_MODE_HDR10_EXPERT &&
+       !preferences.ProfileValid(policy.mode))
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+index 17d7eb6..97b905a 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+@@ -11,7 +11,7 @@ namespace DVBRIDGE
+ {
+ enum class OutputReason { None, NoDVTransport, NoHDR10Transport,
+   NoGPUProcessing, SourceIneligible, TVProfileRequired, ActivationFailed, RestoreFailed,
+-  NoHDR10PlusTransport, SDRTargetInvalid, ProcessingPending, NoPlayerLedTransport };
++  NoHDR10PlusTransport, SDRTargetInvalid, ProcessingPending, NoPlayerLedTransport, HDR10LinkDepthTooLow };
+ struct ModeAdmission { bool usable{}; OutputReason reason{OutputReason::None}; };
+ struct OutputCapabilities
+ {
+@@ -25,6 +25,9 @@ struct OutputCapabilities
+   bool isHDR10Plus{}; // Selected decoded picture, not receiver HDR10+ transport.
+   std::array<ModeAdmission, 9> hdr10Processing{};
+   bool hdr10plus{}, playerLed{};
++  uint64_t hdr10MaxBpc{}; // Zero means the HDMI ceiling is unknown.
++
++  bool HDR10DepthLimited() const { return hdr10MaxBpc != 0 && hdr10MaxBpc < 10; }
+ };
+ }
+ 
+@@ -46,7 +49,8 @@ struct CDVPlaybackInfo
+   static constexpr int PlayerLedMode = 9;
+   inline static std::atomic<unsigned> presented{0};
+   static int ReasonLabel(DVBRIDGE::OutputReason reason)
+-  { return reason == DVBRIDGE::OutputReason::NoPlayerLedTransport ? 41222 :
++  { return reason == DVBRIDGE::OutputReason::HDR10LinkDepthTooLow ? 41223 :
++      reason == DVBRIDGE::OutputReason::NoPlayerLedTransport ? 41222 :
+       reason == DVBRIDGE::OutputReason::ProcessingPending ? 41142 :
+       reason == DVBRIDGE::OutputReason::SDRTargetInvalid ? 41141 :
+       reason == DVBRIDGE::OutputReason::NoHDR10PlusTransport ? 40923 :
+@@ -59,6 +63,7 @@ struct CDVPlaybackInfo
+       case DVBRIDGE::OutputReason::NoPlayerLedTransport: return "no-player-led-transport";
+       case DVBRIDGE::OutputReason::NoDVTransport: return "no-dv-transport";
+       case DVBRIDGE::OutputReason::NoHDR10Transport: return "no-hdr10-transport";
++      case DVBRIDGE::OutputReason::HDR10LinkDepthTooLow: return "hdr10-link-depth-too-low";
+       case DVBRIDGE::OutputReason::NoGPUProcessing: return "gpu-processing-unavailable";
+       case DVBRIDGE::OutputReason::SourceIneligible: return "source-ineligible";
+       case DVBRIDGE::OutputReason::TVProfileRequired: return "tv-profile-required";
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+index 3552aba..dba4ddf 100644
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -526,6 +526,7 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+   // A failed frame or disabled import does not remove reusable output capabilities.
+   caps.nativeDV=available.nativeDV;
+   caps.hdr10=available.hdr10;
++  caps.hdr10MaxBpc=available.hdr10MaxBpc;
+   caps.hdr10plus=available.hdr10plus;
+   if (!menu || !caps.sourceKnown) caps.playerLed=available.playerLed;
+   if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
+@@ -567,6 +568,8 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+         reason=DVBRIDGE::OutputReason::SourceIneligible;
+       else if (hdr10Source && (nativeHDR10Plus || caps.hdr10PlusSource) && !guided && mode!=7)
+         reason=DVBRIDGE::OutputReason::SourceIneligible;
++      else if ((mode==2 || mode==3) && caps.HDR10DepthLimited())
++        reason=DVBRIDGE::OutputReason::HDR10LinkDepthTooLow;
+       else if (mode==8 && !caps.playerLed) reason=DVBRIDGE::OutputReason::NoPlayerLedTransport;
+       else if (mode!=7 && mode!=8 && !(dv ? caps.nativeDV : caps.hdr10))
+         reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+index a409b32..5ae9d23 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -411,17 +411,16 @@ void CWinSystemGbm::ApplyMaxBpcSetting(void* userptr)
+   winSystem->ApplyConnectorProperties();
+ }
+ 
+-uint64_t CWinSystemGbm::GetEffectiveMaxBpc() const
++uint64_t CWinSystemGbm::GetEffectiveMaxBpc(std::optional<uint64_t> restored) const
+ {
+   const int setting = m_maxBpc;
+   if (!m_maxBpcFallback && setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
+     return MAX_BPC_VALUES[setting];
+ 
++  if (restored)
++    return *restored;
+   const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
+-  if (!connector)
+-    return 0;
+-
+-  return connector->GetPropertyValue(MAX_BPC).value_or(0);
++  return connector ? connector->GetPropertyValue(MAX_BPC).value_or(0) : 0;
+ }
+ 
+ void CWinSystemGbm::ApplyColorFormatSetting(void* userptr)
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+index 56d2610..70ea503 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -200,7 +200,7 @@ private:
+   //! The format to ask the driver for: the choice or Adaptive's pick, if listed and not refused
+   ColorFormat GetRequestedColorFormat() const;
+   //! The "max bpc" in effect: the choice, or what the connector has. 0 if unknown
+-  uint64_t GetEffectiveMaxBpc() const;
++  uint64_t GetEffectiveMaxBpc(std::optional<uint64_t> restored = {}) const;
+   //! True if the HDMI link can be driven with FRL, which carries 4K 60 Hz 10 bit RGB
+   bool IsHdmiFrlLink() const;
+   //! True if >8 bit video in the active HDMI mode does not fit as RGB, but does as YCbCr
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index 91ba053..2873be7 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -416,6 +416,9 @@ void CWinSystemGbmGLESContext::PresentRender(bool rendered, bool videoLayer)
+     return;
+ 
+   PresentFrame(rendered, videoLayer);
++#ifdef HAVE_DVBRIDGE
++  RefreshHDR10LinkDepth();
++#endif
+   if (m_dispReset && m_dispResetTimer.IsTimePast()
+ #ifdef HAVE_DVBRIDGE
+       && m_modeAnnouncement.Pending() == CHeldModeAnnouncement::Step::NONE
+@@ -1535,6 +1538,7 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+ {
+   if (eglGetCurrentContext() == EGL_NO_CONTEXT ||
+       eglGetCurrentContext() != m_eglContext.GetEGLContext()) return;
++  RefreshHDR10LinkDepth();
+   auto caps = GetDVOutputCapabilities(nullptr);
+   caps.nativeDV = SupportsNativeDVOutput();
+   caps.hdr10 = SupportsHDR10Conversion();
+@@ -1704,6 +1708,7 @@ DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(
+ {
+   std::lock_guard lock(m_dvCapabilityMutex);
+   auto caps = m_dvCapabilities;
++  caps.hdr10MaxBpc = m_hdr10MaxBpc.load();
+   caps.playerLed = DVBRIDGE::SelectLldvTransport(m_dvLldvStatus,
+       preferences.lldvFormat, allowModeSwitch).connectorId != 0;
+   if (allowModeSwitch)
+@@ -2045,6 +2050,27 @@ DVBRIDGE::OutputReason CWinSystemGbmGLESContext::ConsumeDVPlaybackFailure(DVBRID
+   return m_dvFatalReason;
+ }
+ 
++void CWinSystemGbmGLESContext::RefreshHDR10LinkDepth()
++{
++  const auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector || connector->GetType().rfind("HDMI", 0) != 0 ||
++      !connector->SupportsProperty("max bpc"))
++  {
++    m_hdr10MaxBpc = 0;
++    return;
++  }
++
++  // Native DV and LLDV temporarily own an 8-bit scanout. HDR10 setup stages
++  // the saved connector depth when it releases that transport.
++  const auto restored = m_dvState.Before("max bpc");
++  auto depth = GetEffectiveMaxBpc(restored);
++  if (restored && *restored != 0)
++    depth = std::min(depth, *restored);
++  if (const auto range = connector->GetRangePropertyLimits("max bpc"); range && depth != 0)
++    depth = std::min(depth, range->second);
++  m_hdr10MaxBpc = depth;
++}
++
+ bool CWinSystemGbmGLESContext::SupportsHDR10Conversion(bool requireCurrentMode)
+ {
+   if (!IsHDRDisplay() || !GetDisplayHDRCapabilities().SupportsHDR10())
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+index 212dc70..31743be 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -85,6 +85,7 @@ public:
+   static bool DVBridgeRequested(const VideoPicture* picture);
+   bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res) override;
+   void RefreshDVOutputCapabilities();
++  void RefreshHDR10LinkDepth();
+   DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
+       bool allowModeSwitch = false) const;
+   bool CanRetainDVSource() const;
+@@ -269,6 +270,7 @@ private:
+ #endif
+   DVBRIDGE::OutputCapabilities m_dvCapabilities;
+   bool m_dvAvailableNativeDV{}, m_dvAvailableHDR10{};
++  std::atomic<uint64_t> m_hdr10MaxBpc{0};
+   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
+   DVBRIDGE::SourceBinding m_dvImportBinding{};
+   dvbridge_geometry m_dvImportGeometry{};
