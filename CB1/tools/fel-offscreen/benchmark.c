@@ -269,7 +269,7 @@ static void render(struct reference_gpu *g,struct dvbridge_renderer *renderer,pl
     double pts=base->pts*av_q2d(base->time_base);
     if(!slot->host){
         pl_gpu gpu=g->gl->gpu;
-        slot->host=pl_buf_create(gpu,pl_buf_params(.size=(size_t)base->width*base->height*16,
+        slot->host=pl_buf_create(gpu,pl_buf_params(.size=CB1_LLDV_CPU_HOST_BYTES,
             .host_mapped=true,.storable=true,.memory_type=PL_BUF_MEM_HOST));
         assert(slot->host && slot->host->data);
     }

@@ -1,13 +1,13 @@
 diff --git a/src/include/libplacebo/renderer.h b/src/include/libplacebo/renderer.h
-index 0db0012..6e18a12 100644
+index 0db0012..57326b7 100644
 --- a/src/include/libplacebo/renderer.h
 +++ b/src/include/libplacebo/renderer.h
 @@ -382,6 +382,10 @@ struct pl_render_params {
      // Per-picture integer reference. Null preserves existing composition.
      const struct pl_cb1_dovi_reference *cb1_dovi_reference;
  
-+#define PL_HAVE_CB1_LLDV_HOST 1
-+    // Optional coherent RGBA32F storage output for a full 4K player-led image.
++#define PL_HAVE_CB1_LLDV_HOST 2
++    // Coherent full-4K RGB float storage, in blocks of eight R, eight G and eight B.
 +    pl_buf cb1_lldv_host;
 +
  
@@ -82,10 +82,10 @@ index c5bcf52..2569494 100644
                                                       GL_SHADER_STORAGE_BLOCK,
                                                       desc->name);
 diff --git a/src/renderer.c b/src/renderer.c
-index 084181a..27d4c17 100644
+index 084181a..f5cc978 100644
 --- a/src/renderer.c
 +++ b/src/renderer.c
-@@ -3025,6 +3025,30 @@ static void translate_srgb_color(float out_color[3], const float in_color[3],
+@@ -3025,6 +3025,33 @@ static void translate_srgb_color(float out_color[3], const float in_color[3],
      pl_color_delinearize(csp, out_color);
  }
  
@@ -98,8 +98,8 @@ index 084181a..27d4c17 100644
 +        pl_dispatch_abort(rr->dp,&sh);
 +        return false;
 +    }
-+    struct pl_buffer_var data={.var=pl_var_vec4("cb1_linear")};
-+    data.var.dim_a=w*h;
++    struct pl_buffer_var data={.var=pl_var_float("cb1_linear")};
++    data.var.dim_a=w*h*3;
 +    data.layout=pl_std430_layout(0,&data.var);
 +    ident_t bind=sh_desc(sh,(struct pl_shader_desc){
 +        .desc={.name="cb1_frame_data",.type=PL_DESC_BUF_STORAGE,.access=PL_DESC_ACCESS_WRITEONLY},
@@ -108,7 +108,10 @@ index 084181a..27d4c17 100644
 +    pl_dispatch_abort(rr->dp,mapped);
 +    if(!bind || !pixel){pl_dispatch_abort(rr->dp,&sh);return false;}
 +    sh->output=PL_SHADER_SIG_COLOR;
-+    GLSL("ivec2 pos=ivec2(gl_FragCoord.xy);cb1_linear[pos.y*%d+pos.x]="$"();"
++    GLSL("ivec2 pos=ivec2(gl_FragCoord.xy);"
++         "int i=(pos.y*%d+(pos.x&~7))*3+(pos.x&7);"
++         "vec3 rgb="$"().rgb;"
++         "cb1_linear[i]=rgb.r;cb1_linear[i+8]=rgb.g;cb1_linear[i+16]=rgb.b;"
 +         "vec4 color=vec4(0.0);\n",w,pixel);
 +    return pl_dispatch_finish(rr->dp,pl_dispatch_params(.shader=&sh,.target=target));
 +}
@@ -116,7 +119,7 @@ index 084181a..27d4c17 100644
  static bool pass_output_target(struct pass_state *pass)
  {
      const struct pl_render_params *params = pass->params;
-@@ -3036,6 +3060,16 @@ static bool pass_output_target(struct pass_state *pass)
+@@ -3036,6 +3063,16 @@ static bool pass_output_target(struct pass_state *pass)
      struct img *img = &pass->img;
  
      bool need_clear = pl_frame_is_cropped(target);
@@ -127,13 +130,13 @@ index 084181a..27d4c17 100644
 +            !tex || tex->params.w != 3840 || tex->params.h != 2160 ||
 +            target->planes[0].flipped || target->num_overlays || need_clear ||
 +            pass->rotation || params->blend_params || !buf->params.storable ||
-+            !buf->data || buf->params.size < 3840ULL * 2160 * 16)
++            !buf->data || buf->params.size < 3840ULL * 2160 * 12)
 +            return false;
 +    }
      pl_tex border_tex = NULL;
      if (need_clear && params->border == PL_CLEAR_BLUR &&
          !(rr->errors & PL_RENDER_ERR_BLUR))
-@@ -3364,7 +3398,7 @@ static bool pass_output_target(struct pass_state *pass)
+@@ -3364,7 +3401,7 @@ static bool pass_output_target(struct pass_state *pass)
          const int sample_depth = PL_DEF(target->repr.bits.sample_depth,
                                          target->repr.bits.color_depth);
  
@@ -142,7 +145,7 @@ index 084181a..27d4c17 100644
              const char *comps = params->blend_params ? "rgb" : "rgba";
              const int bit_shift = target->repr.bits.bit_shift;
  
-@@ -3401,12 +3435,14 @@ static bool pass_output_target(struct pass_state *pass)
+@@ -3401,12 +3438,14 @@ static bool pass_output_target(struct pass_state *pass)
              tscale.c[1] += plane->texture->params.h;
          }
  

@@ -2,8 +2,8 @@
 
 This benchmark pairs and decodes both HEVC layers through VA-API, runs the CB1
 player-led renderer for a BT.2020 target, then packs 10- or 12-bit
-4:2:2 into an EGL-imported GBM buffer. A coherent GPU buffer passes the linear
-image to four x86 packing workers. The workers write the final carrier directly
+4:2:2 into an EGL-imported GBM buffer. A coherent GPU buffer passes linear RGB in blocks of eight pixels to four
+x86 packing workers. The workers write the final carrier directly
 into mapped DMA-BUF memory.
 
 Build on x86-64 Linux with Python, GCC, Meson, Ninja, and development libraries
@@ -27,7 +27,7 @@ carrier was ready on a 27-fps timeline with 100 ms of initial headroom. The
 input timestamps still drive BL/EL pairing. The benchmark needs a 3840×2160
 input, AVX2 and FMA, coherent persistent GLES buffer storage, and a linearly
 mapped ABGR8888 GBM buffer with a tightly packed pitch. Peak allocation for
-three linear images and three carriers is about 475 MiB, plus decoded surfaces.
+three linear images and three carriers is about 380 MiB, plus decoded surfaces.
 
 Set CB1_RENDER_NODE to change the VA-API and GBM node from
 /dev/dri/renderD128. On a multi-GPU host, select the same EGL device via the

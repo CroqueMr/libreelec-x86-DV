@@ -76,16 +76,16 @@ static CB1_AVX2 void pack_rows(struct cb1_lldv_cpu *cpu)
     for(unsigned begin=atomic_fetch_add_explicit(&cpu->next_row,ROW_BATCH,memory_order_relaxed);
         begin<H;begin=atomic_fetch_add_explicit(&cpu->next_row,ROW_BATCH,memory_order_relaxed))
     for(unsigned y=begin;y<H && y<begin+ROW_BATCH;y++){
-        const float *row=frame->linear+4*(size_t)y*W;
+        const float *row=frame->linear+3*(size_t)y*W;
         const size_t out_y=frame->flip_y?H-1-y:y;
         uint32_t *out=frame->carrier+out_y*(frame->stride/sizeof(*out));
-        const __m256i mask=_mm256_setr_epi32(0x7fffffff,0x7fffffff,0x7fffffff,0,
-                                            0x7fffffff,0x7fffffff,0x7fffffff,0);
         const bool blank=y<frame->first_row || (frame->end_row && y>=frame->end_row);
         int probe=blank?W:0;
-        for(;probe<W;probe+=2){
-            __m256i value=_mm256_loadu_si256((const __m256i *)(row+probe*4));
-            if(!_mm256_testz_si256(value,mask))break;
+        for(;probe<W;probe+=8){
+            const float *p=row+probe*3;
+            const __m256 r=_mm256_loadu_ps(p),g=_mm256_loadu_ps(p+8),b=_mm256_loadu_ps(p+16);
+            const __m256i value=_mm256_castps_si256(_mm256_or_ps(r,_mm256_or_ps(g,b)));
+            if(!_mm256_testz_si256(value,_mm256_set1_epi32(0x7fffffff)))break;
         }
         if(probe==W){
             __m256i black=_mm256_set1_epi32(frame->xrgb?0xff801000:0xff001080);
@@ -94,12 +94,8 @@ static CB1_AVX2 void pack_rows(struct cb1_lldv_cpu *cpu)
         }
         for(int x=0;x<W;x+=CHUNK){
             for(int k=0;k<CHUNK;k+=8){
-                const float *p=row+4*(x+k);
-                __m128 a=_mm_loadu_ps(p+0),b0=_mm_loadu_ps(p+4),c=_mm_loadu_ps(p+8),d=_mm_loadu_ps(p+12);
-                __m128 e=_mm_loadu_ps(p+16),f=_mm_loadu_ps(p+20),g0=_mm_loadu_ps(p+24),h=_mm_loadu_ps(p+28);
-                _MM_TRANSPOSE4_PS(a,b0,c,d);
-                _MM_TRANSPOSE4_PS(e,f,g0,h);
-                __m256 r=_mm256_set_m128(e,a),g=_mm256_set_m128(f,b0),b=_mm256_set_m128(g0,c);
+                const float *p=row+3*(x+k);
+                __m256 r=_mm256_loadu_ps(p),g=_mm256_loadu_ps(p+8),b=_mm256_loadu_ps(p+16);
                 if(frame->to_bt2020){
                     const __m256 in_r=r,in_g=g,in_b=b;
                     r=matrix_row(cpu->matrix,in_r,in_g,in_b);
