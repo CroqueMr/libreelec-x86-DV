@@ -1,0 +1,52 @@
+diff --git a/backend/drm/atomic.c b/backend/drm/atomic.c
+index faa535d..229a2a7 100644
+--- a/backend/drm/atomic.c
++++ b/backend/drm/atomic.c
+@@ -508,7 +508,11 @@ static void atomic_connector_add(struct atomic *atom,
+ 			DRM_MODE_CONTENT_TYPE_GRAPHICS);
+ 	}
+ 	if (modeset && active && conn->props.max_bpc != 0 && conn->max_bpc_bounds[1] != 0) {
+-		atomic_add(atom, conn->id, conn->props.max_bpc, pick_max_bpc(conn, state->primary_fb));
++		// Keep the value inherited from the previous DRM master across hotplug.
++		if (conn->initial_max_bpc != 0 ||
++				get_drm_prop(drm->fd, conn->id, conn->props.max_bpc, &conn->initial_max_bpc)) {
++			atomic_add(atom, conn->id, conn->props.max_bpc, pick_max_bpc(conn, state->primary_fb));
++		}
+ 	}
+ 	if (conn->props.colorspace != 0) {
+ 		atomic_add(atom, conn->id, conn->props.colorspace, state->colorspace);
+diff --git a/backend/drm/backend.c b/backend/drm/backend.c
+index 5a545b1..dc7a59c 100644
+--- a/backend/drm/backend.c
++++ b/backend/drm/backend.c
+@@ -33,8 +33,18 @@ static void backend_destroy(struct wlr_backend *backend) {
+ 
+ 	struct wlr_drm_backend *drm = get_drm_backend_from_backend(backend);
+ 
++	bool can_restore = drm->session->active && drmIsMaster(drm->fd);
+ 	struct wlr_drm_connector *conn, *next;
+ 	wl_list_for_each_safe(conn, next, &drm->connectors, link) {
++		// Give the next DRM master the connector's original bit-depth ceiling.
++		uint64_t current;
++		if (can_restore && !conn->lease && conn->initial_max_bpc != 0 &&
++				get_drm_prop(drm->fd, conn->id, conn->props.max_bpc, &current) &&
++				current != conn->initial_max_bpc &&
++				drmModeObjectSetProperty(drm->fd, conn->id, DRM_MODE_OBJECT_CONNECTOR,
++					conn->props.max_bpc, conn->initial_max_bpc) != 0) {
++			wlr_drm_conn_log_errno(conn, WLR_ERROR, "Failed to restore max bpc");
++		}
+ 		conn->crtc = NULL; // leave CRTCs on when shutting down
+ 		destroy_drm_connector(conn);
+ 	}
+diff --git a/include/backend/drm/drm.h b/include/backend/drm/drm.h
+index a8c5e07..d402e33 100644
+--- a/include/backend/drm/drm.h
++++ b/include/backend/drm/drm.h
+@@ -199,6 +199,7 @@ struct wlr_drm_connector {
+ 	drmModeConnection status;
+ 	uint32_t id;
+ 	uint64_t max_bpc_bounds[2];
++	uint64_t initial_max_bpc; // 0 until read before the first modeset
+ 	struct wlr_drm_lease *lease;
+ 
+ 	struct wlr_drm_crtc *crtc;
