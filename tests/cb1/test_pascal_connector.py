@@ -57,7 +57,13 @@ static struct drm_property_blob blob={{91},27,1,{}};
 static void *nv_drm_calloc(size_t n,size_t s){return alloc_fail?NULL:calloc(n,s);}
 static void nv_drm_free(void *p){free(p);}
 static struct nv_drm_device *to_nv_device(struct nv_drm_device *d){return d;}
-static struct drm_property_blob *drm_property_blob_get(struct drm_property_blob *b){if(b)b->refs++;return b;}
+/* Linux drm_property_blob_get requires a valid blob. */
+static struct drm_property_blob *drm_property_blob_get(struct drm_property_blob *b)
+{
+    assert(b);
+    b->refs++;
+    return b;
+}
 static void drm_property_blob_put(struct drm_property_blob *b){if(b){assert(b->refs>0);b->refs--;}}
 static struct drm_property_blob *drm_property_lookup_blob(struct nv_drm_device *d,uint64_t id){(void)d;return id==91?drm_property_blob_get(&blob):NULL;}
 static void __drm_atomic_helper_connector_destroy_state(struct drm_connector_state *s){(void)s;}
@@ -72,6 +78,10 @@ int main(void){
  struct drm_connector c={.dev=&d,.status=1};
  uint64_t value;
  nv_cb1_reset(&c);assert(c.state && c.state->max_requested_bpc==12);
+ /* fbdev can duplicate the initial connector state before Kodi sets a VSIF. */
+ struct drm_connector_state *boot_copy=nv_cb1_duplicate_state(&c);
+ assert(boot_copy && !nv_cb1_state(boot_copy)->vsif && blob.refs==1);
+ nv_cb1_destroy_state(&c,boot_copy);
  struct drm_encoder encoder={9,2};c.type=3;c.nv_detected_encoder=&encoder;
  assert(nv_cb1_get_property(&c,c.state,&tmds,&value)==0 && value==1);
  assert(nv_cb1_set_property(&c,c.state,&tmds,0)==-EINVAL);
@@ -90,6 +100,9 @@ int main(void){
  assert(nv_cb1_get_property(&c,c.state,&vsif,&value)==0 && value==91);
  assert(nv_cb1_set_property(&c,c.state,&vsif,0)==0 && blob.refs==2);
  assert(nv_cb1_get_property(&c,copy,&vsif,&value)==0 && value==91);
+ struct drm_connector_state *cleared_copy=nv_cb1_duplicate_state(&c);
+ assert(cleared_copy && !nv_cb1_state(cleared_copy)->vsif && blob.refs==2);
+ nv_cb1_destroy_state(&c,cleared_copy);
  blob.length=28;
  assert(nv_cb1_set_property(&c,c.state,&vsif,91)==-EINVAL && blob.refs==2);
  blob.length=27;
