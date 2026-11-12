@@ -241,10 +241,11 @@ struct Renderer
   };
   struct PlayerLedCpu
   {
-    Slot slots[1];
+    Slot slots[2];
     std::deque<unsigned> queue{0};
     std::mutex mutex;
     std::condition_variable_any changed;
+    std::optional<std::chrono::steady_clock::time_point> primeUntil;
     bool failed=false;
   };
   struct PlayerLedCpuOutput
@@ -268,9 +269,22 @@ int main()
   cpu.failed=true;
   assert(!r.Take() && cpu.queue.size()==1 && cpu.slots[0].acquire==31);
   cpu.failed=false;
+  cpu.primeUntil=std::chrono::steady_clock::now()+std::chrono::seconds(1);
+  assert(!r.Take() && cpu.queue.size()==1);
+  cpu.queue.push_back(1);
+  assert(!r.Take() && cpu.queue.size()==2);
+  cpu.slots[1].packed=true;
   auto frame=r.Take();
-  assert(frame && frame->frame==17 && frame->acquire==31 && cpu.queue.empty());
-  assert(cpu.slots[0].acquire==-1);
+  assert(frame && frame->frame==17 && frame->acquire==31 && cpu.queue.size()==1);
+  assert(cpu.slots[0].acquire==-1 && *cpu.primeUntil<=std::chrono::steady_clock::now());
+  assert(r.Take() && cpu.queue.empty());
+  // A short or starved stream can drain its single prepared carrier.
+  cpu.queue.push_back(0);
+  cpu.slots[0].packed=true;
+  cpu.slots[0].frame=19;
+  cpu.slots[0].carrier=std::make_shared<Renderer::Carrier>();
+  cpu.primeUntil=std::chrono::steady_clock::now();
+  assert(r.Take()->frame==19 && cpu.queue.empty() && *cpu.primeUntil<=std::chrono::steady_clock::now());
 }
 '''.replace('TAKE',take)})
 

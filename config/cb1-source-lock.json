@@ -10,7 +10,7 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "ea42e1b9bda3684effde7e1b29857de7c8c8e3a9248603991941683c488129ee",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "93a89785416c8d57ef5e200de09fcb17c12d5a5350645c1e7cacf69e588cb76e",
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
@@ -345,7 +345,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "78ac32981ffda9cb0de8180cb1e829392f2b9eaedd46c646eefcded84ec27beb",
     "tests/cb1/test_lldv_format.py": "72476ba187041700446f5389465dc88195606f51d265eb0284e186c553f696b3",
-    "tests/cb1/test_lldv_player_info.py": "f2c6e60c3c23f8044522528af04153b9ca652e181b9a04abe09cccbf79865696"
+    "tests/cb1/test_lldv_player_info.py": "2cef0abe896557e3c3be95096777c186a6884e6fd03807d40ec56c776732a893"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
