@@ -40,7 +40,7 @@ diff --git a/xbmc/application/ApplicationMessageHandling.cpp b/xbmc/application/
 diff --git a/xbmc/application/ApplicationPlayerCallback.cpp b/xbmc/application/ApplicationPlayerCallback.cpp
 --- a/xbmc/application/ApplicationPlayerCallback.cpp
 +++ b/xbmc/application/ApplicationPlayerCallback.cpp
-@@ -439,9 +439,13 @@
+@@ -439,11 +439,20 @@
  
  void CApplicationPlayerCallback::OnPlayBackError()
  {
@@ -52,10 +52,19 @@ diff --git a/xbmc/application/ApplicationPlayerCallback.cpp b/xbmc/application/A
    //@todo Playlists can be continued by calling OnPlaybackEnded instead
 -  // open error dialog
 -  CGUIMessage msg(GUI_MSG_PLAYBACK_ERROR, 0, 0);
+-  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
+-  OnPlayBackStopped();
++  // Finish display restoration before opening the circuit error dialog.
++  if (detail != 0)
++    OnPlayBackStopped();
++
 +  CGUIMessage msg(GUI_MSG_PLAYBACK_ERROR, 0, 0, detail);
-   CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
-   OnPlayBackStopped();
++  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
++  if (detail == 0)
++    OnPlayBackStopped();
  }
+ 
+ void CApplicationPlayerCallback::OnQueueNextItem()
 diff --git a/xbmc/application/ApplicationPlayerCallback.h b/xbmc/application/ApplicationPlayerCallback.h
 --- a/xbmc/application/ApplicationPlayerCallback.h
 +++ b/xbmc/application/ApplicationPlayerCallback.h

@@ -79,6 +79,10 @@ int main(){VideoPicture picture;Worker worker;
         application = TREE/'xbmc/application'
         callback = (application/'ApplicationPlayerCallback.cpp').read_text()
         self.assertIn('GUI_MSG_PLAYBACK_ERROR, 0, 0, detail', callback)
+        detailed = body(callback, 'void CApplicationPlayerCallback::OnPlayBackError(int detail)')
+        self.assertIn('if (detail != 0)', detailed)
+        self.assertLess(detailed.index('if (detail != 0)'), detailed.index('SendThreadMessage(msg)'))
+        self.assertLess(detailed.index('OnPlayBackStopped();'), detailed.index('SendThreadMessage(msg)'))
         handling = (application/'ApplicationMessageHandling.cpp').read_text()
         self.assertIn('detail != 0 ? detail : 16027', handling)
         self.assertIn('Dolby Vision picture metadata is missing or unusable.',
