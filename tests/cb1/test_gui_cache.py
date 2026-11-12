@@ -254,9 +254,11 @@ int main(){for(bool videoLayer:{false,true})for(bool reusable:{false,true})for(b
         native=shipped_code('xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp')
         present=body(native,'void CWinSystemGbmGLESContext::PresentFrame(')
         prefixes=[]
-        for marker in ['if (m_hdrConversion)','if (m_dvState.Captured())']:
+        for marker, submit in [
+                ('if (m_hdrConversion)', '      if (m_pascalHDRActive ?'),
+                ('if (m_dvState.Captured())', '      if (m_eglContext.TrySwapBuffers())')]:
             route=body(present,marker)
-            end=route.index('      if (m_eglContext.TrySwapBuffers())') if marker.startswith('if (m_hdrConversion)') else route.index('      if (m_eglContext.TrySwapBuffers())')
+            end=route.index(submit)
             end=route.index('{',end)+1
             prefix=route[:end]+' ++swapped;'
             prefix+='}'*(prefix.count('{')-prefix.count('}'))
@@ -274,6 +276,12 @@ struct CDVBridgeGLES{
 };
 struct Window{
  bool m_dvFrame=true;int m_nWidth=3840,m_nHeight=2160,m_videoSourceSideData=1;
+ bool m_pascalHDRActive=false;
+ struct PascalScanout {
+   unsigned blits=0;
+   std::shared_ptr<int> Blit(){++blits;return std::make_shared<int>();}
+ } scanout;
+ PascalScanout* m_pascalHDRScanout=&scanout;
  std::shared_ptr<DRM>m_DRM=std::make_shared<CDRMAtomic>();
  CDVBridgeGLES bridge;CDVBridgeGLES*m_dvBridge=&bridge;unsigned swaps=0,swapped=0;
  struct EGL{unsigned*counter;bool TrySwapBuffers(){++*counter;return true;}}m_eglContext{&swaps};
@@ -285,6 +293,8 @@ struct Window{
 int main(){for(bool rendered:{false,true}){Window w;
  for(unsigned film=0;film<3;film++){w.HDR(rendered);w.DV(rendered);}
  assert(w.swaps==6&&w.swapped==6&&w.bridge.resolves==6);
+ w.m_pascalHDRActive=true;w.HDR(rendered);
+ assert(w.scanout.blits==1&&w.swaps==6&&w.swapped==7);
  w.m_dvFrame=false;w.HDR(rendered);w.DV(rendered);assert(w.swaps==6);
 }}
 '''.replace('@HDR@',prefixes[0]).replace('@DV@',prefixes[1]))

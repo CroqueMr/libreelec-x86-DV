@@ -180,7 +180,7 @@
     "projects/Generic/patches/linux/linux-9942-intel-hdr10plus-internal-recovery.patch": "a24160e0a629a878da72695941f3a0e638356e4d82af6f429d850ec274618d7b",
     "tests/cb1/test_master_scaling.py": "a86e9ac29f52767ac703c67bd576cd85c8f50218bd5a16eddf448a270298926e",
     "tests/cb1/test_hdr10_final_gui.py": "eb3a2713ddcb87c02a65fde082a195a09a428500a6ebd6c29ebba0805c6d530d",
-    "tests/cb1/test_gui_cache.py": "f186b636b991acd589f11fd6e62964126887e241bb30f0146218a9af280c3198",
+    "tests/cb1/test_gui_cache.py": "3c6b5d7aae3681d5c8d283860b8925b99dd10a304bd3bde2a01901033a0b049f",
     "tests/cb1/test_ai_producer_admission.py": "230070a8f95901d14f4be40a54eb7c03add77fc78e97fb58c0b1d9dd372b3f51",
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
     "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "f58aed646dc57d173f27e713d302102a163de6aa8c262fec93c778b1df004413",
