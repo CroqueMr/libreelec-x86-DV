@@ -8,7 +8,7 @@ from test_native_video_source import TREE, body
 
 
 class AIReferencePhaseTests(unittest.TestCase):
-    def test_native_edge_is_only_used_by_the_affected_driver_and_circuits(self):
+    def test_native_edge_uses_the_matching_pipeline(self):
         header = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.h').read_text()
         predicate = body(header, 'bool CB1NativeAsyncPlayback() const')
         program = r'''
@@ -16,7 +16,11 @@ class AIReferencePhaseTests(unittest.TestCase):
 constexpr int QUIRK_CB1_NATIVE_EDGE=2;
 constexpr int DVBRIDGE_MODE_STANDARD=0,DVBRIDGE_MODE_MASTER_REFERENCE=4;
 struct DRM {bool affected=false;bool HasQuirk(int) const {return affected;}};
-struct Bridge {bool advanced=false;bool Advanced() const {return advanced;}};
+struct Bridge {
+ bool advanced=false,reserve=false;
+ bool Advanced() const {return advanced;}
+ bool PlayerLedCpuReserve() const {return reserve;}
+};
 struct Window {
  DRM drm,*m_DRM=&drm;Bridge bridge,*m_dvBridge=&bridge;
  bool async=true,m_hdrConversion=false;
@@ -33,6 +37,10 @@ int main(){
  w.m_hdrConversion=false;w.m_dvSelection.policy.mode=3;assert(!w.CB1NativeAsyncPlayback());
  w.m_dvSelection.policy.mode=0;w.async=false;assert(!w.CB1NativeAsyncPlayback());
  w.async=true;w.m_DRM=nullptr;assert(!w.CB1NativeAsyncPlayback());
+ w.m_DRM=&w.drm;w.drm.affected=false;w.bridge.advanced=true;w.bridge.reserve=true;
+ assert(w.CB1NativeAsyncPlayback());
+ w.m_hdrConversion=true;assert(!w.CB1NativeAsyncPlayback());
+ w.m_hdrConversion=false;w.async=false;assert(!w.CB1NativeAsyncPlayback());
 }
 '''.replace('PREDICATE', predicate)
         with tempfile.TemporaryDirectory() as temporary:

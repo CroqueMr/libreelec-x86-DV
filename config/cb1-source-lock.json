@@ -10,7 +10,7 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "93a89785416c8d57ef5e200de09fcb17c12d5a5350645c1e7cacf69e588cb76e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "dc7a12d5d5027c9239929ed92cc80f8e2e8ad67dba3c65c09cf78635625dc3cc",
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
@@ -154,7 +154,7 @@
     "tests/cb1/test_process_info_readability.py": "4e7ce3a7389b62ff052cf7bf07dc3ecefcae6d1f2f3b539ea834663ae2140847",
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
     "tests/cb1/test_ai_reentry.py": "ff7f8b75813db09596a5131198daa5688f9936c5431ab6dd2cc200bdf9be92fd",
-    "tests/cb1/test_ai_reference_phase.py": "d941d4707bfc166fd20b40c3a34f8d8d2d109dc19795819595bcf52c3a3a352d",
+    "tests/cb1/test_ai_reference_phase.py": "95b41b7f7eb7227a7ca9ad793b05d8f8f3fefa691986322dc053f47f580ff612",
     "tests/cb1/test_output_menu_recovery.py": "76f833f148d9bfe3883ec274c598cc3578e462c9954be9128f73ae2385591b6a",
     "tests/cb1/test_hdr10plus_selection.py": "889f8f2290f20261faabbe4dc892334e239c942983f57defa06e56081c9cfe2a",
     "tests/cb1/test_native_video_labels.py": "1659ebe7ac39ce1e7aab95e1e828e87c4a473f82909f1bc2c8ea337acf57751b",
@@ -345,7 +345,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "78ac32981ffda9cb0de8180cb1e829392f2b9eaedd46c646eefcded84ec27beb",
     "tests/cb1/test_lldv_format.py": "72476ba187041700446f5389465dc88195606f51d265eb0284e186c553f696b3",
-    "tests/cb1/test_lldv_player_info.py": "2cef0abe896557e3c3be95096777c186a6884e6fd03807d40ec56c776732a893"
+    "tests/cb1/test_lldv_player_info.py": "a28c3be786fce1f377128ca2752ec1dc67987aaa0fa932b261ec6cae07285887"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

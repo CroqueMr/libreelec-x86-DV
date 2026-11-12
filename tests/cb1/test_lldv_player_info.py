@@ -288,6 +288,55 @@ int main()
 }
 '''.replace('TAKE',take)})
 
+    def test_cpu_preparation_retires_a_completed_scanout_without_waiting(self):
+        source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        render = body(source, 'bool CWinSystemGbmGLESContext::RenderDVBridge(')
+        start = render.index('  if (!BeginDVBridge())')
+        retire = render[start:render.index('  const auto capture',start)]
+        run(self, {'test.cpp': r'''
+#include <cassert>
+struct Window
+{
+  struct Bridge
+  {
+    bool pending=true;
+    bool PlayerLedCpuPending() const {return pending;}
+  } bridge;
+  Bridge* m_dvBridge=&bridge;
+  bool ready=true,async=true,signalled=false,rejected=false;
+  int polls=0,leases=4;
+  bool BeginDVBridge() const {return ready;}
+  bool CB1AsyncAvailable() const {return async;}
+  bool CompleteDVBridgePage(int timeout)
+  {
+    assert(timeout==0);
+    ++polls;
+    if (!signalled) return false;
+    --leases;
+    if (rejected) {async=false;return false;}
+    return true;
+  }
+  bool Prepare()
+  {
+    RETIRE
+    return true;
+  }
+};
+int main()
+{
+  Window w;
+  assert(w.Prepare() && w.polls==1 && w.leases==4);
+  w.signalled=true;
+  assert(w.Prepare() && w.polls==2 && w.leases==3);
+  w.rejected=true;
+  assert(!w.Prepare() && w.polls==3);
+  w.bridge.pending=false;
+  assert(w.Prepare() && w.polls==3);
+  w.ready=false;
+  assert(!w.Prepare() && w.polls==3);
+}
+'''.replace('RETIRE',retire)})
+
     def test_seek_retires_only_unsubmitted_carriers(self):
         renderer = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         current = body(renderer, 'bool CDVBridgeGLES::PlayerLedCpuCurrent(')
