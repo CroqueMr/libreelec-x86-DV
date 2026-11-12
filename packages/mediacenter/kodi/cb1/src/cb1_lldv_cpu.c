@@ -6,27 +6,23 @@
 #include <immintrin.h>
 #include <math.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
 enum { W=3840, H=2160, LUT=1024*61, CHUNK=128, MAX_WORKERS=4 };
 
-struct cb1_lldv_worker {
-    pthread_t thread;
-    struct cb1_lldv_cpu *cpu;
-    unsigned index;
-};
-
 struct cb1_lldv_cpu {
     pthread_mutex_t lock;
     pthread_cond_t wake;
-    struct cb1_lldv_worker workers[MAX_WORKERS];
+    pthread_t workers[MAX_WORKERS];
     struct cb1_lldv_cpu_frame frame;
     // Each entry stores the 22-bit PQ value and a 10-bit delta to the next sample.
     uint32_t words[LUT];
     float matrix[9];
     float peak_scale;
     unsigned threads, generation, running;
+    atomic_uint next_row;
     bool closing;
 };
 
@@ -67,7 +63,7 @@ static inline CB1_AVX2 __m256 matrix_row(const float *m, __m256 r, __m256 g, __m
            _mm256_fmadd_ps(_mm256_set1_ps(m[1]),g,_mm256_mul_ps(_mm256_set1_ps(m[2]),b)));
 }
 
-static CB1_AVX2 void pack_rows(const struct cb1_lldv_cpu *cpu, unsigned thread)
+static CB1_AVX2 void pack_rows(struct cb1_lldv_cpu *cpu)
 {
     const struct cb1_lldv_cpu_frame *frame=&cpu->frame;
     unsigned padding=12-frame->bits;
@@ -75,8 +71,10 @@ static CB1_AVX2 void pack_rows(const struct cb1_lldv_cpu *cpu, unsigned thread)
     const __m256 scale=_mm256_set1_ps(1.0f/(1u<<padding));
     const __m256 half=_mm256_set1_ps(.5f);
     float rline[CHUNK+2],gline[CHUNK+2],bline[CHUNK+2];
+    // Share row groups so a decoder or GUI wakeup cannot strand one core's rows.
     enum { ROW_BATCH=16 };
-    for(unsigned begin=thread*ROW_BATCH;begin<H;begin+=cpu->threads*ROW_BATCH)
+    for(unsigned begin=atomic_fetch_add_explicit(&cpu->next_row,ROW_BATCH,memory_order_relaxed);
+        begin<H;begin=atomic_fetch_add_explicit(&cpu->next_row,ROW_BATCH,memory_order_relaxed))
     for(unsigned y=begin;y<H && y<begin+ROW_BATCH;y++){
         const float *row=frame->linear+4*(size_t)y*W;
         const size_t out_y=frame->flip_y?H-1-y:y;
@@ -146,8 +144,7 @@ static CB1_AVX2 void pack_rows(const struct cb1_lldv_cpu *cpu, unsigned thread)
 
 static void *worker(void *opaque)
 {
-    const struct cb1_lldv_worker *slot=opaque;
-    struct cb1_lldv_cpu *cpu=slot->cpu;
+    struct cb1_lldv_cpu *cpu=opaque;
     unsigned seen=0;
     pthread_mutex_lock(&cpu->lock);
     for(;;){
@@ -156,7 +153,7 @@ static void *worker(void *opaque)
         if(cpu->closing)break;
         seen=cpu->generation;
         pthread_mutex_unlock(&cpu->lock);
-        pack_rows(cpu,slot->index);
+        pack_rows(cpu);
         pthread_mutex_lock(&cpu->lock);
         if(!--cpu->running)pthread_cond_broadcast(&cpu->wake);
     }
@@ -201,6 +198,7 @@ struct cb1_lldv_cpu *cb1_lldv_cpu_create(unsigned threads)
         return NULL;
     struct cb1_lldv_cpu *cpu=calloc(1,sizeof(*cpu));
     if(!cpu)return NULL;
+    atomic_init(&cpu->next_row,0);
     if(!make_pq_table(cpu) || pthread_mutex_init(&cpu->lock,NULL)){
         free(cpu);
         return NULL;
@@ -211,10 +209,7 @@ struct cb1_lldv_cpu *cb1_lldv_cpu_create(unsigned threads)
         return NULL;
     }
     while(cpu->threads<threads){
-        struct cb1_lldv_worker *slot=&cpu->workers[cpu->threads];
-        slot->cpu=cpu;
-        slot->index=cpu->threads;
-        if(pthread_create(&slot->thread,NULL,worker,slot)){
+        if(pthread_create(&cpu->workers[cpu->threads],NULL,worker,cpu)){
             cb1_lldv_cpu_destroy(cpu);
             return NULL;
         }
@@ -243,6 +238,7 @@ bool cb1_lldv_cpu_submit(struct cb1_lldv_cpu *cpu, const struct cb1_lldv_cpu_fra
             cpu->frame.to_bt2020=cpu->matrix;
         }
         cpu->peak_scale=frame->peak_nits/10000.0f;
+        atomic_store_explicit(&cpu->next_row,0,memory_order_relaxed);
         cpu->running=cpu->threads;
         cpu->generation++;
         pthread_cond_broadcast(&cpu->wake);
@@ -270,7 +266,7 @@ void cb1_lldv_cpu_destroy(struct cb1_lldv_cpu *cpu)
     pthread_cond_broadcast(&cpu->wake);
     pthread_mutex_unlock(&cpu->lock);
     for(unsigned i=0;i<cpu->threads;i++)
-        pthread_join(cpu->workers[i].thread,NULL);
+        pthread_join(cpu->workers[i],NULL);
     pthread_cond_destroy(&cpu->wake);
     pthread_mutex_destroy(&cpu->lock);
     free(cpu);

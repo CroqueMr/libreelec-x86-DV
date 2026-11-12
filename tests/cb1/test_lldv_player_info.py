@@ -216,6 +216,64 @@ int main()
 }
 '''.replace('BLOCK', block)})
 
+    def test_cpu_carrier_wait_preserves_unready_and_failed_heads(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        take = body(source, 'CDVBridgeGLES::TakePlayerLedCpu()')
+        run(self, {'test.cpp': r'''
+#include <cassert>
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <utility>
+struct Renderer
+{
+  struct Carrier {int buffer=5;};
+  struct Slot
+  {
+    std::optional<int> frame=17;
+    double pts=0;
+    std::shared_ptr<Carrier> carrier=std::make_shared<Carrier>();
+    int acquire=31;
+    bool packed=false;
+  };
+  struct PlayerLedCpu
+  {
+    Slot slots[1];
+    std::deque<unsigned> queue{0};
+    std::mutex mutex;
+    std::condition_variable_any changed;
+    bool failed=false;
+  };
+  struct PlayerLedCpuOutput
+  {
+    int frame;
+    double pts;
+    int buffer;
+    std::shared_ptr<Carrier> carrier;
+    int acquire;
+  };
+  std::unique_ptr<PlayerLedCpu> m_playerLedCpu=std::make_unique<PlayerLedCpu>();
+  bool PlayerLedCpuPending() const {return !m_playerLedCpu->queue.empty();}
+  std::optional<PlayerLedCpuOutput> Take() TAKE
+};
+int main()
+{
+  Renderer r;
+  auto& cpu=*r.m_playerLedCpu;
+  assert(!r.Take() && cpu.queue.size()==1 && cpu.slots[0].acquire==31);
+  cpu.slots[0].packed=true;
+  cpu.failed=true;
+  assert(!r.Take() && cpu.queue.size()==1 && cpu.slots[0].acquire==31);
+  cpu.failed=false;
+  auto frame=r.Take();
+  assert(frame && frame->frame==17 && frame->acquire==31 && cpu.queue.empty());
+  assert(cpu.slots[0].acquire==-1);
+}
+'''.replace('TAKE',take)})
+
     def test_seek_retires_only_unsubmitted_carriers(self):
         renderer = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         current = body(renderer, 'bool CDVBridgeGLES::PlayerLedCpuCurrent(')
@@ -223,13 +281,26 @@ int main()
         present = body(window, 'bool CWinSystemGbmGLESContext::PresentPlayerLedFrame()')
         start = present.index('  if (m_dvBridge->PlayerLedCpuPending())')
         queue = present[start:present.index('  bool accepted', start)]
+        present_cpu = body(window, 'void CWinSystemGbmGLESContext::PresentPlayerLedCpu(')
+        after_wait = present_cpu[1:present_cpu.index('  const auto& requested')]
         run(self, {'test.cpp': r'''
 #include <cassert>
 #include <cstdint>
 #include <deque>
+#include <optional>
+uint64_t generation=4;
+int closed=-1;
+int close(int fd) { closed=fd; return 0; }
 struct Bridge
 {
   struct Frame {struct {uint64_t informationGeneration;} source;} frame{{4}};
+  struct Output {Frame frame; int acquire=31;};
+  bool seekOnTake=false;
+  std::optional<Output> TakePlayerLedCpu()
+  {
+    if (seekOnTake) ++generation;
+    return Output{frame};
+  }
   struct Cpu {struct {Frame* frame;} slots[1]; std::deque<unsigned> queue{0};} cpu{{{&frame}}};
   Cpu* m_playerLedCpu{&cpu};
   bool PlayerLedCpuPending() const { return !cpu.queue.empty(); }
@@ -237,7 +308,6 @@ struct Bridge
 };
 struct CServiceBroker
 {
-  inline static uint64_t generation=4;
   static CServiceBroker GetDataCacheCore() { return {}; }
   uint64_t GetVideoProcessingGeneration() const { return generation; }
 };
@@ -247,7 +317,7 @@ struct Window
   Bridge* m_dvBridge{&bridge};
   unsigned queued=0, acceptedByKms=1;
   void DiscardDVBridgeFrame() { bridge.cpu.queue.clear(); }
-  void PresentPlayerLedCpu(int) { ++queued; }
+  void PresentPlayerLedCpu(int) { AFTER_WAIT ++queued; }
   bool present()
   {
     const int transport=2;
@@ -259,13 +329,16 @@ int main()
 {
   Window w;
   assert(w.present() && w.queued==1 && w.acceptedByKms==1);
-  CServiceBroker::generation=5;
+  generation=5;
   assert(w.present() && w.queued==1 && w.acceptedByKms==1 && !w.bridge.PlayerLedCpuPending());
   w.bridge.frame.source.informationGeneration=5;
   w.bridge.cpu.queue.push_back(0);
   assert(w.present() && w.queued==2 && w.acceptedByKms==1);
+  w.bridge.seekOnTake=true;
+  assert(w.present() && w.queued==2 && w.acceptedByKms==1);
+  assert(closed==31 && !w.bridge.PlayerLedCpuPending());
 }
-'''.replace('CURRENT', current).replace('QUEUE', queue)})
+'''.replace('CURRENT', current).replace('QUEUE', queue).replace('AFTER_WAIT', after_wait)})
 
     def test_panel_reuses_the_fixed_layout(self):
         path = ROOT / 'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml'
