@@ -1226,6 +1226,23 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Keep accepted scanout buffers locked across refused colour changes."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9998-bitmap-subtitle-shift.patch": {
+    "summary": "Shift bitmap subtitles with subtitleshiftup and subtitleshiftdown under Manual offset placement",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Say that the shift actions change the bitmap subtitle offset during playback.",
+      "xbmc/video/PlayerController.cpp": "Step subtitles.bitmapoffset from the shift actions while a bitmap subtitle stream plays with Manual offset placement.",
+      "xbmc/video/PlayerController.h": "Remember the slider label so the bitmap offset slider shows steps, not pixels."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-text-subtitle-shift-step.patch": {
+    "summary": "Move text subtitles one fixed step with SubtitleShiftUp/Down(step)",
+    "component": "kodi",
+    "files": {
+      "xbmc/interfaces/builtins/PlayerBuiltins.cpp": "Pass every SubtitleShiftUp/Down parameter to the action and document step.",
+      "xbmc/video/PlayerController.cpp": "Read save and step from the action text; step moves one thirty-second of the GUI height."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": {
     "summary": "Show original source, actual processing and accepted output in fixed single-line columns",
     "component": "kodi",

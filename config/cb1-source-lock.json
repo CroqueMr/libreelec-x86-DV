@@ -28,7 +28,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "5ded5441420e96dc910ae691e1c85ac28456718f22e7ec33107fcc5426219711",
-    "config/cb1-patch-index.json": "0d823c9b2e13bc43b00e78633b35bfa65917a8dc96e59f3389d0d33b3d931d96",
+    "config/cb1-patch-index.json": "374c3666c76a43ee617304c6ec7b3d564ab1157982c818e3a34f5a9b336d1191",
     "packages/graphics/nvidia/package.mk": "9898721633ebdf315f5040c0d6329ffaa4d71ee92c3515025ce0b338fcdf260b",
     "packages/graphics/nvidia/files/select-driver": "5e1c7a5974f54976d37bd7b4e07486ee9708ee1fb671e839281fbf03dca94e1b",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
