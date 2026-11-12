@@ -487,7 +487,7 @@ https://github.com/dangerouslaser/libreelec-yblod/commit/3b3a983f93d1ac33affb42d
  		intel_hdmi_dp_dual_mode_detect(&connector->base);
  
  		connected = true;
-@@ -2600,16 +2879,24 @@
+@@ -2600,16 +2879,29 @@
  	drm_dbg_kms(display->drm, "[CONNECTOR:%d:%s]\n",
  		    connector->base.base.id, connector->base.name);
  
@@ -502,19 +502,24 @@ https://github.com/dangerouslaser/libreelec-yblod/commit/3b3a983f93d1ac33affb42d
  
  	wakeref = intel_display_power_get(display, POWER_DOMAIN_GMBUS);
  
-+	/* A forced-on link may pulse HPD during a modeset. Re-read its EDID
-+	 * before deciding capabilities; absent or incompatible sinks still fail.
++	/* HPD can pulse while switching modes on a native DV HDMI link.
++	 * Use the existing DDC probe here as for a forced-on port.
 +	 */
  	if (DISPLAY_VER(display) >= 11 &&
 -	    !intel_digital_port_connected(encoder))
 +	    !intel_digital_port_connected(encoder) &&
 +	    !(connector->base.status == connector_status_connected &&
 +	      (connector->base.force == DRM_FORCE_ON ||
-+	       connector->base.force == DRM_FORCE_ON_DIGITAL)))
++	       connector->base.force == DRM_FORCE_ON_DIGITAL ||
++	       (connector->base.force == DRM_FORCE_UNSPECIFIED &&
++	        connector->dv_lab_property && !intel_encoder_is_tc(encoder) &&
++	        intel_hdmi->dp_dual_mode.type == DRM_DP_DUAL_MODE_NONE &&
++	        connector->base.state && connector->base.state->crtc &&
++	        connector->dv_sink_caps.status == DV_EDID_STANDARD))))
  		goto out;
  
  	intel_hdmi_unset_edid(&connector->base);
-@@ -2620,8 +2907,10 @@
+@@ -2620,8 +2912,10 @@
  out:
  	intel_display_power_put(display, POWER_DOMAIN_GMBUS, wakeref);
  
@@ -526,7 +531,7 @@ https://github.com/dangerouslaser/libreelec-yblod/commit/3b3a983f93d1ac33affb42d
  
  	return status;
  }
-@@ -2634,6 +2923,8 @@
+@@ -2634,6 +2928,8 @@
  
  	drm_dbg_kms(display->drm, "[CONNECTOR:%d:%s]\n",
  		    connector->base.base.id, connector->base.name);
@@ -535,7 +540,7 @@ https://github.com/dangerouslaser/libreelec-yblod/commit/3b3a983f93d1ac33affb42d
  
  	if (!intel_display_driver_check_access(display))
  		return;
-@@ -2714,6 +3005,20 @@
+@@ -2714,6 +3010,20 @@
  	struct intel_connector *connector = to_intel_connector(_connector);
  	struct intel_display *display = to_intel_display(intel_hdmi);
  
@@ -556,7 +561,7 @@ https://github.com/dangerouslaser/libreelec-yblod/commit/3b3a983f93d1ac33affb42d
  	intel_attach_force_audio_property(&connector->base);
  	intel_attach_broadcast_rgb_property(&connector->base);
  	intel_attach_aspect_ratio_property(&connector->base);
-@@ -2721,8 +3026,10 @@
+@@ -2721,8 +3031,10 @@
  	intel_attach_hdmi_colorspace_property(&connector->base);
  	drm_connector_attach_content_type_property(&connector->base);
  
