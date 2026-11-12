@@ -1255,19 +1255,28 @@
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": {
-    "summary": "Read and display the LLDV format preference and unavailability reason.",
+    "summary": "Select LLDV formats, stage the packed carrier and report the confirmed presentation.",
     "component": "kodi",
     "files": {
       "xbmc/utils/DVBridgeEdid.h": "Read and display the LLDV format preference and unavailability reason.",
       "xbmc/utils/DVBridgeLldv.h": "Read and display the LLDV format preference and unavailability reason.",
-      "xbmc/windowing/gbm/WinSystemGbm.h": "Read and display the LLDV format preference and unavailability reason.",
-      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read and display the LLDV format preference and unavailability reason.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose connector status and the prepared-carrier presentation entry point.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read back the active LLDV transport and submit the packed GBM carrier with the connector state.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Read and display the LLDV format preference and unavailability reason.",
       "xbmc/dialogs/DVPlaybackModes.h": "Read and display the LLDV format preference and unavailability reason.",
       "xbmc/settings/windows/GUIControlSettings.cpp": "Read and display the LLDV format preference and unavailability reason.",
       "xbmc/settings/Settings.cpp": "Read and display the LLDV format preference and unavailability reason.",
       "system/settings/settings.xml": "Read and display the LLDV format preference and unavailability reason.",
-      "addons/resource.language.en_gb/resources/strings.po": "Read and display the LLDV format preference and unavailability reason."
+      "addons/resource.language.en_gb/resources/strings.po": "Label LLDV formats, availability and experimental forcing.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Identify the player-led playback circuit in telemetry.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Bind player-led facts to the confirmed picture, connector and packed transport.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVProcessingInfo.h": "Report player-led output facts for the active picture.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "Carry the applied mapping and transport through the native player telemetry.",
+      "xbmc/cores/VideoProcessingInfo.h": "Carry the player-led format and applied trim facts.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the confirmed transport and applied trims in Player Process Info.",
+      "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Expose confirmed LLDV information to the skin.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Expose LLDV staging on the shared transport state owner.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Stage the LLDV and TV-led signal changes against a single restorable baseline."
     }
   },
   "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": {

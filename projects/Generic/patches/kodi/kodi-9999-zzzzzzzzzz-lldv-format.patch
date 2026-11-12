@@ -73,17 +73,25 @@ diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
 new file mode 100644
 --- /dev/null
 +++ b/xbmc/utils/DVBridgeLldv.h
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,89 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
 +#include "DVBridgeEdid.h"
++
++#include <cstdint>
 +
 +namespace DVBRIDGE
 +{
 +// Stable preference values. A request of zero means off in the driver.
 +enum class LldvFormat { Auto, Y422_10, Y422_12, Rgb10, Rgb12, Y444_10, Y444_12 };
 +enum class LldvReason { Ready, Edid, Display, Driver, Timing };
++
++constexpr LldvFormat LldvFormatPreference(int value)
++{
++  return value >= 0 && value <= static_cast<int>(LldvFormat::Y444_12)
++             ? static_cast<LldvFormat>(value) : LldvFormat::Auto;
++}
 +
 +constexpr unsigned LldvBit(LldvFormat format)
 +{
@@ -135,6 +143,14 @@ new file mode 100644
 +  return readyForced ? LldvFormat::Y422_10 : LldvFormat::Auto;
 +}
 +
++// The connector and transport used to pack a particular framebuffer.
++struct LldvTransport
++{
++  uint32_t connectorId{0};
++  LldvFormat format{LldvFormat::Auto};
++  bool forced{false};
++};
++
 +struct LldvConnectorStatus
 +{
 +  dvbridge_sink_caps sink{};
@@ -143,6 +159,8 @@ new file mode 100644
 +  LldvFormat active{LldvFormat::Auto};
 +  bool forced42210{false};
 +  bool activeForced{false};
++  uint32_t connectorId{0};
++  bool timingCommitted{false};
 +};
 +} // namespace DVBRIDGE
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
@@ -159,12 +177,13 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm
  
  #include "VideoLayerBridge.h"
  #include "messaging/ApplicationMessenger.h"
-@@ -105,6 +109,9 @@
+@@ -105,6 +109,10 @@
    bool SetHDR(const VideoPicture* videoPicture) override;
    bool IsHDRDisplay() override;
    CHDRCapabilities GetDisplayHDRCapabilities() const override;
 +#ifdef HAVE_DVBRIDGE
 +  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const;
++  bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed);
 +#endif
  
    // holding the returned reference defers video plane teardown until it is released
@@ -172,18 +191,61 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -1554,6 +1554,50 @@
+@@ -1554,6 +1554,97 @@
           m_info->SupportsHDRStaticMetadataType1();
  }
  
 +#ifdef HAVE_DVBRIDGE
++bool CWinSystemGbm::FlipPlayerLedPage(CDVBridgeState& state,
++                                     const DVBRIDGE::LldvTransport& packed)
++{
++  using namespace DVBRIDGE;
++  if (!CompleteDVBridgePage()) return false;
++  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm || !m_GBM || drm->IsSDRRestorePending()) return false;
++
++  const auto status = GetLldvConnectorStatus();
++  if (!packed.connectorId || packed.connectorId != status.connectorId ||
++      (packed.format != LldvFormat::Y422_10 && packed.format != LldvFormat::Y422_12) ||
++      (packed.forced && (packed.format != LldvFormat::Y422_10 || !status.forced42210)) ||
++      LldvFormatReason(status.sink, packed.format, status.driverFormats,
++                       status.currentTiming, packed.forced) != LldvReason::Ready)
++    return false;
++
++  const char* name = packed.forced ? "YCbCr 4:2:2 10 bits forced" :
++      packed.format == LldvFormat::Y422_10 ? "YCbCr 4:2:2 10 useful bits" : "YCbCr 4:2:2 12 bits";
++  auto* connector = drm->GetConnector();
++  const auto value = connector ? connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", name) :
++                                 std::nullopt;
++  if (!value || (!state.Captured() && !state.CapturePlayerLed(*drm))) return false;
++
++  // The caller has swapped the packed carrier into the existing GBM surface.
++  auto& surface = m_GBM->GetDevice().GetSurface();
++  auto* bo = surface.LockTransactionalBuffer();
++  if (!bo) return false;
++  const auto format = gbm_bo_get_format(bo);
++  const bool ready = (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888) &&
++      gbm_bo_get_width(bo) == 3840 && gbm_bo_get_height(bo) == 2160 &&
++      state.StagePlayerLed(*drm, *value) && StageTransportPreferences();
++  if (ready)
++  {
++    drm->StageHDR10Plus(std::nullopt, 0);
++    if (!status.timingCommitted || status.active != packed.format ||
++        status.activeForced != packed.forced)
++      drm->AllowModeset();
++  }
++  const bool accepted = drm->FlipPageTransactional(ready ? bo : nullptr);
++  surface.CompleteTransactionalBuffer(accepted);
++  return accepted;
++}
++
 +DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
 +{
 +  DVBRIDGE::LldvConnectorStatus status;
 +  if (const auto* display = GetDisplayInfo())
 +    status.sink = display->GetDolbyVisionCaps();
 +  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
-+  if (connector && connector->SupportsProperty("CB1_LLDV_FORMAT"))
++  if (connector && connector->IsConnected() && connector->SupportsProperty("CB1_LLDV_FORMAT"))
 +  {
 +    const auto native10 =
 +        connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 useful bits");
@@ -205,6 +267,10 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemG
 +                           (mode->clock == 297000 || mode->clock == 296703) &&
 +                           (mode->flags & ~DRM_MODE_FLAG_PIC_AR_16_9) ==
 +                               (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC);
++    status.connectorId = *connector->GetConnectorId();
++    const auto* atomic = dynamic_cast<const CDRMAtomic*>(m_DRM.get());
++    status.timingCommitted = status.currentTiming && atomic && atomic->IsActive() &&
++                             !atomic->HasPendingCB1Page() && atomic->IsSelectedModeCommitted();
 +    const auto active = connector->ReadPropertyValue("CB1_LLDV_FORMAT");
 +    if (active && active == native10)
 +      status.active = DVBRIDGE::LldvFormat::Y422_10;
@@ -311,7 +377,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +  const auto status = ReadLldvConnector();
 +  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
 +  const auto format = status.active == LldvFormat::Auto ?
-+      static_cast<LldvFormat>(settings->GetInt("dvbridge.lldvformatvalue")) : status.active;
++      LldvFormatPreference(settings->GetInt("dvbridge.lldvformatvalue")) : status.active;
 +  const bool forced = status.active != LldvFormat::Auto ? status.activeForced :
 +      LldvRequiresForcing(format, status.driverFormats, status.forced42210);
 +  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
@@ -498,7 +564,7 @@ new file mode 100644
 index 0000000..70cba65
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,78 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +
@@ -509,15 +575,18 @@ index 0000000..70cba65
 +
 +namespace DVBRIDGE
 +{
-+// Call with the binding and connector readback of the successfully presented
-+// framebuffer. The renderer's status alone cannot activate the panel.
++// Call after confirmed presentation with the packed framebuffer's binding and transport.
++// Match both against the presented picture and current connector readback.
 +inline std::optional<StreamSnapshot::Output> PlayerLedOutput(
 +    cb1_master_status rendered, SourceBinding mapped, SourceBinding presented,
-+    const LldvConnectorStatus& connector,
++    LldvTransport packed, const LldvConnectorStatus& connector,
 +    const dvbridge_creative_plan& plan, bool fel, bool felUpscaled = false)
 +{
 +  const auto format = connector.active;
 +  if (rendered != CB1_MASTER_READY || !presented.Valid() || mapped != presented ||
++      !packed.connectorId || packed.connectorId != connector.connectorId ||
++      !connector.timingCommitted || packed.format != format ||
++      packed.forced != connector.activeForced ||
 +      plan.status == DVBRIDGE_CREATIVE_INVALID || plan.status == DVBRIDGE_CREATIVE_UNSUPPORTED ||
 +      (format != LldvFormat::Y422_10 && format != LldvFormat::Y422_12) ||
 +      (connector.activeForced && format != LldvFormat::Y422_10) ||
@@ -801,3 +870,103 @@ index de87970..d522e40 100644
      if ((info.output.flags & CDVPlaybackInfo::HDMI) && !info.output.hdr10AI &&
          !info.output.authoredLegacy && (info.output.effective==1 || info.output.effective==5))
        return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 (CM4 added)" : "CM2.9 (CM4 not added)";
+diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.h b/xbmc/windowing/gbm/drm/DVBridgeState.h
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.h
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.h
+@@ -18,6 +18,8 @@
+   bool CaptureColorPreferences(CDRMAtomic&, std::optional<uint64_t> defaultMaxBpc);
+   std::optional<uint64_t> Before(const char* name) const;
+   bool Stage(CDRMAtomic&, bool restore);
++  bool CapturePlayerLed(CDRMAtomic&);
++  bool StagePlayerLed(CDRMAtomic&, uint64_t format);
+   void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
+   bool Captured() const { return !m_changes.empty(); }
+   Backend CapturedBackend() const { return m_backend; }
+@@ -34,6 +36,8 @@
+   bool Reject(const char* reason) { m_failure = reason; return false; }
+   bool Read(CDRMAtomic&, std::vector<Change>&, CDRMObject*, const char*, uint64_t,
+             bool required, bool blob, const char* enumName);
++  bool CaptureTransport(CDRMAtomic&, uint64_t ownVsif, bool legacyVsif, bool playerLed);
++  bool StageTransport(CDRMAtomic&, bool restore, uint64_t playerLedFormat);
+   std::vector<Change> m_changes;
+   CDRMAtomic* m_owner = nullptr;
+   Backend m_backend = Backend::NONE;
+diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -51,6 +51,17 @@
+ 
+ bool CDVBridgeState::Capture(CDRMAtomic& drm, uint64_t ownVsif, bool legacyVsif)
+ {
++  return CaptureTransport(drm, ownVsif, legacyVsif, false);
++}
++
++bool CDVBridgeState::CapturePlayerLed(CDRMAtomic& drm)
++{
++  return CaptureTransport(drm, 0, false, true);
++}
++
++bool CDVBridgeState::CaptureTransport(CDRMAtomic& drm, uint64_t ownVsif, bool legacyVsif,
++                                      bool playerLed)
++{
+   m_failure = "none";
+   if (Captured())
+     return Reject("already-captured");
+@@ -59,9 +70,14 @@
+   auto* plane = drm.GetGuiPlane() ? drm.GetGuiPlane() : drm.GetVideoPlane();
+   if (!connector || !crtc || !plane || (drm.GetGuiPlane() && drm.GetVideoPlane()))
+     return Reject("output-objects");
+-  const Backend backend = GetBackend(*connector);
++  const bool hasLldv = connector->SupportsProperty("CB1_LLDV_FORMAT");
++  if ((playerLed && !hasLldv) ||
++      (hasLldv && connector->ReadPropertyValue("CB1_LLDV_FORMAT") != 0))
++    return Reject("CB1_LLDV_FORMAT");
++  const Backend backend = playerLed ? Backend::KERNEL : GetBackend(*connector);
++  const auto standard = connector->GetPropertyValue("DVBRIDGE_DV_STANDARD_LAB");
+   if (backend == Backend::NONE ||
+-      (backend == Backend::KERNEL && connector->GetPropertyValue("DVBRIDGE_DV_STANDARD_LAB") != 0))
++      (backend == Backend::KERNEL && (standard.value_or(0) != 0 || (!playerLed && !standard))))
+     return Reject("DVBRIDGE_DV_STANDARD_LAB");
+   const auto vsif = connector->GetPropertyValue("NV_HDMI_VSIF_METADATA");
+   const bool owned = ownVsif != 0 && vsif == ownVsif;
+@@ -80,7 +96,8 @@
+   if (backend == Backend::KERNEL)
+   {
+     const Setting native[] = {
+-      {connector,"DVBRIDGE_DV_STANDARD_LAB",1,true,false},
++      {connector,"CB1_LLDV_FORMAT",0,playerLed,false},
++      {connector,"DVBRIDGE_DV_STANDARD_LAB",1,!playerLed,false},
+       {connector,"DVBRIDGE_HDR10_DEEP_COLOR",0,false,false},
+       {connector,"HDR_OUTPUT_METADATA",0,false,true},
+       {connector,"max bpc",8,true,false},
+@@ -199,11 +216,29 @@
+ 
+ bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore)
+ {
++  return StageTransport(drm, restore, 0);
++}
++
++bool CDVBridgeState::StagePlayerLed(CDRMAtomic& drm, uint64_t format)
++{
++  return format && m_backend == Backend::KERNEL && Before("CB1_LLDV_FORMAT") &&
++         StageTransport(drm, false, format);
++}
++
++bool CDVBridgeState::StageTransport(CDRMAtomic& drm, bool restore, uint64_t playerLedFormat)
++{
+   if (!Captured() || m_owner != &drm || m_changes.front().object != drm.GetConnector())
+     return false;
+   bool valid = true;
+   for (const auto& change : m_changes)
+-    if (!drm.AddProperty(change.object,change.name.c_str(),restore ? change.before : change.during))
++  {
++    uint64_t value = restore ? change.before : change.during;
++    if (playerLedFormat && change.name == "CB1_LLDV_FORMAT")
++      value = playerLedFormat;
++    else if (playerLedFormat && change.name == "DVBRIDGE_DV_STANDARD_LAB")
++      value = 0;
++    if (!drm.AddProperty(change.object, change.name.c_str(), value))
+       valid = false;
++  }
+   return valid;
+ }

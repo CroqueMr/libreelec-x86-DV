@@ -1,4 +1,4 @@
-"""Run shipped TV-Led capture and HDR10 admission against DRM boundary doubles."""
+"""Run shipped DV transport capture and HDR10 admission against DRM boundary doubles."""
 import os
 from pathlib import Path
 import re
@@ -85,9 +85,10 @@ struct CDRMObject {
 struct CDRMAtomic {
   CDRMObject connector{{{"DVBRIDGE_DV_STANDARD_LAB",0},{"max bpc",12},
                        {"Broadcast RGB",0},{"Colorspace",0},{"DVBRIDGE_HDR10_DEEP_COLOR",0}}, {}};
-  CDRMObject crtc,plane;
+  CDRMObject crtc,plane,reconnected;
+  CDRMObject* selected=&connector;
   std::map<std::string,uint64_t> staged;
-  CDRMObject* GetConnector() {return &connector;}
+  CDRMObject* GetConnector() {return selected;}
   CDRMObject* GetCrtc() {return &crtc;}
   CDRMObject* GetGuiPlane() {return &plane;}
   CDRMObject* GetVideoPlane() {return nullptr;}
@@ -188,6 +189,39 @@ int main() {
   plane.plane_id=30;
   assert(state.Capture(drm));
   assert(std::string(state.CaptureFailure())=="none");
+  state.Restored();
+
+  // One capture can stage both transports and restore the ordinary baseline.
+  drm.connector.props["CB1_LLDV_FORMAT"]=0;
+  drm.connector.props["HDR_OUTPUT_METADATA"]=33;
+  assert(state.Capture(drm));
+  assert(state.Stage(drm,false) && drm.staged.at("CB1_LLDV_FORMAT")==0);
+  assert(state.StagePlayerLed(drm,1));
+  assert(drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==0);
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==1);
+  assert(drm.staged.at("HDR_OUTPUT_METADATA")==0);
+  assert(state.StagePlayerLed(drm,2) && drm.staged.at("CB1_LLDV_FORMAT")==2);
+  assert(!state.StagePlayerLed(drm,0));
+  drm.selected=&drm.reconnected;
+  assert(!state.StagePlayerLed(drm,1) && !state.Stage(drm,true));
+  assert(state.Captured() && clones==1);
+  drm.selected=&drm.connector;
+  assert(state.Stage(drm,false));
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==0);
+  assert(drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==1);
+  assert(state.Stage(drm,true) && drm.staged.at("HDR_OUTPUT_METADATA")==777);
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==0 && drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==0);
+  state.Restored(); assert(clones==0);
+
+  // The LLDV driver property works independently of the TV-led property.
+  drm.connector.props.erase("DVBRIDGE_DV_STANDARD_LAB");
+  assert(state.CapturePlayerLed(drm) && state.StagePlayerLed(drm,1));
+  assert(state.Stage(drm,true));
+  state.Restored();
+  drm.connector.props["CB1_LLDV_FORMAT"]=1;
+  assert(!state.CapturePlayerLed(drm) && !state.Captured());
+  drm.connector.props.erase("CB1_LLDV_FORMAT");
+  assert(!state.CapturePlayerLed(drm) && !state.Captured());
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:

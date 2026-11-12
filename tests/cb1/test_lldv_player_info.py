@@ -41,6 +41,8 @@ int main()
   LldvConnectorStatus connector{};
   connector.sink.status=DV_EDID_LLDV_ONLY; connector.sink.lldv_422=true;
   connector.driverFormats=LLDV_422; connector.currentTiming=true;
+  connector.connectorId=17; connector.timingCommitted=true;
+  LldvTransport packed{17,LldvFormat::Y422_10,false};
   dvbridge_creative_plan plan{};
   plan.policy.tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_P3_D65};
   plan.policy.expert_black_nits=0.002;
@@ -52,36 +54,52 @@ int main()
   for(double& code : plan.codes) code=2048;
   plan.codes[0]=2100; plan.codes[3]=3000; // Chroma is dormant without a saturation trim.
   plan.analysis[1]=3300; plan.analysis[2]=1800;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  const auto outputFor = [&](cb1_master_status status, SourceBinding mapped,
+                             SourceBinding presented, bool fel, bool upscaled = false) {
+    return PlayerLedOutput(status,mapped,presented,packed,connector,plan,fel,upscaled);
+  };
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.active=LldvFormat::Y422_10;
-  assert(!PlayerLedOutput(CB1_MASTER_FAILED,id,id,connector,plan,true));
-  assert(!PlayerLedOutput(CB1_MASTER_READY,{},{},connector,plan,true));
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,{7,3,9},connector,plan,true));
+  assert(!outputFor(CB1_MASTER_FAILED,id,id,true));
+  assert(!outputFor(CB1_MASTER_READY,{},{},true));
+  assert(!outputFor(CB1_MASTER_READY,id,{7,3,9},true));
+  connector.timingCommitted=false; // The selected mode has not flipped.
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
+  connector.timingCommitted=true;
+  connector.connectorId=18; // A late receipt from another connector is insufficient.
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
+  connector.connectorId=17;
+  connector.active=LldvFormat::Y422_12;
+  assert(!outputFor(CB1_MASTER_READY,id,id,true)); // Carrier packed at 10 bits.
+  connector.active=LldvFormat::Y422_10;
   connector.currentTiming=false;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.currentTiming=true;
   connector.driverFormats=0;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.forced42210=true; // Advertised capability alone cannot describe the active route.
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.activeForced=true;
-  auto forced=PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true);
+  assert(!outputFor(CB1_MASTER_READY,id,id,true)); // Native carrier request, forced readback.
+  packed.forced=true;
+  auto forced=outputFor(CB1_MASTER_READY,id,id,true);
   assert(forced && forced->bits==10 && forced->minimumLinkBits==12);
   connector.active=LldvFormat::Y422_12;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.active=LldvFormat::Y422_10;
   connector.forced42210=false;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.activeForced=false;
+  packed.forced=false;
   connector.driverFormats=LLDV_422;
   connector.sink.lldv_422=false;
-  assert(!PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true));
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.sink.lldv_422=true;
-  auto output=PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true);
+  auto output=outputFor(CB1_MASTER_READY,id,id,true);
   assert(output && output->lldv && output->bits==10 && output->minimumLinkBits==12);
   assert(output->stream==7 && output->picture==2 && output->revision==9);
   assert((output->flags & CDVPlaybackInfo::FEL) && output->felUpscaling==-1);
-  assert(PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,true,true)->felUpscaling==2);
+  assert(outputFor(CB1_MASTER_READY,id,id,true,true)->felUpscaling==2);
   assert(output->target==1000 && output->displayBlack==0.002 && output->lldv->cm4Appended);
   assert(output->lldv->scenePQ[0]==3300 && output->lldv->scenePQ[1]==1800);
   assert(LldvTrimText(output->creativeApplied,output->lldv->trimGroups)=="L2 · SOP");
@@ -97,7 +115,7 @@ int main()
   assert(info.TransmittedBlocks().none() && !info.cm4);
 
   plan.codes[0]=2048;
-  output=PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,false);
+  output=outputFor(CB1_MASTER_READY,id,id,false);
   assert(output && !(output->creativeApplied & (1u<<2)) && !(output->flags & CDVPlaybackInfo::FEL));
   assert(LldvTrimText(output->creativeApplied,output->lldv->trimGroups).empty());
 
@@ -105,7 +123,8 @@ int main()
   plan.applied_levels=(1u<<1)|(1u<<3)|(1u<<8);
   plan.l8_coverage.applied=0xdf; plan.l8_coverage.preserved=32; plan.cm4_weight=1.5;
   connector.active=LldvFormat::Y422_12;
-  output=PlayerLedOutput(CB1_MASTER_READY,id,id,connector,plan,false);
+  packed.format=LldvFormat::Y422_12;
+  output=outputFor(CB1_MASTER_READY,id,id,false);
   assert(output && output->bits==12 && !output->lldv->cm4Appended);
   assert(LldvTrimText(output->creativeApplied,output->lldv->trimGroups)=="L8 · SOP · Mid");
   source.output=*output; source.cm4=true;
@@ -120,7 +139,7 @@ int main()
   }
 
   // A pending/failed frame has no accepted summary. TV-led and native SDR replace it.
-  assert(!PlayerLedOutput(CB1_MASTER_FAILED,{8,1,10},{8,1,10},connector,plan,false));
+  assert(!outputFor(CB1_MASTER_FAILED,{8,1,10},{8,1,10},false));
   assert(source.output.lldv && source.output.stream==id.stream);
   source.output={}; source.output.flags=CDVPlaybackInfo::HDMI;
   info=NativeProcessingInfo(source);

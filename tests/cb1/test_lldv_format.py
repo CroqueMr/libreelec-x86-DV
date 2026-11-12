@@ -10,19 +10,72 @@ import unittest
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'matched Kodi source required')
 class LldvFormat(unittest.TestCase):
     def test_selector_accepts_both_2160p24_clocks(self):
+        from test_native_video_source import body
+
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (kodi / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
-        timing = source.split('status.currentTiming = ', 1)[1].split(';', 1)[0]
+        owner = body(source, 'CWinSystemGbm::GetLldvConnectorStatus() const')
         code = r'''
 #include <cassert>
 #include <drm_mode.h>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include "utils/DVBridgeLldv.h"
+
+using namespace DVBRIDGE;
+
 struct Mode
 {
   int hdisplay, vdisplay, clock, htotal, vtotal;
   int hsync_start, hsync_end, vsync_start, vsync_end, hskew, vscan;
   unsigned flags;
 };
-bool supported(const Mode* mode) { return TIMING; }
+struct Connector
+{
+  uint32_t id=17;
+  std::optional<uint64_t> active=0;
+  bool connected=true;
+  uint32_t* GetConnectorId() { return &id; }
+  bool IsConnected() const { return connected; }
+  bool SupportsProperty(std::string_view key) const { return key=="CB1_LLDV_FORMAT"; }
+  std::optional<uint64_t> GetPropertyEnumValue(std::string_view key, std::string_view name) const
+  {
+    assert(SupportsProperty(key));
+    if (name=="YCbCr 4:2:2 10 useful bits") return 1;
+    if (name=="YCbCr 4:2:2 12 bits") return 2;
+    if (name=="YCbCr 4:2:2 10 bits forced") return 3;
+    return {};
+  }
+  std::optional<uint64_t> ReadPropertyValue(std::string_view key) const
+  {
+    assert(SupportsProperty(key));
+    return active;
+  }
+};
+struct CDRMAtomic
+{
+  const Mode* mode{};
+  Connector connector;
+  bool active=true, pending=false, committed=false;
+  Connector* GetConnector() { return &connector; }
+  const Mode* GetSelectedMode() const { return mode; }
+  bool IsActive() const { return active; }
+  bool HasPendingCB1Page() const { return pending; }
+  bool IsSelectedModeCommitted() const { return committed; }
+};
+struct Display
+{
+  dvbridge_sink_caps GetDolbyVisionCaps() const { return {}; }
+};
+struct Window
+{
+  std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
+  Display display;
+  const Display* GetDisplayInfo() const { return &display; }
+  LldvConnectorStatus Read() const OWNER
+};
+
 int main()
 {
   const Mode integer{3840, 2160, 297000, 5500, 2250, 5116, 5204, 2168, 2178,
@@ -43,6 +96,12 @@ int main()
   widescreen.flags |= DRM_MODE_FLAG_PIC_AR_16_9;
   Mode wrongAspect = fractional;
   wrongAspect.flags |= DRM_MODE_FLAG_PIC_AR_4_3;
+  Window window;
+  auto& drm=*window.m_DRM;
+  const auto supported = [&](const Mode* mode) {
+    drm.mode=mode;
+    return window.Read().currentTiming;
+  };
   assert(supported(&integer));
   assert(supported(&fractional));
   assert(!supported(&fractional30));
@@ -52,15 +111,36 @@ int main()
   assert(supported(&widescreen));
   assert(!supported(&wrongAspect));
   assert(!supported(nullptr));
+  drm.mode=&fractional;
+  drm.connector.active=2;
+  assert(window.Read().currentTiming && !window.Read().timingCommitted);
+  drm.committed=true;
+  drm.pending=true;
+  assert(!window.Read().timingCommitted);
+  drm.pending=false;
+  auto readback=window.Read();
+  assert(readback.timingCommitted && readback.active==LldvFormat::Y422_12);
+  assert(readback.connectorId==17 && !readback.activeForced);
+  drm.connector.active=3;
+  readback=window.Read();
+  assert(readback.active==LldvFormat::Y422_10 && readback.activeForced);
+  drm.connector.active.reset();
+  assert(window.Read().active==LldvFormat::Auto);
+  drm.active=false;
+  assert(!window.Read().timingCommitted);
+  drm.active=true;
+  drm.connector.connected=false;
+  assert(!window.Read().timingCommitted && window.Read().connectorId==0);
 }
-'''.replace('TIMING', timing)
+'''.replace('OWNER', owner)
         with tempfile.TemporaryDirectory() as work:
             source = Path(work) / 'timing.cpp'
             binary = Path(work) / 'timing'
             source.write_text(code)
             libdrm = subprocess.check_output(['pkg-config', '--cflags', 'libdrm'], text=True).split()
             subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
-                            *libdrm, str(source), '-o', str(binary)], check=True)
+                            '-I', str(kodi / 'xbmc'), *libdrm, str(source), '-o', str(binary)],
+                           check=True)
             subprocess.run([binary], check=True)
 
     def test_edid_and_selection(self):
