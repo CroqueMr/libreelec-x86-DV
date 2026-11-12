@@ -18,11 +18,12 @@ class IntelEdidOwner(unittest.TestCase):
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
-#include "drm_dvbridge_edid.h"
+#include "drm_dvbridge.h"
 struct edid {u8 raw[126];u8 extensions;u8 checksum;};
 struct drm_edid {size_t size; const struct edid *edid;};
 static size_t edid_size(const struct edid *e){return ((size_t)e->extensions+1)*128;}
@@ -31,14 +32,17 @@ static size_t edid_size(const struct edid *e){return ((size_t)e->extensions+1)*1
 @@SIZE@@
 struct i2c_adapter {int unused;}; struct ref_tracker {int unused;};
 struct intel_display {int version;void *drm;bool enabled,access,port;};
-struct intel_encoder {int unused;};
+struct intel_encoder {bool type_c;};
 struct intel_hdmi {struct{int type,max_tmds_clock;}dp_dual_mode;void *cec_notifier;};
 enum drm_connector_force {DRM_FORCE_UNSPECIFIED,DRM_FORCE_OFF,DRM_FORCE_ON,DRM_FORCE_ON_DIGITAL};
+struct drm_connector_state {void *crtc;};
 struct drm_connector {int status;enum drm_connector_force force;struct i2c_adapter *ddc;
+ struct drm_connector_state *state;
  struct{struct{int id;}base;const char *name;}base;
  struct{int source_physical_address;}display_info;};
 struct intel_connector {struct drm_connector base;struct intel_display *display;
  const struct drm_edid *detect_edid; struct dvbridge_sink_caps dv_sink_caps;
+ const void *dv_lab_property;
  struct intel_hdmi hdmi;};
 enum drm_connector_status {connector_status_disconnected,connector_status_connected};
 #define to_intel_connector(p) ((struct intel_connector *)(p))
@@ -72,6 +76,7 @@ static bool intel_display_driver_check_access(struct intel_display*d){return d->
 static struct intel_display *current_display;
 static bool intel_digital_port_connected(struct intel_encoder*e)
 {(void)e;return current_display->port;}
+static inline bool intel_encoder_is_tc(struct intel_encoder *encoder){return encoder->type_c;}
 @@OWNERS@@
 static void checksum(u8*b){u8 s=0;b[127]=0;for(int i=0;i<127;i++)s+=b[i];b[127]=-s;}
 int main(void){
@@ -161,6 +166,38 @@ int main(void){
  c.dv_sink_caps=(struct dvbridge_sink_caps){};display.enabled=true;
  next_edid=NULL;(void)intel_hdmi_detect(&c.base,false);
  assert(c.dv_sink_caps.status!=DV_EDID_STANDARD);
+ /* An active native HDMI link can report low HPD across a modeset.
+  * Re-read DDC before losing DV. A failed read or new non-DV EDID must
+  * still revoke the previous sink's capabilities. */
+ struct drm_connector_state active={.crtc=&port};
+ c.base.state=&active;
+ c.base.force=DRM_FORCE_UNSPECIFIED;
+ display.version=14;display.enabled=display.access=true;display.port=false;
+ for(int scenario=0;scenario<6;scenario++){
+  memcpy(raw+256,saved_block,128);raw[20]=128;checksum(raw);
+  c.base.status=connector_status_connected;
+  c.dv_lab_property=scenario==3?NULL:&active;
+  port.base.type_c=scenario==4;
+  c.hdmi.dp_dual_mode.type=scenario==5?1:DRM_DP_DUAL_MODE_NONE;
+  c.dv_sink_caps=dvbridge_parse_edid(raw,sizeof(raw));ddc_reads=0;
+  assert(c.dv_sink_caps.status==DV_EDID_STANDARD);
+  next_edid=scenario==1?NULL:&source;publication_result=0;
+  if(scenario==2){b[6]=0;checksum(b);}
+  enum drm_connector_status status=intel_hdmi_detect(&c.base,false);
+  const struct drm_dvbridge_link link={
+   .requested=true,.lab_enabled=true,.sink_standard=c.dv_sink_caps.status==DV_EDID_STANDARD,
+   .hdmi=true,.native_hdmi=true,.rgb=true,.progressive=true,
+   .requested_bpc=8,.pipe_bpp=24,.width=3840,.height=2160,.rounded_refresh=24,
+  };
+  const int result=drm_dvbridge_validate(&link);
+  const int expected=scenario==0?0:-EOPNOTSUPP;
+  if(result!=expected)fprintf(stderr,"2160p24 DV admission: got %d, expected %d\n",result,expected);
+  assert(result==expected);
+  assert(ddc_reads==(scenario<3));
+  assert(status==((scenario==0 || scenario==2)?connector_status_connected:connector_status_disconnected));
+  assert((c.dv_sink_caps.status==DV_EDID_STANDARD)==(scenario==0));
+ }
+ c.base.state=NULL;
  /* The ordinary high-pin path recovers from all previous failures. */
  memcpy(raw+256,saved_block,128);raw[20]=128;checksum(raw);
  source.size=sizeof(raw);next_edid=&source;publication_result=0;
