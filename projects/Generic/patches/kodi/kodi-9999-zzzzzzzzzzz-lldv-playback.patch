@@ -346,7 +346,7 @@ index e4950aa..0fc38be 100644
      std::lock_guard<std::mutex> lock(m_mutex);
      m_nativeActive = true;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-index 46fd28f..0510de8 100644
+index 46fd28f..17142e2 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 @@ -1,5 +1,6 @@
@@ -386,7 +386,7 @@ index 46fd28f..0510de8 100644
  
  #if !defined(DVBRIDGE_L2_TRIMS_API) || DVBRIDGE_L2_TRIMS_API < 1
  #error "Matching CB1 L2 output-trim API required"
-@@ -1213,8 +1225,228 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
+@@ -1213,8 +1225,243 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
    return FrameStatus::Ready;
  }
  
@@ -463,7 +463,17 @@ index 46fd28f..0510de8 100644
 +    if (scratch) carriers[0] = Carrier::Create(device);
 +    if (carriers[0]) worker = cb1_lldv_cpu_create(4);
 +    if (worker)
-+      packer = std::jthread([this](std::stop_token stop) { Pack(stop); });
++    {
++      try
++      {
++        packer = std::jthread([this](std::stop_token stop) { Pack(stop); });
++      }
++      catch (const std::system_error&)
++      {
++        cb1_lldv_cpu_destroy(worker);
++        worker = nullptr;
++      }
++    }
 +  }
 +
 +  ~PlayerLedCpu()
@@ -513,7 +523,12 @@ index 46fd28f..0510de8 100644
 +    return {};
 +  }
 +
-+  bool Full() const { return queue.size() == slots.size(); }
++  bool Backpressured() const
++  {
++    return queue.size() == slots.size() ||
++        std::none_of(carriers.begin(), carriers.end(),
++                     [](const auto& carrier) { return !carrier || carrier.use_count() == 1; });
++  }
 +
 +  void Pack(std::stop_token stop)
 +  {
@@ -602,7 +617,7 @@ index 46fd28f..0510de8 100644
 +  unsigned samples{};
 +  bool announced{}, failed{};
 +  DVBRIDGE::SourceBinding source;
-+  uint64_t policyRevision{};
++  uint64_t revision{};
 +};
 +
 +CDVBridgeGLES::CDVBridgeGLES(bool playerLed) : m_playerLed(playerLed)
@@ -615,7 +630,7 @@ index 46fd28f..0510de8 100644
    cb1_hdr10plus_analysis_destroy(&m_hdr10plusAnalysis);
    ClearFELPrefetch();
    Summary("closed");
-@@ -1228,6 +1460,10 @@ CDVBridgeGLES::~CDVBridgeGLES()
+@@ -1228,6 +1475,10 @@ CDVBridgeGLES::~CDVBridgeGLES()
      pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.degamma);
      pl_tex_destroy(m_gl->gpu, &m_nativeOverlay.pq);
      pl_tex_destroy(m_gl->gpu, &m_scanout);
@@ -626,7 +641,7 @@ index 46fd28f..0510de8 100644
    }
  }
  
-@@ -1311,6 +1547,7 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
+@@ -1311,6 +1562,7 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
  bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr)
  {
    if (!m_gl || m_pending || m_prepared) return false;
@@ -634,7 +649,7 @@ index 46fd28f..0510de8 100644
    pl_opengl_wrap_params output{};
    const auto display = eglGetCurrentDisplay();
    const auto surface = eglGetCurrentSurface(EGL_DRAW);
-@@ -1561,7 +1798,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1561,7 +1813,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    { Failure("source-association"); m_asyncEligible = false; return FrameStatus::Failed; }
    if (!m_renderer || !m_context || m_context->Quarantined())
    { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
@@ -643,18 +658,23 @@ index 46fd28f..0510de8 100644
    auto policy = selected ? *selected : preferences.Policy();
    if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !m_hdr10plusSubmits)
      DVBRIDGE::DiagnosticReserveProgress();
-@@ -1647,7 +1884,9 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1647,7 +1899,14 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
      m_dvPolicyActive = false;
      m_context->SourceReadComplete();
    }
 -  const auto retired = m_context->Poll(eligible);
-+  if (m_playerLedCpu && m_playerLedCpu->Full())
++  if (m_playerLedCpu &&
++      (!m_playerLedCpuDevice || m_playerLedCpu->source.stream != base.binding.stream ||
++       m_playerLedCpu->source.revision != base.binding.revision ||
++       m_playerLedCpu->revision != revision))
++    m_playerLedCpu.reset();
++  if (m_playerLedCpu && m_playerLedCpu->Backpressured())
 +    return FrameStatus::Busy;
 +  const auto retired = m_context->Poll(eligible || (m_playerLedCpuDevice && m_playerLedCpu));
    if (retired != DVBRIDGE_DV_IDLE)
      return retired == DVBRIDGE_DV_FAILED ? FrameStatus::Failed : FrameStatus::Busy;
    if (m_hasCommitted && allowPacked && m_committedPacked &&
-@@ -1663,7 +1902,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1663,7 +1922,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    m_pendingOverlayVisible = m_overlayVisible;
    m_requested = preferences;
    m_spatialMethod = base.scalingMethod;
@@ -664,7 +684,7 @@ index 46fd28f..0510de8 100644
    policy.revision = revision;
    dvbridge_renderer_set_optimized_dv(m_renderer,preferences.optimizedDV);
    dvbridge_renderer_set_fel_filter(m_renderer, preferences.felUpscaling == 2 ? DVBRIDGE_FEL_REFERENCE : preferences.felUpscaling == 1 || (enhancement && enhancement->layout != DVBRIDGE_Y416) ? DVBRIDGE_FEL_BILINEAR : DVBRIDGE_FEL_DEFAULT);
-@@ -1713,7 +1953,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1713,7 +1973,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
          CDVPlaybackInfo::RequestedPolicy(admission.requested),CDVPlaybackInfo::RequestedPolicy(admission.effective),
          CDVPlaybackInfo::Reason(admission.reason));
    }
@@ -674,7 +694,7 @@ index 46fd28f..0510de8 100644
    m_context->Retain(base.lease, enhancement ? enhancement->lease : nullptr);
    if (!m_advanced)
    {
-@@ -1749,7 +1990,14 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1749,7 +2010,14 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
    FrameStatus result = FrameStatus::Failed;
    std::string sdrAudit;
    m_prepared = m_packed = m_direct = false;
@@ -690,7 +710,7 @@ index 46fd28f..0510de8 100644
    {
      auto status = DVBRIDGE_DV_UNSUPPORTED;
      if (allowPacked && m_directUsable && m_scanout && !geometry.x && !geometry.y &&
-@@ -1862,6 +2110,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
+@@ -1862,6 +2130,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(const Layer& base, const
  
  void CDVBridgeGLES::Cancel()
  {
@@ -698,7 +718,7 @@ index 46fd28f..0510de8 100644
    cb1_hdr10plus_analysis_reset(m_hdr10plusAnalysis);
    m_hdr10plusMetadata.reset();
    ClearFELPrefetch();
-@@ -2167,7 +2416,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
+@@ -2167,7 +2436,7 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
    };
    std::shared_ptr<Import> imported;
    const auto mode = (selected ? *selected : preferences.Policy()).mode;
@@ -707,7 +727,7 @@ index 46fd28f..0510de8 100644
    const bool prefetchEnabled = allowAsync && allowPacked && m_context &&
        m_context->AsyncPreparation(base.binding.stream) &&
        mode == DVBRIDGE_MODE_ENHANCED_DV &&
-@@ -2359,6 +2608,263 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
+@@ -2359,6 +2628,257 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
    return m_packed || Failure("composition-pack");
  }
  
@@ -718,12 +738,6 @@ index 46fd28f..0510de8 100644
 +  const auto gpu = m_gl->gpu;
 +  m_playerLedPolicy = policy;
 +  m_playerLedPicture = nullptr;
-+  const auto sourceBinding = metadata.Binding();
-+  if (m_playerLedCpu &&
-+      (m_playerLedCpu->source.stream != sourceBinding.stream ||
-+       m_playerLedCpu->source.revision != sourceBinding.revision ||
-+       m_playerLedCpu->policyRevision != m_requested.revision))
-+    m_playerLedCpu.reset();
 +  float crop[4], dest[4];
 +  constexpr int width = PlayerLedCpu::WIDTH, height = PlayerLedCpu::HEIGHT;
 +  if (m_playerLedCpuDevice && !m_playerLedCpuUnavailable && source.enhancement_layer &&
@@ -744,7 +758,7 @@ index 46fd28f..0510de8 100644
 +      else
 +      {
 +        m_playerLedCpu->source = metadata.Binding();
-+        m_playerLedCpu->policyRevision = m_requested.revision;
++        m_playerLedCpu->revision = m_pendingIdentity.revision;
 +      }
 +    }
 +    if (m_playerLedCpu)
@@ -971,7 +985,7 @@ index 46fd28f..0510de8 100644
  bool CDVBridgeGLES::ResolveHDR10(bool limited)
  {
    if (m_hdr10 && m_prepared && m_direct)
-@@ -2389,7 +2895,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
+@@ -2389,7 +2909,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
  
  unsigned int CDVBridgeGLES::GetPQFramebuffer()
  {
