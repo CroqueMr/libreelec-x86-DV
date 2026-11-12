@@ -19,7 +19,7 @@ class NvidiaBufferRestore(unittest.TestCase):
         ordinary = ordinary[:ordinary.index('    if (!submitted)')]
         ordinary = ordinary[ordinary.index('{') + 1:].replace('return;', 'return false;') + '\nreturn submitted;'
         hdr = present.split('  if (m_hdrConversion)\n', 1)[1]
-        hdr = hdr[hdr.index('        auto drm ='):hdr.index('      }\n      else if (asynchronous)')]
+        hdr = hdr[hdr.index('        auto drm ='):hdr.index('      }\n      else if (asynchronous')]
         signature = re.search(r'bool FlipDVBridgePage\([^;]+;', header).group()
         program = r'''
 #include <cassert>
@@ -62,13 +62,17 @@ struct CDVBridgeState {
 struct Surface {
  struct CGBMSurfaceBuffer {
    gbm_bo buffer;bool available;explicit CGBMSurfaceBuffer(bool available):available(available){}
-   gbm_bo* Get(){return available?&buffer:nullptr;}
+   gbm_bo* external{};std::shared_ptr<void> lease;
+   CGBMSurfaceBuffer(gbm_bo* bo,std::shared_ptr<void> owner)
+     :available(true),external(bo),lease(std::move(owner)){}
+   gbm_bo* Get(){return external?external:available?&buffer:nullptr;}
  };
  bool m_surface=true;
  std::unique_ptr<CGBMSurfaceBuffer> m_pendingBuffer,m_scanoutBuffer;
  std::queue<std::unique_ptr<CGBMSurfaceBuffer>> m_buffers;
  Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
  gbm_bo* LockTransactionalBuffer() @LOCK@
+ gbm_bo* AdoptTransactionalBuffer(gbm_bo* buffer,std::shared_ptr<void> lease) @ADOPT@
  void CompleteTransactionalBuffer(bool presented) @COMPLETE@
  void EndTransactionalMode() @END@
 };
@@ -79,6 +83,8 @@ struct Window {
  CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
  double m_preparedRenderPts{};
  std::optional<uint64_t>m_hdrDeepColorPrevious;
+ struct AlternateScanout {unsigned accepted{};void Presented(){++accepted;}};
+ AlternateScanout scanout;AlternateScanout* m_pascalHDRScanout=&scanout;
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
  bool PrepareOrdinaryDVOutput(void*){return true;}
  bool CompleteDVBridgePage(){return true;}bool SupportsDVOutputMode(){return true;}
@@ -88,7 +94,7 @@ struct Window {
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  @SIGNATURE@
  bool Ordinary(bool rendered){@ORDINARY@}
- bool HDR(){bool presented=false,asynchronous=false;
+ bool HDR(std::shared_ptr<gbm_bo> carrier={}){bool presented=false,asynchronous=false;
    struct {int hdr10plus=0,informationGeneration=1;bool hdr10plusAccepted=false;}submitted;
    @HDR@
    return presented;
@@ -96,24 +102,30 @@ struct Window {
 };
 @FLIP@
 int main(){
- for(bool hdr:{false,true})for(bool nvidia:{true,false})for(bool active:{false,true}){
+ for(bool hdr:{false,true})for(bool nvidia:{true,false})for(bool active:{false,true})
+ for(bool alternate:{false,true}){
+   if(alternate&&!hdr)continue;
+   auto carrier=alternate?std::make_shared<gbm_bo>():nullptr;
    Window window;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(window.m_DRM);
    window.m_dvState.backend=nvidia?CDVBridgeState::Backend::NVIDIA:CDVBridgeState::Backend::KERNEL;
    drm->active=active;
-   bool result=hdr?window.HDR():window.Ordinary(true);
+   bool result=hdr?window.HDR(carrier):window.Ordinary(true);
    assert(result && "NVIDIA restoration must not acquire the same GBM buffer twice");
    assert(drm->missing==0 && drm->acceptedBuffer);
    assert(drm->accepted==(nvidia&&active?2u:1u));
    assert(!window.m_GBM->m_pendingBuffer);
    auto& surface=*window.m_GBM;
    assert(drm->acceptedBuffer==(nvidia?surface.m_buffers.back()->Get():surface.m_scanoutBuffer->Get()));
+   assert(window.scanout.accepted==(alternate?1u:0u));
+   if(carrier) assert(drm->acceptedBuffer==carrier.get());
    assert(nvidia ? !window.m_dvState.captured : window.m_dvState.captured);
    Window failed;auto fd=std::dynamic_pointer_cast<CDRMAtomic>(failed.m_DRM);
    fd->commitOK=false;
-   assert(!(hdr?failed.HDR():failed.Ordinary(true)) && failed.m_dvState.captured);
+   assert(!(hdr?failed.HDR(carrier):failed.Ordinary(true)) && failed.m_dvState.captured);
+   assert(failed.scanout.accepted==0);
    assert(!failed.m_GBM->m_pendingBuffer);
    fd->commitOK=true;
-   assert(hdr?failed.HDR():failed.Ordinary(true));
+   assert(hdr?failed.HDR(carrier):failed.Ordinary(true));
    Window absent;absent.m_GBM->m_surface=false;
    assert(!(hdr?absent.HDR():absent.Ordinary(true)) && absent.m_dvState.captured);
  }
@@ -121,6 +133,7 @@ int main(){
 '''
         for marker, value in {
             'LOCK': body(surface, 'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::LockTransactionalBuffer('),
+            'ADOPT': body(surface, 'gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::AdoptTransactionalBuffer('),
             'COMPLETE': body(surface, 'void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer('),
             'END': body(surface, 'void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode('),
             'SIGNATURE': signature, 'ORDINARY': ordinary, 'HDR': hdr,

@@ -1,4 +1,18 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": {
+    "owner": "R580 CB1 HDR10 scanout when EGL offers no deep-color window.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/CMakeLists.txt": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/PascalHDR10Scanout.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/PascalHDR10Scanout.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Pascal HDR10 scanout and its transactional integration."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzz-hdr10-link-depth.patch": {
     "owner": "Reject HDR10 Rendering before HDMI activation when the link is limited to 8 bpc.",
     "files": {
