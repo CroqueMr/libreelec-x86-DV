@@ -34,6 +34,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool recreateOK=true; int rollbacks=0,swaps=0,m_nWidth=1280,m_nHeight=720;
  struct EGL {int* swaps; bool TrySwapBuffers(){++*swaps; return true;}} m_eglContext{&swaps};
  std::shared_ptr<DRM> m_DRM;
+ std::unique_ptr<int> m_pascalHDRScanout;
  bool EndDVBridge(){return endOK;}
  bool RetireDVContext(){retired=retireOK; return retireOK;}
  bool HasPendingDVOutputSurface(){return pending;}

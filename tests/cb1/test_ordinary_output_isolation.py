@@ -74,7 +74,7 @@ struct CDVBridgeGLES {
   bool Close(){++closed;gl=false;return true;}
  };
  bool rebindHDR=false,rebindSDR=false;
- void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false){rebindHDR=hdr10;rebindSDR=sdr;return true;}
+ void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false,unsigned=0){rebindHDR=hdr10;rebindSDR=sdr;return true;}
  template<class... T> Binding SelectionIdentity(T...){return {};}
 };
 struct State {bool captured=false; bool Captured()const{return captured;}
@@ -100,6 +100,8 @@ struct CWinSystemGbmEGLContext {
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=false,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
+ bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;

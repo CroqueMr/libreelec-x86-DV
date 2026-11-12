@@ -59,7 +59,7 @@ struct CDVBridgeState{enum class Backend{KERNEL,NVIDIA};bool captured=true;
  Backend CapturedBackend(){return Backend::KERNEL;}void Restored(){captured=false;}};
 struct Context{bool fence=true;int status=DVBRIDGE_DV_IDLE;
  bool FenceLastUse(){return fence;}int Poll(){return status;}};
-struct Bridge{void Cancel(){}void Reset(){}bool RebindOutputSurface(bool,bool){return true;}};
+struct Bridge{void Cancel(){}void Reset(){}bool RebindOutputSurface(bool,bool,unsigned){return true;}};
 struct Surface{Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
  void* LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
  void EndTransactionalMode(){}};
@@ -70,6 +70,8 @@ struct Window{
  bool m_dvActivating=false,m_dvRecoveryPending=false,m_dvSuperseded=false,m_dvRejectedSurface=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
  bool m_hdrConversion=false,m_sdrConversion=false,m_dvFatalConsumed=false,m_dvFallbackActive=false;
+ bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false;
  bool pending=true,complete=true,bind=true,restore=false;unsigned restores=0;
  unsigned m_dvAttemptFailures=0,m_dvFailedStream=0,m_dvFailedPolicy=0;
@@ -261,6 +263,7 @@ struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
  std::optional<int> m_hdr10Session,m_hdr10BasicSignal,m_hdr10Signal;
  unsigned m_hdr10SessionStream=1;int m_videoSourceSideData=0;
  struct Bridge{void Reset(){}};std::unique_ptr<Bridge> m_dvBridge;
+ std::unique_ptr<int> m_pascalHDRScanout;
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  bool surfacePending=false,surfaceOK=true,endOK=true,retireOK=true;
  unsigned outputRefused=0;

@@ -52,8 +52,8 @@ struct CDVBridgeGLES {
  struct {void reset(){}} m_playerLedCpu;
  unsigned m_scanoutFramebuffer=99,m_outputBits=0;struct{}m_failedIdentity;
  bool Failure(const char*){return false;}
- bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context={},bool sdr=false) INITIALIZE
- bool RebindOutputSurface(bool hdr10,bool sdr=false) REBIND
+ bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context={},bool sdr=false,unsigned framebuffer=0) INITIALIZE
+ bool RebindOutputSurface(bool hdr10,bool sdr=false,unsigned framebuffer=0) REBIND
  ~CDVBridgeGLES(){if(m_scanout)pl_tex_destroy(m_gl->gpu,&m_scanout);if(m_packer)dvbridge_gl_packer_destroy(m_packer);}
 };
 int main(){
@@ -82,6 +82,19 @@ int main(){
   sdr.m_prepared=true;assert(!sdr.RebindOutputSurface(true,true));sdr.m_prepared=false;
   CDVBridgeGLES hdr;assert(!hdr.Initialize(true,true)); // Native HDR still requires >=10 bits.
   CDVBridgeGLES dv;assert(dv.Initialize(true,false));assert(dv.m_scanout && dv.m_outputBits==8);
+  GLuint rgb10{}, target{};
+  glGenTextures(1,&rgb10);
+  glBindTexture(GL_TEXTURE_2D,rgb10);
+  glTexStorage2D(GL_TEXTURE_2D,1,GL_RGB10_A2,64,32);
+  glGenFramebuffers(1,&target);
+  glBindFramebuffer(GL_FRAMEBUFFER,target);
+  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,rgb10,0);
+  assert(hdr.RebindOutputSurface(true,false,target));
+  assert(hdr.m_scanout && hdr.m_outputBits==10 && hdr.m_scanoutFramebuffer==target);
+  assert(hdr.RebindOutputSurface(true,true));
+  assert(hdr.m_scanout && hdr.m_outputBits==8 && hdr.m_scanoutFramebuffer==0);
+  glDeleteFramebuffers(1,&target);
+  glDeleteTextures(1,&rgb10);
  }
  glBindFramebuffer(GL_FRAMEBUFFER,0);glDeleteFramebuffers(1,&draw);glDeleteFramebuffers(1,&read);
  assert(eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT));

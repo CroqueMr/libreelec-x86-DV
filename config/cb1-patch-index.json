@@ -1,8 +1,16 @@
 {
-  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": {
-    "owner": "Preserve an absent Dolby VSIF during Pascal DRM connector-state duplication.",
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": {
+    "owner": "R580 CB1 HDR10 scanout when EGL offers no deep-color window.",
     "files": {
-      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Acquire a DRM blob reference only for a present VSIF."
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/CMakeLists.txt": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/PascalHDR10Scanout.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/PascalHDR10Scanout.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Pascal HDR10 scanout and its transactional integration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Pascal HDR10 scanout and its transactional integration."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzz-hdr10-link-depth.patch": {
@@ -1399,6 +1407,12 @@
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h": "Share byte-preserving transport admission with the display state.",
       "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Rebuild the DC stream when the DV signalling mode changes.",
       "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Keep the low-latency identity with the candidate stream."
+    }
+  },
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": {
+    "owner": "Preserve an absent Dolby VSIF during Pascal DRM connector-state duplication.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Acquire a DRM blob reference only for a present VSIF."
     }
   }
 }

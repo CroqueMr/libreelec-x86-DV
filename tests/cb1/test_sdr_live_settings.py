@@ -48,13 +48,15 @@ struct CGuiCompositeShaderGLES{
 };
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR, PlayerLed};}
 struct State{bool Captured()const{return false;}};
-struct Bridge{bool RebindOutputSurface(bool,bool){return true;}bool PlayerLed()const{return false;}};
+struct Bridge{bool RebindOutputSurface(bool,bool,unsigned){return true;}bool PlayerLed()const{return false;}};
 struct Context{int Poll(){return DVBRIDGE_DV_IDLE;}};
 struct FBO{void Cleanup(){}};
 struct Picture{};
 struct Window{
  struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::SDR;dvbridge_policy policy{};}m_dvSelection;
  State m_dvState;bool m_sdrConversion=true,m_hdrConversion=true,m_dvPriorHDRConversion=true,m_dvPriorSDRConversion=true,m_dvPriorGuiCompositing=true;
+ bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ unsigned HDR10Framebuffer()const{return 0;}
  bool m_guiCacheValid=false,m_guiCompositing=false,m_compositeShaderLimited=false,m_dvOutputRetiring=false,m_dvRejectedSurface=true,m_dvRollbackFailed=false;
  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_dvPQSubtitleRendering=false,m_dvPQSubtitleCleared=false,m_dvNativeGui=false;
  int m_guiColorTransfer=0,m_dvPQSubtitleWidth=0,m_dvPQSubtitleHeight=0,m_dvPQSubtitleDraws=0,m_guiFboWidth=0,m_guiFboHeight=0;
