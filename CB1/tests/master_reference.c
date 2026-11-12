@@ -477,6 +477,17 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
         else
             assert(pixel[0]==0 && pixel[1]==0 && pixel[2]==0);
     }
+    const struct dvbridge_geometry clipped={8,8,2,2,4,3,8,8,.crop={2,2,6,5}};
+    assert(dvbridge_fit_player_led(renderer,output,&fitted,clipped)==fitted && fitted);
+    float clipped_pixels[8*8*4];
+    reference_read(gpu,fitted,0,0,8,8,clipped_pixels);
+    for(int y=0;y<8;y++)for(int x=0;x<8;x++){
+        const float *pixel=clipped_pixels+(y*8+x)*4;
+        if(x>=2 && x<6 && y>=2 && y<5)
+            assert(fabsf(pixel[0]-pixels[(y*8+x)*4])<1e-6f);
+        else
+            assert(pixel[0]==0 && pixel[1]==0 && pixel[2]==0);
+    }
     pl_tex_destroy(gpu,&fitted);
     policy.expert_black_nits=.01;
     assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);

@@ -2008,7 +2008,8 @@ pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *r, pl_tex source,
        !dvbridge_geometry_raster(geometry,&width,&height) ||
        !dvbridge_geometry_destination(geometry,mask.rect))return NULL;
     if(source->params.w==width && source->params.h==height &&
-       !crop.x0 && !crop.y0 && crop.x1==width && crop.y1==height)return source;
+       !crop.x0 && !crop.y0 && crop.x1==width && crop.y1==height &&
+       !mask.rect[0] && !mask.rect[1] && mask.rect[2]==width && mask.rect[3]==height)return source;
     if(!pl_tex_recreate(r->gpu,fitted,pl_tex_params(.w=width,.h=height,
         .format=source->params.format,.sampleable=true,.renderable=true)))return NULL;
     struct pl_frame image={.num_planes=1,
