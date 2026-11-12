@@ -9,7 +9,7 @@ import unittest
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'matched Kodi source required')
 class LldvFormat(unittest.TestCase):
-    def test_selector_accepts_both_2160p24_clocks(self):
+    def test_selector_accepts_only_the_approved_uhd_cta_modes(self):
         from test_native_video_source import body
 
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
@@ -96,6 +96,14 @@ int main()
   fractional30.htotal = 4400;
   fractional30.hsync_start = 4016;
   fractional30.hsync_end = 4104;
+  Mode integer30 = fractional30;
+  integer30.clock = 297000;
+  Mode integer25 = integer;
+  integer25.htotal = 5280;
+  integer25.hsync_start = 4896;
+  integer25.hsync_end = 4984;
+  Mode fractional25 = integer25;
+  fractional25.clock = 296703;
   Mode integer60 = fractional30;
   integer60.clock = 594000;
   Mode wrongSync = fractional;
@@ -114,7 +122,10 @@ int main()
   };
   assert(supported(&integer));
   assert(supported(&fractional));
-  assert(!supported(&fractional30));
+  assert(supported(&fractional30));
+  assert(supported(&integer30));
+  assert(supported(&integer25));
+  assert(!supported(&fractional25));
   assert(!supported(&integer60));
   assert(!supported(&wrongSync));
   assert(!supported(&interlaced));

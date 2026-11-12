@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "81b950bd3c806e66f4540e3e57bcf1c7f9d6f7da20f151bf06ee1ef4d8076c68",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "1e176b7cb790e0edcbfd5ecd1aad0eef5238430f9269321a048ea23288d98234",
     "tests/cb1/test_pascal_packages.py": "a67a019498903b10cf63d2336c887f44d594468b96d85214d6bfadb19b804d3a",
     "tests/cb1/test_nvidia_pascal_build.py": "b001ffa5a15086356fe7e7d49f3917ea40a75b0eeb36ed9a18a4885da8a1cbb8",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
@@ -340,8 +340,8 @@
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "9a113b7f5ab5b173a147a02e3865e3a77defe7391311a9d8a4a9c26dacecbb8a",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
-    "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "7c0f4ebfcae92cc4fef28694bfc97f94fc892f9706d988405d488a90bc63910a",
-    "tests/cb1/test_lldv_format.py": "51f8152ee8f5fbfbcd3df91e1c449e6af83407891e905e28c036f90d5efa5ab7",
+    "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "6285fb6542f40c0d5ae088c13dfd88b1970eb888fda9cbcb14e83a5b821adeae",
+    "tests/cb1/test_lldv_format.py": "72476ba187041700446f5389465dc88195606f51d265eb0284e186c553f696b3",
     "tests/cb1/test_lldv_player_info.py": "bee095362b08343fda8bad281dde4ba4fe2038c2714dca3a37dc57d7eeac9941"
   },
   "staging": {

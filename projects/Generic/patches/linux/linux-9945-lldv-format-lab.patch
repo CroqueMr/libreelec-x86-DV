@@ -194,18 +194,20 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
  			.hdmi = pipe_config->has_hdmi_sink && pipe_config->has_infoframe &&
  				connector->base.display_info.has_hdmi_infoframe,
  			.native_hdmi = intel_dv_lab_native_hdmi(
-@@ -2671,6 +2691,10 @@
+@@ -2671,6 +2691,12 @@
  			.rounded_refresh = drm_mode_vrefresh(adjusted_mode),
  		};
  
-+		/* CTA VIC 93 includes the 24 Hz and 24/1.001 Hz timings. */
-+		if (lldv && ((adjusted_mode->clock != 297000 && adjusted_mode->clock != 296703) ||
-+		    drm_match_cea_mode(adjusted_mode) != 93 || caps.legacy_vsif))
++		/* CTA VIC 93–95 share the 297 MHz link. VIC 94 has no fractional mode. */
++		int lldv_vic = lldv ? drm_match_cea_mode(adjusted_mode) : 0;
++		if (lldv && (lldv_vic < 93 || lldv_vic > 95 || caps.legacy_vsif ||
++		    (adjusted_mode->clock != 297000 &&
++		     (adjusted_mode->clock != 296703 || lldv_vic == 94))))
 +			return -EOPNOTSUPP;
  		ret = intel_dv_lab_validate(&link);
  		if (!ret && link.width == 3840 && link.rounded_refresh > 30 &&
  		    !caps.supports_2160p60)
-@@ -2713,7 +2737,8 @@
+@@ -2713,7 +2739,8 @@
  		}
  	}
  
@@ -215,7 +217,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/di
  
  	intel_hdmi_compute_gcp_infoframe(encoder, pipe_config,
  					 conn_state);
-@@ -3012,6 +3037,20 @@
+@@ -3012,6 +3039,20 @@
  			DRM_MODE_PROP_ATOMIC, "DVBRIDGE_DV_STANDARD_LAB");
  		if (connector->dv_lab_property)
  			drm_object_attach_property(&_connector->base, connector->dv_lab_property, 0);
