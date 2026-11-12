@@ -8,12 +8,11 @@ class AdaptiveSynchronousPending(unittest.TestCase):
         code=shipped_code('xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp')
         function=code.index('bool CWinSystemGbmGLESContext::RenderDVBridge(')
         assignment=code.index('  m_cb1FramePending =',code.index('  // A paused final surface',function))
-        start=code.rfind('  glBindFramebuffer(GL_FRAMEBUFFER, 0);',function,assignment)
+        start=code.rfind('  const bool renderPending =',function,assignment)
         end=code.index('  if (std::getenv("CB1_PRESENTATION_AUDIT"))',assignment)
         program=r'''
 #include <cassert>
-constexpr int GL_FRAMEBUFFER=0,DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
-void glBindFramebuffer(int,int){}
+constexpr int DVBRIDGE_MODE_ENHANCED_DV=4,DVBRIDGE_MODE_HDR10PLUS=6;
 struct CDVBridgeGLES{enum class FrameStatus{Ready,Pending,Busy,Failed};bool PlayerLed()const{return false;}};
 using Status=CDVBridgeGLES::FrameStatus;
 bool run(bool authored,int mode,Status status,bool allowAsync=false,bool setting=false){

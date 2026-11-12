@@ -29,13 +29,20 @@ struct amdgpu_device {struct {struct dc* dc;}dm;}device;
 struct amdgpu_dm_connector {
  struct {void* dev;struct {unsigned id;}base;int connector_type;}base;
  struct {int connector_signal;}*dc_link;
- void *dv_standard_property,*hdr10_deep_color_property;
+ void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property;
 };
-static bool dv_standard=true;static int properties;
+struct drm_prop_enum_list { unsigned value; const char *name; };
+#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
+static bool dv_standard=true,dv_lldv;static int properties;
 static char message[1024];
 static struct amdgpu_device* drm_to_adev(void* ignored){(void)ignored;return &device;}
 static void* drm_property_create_bool(void* dev,int flags,const char* name){
  (void)dev;(void)flags;(void)name;++properties;return &properties;}
+static void* drm_property_create_enum(void* dev,int flags,const char* name,
+ const struct drm_prop_enum_list *formats,size_t count){
+ assert(count==2 && formats[0].value==0 && formats[1].value==1);
+ return drm_property_create_bool(dev,flags,name);
+}
 #define drm_object_attach_property(...) ((void)0)
 static void drm_info(void* dev,const char* fmt,...){
  (void)dev;va_list args;va_start(args,fmt);vsnprintf(message,sizeof(message),fmt,args);va_end(args);}
@@ -62,6 +69,8 @@ int main(){
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"native_hdmi=0"));
  link.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A;dv_standard=false;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(properties==1 && strstr(message,"dv_parameter=0"));
+ dv_lldv=true;properties=0;message[0]=0;
+ amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
  device.dm.dc=NULL;properties=0;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"family_supported=0"));
 }

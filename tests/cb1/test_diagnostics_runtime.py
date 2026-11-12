@@ -124,6 +124,7 @@ void dvbridge_gl_packer_destroy(int*){}
 void pl_tex_destroy(int,int*){}
 struct CDVBridgeGLES {
  struct Context{unsigned epoch=1;void ClearNextHDR10AI(){++epoch;}void Detach(int*){}};
+ struct {void reset(){}} m_playerLedCpu;
  std::shared_ptr<Context>m_context=std::make_shared<Context>();
  struct GL{int gpu=1;}gl;GL*m_gl=&gl;
  struct{int texture=1,degamma=2,pq=3;}m_nativeOverlay;

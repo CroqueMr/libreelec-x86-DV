@@ -96,7 +96,11 @@ bool CDVBridgeGLES::Context::Quarantined()const{return m_state->quarantined;}
 bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
-struct CDVBridgeGLES::PlayerLedCpu {};
+struct CDVBridgeGLES::PlayerLedCpu {
+  DVBRIDGE::SourceBinding source;
+  uint64_t revision{};
+  bool Backpressured() const {return false;}
+};
 CDVBridgeGLES::CDVBridgeGLES(bool playerLed):m_playerLed(playerLed){}
 CDVBridgeGLES::~CDVBridgeGLES()=default;
 bool CDVBridgeGLES::Failure(const char*){return false;}

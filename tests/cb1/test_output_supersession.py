@@ -143,7 +143,13 @@ struct CEGLContextUtils{
 struct CDVBridgeGLES {
  explicit CDVBridgeGLES(bool playerLed=false):m_playerLed(playerLed){}
  bool m_playerLed{};
- std::unique_ptr<int> m_playerLedCpu;
+ struct CpuQueue {
+  Binding source;
+  uint64_t revision{};
+  bool Backpressured() const {return false;}
+ };
+ std::unique_ptr<CpuQueue> m_playerLedCpu;
+ void* m_playerLedCpuDevice{};
  bool PlayerLed() const{return m_playerLed;}
  struct Context {
   static bool NewContextBlocked(){return false;}

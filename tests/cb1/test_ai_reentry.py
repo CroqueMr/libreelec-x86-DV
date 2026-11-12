@@ -350,6 +350,7 @@ void dvbridge_renderer_reset(int){}
 namespace DVBRIDGE {struct StreamTelemetry{static void ClearOutput(){}};}
 struct Context{void ClearNextHDR10AI(){}};
 struct Renderer{
+ struct {void reset(){}} m_playerLedCpu;
  Context context;Context*m_context=&context;
  int m_hdr10plusAnalysis=0,m_renderer=0,m_pendingInfo=1,m_pendingHDR10Fallback=1;
  std::optional<int>m_hdr10plusMetadata=1;std::vector<int>m_rawELCache{1};

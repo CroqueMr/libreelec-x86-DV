@@ -238,6 +238,7 @@ int eglGetCurrentDisplay(){return display;}int eglGetCurrentSurface(int){return 
 bool eglQuerySurface(int,int,int attr,int* out){*out=attr==EGL_WIDTH?w:h;return valid;}
 struct pl_opengl_wrap_params{int width=0,height=0;};
 struct Test {bool m_gl=true,m_pending=false,m_prepared=false;
+ struct {void reset(){}} m_playerLedCpu;
  bool run(){ PREFIX
  return output.width==w && output.height==h;
  }};

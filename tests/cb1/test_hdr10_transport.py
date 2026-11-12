@@ -149,7 +149,9 @@ struct drm_connector { int connector_type; struct drm_display_info display_info;
 struct amdgpu_dm_connector { struct drm_connector base; void *hdr10_deep_color_property; };
 struct drm_connector_state { struct drm_connector *connector; void *crtc; unsigned max_requested_bpc;
  int colorspace; struct drm_property_blob *hdr_output_metadata;void *hdr10plus_metadata; };
-struct dm_connector_state { struct drm_connector_state base; bool hdr10_deep_color,dv_standard; };
+struct dm_connector_state { struct drm_connector_state base; bool hdr10_deep_color,dv_standard; unsigned lldv_format; };
+static bool amdgpu_dm_dv_transport(const struct dm_connector_state *s)
+{ return s->dv_standard || s->lldv_format; }
 struct dc_link { enum signal_type connector_signal; };
 struct dc_crtc_timing { int pixel_encoding; enum dc_color_depth display_color_depth; unsigned pix_clk_100hz; };
 struct dc_stream_state { enum signal_type signal; struct dc_link *link; struct dc_crtc_timing timing; bool dv_standard; };
@@ -291,7 +293,7 @@ int main(void) {
                  'intel_hdmi_output_format', 'intel_hdmi_compute_output_format',
                  'intel_dvbridge_hdr_deep_requested', 'intel_hdmi_compute_formats')
         config = function(source, 'intel_hdmi_compute_config')
-        transport = next(line for line in config.splitlines() if 'bool lldv =' in line)
+        transport = next(line for line in config.splitlines() if 'lldv =' in line)
         admission = config.split('/* This opt-in', 1)[1].split('pipe_config->has_audio', 1)[0]
         admission = '/* This opt-in' + admission
         final_guard = config.split('\tret = intel_hdmi_compute_formats(', 1)[1]

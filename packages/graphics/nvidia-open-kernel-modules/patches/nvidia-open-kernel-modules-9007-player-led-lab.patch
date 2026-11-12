@@ -141,7 +141,7 @@ index 10c8838..4588cd6 100644
 +    /* The effective packet belongs to this head, even after a connector moves. */
 +    {
 +        const struct drm_property_blob *blob = nv_new_connector_state->hdmi_vsif_metadata;
-+        struct NvKmsHdmiVsifMetadata *current = &req_config->modeSetConfig.hdmiVsifMetadata;
++        struct NvKmsHdmiVsifMetadata *head_vsif = &req_config->modeSetConfig.hdmiVsifMetadata;
 +        struct NvKmsHdmiVsifMetadata next = {0};
 +        if (nv_new_connector_state->lldv_format) {
 +            if (blob || nv_new_connector_state->cb1_deep_color ||
@@ -159,10 +159,10 @@ index 10c8838..4588cd6 100644
 +        /* The same bpc can carry a different signal. Re-evaluate RGB/full on
 +         * entry and exit using the existing full link configuration path. */
 +        req_config->flags.colorBpcChanged |=
-+            nvDoviLowLatency(current->payload, current->payloadSize) !=
++            nvDoviLowLatency(head_vsif->payload, head_vsif->payloadSize) !=
 +            nvDoviLowLatency(next.payload, next.payloadSize);
-+        req_config->flags.hdmiVsifMetadataChanged = memcmp(current, &next, sizeof(next)) != 0;
-+        *current = next;
++        req_config->flags.hdmiVsifMetadataChanged = memcmp(head_vsif, &next, sizeof(next)) != 0;
++        *head_vsif = next;
      }
  
      /*
