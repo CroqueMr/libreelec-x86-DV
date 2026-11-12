@@ -15980,15 +15980,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  using namespace std::chrono_literals;
  
-@@ -39,6 +52,7 @@
+@@ -39,6 +52,11 @@
    m_errCount = 0;
    m_syncOffset = 0;
    m_enabled = false;
 +  m_cb1Phase = false;
++#ifdef HAVE_DVBRIDGE
++  m_cb1Latency.Reset();
++  m_cb1LatencyActive = false;
++#endif
  }
  
  CRenderManager::CRenderManager(CDVDClock &clock, IRenderMsg *player) :
-@@ -96,7 +110,8 @@
+@@ -96,7 +114,8 @@
      if (!m_bRenderGUI)
        return true;
  
@@ -15998,7 +16002,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_NumberBuffers == buffers && !m_pRenderer->ConfigChanged(picture))
      {
        if (m_fps != fps)
-@@ -141,6 +156,10 @@
+@@ -141,6 +160,10 @@
    {
      std::unique_lock lock(m_statelock);
      m_picture.SetParams(picture);
@@ -16009,7 +16013,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_fps = fps;
      m_orientation = orientation;
      m_NumberBuffers  = buffers;
-@@ -217,6 +236,10 @@
+@@ -217,6 +240,10 @@
      m_playerPort->UpdateVideoRender(m_pRenderer->VideoBypassesFramebuffer());
  
      m_queued.clear();
@@ -16020,7 +16024,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_discard.clear();
      m_free.clear();
      m_presentsource = 0;
-@@ -242,7 +265,11 @@
+@@ -242,7 +269,11 @@
      CLog::Log(LOGDEBUG, "CRenderManager::Configure - {}", m_QueueSize);
    }
    else
@@ -16032,7 +16036,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    m_pConfigPicture.reset();
  
-@@ -287,6 +314,229 @@
+@@ -287,6 +318,229 @@
      return false;
  }
  
@@ -16092,9 +16096,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    {
 +      const double end = successor != queue.end() ? m_Queue[*successor].pts :
 +          head.pts + std::max(0.0,head.duration);
-+      // Match source selection; native playback retains its synchronization lead.
-+      const double tolerance = cb1Async ? 1.0 : (m_lateframes <= 6 ? 0.98 : 0.0);
-+      const double lead = !cb1Async && m_clockSync.m_enabled ? refresh / 2 - m_clockSync.m_syncOffset : 0;
++      // Match source selection, including its synchronization lead.
++      const double tolerance = m_lateframes <= 6 ? 0.98 : 0.0;
++      const double lead = m_clockSync.m_enabled ? refresh / 2 - m_clockSync.m_syncOffset : 0;
 +      cutoff = end + tolerance * refresh - lead;
 +    }
 +    const double remaining = std::max(0.0,
@@ -16262,7 +16266,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::FrameMove()
  {
    bool firstFrame = false;
-@@ -302,6 +552,9 @@
+@@ -302,6 +556,9 @@
        lock.unlock();
        if (!Configure())
          return;
@@ -16272,12 +16276,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        UpdateLatencyTweak();
        firstFrame = true;
        FrameWait(50ms);
-@@ -311,8 +564,47 @@
+@@ -311,8 +568,47 @@
    }
    {
      std::unique_lock lock2(m_presentlock);
--
--    if (m_queued.empty())
 +#ifdef HAVE_DVBRIDGE
 +    if (m_cb1PresentPending)
 +    {
@@ -16310,7 +16312,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      if (m_aiQueuePreparationStale) return;
 +    }
 +#endif
-+
+ 
+-    if (m_queued.empty())
 +    if (m_queued.empty()
 +#ifdef HAVE_DVBRIDGE
 +        && !m_cb1PresentPending
@@ -16322,7 +16325,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      {
        m_presentstep = PRESENT_IDLE;
      }
-@@ -321,22 +613,43 @@
+@@ -321,22 +617,43 @@
        m_presentTimer.Set(1000ms);
      }
  
@@ -16367,7 +16370,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          m_overlays.Release(*it);
          m_free.push_back(*it);
          it = m_discard.erase(it);
-@@ -344,6 +657,7 @@
+@@ -344,6 +661,7 @@
        else
          ++it;
      }
@@ -16375,7 +16378,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
      m_bRenderGUI = true;
-@@ -352,9 +666,14 @@
+@@ -352,9 +670,14 @@
    m_playerPort->UpdateGuiRender(IsGuiLayer() || !m_pRenderer->VideoBypassesFramebuffer() ||
                                  firstFrame);
  
@@ -16391,7 +16394,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_overlays.PrepareOverlays(m_presentsource);
  }
  
-@@ -388,6 +707,9 @@
+@@ -388,6 +711,9 @@
    m_QueueSize   = 2;
    m_QueueSkip   = 0;
    m_presentstep = PRESENT_IDLE;
@@ -16401,7 +16404,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bRenderGUI = true;
  
    m_initEvent.Set();
-@@ -397,12 +719,20 @@
+@@ -397,12 +723,20 @@
  {
    if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
    {
@@ -16422,7 +16425,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    std::unique_lock lock(m_statelock);
-@@ -415,6 +745,7 @@
+@@ -415,6 +749,7 @@
  
    m_renderState = STATE_UNCONFIGURED;
    m_picture.Reset();
@@ -16430,7 +16433,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_bRenderGUI = false;
  
    m_initEvent.Set();
-@@ -442,15 +773,30 @@
+@@ -442,15 +777,30 @@
      {
        m_overlays.Flush();
        m_debugRenderer.Flush();
@@ -16461,7 +16464,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          for (int i = 1; i < m_QueueSize; i++)
            m_free.push_back(i);
        }
-@@ -509,6 +855,13 @@
+@@ -509,6 +859,13 @@
      delete m_pRenderer;
      m_pRenderer = NULL;
    }
@@ -16475,7 +16478,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  void CRenderManager::ServiceVideoCaptures()
-@@ -598,8 +951,10 @@
+@@ -598,8 +955,10 @@
      return res;
  
    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
@@ -16486,7 +16489,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return res;
  }
-@@ -617,9 +972,22 @@
+@@ -617,9 +976,25 @@
    if (!gui && m_pRenderer->IsGuiLayer())
      return;
  
@@ -16504,12 +16507,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
 +#ifdef HAVE_DVBRIDGE
 +    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++    {
 +      window->SetDVBridgeOverlays(m_renderDebug || m_overlays.HasVisibleOverlay(m_presentsource));
++      window->SetCB1RenderPts(m_Queue[m_presentsource].pts);
++    }
 +#endif
      SPresent& m = m_Queue[m_presentsource];
  
      if( m.presentmethod == PRESENT_METHOD_BOB )
-@@ -634,7 +1002,15 @@
+@@ -634,7 +1009,15 @@
  
    // the just-presented region is video-only: OSD, GUI and subtitles come later
    if (presented)
@@ -16525,7 +16531,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (presented && !gui)
    {
-@@ -694,6 +1070,19 @@
+@@ -694,6 +1077,19 @@
  
    {
      std::unique_lock lock(m_presentlock);
@@ -16545,15 +16551,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (m_presentstep == PRESENT_FRAME)
      {
-@@ -784,6 +1173,15 @@
+@@ -784,6 +1180,22 @@
    }
  }
  
 +void CRenderManager::UpdateDisplayLatency()
 +{
++  double displayLatency =
++      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetDisplayLatency());
++#ifdef HAVE_DVBRIDGE
++  // Asynchronous CB1 scanout uses its measured selection-to-display delay.
++  if (m_clockSync.m_cb1LatencyActive)
++    if (const auto measured = m_clockSync.m_cb1Latency.EstimateUs())
++      displayLatency = *measured / 1000.0;
++#endif
 +  m_displayLatency = DVD_MSEC_TO_TIME(
-+      m_latencyTweak +
-+      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetDisplayLatency()) -
++      m_latencyTweak + displayLatency -
 +      m_videoDelay -
 +      static_cast<double>(CServiceBroker::GetWinSystem()->GetFrameLatencyAdjustment()));
 +}
@@ -16561,7 +16574,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::UpdateLatencyTweak()
  {
    float fps = CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS();
-@@ -797,6 +1195,15 @@
+@@ -797,6 +1209,15 @@
                                                                                       isHDREnabled));
  }
  
@@ -16577,7 +16590,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void CRenderManager::UpdateResolution()
  {
    if (m_bTriggerUpdateResolution)
-@@ -807,7 +1214,23 @@
+@@ -807,7 +1228,23 @@
        {
          RESOLUTION res = CResolutionUtils::ChooseBestResolution(
              m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty());
@@ -16601,7 +16614,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          UpdateLatencyTweak();
          if (m_pRenderer)
            m_pRenderer->Update();
-@@ -818,10 +1241,14 @@
+@@ -818,10 +1255,14 @@
    }
  }
  
@@ -16617,7 +16630,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_fps = fps;
      m_picture.iWidth = width;
      m_picture.iHeight = height;
-@@ -920,9 +1347,14 @@
+@@ -920,9 +1361,14 @@
  
  
    SPresent& m = m_Queue[index];
@@ -16632,7 +16645,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_queued.push_back(m_free.front());
    m_free.pop_front();
    m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
-@@ -1019,6 +1451,11 @@
+@@ -1019,6 +1465,11 @@
    XbmcThreads::EndTime<> endtime{timeout};
    while(m_free.empty())
    {
@@ -16644,7 +16657,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_presentevent.wait(lock, std::min(50ms, timeout));
      if (endtime.IsTimePast() || bStop)
      {
-@@ -1035,6 +1472,12 @@
+@@ -1035,6 +1486,12 @@
  
  void CRenderManager::PrepareNextRender()
  {
@@ -16657,7 +16670,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_queued.empty())
    {
      CLog::Log(LOGERROR, "CRenderManager::PrepareNextRender - asked to prepare with nothing available");
-@@ -1043,19 +1486,23 @@
+@@ -1043,20 +1500,22 @@
      return;
    }
  
@@ -16684,34 +16697,41 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetDisplayLatency()) -
 -      m_videoDelay -
 -      static_cast<double>(CServiceBroker::GetWinSystem()->GetFrameLatencyAdjustment()));
-+  UpdateDisplayLatency();
- 
+-
    // While the clock is paused, frameOnScreen does not advance, so adding the display
    // latency would pick a frame ahead of the one actually shown. That only holds for
-@@ -1072,27 +1519,84 @@
-   const double nextFramePts =
-       m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
- 
+   // renderers that draw the video into our framebuffer and re-pick every refresh.
+@@ -1065,6 +1524,24 @@
+   // internal pause (caching, display reset) keep that lead and video stays ahead of audio.
+   const bool isPaused =
+       m_dvdClock.IsPaused() && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
++
 +  bool cb1Async = false;
-+  bool nativeAsync = false;
 +  std::optional<double> completionAge;
 +#ifdef HAVE_DVBRIDGE
 +  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
 +  {
 +    cb1Async = window->CB1AsyncPlayback();
-+    nativeAsync = window->CB1NativeAsyncPlayback();
 +    if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
 +      completionAge = window->CB1PresentationAge();
++    if (cb1Async)
++      if (const auto presented = window->CB1PresentedPicture())
++        m_clockSync.m_cb1Latency.Completed(presented->first, presented->second);
 +  }
++  m_clockSync.m_cb1LatencyActive = cb1Async;
 +#endif
 +
++  UpdateDisplayLatency();
++
+   double renderPts = frameOnScreen;
+   if (!isPaused)
+     renderPts += m_displayLatency;
+@@ -1072,19 +1549,41 @@
+   const double nextFramePts =
+       m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
+ 
 +  const bool physicalPhase = cb1Async && m_clockSync.m_enabled && !isPaused &&
 +      m_dvdClock.GetClockSpeed() == 1.0;
-+  const bool prepareAhead = cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0 &&
-+      m_Queue[m_presentsource].presentmethod == PRESENT_METHOD_SINGLE &&
-+      m_Queue[m_presentsource].presentfield == FS_NONE &&
-+      m_Queue[m_queued.front()].presentmethod == PRESENT_METHOD_SINGLE &&
-+      m_Queue[m_queued.front()].presentfield == FS_NONE;
 +  if (m_clockSync.m_cb1Phase != physicalPhase)
 +  {
 +    m_clockSync.m_error = 0;
@@ -16732,10 +16752,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -      m_clockSync.m_syncOffset = average;
 -      m_clockSync.m_error = 0;
 -      m_clockSync.m_errCount = 0;
--
--      m_dvdClock.SetVsyncAdjust(-average);
-+    // Calibrate once per physical segment; missing anchors never contribute CPU phase.
-+    if (!physicalPhase || (completionAge && m_clockSync.m_errCount <= 30))
++    // Keep calibrating, as Kodi does; missing anchors never contribute CPU phase.
++    if (!physicalPhase || completionAge)
 +    {
 +      double err = fmod(renderPts - nextFramePts - completionAge.value_or(0.0), frametime);
 +      if (physicalPhase)
@@ -16752,40 +16770,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        const double average = physicalPhase ? std::remainder(mean, frametime) : mean;
 +        m_clockSync.m_syncOffset = average;
 +        m_clockSync.m_error = 0;
-+        m_clockSync.m_errCount = physicalPhase ? 31 : 0;
-+
++        m_clockSync.m_errCount = 0;
+ 
+-      m_dvdClock.SetVsyncAdjust(-average);
 +        m_dvdClock.SetVsyncAdjust(-average);
 +      }
      }
      if (!isPaused)
--      renderPts += frametime / 2 - m_clockSync.m_syncOffset;
-+    {
-+      // One-ahead native pictures are prepared at the display edge, not its blend midpoint.
-+      const bool nativeEdge = physicalPhase && nativeAsync && prepareAhead && completionAge &&
-+          std::abs(frametime * static_cast<double>(m_fps) - DVD_TIME_BASE) < DVD_TIME_BASE * 0.0005;
-+      renderPts += (nativeEdge ? frametime : frametime / 2) - m_clockSync.m_syncOffset;
-+    }
-   }
-   else
-   {
-     m_dvdClock.SetVsyncAdjust(0);
-   }
-+
-+#ifdef CB1_HAS_HDR10_AI
-+  if (physicalPhase && completionAge && m_fps > 0 &&
-+      frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead())
-+  {
-+    const auto source = DVBRIDGE::FrameOutputSettings(
-+        m_picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS, m_picture.hdrType == StreamHdrType::HDR_TYPE_HLG).hdr10Source;
-+    if (source == DVBRIDGE::HDR10SourceMode::ReferenceDV || source == DVBRIDGE::HDR10SourceMode::HDR10PlusDV)
-+      // Select on the physical refresh phase, not an interpolated mid-refresh clock.
-+      renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
-+  }
-+#endif
- 
-   CLog::LogFC(LOGDEBUG, LOGAVTIMING,
-               "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
-@@ -1114,14 +1618,17 @@
+       renderPts += frametime / 2 - m_clockSync.m_syncOffset;
+@@ -1114,14 +1613,19 @@
      auto iter = m_queued.begin();
      int idx = *iter;
      ++iter;
@@ -16799,36 +16792,54 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        // get. Skipping a frame is easier than having decoder dropping one (lateframes > 10)
 -      double x = (m_lateframes <= 6) ? 0.98 : 0;
 -      if (renderPts < m_Queue[*iter].pts + x * frametime)
-+      // One-ahead scanout admits one full refresh, including clock phase jitter.
-+      double x = cb1Async ? 1.0 : (m_lateframes <= 6 ? 0.98 : 0);
++      // CB1 one-ahead scanout is part of the measured display latency. With an anchored
++      // refresh phase the pictures sit half a refresh from this boundary, so no
++      // hysteresis is needed and a picture of lag is removed at once.
++      double x = physicalPhase && completionAge ? 0 : (m_lateframes <= 6 ? 0.98 : 0);
 +      if (latePts < m_Queue[*iter].pts + x * frametime)
          break;
        idx = *iter;
        ++iter;
-@@ -1139,7 +1646,11 @@
+@@ -1139,7 +1643,8 @@
        m_queued.pop_front();
      }
  
 -    const int lateframes = static_cast<int>((renderPts - m_Queue[idx].pts) *
-+    // Account only for delay beyond the admitted CB1 one-refresh window.
-+    const double lateness = cb1Async ?
-+        std::max(0.0, latePts - m_Queue[idx].pts - frametime) :
-+        renderPts - m_Queue[idx].pts;
++    const double lateness = latePts - m_Queue[idx].pts;
 +    const int lateframes = static_cast<int>(lateness *
                                              static_cast<double>(m_fps / DVD_TIME_BASE));
      if (lateframes)
        m_lateframes += lateframes;
-@@ -1155,7 +1666,8 @@
+@@ -1150,18 +1655,27 @@
+     m_discard.push_back(m_presentsource);
+     m_presentsource = idx;
+     m_queued.pop_front();
++#ifdef HAVE_DVBRIDGE
++    if (cb1Async)
++      m_clockSync.m_cb1Latency.Selected(m_Queue[idx].pts, DVBRIDGE::MonotonicNowNs());
++#endif
+     m_presentpts = m_Queue[idx].pts - m_displayLatency;
+     m_presentevent.notifyAll();
  
      m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
    }
 -  else if (!combined && renderPts > (nextFramePts - frametime))
-+  // A submitted progressive CB1 picture no longer needs native blend-frame waiting.
-+  else if ((!combined || prepareAhead) && renderPts > (nextFramePts - frametime))
++  // CB1 one-ahead scanout presents single pictures; it has no blend frame to prepare.
++  else if (!combined && !cb1Async && renderPts > (nextFramePts - frametime))
    {
      m_lateframes = 0;
      m_presentstep = PRESENT_FLIP;
-@@ -1170,6 +1682,9 @@
+     m_presentsourcePast = m_presentsource;
+     m_presentsource = m_queued.front();
+     m_queued.pop_front();
++#ifdef HAVE_DVBRIDGE
++    if (cb1Async)
++      m_clockSync.m_cb1Latency.Selected(m_Queue[m_presentsource].pts, DVBRIDGE::MonotonicNowNs());
++#endif
+     m_presentpts = m_Queue[m_presentsource].pts - m_displayLatency - frametime / 2;
+     m_presentevent.notifyAll();
+   }
+@@ -1170,6 +1684,9 @@
  void CRenderManager::DiscardBuffer()
  {
    std::unique_lock lock2(m_presentlock);
@@ -16840,7 +16851,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
-@@ -24,6 +24,8 @@
+@@ -19,11 +19,16 @@
+ #include "threads/SystemClock.h"
+ #include "utils/Geometry.h"
+ #include "windowing/Resolution.h"
++#ifdef HAVE_DVBRIDGE
++#include "utils/DVBridgePresentation.h"
++#endif
+ 
+ #include <atomic>
  #include <deque>
  #include <list>
  #include <memory>
@@ -16849,7 +16868,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include "PlatformDefs.h"
  
-@@ -60,6 +62,17 @@
+@@ -60,6 +65,17 @@
    virtual void UpdateGuiRender(bool gui) = 0;
    virtual void UpdateVideoRender(bool video) = 0;
    virtual CVideoSettings GetVideoSettings() const = 0;
@@ -16867,7 +16886,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  };
  
  class CRenderManager
-@@ -78,7 +91,9 @@
+@@ -78,7 +94,9 @@
  
    RESOLUTION GetResolution();
    void UpdateResolution();
@@ -16878,7 +16897,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    void SetViewMode(int iViewMode);
    void PreInit();
    void UnInit();
-@@ -105,6 +120,15 @@
+@@ -105,6 +123,15 @@
    bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
    void AddOverlay(std::shared_ptr<CDVDOverlay> o, double pts);
    void ShowVideo(bool enable);
@@ -16894,7 +16913,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    /*!
     * \brief True if any subtitle/overlay is visible on the current presented
-@@ -148,6 +172,21 @@
+@@ -148,6 +175,21 @@
    void PresentBlend(bool clear, DWORD flags, DWORD alpha);
  
    void PrepareNextRender();
@@ -16916,7 +16935,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool IsPresenting();
    bool IsGuiLayer();
  
-@@ -170,6 +209,7 @@
+@@ -170,6 +212,7 @@
    CCriticalSection m_presentlock;
    CCriticalSection m_datalock;
    bool m_bTriggerUpdateResolution = false;
@@ -16924,7 +16943,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_bRenderGUI = true;
    bool m_renderedDebugOverlay = false;
    bool m_renderDebug = false;
-@@ -205,7 +245,7 @@
+@@ -205,7 +248,7 @@
    /// Display latency tweak value from AdvancedSettings for the current refresh rate
    /// in milliseconds
    double m_latencyTweak = 0.0;
@@ -16933,7 +16952,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    double m_displayLatency = 0.0;
    std::atomic_int m_videoDelay = {};
  
-@@ -214,10 +254,14 @@
+@@ -214,10 +257,14 @@
  
    struct SPresent
    {
@@ -16949,7 +16968,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    std::deque<int> m_free;
    std::deque<int> m_queued;
-@@ -233,6 +277,9 @@
+@@ -233,6 +280,9 @@
    int m_lateframes = -1;
    double m_presentpts = 0.0;
    EPRESENTSTEP m_presentstep = PRESENT_IDLE;
@@ -16959,11 +16978,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    XbmcThreads::EndTime<> m_presentTimer;
    bool m_forceNext = false;
    int m_presentsource = 0;
-@@ -250,6 +297,7 @@
+@@ -250,6 +300,11 @@
      int m_errCount;
      double m_syncOffset;
      bool m_enabled;
 +    bool m_cb1Phase{false};
++#ifdef HAVE_DVBRIDGE
++    DVBRIDGE::PresentationLatency m_cb1Latency;
++    bool m_cb1LatencyActive{false};
++#endif
    };
    CClockSync m_clockSync;
  };

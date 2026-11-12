@@ -764,13 +764,15 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +} // namespace DVBRIDGE
 --- /dev/null
 +++ b/xbmc/utils/DVBridgePresentation.h
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,137 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <cstdint>
 +#include <algorithm>
++#include <array>
 +#include <optional>
 +#include <cmath>
++#include <ctime>
 +
 +namespace DVBRIDGE
 +{
@@ -811,6 +813,74 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  double m_pts{};
 +  unsigned m_warm{},m_samples{},m_low{};
 +  bool m_enabled{},m_active{};
++};
++
++inline uint64_t MonotonicNowNs()
++{
++  timespec now{};
++  return clock_gettime(CLOCK_MONOTONIC, &now) == 0 ?
++      uint64_t(now.tv_sec) * 1000000000 + uint64_t(now.tv_nsec) : 0;
++}
++
++// Measured delay from picture selection to the start of its scanout.
++// Selection records a CLOCK_MONOTONIC time per picture; the KMS completion
++// fence of the commit that carries that picture closes the sample.
++class PresentationLatency
++{
++public:
++  static constexpr uint64_t MAX_SAMPLE_NS = 500000000;
++  static constexpr unsigned MIN_SAMPLES = 8;
++
++  void Reset() { *this = {}; }
++  void Selected(double pts, uint64_t nowNs)
++  {
++    if (!std::isfinite(pts) || !nowNs) return;
++    for (const auto& selection : m_selected)
++      if (selection.ns && selection.pts == pts) return;
++    m_selected[m_nextSelection] = {pts, nowNs};
++    m_nextSelection = (m_nextSelection + 1) % m_selected.size();
++  }
++  void Completed(double pts, uint64_t completedNs)
++  {
++    if (!completedNs || completedNs == m_lastCompletedNs) return;
++    m_lastCompletedNs = completedNs;
++    for (auto& selection : m_selected)
++    {
++      if (!selection.ns || selection.pts != pts) continue;
++      // Only the first scanout of a picture ends its selection delay.
++      if (completedNs > selection.ns && completedNs - selection.ns < MAX_SAMPLE_NS)
++      {
++        m_samples[m_nextSample] = completedNs - selection.ns;
++        m_nextSample = (m_nextSample + 1) % m_samples.size();
++        m_count = std::min<unsigned>(m_count + 1, m_samples.size());
++      }
++      selection = {};
++      return;
++    }
++  }
++  // Interquartile mean in microseconds: single stalls cannot move it, and a
++  // pipeline alternating between two depths is centred between them.
++  std::optional<double> EstimateUs() const
++  {
++    if (m_count < MIN_SAMPLES) return std::nullopt;
++    auto values = m_samples;
++    std::sort(values.begin(), values.begin() + m_count);
++    const unsigned first = m_count / 4, last = m_count - m_count / 4;
++    double sum = 0;
++    for (unsigned i = first; i < last; ++i) sum += static_cast<double>(values[i]);
++    return sum / (last - first) / 1000.0;
++  }
++
++private:
++  struct Selection
++  {
++    double pts{};
++    uint64_t ns{};
++  };
++  std::array<Selection, 8> m_selected{};
++  std::array<uint64_t, 15> m_samples{};
++  unsigned m_nextSelection{}, m_nextSample{}, m_count{};
++  uint64_t m_lastCompletedNs{};
 +};
 +
 +inline uint64_t MasterFramePeriodNs(double fps)
@@ -3237,7 +3307,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  #include "utils/BufferObjectFactory.h"
  #include "utils/DMAHeapBufferObject.h"
-@@ -35,14 +47,83 @@
+@@ -35,8 +47,35 @@
  #include "utils/XTimeUtils.h"
  #include "utils/log.h"
  #include "windowing/WindowSystemFactory.h"
@@ -3273,10 +3343,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include <gbm.h>
  
- using namespace KODI::WINDOWING::GBM;
+@@ -44,6 +83,56 @@
  
  using namespace std::chrono_literals;
-+
+ 
 +#ifdef HAVE_DVBRIDGE
 +float CWinSystemGbmGLESContext::GetDisplayLatency()
 +{
@@ -3317,16 +3387,23 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  if (age < -period || age > 1.25 * sourcePeriod) return std::nullopt;
 +  return age;
 +}
++
++std::optional<std::pair<double, uint64_t>> CWinSystemGbmGLESContext::CB1PresentedPicture() const
++{
++  if (!CB1AsyncPlayback()) return std::nullopt;
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm || !drm->CB1PresentationTime()) return std::nullopt;
++  return std::make_pair(drm->CB1PresentationPts(), drm->CB1PresentationTime());
++}
 +#endif
- 
++
  CWinSystemGbmGLESContext::CWinSystemGbmGLESContext()
    : CWinSystemGbmEGLContext(EGL_PLATFORM_GBM_MESA, "EGL_MESA_platform_gbm")
-@@ -52,6 +133,19 @@
- void CWinSystemGbmGLESContext::Register()
  {
+@@ -54,6 +143,19 @@
    CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem, "gbm");
-+}
-+
+ }
+ 
 +CWinSystemGbmGLESContext::~CWinSystemGbmGLESContext()
 +{
 +#ifdef HAVE_DVBRIDGE
@@ -3338,10 +3415,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_nativeDVProperties = std::make_shared<CDVBridgeState>(std::move(m_dvState));
 +  }
 +#endif
- }
- 
++}
++
  std::unique_ptr<CWinSystemBase> CWinSystemGbmGLESContext::CreateWinSystem()
-@@ -111,15 +205,65 @@
+ {
+   return std::make_unique<CWinSystemGbmGLESContext>();
+@@ -111,15 +213,65 @@
    return true;
  }
  
@@ -3408,7 +3487,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    if (!m_eglContext.TrySwapBuffers())
-@@ -128,16 +272,339 @@
+@@ -128,22 +280,370 @@
      throw std::runtime_error("eglSwapBuffers failed");
    }
  
@@ -3431,8 +3510,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    RefreshDVOutputCapabilities();
 +#endif
 +
-   return true;
- }
++  return true;
++}
 +
 +#ifdef HAVE_DVBRIDGE
 +bool CWinSystemGbmGLESContext::CB1ModeCanJoin(const RESOLUTION_INFO& res) const
@@ -3477,9 +3556,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const auto target=CDisplaySettings::GetInstance().GetResolutionInfo(resolution);
 +  if (!CB1ModeCanJoin(target)) return false;
 +  m_modeHold.Stop(DVBRIDGE::DiagnosticNowMs());
-+  return true;
-+}
-+
+   return true;
+ }
+ 
 +void CWinSystemGbmGLESContext::AnnounceCB1Mode(bool transport)
 +{
 +  if (!m_modeAnnouncement.Before(transport)) return;
@@ -3529,12 +3608,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  return CRenderSystemGLES::BeginRender();
 +}
 +#endif
- 
++
  void CWinSystemGbmGLESContext::PresentRender(bool rendered, bool videoLayer)
  {
    if (!m_bRenderCreated)
      return;
-+
+ 
 +  PresentFrame(rendered, videoLayer);
 +  if (m_dispReset && m_dispResetTimer.IsTimePast()
 +#ifdef HAVE_DVBRIDGE
@@ -3639,6 +3718,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        if (drm) drm->StageHDR10Plus(submitted.hdr10plus, submitted.informationGeneration);
 +        AnnounceCB1Mode(true);
 +        const bool nvidiaRestore = m_dvState.CapturedBackend() == CDVBridgeState::Backend::NVIDIA;
++        if (drm) drm->SetCB1PresentationPts(m_preparedRenderPts);
 +        presented = drm && (nvidiaRestore ? (valid && FlipDVBridgePage(m_dvState,true,false,true,bo)) :
 +                            drm->FlipPageTransactional(valid ? bo : nullptr, false, asynchronous));
 +        CompleteCB1Mode(presented,true);
@@ -3694,6 +3774,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +          const bool plain = !asynchronous && !m_dvActivating && !drm->HasPendingRequest();
 +          AnnounceCB1Mode(true);
 +          const auto started = std::chrono::steady_clock::now();
++          drm->SetCB1PresentationPts(m_preparedRenderPts);
 +          presented = FlipDVBridgePage(m_dvState, false, asynchronous);
 +          CompleteCB1Mode(presented,true);
 +          if (presented)
@@ -3746,10 +3827,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    return;
 +  }
 +#endif
- 
++
    if (rendered || videoLayer)
    {
-@@ -144,6 +611,29 @@
      bool async = !videoLayer && m_eglFence;
      if (rendered)
      {
@@ -3779,7 +3859,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
        if (async)
        {
-@@ -175,27 +642,153 @@
+@@ -175,27 +675,153 @@
  #endif
      }
  
@@ -3841,12 +3921,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -              __FUNCTION__);
 -    m_dispReset = false;
 -    std::unique_lock lock(m_resourceSection);
--
+ 
 -    for (auto resource : m_resources)
 -      resource->OnResetDisplay();
--  }
--}
-+
 +}
 +
 +#ifdef HAVE_DVBRIDGE
@@ -3916,8 +3993,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +            rational(p.knee_point_x), rational(p.knee_point_y), anchors);
 +      }
 +    }
-+  }
-+}
+   }
+ }
 +#endif
  
  bool CWinSystemGbmGLESContext::SetGuiCompositing(int colorTransfer)
@@ -3944,7 +4021,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_guiCompositing = (colorTransfer != 0);
  
    if (m_guiCompositing)
-@@ -203,7 +796,11 @@
+@@ -203,7 +829,11 @@
      if (!m_compositeShader)
      {
        std::string defines;
@@ -3957,7 +4034,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
          defines += "#define KODI_LIMITED_RANGE 1\n";
        m_compositeShader = std::make_unique<CGuiCompositeShaderGLES>(defines);
        if (!m_compositeShader->CompileAndLink())
-@@ -215,16 +812,24 @@
+@@ -215,16 +845,24 @@
        }
      }
  
@@ -3983,7 +4060,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -234,8 +839,68 @@
+@@ -234,8 +872,68 @@
    return m_guiCompositing;
  }
  
@@ -4034,7 +4111,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    }
 +    CRenderSystemGLES::SetViewPort(viewport);
 +    const auto& context = GetGfxContext();
-+    // libplacebo raster passes can leave the GUI's scissor test disabled.
++    // libplacebo can leave scissor testing disabled after a raster pass.
 +    glEnable(GL_SCISSOR_TEST);
 +    CRenderSystemGLES::SetScissors(context.StereoCorrection(context.GetScissors()));
 +    if (report)
@@ -4052,7 +4129,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_guiCompositing)
      return false;
  
-@@ -274,24 +939,43 @@
+@@ -274,25 +972,44 @@
  
      m_guiFboWidth = width;
      m_guiFboHeight = height;
@@ -4101,11 +4178,12 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (!m_guiFbo.BeginRender())
      return false;
-+
  
++
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +984,11 @@
+   {
+@@ -300,6 +1017,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -4117,7 +4195,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -307,7 +996,16 @@
+@@ -307,7 +1029,16 @@
  void CWinSystemGbmGLESContext::EndGuiComposite()
  {
    if (m_guiWillRender)
@@ -4134,7 +4212,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +1038,32 @@
+@@ -340,18 +1071,33 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -4162,19 +4240,19 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      return;
    }
-+
+ 
 +#ifdef HAVE_DVBRIDGE
 +  if (m_dvNativeGui)
 +    return;
 +#endif
- 
++
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +1073,35 @@
-   if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
+   // will skip eglSwapBuffers too (hasRendered==false because Render was not
+@@ -361,6 +1107,35 @@
        m_DRM->GetGuiPlane() != nullptr)
      return;
-+
+ 
 +#ifdef HAVE_DVBRIDGE
 +  GLint previousFramebuffer = 0;
 +  GLint previousViewport[4]{};
@@ -4203,10 +4281,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    glViewport(0, 0, m_nWidth, m_nHeight);
 +  }
 +#endif
- 
++
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +1122,21 @@
+ 
+@@ -380,11 +1155,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
@@ -4230,7 +4309,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1149,1906 @@
+@@ -397,13 +1182,1907 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -4272,7 +4351,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    glDisableVertexAttribArray(texLoc);
  
 -  m_compositeShader->Disable();
--}
 +#ifdef HAVE_DVBRIDGE
 +  if (dvComposite)
 +  {
@@ -4296,7 +4374,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  const bool available = window && mode != DVBRIDGE::OutputMode::Disabled &&
 +      window->CanRetainDVSource();
 +  return DVBRIDGE::Eligible(available, available, source, software, interlaced, stereo);
-+}
+ }
 +} // namespace
 +
 +bool DVBRIDGE::RetainsDVSource(const CDVDStreamInfo& stream)
@@ -5559,6 +5637,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  m_preparedSourceStream = layer.binding.stream;
 +  m_preparedSourcePts = layer.pts;
++  m_preparedRenderPts = m_cb1RenderPts;
 +  geometry.ignore_l5=false;
 +  const bool mergedPQGUI = ComposeDVPQGUI();
 +  const bool subtitlesOnly = !capturing && guiAvailable && m_guiFbo.IsValid() &&
@@ -6140,7 +6219,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3062,16 @@
+@@ -417,5 +3096,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
@@ -6192,7 +6271,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    static void Register();
    using CWinSystemGbm::Register;
-@@ -41,20 +53,148 @@
+@@ -41,20 +53,145 @@
    bool InitWindowSystem() override;
    bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
    void PresentRender(bool rendered, bool videoLayer) override;
@@ -6273,19 +6352,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool ConfigureHDR10Conversion(const VideoPicture& picture);
 +  bool SupportsHDR10Conversion(bool requireCurrentMode = true);
 +  void SetDVBridgeOverlays(bool visible) { m_dvOverlays = visible; }
++  // Kodi presentation timestamp of the picture the next CB1 render prepares.
++  void SetCB1RenderPts(double pts) { m_cb1RenderPts = pts; }
 +  bool CB1FramePending() const { return m_cb1FramePending; }
 +  bool CB1AsyncPlayback() const
 +  {
 +    return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
 +  }
-+  bool CB1NativeAsyncPlayback() const
-+  {
-+    return m_DRM && m_DRM->HasQuirk(QUIRK_CB1_NATIVE_EDGE) && CB1AsyncPlayback() &&
-+        !m_hdrConversion && !m_dvBridge->Advanced() &&
-+        (m_dvSelection.policy.mode == DVBRIDGE_MODE_STANDARD ||
-+         m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE);
-+  }
 +  std::optional<double> CB1PresentationAge() const;
++  // Kodi presentation timestamp and KMS completion time of the latest presented CB1 picture.
++  std::optional<std::pair<double, uint64_t>> CB1PresentedPicture() const;
 +  void RecordDVSubtitle(const CRect& rect, unsigned texture);
 +  bool BeginDVPQSubtitle();
 +  void EndDVPQSubtitle();
@@ -6341,7 +6417,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    bool m_guiCompositing{false};
    CFrameBufferObject m_guiFbo;
    int m_guiFboWidth{0};
-@@ -63,8 +203,97 @@
+@@ -63,8 +200,98 @@
    bool m_guiFboClean{false};
    // Whether the GUI render pass will run this frame; set by BeginGuiComposite.
    bool m_guiWillRender{true};
@@ -6369,6 +6445,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  double m_previousSourcePts{};
 +  uint64_t m_preparedSourceStream{};
 +  double m_preparedSourcePts{};
++  double m_cb1RenderPts{}, m_preparedRenderPts{};
 +  bool m_dvShutdownFence{};
 +  bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
 +  bool PollRejectedDVSurface();
@@ -6469,7 +6546,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <errno.h>
  #include <string.h>
  #include <thread>
-@@ -24,17 +32,234 @@
+@@ -24,18 +32,235 @@
  #include <drm_fourcc.h>
  #include <drm_mode.h>
  #include <fcntl.h>
@@ -6481,9 +6558,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  using namespace KODI::WINDOWING::GBM;
  
 -void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer)
--{
 +namespace
-+{
+ {
 +uint64_t DVNowMs()
 +{
 +  return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -6696,16 +6772,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    // destroying it before the commit returns leaves the atomic request
    // referencing an invalid id and the kernel rejects with EINVAL.
    CDRMPropertyBlob modeBlob;
-+
+ 
 +  if (!PrepareSDRRestore(flags))
 +    return reject("sdr-properties", EINVAL);
 +
 +  bool frameMetadata = false;
 +  if (!PrepareHDR10Plus(flags, frameMetadata))
 +    return reject("hdr10plus-property", EINVAL);
- 
++
    if (m_old_crtc != nullptr)
    {
+     if (m_old_crtc->GetId() != m_crtc->GetId())
 @@ -72,20 +297,28 @@
      m_old_crtc = nullptr;
    }
@@ -6719,10 +6796,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
 -      return;
--
--    modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
 +      return reject("connector-crtc", EINVAL);
-+
+ 
+-    modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
 +    modeBlob = CDRMPropertyBlob(m_fd, mode, sizeof(*mode));
      if (!modeBlob.IsValid())
 -      return;
@@ -6801,8 +6877,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
 -    CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
 -    m_atomicRequestQueue.pop_back();
--  }
--  else
 +    const int error = errno;
 +    if (!strict && !m_req->sdrRestore)
 +      CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
@@ -6822,7 +6896,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Recovered(DVNowMs()))
 +      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
 +          m_dvFailures.Count(), m_dvFailures.Recoveries());
-+  }
+   }
+-  else
 +  FinishRequest(true);
 +  return true;
 +}
@@ -6857,7 +6932,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_inFenceFd != -1)
    {
-@@ -177,10 +469,196 @@
+@@ -177,10 +469,198 @@
  
    m_atomicRequestQueue.emplace_back(std::make_unique<CDRMAtomicRequest>());
    m_req = m_atomicRequestQueue.back().get();
@@ -6936,6 +7011,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    {
 +      m_cb1CompletedNs = detail.timestamp_ns;
 +      m_cb1PreviousCompletedNs = previous;
++      m_cb1CompletedPts = m_cb1PendingPts;
 +    }
 +  }
 +  m_cb1Headroom.reset();
@@ -7012,6 +7088,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (asynchronous)
 +    {
 +      m_cb1Pending = true;
++      m_cb1PendingPts = m_cb1NextPts;
 +      m_cb1OutFence = TakeOutFenceFd();
 +      m_cb1Uncertain = m_cb1OutFence < 0;
 +      if (m_cb1Uncertain) ResetCB1PresentationTime();
@@ -7054,7 +7131,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    struct drm_fb* drm_fb = nullptr;
    uint32_t flags = 0;
  
-@@ -189,6 +667,7 @@
+@@ -189,6 +669,7 @@
      drm_fb = CDRMUtils::DrmFbGetFromBo(bo);
      if (!drm_fb)
      {
@@ -7062,24 +7139,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        CLog::LogF(LOGERROR, "Failed to get a new FBO");
        return;
      }
-@@ -200,11 +679,12 @@
+@@ -200,11 +681,12 @@
    if (m_need_modeset)
    {
      flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-+    CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
-+  }
-+
+-    m_need_modeset = false;
+     CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
+   }
+ 
+-  DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
 +  m_lastPageAccepted=DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
 +  if (m_lastPageAccepted && IsSelectedModeCommitted())
-     m_need_modeset = false;
--    CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
--  }
--
--  DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
++    m_need_modeset = false;
  }
  
  bool CDRMAtomic::InitDrm()
-@@ -255,6 +735,14 @@
+@@ -255,6 +737,14 @@
  
  void CDRMAtomic::DestroyDrm()
  {
@@ -7094,7 +7169,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CDRMUtils::DestroyDrm();
  }
  
-@@ -295,6 +783,7 @@
+@@ -295,6 +785,7 @@
  
  bool CDRMAtomic::SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo)
  {
@@ -7102,7 +7177,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_need_modeset = true;
  
    return true;
-@@ -302,6 +791,7 @@
+@@ -302,6 +793,7 @@
  
  bool CDRMAtomic::SetActive(bool active)
  {
@@ -7110,14 +7185,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_need_modeset = true;
    m_active = active;
  
-@@ -310,10 +800,60 @@
+@@ -310,11 +802,61 @@
  
  bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t value)
  {
 -  if (!object)
 -    return false;
 -  return m_req->AddProperty(object, name, value);
--}
 +  // A successor SDR movie can use different primaries from the GUI.
 +  if (m_sdrRestorePending && object && object == m_connector && strcmp(name, "Colorspace") == 0)
 +    m_sdrRestoreColorspace = value;
@@ -7169,13 +7243,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    m_signalKnown = true;
 +    m_signalState = state;
 +  }
-+}
-+
-+catch (...) {}
+ }
  
++catch (...) {}
++
  CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())
  {
-@@ -332,6 +872,7 @@
+ }
+@@ -332,6 +874,7 @@
      return false;
  
    m_atomicRequestItems[object][propertyId] = value;
@@ -7183,12 +7258,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -379,6 +920,30 @@
- {
-   CLog::LogF(LOGDEBUG, "DRM Atomic Request:");
+@@ -381,6 +924,30 @@
    LogAtomicRequest(LOGDEBUG, m_atomicRequestItems);
-+}
-+
+ }
+ 
 +void CDRMAtomic::CDRMAtomicRequest::LogDVProperties()
 +{
 +  std::string message;
@@ -7211,9 +7284,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +                   std::to_string(property.second);
 +    }
 +  DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge requested properties (48 max):{}", message);
- }
- 
++}
++
  void CDRMAtomic::CDRMAtomicRequest::LogAtomicRequest(
+     uint8_t logLevel, std::map<CDRMObject*, std::map<uint32_t, uint64_t>>& atomicRequestItems)
+ {
 --- a/xbmc/windowing/gbm/drm/DRMAtomic.h
 +++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
 @@ -10,8 +10,11 @@
@@ -7228,7 +7303,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <deque>
  #include <map>
  #include <memory>
-@@ -27,24 +30,104 @@
+@@ -27,24 +30,108 @@
  {
  public:
    CDRMAtomic() = default;
@@ -7264,6 +7339,9 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool HasPendingRequest() const { return m_need_modeset || (m_req && !m_req->Empty()); }
 +  bool CompleteCB1Page(int timeoutMs = 0);
 +  uint64_t CB1PresentationTime() const { return m_cb1CompletedNs; }
++  // Kodi presentation timestamp of the picture carried by the next asynchronous commit.
++  void SetCB1PresentationPts(double pts) { m_cb1NextPts = pts; }
++  double CB1PresentationPts() const { return m_cb1CompletedPts; }
 +  uint64_t CB1PreviousPresentationTime() const { return m_cb1PreviousCompletedNs; }
 +  void SetCB1TimingPeriod(uint64_t periodNs);
 +  std::optional<int64_t> TakeCB1Headroom();
@@ -7321,6 +7399,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  bool m_cb1Pending{}, m_cb1Uncertain{};
 +  int m_cb1OutFence{-1};
 +  uint64_t m_cb1CompletedNs{};
++  double m_cb1NextPts{}, m_cb1PendingPts{}, m_cb1CompletedPts{};
 +  uint64_t m_cb1PreviousCompletedNs{};
 +  int m_cb1TimingInput{-1};
 +  uint64_t m_cb1TimingPeriodNs{}, m_cb1SubmittedNs{};
@@ -7335,7 +7414,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    class CDRMAtomicRequest
    {
-@@ -54,10 +137,17 @@
+@@ -54,10 +141,17 @@
      CDRMAtomicRequest(const CDRMAtomicRequest& right) = delete;
  
      drmModeAtomicReqPtr Get() const { return m_atomicRequest.get(); }
@@ -7484,7 +7563,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- a/xbmc/windowing/gbm/drm/DRMUtils.cpp
 +++ b/xbmc/windowing/gbm/drm/DRMUtils.cpp
-@@ -15,18 +15,93 @@
+@@ -15,19 +15,94 @@
  #include "utils/StringUtils.h"
  #include "utils/log.h"
  #include "windowing/GraphicContext.h"
@@ -7572,12 +7651,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  void DrmFbDestroyCallback(gbm_bo* bo, void* data)
  {
    drm_fb* fb = static_cast<drm_fb*>(data);
-+
+ 
 +  if (fb->opaque_fb_id > 0)
 +    drmModeRmFB(gbm_device_get_fd(gbm_bo_get_device(bo)), fb->opaque_fb_id);
- 
++
    if (fb->fb_id > 0)
    {
+     CLog::LogF(LOGDEBUG, "Removing framebuffer: {}", fb->fb_id);
 @@ -49,6 +124,9 @@
    if (!m_connector->CheckConnector())
      return false;
@@ -7588,12 +7668,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_mode = m_connector->GetModeForIndex(std::atoi(res.strId.c_str()));
    m_width = res.iWidth;
    m_height = res.iHeight;
-@@ -119,6 +197,57 @@
-   gbm_bo_set_user_data(bo, fb, DrmFbDestroyCallback);
- 
+@@ -121,6 +199,57 @@
    return fb;
-+}
-+
+ }
+ 
 +uint32_t CDRMUtils::DrmOpaqueFbGetFromBo(struct gbm_bo* bo)
 +{
 +  auto* fb = DrmFbGetFromBo(bo);
@@ -7643,9 +7721,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    CLog::LogF(LOGERROR, "Cannot create opaque transport framebuffer: {}", strerror(errno));
 +  }
 +  return fb->opaque_fb_id;
- }
- 
++}
++
  bool CDRMUtils::FindPreferredMode()
+ {
+   if (m_mode)
 @@ -479,12 +608,29 @@
      drmVersionPtr version = drmGetVersion(m_fd);
      if (version)
@@ -7656,8 +7736,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +            version->version_major,version->version_minor,version->version_patchlevel);
 +#endif
        if (strcmp(version->name, "amdgpu") == 0)
--        m_drm_quirks |= QUIRK_NEEDSPRIMARY;
-+        m_drm_quirks |= QUIRK_NEEDSPRIMARY | QUIRK_CB1_NATIVE_EDGE;
+         m_drm_quirks |= QUIRK_NEEDSPRIMARY;
        drmFreeVersion(version);
      }
  
@@ -7710,11 +7789,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 -      res.dwFlags = D3DPRESENTFLAG_MODE3DTB;
 -    else if (mode->flags & DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF)
 -      res.dwFlags = D3DPRESENTFLAG_MODE3DSBS;
--  }
--  else if (mode->flags & DRM_MODE_FLAG_INTERLACE)
--    res.dwFlags = D3DPRESENTFLAG_INTERLACED;
--  else
--    res.dwFlags = D3DPRESENTFLAG_PROGRESSIVE;
 +  res.dwFlags = mode->flags & DRM_MODE_FLAG_INTERLACE ? D3DPRESENTFLAG_INTERLACED
 +                                                      : D3DPRESENTFLAG_PROGRESSIVE;
 +
@@ -7741,7 +7815,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +      break;
 +    default:
 +      break;
-+  }
+   }
+-  else if (mode->flags & DRM_MODE_FLAG_INTERLACE)
+-    res.dwFlags = D3DPRESENTFLAG_INTERLACED;
+-  else
+-    res.dwFlags = D3DPRESENTFLAG_PROGRESSIVE;
  
    res.strMode =
        StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
@@ -7804,15 +7882,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
 --- a/xbmc/windowing/gbm/drm/DRMUtils.h
 +++ b/xbmc/windowing/gbm/drm/DRMUtils.h
-@@ -32,12 +32,15 @@
- //
- // amdgpu drm driver needs at least 1 primary plane to active when doing a modeset
- inline constexpr int QUIRK_NEEDSPRIMARY = 1 << 0;
-+// CB1 native one-ahead admission uses the physical display edge on amdgpu.
-+inline constexpr int QUIRK_CB1_NATIVE_EDGE = 1 << 1;
- 
- struct drm_fb
- {
+@@ -38,6 +38,7 @@
    struct gbm_bo* bo = nullptr;
    uint32_t fb_id;
    uint32_t format;
@@ -7820,7 +7890,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  };
  
  struct outputformat
-@@ -68,6 +71,8 @@
+@@ -68,6 +69,8 @@
    CDRMPlane* GetGuiPlane() const { return m_gui_plane; }
    CDRMCrtc* GetCrtc() const { return m_crtc; }
    CDRMConnector* GetConnector() const { return m_connector; }
@@ -7829,7 +7899,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    std::vector<outputformat>& GetOutputFormats() { return m_output_formats; }
    bool FindGuiPlane(uint32_t format, uint64_t modifier);
    bool FindVideoPlane(uint32_t format, uint64_t modifier);
-@@ -93,6 +98,7 @@
+@@ -93,6 +96,7 @@
  protected:
    bool OpenDrm(bool needConnector);
    drm_fb* DrmFbGetFromBo(struct gbm_bo* bo);
@@ -7837,7 +7907,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    int m_fd{-1};
    CDRMConnector* m_connector{nullptr};
-@@ -133,7 +139,10 @@
+@@ -133,7 +137,10 @@
    std::vector<outputformat> m_output_formats = {{DRM_FORMAT_ARGB8888, 8, 8, false, {}},
                                                  {DRM_FORMAT_XRGB8888, 8, 0, false, {}},
                                                  {DRM_FORMAT_ARGB2101010, 10, 2, false, {}},
