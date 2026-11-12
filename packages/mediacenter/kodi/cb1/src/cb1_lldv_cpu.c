@@ -83,7 +83,8 @@ static CB1_AVX2 void pack_rows(const struct cb1_lldv_cpu *cpu, unsigned thread)
         uint32_t *out=frame->carrier+out_y*(frame->stride/sizeof(*out));
         const __m256i mask=_mm256_setr_epi32(0x7fffffff,0x7fffffff,0x7fffffff,0,
                                             0x7fffffff,0x7fffffff,0x7fffffff,0);
-        int probe=0;
+        const bool blank=y<frame->first_row || (frame->end_row && y>=frame->end_row);
+        int probe=blank?W:0;
         for(;probe<W;probe+=2){
             __m256i value=_mm256_loadu_si256((const __m256i *)(row+probe*4));
             if(!_mm256_testz_si256(value,mask))break;
@@ -227,7 +228,9 @@ bool cb1_lldv_cpu_submit(struct cb1_lldv_cpu *cpu, const struct cb1_lldv_cpu_fra
        (uintptr_t)frame->carrier%32 || frame->stride<W*sizeof(*frame->carrier) ||
        frame->stride%32 || frame->stride>SIZE_MAX/H ||
        !isfinite(frame->peak_nits) || frame->peak_nits<=0 || frame->peak_nits>10000 ||
-       (frame->bits!=10 && frame->bits!=12))
+       (frame->bits!=10 && frame->bits!=12) ||
+       ((frame->first_row || frame->end_row) &&
+        (frame->first_row>=frame->end_row || frame->end_row>H)))
         return false;
 
     pthread_mutex_lock(&cpu->lock);

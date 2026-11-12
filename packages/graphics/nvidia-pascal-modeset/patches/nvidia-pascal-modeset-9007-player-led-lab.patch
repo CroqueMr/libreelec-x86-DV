@@ -170,6 +170,34 @@ index cfe7a79..6555a38 100644
      nv_dev->cb1_native_tmds_property = drm_property_create_bool(nv_dev->dev,
          0, "CB1_NATIVE_TMDS");
      if (!nv_dev->cb1_native_tmds_property) return -ENOMEM;
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-modeset.c b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+index 89a96b4..7996e1e 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-modeset.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+@@ -29,6 +29,7 @@
+ #include "nvidia-drm-crtc.h"
+ #include "nvidia-drm-os-interface.h"
+ #include "nvidia-drm-helper.h"
++#include "nvkms-dv-vsif.h"
+ 
+ #if defined(NV_DRM_DRMP_H_PRESENT)
+ #include <drm/drmP.h>
+@@ -534,6 +535,15 @@ int nv_drm_atomic_check(struct drm_device *dev,
+     }
+ 
+     for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
++        const struct NvKmsKapiHeadModeSetConfig *old_head =
++            &to_nv_crtc_state(drm_atomic_get_old_crtc_state(state, crtc))->req_config.modeSetConfig;
++        if (nvDoviLowLatency(old_head->hdmiVsifMetadata.payload,
++                             old_head->hdmiVsifMetadata.payloadSize)) {
++            /* Plane-only and CRTC-only commits must obey the carrier contract too. */
++            ret = drm_atomic_add_affected_connectors(state, crtc);
++            if (ret) goto done;
++        }
++
+         /*
+          * if the color management changed on the crtc, we need to update the
+          * crtc's plane's CSC matrices, so add the crtc's planes to the commit
 diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
 index f9f4d12..64414b5 100644
 --- a/kernel-open/nvidia-drm/nvidia-drm-priv.h

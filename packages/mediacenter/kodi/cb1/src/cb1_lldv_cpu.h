@@ -24,6 +24,9 @@ struct cb1_lldv_cpu_frame {
     unsigned bits;
     bool xrgb;
     bool flip_y;
+    /* The producer guarantees black outside [first_row, end_row).
+     * Leave both zero when the source may contain pixels on every row. */
+    unsigned first_row, end_row;
 };
 
 struct cb1_lldv_cpu *cb1_lldv_cpu_create(unsigned threads);

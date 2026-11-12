@@ -7,7 +7,8 @@
       "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
       "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
       "src/common/inc/nvkms-dv-vsif.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
-      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier."
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-modeset.c": "Validate the effective LLDV state before committing it."
     }
   },
   "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9007-player-led-lab.patch": {
@@ -19,7 +20,9 @@
       "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
       "src/common/inc/nvkms-dv-vsif.h": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
       "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
-      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier."
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Opt-in native NVIDIA HDMI player-led 4:2:2 carrier.",
+      "kernel-open/nvidia-drm/nvidia-drm-modeset.c": "Validate the effective LLDV state before committing it.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Validate the effective LLDV state before committing it."
     }
   },
   "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9006-infoframe-wire-length.patch": {

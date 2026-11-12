@@ -38,6 +38,7 @@ class NvidiaHdmiVic(unittest.TestCase):
 #include <stddef.h>
 #include <string.h>
 #include "timing/nvtiming.h"
+#include "nvkms-dv-vsif.h"
 #define TRUE NV_TRUE
 #define FALSE NV_FALSE
 #define NVMISC_MEMCPY memcpy
@@ -93,9 +94,6 @@ static void disable(const NVDispEvoRec*d,NvU32 head,@@DISABLECTRL@@ int type){
  (void)d;(void)head;@@IGNORECTRL@@ assert(type==NVT_INFOFRAME_TYPE_VENDOR_SPECIFIC);disabled++;
 }
 static NvBool nvDpyIsHdmiEvo(const NVDpyEvoRec*d){return d->hdmi;}
-static NvBool nvDoviLegacy(const NvU8*p,NvU32 n){(void)p;(void)n;return NV_FALSE;}
-static NvBool nvDoviHdmiVic(NvU8 a,NvU8 b){(void)a;(void)b;return NV_FALSE;}
-static void nvDoviTiming(NvU8*p,NvU32 n,NvU8 a,NvU8 b){(void)p;(void)n;(void)a;(void)b;}
 static NvBool nvCb1VsifValid(const struct NvKmsCb1Vsif*v){return v->payloadSize<=27;}
 static void CalculateVideoInfoFrameColorFormat(const NVDpyAttributeColor*c,NvU32 h,
  const NVT_EDID_INFO*e,NVT_VIDEO_INFOFRAME_CTRL*v){(void)c;(void)h;(void)e;(void)v;}
@@ -169,6 +167,16 @@ int main(void){
  edid->hdr_static_metadata_info.supported_eotf.smpte_st_2084_eotf=0;
  edid->hdr_static_metadata_info.supported_eotf.future_eotf=0;
  run(&disp,&display,&info);assert(vendor_count==1 && avi[6]==0);
+ /* Player-led overrides only AVI color fields and retains the selected CTA VIC. */
+ info.ctrl.video_format_id=93;info.vendorSpecificCtrl.HDMI_VIC=0;
+ disp.headState[0].hdmiVsifMetadata.payloadSize=sizeof(nvDoviLowLatencyPayload);
+ memcpy(disp.headState[0].hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,
+        sizeof(nvDoviLowLatencyPayload));
+ run(&disp,&display,&info);
+ assert(avi[6]==93 && ((avi[3]>>5)&3)==1 && ((avi[4]>>6)&3)==3);
+ assert(((avi[5]>>4)&7)==6 && ((avi[5]>>2)&3)==0 && ((avi[7]>>6)&3)==0);
+ assert(vendor_count==1 && vendor[0]==NVT_INFOFRAME_TYPE_VENDOR_SPECIFIC && vendor[1]==1 && vendor[2]==27);
+ assert(!memcmp(vendor+3,nvDoviLowLatencyPayload,sizeof(nvDoviLowLatencyPayload)));
  display.parsedEdid.valid=0;run(&disp,&display,&info);assert(!hdr_count && !vendor_count && !disabled);
 }
 '''
@@ -188,7 +196,7 @@ int main(void){
                 src.write_text(program)
                 args = ['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror',
                         '-Wno-unused-function', '-Wno-unused-variable',
-                        '-I'+str(root/'src/common/modeset'),
+                        '-I'+str(root/'src/common/modeset'), '-I'+str(root/'src/common/inc'),
                         '-I'+str(root/'src/common/sdk/nvidia/inc'), str(src), '-o', str(exe)]
                 built = subprocess.run(args, capture_output=True, text=True)
                 self.assertEqual(built.returncode, 0, built.stderr)

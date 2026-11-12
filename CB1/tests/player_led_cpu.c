@@ -54,6 +54,21 @@ int main(void)
             }
             assert(row[WIDTH]==0xcccccccc);
             assert(carrier[0]==(xrgb?0xff801000u:0xff001080u));
+            const uint32_t active=row[0];
+            struct cb1_lldv_cpu_frame cropped=frame;
+            cropped.first_row=7;
+            cropped.end_row=8;
+            /* A producer that proved the L5 bars need not initialize their host rows. */
+            linear[0]=1;
+            linear[(size_t)(HEIGHT-1)*WIDTH*4]=1;
+            assert(cb1_lldv_cpu_submit(cpu,&cropped));
+            assert(cb1_lldv_cpu_ready(cpu,true));
+            assert(row[0]==active && row[WIDTH]==0xcccccccc);
+            assert(carrier[0]==(xrgb?0xff801000u:0xff001080u));
+            assert(carrier[(size_t)(HEIGHT-1)*stride/sizeof(*carrier)]==carrier[0]);
+            linear[0]=linear[(size_t)(HEIGHT-1)*WIDTH*4]=0;
+            cropped.end_row=HEIGHT+1;
+            assert(!cb1_lldv_cpu_submit(cpu,&cropped));
         }
     }
     cb1_lldv_cpu_destroy(cpu);

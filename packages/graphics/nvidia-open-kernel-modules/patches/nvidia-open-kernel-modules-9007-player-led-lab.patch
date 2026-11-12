@@ -209,6 +209,34 @@ index 859701c..ae254e4 100644
      nv_dev->cb1_native_tmds_property = drm_property_create_bool(nv_dev->dev,
          0, "CB1_NATIVE_TMDS");
      if (!nv_dev->cb1_native_tmds_property) return -ENOMEM;
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-modeset.c b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+index 3e0ab8e..81c1741 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-modeset.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-modeset.c
+@@ -30,6 +30,7 @@
+ #include "nvidia-drm-crtc.h"
+ #include "nvidia-drm-os-interface.h"
+ #include "nvidia-drm-helper.h"
++#include "nvkms-dv-vsif.h"
+ 
+ #if defined(NV_DRM_DRMP_H_PRESENT)
+ #include <drm/drmP.h>
+@@ -578,6 +579,15 @@ int nv_drm_atomic_check(struct drm_device *dev,
+         }
+     }
+     for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
++        const struct NvKmsKapiHeadModeSetConfig *old_head =
++            &to_nv_crtc_state(drm_atomic_get_old_crtc_state(state, crtc))->req_config.modeSetConfig;
++        if (nvDoviLowLatency(old_head->hdmiVsifMetadata.payload,
++                             old_head->hdmiVsifMetadata.payloadSize)) {
++            /* Plane-only and CRTC-only commits must obey the carrier contract too. */
++            ret = drm_atomic_add_affected_connectors(state, crtc);
++            if (ret) goto done;
++        }
++
+ 
+         {
+             struct drm_plane_state *primary =
 diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
 index 60eae53..d029946 100644
 --- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
@@ -310,3 +338,29 @@ index 8e21ddc..464f08b 100644
  
      UpdateInfoFrameFlipStatePre(currentTransmitCtrl, newTransmitCtrl, NV_EVO_INFOFRAME_TRANSMIT_FREQUENCY_EVERY_FRAME, NV_TRUE);
      pDevEvo->hal->SendHdmiInfoFrame(
+diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvkms-modeset.c
+index bb51d56..1e1e519 100644
+--- a/src/nvidia-modeset/src/nvkms-modeset.c
++++ b/src/nvidia-modeset/src/nvkms-modeset.c
+@@ -97,6 +97,7 @@
+ #include "nvkms-api.h"
+ 
+ #include "nvkms-modeset.h"
++#include "nvkms-dv-vsif.h"
+ #include "nvkms-modeset-types.h"
+ #include "nvkms-modeset-workarea.h"
+ #include "nvkms-attributes.h"
+@@ -230,6 +231,13 @@ nvGetHwModeTimings(const NVDispEvoRec *pDispEvo,
+         return FALSE;
+     }
+ 
++    if (nvDoviLowLatency(pRequestHead->flip.hdmiVsifMetadata.vsifMetadata.payload,
++                         pRequestHead->flip.hdmiVsifMetadata.vsifMetadata.payloadSize) &&
++        (!pTimings || (pTimings->protocol != NVKMS_PROTOCOL_SOR_SINGLE_TMDS_A &&
++                       pTimings->protocol != NVKMS_PROTOCOL_SOR_SINGLE_TMDS_B))) {
++        return NV_FALSE;
++    }
++
+     if (pDpyColor != NULL) {
+         *pDpyColor = dpyColor;
+     }

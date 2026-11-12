@@ -43,6 +43,7 @@ struct pending {
     AVFrame *refs[2];
     GLsync fence;
     pl_buf host;
+    unsigned active_rows[2];
     struct gbm_bo *bo;
     int dma_fd;
     void *pixels;
@@ -211,7 +212,8 @@ static void pump(struct pending q[SLOTS],bool wait)
                 sync_carrier(p,DMA_BUF_SYNC_START);
                 cpu_start_ms=clock_ms();
                 const struct cb1_lldv_cpu_frame frame={.linear=(const float *)p->host->data,.carrier=p->pixels,
-                    .stride=WIDTH*4,.peak_nits=peak_nits,.bits=depth,.xrgb=xrgb,.flip_y=xrgb};
+                    .stride=WIDTH*4,.peak_nits=peak_nits,.bits=depth,.xrgb=xrgb,.flip_y=xrgb,
+                    .first_row=p->active_rows[0],.end_row=p->active_rows[1]};
                 assert(cb1_lldv_cpu_submit(cpu,&frame));
                 p->phase=CPU;cpu_slot=p;to_cpu++;changed=true;
             }
@@ -272,7 +274,7 @@ static void render(struct reference_gpu *g,struct dvbridge_renderer *renderer,pl
         assert(slot->host && slot->host->data);
     }
     enum cb1_master_status status=dvbridge_render_player_led_host(renderer,&policy,&frames[0].frame,
-        sd->data,sd->size,pts,el?pts:NAN,target,slot->host,NULL);
+        sd->data,sd->size,pts,el?pts:NAN,target,slot->host,NULL,slot->active_rows);
     if(status!=CB1_MASTER_READY){fprintf(stderr,"render status=%d pts=%.6f\n",status,pts);abort();}
     // The persistent SSBO is coherent. Wait for this draw before starting the CPU pack.
     slot->fence=glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);assert(slot->fence);
