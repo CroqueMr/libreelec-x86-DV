@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/include/drm/drm_dvbridge.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,58 @@
 +/* SPDX-License-Identifier: MIT */
 +/* Shared Standard-DV transport checks. No hardware or pixel processing. */
 +#ifndef DRM_DVBRIDGE_H
@@ -16,6 +16,8 @@
 +
 +struct drm_dvbridge_link {
 +	bool requested, lab_enabled, sink_standard, hdmi, native_hdmi;
++	/* A DP-to-HDMI converter whose DV signalling was verified on hardware. */
++	bool verified_bridge;
 +	bool rgb, limited_range, hdr_blob, cloned, progressive;
 +	unsigned int requested_bpc, pipe_bpp, colorspace;
 +	unsigned int width, height, rounded_refresh;
@@ -40,7 +42,8 @@
 +{
 +	if (!s->requested)
 +		return 0;
-+	if (!s->lab_enabled || !s->sink_standard || !s->native_hdmi)
++	if (!s->lab_enabled || !s->sink_standard ||
++	    !(s->native_hdmi || s->verified_bridge))
 +		return -EOPNOTSUPP;
 +	if (!s->hdmi || !s->rgb || s->limited_range || s->hdr_blob || s->cloned ||
 +	    !s->progressive || s->requested_bpc != 8 || s->pipe_bpp != 24 ||
