@@ -222,6 +222,29 @@ int main() {
   assert(!state.CapturePlayerLed(drm) && !state.Captured());
   drm.connector.props.erase("CB1_LLDV_FORMAT");
   assert(!state.CapturePlayerLed(drm) && !state.Captured());
+
+  // NVIDIA retains the ordinary properties and keeps its two signaling owners exclusive.
+  drm.connector.props["CB1_LLDV_FORMAT"]=0;
+  drm.connector.props["NV_HDMI_VSIF_METADATA"]=0;
+  drm.connector.props["dithering mode"]=0;
+  drm.staged.clear();
+  assert(state.CapturePlayerLed(drm));
+  assert(state.CapturedBackend()==CDVBridgeState::Backend::NVIDIA);
+  assert(state.StagePlayerLed(drm,1));
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==1);
+  assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==0);
+  assert(drm.staged.at("max bpc")==8);
+  assert(state.Stage(drm,false));
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==0);
+  assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==778);
+  assert(state.Stage(drm,true));
+  assert(drm.staged.at("CB1_LLDV_FORMAT")==0);
+  assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==0);
+  assert(drm.staged.at("max bpc")==12);
+  state.Restored();
+  assert(clones==0);
+  drm.connector.props["NV_HDMI_VSIF_METADATA"]=33;
+  assert(!state.CapturePlayerLed(drm) && !state.Captured());
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:

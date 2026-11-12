@@ -2097,3 +2097,45 @@ index 2a6647e..b3748fd 100644
    DVBRIDGE::SourceBinding m_dvImportBinding{};
    dvbridge_geometry m_dvImportGeometry{};
    bool m_dvImportUsable{};
+diff --git a/xbmc/windowing/gbm/drm/DVBridgeState.cpp b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+index 2cef710..6680f38 100644
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -74,7 +74,9 @@ bool CDVBridgeState::CaptureTransport(CDRMAtomic& drm, uint64_t ownVsif, bool le
+   if ((playerLed && !hasLldv) ||
+       (hasLldv && connector->ReadPropertyValue("CB1_LLDV_FORMAT") != 0))
+     return Reject("CB1_LLDV_FORMAT");
+-  const Backend backend = playerLed ? Backend::KERNEL : GetBackend(*connector);
++  const auto connectorBackend = GetBackend(*connector);
++  const Backend backend = playerLed && connectorBackend == Backend::NONE ?
++      Backend::KERNEL : connectorBackend;
+   const auto standard = connector->GetPropertyValue("DVBRIDGE_DV_STANDARD_LAB");
+   if (backend == Backend::NONE ||
+       (backend == Backend::KERNEL && (standard.value_or(0) != 0 || (!playerLed && !standard))))
+@@ -128,6 +130,7 @@ bool CDVBridgeState::CaptureTransport(CDRMAtomic& drm, uint64_t ownVsif, bool le
+     }
+     const uint64_t one = uint64_t{1} << 32;
+     const Setting vendor[] = {
++      {connector,"CB1_LLDV_FORMAT",0,playerLed,false},
+       {connector,"HDR_OUTPUT_METADATA",0,true,true},
+       {connector,"DVBRIDGE_HDR10_DEEP_COLOR",0,false,false},
+       {connector,"max bpc",8,true,false},
+@@ -221,7 +224,7 @@ bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore)
+ 
+ bool CDVBridgeState::StagePlayerLed(CDRMAtomic& drm, uint64_t format)
+ {
+-  return format && m_backend == Backend::KERNEL && Before("CB1_LLDV_FORMAT") &&
++  return format && m_backend != Backend::NONE && Before("CB1_LLDV_FORMAT") &&
+          StageTransport(drm, false, format);
+ }
+ 
+@@ -235,7 +238,8 @@ bool CDVBridgeState::StageTransport(CDRMAtomic& drm, bool restore, uint64_t play
+     uint64_t value = restore ? change.before : change.during;
+     if (playerLedFormat && change.name == "CB1_LLDV_FORMAT")
+       value = playerLedFormat;
+-    else if (playerLedFormat && change.name == "DVBRIDGE_DV_STANDARD_LAB")
++    else if (playerLedFormat && (change.name == "DVBRIDGE_DV_STANDARD_LAB" ||
++                                change.name == "NV_HDMI_VSIF_METADATA"))
+       value = 0;
+     if (!drm.AddProperty(change.object, change.name.c_str(), value))
+       valid = false;
