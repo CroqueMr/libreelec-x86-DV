@@ -22,7 +22,7 @@ void cb1_cpu_init(unsigned,unsigned);
 void cb1_cpu_start(float *,uint32_t *);
 int cb1_cpu_ready(int);
 void cb1_cpu_destroy(void);
-enum { SLOTS=6, WIDTH=3840, HEIGHT=2160 };
+enum { SLOTS=3, WIDTH=3840, HEIGHT=2160 };
 
 static double clock_ms(void)
 {

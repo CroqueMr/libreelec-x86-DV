@@ -284,6 +284,8 @@ Les temps couvrent 900 images après 120 d’échauffement, jusqu’au tampon GB
 
 La relecture EGL des images 1, 120 et 300 est comparée au packing GPU de référence. Les écarts observés valent un code utile au voisinage du seuil d’arrondi. L’essai avec relecture par le GPU à chaque image garde plus de 27 i/s en moyenne, avec 89/300 échéances dépassées en 10 bits et 68/300 en 12 bits. Cet essai partage la file GLES avec le rendu. La cadence de présentation Kodi reste à mesurer.
 
+Avec trois tampons en file, les allocations linéaires et les carriers passent d’environ 950 à 475 Mio hors surfaces de décodage. Le banc atteint 28,17 i/s en 10 bits et 27,74 i/s en 12 bits sur les mêmes fenêtres, avec 0/900 échéance dépassée aux deux profondeurs. Ces mesures s’arrêtent au tampon prêt. La relecture GPU systématique reste une charge distincte.
+
 ## 4. Brancher le circuit dans Kodi et sécuriser les bascules
 
 **Propriétaires.** `DVOutputSettings.h`, `DVOutputSelection.h`, `DVPlaybackModes.cpp`, `DVPlaybackInfo.h` et `CWinSystemGbmGLESContext`, dans leurs patches Kodi existants. Côté moteur, ajouter le mode dans `CB1/src/dvbridge_policy.h` et son identité dans `CB1/src/cb1_circuit.c`. Côté HDMI, réutiliser `CDRMAtomic::FlipPageTransactional()` et la propriété déjà testée.

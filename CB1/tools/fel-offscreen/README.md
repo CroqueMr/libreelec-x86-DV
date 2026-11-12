@@ -28,7 +28,7 @@ carrier was ready on a 27-fps timeline with 100 ms of initial headroom. The
 input timestamps still drive BL/EL pairing. The benchmark needs a 3840×2160
 input, AVX2 and FMA, coherent persistent GLES buffer storage, and a linearly
 mapped ABGR8888 GBM buffer with a tightly packed pitch. Peak allocation for
-six linear images and six carriers is about 950 MiB, plus decoded surfaces.
+three linear images and three carriers is about 475 MiB, plus decoded surfaces.
 
 Set CB1_RENDER_NODE to change the VA-API and GBM node from
 /dev/dri/renderD128. On a multi-GPU host, select the same EGL device via the
