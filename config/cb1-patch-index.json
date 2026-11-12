@@ -1,4 +1,10 @@
 {
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": {
+    "owner": "Preserve an absent Dolby VSIF during Pascal DRM connector-state duplication.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Acquire a DRM blob reference only for a present VSIF."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzz-hdr10-link-depth.patch": {
     "owner": "Reject HDR10 Rendering before HDMI activation when the link is limited to 8 bpc.",
     "files": {
