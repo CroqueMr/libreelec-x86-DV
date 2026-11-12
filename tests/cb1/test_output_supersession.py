@@ -108,7 +108,7 @@ constexpr int EGL_NO_SURFACE=0,EGL_NO_DISPLAY=0,EGL_NO_CONTEXT=0,EGL_TRUE=1,EGL_
 constexpr int GL_DRAW_FRAMEBUFFER_BINDING=1,GL_READ_FRAMEBUFFER_BINDING=2,GL_FRAMEBUFFER=3,
  GL_RED_BITS=4,GL_GREEN_BITS=5,GL_BLUE_BITS=6,GL_SAMPLES=7,GL_BACK=8,
  GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING=9,GL_LINEAR=10,GL_FRAMEBUFFER_COMPLETE=11,
- GL_DRAW_FRAMEBUFFER=12,GL_READ_FRAMEBUFFER=13,DRM_FORMAT_MOD_LINEAR=0;
+ GL_DRAW_FRAMEBUFFER=12,GL_READ_FRAMEBUFFER=13,GL_COLOR_ATTACHMENT0=14,DRM_FORMAT_MOD_LINEAR=0;
 namespace KODI::WINDOWING::GBM{constexpr int QUIRK_NEEDSPRIMARY=1;}
 inline std::map<int,int>surfaces{{1,24}};inline int currentSurface=1,nextSurface=2;
 inline bool failRestore=false;
@@ -178,11 +178,11 @@ struct CDVBridgeGLES {
  void BeginDiagnosticStream(unsigned){}bool Failure(const char*){return false;}
  FrameStatus PrepareFrame(const Layer& base,const Layer* enhancement,const decltype(VideoPicture::doviMetadata)& metadata,
   dvbridge_geometry geometry,const DVBRIDGE::OutputPreferences& preferences,bool allowPacked,const dvbridge_policy* selected,bool allowAsync) __ACTUAL_BODY_2_END__
- bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context,bool sdr) __ACTUAL_BODY_18_END__
+ bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context,bool sdr,unsigned framebuffer=0) __ACTUAL_BODY_18_END__
  void SetHDR10PlusVersion(int){}
  bool SetHDR10Session(const dvbridge_hdr10_session&,unsigned,bool){return true;}
  bool rebindHDR=false,rebindSDR=false;
- void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false) __ACTUAL_BODY_19_END__
+ void Cancel(){} bool RebindOutputSurface(bool hdr10,bool sdr=false,unsigned framebuffer=0) __ACTUAL_BODY_19_END__
  template<class... T> Binding SelectionIdentity(T...){return {};}
 };
 struct State {bool CapturePlayerLed(...){captured=true;return true;}bool Capture(...){captured=true;return true;}const char* CaptureFailure(){return "none";}void Restored(){captured=false;}bool captured=false; bool Captured()const{return captured;}
@@ -218,6 +218,8 @@ struct CWinSystemGbmEGLContext:CWinSystemGbm {
  std::unique_ptr<VideoPicture>m_floatOutputPicture;
  Plane*m_priorOutputPlane=nullptr;unsigned m_priorOutputFormat=0;uint64_t m_priorOutputModifier=0;
  virtual int VideoOutputBitDepth(const VideoPicture*p)const{return p?p->colorBits:8;}
+ virtual bool PrepareHDR10Scanout(){return false;}
+ virtual bool RetainHDR10ScanoutOnTransition()const{return false;}
  virtual bool RejectDVOutputSurface(){return CompleteDVOutputSurface(false);}
  bool HasPendingDVOutputSurface(){return m_dvSurfacePending;}
  void UseDVOutputSurfaceTransaction(bool enabled){m_dvOutputSurface=enabled;}
@@ -229,6 +231,8 @@ struct CWinSystemGbmEGLContext:CWinSystemGbm {
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=true,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
+ bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
