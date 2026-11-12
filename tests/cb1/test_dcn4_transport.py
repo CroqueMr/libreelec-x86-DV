@@ -114,7 +114,7 @@ int main(void)
     def test_real_atomic_neutral_plane_and_exit_contract(self):
         kernel=Path(os.environ['CB1_KERNEL_SOURCE'])
         source=(kernel/'drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c').read_text()
-        names=('dv_stream_edid','dv_sink_supported','dv_identity_tf',
+        names=('dv_stream_edid','dv_sink_supported','lldv_sink_supported','dv_identity_tf',
                'dv_plane_neutral','amdgpu_dm_dv_atomic_check')
         code=Path(__file__).with_name('amd_dv_atomic.c').read_text().replace(
             '@@FUNCTIONS@@','\n'.join(function(source,name) for name in names))

@@ -28,13 +28,13 @@ struct drm_connector {
     struct {bool is_hdmi,has_hdmi_infoframe;}display_info;
 };
 struct amdgpu_dm_connector {
-    struct drm_connector base; bool dv_standard_property,timing_changed;
+    struct drm_connector base; bool dv_standard_property,lldv_format_property,timing_changed;
 };
 #define to_amdgpu_dm_connector(p) ((struct amdgpu_dm_connector *)(p))
 struct dm_connector_state {
     struct {struct drm_connector *connector; struct{int broadcast_rgb;}hdmi;
-        void *hdr_output_metadata; unsigned max_requested_bpc,colorspace;}base;
-    bool dv_standard,hdr10_deep_color,underscan_enable; int scaling;
+        void *hdr_output_metadata,*hdr10plus_metadata; unsigned max_requested_bpc,colorspace;}base;
+    bool dv_standard,hdr10_deep_color,underscan_enable; unsigned lldv_format; int scaling;
 };
 struct drm_display_mode {int hdisplay,vdisplay,clock,flags,vic,refresh;};
 struct dc_info_packet {u8 hb0,hb1,hb2,sb[32];bool valid;};
@@ -42,14 +42,14 @@ struct dc_stream_state {
     struct {struct dc_edid dc_edid;}*sink;
     struct {enum dce_version dce_version;}*ctx;
     struct {int connector_signal;}*link;
-    bool dv_standard;
+    bool dv_standard,dv_low_latency;
     int signal,output_color_space,dither_option,qs_bit;
     struct {int type,tf;}out_transfer_func;
     struct {int pixel_encoding,display_color_depth,h_addressable,v_addressable;
         int pix_clk_100hz,hdmi_vic,vic;struct{bool DSC;}flags;}timing;
     struct dc_info_packet avi_infopacket,vsp_infopacket;
 };
-static bool dv_standard=true;
+static bool dv_standard=true,dv_lldv=false;
 static int drm_mode_vrefresh(const struct drm_display_mode *m){return m->refresh;}
 static int drm_match_cea_mode(const struct drm_display_mode *m){return m->vic;}
 static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *a,
@@ -149,4 +149,39 @@ int main(void){
     assert(!memcmp(&frozen,&s.vsp_infopacket,sizeof(frozen)));
     state.base.hdr_output_metadata=&state;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+    state.base.hdr_output_metadata=NULL;
+
+    state.dv_standard=false;
+    state.lldv_format=1;
+    c.lldv_format_property=true;
+    sink.dc_edid.raw_edid[139]=1;
+    checksum(sink.dc_edid.raw_edid+128);
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    dv_lldv=true;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+    assert(s.dv_low_latency && s.dv_standard && s.vsp_infopacket.sb[4]==3);
+    assert(s.timing.pixel_encoding==PIXEL_ENCODING_RGB && s.timing.display_color_depth==COLOR_DEPTH_888);
+    assert((s.avi_infopacket.sb[1]>>5)==HDMI_COLORSPACE_YUV422);
+    assert((s.avi_infopacket.sb[2]>>6)==HDMI_COLORIMETRY_EXTENDED);
+    assert(((s.avi_infopacket.sb[3]>>4)&7)==HDMI_EXTENDED_COLORIMETRY_BT2020);
+    assert((s.avi_infopacket.sb[5]>>6)==HDMI_YCC_QUANTIZATION_RANGE_LIMITED);
+    assert(!sum(&s.vsp_infopacket) && !sum(&s.avi_infopacket));
+
+    state.dv_standard=true;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+    state.dv_standard=false;
+    state.base.hdr10plus_metadata=&state;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+    state.base.hdr10plus_metadata=NULL;
+    mode.vic=97;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    mode.vic=95;
+    edid(&sink.dc_edid,1,14,false,true);
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+
+    state.lldv_format=0;
+    state.dv_standard=true;
+    edid(&sink.dc_edid,2,11,false,true);
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0 && !s.dv_low_latency);
+    assert(!memcmp(&frozen,&s.vsp_infopacket,sizeof(frozen)));
 }

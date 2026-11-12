@@ -1316,5 +1316,16 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present, retire and restore Player-Led through GBM.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Retain the accepted framebuffer receipt until scanout."
     }
+  },
+  "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": {
+    "owner": "AMD player-led Dolby Vision experimental transport",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Carry the format request through connector state and native HDMI modesets.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h": "Retain the player-led property and connector format value.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Signal 4:2:2 low latency and protect the packed RGB8 carrier.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h": "Share byte-preserving transport admission with the display state.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Rebuild the DC stream when the DV signalling mode changes.",
+      "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Keep the low-latency identity with the candidate stream."
+    }
   }
 }

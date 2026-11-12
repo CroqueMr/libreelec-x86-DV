@@ -40,7 +40,7 @@ struct dc_stream_state {
  const struct dc_transfer_func *func_shaper;
  const struct dc_3dlut *lut3d_func;
  struct {struct dc_edid dc_edid;}*sink;
- bool dv_standard;int dither_option,output_color_space,signal;
+ bool dv_standard,dv_low_latency;int dither_option,output_color_space,signal;
  struct {int type;}out_transfer_func;
  struct {bool enable_remap;}gamut_remap_matrix;
  struct {bool enable_adjustment;}csc_color_matrix;
@@ -64,7 +64,8 @@ struct dc_plane_state {
  struct {bool enable_adjustment;}input_csc_color_matrix;
 };
 static const struct {long value;}dc_fixpt_one={1};
-struct drm_display_mode {int hdisplay,vdisplay,refresh;};
+struct drm_display_mode {int hdisplay,vdisplay,refresh,clock,vic;};
+static int drm_match_cea_mode(const struct drm_display_mode *m){return m->vic;}
 static int drm_mode_vrefresh(const struct drm_display_mode*m){return m->refresh;}
 struct drm_crtc {int unused;};
 struct drm_crtc_state {
@@ -74,9 +75,9 @@ struct drm_crtc_state {
 struct dm_crtc_state {struct drm_crtc_state base;struct dc_stream_state *stream;
  struct {int state;}freesync_config;enum amdgpu_transfer_function regamma_tf;};
 struct drm_connector {int connector_type;};
-struct drm_connector_state {struct drm_crtc *crtc;void *hdr_output_metadata;
+struct drm_connector_state {struct drm_crtc *crtc;void *hdr_output_metadata,*hdr10plus_metadata;
  unsigned colorspace,max_requested_bpc;struct {int broadcast_rgb;}hdmi;};
-struct dm_connector_state {struct drm_connector_state base;bool dv_standard,hdr10_deep_color,underscan_enable;int scaling;};
+struct dm_connector_state {struct drm_connector_state base;bool dv_standard,hdr10_deep_color,underscan_enable;unsigned lldv_format;int scaling;};
 struct drm_plane {int type;};
 struct drm_framebuffer {struct {unsigned format;}*format;int width,height;};
 struct drm_plane_state {
