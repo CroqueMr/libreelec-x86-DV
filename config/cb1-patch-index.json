@@ -4,6 +4,7 @@
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "HDR10 HDMI depth admission and unavailability reporting.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "HDR10 HDMI depth admission and unavailability reporting.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Refuse an incompatible circuit before opening a video stream.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "HDR10 HDMI depth admission and unavailability reporting.",
       "xbmc/settings/SettingConditions.cpp": "HDR10 HDMI depth admission and unavailability reporting.",
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "HDR10 HDMI depth admission and unavailability reporting.",

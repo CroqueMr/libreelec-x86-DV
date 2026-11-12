@@ -67,6 +67,55 @@ index 17d7eb6..97b905a 100644
        case DVBRIDGE::OutputReason::NoGPUProcessing: return "gpu-processing-unavailable";
        case DVBRIDGE::OutputReason::SourceIneligible: return "source-ineligible";
        case DVBRIDGE::OutputReason::TVProfileRequired: return "tv-profile-required";
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+index cfcb899..1e0f77d 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -1149,6 +1149,8 @@ void CVideoPlayer::OpenDefaultStreams(bool reset)
+       valid = true;
+       break;
+     }
++    if (m_bAbortRequest)
++      return;
+   }
+   if (!valid)
+   {
+@@ -1553,6 +1555,8 @@ void CVideoPlayer::Prepare()
+ 
+   if (!discStateRestored)
+     OpenDefaultStreams();
++  if (m_bAbortRequest)
++    return;
+ 
+   // Update stack and offsets in fileItem (for Blurays/DVDs)
+   m_pInputStream->UpdateStack(fileItem);
+@@ -4584,6 +4588,26 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+   if (hint.flags & AV_DISPOSITION_ATTACHED_PIC)
+     return false;
+ 
++#ifdef HAVE_DVBRIDGE
++  if (m_CurrentVideo.id < 0 && hint.stereo_mode.empty() &&
++      (hint.dovi.dv_profile || hint.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION))
++  {
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++        CServiceBroker::GetWinSystem());
++    const auto mode = DVBRIDGE::FrameOutputSettings().Policy().mode;
++    if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
++        window->GetDVOutputCapabilities(nullptr, true).HDR10DepthLimited())
++    {
++      constexpr auto reason = DVBRIDGE::OutputReason::HDR10LinkDepthTooLow;
++      CLog::Log(LOGERROR, "Dolby Vision playback unavailable: profile={} reason={}",
++                hint.dovi.dv_profile, static_cast<int>(reason));
++      DVBRIDGE::PlaybackNotification::RenderingUnavailable(reason);
++      m_bAbortRequest = true;
++      return false;
++    }
++  }
++#endif
++
+   // set desired refresh rate
+   if (m_CurrentVideo.id < 0 && m_playerOptions.fullscreen &&
+       CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot() && hint.fpsrate != 0 &&
 diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
 index 3552aba..dba4ddf 100644
 --- a/xbmc/settings/SettingConditions.cpp
@@ -137,7 +186,7 @@ index 56d2610..c81d932 100644
    bool IsHdmiFrlLink() const;
    //! True if >8 bit video in the active HDMI mode does not fit as RGB, but does as YCbCr
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-index 91ba053..2873be7 100644
+index 91ba053..3cac8f4 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 @@ -416,6 +416,9 @@ void CWinSystemGbmGLESContext::PresentRender(bool rendered, bool videoLayer)
