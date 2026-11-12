@@ -346,7 +346,7 @@ index e4950aa..0fc38be 100644
      std::lock_guard<std::mutex> lock(m_mutex);
      m_nativeActive = true;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-index 46fd28f..7655967 100644
+index 46fd28f..e791814 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 @@ -1,5 +1,6 @@
@@ -472,8 +472,8 @@ index 46fd28f..7655967 100644
 +  PlayerLedCpu(pl_gpu gpu, gbm_device* device) : gpu(gpu), device(device)
 +  {
 +    const auto format = pl_find_fmt(gpu, PL_FMT_UNORM, 4, 8, 8, PL_FMT_CAP_RENDERABLE);
-+    if (!format || gpu->limits.max_ssbo_size < CB1_LLDV_CPU_HOST_BYTES ||
-+        gpu->limits.max_mapped_size < CB1_LLDV_CPU_HOST_BYTES)
++    if (!format || gpu->limits.max_ssbo_size < size_t(WIDTH) * HEIGHT * 16 ||
++        gpu->limits.max_mapped_size < size_t(WIDTH) * HEIGHT * 16)
 +      return;
 +    pl_tex_params params{};
 +    params.w = WIDTH;
@@ -523,7 +523,7 @@ index 46fd28f..7655967 100644
 +      if (!slot.host)
 +      {
 +        pl_buf_params params{};
-+        params.size = CB1_LLDV_CPU_HOST_BYTES;
++        params.size = size_t(WIDTH) * HEIGHT * 16;
 +        params.host_mapped = params.storable = true;
 +        params.memory_type = PL_BUF_MEM_HOST;
 +        slot.host = pl_buf_create(gpu, &params);
@@ -764,7 +764,7 @@ index 46fd28f..7655967 100644
    const bool prefetchEnabled = allowAsync && allowPacked && m_context &&
        m_context->AsyncPreparation(base.binding.stream) &&
        mode == DVBRIDGE_MODE_ENHANCED_DV &&
-@@ -2359,6 +2647,283 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
+@@ -2359,6 +2647,285 @@ bool CDVBridgeGLES::Pack(unsigned int framebuffer, int width, int height, bool f
    return m_packed || Failure("composition-pack");
  }
  
@@ -928,6 +928,8 @@ index 46fd28f..7655967 100644
 +  const auto priming = [&] {
 +    return cpu.primeUntil && std::chrono::steady_clock::now() < *cpu.primeUntil;
 +  };
++  // The GUI selects the next source picture. Leave it running while the FIFO fills.
++  if (cpu.queue.size() < 2 && priming()) return {};
 +  const auto ready = [&] {
 +    return slot.packed && (!priming() ||
 +        (cpu.queue.size() >= 2 && cpu.slots[cpu.queue[1]].packed));
@@ -1048,7 +1050,7 @@ index 46fd28f..7655967 100644
  bool CDVBridgeGLES::ResolveHDR10(bool limited)
  {
    if (m_hdr10 && m_prepared && m_direct)
-@@ -2389,7 +2954,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
+@@ -2389,7 +2956,8 @@ bool CDVBridgeGLES::ResolveHDR10(bool limited)
  
  unsigned int CDVBridgeGLES::GetPQFramebuffer()
  {
@@ -1058,7 +1060,7 @@ index 46fd28f..7655967 100644
    if (!texture)
      return 0;
    GLint previous;
-@@ -2404,12 +2970,25 @@ unsigned int CDVBridgeGLES::GetPQFramebuffer()
+@@ -2404,12 +2972,25 @@ unsigned int CDVBridgeGLES::GetPQFramebuffer()
    return valid ? m_framebuffer : 0;
  }
  

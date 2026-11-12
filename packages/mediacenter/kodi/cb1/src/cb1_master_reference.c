@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_master_reference.h"
-#include "cb1_lldv_cpu.h"
 #include "dvbridge_placebo.h"
 #include "dvbridge_metadata_bounds.h"
 #include "dvbridge_metadata.h"
@@ -133,7 +132,7 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     if(host){
         if(!finish || fmt->type!=PL_FMT_UNORM || fmt->component_depth[0]!=8 ||
            out->w!=3840 || out->h!=2160 || !host->data || !host->params.storable ||
-           host->params.size<CB1_LLDV_CPU_HOST_BYTES)
+           host->params.size<3840ULL*2160*16)
             return CB1_MASTER_UNSUPPORTED;
     }else if(fmt->type!=PL_FMT_FLOAT || fmt->component_depth[0]!=32 ||
              fmt->component_depth[1]!=32 || fmt->component_depth[2]!=32){
@@ -156,7 +155,7 @@ enum cb1_master_status cb1_master_reconstruct(pl_renderer renderer,
     raw.contract=2;
     struct pl_render_params params=pl_render_default_params;
     params.cb1_dovi_reference=&raw;
-#if defined(PL_HAVE_CB1_LLDV_HOST) && PL_HAVE_CB1_LLDV_HOST == 2
+#ifdef PL_HAVE_CB1_LLDV_HOST
     params.cb1_lldv_host=host;
 #else
     if(host)return CB1_MASTER_UNSUPPORTED;

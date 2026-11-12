@@ -57,7 +57,7 @@
     ]
   },
   "patches": {
-    "patches/libplacebo/libplacebo-9919-player-led-host.patch": "bff99bb1d242250bcc48a0bfd7537da00e7f71238aa8d90a58d6e43e1ee4a4d7",
+    "patches/libplacebo/libplacebo-9919-player-led-host.patch": "a6de071a3a0b8d9e4ce0e4e2dcb31dc5124838aaaf33948adc903346019cfb24",
     "patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch": "9fa035e84702ca1ee0db82bfcbfc1de029f7a2ca149b36950cf209cbc73aedc0",
     "patches/ffmpeg/ffmpeg-9900-01-libavformat__isom_tags.c.patch": "c86fe701ec00bb74fee4b7d8e87133d2d7cb43ce3d217f3ec128f8bcc9487fbb",
     "patches/ffmpeg/ffmpeg-9900-02-libavutil__dovi_meta.h.patch": "953cfb01339263c02c7932eb67e30ea6603613a1800fa4041f46b5f3ffb10fe0",

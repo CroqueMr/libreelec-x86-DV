@@ -12,12 +12,9 @@ extern "C" {
 
 struct cb1_lldv_cpu;
 
-#define CB1_LLDV_CPU_HOST_BYTES (3840ULL * 2160 * 3 * sizeof(float))
-
 /* The caller owns GPU completion, DMA-BUF synchronization and buffer lifetime.
- * Each row stores 3840 RGB float pixels in blocks of eight R, eight G and eight B.
- * The output is a linear 4-byte carrier with a 32-byte-aligned pointer and byte
- * stride. NULL matrix is BT.2020. */
+ * Input is a complete 3840x2160 RGBA32F image. The output is a linear 4-byte
+ * carrier with a 32-byte-aligned pointer and byte stride. NULL matrix is BT.2020. */
 struct cb1_lldv_cpu_frame {
     const float *linear;
     uint32_t *carrier;

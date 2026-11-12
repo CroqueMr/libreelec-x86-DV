@@ -32,7 +32,7 @@ def main():
 
     out.mkdir(parents=True)
     shutil.copytree(args.libplacebo_source, placebo, ignore=shutil.ignore_patterns(".git"))
-    if "#define PL_HAVE_CB1_LLDV_HOST 2" not in (placebo / "src/include/libplacebo/renderer.h").read_text():
+    if "PL_HAVE_CB1_LLDV_HOST" not in (placebo / "src/include/libplacebo/renderer.h").read_text():
         parser.error("libplacebo source must contain the CB1 player-led host patch")
     run("meson", "setup", placebo_build, placebo, "--buildtype=debugoptimized",
         "-Ddemos=false", "-Dtests=false", "-Dvulkan=disabled", "-Dopengl=enabled",
