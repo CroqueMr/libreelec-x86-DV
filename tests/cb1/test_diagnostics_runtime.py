@@ -139,6 +139,7 @@ struct CDVBridgeGLES {
  std::vector<int>m_rawELCache{1,2};
  uint64_t m_diagnosticStream=7,m_prepares=0,m_directFrames=0,m_presentations=120,m_failedPresentations=0;
  uint64_t m_lastSummary=0,m_lastReported=0,m_rawELImports=0,m_rawELHits=0;
+ uint64_t m_lastPresentedSourcePicture=0,m_nonadvancingSource=0,m_sourceGaps=0;
  struct Binding{uint64_t stream=7,picture=31,revision=11;}m_pendingBinding;
  struct{uint64_t revision=13;}m_requested;
  int m_effectiveMode=8;
@@ -147,7 +148,7 @@ struct CDVBridgeGLES {
  unsigned m_hdr10plusSubmits=0,m_pendingHDR10Fallback=6;std::array<double,4>m_hdr10plusLight{};
  @MEMBER@
  void ClearFELPrefetch(){}
- void Summary(const char*);void CountPresentation(bool,uint64_t=0);void BeginDiagnosticStream(uint64_t);
+ void Summary(const char*);void CountPresentation(bool,uint64_t=0,uint64_t=0);void BeginDiagnosticStream(uint64_t);
  void Reset();void Cancel();~CDVBridgeGLES();
 };
 namespace DVBRIDGE{struct StreamTelemetry{static void ClearOutput(){}};}
@@ -171,7 +172,7 @@ int main(){
    r.m_presentations=119;r.m_prepared=false;testNow=30000;r.CountPresentation(true,7);r.m_prepared=true;
    assert(CLog::lines.size()==++count && "Actual renderer periodic summary must survive full Normal/Progress ring");
    has(CLog::lines.back(),"advanced renderer summary: presented=120");
-   has(CLog::lines.back(),"counter_stream=7 stream=7 picture=31 revision=11 policy=13");
+   has(CLog::lines.back(),"counter_stream=7 source_picture=0 nonadvancing_source=0 source_gaps=0 stream=7 picture=31 revision=11 policy=13");
    assert(!DiagnosticLog(LOGINFO,"Normal still full") && CLog::lines.size()==count);
    r.CountPresentation(true,6);
    assert(r.m_presentations==120 && CLog::lines.size()==count); // A retiring old stream is not new progress.
@@ -214,10 +215,13 @@ int main(){
   CDVBridgeGLES r;r.Reset();auto count=CLog::lines.size();
   ObserveDiagnostic(9,1,17,19,"successor",true,false);r.BeginDiagnosticStream(9);
   assert(CLog::lines.size()==count+1);has(CLog::lines.back(),"renderer stream-end:");
-  has(CLog::lines.back(),"counter_stream=7 stream=9 picture=1 revision=17 policy=19");
+  has(CLog::lines.back(),"counter_stream=7 source_picture=0 nonadvancing_source=0 source_gaps=0 stream=9 picture=1 revision=17 policy=19");
   assert(r.m_diagnosticStream==9&&r.m_presentations==0&&r.m_failedPresentations==0&&r.m_failures.Count()==0);
   r.Reset();assert(CLog::lines.size()==count+2); // New domain cannot reuse prior reset key.
   r.BeginDiagnosticStream(0);r.BeginDiagnosticStream(9);assert(CLog::lines.size()==count+2);
+  r.CountPresentation(true,9,20);r.CountPresentation(true,9,20);r.CountPresentation(true,9,23);
+  r.CountPresentation(true,7,900);
+  assert(r.m_lastPresentedSourcePicture==23&&r.m_nonadvancingSource==1&&r.m_sourceGaps==2);
  }
  // All counter records retain the one formatter's byte/newline/suffix limits.
  std::string longEvent(10000,'x');longEvent[1]='\n';longEvent[2]='\r';longEvent[3]='\0';

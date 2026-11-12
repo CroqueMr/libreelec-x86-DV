@@ -98,14 +98,14 @@ bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
 struct CDVBridgeGLES::PlayerLedCpu {
   DVBRIDGE::SourceBinding source;
-  uint64_t revision{};
+  uint64_t generation{}, revision{};
   bool Backpressured() const {return false;}
 };
 CDVBridgeGLES::CDVBridgeGLES(bool playerLed):m_playerLed(playerLed){}
 CDVBridgeGLES::~CDVBridgeGLES()=default;
 bool CDVBridgeGLES::Failure(const char*){return false;}
 void CDVBridgeGLES::BeginDiagnosticStream(uint64_t){}
-void CDVBridgeGLES::CountPresentation(bool,uint64_t){}
+void CDVBridgeGLES::CountPresentation(bool,uint64_t,uint64_t){}
 void CDVBridgeGLES::ReportHDR10Plus(){}
 bool CDVBridgeGLES::Presented(bool){return false;}
 bool CDVBridgeGLES::PollReady(){return m_prepared;}

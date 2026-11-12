@@ -145,7 +145,7 @@ struct CDVBridgeGLES {
  bool m_playerLed{};
  struct CpuQueue {
   Binding source;
-  uint64_t revision{};
+  uint64_t generation{}, revision{};
   bool Backpressured() const {return false;}
  };
  std::unique_ptr<CpuQueue> m_playerLedCpu;
@@ -161,7 +161,7 @@ struct CDVBridgeGLES {
   bool Close(){++closed;gl=false;return true;}
  };
  enum class FrameStatus {Ready,Pending,Busy,Failed,Reused,Unsupported};
- struct Layer {Binding binding;double pts=0;bool lease=true;int scalingMethod=0;struct {unsigned profile=8;}sourceInfo;};
+ struct Layer {Binding binding;double pts=0;bool lease=true;int scalingMethod=0;struct {unsigned profile=8; uint64_t informationGeneration{}; }sourceInfo;};
  bool m_submissionAsync=false,m_asyncEligible=false,m_hdr10plusSubmits=false;
  struct {bool asyncEligible=false;}m_submission;
  pl_renderer m_renderer=&rendererToken;pl_opengl m_gl=nullptr;pl_log m_log=nullptr;void*m_packer=&packer;pl_tex m_scanout=nullptr;bool m_pending=false,m_prepared=false,m_live=true,m_hdr10=false;unsigned m_outputBits=0,m_scanoutFramebuffer=0;Binding m_failedIdentity{};

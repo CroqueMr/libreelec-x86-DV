@@ -165,6 +165,57 @@ struct CDataCacheCore {
 ''',
         }, ('-I' + str(ROOT / 'CB1/src'), '-I' + str(prefix / 'include')))
 
+    def test_reuses_the_queued_picture_without_hiding_a_new_policy(self):
+        renderer = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        begin = renderer.index('  if (m_playerLedCpu &&\n      (!m_playerLedCpuDevice')
+        block = renderer[begin:renderer.index('  const auto retired', begin)]
+        run(self, {'test.cpp': r'''
+#include <cassert>
+#include <cstdint>
+#include <memory>
+struct Binding
+{
+  uint64_t stream=3, picture=17, revision=2;
+  bool operator==(const Binding&) const = default;
+};
+struct Layer
+{
+  Binding binding;
+  struct {uint64_t informationGeneration=4;} sourceInfo;
+};
+enum class FrameStatus {Busy, Reused, Ready};
+struct Cpu
+{
+  Binding source;
+  uint64_t generation=4, revision=8;
+  bool Backpressured() const { return true; }
+};
+struct Renderer
+{
+  std::unique_ptr<Cpu> m_playerLedCpu=std::make_unique<Cpu>();
+  bool m_playerLedCpuDevice=true;
+  FrameStatus Prepare(const Layer& base, uint64_t revision, bool allowPacked)
+  {
+    BLOCK
+    return FrameStatus::Ready;
+  }
+};
+int main()
+{
+  Renderer r;
+  Layer layer;
+  assert(r.Prepare(layer,8,true)==FrameStatus::Reused);
+  assert(r.Prepare(layer,8,false)==FrameStatus::Busy);
+  ++layer.binding.picture;
+  assert(r.Prepare(layer,8,true)==FrameStatus::Busy);
+  --layer.binding.picture;
+  ++layer.sourceInfo.informationGeneration;
+  assert(r.Prepare(layer,8,true)==FrameStatus::Busy);
+  assert(r.Prepare(layer,9,true)==FrameStatus::Ready);
+  assert(!r.m_playerLedCpu);
+}
+'''.replace('BLOCK', block)})
+
     def test_seek_retires_only_unsubmitted_carriers(self):
         renderer = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         current = body(renderer, 'bool CDVBridgeGLES::PlayerLedCpuCurrent(')
