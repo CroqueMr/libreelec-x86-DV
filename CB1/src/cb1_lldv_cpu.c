@@ -126,16 +126,17 @@ static CB1_AVX2 void pack_rows(const struct cb1_lldv_cpu *cpu, unsigned thread)
                 __m256 cv=_mm256_fmadd_ps(range(_mm256_blend_ps(cb,cr,0xaa),-.5,.5),_mm256_set1_ps(3584),_mm256_set1_ps(2048));
                 __m256i Y=_mm256_sll_epi32(_mm256_cvttps_epi32(_mm256_fmadd_ps(yv,scale,half)),pad);
                 __m256i C=_mm256_sll_epi32(_mm256_cvttps_epi32(_mm256_fmadd_ps(cv,scale,half)),pad);
-                __m256i cy=_mm256_or_si256(_mm256_srli_epi32(C,4),_mm256_slli_epi32(_mm256_srli_epi32(Y,4),8));
-                cy=_mm256_or_si256(cy,_mm256_slli_epi32(_mm256_and_si256(C,_mm256_set1_epi32(15)),20));
-                cy=_mm256_or_si256(cy,_mm256_slli_epi32(_mm256_and_si256(Y,_mm256_set1_epi32(15)),16));
-                if(frame->xrgb){
-                    const __m256i byte=_mm256_set1_epi32(255);
-                    cy=_mm256_or_si256(_mm256_and_si256(cy,_mm256_set1_epi32(0xff00)),
-                        _mm256_or_si256(_mm256_slli_epi32(_mm256_and_si256(cy,byte),16),
-                                       _mm256_and_si256(_mm256_srli_epi32(cy,16),byte)));
-                }
-                _mm256_stream_si256((void*)(out+x+k),_mm256_or_si256(cy,_mm256_set1_epi32(0xff000000)));
+                // Assemble the selected byte order once, including both low nibbles.
+                const __m256i nibble=_mm256_set1_epi32(15);
+                const __m256i low=_mm256_or_si256(
+                    _mm256_slli_epi32(_mm256_and_si256(C,nibble),4),_mm256_and_si256(Y,nibble));
+                const __m256i high_c=_mm256_srli_epi32(C,4);
+                const __m256i high_y=_mm256_slli_epi32(_mm256_srli_epi32(Y,4),8);
+                const __m256i red_blue=frame->xrgb ?
+                    _mm256_or_si256(low,_mm256_slli_epi32(high_c,16)) :
+                    _mm256_or_si256(high_c,_mm256_slli_epi32(low,16));
+                const __m256i alpha_y=_mm256_or_si256(high_y,_mm256_set1_epi32(0xff000000));
+                _mm256_stream_si256((void*)(out+x+k),_mm256_or_si256(red_blue,alpha_y));
             }
             rline[0]=rline[CHUNK];gline[0]=gline[CHUNK];bline[0]=bline[CHUNK];
         }
