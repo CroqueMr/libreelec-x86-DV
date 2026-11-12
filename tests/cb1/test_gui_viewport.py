@@ -30,6 +30,8 @@ constexpr int GL_VIEWPORT=5,GL_FRAMEBUFFER_BINDING=6;
 constexpr int LOGERROR=1,LOGDEBUG=2,LOGINFO=3;
 std::array<int,4> viewport{},scissor{};
 unsigned queries=0;
+constexpr int GL_SCISSOR_TEST=7;
+void glEnable(int cap){assert(cap==GL_SCISSOR_TEST);}
 void glGetIntegerv(int key,int* out){++queries;if(key==GL_VIEWPORT)std::copy(viewport.begin(),viewport.end(),out);else *out=71;}
 namespace DVBRIDGE {
 @INTERVAL@;

@@ -3983,7 +3983,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
      m_guiFbo.Cleanup();
      m_guiFboWidth = 0;
      m_guiFboHeight = 0;
-@@ -234,8 +839,66 @@
+@@ -234,8 +839,68 @@
    return m_guiCompositing;
  }
  
@@ -4034,6 +4034,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    }
 +    CRenderSystemGLES::SetViewPort(viewport);
 +    const auto& context = GetGfxContext();
++    // libplacebo raster passes can leave the GUI's scissor test disabled.
++    glEnable(GL_SCISSOR_TEST);
 +    CRenderSystemGLES::SetScissors(context.StereoCorrection(context.GetScissors()));
 +    if (report)
 +    {
@@ -4050,7 +4052,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (!m_guiCompositing)
      return false;
  
-@@ -274,24 +937,43 @@
+@@ -274,24 +939,43 @@
  
      m_guiFboWidth = width;
      m_guiFboHeight = height;
@@ -4103,7 +4105,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // Clear only when the FBO holds stale content; idle frames are already clean.
    if (!m_guiFboClean)
-@@ -300,6 +982,11 @@
+@@ -300,6 +984,11 @@
      glClear(GL_COLOR_BUFFER_BIT);
      m_guiFboClean = true;
    }
@@ -4115,7 +4117,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    return true;
  }
-@@ -307,7 +994,16 @@
+@@ -307,7 +996,16 @@
  void CWinSystemGbmGLESContext::EndGuiComposite()
  {
    if (m_guiWillRender)
@@ -4132,7 +4134,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // When the GUI render is skipped this frame, Flip(hasRendered=false, ...)
    // will skip eglSwapBuffers and the back-buffer contents never reach the
-@@ -340,17 +1036,32 @@
+@@ -340,17 +1038,32 @@
    // m_guiFboClean meaning depends on context:
    //   single-plane: "FBO is empty/clean" (no composite work needed)
    //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
@@ -4168,7 +4170,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    // D2P with no new render: the cached PQ frame is already in the GUI plane
    // back buffer from the prior composite. Skip the shader pass entirely; Flip
-@@ -360,6 +1071,35 @@
+@@ -360,6 +1073,35 @@
    if (!m_guiWillRender && m_DRM && m_DRM->GetVideoPlane() != nullptr &&
        m_DRM->GetGuiPlane() != nullptr)
      return;
@@ -4204,7 +4206,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    glActiveTexture(GL_TEXTURE0);
    glBindTexture(GL_TEXTURE_2D, m_guiFbo.Texture());
-@@ -380,11 +1120,21 @@
+@@ -380,11 +1122,21 @@
    float w = static_cast<float>(m_guiFboWidth);
    float h = static_cast<float>(m_guiFboHeight);
  
@@ -4228,7 +4230,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    GLint posLoc = m_compositeShader->GetPosLoc();
    GLint texLoc = m_compositeShader->GetTexLoc();
  
-@@ -397,13 +1147,1906 @@
+@@ -397,13 +1149,1906 @@
    glEnableVertexAttribArray(posLoc);
    glEnableVertexAttribArray(texLoc);
  
@@ -6138,7 +6140,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  bool CWinSystemGbmGLESContext::CreateContext()
  {
-@@ -417,5 +3060,16 @@
+@@ -417,5 +3062,16 @@
      CLog::Log(LOGERROR, "EGL context creation failed");
      return false;
    }
