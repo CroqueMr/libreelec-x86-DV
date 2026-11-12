@@ -86,6 +86,11 @@ int main() {
  assert(!disabled(2,"dvbridge.playback") && !disabled(5,"dvbridge.playback"));
  preferences.peak=preferences.expertPeak=1000;
  assert(!disabled());
+ // The current HDMI ceiling takes precedence over an earlier presented frame.
+ window.available.hdr10MaxBpc=8;
+ assert(disabled(4) && disabled(5) && !disabled());
+ window.available.hdr10MaxBpc=10;
+ assert(!disabled(4) && !disabled(5));
  // A prior failed atomic commit does not remove physically available transports.
  frame.capabilities.nativeDV=false;frame.capabilities.hdr10=false;
  assert(!disabled());

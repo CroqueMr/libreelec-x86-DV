@@ -172,7 +172,7 @@ index 91ba053..2873be7 100644
  
 +void CWinSystemGbmGLESContext::RefreshHDR10LinkDepth()
 +{
-+  const auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
 +  if (!connector || connector->GetType().rfind("HDMI", 0) != 0 ||
 +      !connector->SupportsProperty("max bpc"))
 +  {
