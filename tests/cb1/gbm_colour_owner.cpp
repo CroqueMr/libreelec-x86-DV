@@ -95,6 +95,10 @@ struct CWinSystemGbm {
 int main() {
  CWinSystemGbm w;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);
  w.m_defaultMaxBpc=12;
+ drm->connector.cache["max bpc"]=8;
+ assert(w.GetEffectiveMaxBpc()==8 && w.GetEffectiveMaxBpc(12)==12);
+ w.m_maxBpc=1;assert(w.GetEffectiveMaxBpc(12)==8);
+ w.m_maxBpc=0;drm->connector.cache["max bpc"]=12;
  drm->connector.cache["Colorspace"]=0;
  drm->connector.enums["Colorspace"]={{"Default",0},{"BT2020_RGB",1},{"BT2020_YCC",2},{"BT709_YCC",3}};
  VideoPicture picture;

@@ -38,6 +38,8 @@ def native_owner_program(root):
     constants = source[source.index("constexpr const char* BROADCAST_RGB"):source.index("// These map")]+source[source.index("constexpr auto ColorimetryMap"):source.index("} // namespace")].replace("constexpr auto ColorimetryMap", "const auto ColorimetryMap")
     enums = header[header.index("enum class ColorRange"):header.index("class CWinSystemGbm :")]
     members = header[header.index("  static void ApplyColorRangeSetting"):header.index("  // Claim no 3D")]
+    depth = re.search(r"^  uint64_t GetEffectiveMaxBpc.*;", header, re.M)[0]
+    members = depth + "\n" + members
     program = (Path(__file__).with_name("gbm_colour_owner.cpp").read_text()
                .replace("// NATIVE_CONSTANTS", constants + enums)
                .replace("// NATIVE_MEMBERS", members)

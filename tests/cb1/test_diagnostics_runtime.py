@@ -677,6 +677,7 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   bool CreateNewWindow(const char*,bool,RESOLUTION_INFO&) {return true;}
   bool SetFullScreen(bool,RESOLUTION_INFO&,bool);
   void RefreshDVOutputCapabilities();
+  void RefreshHDR10LinkDepth() {}
 };
 ''' + refresh + '\n' + switch + r'''
 int main() {

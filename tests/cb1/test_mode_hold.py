@@ -235,6 +235,7 @@ struct Window {
  Resource audio;std::vector<Resource*> m_resources{&audio};
  void OnLostDevice(){if(!m_dispReset){m_dispReset=true;++lost;}}
  void PresentFrame(bool,bool){}
+ void RefreshHDR10LinkDepth(){}
  bool HasPendingDVOutputSurface(){return pending;}
  void announce(bool transport) ANNOUNCE
  void complete(bool accepted,bool transport) COMPLETE
