@@ -43,6 +43,8 @@ constexpr int GL_VIEWPORT=1,GL_FRAMEBUFFER_BINDING=2,GL_TEXTURE_2D=3,GL_RGBA=4,G
 constexpr int LOGERROR=0,LOGDEBUG=1,LOGINFO=2,DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_ENHANCED_DV=4;
 constexpr int DIRTYREGION_SOLVER_FILL_VIEWPORT_ALWAYS=0,DIRTYREGION_SOLVER_FILL_VIEWPORT_ON_CHANGE=3;
 unsigned binds=0,clears=0;
+constexpr int GL_SCISSOR_TEST=7;
+void glEnable(int cap){assert(cap==GL_SCISSOR_TEST);}
 void glGetIntegerv(int,int*){}void glClearColor(float,float,float,float){}void glClear(int){++clears;}
 struct CLog{template<class...T>static void Log(T...){}};
 namespace KODI::RENDERING::CAPTURE {enum class CaptureContent {VIDEO,COMPOSITE};}

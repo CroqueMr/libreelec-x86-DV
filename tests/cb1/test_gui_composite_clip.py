@@ -32,11 +32,14 @@ struct CRect {
 };
 CRect rawClip{0,276,3840,1884};
 bool bottomCleared=false;
+bool scissorEnabled=false; // libplacebo's raster pass leaves it disabled.
 constexpr int GL_TEXTURE_2D=1,GL_RGBA=2,GL_COLOR_BUFFER_BIT=4,LOGERROR=0,LOGDEBUG=1,LOGINFO=2;
-constexpr int GL_VIEWPORT=5,GL_FRAMEBUFFER_BINDING=6;
+constexpr int GL_VIEWPORT=5,GL_FRAMEBUFFER_BINDING=6,GL_SCISSOR_TEST=7;
+void glEnable(int cap) {assert(cap==GL_SCISSOR_TEST);scissorEnabled=true;}
+bool drawsAt(int x,int y) {return !scissorEnabled || rawClip.contains(x,y);}
 void glGetIntegerv(int,int*){assert(false && "Disabled diagnostics queried GL");}
 void glClearColor(float,float,float,float) {}
-void glClear(int) {bottomCleared=rawClip.contains(1900,1950);}
+void glClear(int) {bottomCleared=drawsAt(1900,1950);}
 struct CLog {template<class... T> static void Log(T...) {}};
 struct CRenderSystemGLES {
   inline static unsigned m_GUIElementCount=0;
@@ -98,25 +101,27 @@ int main() {
   // A requested Kodi clip is preserved, not replaced by an unconditional full-screen clip.
   CWinSystemGbmGLESContext clipped;
   clipped.context.scissors={100,200,3000,2000};
+  scissorEnabled=false;
   assert(clipped.BeginGuiComposite(true));
-  assert(rawClip.contains(1900,1950) && !rawClip.contains(50,1950));
+  assert(drawsAt(1900,1950) && !drawsAt(50,1950) && "GUI text escapes Kodi's clip");
   CWinSystemGbmGLESContext hdr;
   hdr.m_dvState.captured=false;hdr.m_hdrConversion=true;
-  rawClip={0,276,3840,1884};bottomCleared=false;
-  assert(hdr.BeginGuiComposite(true) && bottomCleared);
+  rawClip={0,276,3840,1884};bottomCleared=false;scissorEnabled=false;
+  assert(hdr.BeginGuiComposite(true) && bottomCleared && scissorEnabled);
   // Vanilla compositing retains its existing clip; no CB1 state is owned here.
   CWinSystemGbmGLESContext vanilla;
   vanilla.m_dvState.captured=false;rawClip={100,200,3000,1800};
-  assert(vanilla.BeginGuiComposite(true));
+  scissorEnabled=false;
+  assert(vanilla.BeginGuiComposite(true) && !scissorEnabled);
   assert(rawClip.contains(200,300) && !rawClip.contains(1900,1950));
   // No GUI drawing leaves the active framebuffer's clip alone.
-  assert(master.BeginGuiComposite(false));
+  assert(master.BeginGuiComposite(false) && !scissorEnabled);
   assert(!rawClip.contains(1900,1950));
   // Failure to bind the GUI FBO falls through to native GUI drawing, which
   // still needs Kodi's clip; the failed pass must not clear any framebuffer.
   master.m_guiFbo.begin=false;
   bottomCleared=false;
-  assert(!master.BeginGuiComposite(true) && rawClip.contains(1900,1950) && !bottomCleared);
+  assert(!master.BeginGuiComposite(true) && scissorEnabled && rawClip.contains(1900,1950) && !bottomCleared);
 }
 '''.replace('@@BEGIN@@', begin)
         with tempfile.TemporaryDirectory() as temporary:
