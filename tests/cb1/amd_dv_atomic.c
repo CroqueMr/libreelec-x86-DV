@@ -99,7 +99,7 @@ struct drm_atomic_commit {struct drm_crtc *crtc;struct drm_connector *connector;
 static int hweight32(unsigned n){return __builtin_popcount(n);}
 @@FUNCTIONS@@
 static void checksum(u8*p){u8 n=0;p[127]=0;for(unsigned i=0;i<127;i++)n+=p[i];p[127]=-n;}
-int main(void){
+static void check_transport(bool low_latency){
  struct dc display={0};struct dc_context ctx={&display};
  struct drm_crtc crtc={0};struct drm_connector connector={DRM_MODE_CONNECTOR_HDMIA};
  struct drm_plane plane={DRM_PLANE_TYPE_PRIMARY};
@@ -113,20 +113,20 @@ int main(void){
   .src_w=3840u<<16,.src_h=2160u<<16,.crtc_w=3840,.crtc_h=2160},
   .dc_state=&dp,.hdr_mult=AMDGPU_HDR_MULT_DEFAULT};
  typeof(*((struct dc_stream_state*)0)->sink)sink={0};
- struct dc_stream_state stream={.ctx=&ctx,.sink=&sink,.dv_standard=true,.dither_option=DITHER_OPTION_DISABLE,
+ struct dc_stream_state stream={.ctx=&ctx,.sink=&sink,.dv_standard=true,.dv_low_latency=low_latency,.dither_option=DITHER_OPTION_DISABLE,
   .output_color_space=COLOR_SPACE_SRGB,.signal=SIGNAL_TYPE_HDMI_TYPE_A,
   .out_transfer_func={TF_TYPE_BYPASS},.avi_infopacket={true},.vsp_infopacket={true},
   .timing={.timing_3d_format=TIMING_3D_FORMAT_NONE,.h_addressable=3840,.v_addressable=2160,
     .pixel_encoding=PIXEL_ENCODING_RGB,.display_color_depth=COLOR_DEPTH_888},
   .src={0,0,3840,2160},.dst={0,0,3840,2160}};
- struct dm_crtc_state cs={.base={.active=true,.mode={3840,2160,30},.connector_mask=1,.plane_mask=1},.stream=&stream};
+ struct dm_crtc_state cs={.base={.active=true,.mode={3840,2160,30,297000,95},.connector_mask=1,.plane_mask=1},.stream=&stream};
  struct dm_connector_state con={.base={.crtc=&crtc,.max_requested_bpc=8,.hdmi={DRM_HDMI_BROADCAST_RGB_FULL}},
-  .dv_standard=true,.scaling=RMX_OFF};
+  .dv_standard=!low_latency,.lldv_format=low_latency,.scaling=RMX_OFF};
  struct drm_atomic_commit atomic={&crtc,&connector,&plane,&cs.base,&con.base,&ps.base};
  const u8 magic[]={0,255,255,255,255,255,255,0};
  memcpy(sink.dc_edid.raw_edid,magic,8);sink.dc_edid.length=256;sink.dc_edid.raw_edid[126]=1;
  u8*b=sink.dc_edid.raw_edid+128;b[0]=2;b[1]=3;b[2]=16;b[4]=0xeb;
- b[5]=1;b[6]=0x46;b[7]=0xd0;b[9]=(2<<5)|2;b[11]=2;
+ b[5]=1;b[6]=0x46;b[7]=0xd0;b[9]=(2<<5)|2;b[11]=low_latency?3:2;
  checksum(sink.dc_edid.raw_edid);checksum(b);
  assert(dv_plane_neutral(&ps.base,&cs.base.mode));assert(!amdgpu_dm_dv_atomic_check(&atomic));
  unsigned missed=0;
@@ -138,6 +138,12 @@ int main(void){
  REJECT(plane.type,DRM_PLANE_TYPE_CURSOR);REJECT(stream.timing.flags.DSC,true);
  REJECT(stream.timing.display_color_depth,COLOR_DEPTH_888+1);REJECT(stream.gamut_remap_matrix.enable_remap,true);
  REJECT(con.hdr10_deep_color,true);REJECT(con.base.hdr_output_metadata,&con);
+ REJECT(con.base.hdr10plus_metadata,&con);REJECT(con.dv_standard,low_latency);
+ REJECT(con.lldv_format,low_latency?0:1);
+ if (low_latency) {
+  REJECT(con.lldv_format,2);REJECT(cs.base.mode.vic,97);
+  REJECT(cs.base.mode.clock,594000);
+ }
  REJECT(con.base.max_requested_bpc,10);REJECT(connector.connector_type,999);
  REJECT(cs.base.vrr_enabled,true);REJECT(cs.base.ctm,&cs);REJECT(cs.base.connector_mask,3);
  REJECT(display.debug.visual_confirm,VISUAL_CONFIRM_SURFACE);
@@ -173,6 +179,12 @@ int main(void){
  display.config.use_spl=false;dp.adaptive_sharpness_en=false;
  assert(!missed);
  /* A stop/ordinary commit is not constrained by the DV byte-preserving contract. */
- stream.dv_standard=false;cs.base.ctm=&cs;con.base.hdr_output_metadata=&con;
+ stream.dv_standard=false;stream.dv_low_latency=false;
+ con.dv_standard=false;con.lldv_format=0;cs.base.ctm=&cs;con.base.hdr_output_metadata=&con;
  assert(!amdgpu_dm_dv_atomic_check(&atomic));
+}
+
+int main(void){
+ check_transport(false);
+ check_transport(true);
 }

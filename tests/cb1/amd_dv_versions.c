@@ -167,6 +167,29 @@ int main(void){
     assert((s.avi_infopacket.sb[5]>>6)==HDMI_YCC_QUANTIZATION_RANGE_LIMITED);
     assert(!sum(&s.vsp_infopacket) && !sum(&s.avi_infopacket));
 
+    static const struct {int vic, refresh;} lldv_modes[]={{93,24},{94,25},{95,30}};
+    for(unsigned i=0;i<sizeof(lldv_modes)/sizeof(lldv_modes[0]);i++){
+        mode.vic=lldv_modes[i].vic;
+        mode.refresh=lldv_modes[i].refresh;
+        mode.clock=297000;
+        s.timing.pix_clk_100hz=mode.clock*10;
+        assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+        const struct dc_info_packet last_avi=s.avi_infopacket, last_vsif=s.vsp_infopacket;
+        mode.clock=296703;
+        s.timing.pix_clk_100hz=mode.clock*10;
+        if (mode.vic==94){
+            assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+            assert(!memcmp(&last_avi,&s.avi_infopacket,sizeof(last_avi)));
+            assert(!memcmp(&last_vsif,&s.vsp_infopacket,sizeof(last_vsif)));
+        }else{
+            assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+        }
+    }
+    mode.clock=297000;
+    s.timing.pix_clk_100hz=mode.clock*10;
+    c.lldv_format_property=false;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
+    c.lldv_format_property=true;
     state.dv_standard=true;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EINVAL);
     state.dv_standard=false;

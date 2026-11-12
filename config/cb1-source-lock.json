@@ -107,7 +107,7 @@
     "tests/cb1/test_playback_stall_diagnostics.py": "1570b21e245685e2243d7564ce0841d392476680b6b8f67c50b9492835854e39",
     "tests/cb1/test_dcn4_transport.py": "d660535c9b5f1dd48a02d9c849d4ff10a254729881a369743daeb83c7b72b4d7",
     "tests/cb1/dcn4_transport.c": "63284b5b2cef0bb2f4be1eced5a9b52358e834a1afc8d4d1b8eeeac91e15ab2a",
-    "tests/cb1/amd_dv_atomic.c": "7777a262a380e72c79b2f1b93be15863dd25428c994ac53eb7632f2c17ed5952",
+    "tests/cb1/amd_dv_atomic.c": "c6206b29d490d51a3a823fb69037012e0965212bb8e10c161b4b7dd084899050",
     "tests/cb1/test_bluray_pairing.py": "4f14cfce8f8f320ebd38f65a4507228c01f74f55946c36f8c9369ae4808aedca",
     "tests/cb1/test_bluray_el_preroll.py": "f3f849acae74763fb5416e9f8e95223fff66b426a0cbcdb293ccf683f929f430",
     "tests/cb1/test_dual_carriage.py": "4c8798ebc2b590d7f3dd6cf9d695d9a5427a91b5ff004045d40e1413a9c1dafd",
@@ -341,7 +341,7 @@
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "9a113b7f5ab5b173a147a02e3865e3a77defe7391311a9d8a4a9c26dacecbb8a",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
-    "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "6285fb6542f40c0d5ae088c13dfd88b1970eb888fda9cbcb14e83a5b821adeae",
+    "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "78ac32981ffda9cb0de8180cb1e829392f2b9eaedd46c646eefcded84ec27beb",
     "tests/cb1/test_lldv_format.py": "72476ba187041700446f5389465dc88195606f51d265eb0284e186c553f696b3",
     "tests/cb1/test_lldv_player_info.py": "bee095362b08343fda8bad281dde4ba4fe2038c2714dca3a37dc57d7eeac9941"
   },
