@@ -10,7 +10,7 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "aaff7a0bc92b6b42e74a0919b0c397faeff4073aaa0285333ccc591c8f77ae75",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "31a283da996afaaa1d0b9d3296d9d58a98b411b065bcbfe7533548bc930194b1",
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
@@ -302,7 +302,7 @@
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "ed11c2b45c37386b5d8d1931061bc85c732e4023573968311986202b90538f25",
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": "4f1cbb23530b01eb3bc424eed9b85524c213dcaecd64e84cf8b1ef59655fe206",
-    "tests/cb1/test_diagnostics_runtime.py": "895df5d8c5d20f487b222965b5ad552c2c9a78e1e99c45935bca82ee2e945f02",
+    "tests/cb1/test_diagnostics_runtime.py": "09b36bf64f5999448fa101de2e999515fb9b829039dd7869ea5fe0508ac7a0eb",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "872cb1555415ab52f0f81d0230ff3b1371f5e4ec4b2d4766e4cd24b2b9ccf801",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "8456a48036ffdefe7907ea4d95776a1151dce1ddeac0beb12ed922ac8804087c",
@@ -332,7 +332,7 @@
     "tests/cb1/sdr_direct_provenance.cpp": "bf133b1c9c1acc6a55398d54ea19b0ebce0b9f6379ce8f26050c55087e628f5c",
     "tests/cb1/test_sdr_direct_integration.py": "58fb02da124a64c1c96ea710aa95e77522db5c5913a1adcd4c6e022f0b65f00c",
     "tests/cb1/test_sdr_render.py": "6c5cbdd57b424333a5e51ad87a82272e296318bfc5d4bcbc5171ef21d99bf258",
-    "tests/cb1/sdr_direct_owners.cpp": "18242ab7c89a07ecc68da5ae655871408c022e09d28fcc163c80a187850875dd",
+    "tests/cb1/sdr_direct_owners.cpp": "e108f386f72450963559ba8296269965416d362b6c23de5a3ef26645993aa0b5",
     "CB1/tests/gui_coverage_alpha.cpp": "a80d942dd1b705bdff7281ac48ba648e9a74847dff580054109eb6c58b175ad8",
     "tests/cb1/process_info_structure.json": "474ae19a153d22989cd65b7258830ef4b33b013327da7184ae54b7d9d2cc003a",
     "tests/cb1/test_fel_upscaling.py": "6ca5c876fd82694a657e461f30d2a486d43898f243b789c31fc91ceef897fd13",
@@ -345,7 +345,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "78ac32981ffda9cb0de8180cb1e829392f2b9eaedd46c646eefcded84ec27beb",
     "tests/cb1/test_lldv_format.py": "72476ba187041700446f5389465dc88195606f51d265eb0284e186c553f696b3",
-    "tests/cb1/test_lldv_player_info.py": "bee095362b08343fda8bad281dde4ba4fe2038c2714dca3a37dc57d7eeac9941"
+    "tests/cb1/test_lldv_player_info.py": "48ba9a425cea254569b8ab9573b6ad688f6730ed85a29f5791d819df5e613f08"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

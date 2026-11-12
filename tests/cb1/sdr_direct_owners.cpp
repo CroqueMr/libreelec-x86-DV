@@ -105,7 +105,7 @@ CDVBridgeGLES::CDVBridgeGLES(bool playerLed):m_playerLed(playerLed){}
 CDVBridgeGLES::~CDVBridgeGLES()=default;
 bool CDVBridgeGLES::Failure(const char*){return false;}
 void CDVBridgeGLES::BeginDiagnosticStream(uint64_t){}
-void CDVBridgeGLES::CountPresentation(bool){}
+void CDVBridgeGLES::CountPresentation(bool,uint64_t){}
 void CDVBridgeGLES::ReportHDR10Plus(){}
 bool CDVBridgeGLES::Presented(bool){return false;}
 bool CDVBridgeGLES::PollReady(){return m_prepared;}

@@ -173,6 +173,8 @@ int main(){
    has(CLog::lines.back(),"advanced renderer summary: presented=120");
    has(CLog::lines.back(),"counter_stream=7 stream=7 picture=31 revision=11 policy=13");
    assert(!DiagnosticLog(LOGINFO,"Normal still full") && CLog::lines.size()==count);
+   r.CountPresentation(true,6);
+   assert(r.m_presentations==120 && CLog::lines.size()==count); // A retiring old stream is not new progress.
    r.Summary("summary");assert(CLog::lines.size()==count); // Same count is not a new periodic report.
    testNow=30001;r.m_presentations=239;r.CountPresentation(true);
    assert(CLog::lines.size()==count); // No new30s opportunity.

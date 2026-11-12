@@ -165,6 +165,57 @@ struct CDataCacheCore {
 ''',
         }, ('-I' + str(ROOT / 'CB1/src'), '-I' + str(prefix / 'include')))
 
+    def test_seek_retires_only_unsubmitted_carriers(self):
+        renderer = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        current = body(renderer, 'bool CDVBridgeGLES::PlayerLedCpuCurrent(')
+        window = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        present = body(window, 'bool CWinSystemGbmGLESContext::PresentPlayerLedFrame()')
+        start = present.index('  if (m_dvBridge->PlayerLedCpuPending())')
+        queue = present[start:present.index('  bool accepted', start)]
+        run(self, {'test.cpp': r'''
+#include <cassert>
+#include <cstdint>
+#include <deque>
+struct Bridge
+{
+  struct Frame {struct {uint64_t informationGeneration;} source;} frame{{4}};
+  struct Cpu {struct {Frame* frame;} slots[1]; std::deque<unsigned> queue{0};} cpu{{{&frame}}};
+  Cpu* m_playerLedCpu{&cpu};
+  bool PlayerLedCpuPending() const { return !cpu.queue.empty(); }
+  bool PlayerLedCpuCurrent(uint64_t generation) const CURRENT
+};
+struct CServiceBroker
+{
+  inline static uint64_t generation=4;
+  static CServiceBroker GetDataCacheCore() { return {}; }
+  uint64_t GetVideoProcessingGeneration() const { return generation; }
+};
+struct Window
+{
+  Bridge bridge;
+  Bridge* m_dvBridge{&bridge};
+  unsigned queued=0, acceptedByKms=1;
+  void DiscardDVBridgeFrame() { bridge.cpu.queue.clear(); }
+  void PresentPlayerLedCpu(int) { ++queued; }
+  bool present()
+  {
+    const int transport=2;
+    QUEUE
+    return false;
+  }
+};
+int main()
+{
+  Window w;
+  assert(w.present() && w.queued==1 && w.acceptedByKms==1);
+  CServiceBroker::generation=5;
+  assert(w.present() && w.queued==1 && w.acceptedByKms==1 && !w.bridge.PlayerLedCpuPending());
+  w.bridge.frame.source.informationGeneration=5;
+  w.bridge.cpu.queue.push_back(0);
+  assert(w.present() && w.queued==2 && w.acceptedByKms==1);
+}
+'''.replace('CURRENT', current).replace('QUEUE', queue)})
+
     def test_panel_reuses_the_fixed_layout(self):
         path = ROOT / 'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml'
         panel = ET.parse(path)
