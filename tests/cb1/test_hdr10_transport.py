@@ -306,6 +306,7 @@ int main(void) {
 #define min(a,b) ((a)<(b)?(a):(b))
 #define max(a,b) ((a)>(b)?(a):(b))
 #define DIV_ROUND_CLOSEST(a,b) (((a)+(b)/2)/(b))
+typedef unsigned char u8;
 #define DISPLAY_VER(d) ((d)->version)
 #define HAS_GMCH(d) (false)
 #define MISSING_CASE(x) ((void)(x))
