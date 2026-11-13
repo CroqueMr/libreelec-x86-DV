@@ -1244,6 +1244,13 @@
       "src/libbluray/bdj/java/java/awt/BDRootWindow.java": "Bound continuous BD-J repaint deferral with monotonic task age."
     }
   },
+  "packages/multimedia/libbluray/patches/0006-bdj-leave-process-signals-to-host.patch": {
+    "summary": "Keep POSIX process shutdown under the embedding application",
+    "component": "libbluray",
+    "files": {
+      "src/libbluray/bdj/bdj.c": "Use reduced JVM signal handling for POSIX BD-J runtimes."
+    }
+  },
   "packages/multimedia/libbluray/patches/0005-pre151-hardening.patch": {
     "summary": "Harden native navigation, transport and graphics parsing with validated dependencies",
     "component": "libbluray",
