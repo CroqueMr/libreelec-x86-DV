@@ -73,6 +73,7 @@ struct CDVDInputStreamBluray : CDVDInputStream {
  }
  int Read(uint8_t*,int);bool PosTime(int);bool SeekChapter(int);ENextStream NextStream();
  void UserInput(int);void SkipStill();bool HoldEvent();
+ bool CanContinuePlayItem(uint32_t) const { return false; } // non-seamless fixture
 };
 DEFINITIONS
 int main() {
