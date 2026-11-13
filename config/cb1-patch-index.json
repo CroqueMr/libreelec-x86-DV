@@ -1223,6 +1223,16 @@
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-menu-lifetime.patch": {
+    "owner": "Keep Blu-ray menu overlays independent of timed subtitles.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDOverlayContainer.cpp": "Replace and remove menu overlays without touching subtitle overlays.",
+      "xbmc/cores/VideoPlayer/DVDOverlayContainer.h": "Expose the menu overlay operations.",
+      "xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp": "Reset subtitle state independently of menu graphics.",
+      "xbmc/cores/VideoPlayer/VideoPlayerSubtitle.h": "Expose the subtitle-only reset.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Preserve menu graphics across subtitle changes."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9995-cb1-bluray-overlay.patch": {
     "summary": "Respect HDMV staged HIDE and palette/image updates per plane",
     "component": "kodi",
