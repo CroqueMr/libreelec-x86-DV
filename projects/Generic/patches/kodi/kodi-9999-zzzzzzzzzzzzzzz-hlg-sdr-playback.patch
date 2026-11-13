@@ -1,0 +1,185 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26440,5 +26440,5 @@
+ 
+ msgctxt "#41132"
+-msgid "Choose the default playback circuit for original HLG video. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
++msgid "Choose the default playback circuit for original HLG video. Playback-menu choices apply only to the current file. Kodi default uses native HLG playback. SDR Rendering uses the configured HDR/DV to SDR target."
+ msgstr ""
+ 
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -21,5 +21,5 @@
+         <setting id="dvbridge.hlgsource" type="integer" label="41131" help="41132">
+           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options><option label="40867">1</option><option label="40866">0</option></options></constraints>
++          <constraints><options><option label="40867">1</option><option label="40866">0</option><option label="41130">2</option></options></constraints>
+           <control type="list" format="string"><usedetails>true</usedetails></control>
+         </setting>
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+@@ -23,19 +23,7 @@
+   if (caps.stereoSource)
+     return {OutputRoute::Vanilla, {}, OutputReason::SourceIneligible};
+-  if (caps.sourceKnown && caps.isHLG && !caps.isDV)
++  if (caps.sourceKnown && (caps.isHLG || caps.isHDR10) && !caps.isDV)
+   {
+-    if (preferences.hlgSource == HLGSourceMode::Native) return result;
+-    auto policy=preferences.Policy();
+-    policy.mode=DVBRIDGE_MODE_STANDARD; policy.master_ipt=false; policy.tv={};
+-    policy.adaptive=DVBRIDGE_ADAPTIVE_A; policy.expert_black_nits=0;
+-    if (!caps.nativeDV) return {OutputRoute::Vanilla,{},OutputReason::NoDVTransport};
+-    if (!caps.processingKnown || !caps.processing[DVBRIDGE_MODE_STANDARD].usable)
+-      return {OutputRoute::Vanilla,{},!caps.processingKnown ? OutputReason::ProcessingPending : caps.processing[policy.mode].reason!=OutputReason::None ?
+-          caps.processing[policy.mode].reason : OutputReason::NoGPUProcessing};
+-    return {OutputRoute::NativeDV,policy,OutputReason::None};
+-  }
+-  if (caps.sourceKnown && caps.isHDR10 && !caps.isDV)
+-  {
+-    const auto source = preferences.HDR10Mode(caps.hdr10PlusSource);
++    const auto source = caps.isHLG ? preferences.HLGMode() : preferences.HDR10Mode(caps.hdr10PlusSource);
+     if (source == HDR10SourceMode::Native) return result;
+     if (caps.hdr10PlusSource && source != HDR10SourceMode::HDR10PlusDV && source != HDR10SourceMode::SDR)
+@@ -43,5 +31,5 @@
+     if (source == HDR10SourceMode::HDR10PlusDV && !caps.isHDR10Plus)
+       return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
+-    auto policy = preferences.HDR10Policy(caps.hdr10PlusSource);
++    auto policy = preferences.HDR10PolicyFor(source);
+     if (policy.mode == DVBRIDGE_MODE_DISABLED)
+       return {OutputRoute::Vanilla,{},OutputReason::SourceIneligible};
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -21,5 +21,5 @@
+ enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5, SDR = 6, PlayerLed = 7 };
+ enum class HDR10SourceMode : int { Native = 0, ReferenceDV = 1, EnhancedDV = 2, HDR10PlusDV = 3, SDR = 4 };
+-enum class HLGSourceMode : int { Native = 0, ReferenceDV = 1 };
++enum class HLGSourceMode : int { Native = 0, ReferenceDV = 1, SDR = 2 };
+ 
+ // Decoder ingress sees the last complete frame-boundary preference snapshot.
+@@ -73,4 +73,14 @@
+   }
+ 
++  HDR10SourceMode HLGMode() const
++  {
++    switch (hlgSource)
++    {
++      case HLGSourceMode::ReferenceDV: return HDR10SourceMode::ReferenceDV;
++      case HLGSourceMode::SDR: return HDR10SourceMode::SDR;
++      default: return HDR10SourceMode::Native;
++    }
++  }
++
+   bool SameValues(const OutputPreferences& other) const
+   {
+@@ -160,8 +170,11 @@
+   dvbridge_policy HDR10Policy(bool hdr10Plus = false) const
+   {
++    return HDR10PolicyFor(HDR10Mode(hdr10Plus));
++  }
++  dvbridge_policy HDR10PolicyFor(HDR10SourceMode source) const
++  {
+     auto result = Policy();
+     result.master_ipt=false;
+     result.expert_black_nits=0;
+-    const auto source = HDR10Mode(hdr10Plus);
+     result.mode = source == HDR10SourceMode::ReferenceDV ||
+         source == HDR10SourceMode::HDR10PlusDV ? DVBRIDGE_MODE_STANDARD :
+@@ -220,5 +233,6 @@
+   result.hdr10PlusSource=plus==3 ? HDR10SourceMode::HDR10PlusDV :
+       plus==4 ? HDR10SourceMode::SDR : HDR10SourceMode::Native;
+-  result.hlgSource=settings->GetInt("dvbridge.hlgsource")==1 ? HLGSourceMode::ReferenceDV : HLGSourceMode::Native;
++  const int hlg=settings->GetInt("dvbridge.hlgsource");
++  if (hlg==1 || hlg==2) result.hlgSource=static_cast<HLGSourceMode>(hlg);
+   return result;
+ }
+@@ -281,9 +295,8 @@
+   hdr10PlaybackMode.store(next.hdr10Source);
+   hdr10PlusPlaybackMode.store(next.hdr10PlusSource);
+-  hlgPlaybackMode.store(next.hlgSource==HLGSourceMode::ReferenceDV ? HDR10SourceMode::ReferenceDV : HDR10SourceMode::Native);
++  hlgPlaybackMode.store(next.HLGMode());
+   // Resolve only the returned copy; alternating inputs must not churn revisions.
+   if (hdr10Plus) next.hdr10Source = next.hdr10PlusSource;
+-  if (hlg) next.hdr10Source = next.hlgSource == HLGSourceMode::ReferenceDV ?
+-      HDR10SourceMode::ReferenceDV : HDR10SourceMode::Native;
++  if (hlg) next.hdr10Source = next.HLGMode();
+   return next;
+ }
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h
+@@ -75,5 +75,5 @@
+ #ifdef CB1_HAS_HDR10_AI
+     bool hdr10AI{};
+-    bool hlgAI{}, sdrHDRSource{};
++    bool hlgAI{}, sdrHDRSource{}, sdrHLGSource{};
+     bool hdr10PlusDV{}, untranslatedCurve{}, untranslatedSaturation{};
+     unsigned guidedSourceFields{}, guidedEstimatedFields{};
+@@ -87,5 +87,6 @@
+       if (!flags) return "";
+       if (lldv) return cb1_circuit_version(CB1_DV_DV_LLDV);
+-      if (effective==8) return cb1_circuit_version(sdrHDRSource ? CB1_HDR10_SDR : CB1_DV_SDR);
++      if (effective==8)
++        return cb1_circuit_version(sdrHLGSource ? CB1_HLG_SDR : sdrHDRSource ? CB1_HDR10_SDR : CB1_DV_SDR);
+       if (hdr10AI)
+       {
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -113,5 +113,5 @@
+       }
+     }
+-    if (hdrInputUsed)
++    if (hdrInputUsed && !layer.hlg)
+     {
+       // Attest the same nominal input selection the SDR tone mapper consumes.
+@@ -1940,4 +1940,5 @@
+ #ifdef CB1_HAS_HDR10_AI
+   m_aiFrame = m_aiOutputAccepted = false;
++  m_sourceHLG = base.hlg;
+ #endif
+   m_guiComposed = false;
+@@ -2092,5 +2093,5 @@
+     const bool originalDV = base.sourceInfo.profile && base.sourceInfo.rpu && metadata.Data();
+     const bool originalHDR = !base.sourceInfo.profile && !base.sourceInfo.rpu &&
+-        !base.sourceInfo.el && !base.hlg && !metadata.Data() && !enhancement;
++        !base.sourceInfo.el && !metadata.Data() && !enhancement;
+     int directQuery=-1; // Not evaluated is distinct from a negative C query.
+     const bool attemptedSDR = policy.mode == DVBRIDGE_MODE_SDR &&
+@@ -3154,4 +3155,5 @@
+ #ifdef CB1_HAS_HDR10_AI
+     output.sdrHDRSource=m_pendingSourceInfo.profile==0;
++    output.sdrHLGSource=output.sdrHDRSource && m_sourceHLG;
+ #endif
+     output.level6=false; output.iptTransport=false;
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -165,5 +165,5 @@
+   const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
+   if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
+-  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,40866}};
++  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,40866},{2,0,41130}};
+   const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
+ #ifdef CB1_HAS_HDR10_AI
+@@ -257,5 +257,5 @@
+       }
+ #ifdef CB1_HAS_HDR10_AI
+-      if (!settingsMenu && hdr10Source && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
++      if (!settingsMenu && (hdr10Source || hlgSource) && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
+ #endif
+     }
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -554,5 +554,6 @@
+   for(auto& option : list)
+   {
+-    const int mode=hlgSource ? ((hlgMenu ? option.value==0 : option.value==1) ? 1 : 0) : hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
++    const int mode=hlgSource ? (option.value==2 ? DVBRIDGE_MODE_SDR :
++        (hlgMenu ? option.value==0 : option.value==1) ? DVBRIDGE_MODE_STANDARD : DVBRIDGE_MODE_DISABLED) : hdr10PlusMenu ? (option.value>=0 && option.value<int(std::size(hdr10PlusMenuModes)) ? hdr10PlusMenuModes[option.value] : 0) :
+         hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
+         hdr10Source ? (option.value==1 || option.value==3 ? 1 : option.value==2 ? 4 : option.value==4 ? 7 : 0) :

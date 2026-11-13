@@ -155,6 +155,44 @@ static void native_pair(struct reference_gpu *gpu,struct dvbridge_renderer *stag
     dvbridge_gl_frame_release(&el);dvbridge_gl_frame_release(&frame);
     glDeleteTextures(3,residual.textures);glDeleteTextures(3,planes.textures);
 }
+static void hlg_native_sdr(struct reference_gpu *gpu,struct dvbridge_renderer *r)
+{
+    struct native_planes planes=native_planes(DVBRIDGE_P010,false);
+    struct dvbridge_gl_frame imported={0};
+    assert(dvbridge_gl_frame_import(&imported,gpu->gl->gpu,DVBRIDGE_P010,W,H,planes.planes));
+    dvbridge_gl_frame_set_chroma(&imported,PL_CHROMA_LEFT);
+    struct pl_frame *frame=&imported.frame;
+    frame->repr.sys=PL_COLOR_SYSTEM_BT_2020_NC;
+    frame->repr.levels=PL_COLOR_LEVELS_LIMITED;
+    frame->color=(struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_2020,.transfer=PL_COLOR_TRC_HLG};
+    struct dvbridge_policy policy={.revision=3,.mode=DVBRIDGE_MODE_SDR};
+    const struct dvbridge_identity id={1,1,3};
+    pl_tex out=target(gpu->gl->gpu,true,10);assert(out);
+    float reference[N],actual[N];
+    for(unsigned preset=0;preset<3;preset++){
+        policy.sdr=(struct dvbridge_sdr_profile){preset,120,2.35,.02};
+        assert(!draw(r,true,&policy,&id,frame,NULL,0,out,false,true,10));
+        assert(draw(r,false,&policy,&id,frame,NULL,0,out,false,true,10));
+        read_target(gpu->gl->gpu,out,true,reference);
+        // An HLG decoder may carry static or dynamic mastering data. HLG
+        // luminance is defined by the reference system, independently of it.
+        frame->color.hdr=(struct pl_hdr_metadata){.max_luma=4000,.scene_max={800,500,400}};
+        assert(draw(r,false,&policy,&id,frame,NULL,0,out,false,true,10));
+        read_target(gpu->gl->gpu,out,true,actual);
+        assert(!memcmp(actual,reference,sizeof(actual)));
+        memset(&frame->color.hdr,0,sizeof(frame->color.hdr));
+        for(unsigned i=0;i<N;i++)if(i%4!=3)
+            assert(isfinite(actual[i]) && actual[i]>=0 && actual[i]<=1);
+        assert(actual[0]>=63.f/1023 && actual[4*(W-1)]<=941.f/1023);
+        assert(actual[W]<actual[2*W] && actual[2*W]<actual[3*W]);
+        assert(fabsf(actual[3*W]-actual[3*W+1])<2.f/1023);
+        assert(fabsf(actual[3*W]-actual[3*W+2])<2.f/1023);
+    }
+    pl_tex_destroy(gpu->gl->gpu,&out);
+    dvbridge_gl_frame_release(&imported);
+    glDeleteTextures(3,planes.textures);
+}
+
 static void raster_regression(struct reference_gpu *gpu,struct dvbridge_renderer *r)
 {
     struct native_planes planes=native_planes(DVBRIDGE_P010,false);
@@ -322,6 +360,20 @@ int main(void)
         assert(fabs(actual[i]-want)<.002);
     }
     p.sdr=(struct dvbridge_sdr_profile){0};
+    struct pl_frame hlg=frame;
+    hlg.color.transfer=PL_COLOR_TRC_HLG;
+    hlg.color.hdr=(struct pl_hdr_metadata){0};
+    assert(dvbridge_render_sdr_policy_rgb(r,&p,&id,&hlg,NULL,0,0,0,g));
+    assert(dvbridge_render_sdr_policy_resolve(r,output,false,false,10));
+    assert(dvbridge_render_policy_commit(r,&id,output));
+    reference_read(gpu.gl->gpu,output,0,0,2,2,actual);
+    assert(actual[8]<actual[0] && actual[0]<actual[4]);
+    for(unsigned i=0;i<3;i++){
+        assert(fabsf(actual[i]-actual[0])<.002f);
+        assert(fabsf(actual[4+i]-actual[4])<.002f);
+    }
+    assert(actual[12]>actual[13] && actual[13]>actual[14]);
+    hlg_native_sdr(&gpu,r);
     /* Independently reconstructed DV must map exactly like its complete RGB
      * image. Exercise a real non-neutral FEL and HLG-base DV source tags. */
     size_t dvbytes;AVDOVIMetadata *dv=task3_fixture(&dvbytes);

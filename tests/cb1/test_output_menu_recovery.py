@@ -24,6 +24,7 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <memory>
 #include <vector>
 using dvbridge_mode=int;
+constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_SDR=7;
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct CDVPlaybackModes {
  static inline StreamHdrType nativeSource=StreamHdrType::HDR_TYPE_NONE;
@@ -107,6 +108,17 @@ int main() {
  frame.capabilities.sourceKnown=true;frame.capabilities.isDV=true;
  frame.capabilities.processing[1]={false,OutputReason::SourceIneligible};
  assert(disabled());
+ // HLG SDR is available on an SDR sink and uses per-picture import admission.
+ window.available.nativeDV=window.available.hdr10=false;
+ window.available.hdr10Processing[DVBRIDGE_MODE_SDR]={true,OutputReason::None};
+ assert(!disabled(2,"dvbridge.hlgsource") && disabled(1,"dvbridge.hlgsource"));
+ frame.capabilities=window.available;
+ frame.capabilities.sourceKnown=frame.capabilities.isHLG=true;
+ frame.capabilities.processing=window.available.hdr10Processing;
+ assert(!disabled(2,"dvbridge.hlgplaybackchoice") && disabled(0,"dvbridge.hlgplaybackchoice"));
+ frame.capabilities.processing[DVBRIDGE_MODE_SDR]={false,OutputReason::ActivationFailed};
+ assert(disabled(2,"dvbridge.hlgplaybackchoice") && !disabled(1,"dvbridge.hlgplaybackchoice"));
+ window.available.nativeDV=window.available.hdr10=true;
 #ifdef CB1_HAS_HDR10_AI
  // Native HDR10 must expose AI choices before AI output has ever activated.
  preferences={};
