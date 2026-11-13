@@ -1,8 +1,13 @@
 # Playback diagnostics
 
-Supplemental diagnostics are enabled in `kodi.log` without global debug logging.
-`DVBRIDGE_DIAGNOSTICS=0` disables the supplement for developer builds. No upload is
-performed. The supplement does not change playback admission, retries or timeouts.
+Set **CB1 log detail** under **Settings → System → Logging** at Standard level or
+higher. **Enhanced** is the default and keeps the existing CB1 diagnostics.
+**Normal** keeps warnings, errors, output selections, fallbacks and key playback
+events, while reducing renderer counters, periodic health reports and other
+diagnostic detail. The setting takes effect immediately and is independent of
+Kodi's debug and component logging settings.
+
+`DVBRIDGE_DIAGNOSTICS=0` disables the supplement for developer builds.
 
 For an issue, attach `kodi.log` with the build version, exact CPU/GPU, display,
 HDMI connection chain, source format and selected mode. For 3D, include the source

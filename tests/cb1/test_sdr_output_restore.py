@@ -416,7 +416,7 @@ struct CLog {
 };
 namespace DVBRIDGE {
  bool DiagnosticsEnabled(){return false;}
- template<class... T>void DiagnosticLog(T...){}
+ template<class... T>void DiagnosticEssentialLog(T...){}
 }
 uint64_t DVNowMs(){return 1;} uint64_t DVNowNs(){return 1;}
 void CollectDVKernelLog(){}

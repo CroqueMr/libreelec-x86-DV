@@ -936,7 +936,7 @@ int main(){
         gui = (TREE/'xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h').read_text()
         mode = body(gui, 'static std::string Mode(')
         renderer = (TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
-        start = renderer.index('DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge output selection:')
+        start = renderer.index('"DVBridge output selection:')
         selection = renderer[start:renderer.index(';', start)]
         calls = re.findall(r'CDVPlaybackInfo::RequestedPolicy\([^\n]+\)', selection)
         self.assertEqual(len(calls), 2)
