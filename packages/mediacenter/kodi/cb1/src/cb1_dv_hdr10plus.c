@@ -143,5 +143,7 @@ bool cb1_dv_hdr10plus_metadata_for_version(AVDynamicHDRPlus *out,
         result.reason=CB1_DV_HDR10PLUS_UNREPRESENTABLE_CURVE;
     }
 done:
+    if(!m.params[0].tone_mapping_flag)
+        m.targeted_system_display_maximum_luminance=(AVRational){0,1};
     *out=m;*report=result;return true;
 }

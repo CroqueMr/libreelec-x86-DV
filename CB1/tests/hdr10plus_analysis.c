@@ -35,6 +35,45 @@ static double nits(double q)
     return 10000*pow(fmax(0,x-3424.0/4096)/(2413.0/128-2392.0/128*x),16384.0/2610);
 }
 
+static void luminance_patterns(pl_gpu gpu,struct cb1_hdr10plus_analysis *ctx)
+{
+    enum {W=100,H=100,N=W*H};
+    float *pixels=malloc(N*4*sizeof(*pixels));assert(pixels);
+    const float below=pq(99.9),above=pq(100.1),bright=pq(800);
+    struct cb1_hdr10plus_scene scene={0};
+    for(unsigned pattern=0;pattern<3;pattern++){
+        for(unsigned i=0;i<N;i++){
+            float q=pattern==2?below:i<pattern+1?bright:i<N/2?above:below;
+            for(unsigned c=0;c<3;c++)pixels[4*i+c]=q;
+            pixels[4*i+3]=1;
+        }
+        pl_tex t=reference_texture(gpu,W,H,pixels);
+        struct dvbridge_identity id={100,pattern+1,1};
+        assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+        struct cb1_hdr10plus_statistics stats=result(ctx,id);
+        assert(stats.luminance_valid && stats.y99_nits==(pattern==1?800:96));
+        assert(stats.y100_percent==(pattern==2?100:50));
+        cb1_hdr10plus_scene_update(&scene,&stats,id,false);
+        AVDynamicHDRPlus metadata;
+        uint8_t wire[31];
+        assert(cb1_hdr10plus_describe(&metadata,&stats,992));
+        assert(cb1_hdr10plus_vsif(wire,&metadata,false,true)==CB1_HDR10PLUS_OK);
+        assert(wire[10]==(pattern?50:6) && wire[11]==(pattern==2?67:50));
+        if(pattern==2){
+            assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,0)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+            assert(!result(ctx,id).luminance_valid);
+            stats.y99_nits=96;stats.y100_percent=100;
+            cb1_hdr10plus_scene_update(&scene,&stats,(struct dvbridge_identity){100,4,1},true);
+            assert(stats.y99_nits==96 && stats.y100_percent==100);
+            stats.y99_nits=800;stats.y100_percent=50;
+            cb1_hdr10plus_scene_update(&scene,&stats,(struct dvbridge_identity){100,5,2},false);
+            assert(stats.y99_nits==800 && stats.y100_percent==50);
+        }
+        pl_tex_destroy(gpu,&t);
+    }
+    free(pixels);
+}
+
 static void reconstructed(struct reference_gpu *gpu,struct cb1_hdr10plus_analysis *analysis)
 {
     enum {W=32,H=32};
@@ -79,7 +118,7 @@ static void reconstructed(struct reference_gpu *gpu,struct cb1_hdr10plus_analysi
         pl_tex rgb=dvbridge_render_texture(r);assert(rgb);
         reference_read(gpu->gl->gpu,rgb,0,0,W,H,before);
         struct dvbridge_identity id={13,mode+1,1};
-        assert(cb1_hdr10plus_analysis_submit(analysis,rgb,(pl_rect2d){0,0,W,H},id)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+        assert(cb1_hdr10plus_analysis_submit(analysis,rgb,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
         struct cb1_hdr10plus_statistics stats=result(analysis,id);
         double sum=0;for(unsigned i=0;i<W*H;i++)sum+=nits(fmax(before[4*i],fmax(before[4*i+1],before[4*i+2])));
         assert(stats.count==W*H && fabs(stats.average_maxrgb-sum/(W*H))<.1);
@@ -109,7 +148,7 @@ int main(void)
         }
         pl_tex t=reference_texture(gpu.gl->gpu,W,H,pixels);free(pixels);
         struct dvbridge_identity id={99,1,1};
-        assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+        assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
         struct cb1_hdr10plus_statistics s=result(ctx,id);
         assert(s.count==N && s.histogram[0]==16384 && s.histogram[10]==8192 && s.histogram[250]==8192);
         assert(fabs(s.average_maxrgb-1040)<.1);
@@ -120,7 +159,7 @@ int main(void)
         .w=2,.h=2,.sampleable=true,
         .format=pl_find_fmt(gpu.gl->gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_SAMPLEABLE)));
     assert(missing_channels);
-    assert(cb1_hdr10plus_analysis_submit(ctx,missing_channels,(pl_rect2d){0,0,2,2},id)==
+    assert(cb1_hdr10plus_analysis_submit(ctx,missing_channels,(pl_rect2d){0,0,2,2},id,1)==
            CB1_HDR10PLUS_ANALYSIS_INVALID);
     pl_tex_destroy(gpu.gl->gpu,&missing_channels);
     float pixels[66*34*4]={0};
@@ -136,11 +175,11 @@ int main(void)
     }
     pl_tex t=reference_texture(gpu.gl->gpu,66,34,pixels);
     pl_rect2d area={1,1,65,33};
-    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
     struct cb1_hdr10plus_statistics untouched={.count=99};
     assert(cb1_hdr10plus_analysis_poll(ctx,(struct dvbridge_identity){3,8,11},&untouched)==CB1_HDR10PLUS_ANALYSIS_INVALID);
     assert(untouched.count==99);
-    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
     struct cb1_hdr10plus_statistics out=result(ctx,id);
     fprintf(stderr,"linear statistics: count=%llu avg=%.6f max=%.6f %.6f %.6f\n",
         (unsigned long long)out.count,out.average_maxrgb,out.maxscl[0],out.maxscl[1],out.maxscl[2]);
@@ -152,10 +191,11 @@ int main(void)
     AVDynamicHDRPlus m={0};uint8_t wire[31];
     assert(cb1_hdr10plus_describe(&m,&out,992));
     assert(m.application_version==1 && m.num_windows==1 && m.params[0].tone_mapping_flag==0);
-    assert(m.params[0].distribution_maxrgb[1].percentile.num==0);
-    assert(m.params[0].distribution_maxrgb[2].percentile.num==255);
     assert(cb1_hdr10plus_vsif(wire,&m,false,true)==CB1_HDR10PLUS_OK);
     assert(wire[7]==126 && wire[8]==78);
+    /* Green at 800 nits gives Y=542.4, brighter than the blue at 4000 nits.
+     * Only black and red have Y <= 100 nits. */
+    assert(wire[10]==34 && wire[11]==50);
     assert(wire[9]==0 && wire[12]==0 && wire[13]==10 && wire[14]==50 && wire[17]==250);
     struct cb1_hdr10plus_statistics impossible=out;
     impossible.average_maxrgb=5000;
@@ -166,18 +206,18 @@ int main(void)
     out.histogram[0]++;assert(!cb1_hdr10plus_describe(&m,&out,992));
     cb1_hdr10plus_analysis_reset(ctx);
     assert(cb1_hdr10plus_analysis_poll(ctx,id,&untouched)==CB1_HDR10PLUS_ANALYSIS_INVALID);
-    assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,67,34},id)==CB1_HDR10PLUS_ANALYSIS_INVALID);
-    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+    assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,67,34},id,1)==CB1_HDR10PLUS_ANALYSIS_INVALID);
+    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
     cb1_hdr10plus_analysis_reset(ctx);
     /* A cancelled GPU job may still own the buffer. PENDING must mean this
      * identity was admitted, never that an old job is merely being drained. */
     const struct dvbridge_identity next={4,1,1};
     force_busy=true;
-    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,next)==CB1_HDR10PLUS_ANALYSIS_BUSY);
+    assert(cb1_hdr10plus_analysis_submit(ctx,t,area,next,1)==CB1_HDR10PLUS_ANALYSIS_BUSY);
     force_busy=false;
     enum cb1_hdr10plus_analysis_status admitted;
     do {
-        admitted=cb1_hdr10plus_analysis_submit(ctx,t,area,next);
+        admitted=cb1_hdr10plus_analysis_submit(ctx,t,area,next,1);
         if (admitted==CB1_HDR10PLUS_ANALYSIS_BUSY) nanosleep(&(struct timespec){.tv_nsec=1000000},NULL);
     } while (admitted==CB1_HDR10PLUS_ANALYSIS_BUSY);
     assert(admitted==CB1_HDR10PLUS_ANALYSIS_PENDING);
@@ -185,6 +225,7 @@ int main(void)
     float after[66*34*4];reference_read(gpu.gl->gpu,t,0,0,66,34,after);
     assert(!memcmp(after,pixels,sizeof(after)));
     pl_tex_destroy(gpu.gl->gpu,&t);
+    luminance_patterns(gpu.gl->gpu,ctx);
     reconstructed(&gpu,ctx);
     cb1_hdr10plus_analysis_destroy(&ctx);reference_gpu_destroy(&gpu);
     puts("HDR10+ linear statistics, crop, identity and HDMI quantization passed");
