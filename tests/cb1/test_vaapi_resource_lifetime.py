@@ -86,7 +86,7 @@ int main(){Texture texture;CVaapiRenderPicture pic;VADRMPRIMESurfaceDescriptor s
 
     def test_real_pool_retains_views_and_current_decode_wait(self):
         renderer=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text()
-        configure=body(renderer,'unsigned int orientation, bool retainedNativeDV)')
+        configure=body(renderer,'unsigned int orientation, RetainedOutput retainedOutput)')
         configure=configure[configure.index('m_texturePool.ReleaseAll();'):configure.index('for (auto& tex : m_vaapiTextures)')]
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/VaapiEGL.cpp').read_text()
         get=body(source,'CVaapi2Texture* CVaapiTexturePool::Get(')

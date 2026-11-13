@@ -1509,5 +1509,12 @@
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose held BD-J selections after probing.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Distinguish a held selection from natural play item boundaries."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-zz-amd-static-pq-handoff.patch": {
+    "owner": "AMD static PQ scanout across compatible source changes",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Use the effective static PQ output for the paired DRM commit.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Share the same eligibility check when replacing the renderer."
+    }
   }
 }

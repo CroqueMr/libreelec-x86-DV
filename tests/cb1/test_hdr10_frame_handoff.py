@@ -85,3 +85,77 @@ int main() {
   assert(drm.Flip(&next, 200) && drm.committedFB == 20 && drm.committedBlob == 200);
 }
 '''.replace("COMMIT", commit))
+
+    def test_retention_checks_the_actual_static_pq_output(self):
+        source = (TREE / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
+        keep = body(source, 'bool CWinSystemGbm::CanKeepHDR10Signal')
+        execute(r'''
+#include <cassert>
+#include <memory>
+#include <string_view>
+enum class StreamHdrType { HDR_TYPE_HDR10, HDR_TYPE_HDR10PLUS, HDR_TYPE_HLG };
+constexpr int AVCOL_TRC_SMPTE2084=16, QUIRK_NEEDSPRIMARY=1, SETTING_WINSYSTEM_IS_HDR_DISPLAY=2;
+struct VideoPicture { StreamHdrType hdrType; int color_transfer=16; };
+namespace KODI::UTILS {
+enum class Eotf { PQ };
+int GetColorimetry(const VideoPicture&) { return 9; }
+}
+struct Display { int version=-1; int HDR10PlusVersion() const { return version; } };
+struct Props {
+ bool supported=true;
+ bool SupportsProperty(std::string_view key) { assert(key=="HDR10PLUS_METADATA"); return supported; }
+ int GetPropertyValue(std::string_view key) const {
+   if (key=="ACTIVE") return 1;
+   if (key=="Colorspace") return 9;
+   return 42;
+ }
+};
+struct DRM { virtual ~DRM()=default; };
+struct CDRMAtomic : DRM {
+ Props connector,crtc;
+ bool activePlus=false;
+ bool HasQuirk(int) const { return true; }
+ bool IsActive() const { return true; }
+ bool IsSelectedModeCommitted() const { return true; }
+ bool LastCommitFellBack() const { return false; }
+ bool IsSDRRestorePending() const { return false; }
+ bool HasPendingRequest() const { return false; }
+ bool HasPendingCB1Page() const { return false; }
+ bool HasColorRangeTransition() const { return false; }
+ bool HDR10PlusActive() const { return activePlus; }
+ Props* GetConnector() { return &connector; }
+ const Props* GetCrtc() const { return &crtc; }
+};
+struct Settings {
+ bool GetBool(int) const { return true; }
+ const Settings* GetSettings() const { return this; }
+};
+struct CServiceBroker {
+ static const Settings* GetSettingsComponent() { static Settings settings; return &settings; }
+};
+struct Window {
+ std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
+ Display display;
+ const Display* m_info=&display;
+ struct { bool IsValid() const { return true; } int Get() const { return 42; } } m_hdrBlob;
+ KODI::UTILS::Eotf m_eotf=KODI::UTILS::Eotf::PQ;
+ int m_colorimetry=9, m_queuedColorspace=9;
+ bool Keep(const VideoPicture& picture) BODY
+};
+int main() {
+ Window w;
+ VideoPicture plain{StreamHdrType::HDR_TYPE_HDR10}, plus{StreamHdrType::HDR_TYPE_HDR10PLUS};
+ assert(w.Keep(plain) && w.Keep(plus));
+ w.display.version=0;
+ assert(w.Keep(plain) && !w.Keep(plus));
+ w.m_info=nullptr;
+ assert(!w.Keep(plus));
+ w.m_DRM->connector.supported=false;
+ assert(w.Keep(plus));
+ w.m_DRM->activePlus=true;
+ assert(!w.Keep(plus) && !w.Keep(plain));
+ w.m_DRM->activePlus=false;
+ assert(!w.Keep({StreamHdrType::HDR_TYPE_HLG}));
+ assert(!w.Keep({StreamHdrType::HDR_TYPE_HDR10PLUS,18}));
+}
+'''.replace('BODY',keep))
