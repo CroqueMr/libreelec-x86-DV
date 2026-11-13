@@ -166,7 +166,10 @@ enum cb1_ai_status cb1_hdr10_ai_submit(struct cb1_hdr10_ai *c,const struct pl_fr
         if(status!=CB1_AI_PENDING)goto submit_fail;
     }else memset(c->quantile_values,0,sizeof(c->quantile_values));
     pl_tex small;
-    status=cb1_hdr10_ingress_preview_u16(c->ingress,frame,&small);if(status!=CB1_AI_READY)goto submit_fail;
+    status=frame->color.transfer==PL_COLOR_TRC_HLG?
+        cb1_hdr10_ingress_hlg_preview(c->ingress,c->rgb,&small):
+        cb1_hdr10_ingress_preview_u16(c->ingress,frame,&small);
+    if(status!=CB1_AI_READY)goto submit_fail;
     status=calibration?cb1_hdr10_spatial_submit(c->spatial,small,id):
         cb1_hdr10_spatial_submit_motion(c->spatial,small,id);
     if(status!=CB1_AI_PENDING)goto submit_fail;

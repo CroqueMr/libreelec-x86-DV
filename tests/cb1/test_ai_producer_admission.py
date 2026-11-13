@@ -19,8 +19,8 @@ class AIProducerAdmission(unittest.TestCase):
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
 
     def test_valid_captured_horizon_not_raw_queue_size(self):
-        capture=body(shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp'),
-                     'HDR10AIQueuePreparation CRendererVAAPIGLES::CaptureHDR10AIQueue(')
+        capture=body(shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp'),
+                     'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
         at=capture.find('  const bool buffered =')
         calculation=(capture[at:capture.index('  const auto preferences =',at)] if at>=0 else
                      'const bool buffered=false;')

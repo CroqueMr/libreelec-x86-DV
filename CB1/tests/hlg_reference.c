@@ -29,6 +29,10 @@ int main(int argc,char **argv)
     pl_tex small;assert(cb1_hdr10_ingress_preview_u16(ingress,&source,&small)==CB1_AI_READY);
     float preview[4];reference_read(gpu.gl->gpu,small,60,30,1,1,preview);
     assert(fabs(preview[0]-expected)<.001);
+    float reused[4];
+    assert(cb1_hdr10_ingress_hlg_preview(ingress,rgb,&small)==CB1_AI_READY);
+    reference_read(gpu.gl->gpu,small,60,30,1,1,reused);
+    assert(memcmp(preview,reused,sizeof(preview))==0);
     struct pl_frame stripes=source;stripes.crop=(pl_rect2df){0,0,1024,576};
     uint16_t *pattern=malloc(1024*576*sizeof(*pattern));assert(pattern);
     for(unsigned c=0;c<3;c++){

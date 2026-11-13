@@ -7,11 +7,31 @@ from test_native_video_source import TREE,body
 
 
 class SoftwareDVImportTests(unittest.TestCase):
+    def test_software_renderer_uses_the_shared_ai_queue(self):
+        renderer = TREE / 'xbmc/cores/VideoPlayer/VideoRenderers'
+        header = (renderer / 'LinuxRendererGLES.h').read_text()
+        source = (renderer / 'LinuxRendererGLES.cpp').read_text()
+        self.assertIn('bool HDR10AIQueueEligible() const override', header)
+        capture = body(source, 'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
+        self.assertIn('PrepareHDR10AIQueue(*head,layers', capture)
+        self.assertIn('buffered && !metadataOnly', capture)
+        self.assertNotIn('buffered && head->hdrType', capture)
+        vaapi = (renderer / 'HwDecRender/RendererVAAPIGLES.cpp').read_text()
+        self.assertNotIn('CRendererVAAPIGLES::CaptureHDR10AIQueue(', vaapi)
+
+    def test_entering_ai_can_expand_the_software_render_queue(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text()
+        changed = body(source, 'bool CLinuxRendererGLES::ConfigChanged(')
+        self.assertIn('SoftwareHDR10AIBufferCount(picture, m_fps, m_renderOrientation)', changed)
+        self.assertIn('> m_softwareAIBuffers', changed)
+
     def test_planar_ten_bit_frame_is_admitted_before_output_selection(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text()
         upload=body(source,'bool CLinuxRendererGLES::UploadTexture(')
         build=body(source,'bool CLinuxRendererGLES::BuildDVBridgeLayer(') if \
             'bool CLinuxRendererGLES::BuildDVBridgeLayer(' in source else '{return false;}'
+        source_type=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text()
+        source_type='\n'.join(line for line in source_type.splitlines() if not line.startswith('#'))
         program=r'''
 #include <cassert>
 #include <cmath>
@@ -21,7 +41,8 @@ constexpr int AV_PIX_FMT_YUV420P10LE=1,AV_PIX_FMT_YUV444P10LE=2,
  AV_PIX_FMT_NV12=3,AV_PIX_FMT_YUYV422=4,AV_PIX_FMT_UYVY422=5,
  GL_TEXTURE_2D=6,FIELD_FULL=0,DVBRIDGE_YUV420P10=7,DVBRIDGE_YUV444P10=8;
 constexpr double DVD_NOPTS_VALUE=-1,DVD_TIME_BASE=1000000,AV_NOPTS_VALUE=-2;
-enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS};
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
+SOURCE_TYPE
 double av_q2d(double value){return value;}
 struct SourceInfo{int profile=8;};
 struct Side{unsigned Serial()const{return 1;}};
@@ -41,7 +62,7 @@ struct Buffer{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture
  Metadata doviMetadata;double doviPts=100;bool loaded=false;YuvImage image;
  Plane fields[1][3]={{{11,3840,1920},{12,1920,960},{13,1920,960}}};};
 struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},width{},height{};
- double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{},hdr10PlusSource{};HDR hdr;
+ double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{},hdr10PlusSource{},hlg{};HDR hdr;
  struct{unsigned texture;int width,height;}planes[3]{};};};
 struct WindowBase{virtual ~WindowBase()=default;};
 namespace KODI::WINDOWING::GBM{struct CWinSystemGbmGLESContext:WindowBase{
@@ -93,8 +114,12 @@ int main(){CLinuxRendererGLES r;
  assert(r.BuildDVBridgeLayer(0,layer) && layer.hdr10PlusSource);
  source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
  assert(r.BuildDVBridgeLayer(0,layer) && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HLG;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.hlg && layer.pts==1 && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ assert(r.BuildDVBridgeLayer(0,layer) && !layer.hlg);
  source.doviSourcePts=AV_NOPTS_VALUE;assert(!r.BuildDVBridgeLayer(0,layer));}
-'''.replace('BUILD',build).replace('UPLOAD',upload)
+'''.replace('BUILD',build).replace('UPLOAD',upload).replace('SOURCE_TYPE',source_type)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'check.cpp').write_text(program)
             compiled=subprocess.run(['c++','-std=c++20','-Wall','-Wextra','-Werror',
