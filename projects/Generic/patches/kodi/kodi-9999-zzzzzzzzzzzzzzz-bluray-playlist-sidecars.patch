@@ -1,0 +1,18 @@
+Subject: [PATCH] Require complete Blu-ray playlist filenames
+
+Backport the playlist discovery fix from 78andyp and Team Kodi.
+https://github.com/xbmc/xbmc/pull/30340 (GPL-2.0-or-later).
+Use absolute PCRE2 anchors so a trailing newline is not part of a playlist name.
+
+--- a/xbmc/filesystem/BlurayDirectory.cpp
++++ b/xbmc/filesystem/BlurayDirectory.cpp
+@@ -184,7 +184,8 @@ bool GetPlaylistsFromDisc(const CURL& url,
+     return false;
+ 
+   // Get information on all playlists
+-  CRegExp pl{true, CRegExp::autoUtf8, R"((\d{5}.mpls))"};
++  // Ignore sidecars such as 00000.mpls.hash.
++  CRegExp pl{true, CRegExp::autoUtf8, R"(\A(\d{5})\.mpls\z)"};
+   for (const auto& title : allTitles)
+   {
+     const CURL url3{title->GetPath()};

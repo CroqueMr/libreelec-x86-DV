@@ -882,6 +882,12 @@
       "libavcodec/pgssubdec.c": "Select explicit PGS palette matrix while retaining native Auto output."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-playlist-sidecars.patch": {
+    "owner": "Ignore checksum sidecars and other non-playlists during Blu-ray title enumeration.",
+    "files": {
+      "xbmc/filesystem/BlurayDirectory.cpp": "Match only complete five-digit MPLS filenames."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": {
     "summary": "Consolidated native CB1 video ownership",
     "component": "kodi",
