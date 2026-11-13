@@ -114,6 +114,7 @@ struct CLog {
 #include <vector>
 unsigned resets=0,cancels=0,driverEpoch=0;
 void cb1_hdr10plus_analysis_reset(int*){++cancels;}
+void cb1_hdr10plus_analysis_clear_scene(int*p){assert(!p);}
 void cb1_hdr10plus_analysis_destroy(int**p){*p=nullptr;}
 void dvbridge_render_dv_policy_cancel(int*){++driverEpoch;}
 void dvbridge_render_policy_cancel(int*){++driverEpoch;}

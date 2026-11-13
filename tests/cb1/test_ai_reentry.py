@@ -344,6 +344,8 @@ int main(){
 #include <vector>
 #define CB1_HAS_HDR10_AI
 void cb1_hdr10plus_analysis_reset(int){}
+unsigned sceneClears=0;
+void cb1_hdr10plus_analysis_clear_scene(int){++sceneClears;}
 void dvbridge_render_dv_policy_cancel(int){}
 void dvbridge_render_policy_cancel(int){}
 void dvbridge_renderer_reset(int){}
@@ -365,7 +367,9 @@ struct Renderer{
 };
 int main(){
  for(bool active:{false,true}){
+  const auto previousSceneClears=sceneClears;
   Renderer r;r.m_dvPolicyActive=active;r.Reset();
+  assert(sceneClears==previousSceneClears+1);
   assert(!r.m_pending && !r.m_prepared && !r.m_packed);
   assert(!r.m_asyncEligible && !r.m_submission.sequence);
   assert(r.m_dvPolicyActive==active);
