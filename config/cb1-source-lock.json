@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-native-dv-renderer-handoff.patch": "7a4bf4b599ddb4a9f29e00bf730ca918adf5c74de8d8179451b41c047aba1265",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-bluray-flush-before-new-packets.patch": "fd7fedda6a77d04abbcd6b3f7fe69d14130996bee7fc09c305cc275f4560babc",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr10-ai-queue-continuity.patch": "14e8a9593761dd3390ac377e80776382918745f8c6fb24a4ea91813eee08fc68",
     "tests/cb1/test_hdr10_dv_handoff.py": "9783710f0601cc4f4c445ad298000f2cd2d3b712b1844e968435a57a80f3d554",

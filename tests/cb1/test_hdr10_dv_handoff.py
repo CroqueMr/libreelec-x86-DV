@@ -168,8 +168,7 @@ int main() {
 
     def test_only_matching_vaapi_sources_can_retain_the_active_output(self):
         source = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp").read_text()
-        self.assertIn("bool CRendererVAAPIGLES::RetainHDR10DVOutput(", source)
-        handoff = body(source, "bool CRendererVAAPIGLES::RetainHDR10DVOutput(")
+        handoff = body(source, "CRendererVAAPIGLES::DVHandoff CRendererVAAPIGLES::RetainDVOutput(")
         execute(r'''
 #include <cassert>
 #include <cmath>
@@ -180,41 +179,49 @@ struct CVaapiRenderPicture : VideoBuffer {
 };
 constexpr int VA_INVALID_ID=-1, NUM_BUFFERS=6;
 constexpr unsigned DVP_FLAG_INTERLACED=8;
-enum class StreamHdrType {HDR_TYPE_HDR10, HDR_TYPE_HLG, HDR_TYPE_HDR10PLUS, SDR};
 struct VideoPicture {
  VideoBuffer* videoBuffer;
- int iWidth=3840,iHeight=2160;
+ int iWidth=3840,iHeight=2160,colorBits=10;
  unsigned iFlags=0;
- StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;
- struct {int profile=0;} doviSourceInfo;
 };
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext {
  virtual ~CWinSystemGbmGLESContext()=default;
- bool keep=true;
- bool RetainHDR10DVOutput(const VideoPicture&){return keep;}
+ bool native=false, ai=true;
+ bool RetainNativeDVOutput(const VideoPicture&){return native;}
+ bool RetainHDR10DVOutput(const VideoPicture&){return ai;}
 };
 }
 using Window=KODI::WINDOWING::GBM::CWinSystemGbmGLESContext;
 Window window;
 struct CServiceBroker { static Window* GetWinSystem(){return &window;} };
 struct Renderer {
- bool m_dvRequested=true,m_aiLookahead=true,m_bConfigured=true;
- int m_sourceWidth=3840,m_sourceHeight=2160,m_vaapiFourcc=10; float m_fps=24;
+ enum class DVHandoff {None, HDR10AI, Native};
+ bool m_dvRequested=true,m_aiLookahead=true,m_bConfigured=true,m_isVAAPIBuffer=true;
+ int m_sourceWidth=3840,m_sourceHeight=2160,m_vaapiFourcc=10,m_srcColorBits=10;
+ float m_fps=24;
  bool DVBridgeOrientationSupported(unsigned orientation)const{return orientation==0;}
- bool RetainHDR10DVOutput(const VideoPicture& picture,float fps,unsigned orientation) HANDOFF
+ DVHandoff RetainDVOutput(const VideoPicture& picture,float fps,unsigned orientation) HANDOFF
 };
 int main(){
+ using H=Renderer::DVHandoff;
  CVaapiRenderPicture va;
  VideoPicture p{&va};
  Renderer r;
- assert(!r.RetainHDR10DVOutput(p,25,0));
- assert(!r.RetainHDR10DVOutput(p,24,90) && r.m_dvRequested && r.m_bConfigured);
- p.iWidth=1920; assert(!r.RetainHDR10DVOutput(p,24,0));p.iWidth=3840;
- p.iFlags=DVP_FLAG_INTERLACED;assert(!r.RetainHDR10DVOutput(p,24,0));p.iFlags=0;
- va.procPic.fourcc=8;assert(!r.RetainHDR10DVOutput(p,24,0));va.procPic.fourcc=10;
- va.procPic.videoSurface=VA_INVALID_ID;assert(!r.RetainHDR10DVOutput(p,24,0));va.procPic.videoSurface=1;
- window.keep=false;assert(!r.RetainHDR10DVOutput(p,24,0));window.keep=true;
- assert(r.RetainHDR10DVOutput(p,24,0) && !r.m_dvRequested && !r.m_bConfigured);
+ assert(r.RetainDVOutput(p,25,0)==H::None);
+ assert(r.RetainDVOutput(p,24,90)==H::None && r.m_dvRequested && r.m_bConfigured);
+ p.iWidth=1920; assert(r.RetainDVOutput(p,24,0)==H::None);p.iWidth=3840;
+ p.iFlags=DVP_FLAG_INTERLACED;assert(r.RetainDVOutput(p,24,0)==H::None);p.iFlags=0;
+ va.procPic.fourcc=8;assert(r.RetainDVOutput(p,24,0)==H::None);va.procPic.fourcc=10;
+ va.procPic.videoSurface=VA_INVALID_ID;assert(r.RetainDVOutput(p,24,0)==H::None);va.procPic.videoSurface=1;
+ p.colorBits=8;assert(r.RetainDVOutput(p,24,0)==H::None);p.colorBits=10;
+ window.ai=false;assert(r.RetainDVOutput(p,24,0)==H::None);window.ai=true;
+ assert(r.RetainDVOutput(p,24,0)==H::HDR10AI && !r.m_dvRequested && !r.m_bConfigured);
+ r=Renderer{};
+ va.renderBufferCount=NUM_BUFFERS;
+ assert(r.RetainDVOutput(p,24,0)==H::None && r.m_dvRequested);
+ window.native=true;
+ r.m_aiLookahead=false;
+ assert(r.RetainDVOutput(p,24,0)==H::Native && !r.m_dvRequested && !r.m_bConfigured);
 }
 '''.replace("HANDOFF", handoff))
