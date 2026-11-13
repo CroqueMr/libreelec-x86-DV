@@ -1,0 +1,20 @@
+Subject: [PATCH] DV GL: treat Mesa's sRGB-capable scanout as linear
+
+Mesa gives desktop default framebuffers sRGB formats, so the encoding
+query returns GL_SRGB although writes stay linear until
+GL_FRAMEBUFFER_SRGB is enabled. Without this the scanout is refused
+and every Dolby Vision frame failed at the base-layer import.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1623,6 +1623,10 @@ bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr, unsigned int frame
+       GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &blue);
+   glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, attachment,
+       GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
++  // Mesa gives desktop default framebuffers sRGB formats; writes stay linear until
++  // GL_FRAMEBUFFER_SRGB is enabled.
++  if (encoding == GL_SRGB && !glIsEnabled(GL_FRAMEBUFFER_SRGB))
++    encoding = GL_LINEAR;
+ #else
+   glGetIntegerv(GL_RED_BITS, &red);
+   glGetIntegerv(GL_GREEN_BITS, &green);

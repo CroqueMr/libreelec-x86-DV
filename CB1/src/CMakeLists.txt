@@ -44,7 +44,14 @@ endif()
 unset(CMAKE_REQUIRED_INCLUDES)
 pkg_check_modules(DVAvutil REQUIRED IMPORTED_TARGET libavutil>=59.12.100)
 pkg_check_modules(DVAvcodec REQUIRED IMPORTED_TARGET libavcodec>=62)
-pkg_check_modules(DVGles REQUIRED IMPORTED_TARGET glesv2)
+# Kodi's render API decides which GL the bridge links: desktop OpenGL or OpenGL ES.
+if(TARGET ${APP_NAME_LC}::OpenGl)
+  # glvnd ships desktop GL as opengl.pc; Mesa without glvnd as gl.pc.
+  pkg_search_module(DVGles REQUIRED IMPORTED_TARGET gl opengl)
+  set(DVBRIDGE_DESKTOP_GL ON)
+else()
+  pkg_check_modules(DVGles REQUIRED IMPORTED_TARGET glesv2)
+endif()
 pkg_check_modules(DVEgl REQUIRED IMPORTED_TARGET egl)
 pkg_check_modules(DVDrm REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(DVVa REQUIRED IMPORTED_TARGET libva)
@@ -69,6 +76,9 @@ target_include_directories(dvbridge_core PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(dvbridge_core PUBLIC ${CMAKE_DL_LIBS} PkgConfig::DVPlacebo PkgConfig::DVAvutil
                                          PkgConfig::DVAvcodec PkgConfig::DVGles
                                          PkgConfig::DVEgl PkgConfig::DVDrm PkgConfig::DVVa Threads::Threads m)
+if(DVBRIDGE_DESKTOP_GL)
+  target_compile_definitions(dvbridge_core PUBLIC DVBRIDGE_DESKTOP_GL=1)
+endif()
 if(CB1_ENABLE_HDR10_AI)
   target_compile_definitions(dvbridge_core PUBLIC CB1_HAS_HDR10_AI=1)
   set(CB1_L1L3_BUNDLE_CONTRACT "${CMAKE_CURRENT_SOURCE_DIR}/../models/l1l3/contract"

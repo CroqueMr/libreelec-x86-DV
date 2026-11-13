@@ -1,0 +1,90 @@
+Subject: [PATCH] DV GL: report subtitle bounds from the GL overlay renderer
+
+The DV composite places subtitles from the bounds and textures the
+overlay renderer records. Record them from the GL renderer as the GLES
+one does, keeping the glyph extent for ASS subtitles.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp
+@@ -23,13 +23,26 @@
+ #include "utils/MathUtils.h"
+ #include "utils/log.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "windowing/gbm/WinSystemGbmDVContext.h"
++#endif
+ 
++#include <algorithm>
+ #include <cmath>
+ 
+ #define USE_PREMULTIPLIED_ALPHA 1
+ 
+ using namespace OVERLAY;
+ 
++static void RecordSubtitleBounds(const CRect& rect, unsigned texture)
++{
++#ifdef HAVE_DVBRIDGE
++  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
++          CServiceBroker::GetWinSystem()))
++    window->RecordDVSubtitle(rect, texture);
++#endif
++}
++
+ static void LoadTexture(GLenum target
+                       , GLsizei width, GLsizei height, GLsizei stride
+                       , GLfloat* u, GLfloat* v
+@@ -260,6 +273,23 @@ COverlayGlyphGL::COverlayGlyphGL(ASS_Image* images, float width, float height)
+     vt += 4;
+   }
+ 
++  // ASS's nominal extent is the whole screen. Keep its actual glyph extent.
++  for (size_t i = 0; i < m_vertex.size(); i++)
++  {
++    const VERTEX& vertex = m_vertex[i];
++    if (i == 0)
++    {
++      m_glyphBounds = CRect(vertex.x, vertex.y, vertex.x, vertex.y);
++    }
++    else
++    {
++      m_glyphBounds.x1 = std::min(m_glyphBounds.x1, vertex.x);
++      m_glyphBounds.y1 = std::min(m_glyphBounds.y1, vertex.y);
++      m_glyphBounds.x2 = std::max(m_glyphBounds.x2, vertex.x);
++      m_glyphBounds.y2 = std::max(m_glyphBounds.y2, vertex.y);
++    }
++  }
++
+   glBindTexture(GL_TEXTURE_2D, 0);
+ }
+ 
+@@ -273,6 +303,12 @@ void COverlayGlyphGL::Render(SRenderState& state)
+   if ((m_texture == 0) || (m_vertex.empty()))
+     return;
+ 
++  RecordSubtitleBounds(CRect(state.x + state.width * m_glyphBounds.x1,
++                             state.y + state.height * m_glyphBounds.y1,
++                             state.x + state.width * m_glyphBounds.x2,
++                             state.y + state.height * m_glyphBounds.y2),
++                       m_texture);
++
+   glEnable(GL_BLEND);
+ 
+   glBindTexture(GL_TEXTURE_2D, m_texture);
+@@ -392,6 +428,7 @@ void COverlayTextureGL::Render(SRenderState& state)
+ 
+     rd.SetRect(left, top, right, bottom);
+   }
++  RecordSubtitleBounds(rd, m_texture);
+ 
+   CRenderSystemGL* renderSystem = dynamic_cast<CRenderSystemGL*>(CServiceBroker::GetRenderSystem());
+ 
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h
+@@ -56,6 +56,7 @@ namespace OVERLAY {
+     };
+ 
+     std::vector<VERTEX> m_vertex;
++    CRect m_glyphBounds;
+ 
+     GLuint m_texture = 0;
+     float m_u;

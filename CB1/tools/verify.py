@@ -89,6 +89,7 @@ def verify(root, dependency_roots=None, prefix=None):
                       'src/dvbridge_fel.c', 'src/dvbridge_fel.h', 'src/dvbridge_fel_seek.h', 'src/dvbridge_fel_vpp.c', 'src/dvbridge_fel_vpp.h',
                       'src/dvbridge_placebo.c', 'src/dvbridge_placebo.h',
                       'src/dvbridge_render.c', 'src/dvbridge_render.h', 'src/dvbridge_gl_pack.c', 'src/dvbridge_gl_pack.h',
+                      'src/dvbridge_gl_api.h',
                       'src/dvbridge_core.c', 'src/dvbridge_core.h',
                       'src/dvbridge_metadata.h', 'src/dvbridge_metadata_bounds.h', 'src/mpv_dvbridge_cm4.h',
                       'src/dvbridge_pack_sources.h.in', 'src/pack_gles300.frag', 'src/pack_gles300.vert',

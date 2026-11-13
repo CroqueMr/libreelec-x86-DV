@@ -140,6 +140,7 @@ struct CEGLContextUtils{
  bool CreatePlatformSurface(void*,uintptr_t){m_eglSurface=nextSurface++;surfaces[m_eglSurface]=m_eglConfig;return true;}
  void DestroySurface(){}bool BindContext(){currentSurface=m_eglSurface;return true;}bool TrySwapBuffers(){return true;}
 };
+inline void ClearInheritedGLErrors() {}
 struct CDVBridgeGLES {
  explicit CDVBridgeGLES(bool playerLed=false):m_playerLed(playerLed){}
  bool m_playerLed{};
@@ -157,6 +158,7 @@ struct CDVBridgeGLES {
   bool Quarantined()const{return false;}bool AsyncPreparation(unsigned)const{return true;}
   pl_opengl GL() const {return gl?&fakeGL:nullptr;}pl_log Log(){return nullptr;}pl_renderer Attach(){return &rendererToken;} int Poll(bool=false){return pollFailed?DVBRIDGE_DV_FAILED:ready ? DVBRIDGE_DV_IDLE : DVBRIDGE_DV_BUSY;}void SourceReadComplete(){}
   bool Initialize(bool){++initialized;gl=true;return true;}
+  const char* AttachRefusal() const {return "renderer-create";}
   bool FenceLastUse(){++fences;return fenceOK;}
   bool Close(){++closed;gl=false;return true;}
  };

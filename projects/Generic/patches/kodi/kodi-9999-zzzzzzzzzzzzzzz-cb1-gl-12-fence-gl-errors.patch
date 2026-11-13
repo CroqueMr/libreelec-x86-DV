@@ -1,0 +1,25 @@
+Subject: [PATCH] DV: clear inherited GL errors before fencing the context's last use
+
+FenceLastUse quarantines the context when glGetError() reports an
+error after creating its fence. An error left by Kodi's own drawing
+quarantined it for good, so retiring the context failed, every later
+mode change was refused and Dolby Vision never started again.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -610,6 +610,7 @@ void CDVBridgeGLES::Context::Retain(std::shared_ptr<void> base, std::shared_ptr<
+ void CDVBridgeGLES::Context::SourceReadComplete() { m_state->foreign.clear(); }
+ bool CDVBridgeGLES::Context::FenceLastUse()
+ {
++  ClearInheritedGLErrors();
+   if (m_state->quarantined) return false;
+   auto fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE,0);
+   glFlush();
+@@ -644,6 +645,7 @@ HDR10AISource& CDVBridgeGLES::Context::HDR10AI()
+ 
+ bool CDVBridgeGLES::Context::FenceHDR10AIUse()
+ {
++  ClearInheritedGLErrors();
+   if (m_state->quarantined) return false;
+   const auto submission = HDR10AI().Metrics().gpu_submissions;
+   if (!submission || submission == m_state->aiFencedSubmission) return true;

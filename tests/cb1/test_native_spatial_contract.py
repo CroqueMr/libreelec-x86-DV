@@ -231,6 +231,7 @@ int main(){Test t;
         prefix = rebind[1:rebind.index("  GLint draw,")]
         self.run_program(r'''
 #include <cassert>
+inline void ClearInheritedGLErrors() {}
 using EGLint=int;
 constexpr int EGL_DRAW=1,EGL_WIDTH=2,EGL_HEIGHT=3,EGL_NO_DISPLAY=0,EGL_NO_SURFACE=0;
 int display=1,surface=1,w=1920,h=1080;bool valid=true;

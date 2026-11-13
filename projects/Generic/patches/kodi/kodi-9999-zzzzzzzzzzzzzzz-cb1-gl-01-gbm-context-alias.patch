@@ -1,0 +1,255 @@
+Subject: [PATCH] DV GL: reach the GBM context through a GL/GLES alias
+
+The DV paths cast the window system to the GLES GBM context by name.
+Route them through one alias, so the same code reaches the GL context
+in desktop GL builds.
+
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -9,7 +9,7 @@
+ #include "VideoPlayer.h"
+ #include "utils/DVBridgeDiagnosticLog.h"
+ #ifdef HAVE_DVBRIDGE
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ #ifdef HAVE_DVBRIDGE
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
+@@ -950,7 +950,7 @@ bool CVideoPlayer::OpenInputStream()
+ #ifdef HAVE_DVBRIDGE
+   MESSAGING::ThreadMessageCallback refresh{
+       [](void*) {
+-        auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++        auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem());
+         if (window && window->RefreshDisplayInfoForVideo()) window->RefreshDVOutputCapabilities();
+       },nullptr};
+   CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK,0,0,&refresh);
+@@ -4600,7 +4600,7 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+   if (m_CurrentVideo.id < 0 && hint.stereo_mode.empty() &&
+       (hint.dovi.dv_profile || hint.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION))
+   {
+-    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+         CServiceBroker::GetWinSystem());
+     const auto mode = DVBRIDGE::FrameOutputSettings().Policy().mode;
+     if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -14,7 +14,7 @@
+ #include "utils/DVBridgeDiagnosticLog.h"
+ #include "utils/DVBridgeDiagnosticState.h"
+ #include "utils/StringUtils.h"
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ 
+ #include "DVDCodecs/DVDCodecUtils.h"
+@@ -1014,7 +1014,7 @@ void CVideoPlayerVideo::ProcessOverlays(const VideoPicture* pSource, double pts)
+ #ifdef HAVE_DVBRIDGE
+ bool CVideoPlayerVideo::HandleDVPlaybackFailure(const VideoPicture* picture)
+ {
+-  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+       CServiceBroker::GetWinSystem());
+   if (!window || !picture || !picture->stereoMode.empty()) return false;
+   const bool authoredDV=picture->doviSourceInfo.profile || picture->hdrType==StreamHdrType::HDR_TYPE_DOLBYVISION;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
+@@ -26,7 +26,7 @@
+ #include "windowing/GraphicContext.h"
+ #include "windowing/WinSystem.h"
+ #ifdef HAVE_DVBRIDGE
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ 
+ #include <algorithm>
+@@ -177,7 +177,7 @@ void CRenderer::Render(int idx, float depth)
+       if (!(hdrComposite && o->m_isHDROverlay))
+         Render(o.get());
+ #ifdef HAVE_DVBRIDGE
+-      else if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++      else if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+                    CServiceBroker::GetWinSystem()); window && window->BeginDVPQSubtitle())
+       {
+         Render(o.get());
+@@ -199,7 +199,7 @@ void CRenderer::RenderHDROverlays(int idx)
+   if (!CServiceBroker::GetWinSystem()->IsHdrComposite())
+     return;
+ #ifdef HAVE_DVBRIDGE
+-  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+           CServiceBroker::GetWinSystem()); window && window->HasDVBridgeScreenshot() &&
+       window->DVPQSubtitlesReady())
+     return;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+@@ -18,7 +18,7 @@
+ #include "windowing/GraphicContext.h"
+ #include "windowing/WinSystem.h"
+ #ifdef HAVE_DVBRIDGE
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ 
+ #include <algorithm>
+@@ -301,7 +301,7 @@ unsigned BitmapPaletteOutputState()
+ {
+   bool cb1PQ = false;
+ #ifdef HAVE_DVBRIDGE
+-  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+           CServiceBroker::GetWinSystem()))
+     cb1PQ = window->HasDVBridgeScreenshot();
+ #endif
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -40,8 +40,8 @@
+ #ifdef HAVE_DVBRIDGE
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+ #endif
+-#if defined(HAVE_GBM) && defined(HAS_GLES)
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#if defined(HAVE_GBM)
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ 
+ using namespace std::chrono_literals;
+@@ -362,7 +362,7 @@ bool CRenderManager::PrepareHDR10AILookahead(std::unique_lock<CCriticalSection>&
+     double playing = m_dvdClock.GetClock();
+     bool cb1Async = false;
+ #ifdef HAVE_DVBRIDGE
+-    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem()))
+     {
+       cb1Async = window->CB1AsyncPlayback() && !m_dvdClock.IsPaused() &&
+           m_dvdClock.GetClockSpeed() == 1.0;
+@@ -417,7 +417,7 @@ bool CRenderManager::ExecuteHDR10AIQueuePreparation(
+       m_aiStartupBuffered = false;
+       // Reject only unsubmitted output; accepted KMS work keeps its owner.
+ #ifdef HAVE_DVBRIDGE
+-      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+               CServiceBroker::GetWinSystem()))
+         window->DiscardDVBridgeFrame();
+       m_cb1PresentPending = false;
+@@ -571,7 +571,7 @@ void CRenderManager::FrameMove()
+ #ifdef HAVE_DVBRIDGE
+     if (m_cb1PresentPending)
+     {
+-      auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++      auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem());
+       if (!window || !window->CB1FramePending())
+       {
+         m_cb1PresentPending = false;
+@@ -590,7 +590,7 @@ void CRenderManager::FrameMove()
+     }
+     bool aiReselection = false;
+     if (m_pRenderer->HDR10AIQueueEligible())
+-      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+               CServiceBroker::GetWinSystem()))
+         aiReselection = window->HDR10AISelectionPending();
+     if (!m_aiQueueReady || m_aiQueuePreparationStale || m_aiStartPts == DVD_NOPTS_VALUE ||
+@@ -954,7 +954,7 @@ RESOLUTION ChoosePlaybackResolution(const VideoPicture& picture, double fps, boo
+   const auto advanced = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings();
+   if (nativeDV && picture.stereoMode.empty() && !CResolutionUtils::HasWhitelist() &&
+       advanced->m_videoAdjustRefreshOverrides.empty())
+-    if (const auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++    if (const auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+             CServiceBroker::GetWinSystem()))
+       if (const auto resolution = window->PlayerLedResolution(fps))
+         return *resolution;
+@@ -1008,7 +1008,7 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
+   if (!gui || m_pRenderer->IsGuiLayer())
+   {
+ #ifdef HAVE_DVBRIDGE
+-    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem()))
+     {
+       window->SetDVBridgeOverlays(m_renderDebug || m_overlays.HasVisibleOverlay(m_presentsource));
+       window->SetCB1RenderPts(m_Queue[m_presentsource].pts);
+@@ -1031,7 +1031,7 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
+   {
+     ServiceVideoCaptures();
+ #if defined(HAVE_GBM) && defined(HAS_GLES)
+-    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(
+             CServiceBroker::GetWinSystem()))
+       window->StageVideoSource(m_pRenderer->HasRenderedFrame() ?
+           m_Queue[m_presentsource].sourceSideData : nullptr);
+@@ -1097,7 +1097,7 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
+   {
+     std::unique_lock lock(m_presentlock);
+ #ifdef HAVE_DVBRIDGE
+-    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem());
+         window && window->CB1FramePending())
+     {
+       m_cb1PresentPending = true;
+@@ -1255,7 +1255,7 @@ void CRenderManager::UpdateResolution()
+ #ifdef HAVE_DVBRIDGE
+         DVBRIDGE::guiModeChangeResolution = previous;
+         if (m_nativeDVRate)
+-          if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++          if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem()))
+           {
+             // A deferred retirement has not attempted the selected modeset yet.
+             if (window->GetGfxContext().GetVideoResolution() != res &&
+@@ -1546,7 +1546,7 @@ void CRenderManager::PrepareNextRender()
+   bool cb1Async = false;
+   std::optional<double> completionAge;
+ #ifdef HAVE_DVBRIDGE
+-  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
++  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem()))
+   {
+     cb1Async = window->CB1AsyncPlayback();
+     if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -33,7 +33,7 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
+ #include "resources/LocalizeStrings.h"
+ #include "resources/ResourcesComponent.h"
+-#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#include "windowing/gbm/WinSystemGbmDVContext.h"
+ #endif
+ 
+ namespace
+@@ -517,7 +517,7 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+   const auto preferences=DVBRIDGE::FrameOutputSettings();
+   const auto data=DVBRIDGE::StreamTelemetry::Read();
+   auto caps=data.transaction.capabilities;
+-  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
++  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmDVContext*>(CServiceBroker::GetWinSystem());
+   const auto available=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
+   // Global preferences use hardware capabilities, not the current or previous film.
+   if ((!menu && !hdr10Menu && !hlgMenu) ||
+--- /dev/null
++++ b/xbmc/windowing/gbm/WinSystemGbmDVContext.h
+@@ -0,0 +1,25 @@
++/*
++ *  Copyright (C) 2026 Team Kodi
++ *  This file is part of Kodi - https://kodi.tv
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *  See LICENSES/README.md for more information.
++ */
++
++#pragma once
++
++// The GBM context class that carries DVBridge output, for GL and GLES builds alike.
++#if defined(HAS_GLES)
++#include "windowing/gbm/WinSystemGbmGLESContext.h"
++#else
++#include "windowing/gbm/WinSystemGbmGLContext.h"
++#endif
++
++namespace KODI::WINDOWING::GBM
++{
++#if defined(HAS_GLES)
++using CWinSystemGbmDVContext = CWinSystemGbmGLESContext;
++#else
++using CWinSystemGbmDVContext = CWinSystemGbmGLContext;
++#endif
++} // namespace KODI::WINDOWING::GBM

@@ -1,0 +1,89 @@
+Subject: [PATCH] DV: clear inherited GL errors before handing libplacebo control
+
+libplacebo treats any pending GL error as its own failure and marks
+its GPU failed. On desktop GL, Kodi's GUI drawing leaves
+GL_INVALID_VALUE pending (glEnableVertexAttribArray(-1)). Creating a
+new libplacebo GPU swallowed it, so the first Dolby Vision session
+worked, but later sessions reuse the context and refused to start.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -64,6 +64,14 @@ namespace DVFilterShaders = Shaders::GLES;
+ 
+ namespace
+ {
++// Kodi's ordinary drawing can leave GL errors pending (seen on desktop GL). libplacebo takes
++// any pending error as its own failure and marks its GPU failed, so clear them first.
++void ClearInheritedGLErrors()
++{
++  for (int i = 0; i < 64 && glGetError() != GL_NO_ERROR; ++i)
++    ;
++}
++
+ void BackendLog(void*, pl_log_level level, const char* message)
+ {
+   try
+@@ -426,6 +434,7 @@ CDVBridgeGLES::Context::~Context()
+ 
+ bool CDVBridgeGLES::Context::Initialize(bool allowSoftware)
+ {
++  ClearInheritedGLErrors();
+   if (m_state->gl) return !m_state->quarantined;
+   if (NewContextBlocked()) return false;
+   pl_opengl_params params{};
+@@ -481,6 +490,7 @@ const char* CDVBridgeGLES::Context::AttachRefusal() const
+ 
+ dvbridge_renderer* CDVBridgeGLES::Context::Attach()
+ {
++  ClearInheritedGLErrors();
+   if (m_state->quarantined || !m_state->inFlight.empty()) return nullptr;
+   auto* renderer = dvbridge_renderer_create_with_owner(m_state->owner);
+   if (renderer)
+@@ -494,6 +504,7 @@ dvbridge_renderer* CDVBridgeGLES::Context::Attach()
+ 
+ void CDVBridgeGLES::Context::Detach(dvbridge_renderer* renderer)
+ {
++  ClearInheritedGLErrors();
+ #ifdef CB1_HAS_HDR10_AI
+   ClearNextHDR10AI();
+ #endif
+@@ -1501,6 +1512,7 @@ CDVBridgeGLES::CDVBridgeGLES(bool playerLed) : m_playerLed(playerLed)
+ 
+ CDVBridgeGLES::~CDVBridgeGLES()
+ {
++  ClearInheritedGLErrors();
+   m_playerLedCpu.reset();
+   cb1_hdr10plus_analysis_destroy(&m_hdr10plusAnalysis);
+   ClearFELPrefetch();
+@@ -1611,6 +1623,7 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
+ 
+ bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr, unsigned int framebuffer)
+ {
++  ClearInheritedGLErrors();
+   if (!m_gl || m_pending || m_prepared) return false;
+   m_playerLedCpu.reset();
+   pl_opengl_wrap_params output{};
+@@ -1695,6 +1708,7 @@ bool CDVBridgeGLES::SetHDR10Session(const dvbridge_hdr10_session& session, uint6
+ 
+ void CDVBridgeGLES::Reset()
+ {
++  ClearInheritedGLErrors();
+   Summary("reset");
+   Cancel();
+   m_rawELCache.clear();
+@@ -1712,6 +1726,7 @@ void CDVBridgeGLES::Reset()
+ bool CDVBridgeGLES::Prepare(const Layer& base, const Layer* enhancement,
+                           const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked)
+ {
++  ClearInheritedGLErrors();
+   m_prepared = m_packed = false;
+   m_direct = false;
+   if (!m_renderer)
+@@ -2450,6 +2465,7 @@ bool CDVBridgeGLES::ReadScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out
+ bool CDVBridgeGLES::PrepareHardware(const Layer& base, const AVFrame* enhancement,
+                                   const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked)
+ {
++  ClearInheritedGLErrors();
+   m_prepared = m_packed = false;
+   if (!enhancement)
+     return Prepare(base, nullptr, metadata, geometry, allowPacked);

@@ -1,0 +1,162 @@
+Subject: [PATCH] DV GL: screenshots and float-output clamps for the GL shaders
+
+As on GLES, a floating-point output keeps what a fixed-point one clamps
+away, so the GL video shaders clamp their results and keep a black
+pixel black where tone mapping divides 0 by 0. Screenshots taken during
+DV output read the bridge's frame, as the GLES screenshot surface does.
+
+--- a/system/shaders/GL/1.5/gl_output.glsl
++++ b/system/shaders/GL/1.5/gl_output.glsl
+@@ -33,5 +33,8 @@ void main()
+   rgb = floor(rgb * m_ditherquant + ditherval) / m_ditherquant;
+ #endif
+ 
++#if defined(KODI_CLAMP_OUTPUT)
++  rgb = clamp(rgb, 0.0, 1.0);
++#endif
+   fragColor = rgb;
+ }
+--- a/system/shaders/GL/1.5/gl_videofilter_frag.glsl
++++ b/system/shaders/GL/1.5/gl_videofilter_frag.glsl
+@@ -9,4 +9,7 @@ void main()
+ {
+   fragColor = texture(img, m_cord);
+   fragColor.a = m_alpha;
++#if defined(KODI_CLAMP_OUTPUT)
++  fragColor = clamp(fragColor, 0.0, 1.0);
++#endif
+ }
+--- a/system/shaders/GL/1.5/gl_yuv2rgb_basic.glsl
++++ b/system/shaders/GL/1.5/gl_yuv2rgb_basic.glsl
+@@ -100,7 +100,14 @@ vec4 process()
+ 
+ #if defined(KODI_TONE_MAPPING_REINHARD)
+   float luma = dot(rgb.rgb, m_coefsDst);
++#if defined(KODI_CLAMP_OUTPUT)
++  // 0/0 for a black pixel is no number. A fixed-point output stores it as 0; a floating-point
++  // one keeps it, and what clamp() makes of it is not defined. A black pixel stays black.
++  if (luma > 0.0)
++    rgb.rgb *= reinhard(luma) / luma;
++#else
+   rgb.rgb *= reinhard(luma) / luma;
++#endif
+ 
+ #elif defined(KODI_TONE_MAPPING_ACES)
+   rgb.rgb = inversePQ(rgb.rgb);
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGL.cpp
+@@ -15,6 +15,7 @@
+ #include "rendering/RenderSystem.h"
+ #include "utils/GLUtils.h"
+ #include "utils/log.h"
++#include "windowing/WinSystem.h"
+ 
+ #include <math.h>
+ #include <string>
+@@ -23,6 +24,17 @@
+ 
+ using namespace Shaders::GL;
+ 
++namespace
++{
++// A floating-point output keeps what a fixed-point one clamps away: values outside [0, 1] (the
++// overshoot of a scaling kernel) and results that are no number.
++std::string OutputDefines()
++{
++  const auto* winSystem = CServiceBroker::GetWinSystem();
++  return winSystem && winSystem->HasFloatOutput() ? "#define KODI_CLAMP_OUTPUT\n" : "";
++}
++} // unnamed namespace
++
+ //////////////////////////////////////////////////////////////////////
+ // BaseVideoFilterShader - base class for video filter shaders
+ //////////////////////////////////////////////////////////////////////
+@@ -37,7 +49,7 @@ BaseVideoFilterShader::BaseVideoFilterShader()
+ 
+   VertexShader()->LoadSource("gl_videofilter_vertex.glsl");
+ 
+-  PixelShader()->LoadSource("gl_videofilter_frag.glsl");
++  PixelShader()->LoadSource("gl_videofilter_frag.glsl", OutputDefines());
+ }
+ 
+ BaseVideoFilterShader::~BaseVideoFilterShader()
+@@ -57,7 +69,7 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method,
+   m_method = method;
+ 
+   std::string shadername;
+-  std::string defines;
++  std::string defines = OutputDefines();
+ 
+   m_floattex = CGLExtensions::IsExtensionSupported(CGLExtensions::ARB_texture_float);
+ 
+@@ -89,7 +101,7 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method,
+   }
+ 
+   if (m_floattex)
+-    defines = "#define HAS_FLOAT_TEXTURE\n";
++    defines += "#define HAS_FLOAT_TEXTURE\n";
+ 
+   //don't compile in stretch support when it's not needed
+   if (stretch)
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp
+@@ -17,6 +17,7 @@
+ #include "settings/SettingsComponent.h"
+ #include "utils/GLUtils.h"
+ #include "utils/log.h"
++#include "windowing/WinSystem.h"
+ 
+ #include <sstream>
+ #include <string>
+@@ -104,6 +105,13 @@ BaseYUV2RGBGLSLShader::BaseYUV2RGBGLSLShader(bool rect,
+       m_defines += "#define KODI_TONE_MAPPING_HABLE\n";
+   }
+ 
++  // A floating-point output keeps what a fixed-point one clamps away: values outside [0, 1], and
++  // results that are no number (0/0 in the tone mapping of a black pixel, which the shaders then
++  // leave out).
++  if (const auto* winSystem = CServiceBroker::GetWinSystem();
++      winSystem && winSystem->HasFloatOutput())
++    m_defines += "#define KODI_CLAMP_OUTPUT\n";
++
+   VertexShader()->LoadSource("gl_yuv2rgb_vertex.glsl", m_defines);
+ 
+   CLog::Log(LOGDEBUG, "GL: using shader format: {}",
+--- a/xbmc/rendering/gl/ScreenshotSurfaceGL.cpp
++++ b/xbmc/rendering/gl/ScreenshotSurfaceGL.cpp
+@@ -11,6 +11,9 @@
+ #include "rendering/capture/CaptureReadback.h"
+ #include "utils/Screenshot.h"
+ #include "windowing/WinSystem.h"
++#ifdef HAVE_DVBRIDGE
++#include "windowing/gbm/DVBridgeCapture.h"
++#endif
+ 
+ #include <memory>
+ 
+@@ -36,11 +39,22 @@ bool CScreenshotSurfaceGL::Read(const ScreenshotContext& ctx)
+   GLint viewport[4];
+   glGetIntegerv(GL_VIEWPORT, viewport);
+ 
+-  // window rows are bottom-up: flip to top-down
++  bool logicalPQ = false;
+   ReadbackBuffer buffer;
+-  if (!ReadFramebufferRegion(viewport[0], viewport[1], static_cast<unsigned int>(viewport[2]),
++#ifdef HAVE_DVBRIDGE
++  logicalPQ = KODI::WINDOWING::GBM::HasDVBridgeScreenshot(ctx.winSystem);
++  if (logicalPQ)
++  {
++    if (!KODI::WINDOWING::GBM::ReadDVBridgeScreenshot(ctx.winSystem,buffer))
++      return false;
++  }
++#endif
++
++  // window rows are bottom-up: flip to top-down
++  const bool read = logicalPQ || ReadFramebufferRegion(viewport[0], viewport[1], static_cast<unsigned int>(viewport[2]),
+                              static_cast<unsigned int>(viewport[3]),
+-                             ctx.winSystem.GetOutputBitDepth(), true, buffer))
++                             ctx.winSystem.GetOutputBitDepth(), true, buffer);
++  if (!read)
+     return false;
+ 
+   m_width = static_cast<int>(buffer.width);

@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cb1_hdr10_spatial.h"
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

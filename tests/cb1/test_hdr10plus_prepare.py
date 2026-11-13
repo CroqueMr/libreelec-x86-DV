@@ -219,6 +219,7 @@ int main(){
         implementation=body(source,'bool CDVBridgeGLES::Prepare(')
         program=r'''
 #include <cassert>
+inline void ClearInheritedGLErrors() {}
 #include <optional>
 #include <limits>
 #include <cstdint>

@@ -17,6 +17,7 @@ class NativeRenderReceiptTests(unittest.TestCase):
         native_publish=body(window_source,'void CWinSystemGbmGLESContext::PublishVideoSource(')
         program=r'''
 #include <cassert>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 #include <cstdint>
 #include <memory>
 #define HAVE_GBM
@@ -90,6 +91,7 @@ int main(){
         receipt=body(header,'bool HasRenderedFrame()')
         program=r'''
 #include <cassert>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 #include <memory>
 #include <array>
 #define HAVE_GBM

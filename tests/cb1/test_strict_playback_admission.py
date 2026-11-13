@@ -15,6 +15,7 @@ class StrictPlaybackAdmissionTests(unittest.TestCase):
 #include <memory>
 #include <mutex>
 #include <string>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 constexpr int LOGERROR=1;
 namespace DVBRIDGE {
 enum class OutputMode{Standard,Disabled};enum class HDR10SourceMode{Native,ReferenceDV};enum class OutputReason{None,ActivationFailed,SourceIneligible};

@@ -17,6 +17,7 @@ class AIReferencePhaseTests(unittest.TestCase):
 #define HAVE_DVBRIDGE 1
 #define CB1_HAS_HDR10_AI 1
 #include <cassert>
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 #include <cmath>
 #include <deque>
 #include <optional>

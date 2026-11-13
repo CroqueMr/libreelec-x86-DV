@@ -1435,5 +1435,119 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-01-gbm-context-alias.patch": {
+    "summary": "Reach the DV GBM context through a GL/GLES alias",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Cast to the DV context alias.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Cast to the DV context alias.",
+      "xbmc/settings/SettingConditions.cpp": "Cast to the DV context alias.",
+      "xbmc/windowing/gbm/WinSystemGbmDVContext.h": "Name the GBM context that carries DV output in GL and GLES builds."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-02-generated-gl-context.patch": {
+    "summary": "Generate the DV GL windowing context and GUI compositing from GLES",
+    "component": "kodi",
+    "files": {
+      "system/shaders/GL/1.5/gl_gui_composite.frag": "Match the GLES composite shader: LUT transfer, PQ input and output range.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/CMakeLists.txt": "Build DVBridge on GBM with OpenGL or OpenGL ES.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Use the GL video filter shaders in GL builds.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.cpp": "Match the GLES composite shader interface.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.h": "Match the GLES composite shader interface.",
+      "xbmc/windowing/gbm/CMakeLists.txt": "Build the R580 HDR10 scanout helper for GL too.",
+      "xbmc/windowing/gbm/PascalHDR10Scanout.cpp": "Include Kodi's GL header, so the helper builds for GL.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.h": "Generated from the DV GLES context by scripts/cb1-gl-winsys.py."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-03-shaders-screenshots.patch": {
+    "summary": "DV screenshots and float-output clamps for the GL shaders",
+    "component": "kodi",
+    "files": {
+      "system/shaders/GL/1.5/gl_output.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_videofilter_frag.glsl": "Clamp results on a floating-point output.",
+      "system/shaders/GL/1.5/gl_yuv2rgb_basic.glsl": "Clamp on a floating-point output; keep black pixels black in tone mapping.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/YUV2RGBShaderGL.cpp": "Enable the clamp on a floating-point output.",
+      "xbmc/rendering/gl/ScreenshotSurfaceGL.cpp": "Read DV screenshots from the bridge."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-04-gl-video-renderer.patch": {
+    "summary": "DV output hooks in the GL video renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Retain DV sources per buffer, build bridge layers, render through the bridge and report frame receipts.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Declare the DV hooks and per-buffer source retention."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-05-vaapi-gl-renderer.patch": {
+    "summary": "DV output and AI queue hooks in the VAAPI GL renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.cpp": "Build bridge layers from VAAPI DMA-BUF surfaces and size the HDR10 AI queue.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGL.h": "Declare the VAAPI DV hooks."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-06-gl-overlay-bounds.patch": {
+    "summary": "Report subtitle bounds from the GL overlay renderer",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.cpp": "Record subtitle bounds and textures for the DV composite.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGL.h": "Keep the ASS glyph extent."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-07-gpu-processing-probe.patch": {
+    "summary": "Probe DV GPU processing without GLES extension names on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Desktop GL has float blending and linear float filtering in core."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-08-core-profile-bit-depths.patch": {
+    "summary": "Read the DV scanout's bit depths the core-profile way on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Read scanout bit depths from the GL_BACK_LEFT attachment on desktop GL."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-09-srgb-scanout.patch": {
+    "summary": "Treat Mesa's sRGB-capable scanout as linear on desktop GL",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Treat an sRGB-capable scanout as linear while GL_FRAMEBUFFER_SRGB is off."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-10-renderer-setup-reasons.patch": {
+    "summary": "Say why the DV bridge renderer could not be set up",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Report which setup step failed and why an attach was refused.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Expose the attach refusal reason."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-11-inherited-gl-errors.patch": {
+    "summary": "Clear inherited GL errors before handing libplacebo control",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing at bridge entry points."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-12-fence-gl-errors.patch": {
+    "summary": "Clear inherited GL errors before fencing the DV context's last use",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Clear GL errors left by Kodi's drawing before fencing."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-gl-13-font-batch-shader.patch": {
+    "summary": "Draw a GL font batch with the shader it began with",
+    "component": "kodi",
+    "files": {
+      "xbmc/guilib/GUIFontTTFGL.cpp": "Take attribute locations from the font shader, not the current one."
+    }
   }
 }
