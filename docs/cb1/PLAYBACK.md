@@ -130,8 +130,13 @@ their existing capability and safety checks. Movie pixels and metadata are uncha
 ## Geometry, scaling and display modes
 
 Kodi owns the output resolution, refresh-rate whitelist, aspect ratio, zoom and
-video rectangle. CB1 uses that geometry and Kodi's selected spatial filter;
-there is no separate 1080p/1440p upscale option or custom bilinear selector.
+video rectangle. **SDR upscaler** and **HDR and Dolby Vision upscaler** select a
+spatial filter for the effective output. Both start at **Kodi default**, which
+uses the existing video scaling preference, including per-title settings. A new
+Kodi profile uses bilinear. The separate **Auto** choice uses Kodi's automatic
+filter selection. Player Information shows the effective filter when the video
+is enlarged.
+
 Reconstruction and processing precede final spatial scaling and tunnel packing.
 FEL upscaling is a separate enhancement-layer operation.
 

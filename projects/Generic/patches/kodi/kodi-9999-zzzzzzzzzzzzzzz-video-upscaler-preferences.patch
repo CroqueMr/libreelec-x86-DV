@@ -1,0 +1,712 @@
+--- /dev/null
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++#pragma once
++
++#include "cores/VideoSettings.h"
++
++#include <string>
++
++namespace KODI::VIDEO::UPSCALER
++{
++inline constexpr auto SDR = "videoplayer.sdrupscaler";
++inline constexpr auto HDR = "videoplayer.hdrupscaler";
++inline constexpr int KODI_DEFAULT = -1;
++
++constexpr int Select(int method, int kodi)
++{
++  return method == -1 ? kodi : method;
++}
++
++constexpr bool Enlarges(float width, float height, float targetWidth, float targetHeight)
++{
++  return width > 0 && height > 0 && targetWidth > 0 && targetHeight > 0 &&
++         (targetWidth - width >= 0.5f || targetHeight - height >= 0.5f);
++}
++
++int Get(bool hdr, int kodi);
++constexpr int Label(int method)
++{
++  switch (method)
++  {
++    case -1: return 41225; // Kodi default
++    case VS_SCALINGMETHOD_NEAREST: return 16301;  // Nearest neighbour
++    case VS_SCALINGMETHOD_LINEAR: return 16302;  // Bilinear
++    case VS_SCALINGMETHOD_CUBIC_B_SPLINE: return 16303;  // Bicubic B-Spline
++    case VS_SCALINGMETHOD_CUBIC_MITCHELL: return 16314;  // Bicubic Mitchell
++    case VS_SCALINGMETHOD_CUBIC_CATMULL: return 16321;  // Bicubic Catmull-Rom
++    case VS_SCALINGMETHOD_CUBIC_0_075: return 16326;  // Bicubic (0, 0.75)
++    case VS_SCALINGMETHOD_CUBIC_0_1: return 16330;  // Bicubic (0, 1)
++    case VS_SCALINGMETHOD_LANCZOS2: return 16304;  // Lanczos2
++    case VS_SCALINGMETHOD_LANCZOS3_FAST: return 16315;  // Lanczos3 Fast
++    case VS_SCALINGMETHOD_LANCZOS3: return 16305;  // Lanczos3
++    case VS_SCALINGMETHOD_AUTO: return 16316; // Auto
++    case VS_SCALINGMETHOD_SPLINE36_FAST: return 16323; // Spline36 Fast
++    case VS_SCALINGMETHOD_SPLINE36: return 16322; // Spline36
++    default: return 0;
++  }
++}
++} // namespace KODI::VIDEO::UPSCALER
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -3,6 +3,30 @@
+   <section id="player" label="14200" help="38100">
+     <category id="videoplayer" label="14215" help="38103">
+       <group id="99" label="40810">
++        <setting id="videoplayer.sdrupscaler" type="integer" label="41226" help="41228">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
++          <constraints><options>
++            <option label="41225">-1</option><option label="16316">16</option>
++            <option label="16301">0</option><option label="16302">1</option>
++            <option label="16303">2</option><option label="16314">3</option>
++            <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
++            <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
++            <option label="16323">17</option><option label="16322">18</option>
++          </options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="videoplayer.hdrupscaler" type="integer" label="41227" help="41228">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
++          <constraints><options>
++            <option label="41225">-1</option><option label="16316">16</option>
++            <option label="16301">0</option><option label="16302">1</option>
++            <option label="16303">2</option><option label="16314">3</option>
++            <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
++            <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
++            <option label="16323">17</option><option label="16322">18</option>
++          </options></constraints>
++          <control type="list" format="string" />
++        </setting>
+         <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
+           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+           <constraints><options>
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26573,3 +26573,23 @@
+ msgctxt "#41224"
+ msgid "Dolby Vision picture metadata is missing or unusable."
+ msgstr ""
++
++msgctxt "#41225"
++msgid "Kodi default"
++msgstr ""
++
++msgctxt "#41226"
++msgid "SDR upscaler"
++msgstr ""
++
++msgctxt "#41227"
++msgid "HDR and Dolby Vision upscaler"
++msgstr ""
++
++msgctxt "#41228"
++msgid "Select the filter used to enlarge video for this output. Kodi default keeps the existing video scaling settings."
++msgstr ""
++
++msgctxt "#41229"
++msgid "Upscaler"
++msgstr ""
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -15,6 +15,7 @@
+ #include "application/ApplicationPlayer.h"
+ #include "dialogs/GUIDialogYesNo.h"
+ #ifdef HAVE_DVBRIDGE
++#include "cores/VideoPlayer/VideoRenderers/UpscalerSettings.h"
+ #include "dialogs/DVPlaybackModes.h"
+ #endif
+ #include "guilib/GUIComponent.h"
+@@ -93,6 +94,14 @@
+     vs.m_ScalingMethod = static_cast<ESCALINGMETHOD>(std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
+     appPlayer->SetVideoSettings(vs);
+   }
++#ifdef HAVE_DVBRIDGE
++  else if (settingId == KODI::VIDEO::UPSCALER::SDR || settingId == KODI::VIDEO::UPSCALER::HDR)
++  {
++    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++    settings->SetInt(settingId, std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
++    settings->Save();
++  }
++#endif
+   else if (settingId == SETTING_VIDEO_STREAM)
+   {
+     m_videoStream = std::static_pointer_cast<const CSettingInt>(setting)->GetValue();
+@@ -403,6 +412,18 @@
+   entries.emplace_back(16319, VS_SCALINGMETHOD_DXVA_HARDWARE);
+   entries.emplace_back(16316, VS_SCALINGMETHOD_AUTO);
+ 
++#ifdef HAVE_DVBRIDGE
++  using namespace KODI::VIDEO::UPSCALER;
++  TranslatableIntegerSettingOptions upscalers{{41225, KODI_DEFAULT}};
++  for (const auto& entry : entries)
++  {
++    if (Label(entry.value))
++      upscalers.push_back(entry);
++  }
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
++  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
++#else
+   /* remove unsupported methods */
+   for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
+   {
+@@ -413,6 +434,8 @@
+   }
+ 
+   AddSpinner(groupVideo, SETTING_VIDEO_SCALINGMETHOD, 16300, SettingLevel::Basic, static_cast<int>(videoSettings.m_ScalingMethod), entries);
++
++#endif
+ 
+   AddVideoStreams(groupVideoStream, SETTING_VIDEO_STREAM);
+ 
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -35,7 +35,9 @@
+ #include "windowing/WinSystem.h"
+ #ifdef HAVE_DVBRIDGE
+ #include "cores/VideoSourceSideData.h"
++#include "cores/DataCacheCore.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
++#include "UpscalerSettings.h"
+ #include "windowing/gbm/WinSystemGbmGLESContext.h"
+ #endif
+ 
+@@ -214,6 +216,9 @@
+   m_bConfigured = true;
+   m_scalingMethodGui = VS_SCALINGMETHOD_MAX;
+   m_scalingMethod = m_videoSettings.m_ScalingMethod;
++#ifdef HAVE_DVBRIDGE
++  m_reportedUpscaler = -2;
++#endif
+ 
+   // Ensure that textures are recreated and rendering starts only after the 1st
+   // frame is loaded after every call to Configure().
+@@ -331,6 +336,7 @@
+   buf.loaded = false;
+   buf.doviMetadata = picture.doviMetadata;
+ #ifdef HAVE_DVBRIDGE
++  buf.informationGeneration = picture.sourceSideData ? picture.sourceSideData->Generation() : 0;
+   buf.doviEnhancement = picture.doviEnhancement;
+   buf.doviEnhancementBinding = picture.doviEnhancementBinding;
+   if (picture.doviSourceBinding.Valid() || picture.doviMetadata.Data())
+@@ -832,7 +838,11 @@
+ 
+ ESCALINGMETHOD CLinuxRendererGLES::SelectScalingMethod() const
+ {
+-  auto method = m_videoSettings.m_ScalingMethod;
++  return ResolveScalingMethod(m_videoSettings.m_ScalingMethod);
++}
++
++ESCALINGMETHOD CLinuxRendererGLES::ResolveScalingMethod(ESCALINGMETHOD method) const
++{
+   if(!Supports(method))
+   {
+     CLog::Log(LOGWARNING,
+@@ -861,6 +871,17 @@
+   return method;
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++ESCALINGMETHOD CLinuxRendererGLES::AutoUpscalingOverride() const
++{
++  using namespace KODI::VIDEO::UPSCALER;
++  if (Get(false, KODI_DEFAULT) == VS_SCALINGMETHOD_AUTO ||
++      Get(true, KODI_DEFAULT) == VS_SCALINGMETHOD_AUTO)
++    return ResolveScalingMethod(VS_SCALINGMETHOD_AUTO);
++  return VS_SCALINGMETHOD_LINEAR;
++}
++#endif
++
+ void CLinuxRendererGLES::UpdateVideoFilter()
+ {
+   CRect srcRect;
+@@ -877,7 +898,18 @@
+ 
+   // TODO: GL also checks nonLinStretchChanged and cmsChanged in the early exit
+   // and the reload check below. Add when non-linear stretch and CMS are ported to GLES.
+-  if (m_scalingMethodGui == m_videoSettings.m_ScalingMethod &&
++  auto requested = m_videoSettings.m_ScalingMethod;
++#ifdef HAVE_DVBRIDGE
++  if (!m_dvRequested && KODI::VIDEO::UPSCALER::Enlarges(
++          srcRect.Width(), srcRect.Height(), dstRect.Width(), dstRect.Height()))
++  {
++    const auto override = static_cast<ESCALINGMETHOD>(
++        KODI::VIDEO::UPSCALER::Get(m_passthroughHDR, requested));
++    if (override == requested || Supports(override))
++      requested = override;
++  }
++#endif
++  if (m_scalingMethodGui == requested &&
+       viewRect.Height() == m_lastViewRect.Height() && viewRect.Width() == m_lastViewRect.Width() &&
+       srcRect.Height() == m_lastSourceRect.Height() && srcRect.Width() == m_lastSourceRect.Width())
+   {
+@@ -885,12 +917,12 @@
+   }
+ 
+   // Viewport-only change doesn't need shader reload -- only method changes do
+-  if (m_scalingMethod != m_videoSettings.m_ScalingMethod)
++  if (m_scalingMethod != requested)
+     m_reloadShaders = true;
+ 
+   const ESCALINGMETHOD previousMethod = m_scalingMethod;
+-  m_scalingMethodGui = m_videoSettings.m_ScalingMethod;
+-  m_scalingMethod = SelectScalingMethod();
++  m_scalingMethodGui = requested;
++  m_scalingMethod = ResolveScalingMethod(requested);
+   m_lastViewRect = viewRect;
+   m_lastSourceRect = srcRect;
+ 
+@@ -1039,6 +1071,7 @@
+   }
+ 
+   CLog::Log(LOGERROR, "GLES: Falling back to bilinear due to failure to init scaler");
++  m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+   if (m_pVideoFilterShader)
+   {
+     delete m_pVideoFilterShader;
+@@ -1132,6 +1165,7 @@
+             else
+             {
+               CLog::Log(LOGERROR, "GLES: Error enabling YUV2RGB GLSL shader");
++              m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+               delete m_pYUVProgShader;
+               m_pYUVProgShader = nullptr;
+             }
+@@ -1345,6 +1379,7 @@
+   }
+   layer.width=m_sourceWidth; layer.height=m_sourceHeight;
+   layer.scalingMethod=SelectScalingMethod();
++  layer.autoScalingMethod=AutoUpscalingOverride();
+   layer.pts=hdr10 ? source.pts / DVD_TIME_BASE : buffer.doviPts;
+   layer.binding=hdr10 ? source.doviSourceBinding : buffer.doviMetadata.Binding();
+   if (!std::isfinite(layer.pts) || (hdr10 && (source.pts==DVD_NOPTS_VALUE ||
+@@ -1452,6 +1487,7 @@
+   }
+   if (m_dvRequested)
+   {
++    m_reportedUpscaler = -2;
+     const bool rendered = m_currentField == FIELD_FULL && RenderDVBridge(index);
+     AfterRenderHook(index);
+     if (rendered)
+@@ -1461,6 +1497,9 @@
+     return rendered;
+   }
+ #endif
++#ifdef HAVE_DVBRIDGE
++  int upscaler = -1;
++#endif
+   if (RenderHook(index))
+   {
+     ;
+@@ -1487,6 +1526,13 @@
+     default:
+       break;
+     }
++#ifdef HAVE_DVBRIDGE
++    if (KODI::VIDEO::UPSCALER::Enlarges(m_sourceRect.Width(), m_sourceRect.Height(),
++                                       m_destRect.Width(), m_destRect.Height()))
++      upscaler = m_currentField != FIELD_FULL && m_renderQuality != RQ_MULTIPASS &&
++                 m_scalingMethod != VS_SCALINGMETHOD_NEAREST
++                     ? VS_SCALINGMETHOD_LINEAR : m_scalingMethod;
++#endif
+   }
+   else
+   {
+@@ -1495,8 +1541,17 @@
+ 
+   AfterRenderHook(index);
+ #ifdef HAVE_DVBRIDGE
++  const auto generation =
++      m_buffers[index].videoBuffer ? m_buffers[index].videoBuffer->PlaybackGeneration() : 0;
++  const auto informationGeneration = m_buffers[index].informationGeneration;
++  if (informationGeneration != m_reportedUpscalerGeneration || m_reportedUpscaler != upscaler)
++  {
++    CServiceBroker::GetDataCacheCore().SetVideoUpscaler(upscaler, informationGeneration);
++    m_reportedUpscalerGeneration = informationGeneration;
++    m_reportedUpscaler = upscaler;
++  }
+   DVBRIDGE::PlaybackNotification::RenderedOrdinary(
+-      m_buffers[index].videoBuffer ? m_buffers[index].videoBuffer->PlaybackGeneration() : 0);
++      generation);
+ #endif
+   return true;
+ }
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -114,6 +114,10 @@
+   virtual void ReleaseShaders();
+   void SetTextureFilter(GLenum method);
+   ESCALINGMETHOD SelectScalingMethod() const;
++  ESCALINGMETHOD ResolveScalingMethod(ESCALINGMETHOD method) const;
++#ifdef HAVE_DVBRIDGE
++  ESCALINGMETHOD AutoUpscalingOverride() const;
++#endif
+   void UpdateVideoFilter();
+   void CheckVideoParameters(int index);
+   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
+@@ -152,6 +156,8 @@
+   virtual bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
+   dvbridge_geometry DVBridgeGeometry();
+   bool m_dvRequested{false};
++  int m_reportedUpscaler{-2};
++  uint64_t m_reportedUpscalerGeneration{};
+ #endif
+   virtual void AfterRenderHook(int idx) {}
+ 
+@@ -225,6 +231,7 @@
+     std::shared_ptr<AVFrame> doviEnhancement;
+     DVBRIDGE::SourceBinding doviEnhancementBinding{};
+     std::shared_ptr<VideoPicture> doviSourcePicture;
++    uint64_t informationGeneration{};
+ #endif
+     double doviPts = DVD_NOPTS_VALUE;
+   };
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1,5 +1,6 @@
+ /* SPDX-License-Identifier: GPL-2.0-or-later */
+ #include "DVBridgeGLES.h"
++#include "UpscalerSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h"
+ #include "VideoShaders/VideoFilterShaderGLES.h"
+ #include "utils/DVBridgeDiagnosticLog.h"
+@@ -189,6 +190,24 @@
+ }
+ catch (...) { return {}; } // Observation cannot change preparation or fence/release results.
+ 
++namespace
++{
++ESCALINGMETHOD OutputScalingMethod(const CDVBridgeGLES::Layer& layer,
++                                   const dvbridge_geometry& geometry,
++                                   dvbridge_mode mode)
++{
++  using namespace KODI::VIDEO::UPSCALER;
++  if (!Enlarges(geometry.crop[2] - geometry.crop[0], geometry.crop[3] - geometry.crop[1],
++                geometry.placement[2] - geometry.placement[0],
++                geometry.placement[3] - geometry.placement[1]))
++    return layer.scalingMethod;
++  const int method = Get(mode != DVBRIDGE_MODE_SDR, layer.scalingMethod);
++  if (method == VS_SCALINGMETHOD_AUTO)
++    return layer.autoScalingMethod;
++  return static_cast<ESCALINGMETHOD>(method);
++}
++} // namespace
++
+ /* Native spatial interpolation only. Colour processing and transport stay in CB1. */
+ class DVNativeScaler
+ {
+@@ -202,7 +221,13 @@
+     glDeleteVertexArrays(1, &m_vao);
+   }
+ 
+-  void SetMethod(ESCALINGMETHOD method, bool exact = true) { m_method = method; m_exact = exact; }
++  void SetMethod(ESCALINGMETHOD method, bool exact = true)
++  {
++    m_method = method;
++    m_exact = exact;
++    m_upscaler = -1;
++  }
++  int Upscaler() const { return m_upscaler; }
+ 
+   static bool Fit(void* priv, const pl_frame* image, const pl_frame* target, pl_frame* fitted)
+   {
+@@ -346,9 +371,14 @@
+     fitted.planes[0].texture = m_texture;
+     fitted.planes[0].flipped = false;
+     fitted.crop = target.crop;
++    if (KODI::VIDEO::UPSCALER::Enlarges(
++            image.crop.x1 - image.crop.x0, image.crop.y1 - image.crop.y0,
++            target.crop.x1 - target.crop.x0, target.crop.y1 - target.crop.y0))
++      m_upscaler = m_method;
+     return true;
+   }
+ 
++  int m_upscaler{-1};
+   bool m_exact{true};
+   pl_gpu m_gpu{};
+   pl_tex m_texture{};
+@@ -564,6 +594,11 @@
+ {
+   if (m_state->spatial) m_state->spatial->SetMethod(method, exact);
+ }
++int CDVBridgeGLES::Context::Upscaler() const
++{
++  return m_state->spatial ? m_state->spatial->Upscaler() : -1;
++}
++
+ pl_opengl CDVBridgeGLES::Context::GL() const { return m_state->gl; }
+ pl_log CDVBridgeGLES::Context::Log() const { return m_state->log; }
+ void CDVBridgeGLES::Context::Retain(std::shared_ptr<void> base, std::shared_ptr<void> enhancement)
+@@ -902,6 +937,7 @@
+   if (m_dvPolicyActive && dvbridge_render_dv_policy_poll(m_renderer) == DVBRIDGE_DV_FAILED)
+     return FrameStatus::Failed;
+   const bool asyncSetting = m_context->AsyncPreparation(base.binding.stream);
++  const auto scalingMethod = OutputScalingMethod(base, geometry, policy.mode);
+   const bool sameGeometry = m_geometryKnown &&
+       geometry.source_width == m_sourceGeometry.source_width &&
+       geometry.source_height == m_sourceGeometry.source_height &&
+@@ -911,7 +947,7 @@
+       geometry.target_height == m_sourceGeometry.target_height &&
+       std::equal(std::begin(geometry.crop), std::end(geometry.crop), std::begin(m_sourceGeometry.crop)) &&
+       std::equal(std::begin(geometry.placement), std::end(geometry.placement), std::begin(m_sourceGeometry.placement)) &&
+-      base.scalingMethod == m_spatialMethod;
++      scalingMethod == m_spatialMethod;
+   if (m_aiFrame && m_aiOutputAccepted && !m_pending && m_hasCommitted && base.binding == m_committedBinding &&
+       m_pendingBinding == m_committedBinding &&
+       prediction.id.revision == m_committedRevision && policy.mode == m_committedMode &&
+@@ -961,7 +997,7 @@
+   if (!dvbridge_gl_frame_import(&imported,m_gl->gpu,base.layout,base.width,base.height,base.planes))
+     return FrameStatus::Unsupported;
+   HDR10Color(imported.frame,base);
+-  m_spatialMethod = base.scalingMethod;
++  m_spatialMethod = scalingMethod;
+   m_context->SetSpatialMethod(m_spatialMethod, policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE);
+   m_context->Retain(base.lease);
+   policy.revision = prediction.id.revision;
+@@ -1832,6 +1868,7 @@
+   { Failure("renderer-unavailable"); m_asyncEligible = false; return FrameStatus::Failed; }
+   const bool asyncSetting = m_playerLed || m_context->AsyncPreparation(base.binding.stream);
+   auto policy = selected ? *selected : preferences.Policy();
++  const auto scalingMethod = OutputScalingMethod(base, geometry, policy.mode);
+   if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !m_hdr10plusSubmits)
+     DVBRIDGE::DiagnosticReserveProgress();
+   if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && !allowPacked)
+@@ -1859,7 +1896,7 @@
+       geometry.target_height == m_sourceGeometry.target_height &&
+       std::equal(std::begin(geometry.crop), std::end(geometry.crop), std::begin(m_sourceGeometry.crop)) &&
+       std::equal(std::begin(geometry.placement), std::end(geometry.placement), std::begin(m_sourceGeometry.placement)) &&
+-      base.scalingMethod == m_spatialMethod;
++      scalingMethod == m_spatialMethod;
+   if (m_geometryKnown && !sameGeometry)
+     m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max(preferences.revision,base.binding.revision));
+   m_sourceGeometry = geometry;
+@@ -1944,7 +1981,7 @@
+   m_pendingOverlayRevision = m_nativeOverlayRevision;
+   m_pendingOverlayVisible = m_overlayVisible;
+   m_requested = preferences;
+-  m_spatialMethod = base.scalingMethod;
++  m_spatialMethod = scalingMethod;
+   m_context->SetSpatialMethod(m_spatialMethod, policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE ||
+       policy.mode == DVBRIDGE_MODE_PLAYER_LED);
+   policy.revision = revision;
+@@ -2925,6 +2962,8 @@
+   m_committedOverlayRevision = frame.overlayRevision;
+   m_committedPacked = frame.withoutGui;
+   output->l2TrimsDisabled = frame.l2Disabled;
++  CServiceBroker::GetDataCacheCore().SetVideoUpscaler(frame.submission.upscaler,
++                                                      frame.source.informationGeneration);
+   DVBRIDGE::StreamTelemetry::NativePresented(frame.source, frame.metadata, *output, frame.decoded);
+   return true;
+ }
+@@ -3104,6 +3143,8 @@
+ #endif
+   m_committedBinding = m_pendingBinding;
+   m_committedMode = m_effectiveMode;
++  CServiceBroker::GetDataCacheCore().SetVideoUpscaler(submission.upscaler,
++                                                      submission.informationGeneration);
+   m_committedRevision = m_pendingIdentity.revision;
+   m_committedOverlayRevision = m_pendingOverlayRevision;
+   m_committedPacked = !m_guiComposed;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -64,6 +64,7 @@
+     bool AsyncPreparationConfigured() const;
+     bool FELHardwareUpscaling(uint64_t stream);
+     void SetSpatialMethod(ESCALINGMETHOD method, bool exact);
++    int Upscaler() const;
+     pl_opengl GL() const;
+     pl_log Log() const;
+     void Retain(std::shared_ptr<void> base, std::shared_ptr<void> enhancement = {});
+@@ -97,6 +98,7 @@
+   {
+     dvbridge_gl_layout layout;
+     ESCALINGMETHOD scalingMethod{VS_SCALINGMETHOD_LINEAR};
++    ESCALINGMETHOD autoScalingMethod{VS_SCALINGMETHOD_LINEAR};
+     int width;
+     int height;
+     dvbridge_gl_plane planes[3];
+@@ -157,12 +159,14 @@
+     std::optional<std::array<uint8_t,CB1_HDR10PLUS_VSIF_BYTES>> hdr10plus{};
+     bool hdr10plusAccepted{};
+     cb1_cmv40_status cmv40Status{CB1_CMV40_OFF};
++    int upscaler{-1};
+   };
+   Submission CaptureSubmission() const
+   {
+     auto submission=m_submission;
+     submission.informationGeneration=m_pendingSourceInfo.informationGeneration;
+     submission.cmv40Status=dvbridge_renderer_cmv40_status(m_renderer);
++    submission.upscaler = m_context->Upscaler();
+     const bool fel=(m_pendingInfo & CDVPlaybackInfo::FEL) != 0;
+     submission.felFilter=fel ? m_requested.felUpscaling : -1;
+     submission.felBackend=fel ? (m_effectiveMode == DVBRIDGE_MODE_MASTER_REFERENCE || m_requested.felUpscaling == 2 ? 3 :
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
+@@ -248,6 +248,7 @@
+     default: return false;
+   }
+   layer.scalingMethod = SelectScalingMethod();
++  layer.autoScalingMethod = AutoUpscalingOverride();
+   layer.width = m_sourceWidth;
+   layer.height = m_sourceHeight;
+   // AI follows Kodi's repaired presentation timestamps; DV pairing keeps source timestamps.
+--- a/xbmc/cores/DataCacheCore.h
++++ b/xbmc/cores/DataCacheCore.h
+@@ -37,6 +37,8 @@
+   uint64_t GetVideoProcessingGeneration();
+   bool SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info);
+   VideoProcessingInfo GetVideoProcessingInfo();
++  void SetVideoUpscaler(int method, uint64_t generation);
++  int GetVideoUpscaler();
+   bool SetVideoSourceSideData(uint64_t generation, std::shared_ptr<const VideoSourceSideData> source);
+   std::string GetVideoSourceSideData();
+   bool HasVideoHDR10PlusSource();
+@@ -245,6 +247,8 @@
+ 
+   CCriticalSection m_videoPlayerSection;
+   VideoProcessingInfo m_videoProcessingInfo;
++  int m_videoUpscaler{-1};
++  uint64_t m_videoUpscalerGeneration{};
+   std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
+   uint64_t m_videoProcessingGeneration{};
+   struct SPlayerVideoInfo
+--- a/xbmc/cores/DataCacheCore.cpp
++++ b/xbmc/cores/DataCacheCore.cpp
+@@ -111,6 +111,22 @@
+   return true;
+ }
+ 
++void CDataCacheCore::SetVideoUpscaler(int method, uint64_t generation)
++{
++  std::unique_lock lock(m_videoPlayerSection);
++  if (generation == m_videoProcessingGeneration)
++  {
++    m_videoUpscalerGeneration = generation;
++    m_videoUpscaler = method;
++  }
++}
++
++int CDataCacheCore::GetVideoUpscaler()
++{
++  std::unique_lock lock(m_videoPlayerSection);
++  return m_videoUpscalerGeneration == m_videoProcessingGeneration ? m_videoUpscaler : -1;
++}
++
+ VideoProcessingInfo CDataCacheCore::GetVideoProcessingInfo()
+ {
+   std::unique_lock lock(m_videoPlayerSection);
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -16,6 +16,7 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
+ #include "cores/DataCacheCore.h"
++#include "cores/VideoPlayer/VideoRenderers/UpscalerSettings.h"
+ #include "cores/VideoSourceSideData.h"
+ #include "guilib/guiinfo/VideoProcessingInfoGUI.h"
+ #include "utils/StringUtils.h"
+@@ -349,6 +350,10 @@
+     SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
+         (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
+     SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
++    const int upscaler = CServiceBroker::GetDataCacheCore().GetVideoUpscaler();
++    const int upscalerLabel = upscaler < 0 ? 0 : KODI::VIDEO::UPSCALER::Label(upscaler);
++    SetProperty("DV.VideoUpscaler", upscalerLabel ?
++        CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(upscalerLabel) : "");
+     SetProperty("DV.Engine", data.output.engine);
+     SetProperty("DV.Circuit", data.output.circuit);
+     SetProperty("DV.Reconstruction", "");
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -11,6 +11,7 @@
+ #include <optional>
+ #endif
+ #ifdef HAVE_DVBRIDGE
++#include "cores/VideoPlayer/VideoRenderers/UpscalerSettings.h"
+ #include "dialogs/DVPlaybackModes.h"
+ #endif
+ 
+@@ -614,9 +615,57 @@
+   CSettingConditions::Deinitialize();
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++namespace
++{
++class UpscalerPreferences final : public ISettingsHandler, public ISettingCallback
++{
++public:
++  void OnSettingsLoaded() override
++  {
++    using namespace KODI::VIDEO::UPSCALER;
++    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++    Set(SDR, settings->GetInt(SDR));
++    Set(HDR, settings->GetInt(HDR));
++  }
++
++  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override
++  {
++    Set(setting->GetId(),
++        std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
++  }
++
++  int Get(bool highDynamicRange, int kodi) const
++  {
++    using namespace KODI::VIDEO::UPSCALER;
++    const int method = (highDynamicRange ? hdr : sdr).load(std::memory_order_relaxed);
++    return Select(method, kodi);
++  }
++
++private:
++  void Set(const std::string& id, int method)
++  {
++    using namespace KODI::VIDEO::UPSCALER;
++    auto& preference = id == HDR ? hdr : sdr;
++    preference.store(Label(method) ? method : KODI_DEFAULT, std::memory_order_relaxed);
++  }
++
++  std::atomic<int> sdr{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
++  std::atomic<int> hdr{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
++};
++UpscalerPreferences upscalerPreferences;
++} // namespace
++
++int KODI::VIDEO::UPSCALER::Get(bool hdr, int kodi)
++{
++  return upscalerPreferences.Get(hdr, kodi);
++}
++#endif
++
+ void CSettings::InitializeISettingsHandlers()
+ {
+ #ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->RegisterSettingsHandler(&upscalerPreferences);
+   GetSettingsManager()->RegisterSettingsHandler(&CDVPlaybackModes::GetInstance());
+ #endif
+   // register ISettingsHandler implementations
+@@ -635,6 +684,7 @@
+ {
+ #ifdef HAVE_DVBRIDGE
+   GetSettingsManager()->UnregisterSettingsHandler(&CDVPlaybackModes::GetInstance());
++  GetSettingsManager()->UnregisterSettingsHandler(&upscalerPreferences);
+ #endif
+   // unregister ISettingsHandler implementations
+   GetSettingsManager()->UnregisterSettingsHandler(&CMediaSettings::GetInstance());
+@@ -670,6 +720,8 @@
+ void CSettings::InitializeISettingCallbacks()
+ {
+ #ifdef HAVE_DVBRIDGE
++  GetSettingsManager()->RegisterCallback(&upscalerPreferences,
++      {KODI::VIDEO::UPSCALER::SDR, KODI::VIDEO::UPSCALER::HDR});
+   GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
+       {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
+        "dvbridge.playback", "dvbridge.lldvformat"});
+@@ -738,6 +790,7 @@
+ {
+ #ifdef HAVE_DVBRIDGE
+   GetSettingsManager()->UnregisterCallback(&CDVPlaybackModes::GetInstance());
++  GetSettingsManager()->UnregisterCallback(&upscalerPreferences);
+ #endif
+   GetSettingsManager()->UnregisterCallback(&CMediaSettings::GetInstance());
+   GetSettingsManager()->UnregisterCallback(&CDisplaySettings::GetInstance());

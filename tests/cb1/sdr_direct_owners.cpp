@@ -1,5 +1,6 @@
 /* Actual post-stack class/method bodies are inserted by the unittest. Only
  * external GPU, retirement and publication boundaries are deterministic. */
+#include "cores/VideoPlayer/VideoRenderers/UpscalerSettings.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -36,7 +37,11 @@ extern "C" {
 #include "cores/VideoSourceSideData.h"
 namespace KODI::RENDERING::CAPTURE {struct ReadbackBuffer;}
 struct CRect {};
-enum ESCALINGMETHOD {VS_SCALINGMETHOD_MAX,VS_SCALINGMETHOD_LINEAR};
+struct CServiceBroker
+{
+ struct DataCache { void SetVideoUpscaler(int, uint64_t) {} };
+ static DataCache GetDataCacheCore() { return {}; }
+};
 constexpr int LOGINFO=1;
 @SETTINGS@
 namespace DVBRIDGE {
@@ -96,6 +101,8 @@ bool CDVBridgeGLES::Context::Quarantined()const{return m_state->quarantined;}
 bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
+int CDVBridgeGLES::Context::Upscaler() const { return -1; }
+int KODI::VIDEO::UPSCALER::Get(bool, int kodi) { return kodi; }
 struct CDVBridgeGLES::PlayerLedCpu {
   DVBRIDGE::SourceBinding source;
   uint64_t generation{}, revision{};

@@ -1435,5 +1435,23 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": {
+    "owner": "Select the video scaling method by output and report executed enlargement.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Kodi output-specific upscaler preferences and playback information.",
+      "system/settings/settings.xml": "Kodi output-specific upscaler preferences and playback information.",
+      "addons/resource.language.en_gb/resources/strings.po": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/DataCacheCore.h": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/cores/DataCacheCore.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Kodi output-specific upscaler preferences and playback information.",
+      "xbmc/settings/Settings.cpp": "Kodi output-specific upscaler preferences and playback information."
+    }
   }
 }
