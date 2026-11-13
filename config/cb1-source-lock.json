@@ -9,6 +9,8 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "tests/cb1/test_bluray_playlist_names.py": "11c224d44fb939c0a83af40ed412900600a16e391389511cc27f6aceac74f3fa",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-playlist-sidecars.patch": "fadb89dad3b3bc85394fc8bdf94709b0588a16c6db7165e95b03c4ae1c5d181f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
