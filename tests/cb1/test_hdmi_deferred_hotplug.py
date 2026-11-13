@@ -118,6 +118,14 @@ hpd_pin intel_connector_hpd_pin(intel_connector*c){return c->pin;}
 intel_encoder*intel_attached_encoder(intel_connector*c){return c->encoder;}
 
 void intel_hpd_irq_storm_switch_to_polling(intel_display*){}
+bool intel_encoder_has_hpd_pulse(intel_encoder*){return false;}
+bool intel_hpd_irq_storm_detect(intel_display*,enum hpd_pin,bool){return false;}
+void intel_hpd_irq_setup(intel_display*){}
+void spin_lock(int*lock){spin_lock_irq(lock);}
+void spin_unlock(int*lock){spin_unlock_irq(lock);}
+#define HAS_GMCH(display) false
+#define drm_WARN_ONCE(device,condition,...) warn(!!(condition))
+#define drm_dbg(...) do{}while(0)
 int refs=0,notifications=0,single_notifications=0,global_notifications=0,queues=0,delay_ms=0,worker_runs=0;
 bool queued=false;unsigned now_ms=0,due_ms=0;int hpd_events=0;
 void drm_connector_get(drm_connector*){++refs;}
@@ -169,12 +177,14 @@ void complete_all(std::atomic<bool>*done){done->store(true);if(published){auto h
   ('hdmi_ready_encoders','u32 hdmi_ready_encoders(intel_display*display)'),
   ('intel_hpd_hdmi_cancel','void intel_hpd_hdmi_cancel(intel_encoder*encoder)'),
   ('intel_hpd_hdmi_wait_for_commit','bool intel_hpd_hdmi_wait_for_commit(intel_encoder*encoder,enum pipe pipe,drm_crtc_commit*commit)'),
+  ('queue_hotplug_event_work','void queue_hotplug_event_work(intel_display*display)'),
   ('intel_hpd_hdmi_commit_done','void intel_hpd_hdmi_commit_done(intel_display*display,u8 pipe_mask)')]:code+=add('intel_hotplug.c',name+'(',proto)
  code+=add('intel_ddi.c','static int intel_hdmi_reset_link(','int intel_hdmi_reset_link(intel_encoder*encoder,drm_modeset_acquire_ctx*ctx)')
  code+=add('intel_hotplug.c','intel_hotplug_detect_connector(','intel_hotplug_state intel_hotplug_detect_connector(intel_connector*connector)')
  code+=add('intel_hotplug.c','intel_encoder_hotplug(','intel_hotplug_state intel_encoder_hotplug(intel_encoder*encoder,intel_connector*connector)')
  code+=add('intel_ddi.c','intel_ddi_hotplug(','intel_hotplug_state intel_ddi_hotplug(intel_encoder*encoder,intel_connector*connector)')
  code+=add('intel_hotplug.c','static void i915_hotplug_work_func(','void i915_hotplug_work_func(work_struct*work)')
+ code+=add('intel_hotplug.c','void intel_hpd_irq_handler(','void intel_hpd_irq_handler(intel_display*display,u32 pin_mask,u32 long_mask)')
  for name,proto in [
   ('cancel_all_detection_work','bool cancel_all_detection_work(intel_display*display)'),
   ('intel_hpd_cancel_work','void intel_hpd_cancel_work(intel_display*display)'),
@@ -235,6 +245,41 @@ int main(){int failures=0,checks=0;auto check=[&](bool good,const char*text){++c
   Fixture f,g;f.add(g);g.crtc.pipe=PIPE_B;f.pending();f.irq();
   for(unsigned time:{1000u,2000u,10000u,60000u}){f.advance_to(time);g.publish();f.drain();}
   check(f.waiting()&&!queued&&!f.configs()&&worker_runs==1,"permanent pending and unrelated CRTC completions never poll");
+ }
+ {
+  Fixture f;f.connector.base.status=1;f.pending();f.bus.config=0;f.irq();
+  check(queued&&due_ms==1000&&f.waiting(),"ordinary retry has a delayed timer");
+  f.advance_to(100);f.publish();
+  check(queued&&due_ms==100&&f.ready(),"ready HDMI recovery preempts a pending HPD retry timer");
+  f.advance_to(100);
+  check(f.configs()==1&&f.display.resets==1&&!f.waiting()&&!f.ready(),"recovery checks SCDC immediately");
+ }
+ {
+  Fixture f,g;f.add(g);f.connector.base.status=1;g.connector.base.status=1;g.crtc.pipe=PIPE_B;
+  g.pending();intel_ddi_hotplug(&g.encoder,&g.connector);
+  f.pending();
+  completion_read=[&](int read){if(read==2){completion_read=nullptr;after_irq_unlock=[&]{g.publish();};}};
+  f.irq();
+  check(queued&&due_ms==0&&g.ready(),"ordinary retry cannot postpone an already-ready HDMI check");
+  f.advance_to(0);
+  check(g.configs()==1&&f.configs()==0,"ready sibling checks without reading pending sink");
+ }
+ {
+  Fixture f;f.connector.base.status=1;f.bus.config=3;f.irq();
+  check(queued&&due_ms==1000,"unchanged connector has a delayed retry");
+  f.advance_to(600);f.bus.config=0;
+  intel_hpd_irq_handler(&f.display,BIT(HPD_A),BIT(HPD_A));
+  check(queued&&due_ms==600,"a fresh IRQ on the same pin preempts its retry timer");
+  if(queued&&due_ms==600){queued=false;f.run();}
+  check(f.display.resets==1,"the fresh IRQ recovers the HDMI link");
+ }
+ {
+  Fixture f;f.connector.base.status=1;
+  after_irq_unlock=[&]{after_irq_unlock=[&]{
+   intel_hpd_irq_handler(&f.display,BIT(HPD_A),BIT(HPD_A));
+  };};
+  f.irq();
+  check(queued&&due_ms==0,"a worker cannot defer a fresh IRQ on the pin it is retrying");
  }
  for(bool crtc_lock:{false,true}){
   Fixture f;f.pending();lock_error=crtc_lock?2:1;lock_failures=1;f.irq();f.publish();f.drain();

@@ -1429,5 +1429,11 @@
     "files": {
       "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Acquire a DRM blob reference only for a present VSIF."
     }
+  },
+  "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": {
+    "owner": "Schedule ready Intel HDMI SCDC recovery without the ordinary HPD retry delay.",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
+    }
   }
 }

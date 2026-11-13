@@ -323,7 +323,7 @@
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
     "tests/cb1/test_hdmi_scdc_diagnostics.py": "b82425e1906205f8e6d6685a634f3fa8b3c83def89660c13a7bb691f04612bd2",
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "e73a5a3c32a8a83781dcf693bf6f096921526b910ab7373a17ddde8b62bb425b",
-    "tests/cb1/test_hdmi_deferred_hotplug.py": "0d845096b44451b9cccca1bd94358dbb50923c694093481ce6d0eda5804cbcb4",
+    "tests/cb1/test_hdmi_deferred_hotplug.py": "b5d3260c51f9c364520878123f7b98e191f906ba822013fa816f0b346d283d0a",
     "packages/mediacenter/kodi-theme-Estuary/package.mk": "2f360b508a0fd05a9b6eee81469875f840882e01f7a60df3f162c365c1fe40f7",
     "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078",
     "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce",
@@ -354,7 +354,8 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "be36260449d7f9a43c6f5bcea629e5633c1d6f65d9d6f1ac7c7a1b690b2176e0"
+    "config/cb1-patch-index.json": "208206570217d5dfdd2b4091d98be9b877f5760650ad32b24aead09cede39fa3",
+    "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
