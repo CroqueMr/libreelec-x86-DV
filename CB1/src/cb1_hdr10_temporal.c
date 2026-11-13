@@ -93,7 +93,9 @@ enum cb1_ai_status cb1_hdr10_temporal_push(struct cb1_hdr10_temporal *ctx,
     if(ctx->count){
         struct sample *last=&ctx->samples[ctx->count-1];
         if(last->id.picture==id.picture)return d->pts==last->d.pts?CB1_AI_READY:CB1_AI_INVALID;
-        if(d->pts<=last->d.pts || d->pts<ctx->frontier || id.picture<=last->id.picture)return CB1_AI_INVALID;
+        /* A presentation hold may extend lookahead beyond the next decoded sample.
+         * Only decoded samples determine ordering; a new sample reanchors lookahead. */
+        if(d->pts<=last->d.pts || id.picture<=last->id.picture)return CB1_AI_INVALID;
     }
     if(ctx->ended)return CB1_AI_INVALID;
     if(ctx->count==MAX_SAMPLES)return CB1_AI_PENDING;

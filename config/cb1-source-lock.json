@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "tests/cb1/test_ai_temporal.py": "8b69ffd910fed9a182526fc68fc82dfa8870659bcda5d51556dc816afa99d756",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
@@ -300,7 +301,7 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "15ba5081ed23eb8138bab7b6174031af517b6b33494ce9743f47053d9493f978",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "ed11c2b45c37386b5d8d1931061bc85c732e4023573968311986202b90538f25",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "45135688c58f8b490f8983dcf846d80ec3637eccf397687855d3340080a14b8e",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "25b8d90d6c145730a915af7f5f7dd4d469111b49bb5d3480ca2f6a129805eb82",
     "tests/cb1/test_diagnostics_runtime.py": "7788bc522c91d111195842c384f035df6f2c2c12ca3576deaee7bc22242503fd",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "872cb1555415ab52f0f81d0230ff3b1371f5e4ec4b2d4766e4cd24b2b9ccf801",
@@ -448,7 +449,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_temporal.c": {
       "source": "src/cb1_hdr10_temporal.c",
-      "sha256": "edc161db56c2e6e2bacd910fa4383a4031788e5f420061cd58226bf76b7b376b"
+      "sha256": "61fe01d4cec4c191cb2eda2df5787fb1c15c157f8a5c51de630bf10c7ca7bf1e"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_temporal.h": {
       "source": "src/cb1_hdr10_temporal.h",
@@ -596,7 +597,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "45135688c58f8b490f8983dcf846d80ec3637eccf397687855d3340080a14b8e"
+      "sha256": "25b8d90d6c145730a915af7f5f7dd4d469111b49bb5d3480ca2f6a129805eb82"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
