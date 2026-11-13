@@ -1,0 +1,9 @@
+Anime4K Fast shader files
+Copyright 2019-2021 bloc97. MIT license retained in each file.
+Source: https://github.com/bloc97/Anime4K
+Bundle and ordering: https://github.com/atrugiel69/libreelec-x86-DV/commit/fadfd9d4320e00bef67264b90cfb038222279eb8
+
+FSRCNNX x2 8-0-4-1 shader
+Copyright 2017-2021 igv. LGPL-3.0-or-later notice retained in the file.
+Source: https://github.com/igv/FSRCNN-TensorFlow/releases
+Pinned bundle: https://github.com/atrugiel69/libreelec-x86-DV/commit/fadfd9d4320e00bef67264b90cfb038222279eb8
