@@ -1481,5 +1481,21 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Offer fixed SDR shader presets in Kodi.",
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Offer fixed SDR shader presets in Kodi."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-fsr1-rcas.patch": {
+    "owner": "Offer RCAS separately with matching SDR and HDR upscaler lists.",
+    "files": {
+      "system/settings/settings.xml": "Integrate EASU plus RCAS and share preset selection.",
+      "addons/resource.language.en_gb/resources/strings.po": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoSettings.h": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.h": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Integrate EASU plus RCAS and share preset selection.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Integrate EASU plus RCAS and share preset selection.",
+      "system/shaders/GLES/2.0/gles_fsr1_rcas.frag": "Integrate EASU plus RCAS and share preset selection."
+    }
   }
 }

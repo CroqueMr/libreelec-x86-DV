@@ -33,26 +33,35 @@ int main()
 }
 """)
 
-    def test_fsr1_is_opt_in_for_sdr_and_uses_kodi_multipass(self):
+    def test_fsr1_is_opt_in_and_uses_kodi_multipass(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for output, available in (("sdr", True), ("hdr", False)):
+        for output in ("sdr", "hdr"):
             preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
                                    "/constraints/options/option[@label='41230']")
-            self.assertEqual(preset is not None, available)
+            self.assertIsNotNone(preset)
         renderer = TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp"
         self.assertIn("new FSR1FilterShader", renderer.read_text())
         shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_easu.frag"
         self.assertIn("FsrEasuTap", shader.read_text())
 
-    def test_cnn_presets_are_admitted_only_for_compatible_sdr(self):
+    def test_cnn_presets_are_offered_for_both_output_preferences(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for output, available in (("sdr", True), ("hdr", False)):
+        for output in ("sdr", "hdr"):
             for label in ("41231", "41232"):
                 preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
                                        f"/constraints/options/option[@label='{label}']")
-                self.assertEqual(preset is not None, available)
+                self.assertIsNotNone(preset)
         renderer = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp").read_text()
         self.assertIn("RenderShaderUpscaler(index, preset)", renderer)
+
+    def test_rcas_is_a_separate_preset(self):
+        settings = ET.parse(TREE / "system/settings/settings.xml")
+        for output in ("sdr", "hdr"):
+            preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+                                   "/constraints/options/option[@label='41233']")
+            self.assertIsNotNone(preset)
+        shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_rcas.frag"
+        self.assertIn("FsrRcas", shader.read_text())
 
     def test_settings_and_conditional_information_row(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")

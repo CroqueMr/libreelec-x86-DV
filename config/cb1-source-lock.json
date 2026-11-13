@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-fsr1-rcas.patch": "60da22d84ede2f225095b280efd7217c424cca0cb4271e91b1c0aff960cfd639",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/PROVENANCE.txt": "8eda74d77c08cc571098b4379bc5aebf1cfdf56a6abc50c0dbad1e0e2a5dfb8f",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/FSRCNNX_x2_8-0-4-1.glsl": "133e966a9a405d6c47dc2694bea9b6eede7c92db74d2be53d9aafc6ccc2e208f",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_Upscale_CNN_x2_S.glsl": "4c53ec2e287908f7ee7bcb266b0170421626d663576468b7d7dafc62962649a4",
@@ -19,7 +20,7 @@
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_AutoDownscalePre_x2.glsl": "8c58291740146bd766a4d73f132775a797fe80f7d07919b5d767e27a5dc85656",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "b12710316bc79512aa850460341769883cfa19deecb00d1f8ab81252b97700de",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "422a2ccc6efe21a73ddfe39b51334e85be2b916c5dbd86dfd1d394f80e2c4849",
-    "tests/cb1/test_upscaler_preferences.py": "4551e2c8c670c5d1c6f7a676cf078f7764ab4f789817615268fb75bc375e4a9e",
+    "tests/cb1/test_upscaler_preferences.py": "8f6cfa476a0f92184f095990bf4dad281ced1ec20674db0b6eaa737623aa2c5f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "223a565aaaf975ab244203a7ec4bdd4e20e00e8edf71bf803d27317c049d74ab",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
@@ -27,7 +28,7 @@
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
     "tests/cb1/test_rendering_labels.py": "069a3c45c15feee729d0a4865299d6c6a23f66a76ca90258055278278ec32d81",
-    "docs/cb1/PLAYBACK.md": "2fc29eb1a8e32e90477418af878a3876fc6c348dfebcb19c7f5e666de1c68e48",
+    "docs/cb1/PLAYBACK.md": "ef5c5f928d8e981d497628e120dc7fd2c0d877162907aabda26187826ff35096",
     "packages/multimedia/bdj-runtime/package.mk": "1c0e1163651be3f08d75c1524bea594f6ab8bd8b11849cfa141e8018a18d8638",
     "packages/multimedia/bdj-runtime/profile.d/90-bdj.conf": "a1328b1ad9daf6f7710b53cc10686e7b6329cdb497d3fabb6f7b7585a1924a56",
     "packages/multimedia/libbluray/package.mk": "09e7c3604ddb5623300d05fe9e57fe771b32124139e83b364696a59948dbee91",
@@ -366,7 +367,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "66f8084a95c33284a0c2c896c583c4446b190bb3c11a448dfa89b2ca23ab2bb8",
+    "config/cb1-patch-index.json": "87c4f66a1b6e0fa9d0c795cc3b28a09d346df4e2cd8efc9d2d0cd10df9d41e9c",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780"
   },
   "staging": {
