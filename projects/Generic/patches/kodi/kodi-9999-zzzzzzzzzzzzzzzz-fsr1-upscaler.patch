@@ -1,0 +1,301 @@
+--- a/xbmc/cores/VideoSettings.h
++++ b/xbmc/cores/VideoSettings.h
+@@ -103,6 +103,7 @@
+   VS_SCALINGMETHOD_AUTO,
+   VS_SCALINGMETHOD_SPLINE36_FAST,
+   VS_SCALINGMETHOD_SPLINE36,
++  VS_SCALINGMETHOD_FSR1,
+   VS_SCALINGMETHOD_MAX // do not use and keep as last enum value.
+ };
+ 
+@@ -147,6 +148,7 @@
+       {VS_SCALINGMETHOD_AUTO, "auto"},
+       {VS_SCALINGMETHOD_SPLINE36_FAST, "spline36 fast"},
+       {VS_SCALINGMETHOD_SPLINE36, "spline36"},
++      {VS_SCALINGMETHOD_FSR1, "FSR 1 EASU"},
+   });
+ 
+   static_assert(VS_SCALINGMETHOD_MAX == scalingMethodMap.size(),
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
+@@ -41,6 +41,7 @@
+     case VS_SCALINGMETHOD_AUTO: return 16316; // Auto
+     case VS_SCALINGMETHOD_SPLINE36_FAST: return 16323; // Spline36 Fast
+     case VS_SCALINGMETHOD_SPLINE36: return 16322; // Spline36
++    case VS_SCALINGMETHOD_FSR1: return 41230;
+     default: return 0;
+   }
+ }
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -12,6 +12,7 @@
+             <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
+             <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
+             <option label="16323">17</option><option label="16322">18</option>
++            <option label="41230">19</option>
+           </options></constraints>
+           <control type="list" format="string" />
+         </setting>
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26593,3 +26593,7 @@
+ msgctxt "#41229"
+ msgid "Upscaler"
+ msgstr ""
++
++msgctxt "#41230"
++msgid "FSR 1 (EASU)"
++msgstr ""
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -421,8 +421,9 @@
+       upscalers.push_back(entry);
+   }
+   const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
++  upscalers.emplace_back(41230, VS_SCALINGMETHOD_FSR1);
+   AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
+-  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+ #else
+   /* remove unsupported methods */
+   for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -975,6 +975,7 @@
+     [[fallthrough]];
+   }
+ 
++  case VS_SCALINGMETHOD_FSR1:
+   case VS_SCALINGMETHOD_LANCZOS2:
+   case VS_SCALINGMETHOD_SPLINE36:
+   case VS_SCALINGMETHOD_LANCZOS3:
+@@ -1020,14 +1021,17 @@
+ 
+     // TODO: GL also passes m_nonLinStretch, m_intermediateGammaCorrection.
+     // Add when non-linear stretch and gamma correction are ported to GLES.
+-    m_pVideoFilterShader = new ConvolutionFilterShader(m_scalingMethod, m_useDithering);
++    if (m_scalingMethod == VS_SCALINGMETHOD_FSR1)
++      m_pVideoFilterShader = new FSR1FilterShader();
++    else
++      m_pVideoFilterShader = new ConvolutionFilterShader(m_scalingMethod, m_useDithering);
+     if (!m_pVideoFilterShader->CompileAndLink())
+     {
+       CLog::Log(LOGERROR, "GLES: Error compiling and linking video filter shader");
+       break;
+     }
+ 
+-    if (m_useDithering && m_ditherTex)
++    if (m_scalingMethod != VS_SCALINGMETHOD_FSR1 && m_useDithering && m_ditherTex)
+     {
+       bool ditherActive = true;
+       unsigned int effectiveDitherDepth = m_ditherDepth;
+@@ -1867,6 +1871,8 @@
+     m_pVideoFilterShader->SetSourceTexture(0);
+     m_pVideoFilterShader->SetWidth(m_sourceWidth);
+     m_pVideoFilterShader->SetHeight(m_sourceHeight);
++    if (m_scalingMethod == VS_SCALINGMETHOD_FSR1)
++      static_cast<FSR1FilterShader*>(m_pVideoFilterShader)->SetInputSize(m_fbo.width, m_fbo.height);
+     m_pVideoFilterShader->SetAlpha(1.0f);
+     m_pVideoFilterShader->SetMatrices(glMatrixProject.Get(), glMatrixModview.Get());
+     m_pVideoFilterShader->Enable();
+@@ -2524,6 +2530,14 @@
+     return true;
+   }
+ 
++#ifdef HAVE_DVBRIDGE
++  if (method == VS_SCALINGMETHOD_FSR1)
++    return (m_renderMethod & RENDER_GLSL) && !m_passthroughHDR && !m_renderOrientation &&
++           m_currentField == FIELD_FULL &&
++           KODI::VIDEO::UPSCALER::Enlarges(m_sourceRect.Width(), m_sourceRect.Height(),
++                                         m_destRect.Width(), m_destRect.Height());
++#endif
++
+   if (method == VS_SCALINGMETHOD_CUBIC_B_SPLINE ||
+       method == VS_SCALINGMETHOD_CUBIC_MITCHELL ||
+       method == VS_SCALINGMETHOD_CUBIC_CATMULL ||
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -202,6 +202,8 @@
+                 geometry.placement[3] - geometry.placement[1]))
+     return layer.scalingMethod;
+   const int method = Get(mode != DVBRIDGE_MODE_SDR, layer.scalingMethod);
++  if (method == VS_SCALINGMETHOD_FSR1)
++    return layer.scalingMethod;
+   if (method == VS_SCALINGMETHOD_AUTO)
+     return layer.autoScalingMethod;
+   return static_cast<ESCALINGMETHOD>(method);
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.h
+@@ -106,6 +106,20 @@
+     int m_ditherSize = 0;
+   };
+ 
++  class FSR1FilterShader : public BaseVideoFilterShader
++  {
++  public:
++    FSR1FilterShader();
++    void OnCompiledAndLinked() override;
++    bool OnEnabled() override;
++    bool GetTextureFilter(GLint& filter) override { filter = GL_NEAREST; return true; }
++    void SetInputSize(float width, float height) { m_inputWidth = width; m_inputHeight = height; }
++
++  private:
++    GLint m_hInputSize{-1};
++    float m_inputWidth{1.0f}, m_inputHeight{1.0f};
++  };
++
+   class DefaultFilterShader : public BaseVideoFilterShader
+   {
+     public:
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp
+@@ -252,6 +252,28 @@
+   BaseVideoFilterShader::Free();
+ }
+ 
++FSR1FilterShader::FSR1FilterShader()
++{
++  PixelShader()->LoadSource("gles_fsr1_easu.frag", OutputDefines());
++}
++
++void FSR1FilterShader::OnCompiledAndLinked()
++{
++  BaseVideoFilterShader::OnCompiledAndLinked();
++  m_hSourceTex = glGetUniformLocation(ProgramHandle(), "img");
++  m_hStepXY = glGetUniformLocation(ProgramHandle(), "stepxy");
++  m_hInputSize = glGetUniformLocation(ProgramHandle(), "input_size");
++}
++
++bool FSR1FilterShader::OnEnabled()
++{
++  BaseVideoFilterShader::OnEnabled();
++  glUniform1i(m_hSourceTex, m_sourceTexUnit);
++  glUniform2f(m_hStepXY, m_stepX, m_stepY);
++  glUniform2f(m_hInputSize, m_inputWidth, m_inputHeight);
++  return true;
++}
++
+ void DefaultFilterShader::OnCompiledAndLinked()
+ {
+   BaseVideoFilterShader::OnCompiledAndLinked();
+--- /dev/null
++++ b/system/shaders/GLES/2.0/gles_fsr1_easu.frag
+@@ -0,0 +1,118 @@
++// Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
++//
++// Permission is hereby granted, free of charge, to any person obtaining a copy
++// of this software and associated documentation files (the "Software"), to deal
++// in the Software without restriction, including without limitation the rights
++// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++// copies of the Software, and to permit persons to whom the Software is
++// furnished to do so, subject to the following conditions:
++//
++// The above copyright notice and this permission notice shall be included in
++// all copies or substantial portions of the Software.
++//
++// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
++// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++// THE SOFTWARE.
++
++#version 100
++
++// FidelityFX Super Resolution v1 EASU. RGB fragment adaptation for Kodi.
++// https://github.com/GPUOpen-Effects/FidelityFX-FSR
++precision highp float;
++uniform sampler2D img;
++uniform vec2 stepxy;
++uniform vec2 input_size;
++uniform float m_alpha;
++varying vec2 cord;
++
++vec3 samplePixel(vec2 pixel)
++{
++  return texture2D(img, (clamp(pixel, vec2(0.0), max(input_size - 1.0, 0.0)) + 0.5) * stepxy).rgb;
++}
++
++float luma(vec3 rgb)
++{
++  return rgb.g + 0.5 * (rgb.r + rgb.b);
++}
++
++void FsrEasuSet(inout vec2 direction, inout float len, float weight,
++                float a, float b, float c, float d, float e)
++{
++  vec2 negative = vec2(c - b, c - a);
++  vec2 positive = vec2(d - c, e - c);
++  vec2 gradient = vec2(d - b, e - a);
++  vec2 strength = clamp(abs(gradient) / max(max(abs(positive), abs(negative)), 1e-7),
++                        0.0, 1.0);
++  direction += gradient * weight;
++  len += dot(strength, strength) * weight;
++}
++
++void FsrEasuTap(inout vec3 color, inout float total, vec2 offset, vec2 direction,
++                vec2 kernel, float lobe, float clip, vec3 pixel)
++{
++  vec2 oriented = vec2(dot(offset, direction), dot(offset, vec2(-direction.y, direction.x)));
++  oriented *= kernel;
++  float distance2 = min(dot(oriented, oriented), clip);
++  float window = 0.4 * distance2 - 1.0;
++  float lanczos = lobe * distance2 - 1.0;
++  float weight = (1.5625 * window * window - 0.5625) * lanczos * lanczos;
++  color += pixel * weight;
++  total += weight;
++}
++
++void main()
++{
++  vec2 source = cord / stepxy - 0.5;
++  vec2 base = floor(source);
++  vec2 p = fract(source);
++  vec3 b = samplePixel(base + vec2(0.0, -1.0));
++  vec3 c = samplePixel(base + vec2(1.0, -1.0));
++  vec3 e = samplePixel(base + vec2(-1.0, 0.0));
++  vec3 f = samplePixel(base);
++  vec3 g = samplePixel(base + vec2(1.0, 0.0));
++  vec3 h = samplePixel(base + vec2(2.0, 0.0));
++  vec3 i = samplePixel(base + vec2(-1.0, 1.0));
++  vec3 j = samplePixel(base + vec2(0.0, 1.0));
++  vec3 k = samplePixel(base + vec2(1.0, 1.0));
++  vec3 l = samplePixel(base + vec2(2.0, 1.0));
++  vec3 n = samplePixel(base + vec2(0.0, 2.0));
++  vec3 o = samplePixel(base + vec2(1.0, 2.0));
++
++  vec2 direction = vec2(0.0);
++  float len = 0.0;
++  FsrEasuSet(direction, len, (1.0-p.x)*(1.0-p.y), luma(b),luma(e),luma(f),luma(g),luma(j));
++  FsrEasuSet(direction, len, p.x*(1.0-p.y), luma(c),luma(f),luma(g),luma(h),luma(k));
++  FsrEasuSet(direction, len, (1.0-p.x)*p.y, luma(f),luma(i),luma(j),luma(k),luma(n));
++  FsrEasuSet(direction, len, p.x*p.y, luma(g),luma(j),luma(k),luma(l),luma(o));
++  float direction2 = dot(direction, direction);
++  direction = direction2 < (1.0/32768.0) ? vec2(1.0,0.0) : direction * inversesqrt(direction2);
++  len = 0.25 * len * len;
++  float stretch = 1.0 / max(abs(direction.x), abs(direction.y));
++  vec2 kernel = vec2(1.0 + (stretch-1.0)*len, 1.0 - 0.5*len);
++  float lobe = 0.5 - 0.29 * len;
++  float clip = 1.0 / lobe;
++  vec3 color = vec3(0.0);
++  float total = 0.0;
++  FsrEasuTap(color,total,vec2(0.0,-1.0)-p,direction,kernel,lobe,clip,b);
++  FsrEasuTap(color,total,vec2(1.0,-1.0)-p,direction,kernel,lobe,clip,c);
++  FsrEasuTap(color,total,vec2(-1.0,0.0)-p,direction,kernel,lobe,clip,e);
++  FsrEasuTap(color,total,vec2(0.0,0.0)-p,direction,kernel,lobe,clip,f);
++  FsrEasuTap(color,total,vec2(1.0,0.0)-p,direction,kernel,lobe,clip,g);
++  FsrEasuTap(color,total,vec2(2.0,0.0)-p,direction,kernel,lobe,clip,h);
++  FsrEasuTap(color,total,vec2(-1.0,1.0)-p,direction,kernel,lobe,clip,i);
++  FsrEasuTap(color,total,vec2(0.0,1.0)-p,direction,kernel,lobe,clip,j);
++  FsrEasuTap(color,total,vec2(1.0,1.0)-p,direction,kernel,lobe,clip,k);
++  FsrEasuTap(color,total,vec2(2.0,1.0)-p,direction,kernel,lobe,clip,l);
++  FsrEasuTap(color,total,vec2(0.0,2.0)-p,direction,kernel,lobe,clip,n);
++  FsrEasuTap(color,total,vec2(1.0,2.0)-p,direction,kernel,lobe,clip,o);
++  vec3 lo = min(min(f,g),min(j,k));
++  vec3 hi = max(max(f,g),max(j,k));
++  gl_FragColor = vec4(clamp(color / total, lo, hi), m_alpha);
++#if defined(KODI_CLAMP_OUTPUT)
++  gl_FragColor = clamp(gl_FragColor, 0.0, 1.0);
++#endif
++}

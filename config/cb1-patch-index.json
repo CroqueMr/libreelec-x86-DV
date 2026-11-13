@@ -1453,5 +1453,20 @@
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Kodi output-specific upscaler preferences and playback information.",
       "xbmc/settings/Settings.cpp": "Kodi output-specific upscaler preferences and playback information."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": {
+    "owner": "Offer FSR 1 EASU in Kodi SDR playback without changing native defaults.",
+    "files": {
+      "xbmc/cores/VideoSettings.h": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Integrate the opt-in FSR 1 EASU filter.",
+      "system/settings/settings.xml": "Integrate the opt-in FSR 1 EASU filter.",
+      "addons/resource.language.en_gb/resources/strings.po": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.h": "Integrate the opt-in FSR 1 EASU filter.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp": "Integrate the opt-in FSR 1 EASU filter.",
+      "system/shaders/GLES/2.0/gles_fsr1_easu.frag": "Integrate the opt-in FSR 1 EASU filter."
+    }
   }
 }

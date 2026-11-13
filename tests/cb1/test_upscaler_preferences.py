@@ -33,6 +33,17 @@ int main()
 }
 """)
 
+    def test_fsr1_is_opt_in_for_sdr_and_uses_kodi_multipass(self):
+        settings = ET.parse(TREE / "system/settings/settings.xml")
+        for output, available in (("sdr", True), ("hdr", False)):
+            preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+                                   "/constraints/options/option[@label='41230']")
+            self.assertEqual(preset is not None, available)
+        renderer = TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp"
+        self.assertIn("new FSR1FilterShader", renderer.read_text())
+        shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_easu.frag"
+        self.assertIn("FsrEasuTap", shader.read_text())
+
     def test_settings_and_conditional_information_row(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for setting in ("videoplayer.sdrupscaler", "videoplayer.hdrupscaler"):
