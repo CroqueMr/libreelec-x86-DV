@@ -10,12 +10,8 @@ enum { GROUPS=64, WORDS=518, TOTAL_WORDS=GROUPS*WORDS };
 
 static const char analysis_header[]=
     "shared uint hist[256];shared uint yhist[256];shared vec4 sums[128];shared uvec2 counts[128];"
-    "vec3 exact_nits(vec3 q){vec3 x=pow(q,vec3(32.0/2523.0));return 10000.0*"
+    "vec3 nits(vec3 q){vec3 x=pow(q,vec3(32.0/2523.0));return 10000.0*"
     "pow(max(x-3424.0/4096.0,0.0)/(2413.0/128.0-2392.0/128.0*x),vec3(16384.0/2610.0));}"
-    "float nits(float q){"
-    "float p=q*4096.0;int i=min(4095,int(p));"
-    "int j=i+1;return mix(texelFetch(pq_lut,ivec2(i&2047,i>>11),0).r,"
-    "texelFetch(pq_lut,ivec2(j&2047,j>>11),0).r,p-float(i));}"
     "uint hdmi_bin(float light){return min(255u,uint(floor(light/16.0+0.5)));}";
 static const char analysis_body[]=
     "uint lane=gl_LocalInvocationID.x;hist[lane]=0u;hist[lane+128u]=0u;"
@@ -23,20 +19,20 @@ static const char analysis_body[]=
     "counts[lane]=uvec2(0);sums[lane]=vec4(0);barrier();"
     "uvec2 size=uvec2(area.zw-area.xy);uint count=size.x*size.y;"
     "uint last=0u,run=0u,last_y=0u,run_y=0u;"
-    "for(uint i=gl_GlobalInvocationID.x;i<count;i+=8192u){"
+    "uint tile=count/gl_NumWorkGroups.x+uint(count%gl_NumWorkGroups.x!=0u);"
+    "uint first=gl_WorkGroupID.x*tile,length=min(tile,count-min(first,count));"
+    "for(uint offset=lane;offset<length;offset+=128u){uint i=first+offset;"
     "ivec2 pos=area.xy+ivec2(i%size.x,i/size.x);vec3 q=texelFetch(video,pos,0).rgb;"
     "if(any(isnan(q))||any(isinf(q))||any(lessThan(q,vec3(0)))||any(greaterThan(q,vec3(1))))"
     "{counts[lane].x=1u;continue;}"
     "float light;"
     "if(measure_y){"
-    "vec3 rgb=vec3(nits(q.r),nits(q.g),nits(q.b));"
-    "light=exact_nits(vec3(max(q.r,max(q.g,q.b)))).r;"
+    "vec3 rgb=nits(q);light=max(rgb.r,max(rgb.g,rgb.b));"
     "float y=dot(rgb,vec3(0.2627,0.6780,0.0593));"
-    "if(abs(y-100.0)<0.001)y=dot(exact_nits(q),vec3(0.2627,0.6780,0.0593));"
     "counts[lane].y+=uint(y<=100.0);"
     "uint bin_y=hdmi_bin(y);"
     "if(bin_y!=last_y){if(run_y>0u)atomicAdd(yhist[last_y],run_y);last_y=bin_y;run_y=0u;}run_y++;"
-    "}else light=exact_nits(vec3(max(q.r,max(q.g,q.b)))).r;"
+    "}else light=nits(vec3(max(q.r,max(q.g,q.b)))).r;"
     "uint bin=hdmi_bin(light);"
     "if(bin!=last){if(run>0u)atomicAdd(hist[last],run);last=bin;run=0u;}run++;"
     "sums[lane].xyz=max(sums[lane].xyz,q);sums[lane].w+=light;}"
@@ -51,10 +47,16 @@ static const char analysis_body[]=
     "if(lane==0u){for(uint j=0u;j<4u;j++)records[base+512u+j]=floatBitsToUint(sums[0][j]);"
     "records[base+516u]=counts[0].x;records[base+517u]=counts[0].y;}";
 
+struct cb1_hdr10plus_scene {
+    struct dvbridge_identity last;
+    unsigned y99_nits;
+    double y100_sum;
+    uint64_t pictures;
+};
+
 struct cb1_hdr10plus_analysis {
     pl_gpu gpu;
-    GLuint program, buffer, sampler, pq_texture;
-    pl_tex pq_lut;
+    GLuint program, buffer, sampler;
     GLsync fence;
     struct dvbridge_identity identity;
     struct cb1_hdr10plus_scene scene, pending_scene;
@@ -67,7 +69,6 @@ static GLuint create_program(pl_log log)
     const char *parts[]={"#version 310 es\nprecision highp float;precision highp int;\n"
         "layout(local_size_x=128)in;layout(binding=0)uniform highp sampler2D video;uniform ivec4 area;"
         "uniform bool measure_y;"
-        "layout(binding=1)uniform highp sampler2D pq_lut;"
         "layout(std430,binding=0)writeonly buffer Statistics{uint records[];};",
         analysis_header,"void main(){",analysis_body,"}"};
     GLuint shader=glCreateShader(GL_COMPUTE_SHADER);
@@ -109,14 +110,7 @@ struct cb1_hdr10plus_analysis *cb1_hdr10plus_analysis_create(pl_log log,pl_gpu g
     glGenSamplers(1,&ctx->sampler);
     glSamplerParameteri(ctx->sampler,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
     glSamplerParameteri(ctx->sampler,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
-    /* The PQ table uses linear interpolation in float32. A 2D layout stays
-     * within the minimum GLES texture width, including the last sample. */
-    float lut[2048*3]={0};for(unsigned i=0;i<=4096;i++)lut[i]=(float)eotf(i/4096.0);
-    pl_fmt format=pl_find_fmt(gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_SAMPLEABLE);
-    if(format)ctx->pq_lut=pl_tex_create(gpu,pl_tex_params(
-        .w=2048,.h=3,.format=format,.sampleable=true,.initial_data=lut));
-    if(ctx->pq_lut)ctx->pq_texture=pl_opengl_unwrap(gpu,ctx->pq_lut,NULL,NULL,NULL);
-    if(!ctx->program || !ctx->buffer || !ctx->sampler || !ctx->pq_texture || glGetError()!=GL_NO_ERROR){
+    if(!ctx->program || !ctx->buffer || !ctx->sampler || glGetError()!=GL_NO_ERROR){
         cb1_hdr10plus_analysis_destroy(&ctx);return NULL;
     }
     return ctx;
@@ -128,7 +122,6 @@ void cb1_hdr10plus_analysis_destroy(struct cb1_hdr10plus_analysis **ctx)
     if((*ctx)->fence)glDeleteSync((*ctx)->fence);
     glDeleteBuffers(1,&(*ctx)->buffer);glDeleteProgram((*ctx)->program);
     glDeleteSamplers(1,&(*ctx)->sampler);
-    pl_tex_destroy((*ctx)->gpu,&(*ctx)->pq_lut);
     free(*ctx);*ctx=NULL;
 }
 
@@ -164,7 +157,7 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_submit(
     }
     GLenum target;GLuint texture=pl_opengl_unwrap(ctx->gpu,rgb,&target,NULL,NULL);
     if(!texture || target!=GL_TEXTURE_2D || glGetError()!=GL_NO_ERROR)return CB1_HDR10PLUS_ANALYSIS_INVALID;
-    GLint program,active,texture_binding,sampler,lut_binding,lut_sampler,generic,indexed;GLint64 offset,size;
+    GLint program,active,texture_binding,sampler,generic,indexed;GLint64 offset,size;
     glGetIntegerv(GL_CURRENT_PROGRAM,&program);glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
     glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,&texture_binding);
     glGetIntegerv(GL_SAMPLER_BINDING,&sampler);
@@ -173,9 +166,6 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_submit(
     glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_START,0,&offset);
     glGetInteger64i_v(GL_SHADER_STORAGE_BUFFER_SIZE,0,&size);
     glBindTexture(GL_TEXTURE_2D,texture);glBindSampler(0,ctx->sampler);
-    glActiveTexture(GL_TEXTURE1);glGetIntegerv(GL_TEXTURE_BINDING_2D,&lut_binding);
-    glGetIntegerv(GL_SAMPLER_BINDING,&lut_sampler);
-    glBindTexture(GL_TEXTURE_2D,ctx->pq_texture);glBindSampler(1,ctx->sampler);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,ctx->buffer);glUseProgram(ctx->program);
     glUniform4i(glGetUniformLocation(ctx->program,"area"),area.x0,area.y0,area.x1,area.y1);
     glUniform1i(glGetUniformLocation(ctx->program,"measure_y"),version==1);
@@ -186,8 +176,6 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_submit(
     if(indexed && size)glBindBufferRange(GL_SHADER_STORAGE_BUFFER,0,(GLuint)indexed,offset,size);
     else glBindBufferBase(GL_SHADER_STORAGE_BUFFER,0,(GLuint)indexed);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,(GLuint)generic);glUseProgram((GLuint)program);
-    glBindTexture(GL_TEXTURE_2D,(GLuint)lut_binding);glBindSampler(1,(GLuint)lut_sampler);
-    glActiveTexture(GL_TEXTURE0);
     glBindSampler(0,(GLuint)sampler);glBindTexture(GL_TEXTURE_2D,(GLuint)texture_binding);
     glActiveTexture((GLenum)active);
     if(!ok || glGetError()!=GL_NO_ERROR)return CB1_HDR10PLUS_ANALYSIS_INVALID;
@@ -251,7 +239,7 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_poll(
     *out=s;return CB1_HDR10PLUS_ANALYSIS_READY;
 }
 
-void cb1_hdr10plus_scene_update(struct cb1_hdr10plus_scene *scene,
+static void scene_update(struct cb1_hdr10plus_scene *scene,
     struct cb1_hdr10plus_statistics *s,struct dvbridge_identity id,bool scene_refresh)
 {
     if(!s->luminance_valid)return;
@@ -276,7 +264,7 @@ void cb1_hdr10plus_analysis_stage_scene(struct cb1_hdr10plus_analysis *ctx,
     ctx->pending_scene=(struct cb1_hdr10plus_scene){0};
     if(!s->luminance_valid)return;
     ctx->pending_scene=ctx->scene;
-    cb1_hdr10plus_scene_update(&ctx->pending_scene,s,ctx->identity,scene_refresh);
+    scene_update(&ctx->pending_scene,s,ctx->identity,scene_refresh);
 }
 
 void cb1_hdr10plus_analysis_commit_scene(struct cb1_hdr10plus_analysis *ctx)

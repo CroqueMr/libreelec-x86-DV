@@ -300,7 +300,7 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "15ba5081ed23eb8138bab7b6174031af517b6b33494ce9743f47053d9493f978",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "ed11c2b45c37386b5d8d1931061bc85c732e4023573968311986202b90538f25",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "b182a593322495d09b60c341e78c5083f95b0c739e5370f3e50f5448d5dd1353",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "5a1197bb857676c143d8e103ea3f7bf4fad5630d9b1b84dd789d950d0bbe7516",
     "tests/cb1/test_diagnostics_runtime.py": "7788bc522c91d111195842c384f035df6f2c2c12ca3576deaee7bc22242503fd",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "872cb1555415ab52f0f81d0230ff3b1371f5e4ec4b2d4766e4cd24b2b9ccf801",
@@ -596,7 +596,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "b182a593322495d09b60c341e78c5083f95b0c739e5370f3e50f5448d5dd1353"
+      "sha256": "5a1197bb857676c143d8e103ea3f7bf4fad5630d9b1b84dd789d950d0bbe7516"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
@@ -824,11 +824,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10plus_analysis.h": {
       "source": "src/cb1_hdr10plus_analysis.h",
-      "sha256": "321a7c3971debc288e43bc225dc0a4a4c3421ee7193ef2b32841fab2963f95e9"
+      "sha256": "a8097eb412bbe2498b5d966c94164b9a672a8d0b87025e475fdcd7451b26b4d5"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10plus_analysis.c": {
       "source": "src/cb1_hdr10plus_analysis.c",
-      "sha256": "7146d6e4f0c677d1fd2e9f97bedf0bd75d02976c6fd0a02b7171d083535565fa"
+      "sha256": "12d72af14f08fe315aa3bf8db86f529d0321de20c077f4d2750bab875745d3b3"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10plus_curve.h": {
       "source": "src/cb1_hdr10plus_curve.h",

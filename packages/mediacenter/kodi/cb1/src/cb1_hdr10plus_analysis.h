@@ -20,12 +20,6 @@ struct cb1_hdr10plus_statistics {
     double y100_percent;
     bool luminance_valid;
 };
-struct cb1_hdr10plus_scene {
-    struct dvbridge_identity last;
-    unsigned y99_nits;
-    double y100_sum;
-    uint64_t pictures;
-};
 enum cb1_hdr10plus_analysis_status {
     CB1_HDR10PLUS_ANALYSIS_INVALID,
     CB1_HDR10PLUS_ANALYSIS_PENDING,
@@ -60,9 +54,6 @@ enum cb1_hdr10plus_analysis_status cb1_hdr10plus_analysis_poll(
     struct cb1_hdr10plus_analysis *ctx, struct dvbridge_identity identity,
     struct cb1_hdr10plus_statistics *out);
 /* Accumulate on the pending scene snapshot and commit it with the picture. */
-void cb1_hdr10plus_scene_update(struct cb1_hdr10plus_scene *scene,
-    struct cb1_hdr10plus_statistics *statistics, struct dvbridge_identity identity,
-    bool scene_refresh);
 void cb1_hdr10plus_analysis_stage_scene(struct cb1_hdr10plus_analysis *ctx,
     struct cb1_hdr10plus_statistics *statistics, bool scene_refresh);
 void cb1_hdr10plus_analysis_commit_scene(struct cb1_hdr10plus_analysis *ctx);

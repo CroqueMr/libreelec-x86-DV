@@ -40,7 +40,6 @@ static void luminance_patterns(pl_gpu gpu,struct cb1_hdr10plus_analysis *ctx)
     enum {W=100,H=100,N=W*H};
     float *pixels=malloc(N*4*sizeof(*pixels));assert(pixels);
     const float below=pq(99.9),above=pq(100.1),bright=pq(800);
-    struct cb1_hdr10plus_scene scene={0};
     for(unsigned pattern=0;pattern<3;pattern++){
         for(unsigned i=0;i<N;i++){
             float q=pattern==2?below:i<pattern+1?bright:i<N/2?above:below;
@@ -53,21 +52,32 @@ static void luminance_patterns(pl_gpu gpu,struct cb1_hdr10plus_analysis *ctx)
         struct cb1_hdr10plus_statistics stats=result(ctx,id);
         assert(stats.luminance_valid && stats.y99_nits==(pattern==1?800:96));
         assert(stats.y100_percent==(pattern==2?100:50));
-        cb1_hdr10plus_scene_update(&scene,&stats,id,false);
+        cb1_hdr10plus_analysis_stage_scene(ctx,&stats,false);
         AVDynamicHDRPlus metadata;
         uint8_t wire[31];
         assert(cb1_hdr10plus_describe(&metadata,&stats,992));
         assert(cb1_hdr10plus_vsif(wire,&metadata,false,true)==CB1_HDR10PLUS_OK);
         assert(wire[10]==(pattern?50:6) && wire[11]==(pattern==2?67:50));
+        cb1_hdr10plus_analysis_commit_scene(ctx);
         if(pattern==2){
             assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,0)==CB1_HDR10PLUS_ANALYSIS_PENDING);
             assert(!result(ctx,id).luminance_valid);
-            stats.y99_nits=96;stats.y100_percent=100;
-            cb1_hdr10plus_scene_update(&scene,&stats,(struct dvbridge_identity){100,4,1},true);
+            id.picture++;
+            assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+            stats=result(ctx,id);
+            cb1_hdr10plus_analysis_stage_scene(ctx,&stats,true);
             assert(stats.y99_nits==96 && stats.y100_percent==100);
-            stats.y99_nits=800;stats.y100_percent=50;
-            cb1_hdr10plus_scene_update(&scene,&stats,(struct dvbridge_identity){100,5,2},false);
-            assert(stats.y99_nits==800 && stats.y100_percent==50);
+            /* A cancelled refresh must leave the last accepted picture's scene intact. */
+            cb1_hdr10plus_analysis_reset(ctx);
+            assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+            stats=result(ctx,id);
+            cb1_hdr10plus_analysis_stage_scene(ctx,&stats,false);
+            assert(stats.y99_nits==800 && stats.y100_percent==75);
+            id.revision++;
+            assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
+            stats=result(ctx,id);
+            cb1_hdr10plus_analysis_stage_scene(ctx,&stats,false);
+            assert(stats.y99_nits==96 && stats.y100_percent==100);
         }
         pl_tex_destroy(gpu,&t);
     }
