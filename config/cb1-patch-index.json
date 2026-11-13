@@ -1223,6 +1223,16 @@
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr10-ai-queue-continuity.patch": {
+    "owner": "HDR10-to-Dolby Vision input draining and anticipation",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Drain the outgoing video before waiting on audio at a stream boundary.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Anticipate the first sample beyond the sealed prediction horizon.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Keep the analysis interface independent of the current presentation window.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Admit ordered samples independently of the presentation window.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h": "Expose the source analysis input without a presentation timestamp."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-dv-renderer-handoff.patch": {
     "owner": "Keep the committed HDR10-to-Dolby Vision output while a compatible VAAPI renderer is replaced.",
     "files": {

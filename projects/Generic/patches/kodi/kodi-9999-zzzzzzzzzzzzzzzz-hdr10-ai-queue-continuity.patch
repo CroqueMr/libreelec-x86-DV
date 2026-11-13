@@ -1,0 +1,140 @@
+Subject: [PATCH] Keep HDR10 AI analysis fed at stream boundaries
+
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -1869,6 +1869,12 @@
+       {
+         CloseDemuxer();
+ 
++#ifdef CB1_HAS_HDR10_AI
++        // CloseStream(audio) can wait while AI is still holding the outgoing
++        // video's last second. Signal the end to the video decoder first.
++        if (m_CurrentVideo.inited && m_renderManager.HDR10AILookahead())
++          m_VideoPlayerVideo->SendMessage(std::make_shared<CDVDMsg>(CDVDMsg::VIDEO_DRAIN));
++#endif
+         SetCaching(CACHESTATE_DONE);
+         CLog::Log(LOGINFO, "VideoPlayer: next stream, wait for old streams to be finished");
+         CloseStream(m_CurrentAudio, true);
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -382,7 +382,6 @@
+   {
+     Layer layer;
+     DVBRIDGE::SourceBinding head;
+-    double headPts;
+     DVBRIDGE::OutputPreferences preferences;
+   };
+   std::optional<NextHDR10AI> aiNext;
+@@ -667,7 +666,7 @@
+       HDR10AI().RecordStatus("analysis-context",CB1_AI_INCOMPATIBLE);
+ }
+ 
+-cb1_ai_status CDVBridgeGLES::Context::AnalyseHDR10AI(const Layer& base, double headPts)
++cb1_ai_status CDVBridgeGLES::Context::AnalyseHDR10AI(const Layer& base)
+ {
+   if (!m_state->gl || Quarantined())
+     return HDR10AI().RecordStatus("analysis-context",CB1_AI_INVALID);
+@@ -679,7 +678,7 @@
+   if (!dvbridge_gl_frame_import(&imported,m_state->gl->gpu,base.layout,base.width,base.height,base.planes))
+     return HDR10AI().RecordStatus("analysis-import",CB1_AI_INCOMPATIBLE);
+   HDR10Color(imported.frame,base);
+-  const auto status = HDR10AI().Submit(&imported.frame,base.binding,base.pts,headPts,base.lease);
++  const auto status = HDR10AI().Submit(&imported.frame,base.binding,base.pts,base.lease);
+   const bool fenced = FenceHDR10AIUse();
+   dvbridge_gl_frame_release(&imported);
+   return fenced ? status : HDR10AI().RecordStatus("analysis-fence",CB1_AI_INVALID);
+@@ -691,9 +690,9 @@
+ {
+   return m_context ? m_context->BeginHDR10AI(bundle,preferences,binding,pts,now) : CB1_AI_INCOMPATIBLE;
+ }
+-cb1_ai_status CDVBridgeGLES::AnalyseHDR10AI(const Layer& base, double headPts)
+-{
+-  return m_context ? m_context->AnalyseHDR10AI(base,headPts) : CB1_AI_INCOMPATIBLE;
++cb1_ai_status CDVBridgeGLES::AnalyseHDR10AI(const Layer& base)
++{
++  return m_context ? m_context->AnalyseHDR10AI(base) : CB1_AI_INCOMPATIBLE;
+ }
+ 
+ cb1_ai_status CDVBridgeGLES::CollectHDR10AI()
+@@ -748,7 +747,7 @@
+       !source.Current(accepted,preferences) ||
+       next->layer.binding.picture <= source.LastSubmitted())
+     return;
+-  const auto status = AnalyseHDR10AI(next->layer,next->headPts);
++  const auto status = AnalyseHDR10AI(next->layer);
+   // The accepted current output cannot be undone by a future sample failure.
+   // Preserve fatal analysis handling at the next queue preparation, without
+   // charging a speculative job against the cumulative required-wait budget.
+@@ -825,7 +824,7 @@
+         break;
+       }
+       if (layer.binding.picture <= source.LastSubmitted()) continue;
+-      if (AnalyseHDR10AI(layer,head.pts) != CB1_AI_READY) break;
++      if (AnalyseHDR10AI(layer) != CB1_AI_READY) break;
+     }
+     if (!covered && end && source.Collect() == CB1_AI_READY &&
+         source.LastSubmitted() >= queue.back().binding.picture)
+@@ -834,13 +833,13 @@
+         std::chrono::steady_clock::now() - started).count();
+     const bool required = drain && now + elapsed >= presentationDeadline;
+     const auto decision=source.Prediction(head.binding,preferences,now+elapsed,result,required);
+-    // Capture anticipation without placing it ahead of the current draw.
++    // The first sample at or beyond the sealed horizon belongs to the next
++    // prediction. Its GPU work follows the current draw, including at 23.976 Hz.
+     if (decision == Decision::Prepare && !paused && m_state->attached && anticipation &&
+-        anticipation->pts <= head.pts + 1.0 + 1e-9 &&
+         anticipation->binding.picture > source.LastSubmitted() &&
+         source.Collect() == CB1_AI_READY)
+     {
+-      m_state->aiNext = State::NextHDR10AI{*anticipation,head.binding,head.pts,preferences};
++      m_state->aiNext = State::NextHDR10AI{*anticipation,head.binding,preferences};
+     }
+     // Collect may dispatch follow-up reductions after the initial import fence.
+     if (!FenceHDR10AIUse())
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -79,7 +79,7 @@
+     cb1_ai_status BeginHDR10AI(const char* bundle,
+         const DVBRIDGE::OutputPreferences& preferences, DVBRIDGE::SourceBinding binding,
+         double pts, uint64_t now, bool buffered = true);
+-    cb1_ai_status AnalyseHDR10AI(const Layer& base, double headPts);
++    cb1_ai_status AnalyseHDR10AI(const Layer& base);
+     HDR10AISource::Decision PrepareHDR10AIQueue(std::span<const Layer> queue,
+         const DVBRIDGE::OutputPreferences& preferences, const char* bundle,
+         uint64_t now, bool end, cb1_ai_result* result, bool paused = false,
+@@ -116,7 +116,7 @@
+ #ifdef CB1_HAS_HDR10_AI
+   cb1_ai_status BeginHDR10AI(const char* bundle, const DVBRIDGE::OutputPreferences& preferences,
+       DVBRIDGE::SourceBinding binding, double pts, uint64_t now);
+-  cb1_ai_status AnalyseHDR10AI(const Layer& base, double headPts);
++  cb1_ai_status AnalyseHDR10AI(const Layer& base);
+   cb1_ai_status CollectHDR10AI();
+   cb1_ai_status SealHDR10AI(double pts);
+   void EndHDR10AI();
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
+@@ -122,10 +122,9 @@
+ }
+ 
+ cb1_ai_status HDR10AISource::Submit(const pl_frame* frame, DVBRIDGE::SourceBinding binding,
+-    double pts, double headPts, std::shared_ptr<void> lease)
+-{
+-  if (!Matches(binding) || m_fallback || !m_context || !std::isfinite(pts) ||
+-      !std::isfinite(headPts) || pts < m_origin || pts < headPts || pts > headPts + 1.0 + 1e-9)
++    double pts, std::shared_ptr<void> lease)
++{
++  if (!Matches(binding) || m_fallback || !m_context || !std::isfinite(pts) || pts < m_origin)
+     return RecordStatus("analysis-submit",CB1_AI_INVALID);
+   const auto collected = Collect();
+   if (collected != CB1_AI_READY) return collected;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h
+@@ -30,7 +30,7 @@
+       std::shared_ptr<const AVDynamicHDRPlus> source, double pts, uint64_t now,
+       cb1_ai_result* result);
+   cb1_ai_status Submit(const pl_frame* frame, DVBRIDGE::SourceBinding binding, double pts,
+-      double headPts, std::shared_ptr<void> lease);
++      std::shared_ptr<void> lease);
+   cb1_ai_status Seal(double pts);
+   void End();
+   Decision Prediction(DVBRIDGE::SourceBinding binding,

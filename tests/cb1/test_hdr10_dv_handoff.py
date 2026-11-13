@@ -7,6 +7,53 @@ from test_native_video_source import TREE, body
 
 
 class HDR10DVHandoffTests(unittest.TestCase):
+    def test_video_drains_before_waiting_for_outgoing_audio(self):
+        source = (TREE / "xbmc/cores/VideoPlayer/VideoPlayer.cpp").read_text()
+        handoff = body(source, "if(next == CDVDInputStream::NEXTSTREAM_OPEN)")
+        execute(r'''
+#include <cassert>
+#include <memory>
+#define CB1_HAS_HDR10_AI
+struct CDVDMsg { enum { VIDEO_DRAIN }; explicit CDVDMsg(int) {} };
+struct Player {
+ enum { CACHESTATE_DONE, LOGINFO };
+ struct Stream { bool inited=true; void Clear(){} };
+ Stream m_CurrentAudio, m_CurrentVideo;
+ struct { void reset(){} } m_syncStartPtsWait;
+ struct { void Clear(){} } m_CurrentSubtitle;
+ struct Renderer {
+  bool ai=true;
+  bool HDR10AILookahead(){return ai;}
+ } m_renderManager;
+ struct Video {
+  int drains=0;
+  void SendMessage(std::shared_ptr<CDVDMsg>){++drains;}
+ } video, *m_VideoPlayerVideo=&video;
+ struct CLog { static void Log(int,const char*){} };
+ bool demuxClosed=false;
+ int drainsAtAudioClose=-1;
+ void CloseDemuxer(){demuxClosed=true;}
+ void SetCaching(int){}
+ void CloseStream(Stream& stream,bool wait) {
+  assert(demuxClosed && wait);
+  if (&stream==&m_CurrentAudio) drainsAtAudioClose=video.drains;
+ }
+ void Handoff() {
+  for (int once=0;once<1;++once) HANDOFF
+ }
+};
+int main() {
+ Player ai;
+ ai.Handoff(); assert(ai.drainsAtAudioClose==1 && ai.video.drains==1);
+ Player native;
+ native.m_renderManager.ai=false;
+ native.Handoff(); assert(native.drainsAtAudioClose==0);
+ Player uninitialized;
+ uninitialized.m_CurrentVideo.inited=false;
+ uninitialized.Handoff(); assert(uninitialized.drainsAtAudioClose==0);
+}
+'''.replace("HANDOFF", handoff))
+
     def test_only_matching_vaapi_sources_can_retain_the_active_output(self):
         source = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp").read_text()
         self.assertIn("bool CRendererVAAPIGLES::RetainHDR10DVOutput(", source)
