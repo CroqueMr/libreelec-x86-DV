@@ -1,0 +1,240 @@
+Subject: [PATCH] VideoPlayer: Dolby Vision active area view mode
+
+The "Dolby Vision active area" view mode fits the authored L5 active
+area of each picture instead of the whole encoded frame. A 1.43:1 IMAX
+master that windowboxes its 2.39:1 scenes then shows those scenes at
+full width, and returns to the IMAX frame when L5 changes. The source
+rect is cropped only when that enlarges the picture, so frames that
+already fit their active area keep the unscaled Master paths. Without
+L5, the mode behaves as Normal.
+
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26573,3 +26573,7 @@
+ msgctxt "#41224"
+ msgid "Dolby Vision picture metadata is missing or unusable."
+ msgstr ""
++
++msgctxt "#41225"
++msgid "Dolby Vision active area"
++msgstr ""
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp
+@@ -381,13 +381,44 @@
+   const bool eyeCropped =
+       (stereo_view == RenderStereoView::LEFT || stereo_view == RenderStereoView::RIGHT);
+ 
++  float aspectRatio = (eyeCropped ? GetPerEyeAspectRatio() : GetAspectRatio()) *
++                      CDisplaySettings::GetInstance().GetPixelRatio();
++  if (m_videoSettings.m_ViewMode == ViewModeActiveArea && !stereo_mode &&
++      m_renderOrientation == 0)
++    FitActiveArea(aspectRatio);
++
+   CalcNormalRenderRect(m_viewRect.x1, m_viewRect.y1, m_viewRect.Width(), m_viewRect.Height(),
+-                       (eyeCropped ? GetPerEyeAspectRatio() : GetAspectRatio()) *
+-                           CDisplaySettings::GetInstance().GetPixelRatio(),
++                       aspectRatio,
+                        CDisplaySettings::GetInstance().GetZoomAmount(),
+                        CDisplaySettings::GetInstance().GetVerticalShift());
+ }
+ 
++void CBaseRenderer::FitActiveArea(float& aspectRatio)
++{
++  const CRect frame(0.0f, 0.0f, static_cast<float>(m_sourceWidth),
++                    static_cast<float>(m_sourceHeight));
++  CRect area(m_activeArea);
++  area.Intersect(frame);
++  if (area.IsEmpty() || area == frame)
++    return;
++
++  const float areaAspectRatio =
++      aspectRatio * (area.Width() / frame.Width()) / (area.Height() / frame.Height());
++  auto& display = CDisplaySettings::GetInstance();
++  CRect whole;
++  CRect fitted;
++  CalcDestRect(m_viewRect.x1, m_viewRect.y1, m_viewRect.Width(), m_viewRect.Height(), aspectRatio,
++               display.GetZoomAmount(), display.GetVerticalShift(), whole);
++  CalcDestRect(m_viewRect.x1, m_viewRect.y1, m_viewRect.Width(), m_viewRect.Height(),
++               areaAspectRatio, display.GetZoomAmount(), display.GetVerticalShift(), fitted);
++  // Compare the area's width inside the whole-frame fit; one pixel absorbs rounding.
++  if (fitted.Width() <= whole.Width() * area.Width() / frame.Width() + 1.0f)
++    return;
++
++  m_sourceRect = area;
++  aspectRatio = areaAspectRatio;
++}
++
+ float CBaseRenderer::GetPerEyeAspectRatio() const
+ {
+   const float ratio = GetAspectRatio();
+@@ -450,7 +481,7 @@
+ 
+ void CBaseRenderer::SetViewMode(int viewMode)
+ {
+-  if (viewMode < ViewModeNormal || viewMode > ViewModeAuto)
++  if (viewMode < ViewModeNormal || viewMode > ViewModeActiveArea)
+     viewMode = ViewModeNormal;
+ 
+   m_videoSettings.m_ViewMode = viewMode;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
+@@ -178,6 +178,21 @@
+    */
+   float GetPerEyeAspectRatio() const;
+ 
++  /*!
++   * \brief Set the authored active picture area of the next picture, in source pixels.
++   *
++   * An empty rect means that the whole encoded frame is active.
++   */
++  void SetActiveArea(const CRect& area) { m_activeArea = area; }
++
++  /*!
++   * \brief Fit the active area instead of the encoded frame when this enlarges the picture.
++   *
++   * Changes m_sourceRect and the aspect ratio only for the Dolby Vision active area
++   * view mode. A frame that already fits its active area keeps the whole source rect.
++   */
++  void FitActiveArea(float& aspectRatio);
++
+   virtual void ManageRenderArea();
+   virtual void ReorderDrawPoints();
+   virtual EShaderFormat GetShaderFormat();
+@@ -204,6 +219,7 @@
+   CRect m_destRect;
+   CRect m_sourceRect;
+   CRect m_viewRect;
++  CRect m_activeArea;
+ 
+   // rendering flags
+   unsigned m_iFlags = 0;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -41,6 +41,11 @@
+ 
+ #include <mutex>
+ 
++extern "C"
++{
++#include <libavutil/dovi_meta.h>
++}
++
+ using namespace Shaders;
+ using namespace Shaders::GLES;
+ 
+@@ -551,6 +556,26 @@
+   ValidateRenderTarget();
+ }
+ 
++void CLinuxRendererGLES::UpdateActiveArea(int index)
++{
++  CRect area;
++  // The decoder retains only bounded metadata. Without L5, the whole frame is active.
++  const auto* metadata =
++      reinterpret_cast<const AVDOVIMetadata*>(m_buffers[index].doviMetadata.Data());
++  for (int i = 0; metadata && i < metadata->num_ext_blocks; ++i)
++  {
++    const AVDOVIDmData* block = av_dovi_get_ext(metadata, i);
++    if (block->level != 5)
++      continue;
++    const unsigned left = block->l5.left_offset, right = block->l5.right_offset;
++    const unsigned top = block->l5.top_offset, bottom = block->l5.bottom_offset;
++    if (left + right < m_sourceWidth && top + bottom < m_sourceHeight)
++      area.SetRect(left, top, m_sourceWidth - right, m_sourceHeight - bottom);
++    break;
++  }
++  SetActiveArea(area);
++}
++
+ void CLinuxRendererGLES::ClearBackBuffer()
+ {
+   //set the entire backbuffer to black
+@@ -715,6 +740,7 @@
+     return;
+   }
+ 
++  UpdateActiveArea(index);
+   ManageRenderArea();
+ 
+   if (clear)
+@@ -790,6 +816,7 @@
+   if (!buf.fields[FIELD_FULL][0].id)
+     return;
+ 
++  UpdateActiveArea(index);
+   ManageRenderArea();
+ 
+   if (clear)
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -116,6 +116,7 @@
+   ESCALINGMETHOD SelectScalingMethod() const;
+   void UpdateVideoFilter();
+   void CheckVideoParameters(int index);
++  void UpdateActiveArea(int index);
+   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
+ 
+   // textures
+diff --git a/xbmc/cores/VideoSettings.h b/xbmc/cores/VideoSettings.h
+--- a/xbmc/cores/VideoSettings.h
++++ b/xbmc/cores/VideoSettings.h
+@@ -208,7 +208,8 @@
+   ViewModeStretch16x9Nonlin,
+   ViewModeZoom120Width,
+   ViewModeZoom110Width,
+-  ViewModeAuto
++  ViewModeAuto,
++  ViewModeActiveArea
+ };
+ 
+ class CVideoSettings
+diff --git a/xbmc/interfaces/json-rpc/PlayerOperations.cpp b/xbmc/interfaces/json-rpc/PlayerOperations.cpp
+--- a/xbmc/interfaces/json-rpc/PlayerOperations.cpp
++++ b/xbmc/interfaces/json-rpc/PlayerOperations.cpp
+@@ -722,6 +722,7 @@
+ {
+   {"normal", ViewModeNormal},
+   {"auto", ViewModeAuto},
++  {"activearea", ViewModeActiveArea},
+   {"zoom", ViewModeZoom},
+   {"stretch4x3", ViewModeStretch4x3},
+   {"widezoom", ViewModeWideZoom, },
+diff --git a/xbmc/interfaces/json-rpc/schema/types.json b/xbmc/interfaces/json-rpc/schema/types.json
+--- a/xbmc/interfaces/json-rpc/schema/types.json
++++ b/xbmc/interfaces/json-rpc/schema/types.json
+@@ -531,6 +531,7 @@
+     "enum": [
+       "normal",
+       "auto",
++      "activearea",
+       "zoom",
+       "stretch4x3",
+       "widezoom",
+diff --git a/xbmc/settings/MediaSettings.cpp b/xbmc/settings/MediaSettings.cpp
+--- a/xbmc/settings/MediaSettings.cpp
++++ b/xbmc/settings/MediaSettings.cpp
+@@ -69,7 +69,7 @@
+       scalingMethod = (int)VS_SCALINGMETHOD_LINEAR;
+     m_defaultVideoSettings.m_ScalingMethod = (ESCALINGMETHOD)scalingMethod;
+ 
+-    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeAuto);
++    XMLUtils::GetInt(pElement, "viewmode", m_defaultVideoSettings.m_ViewMode, ViewModeNormal, ViewModeActiveArea);
+     if (!XMLUtils::GetFloat(pElement, "zoomamount", m_defaultVideoSettings.m_CustomZoomAmount, 0.5f, 2.0f))
+       m_defaultVideoSettings.m_CustomZoomAmount = 1.0f;
+     if (!XMLUtils::GetFloat(pElement, "pixelratio", m_defaultVideoSettings.m_CustomPixelRatio, 0.5f, 2.0f))
+diff --git a/xbmc/video/ViewModeSettings.cpp b/xbmc/video/ViewModeSettings.cpp
+--- a/xbmc/video/ViewModeSettings.cpp
++++ b/xbmc/video/ViewModeSettings.cpp
+@@ -30,6 +30,7 @@
+ {
+   { 630,   ViewModeNormal },
+   { 16316, ViewModeAuto },
++  { 41225, ViewModeActiveArea },
+   { 631,   ViewModeZoom },
+   { 39008, ViewModeZoom120Width },
+   { 39009, ViewModeZoom110Width },

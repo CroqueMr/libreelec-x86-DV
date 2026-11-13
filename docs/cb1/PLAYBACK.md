@@ -143,7 +143,11 @@ still apply; no automatic aspect-ratio correction is inferred.
 **Original size** keeps source-sized placement within the selected HDMI mode;
 it does not request a matching HDMI resolution by itself. **Auto** avoids
 unnecessary near-native UHD enlargement while retaining normal scaling for
-smaller sources. Manual zoom remains available.
+smaller sources. **Dolby Vision active area** fits each picture's L5 active area
+instead of the encoded frame when this enlarges the picture. For example, the
+windowboxed 2.39:1 scenes of a 1.43:1 IMAX master fill the width, and the IMAX
+scenes stay unchanged. Without L5, it behaves as Normal. Manual zoom remains
+available.
 
 ## Bitmap subtitles and Blu-ray menus
 
