@@ -1098,6 +1098,13 @@
       "xbmc/guilib/GUITextureGLES.cpp": "Use the same window alpha policy for texture coverage; retain native HDR compensation and opaque-texture behavior."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-seamless-playitems.patch": {
+    "owner": "Keep the demuxer at compatible seamless Blu-ray playitem boundaries.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Use libbluray continuity and stream compatibility to distinguish seamless playitems.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Track the preceding playitem and its continuity."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": {
     "summary": "Consolidated native CB1 integration ownership",
     "component": "kodi",
