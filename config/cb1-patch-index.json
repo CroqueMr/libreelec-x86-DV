@@ -1460,5 +1460,11 @@
       "xbmc/dialogs/DVPlaybackModes.cpp": "Reprime seekable HLG playback at its current position when entering Dolby Vision.",
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Wait for priming before enabling normal clock catch-up."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-placed-packing.patch": {
+    "owner": "Admit native Dolby Vision packing for unscaled UHD-width pictures.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Use the packed Adaptive path when the picture only needs vertical placement."
+    }
   }
 }
