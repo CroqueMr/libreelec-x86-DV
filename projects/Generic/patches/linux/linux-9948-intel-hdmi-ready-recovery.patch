@@ -1,0 +1,26 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] drm/i915: prioritize completed HDMI checks over HPD retries
+
+--- a/drivers/gpu/drm/i915/display/intel_hotplug.c
++++ b/drivers/gpu/drm/i915/display/intel_hotplug.c
+@@ -463,7 +463,7 @@
+ 	}
+ 	hotplug->hdmi_ready_encoders |= ready;
+ 	if (ready && hdmi_ready_encoders(display))
+-		queue_delayed_detection_work(display, &hotplug->hotplug_work, 0);
++		mod_delayed_detection_work(display, &hotplug->hotplug_work, 0);
+ 	spin_unlock_irq(&display->irq.lock);
+ }
+ 
+@@ -660,8 +660,9 @@
+ 		spin_lock_irq(&display->irq.lock);
+ 		display->hotplug.retry_bits |= retry;
+ 
+-		mod_delayed_detection_work(display,
+-					   &display->hotplug.hotplug_work,
++		/* A commit may have made an HDMI check ready during this pass. */
++		mod_delayed_detection_work(display, &hotplug->hotplug_work,
++					   hdmi_ready_encoders(display) ? 0 :
+ 					   msecs_to_jiffies(HPD_RETRY_DELAY));
+ 		spin_unlock_irq(&display->irq.lock);
+ 	}

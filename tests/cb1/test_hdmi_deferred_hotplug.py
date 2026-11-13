@@ -236,6 +236,24 @@ int main(){int failures=0,checks=0;auto check=[&](bool good,const char*text){++c
   for(unsigned time:{1000u,2000u,10000u,60000u}){f.advance_to(time);g.publish();f.drain();}
   check(f.waiting()&&!queued&&!f.configs()&&worker_runs==1,"permanent pending and unrelated CRTC completions never poll");
  }
+ {
+  Fixture f;f.connector.base.status=1;f.pending();f.bus.config=0;f.irq();
+  check(queued&&due_ms==1000&&f.waiting(),"ordinary retry has a delayed timer");
+  f.advance_to(100);f.publish();
+  check(queued&&due_ms==100&&f.ready(),"ready HDMI recovery preempts a pending HPD retry timer");
+  f.advance_to(100);
+  check(f.configs()==1&&f.display.resets==1&&!f.waiting()&&!f.ready(),"recovery checks SCDC immediately");
+ }
+ {
+  Fixture f,g;f.add(g);f.connector.base.status=1;g.connector.base.status=1;g.crtc.pipe=PIPE_B;
+  g.pending();intel_ddi_hotplug(&g.encoder,&g.connector);
+  f.pending();
+  completion_read=[&](int read){if(read==2){completion_read=nullptr;after_irq_unlock=[&]{g.publish();};}};
+  f.irq();
+  check(queued&&due_ms==0&&g.ready(),"ordinary retry cannot postpone an already-ready HDMI check");
+  f.advance_to(0);
+  check(g.configs()==1&&f.configs()==0,"ready sibling checks without reading pending sink");
+ }
  for(bool crtc_lock:{false,true}){
   Fixture f;f.pending();lock_error=crtc_lock?2:1;lock_failures=1;f.irq();f.publish();f.drain();
   check(backoffs==1&&f.configs()==1&&!warns&&acquire_init==acquire_fini,"native EDEADLK backoff preserves completion handoff");
