@@ -91,6 +91,7 @@ struct CDVPlaybackModes {
  static bool ShowMenu(bool settingsMenu=false) MENU
  static std::string DefaultPlaybackLabel();
  static std::string LldvPreferenceLabel(){return "LLDV format";}
+ static std::string SDRGamutLabel(){return "BT.709";}
 };
 LABEL
 struct Button {std::string label;std::string GetLabel2(){return label;}} button;
@@ -142,6 +143,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
    assert(actionValue()==std::to_string(method==0?40822:method==1?40823:40922));}
   stored->ints["dvbridge.outputmode"]=2;assert(actionValue()=="40814");
   assert(actionValue("dvbridge.lldvformat")=="LLDV format");
+  assert(actionValue("dvbridge.sdrgamut")=="BT.709");
  }
  if(scenario=="legacy-toggles"){
   auto before=FrameOutputSettings();stored->ints["dvbridge.encodedactivearea"]=1;stored->ints["dvbridge.masterfallback"]=1;
