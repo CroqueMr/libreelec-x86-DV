@@ -1223,6 +1223,17 @@
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-dv-renderer-handoff.patch": {
+    "owner": "Keep the committed HDR10-to-Dolby Vision output while a compatible VAAPI renderer is replaced.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Check the next VAAPI renderer format and preserve output ownership.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Expose the renderer handoff.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Keep stop ownership while the next analysis queue primes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Hand over the active scanout at renderer replacement.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Retain the committed native Dolby Vision scanout and discard unsubmitted frame work.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the render-thread output ownership checks."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9995-cb1-bluray-overlay.patch": {
     "summary": "Respect HDMV staged HIDE and palette/image updates per plane",
     "component": "kodi",

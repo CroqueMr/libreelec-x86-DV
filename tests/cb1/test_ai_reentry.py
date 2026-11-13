@@ -239,7 +239,8 @@ struct Renderer {
  int m_vaapiFourcc=0;
  unsigned m_aiBuffers=NUM_BUFFERS,m_renderOrientation=0;
  bool DVBridgeOrientationSupported(unsigned orientation)const ORIENTATION
- void Configure(const VideoPicture& picture,unsigned orientation=0){
+ void SetFps(float) {}
+ void Configure(const VideoPicture& picture,unsigned orientation=0,float fps=24){
   m_renderOrientation=orientation;
   SELECTION
  }
