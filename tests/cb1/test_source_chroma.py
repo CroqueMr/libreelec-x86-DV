@@ -79,7 +79,7 @@ int main(){
  layer.sourceSerial=7;layer.sourceInfo.informationGeneration=10;
  assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
  layer.sourceInfo.informationGeneration=9;layer.hlg=true;
- assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==2);
+ assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==0);
  layer.hlg=false;layer.sourceInfo.profile=8;
  assert(ImportDVLayer(&imported,nullptr,layer,&used) && used==0);
  layer.sourceInfo.profile=0;metadata.params[0].maxscl[0].den=0;

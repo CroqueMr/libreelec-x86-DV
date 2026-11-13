@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
@@ -154,8 +155,8 @@
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
     "tests/cb1/test_ai_reentry.py": "ff7f8b75813db09596a5131198daa5688f9936c5431ab6dd2cc200bdf9be92fd",
     "tests/cb1/test_ai_reference_phase.py": "07d8909154c77a93491e29ca149085f185bff919c049bbd712178a3e2256453a",
-    "tests/cb1/test_output_menu_recovery.py": "15b6bb64ab2090f19e526b22efbb45fa87578f89b1588e1582a853f79835c7fd",
-    "tests/cb1/test_hdr10plus_selection.py": "889f8f2290f20261faabbe4dc892334e239c942983f57defa06e56081c9cfe2a",
+    "tests/cb1/test_output_menu_recovery.py": "8c0831292b25110a5d015b74991b2d323d1cec2af4f47114458145b583b80111",
+    "tests/cb1/test_hdr10plus_selection.py": "de738bfddbd7820b1c386a1b0b2d6410484807ad958894133d2df2a9768e155d",
     "tests/cb1/test_native_video_labels.py": "1659ebe7ac39ce1e7aab95e1e828e87c4a473f82909f1bc2c8ea337acf57751b",
     "tests/cb1/test_ordinary_output_isolation.py": "7538cbf8c3ed5f6d974781b741a099ceeb51e8d798bf40d2d6fea0e97c6b75f9",
     "tests/cb1/test_source_preferences.py": "f1cfdccbfd53c3a6938568fa381e219eabb236e6bd4702e1592aec79ccf6781d",
@@ -164,7 +165,7 @@
     "tests/cb1/test_ai_pool_lifetime.py": "4cb0ad0714382cbeebd56dce543d9bea352e4f31791150888790bc9097ee5199",
     "tests/cb1/test_alsa_stereo_map.py": "97bc942b28f21bdd4920f1d955f0b2e13b029c4759976c1a60e61e8dd6a1eae4",
     "tests/cb1/test_video_buffer_cancel.py": "6f2bff4666c81a807cb071ba7e066e170d0a903b9fdd5bd1dcdd5b5b1f1e80c8",
-    "tests/cb1/test_master_panel_surface.py": "a220ec7a35976f1e19b8093b5daa3dceb6f234b024a28d9618e08ea72a987066",
+    "tests/cb1/test_master_panel_surface.py": "62b11f6a4b62248c22ac3606e25f7d1e0282d1a81d7d09fa424f09bf65d040bd",
     "tests/cb1/test_dtdl_stream_inventory.py": "251c6686094915987206d28729f4995b44472fd242582f5c6b687a9c276522ad",
     "tests/cb1/test_hdr10_expert_settings.py": "5866cda2cc90537f5e8822824b9bbe0b82e41314108893a56ee8c8c7e3c4ee14",
     "tests/cb1/test_display_refresh.py": "c6c55907664f9213fe75a3ca414bff9c1b7216461590883d89f2a3285622f6cb",
@@ -271,19 +272,19 @@
     "projects/Generic/patches/kodi/kodi-9997-gbm-colour-buffer-lifetime.patch": "1cc1ba2c54ea1bae5915b30f60aa94433e5018501156010b2153a25f9945a08c",
     "tests/cb1/gbm_colour_buffer.cpp": "df8e2e8c0152bedec55abb2de964255c78d7d144803e4757539f8a5ff7b4fdfc",
     "tests/cb1/test_gbm_colour_buffer.py": "612b03b38ffaea56daac55a9be4fd66c1ee0d2a53933266462563e8e46b0ede0",
-    "tests/cb1/test_source_chroma.py": "e613ec1b703fb8a4045824dbe85e12da13556f8077ac0e03c008c36c53b35c5f",
+    "tests/cb1/test_source_chroma.py": "c33538c5dcc18656379116772f88dc6309a88f4e074a777a4be886f144162d07",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-glass.png": "1cd03200df33574d2cf1a0c5baac776cf8ad4fe623b62e202a22e9ed0961350b",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-bar.png": "5799eb929ce7ab181314821ae40dcac23451d8c933ccb0b0b38b44fab3dc1179",
     "tests/cb1/test_player_columns_contract.py": "6610477ce5d826f52890322838857d659e5e78d29591c45533b9fcd8d2f9b9d6",
     "tests/cb1/test_ai_initial_overlap.py": "a4c3aa7fc301bfa2825b7928ff9417406380a8f721269412536c0d355acdffb1",
     "tests/cb1/test_process_info_wording.py": "390a2cc0d2771e8c4601568e0eede1e2e6865db9880814bf663242a17184af83",
     "docs/superpowers/plans/2026-11-09-sdr-hlg-player-info.md": "932455791c9443ebe66e911b550ee33e1d40311fff694a40e15cbd17b8ace86a",
-    "tests/cb1/test_sdr_hlg_routes.py": "ea1711ea5e30867a79aaef8b367bdfa2bb862e8cf3a6ffb36a3f9740e6b42881",
+    "tests/cb1/test_sdr_hlg_routes.py": "17da52b69faebdb2f38ad080e8390e72f991ba2b503da337b5a8e64f588e1adb",
     "tests/cb1/test_sdr_display_transition.py": "b963a22052a03cdd3d41761a34f2c7a4064607d3afaf80e09041d2a02ad40624",
     "tests/cb1/test_sdr_gui_transfer.py": "e109d3b5064d4209ab49e6c755fe58aaa6cae0f8f520caadaa0c1cb299aee840",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-card.png": "d248cfeb28cdb4f96e58271ba284761a1bddc1b94ff90faad7f6d1998696e19b",
     "tests/cb1/test_process_info_skin_recovery.py": "0e766ea606f5874c802215be713d6b06f900f2702a5c1e734a0a0ae32dfaa75e",
-    "tests/cb1/test_async_output_admission.py": "18871eb5f2b5fceeb463d8d010da916d546405a3bc4cf2af65a8c72e6ab11746",
+    "tests/cb1/test_async_output_admission.py": "120ef983bb7182288a9d45bd4ca5ba9877946ee319438b5858f443eac6b72fdf",
     "tests/cb1/test_process_info_metadata.py": "05b9b610232c1a6d771db6427096ea8984ab26c550d85e79ed55430a0ded4495",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-chip.png": "c09cad7da82f242339d55e4f37b28c143ef16eb33e35d293c4f2ce7b169c3a41",
     "docs/cb1/PROCESSING.md": "1d092be18d55e7948e80178a2cf7ee21e5b98e7079ded213523d773b676556f7",
@@ -293,18 +294,18 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": "3c7b176030f75e5fa09636609877fd0d2fd0759ad928558e4c9b75efb7ca5ef1",
     "tests/cb1/test_sdr_final_gui.py": "ffacd82f5694e9f98e983a5a3537d6ed8b21f29cbb246bd5a912206e02b11a14",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": "1bd3da037753369ff24e692e9857511388f5a1db59da8192372408dd02aab69e",
-    "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": "c0a1c77fa5d8241891e7c74d787e5917899c4c865b35485fba794ce25c4d1771",
+    "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": "1858268a2e6ce2f76c827a871a88b6c82ea4c5099f2e0c18e4c9c9302f6f7a97",
     "tests/cb1/test_tv_profile_admission.py": "c5eebadb52147670991912263c0c7f4af4657bd0210ff825365f74ef7fcb812d",
     "tests/cb1/test_master_startup.py": "959e2e66b3b642cd125ff614d779fd712dae08c2fccc31c2d67e80c437be4909",
     "packages/mediacenter/kodi/cb1/src/dvbridge_placebo.h": "1ae453d519231b702dcf128fa6a5c8347491485f746023bf5f7c8ef478ccfef4",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "15ba5081ed23eb8138bab7b6174031af517b6b33494ce9743f47053d9493f978",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "ed11c2b45c37386b5d8d1931061bc85c732e4023573968311986202b90538f25",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "45135688c58f8b490f8983dcf846d80ec3637eccf397687855d3340080a14b8e",
-    "tests/cb1/test_diagnostics_runtime.py": "7788bc522c91d111195842c384f035df6f2c2c12ca3576deaee7bc22242503fd",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "8190ffbdce8005a52ba2481ff74cebad8bed92abacfa17899a3e7f775c315063",
+    "tests/cb1/test_diagnostics_runtime.py": "8e11839cb2f5c06fa92c821a623c855b97ec916ad87e0d91cdf5a7b57bdcacce",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
-    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "872cb1555415ab52f0f81d0230ff3b1371f5e4ec4b2d4766e4cd24b2b9ccf801",
-    "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "8456a48036ffdefe7907ea4d95776a1151dce1ddeac0beb12ed922ac8804087c",
+    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "db1a18f9d472713238a6c55374da2f6df2e9373de892dd92a9ae4cbbb2fa71dd",
+    "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "0257bdfe0ae6c0963b3dd91b0548e518e24e1ec46dba446222dff87cca113045",
     "README.md": "c9142345089e9eb7a81f63542547032ba87cb82e997bf809b76cd45cff4d13de",
     "docs/cb1/README.md": "c9449ccf4729d7fb282c52e1f94cbf2cdf39a56b9708909fcab00d868b907fb5",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "29c6368b9f8d424e3a56f0fddbfccc714b79762e1ba8a540d712e7f55781ebdb",
@@ -337,7 +338,7 @@
     "tests/cb1/test_fel_upscaling.py": "6ca5c876fd82694a657e461f30d2a486d43898f243b789c31fc91ceef897fd13",
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
     "tests/cb1/test_master_fallback.py": "b491d2ca9a92fbf9e4f5afe454b0f674d0741dc503574021956e7f67bc9b407e",
-    "tests/cb1/test_master_reference.py": "16a3d03e02c2b3841d7e6a7c5ee3a28a2c848d1bb63ec91ec843f9a6bfc5bfcd",
+    "tests/cb1/test_master_reference.py": "6f451f60c9765cc6b1fcd7dd0cc614399e6e4846a7dc1ac3924d41d9f3aba449",
     "tests/cb1/test_playback_defaults.py": "802c50f4bdb06f6f1db2162df2b51b86dec0bb477742b305706e8a644e401676",
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "ada5a545ad1196d11f8124c3a171dc958f7a01d38d409ecc9daf6d9da9c763bb",
@@ -354,7 +355,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "208206570217d5dfdd2b4091d98be9b877f5760650ad32b24aead09cede39fa3",
+    "config/cb1-patch-index.json": "ee3f47f27e0e58306967dcef6efba4ed6fa24cca24ff928359aa1bb6d2d4d82e",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780"
   },
   "staging": {
@@ -372,11 +373,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": {
       "source": "src/cb1_circuit.c",
-      "sha256": "c0a1c77fa5d8241891e7c74d787e5917899c4c865b35485fba794ce25c4d1771"
+      "sha256": "1858268a2e6ce2f76c827a871a88b6c82ea4c5099f2e0c18e4c9c9302f6f7a97"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": {
       "source": "src/cb1_circuit.h",
-      "sha256": "8456a48036ffdefe7907ea4d95776a1151dce1ddeac0beb12ed922ac8804087c"
+      "sha256": "0257bdfe0ae6c0963b3dd91b0548e518e24e1ec46dba446222dff87cca113045"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": {
       "source": "src/cb1_hdr10_ai.c",
@@ -560,7 +561,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "872cb1555415ab52f0f81d0230ff3b1371f5e4ec4b2d4766e4cd24b2b9ccf801"
+      "sha256": "db1a18f9d472713238a6c55374da2f6df2e9373de892dd92a9ae4cbbb2fa71dd"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
@@ -596,7 +597,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "45135688c58f8b490f8983dcf846d80ec3637eccf397687855d3340080a14b8e"
+      "sha256": "8190ffbdce8005a52ba2481ff74cebad8bed92abacfa17899a3e7f775c315063"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

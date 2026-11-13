@@ -2599,7 +2599,13 @@ static void sdr_final_params(struct pl_render_params *params)
 
 static bool raw_sdr_source_valid(const struct pl_frame *source)
 {
-    if(!source)return false;
+    if(!source || source->enhancement_layer || source->repr.dovi || source->profile.len ||
+       source->icc || source->lut || source->color.primaries!=PL_COLOR_PRIM_BT_2020 ||
+       source->num_planes<1 || source->num_planes>4)return false;
+    for(int i=0;i<source->num_planes;i++)if(!source->planes[i].texture)return false;
+    if(source->color.transfer==PL_COLOR_TRC_HLG)
+        return source->repr.sys==PL_COLOR_SYSTEM_BT_2020_NC || source->repr.sys==PL_COLOR_SYSTEM_RGB;
+    if(source->color.transfer!=PL_COLOR_TRC_PQ)return false;
     const struct pl_hdr_metadata *hdr=&source->color.hdr;
     const float luminance[]={hdr->min_luma,hdr->max_luma,hdr->max_cll,hdr->max_fall,
         hdr->scene_max[0],hdr->scene_max[1],hdr->scene_max[2],hdr->scene_avg};
@@ -2608,10 +2614,6 @@ static bool raw_sdr_source_valid(const struct pl_frame *source)
     if((hdr->max_luma && hdr->min_luma>hdr->max_luma) ||
        !isfinite(hdr->max_pq_y) || !isfinite(hdr->avg_pq_y) || hdr->max_pq_y<0 ||
        hdr->max_pq_y>1 || hdr->avg_pq_y<0 || hdr->avg_pq_y>hdr->max_pq_y)return false;
-    if(source->enhancement_layer || source->repr.dovi || source->profile.len || source->icc || source->lut ||
-       source->color.transfer!=PL_COLOR_TRC_PQ || source->color.primaries!=PL_COLOR_PRIM_BT_2020 ||
-       source->num_planes<1 || source->num_planes>4)return false;
-    for(int i=0;i<source->num_planes;i++)if(!source->planes[i].texture)return false;
     return true;
 }
 
@@ -2662,7 +2664,9 @@ bool dvbridge_render_sdr_policy_direct_eligible(const struct dvbridge_renderer *
     for(int i=0;i<source->num_planes;i++)if(source->planes[i].texture==target)return false;
     if(el)for(int i=0;i<el->num_planes;i++)if(el->planes[i].texture==target)return false;
     if(!metadata && !bytes)
-        return source->repr.sys==PL_COLOR_SYSTEM_BT_2020_NC && raw_sdr_source_valid(source);
+        // HLG first resolves to the reference PQ domain before SDR mapping.
+        return source->color.transfer==PL_COLOR_TRC_PQ &&
+            source->repr.sys==PL_COLOR_SYSTEM_BT_2020_NC && raw_sdr_source_valid(source);
     struct dvbridge_color mapped;
     return metadata && bytes && dvbridge_frame_area(margins,metadata,bytes,geometry) &&
         !margins[0] && !margins[1] && !margins[2] && !margins[3] &&
