@@ -24,6 +24,7 @@ extern "C" {
 #include "dvbridge_dmabuf.h"
 #include "dvbridge_fel_vpp.h"
 #include "cb1_dv_hdr10plus.h"
+#include "cb1_hdr10plus_analysis.h"
 #include "cb1_hdr10plus_dovi.h"
 #include "cb1_circuit.h"
 }
@@ -119,6 +120,7 @@ bool CDVBridgeGLES::PreparePlayerLed(const pl_frame&,const CDVMetadataBuffer&,
 const dvbridge_hdr10_policy_output*CDVBridgeGLES::HDR10Output()const{return &pending;}
 @METHODS@
 extern "C" {
+void cb1_hdr10plus_analysis_commit_scene(cb1_hdr10plus_analysis*){assert(false);}
 void dvbridge_renderer_set_l2_trims_disabled(dvbridge_renderer*,bool){}
 void dvbridge_renderer_set_cmv40(dvbridge_renderer*,const cb1_cmv40_options*){}
 void dvbridge_renderer_set_optimized_dv(dvbridge_renderer*,bool){}

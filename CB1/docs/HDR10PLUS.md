@@ -32,7 +32,7 @@ described [below](#hdr10-to-dolby-vision).
 - Do not tone-map pixels before sending the curve. The receiver applies it once.
 
 The curve reference is 992 nits, the largest nonzero value represented by the
-selected HDMI field. It does not clip pixels or describe the TV's brightness.
+selected HDMI field. Packets that carry only statistics send a target of zero.
 The top transmitted percentile supplies the receiver's normalization because
 this payload does not transmit MaxSCL.
 
@@ -41,8 +41,11 @@ use HDR10. Packets belong to the same atomic transaction as their framebuffer.
 Seek, source changes, rejected imports and teardown clear stale metadata.
 
 Native and generated metadata support receiver versions 0 and 1. Generated V0
-uses measured 5th/10th percentiles. Generated V1 retains its existing 0/255 defaults
-for the additional system fields.
+uses measured 5th/10th maxRGB percentiles. Generated V1 measures linear BT.2020
+luminance in the same GPU pass. DistributionY99 is the maximum of the
+99.99th percentiles seen so far in the scene. DistributionY100nit is the mean
+per-picture percentage of pixels at or below 100 nits. The running statistics
+start over at scene cuts and picture discontinuities.
 Native V1 also accepts its Y99 luminance and Y100nit percentage fields. The latter
 is transmitted without luminance quantization; values 101..254 remain rejected.
 Changing receiver version cancels pending conversion metadata before reuse.
