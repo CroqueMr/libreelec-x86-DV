@@ -182,13 +182,14 @@ constexpr int VA_INVALID_ID=-1, NUM_BUFFERS=6;
 constexpr unsigned DVP_FLAG_INTERLACED=8;
 struct VideoPicture {
  VideoBuffer* videoBuffer;
- int iWidth=3840,iHeight=2160,colorBits=10;
+ int iWidth=3840,iHeight=2160,colorBits=10,color_range=0,color_primaries=9;
  unsigned iFlags=0;
 };
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext {
  virtual ~CWinSystemGbmGLESContext()=default;
- bool native=false, ai=true;
+ bool native=false, ai=true, hdr10=false;
+ bool CanRetainHDR10Output(const VideoPicture&){return hdr10;}
  bool RetainNativeDVOutput(const VideoPicture&){return native;}
  bool RetainHDR10DVOutput(const VideoPicture&){return ai;}
 };
@@ -197,8 +198,10 @@ using Window=KODI::WINDOWING::GBM::CWinSystemGbmGLESContext;
 Window window;
 struct CServiceBroker { static Window* GetWinSystem(){return &window;} };
 struct Renderer {
- enum class DVHandoff {None, HDR10AI, Native};
+ enum class DVHandoff {None, HDR10AI, Native, HDR10};
  bool m_dvRequested=true,m_aiLookahead=true,m_bConfigured=true,m_isVAAPIBuffer=true;
+ bool m_passthroughHDR=false,m_srcFullRange=false;
+ int m_srcPrimaries=9;
  int m_sourceWidth=3840,m_sourceHeight=2160,m_vaapiFourcc=10,m_srcColorBits=10;
  float m_fps=24;
  bool DVBridgeOrientationSupported(unsigned orientation)const{return orientation==0;}
@@ -224,5 +227,14 @@ int main(){
  window.native=true;
  r.m_aiLookahead=false;
  assert(r.RetainDVOutput(p,24,0)==H::Native && !r.m_dvRequested && !r.m_bConfigured);
+ r=Renderer{};
+ r.m_dvRequested=false;
+ r.m_passthroughHDR=true;
+ assert(r.RetainDVOutput(p,24,0)==H::None && r.m_bConfigured);
+ window.hdr10=true;
+ p.color_range=1;
+ assert(r.RetainDVOutput(p,24,0)==H::None && r.m_bConfigured);
+ p.color_range=0;
+ assert(r.RetainDVOutput(p,24,0)==H::HDR10 && !r.m_bConfigured);
 }
 '''.replace("HANDOFF", handoff))

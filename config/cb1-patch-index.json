@@ -1483,5 +1483,21 @@
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Feed libbluray presentation sequences and report navigation boundaries.",
       "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose Blu-ray Java presentation controls to VideoPlayer."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": {
+    "owner": "Native AMD HDR10 renderer handoff",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Carry static HDR metadata with each renderer buffer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Identify an AMD native HDR10 output transfer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Transfer compatible AMD HDR10 output ownership.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Stage static metadata from the frame after rendering.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Keep the display surface when replacing a compatible renderer.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep frame metadata until its presentation attempt.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Wait for video and submit its metadata with its framebuffer.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose the native HDR10 output handoff to GBM GLES.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Promote the metadata blob only after accepted scanout.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Expose a paired native HDR10 frame commit.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Submit metadata and framebuffer together without ordinary fallback."
+    }
   }
 }

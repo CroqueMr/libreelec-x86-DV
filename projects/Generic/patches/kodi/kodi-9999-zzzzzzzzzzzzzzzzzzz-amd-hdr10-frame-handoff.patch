@@ -1,0 +1,617 @@
+Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor frame
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -93,8 +93,9 @@
+ 
+ protected:
+   bool m_frameRendered{false};
++  enum class RetainedOutput { None, NativeDV, HDR10 };
+   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation,
+-                 bool retainedNativeDV);
++                 RetainedOutput retainedOutput);
+   bool ConfigureVideoOutput(const VideoPicture& picture);
+ #ifdef CB1_HAS_HDR10_AI
+   bool m_aiOutputPending{false};
+@@ -222,6 +223,8 @@
+     AVMasteringDisplayMetadata displayMetadata;
+     bool hasLightMetadata{false};
+     AVContentLightMetadata lightMetadata;
++    bool hasHDR10LightMetadata{false};
++    StreamHdrType hdrType{StreamHdrType::HDR_TYPE_NONE};
+     CDVMetadataBuffer doviMetadata;
+ #ifdef HAVE_DVBRIDGE
+     std::shared_ptr<AVFrame> doviEnhancement;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
+@@ -44,14 +44,16 @@
+ 
+   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation) override;
+   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation,
+-                 bool retainedNativeDV);
++                 RetainedOutput retainedOutput);
+ 
+   // Player functions
+   bool ConfigChanged(const VideoPicture &picture) override;
+ #ifdef CB1_HAS_HDR10_AI
+   CRenderInfo GetRenderInfo() override;
+-  enum class DVHandoff { None, HDR10AI, Native };
++  enum class DVHandoff { None, HDR10AI, Native, HDR10 };
+   DVHandoff RetainDVOutput(const VideoPicture& picture, float fps, unsigned int orientation);
++  bool ConfigureWithHandoff(const VideoPicture& picture, float fps, unsigned int orientation,
++                            DVHandoff handoff);
+   bool HDR10AIQueueEligible() const override { return m_aiBuffers > NUM_BUFFERS; }
+   bool HDR10AILookahead() const override;
+   bool HDR10AIFrameCommitted() const override;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
+@@ -90,11 +90,11 @@
+ 
+ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps, unsigned int orientation)
+ {
+-  return Configure(picture, fps, orientation, false);
++  return Configure(picture, fps, orientation, RetainedOutput::None);
+ }
+ 
+ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps,
+-                                  unsigned int orientation, bool retainedNativeDV)
++                                  unsigned int orientation, RetainedOutput retainedOutput)
+ {
+   CVaapiRenderPicture *pic = dynamic_cast<CVaapiRenderPicture*>(picture.videoBuffer);
+   if (pic->procPic.videoSurface != VA_INVALID_ID)
+@@ -141,7 +141,7 @@
+     }
+   }
+ 
+-  return CLinuxRendererGLES::Configure(picture, fps, orientation, retainedNativeDV);
++  return CLinuxRendererGLES::Configure(picture, fps, orientation, retainedOutput);
+ }
+ 
+ #ifdef CB1_HAS_HDR10_AI
+@@ -156,7 +156,7 @@
+     const VideoPicture& picture, float fps, unsigned int orientation)
+ {
+   const auto* next = dynamic_cast<const CVaapiRenderPicture*>(picture.videoBuffer);
+-  if (!m_dvRequested || !m_isVAAPIBuffer || !next || !next->valid ||
++  if (!m_isVAAPIBuffer || !next || !next->valid ||
+       next->procPic.videoSurface == VA_INVALID_ID || next->procPic.fourcc != m_vaapiFourcc ||
+       picture.iWidth != m_sourceWidth || picture.iHeight != m_sourceHeight ||
+       picture.colorBits != m_srcColorBits || !DVBridgeOrientationSupported(orientation) ||
+@@ -167,6 +167,17 @@
+       CServiceBroker::GetWinSystem());
+   if (!window)
+     return DVHandoff::None;
++
++  if (!m_dvRequested)
++  {
++    if (!m_bConfigured || !m_passthroughHDR ||
++        m_srcFullRange != (picture.color_range == 1) ||
++        m_srcPrimaries != picture.color_primaries || !window->CanRetainHDR10Output(picture))
++      return DVHandoff::None;
++
++    m_bConfigured = false;
++    return DVHandoff::HDR10;
++  }
+ 
+   const auto handoff = window->RetainNativeDVOutput(picture) ? DVHandoff::Native :
+       m_aiLookahead && next->renderBufferCount > NUM_BUFFERS && window->RetainHDR10DVOutput(picture)
+@@ -174,6 +185,15 @@
+   if (handoff != DVHandoff::None)
+     m_dvRequested = m_bConfigured = false; // The successor owns output cleanup.
+   return handoff;
++}
++
++bool CRendererVAAPIGLES::ConfigureWithHandoff(const VideoPicture& picture,
++                                              float fps,
++                                              unsigned int orientation,
++                                              DVHandoff handoff)
++{
++  return Configure(picture, fps, orientation,
++                   handoff == DVHandoff::HDR10 ? RetainedOutput::HDR10 : RetainedOutput::NativeDV);
+ }
+ 
+ bool CRendererVAAPIGLES::HDR10AILookahead() const
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -177,11 +177,11 @@
+ 
+ bool CLinuxRendererGLES::Configure(const VideoPicture& picture, float fps, unsigned int orientation)
+ {
+-  return Configure(picture, fps, orientation, false);
++  return Configure(picture, fps, orientation, RetainedOutput::None);
+ }
+ 
+ bool CLinuxRendererGLES::Configure(const VideoPicture& picture, float fps,
+-                                   unsigned int orientation, bool retainedNativeDV)
++                                   unsigned int orientation, RetainedOutput retainedOutput)
+ {
+   auto colorimetry = KODI::UTILS::GetColorimetry(picture);
+   bool inferred = (picture.color_space == AVCOL_SPC_UNSPECIFIED);
+@@ -226,6 +226,16 @@
+   m_bValidated = false;
+ 
+ #ifdef CB1_HAS_HDR10_AI
++  if (retainedOutput == RetainedOutput::HDR10)
++  {
++    auto& window = static_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext&>(
++        *CServiceBroker::GetWinSystem());
++    m_passthroughHDR = true;
++    m_hdrFboActive = window.IsHdrComposite();
++    m_reloadShaders = true;
++    window.BeginHDR10Handoff();
++    return true;
++  }
+   m_aiOutputPending = HDR10AILookahead() &&
+       DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS, picture.hdrType == StreamHdrType::HDR_TYPE_HLG).hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
+   if (m_aiOutputPending)
+@@ -239,7 +249,7 @@
+   }
+ #endif
+ #ifdef HAVE_DVBRIDGE
+-  if (retainedNativeDV)
++  if (retainedOutput == RetainedOutput::NativeDV)
+   {
+     // The renderer owns cleanup now. Source admission happens after import.
+     m_dvRequested = m_hdrFboActive = true;
+@@ -370,6 +380,8 @@
+   buf.hasDisplayMetadata = picture.hasDisplayMetadata;
+   buf.displayMetadata = picture.displayMetadata;
+   buf.lightMetadata = picture.lightMetadata;
++  buf.hasHDR10LightMetadata = picture.hasLightMetadata;
++  buf.hdrType = picture.hdrType;
+   if (picture.hasLightMetadata && picture.lightMetadata.MaxCLL)
+   {
+     buf.hasLightMetadata = picture.hasLightMetadata;
+@@ -1516,6 +1528,29 @@
+ #ifdef HAVE_DVBRIDGE
+   DVBRIDGE::PlaybackNotification::RenderedOrdinary(
+       m_buffers[index].videoBuffer ? m_buffers[index].videoBuffer->PlaybackGeneration() : 0);
++#ifdef CB1_HAS_HDR10_AI
++  if (m_passthroughHDR)
++  {
++    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++        CServiceBroker::GetWinSystem());
++    if (window && window->HDR10HandoffPending())
++    {
++      const auto& buffer = m_buffers[index];
++      VideoPicture signal{};
++      signal.hdrType = buffer.hdrType;
++      signal.color_transfer = buffer.m_srcColTransfer;
++      signal.color_space = buffer.m_srcColSpace;
++      signal.color_primaries = buffer.m_srcPrimaries;
++      signal.color_range = buffer.m_srcFullRange;
++      signal.colorBits = buffer.m_srcBits;
++      signal.hasDisplayMetadata = buffer.hasDisplayMetadata;
++      signal.displayMetadata = buffer.displayMetadata;
++      signal.hasLightMetadata = buffer.hasHDR10LightMetadata;
++      signal.lightMetadata = buffer.lightMetadata;
++      window->StageHDR10Handoff(signal);
++    }
++  }
++#endif
+ #endif
+   return true;
+ }
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -220,17 +220,26 @@
+     m_pRenderer->SetVideoSettings(m_playerPort->GetVideoSettings());
+   bool result;
+ #if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
+-  if (retained == DVHandoff::Native)
++  if (retained == DVHandoff::Native || retained == DVHandoff::HDR10)
+   {
+     auto* successor = dynamic_cast<CRendererVAAPIGLES*>(m_pRenderer);
+-    result = successor && successor->Configure(*m_pConfigPicture, m_fps, m_orientation, true);
++    result = successor && successor->ConfigureWithHandoff(*m_pConfigPicture, m_fps, m_orientation,
++                                                          retained);
+   }
+   else
+ #endif
+     result = m_pRenderer && m_pRenderer->Configure(*m_pConfigPicture, m_fps, m_orientation);
+ 
+ #if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
+-  if (retained != DVHandoff::None && !result)
++  if (retained == DVHandoff::HDR10 && !result)
++  {
++    auto* window = CServiceBroker::GetWinSystem();
++    window->SetGuiCompositing(0);
++    window->SetHDR(nullptr);
++    window->SetColorimetry(nullptr);
++    window->SetVideoOutput(nullptr);
++  }
++  else if (retained != DVHandoff::None && !result)
+     if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+             CServiceBroker::GetWinSystem()))
+       window->StopDVBridgePlayback();
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -114,6 +114,10 @@
+ #ifdef CB1_HAS_HDR10_AI
+   bool HDR10AILookaheadActive() const;
+   bool RetainNativeDVOutput(const VideoPicture& picture);
++  bool CanRetainHDR10Output(const VideoPicture& picture) const;
++  void BeginHDR10Handoff();
++  bool HDR10HandoffPending() const { return m_hdr10HandoffPending; }
++  void StageHDR10Handoff(const VideoPicture& picture);
+   bool RetainHDR10DVOutput(const VideoPicture& picture);
+   bool OwnsHDR10DVOutput() const
+   {
+@@ -217,6 +221,11 @@
+   void StageNativeHDR10Plus(bool overlay);
+   std::string m_hdr10plusReason;
+   uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
++#endif
++#ifdef CB1_HAS_HDR10_AI
++  bool m_hdr10HandoffPending{false};
++  unsigned m_hdr10HandoffFailures{0};
++  std::unique_ptr<VideoPicture> m_hdr10HandoffPicture;
+ #endif
+   void PresentFrame(bool rendered, bool videoLayer);
+   bool m_guiCompositing{false};
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -31,6 +31,7 @@
+ #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIWindowManager.h"
++#include "messaging/ApplicationMessenger.h"
+ #include "rendering/gles/GuiCompositeShaderGLES.h"
+ #include "rendering/gles/ScreenshotSurfaceGLES.h"
+ 
+@@ -399,6 +400,9 @@
+ 
+ bool CWinSystemGbmGLESContext::BeginRender()
+ {
++#ifdef CB1_HAS_HDR10_AI
++  m_hdr10HandoffPicture.reset();
++#endif
+   // A prepared picture already includes its GUI; wait before drawing it again.
+   if (m_cb1FramePending && m_dvFrame)
+   {
+@@ -671,7 +675,15 @@
+ 
+   if (rendered || videoLayer)
+   {
++#ifdef CB1_HAS_HDR10_AI
++    if (m_hdr10HandoffPending &&
++        (!rendered || !m_hdr10HandoffPicture || m_hdr10HandoffFailures >= 3))
++      return; // Keep the outgoing framebuffer while only the GUI is ready.
++#endif
+     bool async = !videoLayer && m_eglFence;
++#ifdef CB1_HAS_HDR10_AI
++    async = async && !m_hdr10HandoffPending;
++#endif
+     if (rendered)
+     {
+       if (GetGfxContext().GetStereoMode() == RenderStereoMode::SPLIT_HORIZONTAL)
+@@ -732,6 +744,25 @@
+     AnnounceCB1Mode(false);
+     StageNativeHDR10Plus(CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
+         CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->HasVisibleOverlay());
++#endif
++#ifdef CB1_HAS_HDR10_AI
++    if (m_hdr10HandoffPending)
++    {
++      const bool accepted = PresentHDR10Handoff(*m_hdr10HandoffPicture);
++      CompleteCB1Mode(accepted, false);
++      if (accepted)
++      {
++        m_hdr10HandoffPending = false;
++        PublishVideoSource(true, m_videoSourceSideData);
++      }
++      else if (++m_hdr10HandoffFailures == 3)
++      {
++        CLog::Log(LOGERROR, "HDR10 handoff rejected, stopping playback");
++        CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_STOP);
++      }
++      CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++      return;
++    }
+ #endif
+     CWinSystemGbm::FlipPage(rendered, videoLayer, async);
+ #ifdef HAVE_DVBRIDGE
+@@ -1863,6 +1894,29 @@
+ #ifndef CB1_L1L3_BUNDLE_DIR
+ #define CB1_L1L3_BUNDLE_DIR "/usr/share/cb1/l1l3"
+ #endif
++bool CWinSystemGbmGLESContext::CanRetainHDR10Output(const VideoPicture& picture) const
++{
++  return picture.hdrType == StreamHdrType::HDR_TYPE_HDR10 && !picture.doviSourceInfo.profile &&
++      picture.stereoMode.empty() && picture.colorBits >= 10 &&
++      picture.colorBits == static_cast<unsigned>(GetOutputBitDepth()) &&
++      !DVBridgeRequested(&picture) && !m_dvBridge && !HasPendingDVOutputSurface() &&
++      !m_dvOrdinaryFrame && !HasPendingDVBridgeRestore() && CanKeepHDR10Signal(picture);
++}
++
++void CWinSystemGbmGLESContext::BeginHDR10Handoff()
++{
++  m_hdr10HandoffPicture.reset();
++  m_hdr10HandoffFailures = 0;
++  m_hdr10HandoffPending = true;
++}
++
++void CWinSystemGbmGLESContext::StageHDR10Handoff(const VideoPicture& picture)
++{
++  if (!m_hdr10HandoffPicture)
++    m_hdr10HandoffPicture = std::make_unique<VideoPicture>();
++  m_hdr10HandoffPicture->SetParams(picture);
++}
++
+ bool CWinSystemGbmGLESContext::RetainNativeDVOutput(const VideoPicture& picture)
+ {
+   if (!picture.doviSourceInfo.profile || !picture.doviSourceBinding.Valid() ||
+@@ -2485,6 +2539,10 @@
+ 
+ bool CWinSystemGbmGLESContext::SetVideoOutput(const VideoPicture* picture)
+ {
++#ifdef CB1_HAS_HDR10_AI
++  m_hdr10HandoffPending = false;
++  m_hdr10HandoffPicture.reset();
++#endif
+   if (picture && DVBRIDGE::DiagnosticsEnabled())
+   {
+     const auto binding = picture->doviSourceBinding.Valid() ? picture->doviSourceBinding : picture->doviMetadata.Binding();
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -132,6 +132,8 @@
+   virtual bool ConnectorPreferencesAllowed() const { return true; }
+   void DeferConnectorPreferences();
+   void ApplyColorspace();
++  bool CanKeepHDR10Signal(const VideoPicture& picture) const;
++  bool PresentHDR10Handoff(const VideoPicture& picture);
+   virtual std::optional<bool> TransportLimitedColor() const { return {}; }
+   bool OrdinaryShaderLimitedColor();
+   bool RequestedLimitedColor() const { return GetColorRange() == ColorRange::LIMITED; }
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1353,6 +1353,129 @@
+   }
+ }
+ 
++namespace
++{
++hdr_output_metadata MakeHDRMetadata(const VideoPicture& picture, KODI::UTILS::Eotf eotf)
++{
++  hdr_output_metadata hdr_metadata = {};
++
++  hdr_metadata.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
++  hdr_metadata.hdmi_metadata_type1.eotf = static_cast<uint8_t>(eotf);
++  hdr_metadata.hdmi_metadata_type1.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
++
++  if (hdr_metadata.hdmi_metadata_type1.eotf)
++  {
++    const AVMasteringDisplayMetadata* mdmd =
++        KODI::UTILS::GetMasteringDisplayMetadata(picture);
++    if (mdmd && mdmd->has_primaries)
++    {
++      // Convert to unsigned 16-bit values in units of 0.00002,
++      // where 0x0000 represents zero and 0xC350 represents 1.0000
++      for (int i = 0; i < 3; i++)
++      {
++        hdr_metadata.hdmi_metadata_type1.display_primaries[i].x =
++            std::round(av_q2d(mdmd->display_primaries[i][0]) * 50000.0);
++        hdr_metadata.hdmi_metadata_type1.display_primaries[i].y =
++            std::round(av_q2d(mdmd->display_primaries[i][1]) * 50000.0);
++
++        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - display_primaries[{}].x: {}",
++                  __FUNCTION__, i, hdr_metadata.hdmi_metadata_type1.display_primaries[i].x);
++        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - display_primaries[{}].y: {}",
++                  __FUNCTION__, i, hdr_metadata.hdmi_metadata_type1.display_primaries[i].y);
++      }
++      hdr_metadata.hdmi_metadata_type1.white_point.x =
++          std::round(av_q2d(mdmd->white_point[0]) * 50000.0);
++      hdr_metadata.hdmi_metadata_type1.white_point.y =
++          std::round(av_q2d(mdmd->white_point[1]) * 50000.0);
++
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - white_point.x: {}", __FUNCTION__,
++                hdr_metadata.hdmi_metadata_type1.white_point.x);
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - white_point.y: {}", __FUNCTION__,
++                hdr_metadata.hdmi_metadata_type1.white_point.y);
++    }
++    if (mdmd && mdmd->has_luminance)
++    {
++      // Convert to unsigned 16-bit value in units of 1 cd/m2,
++      // where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2
++      hdr_metadata.hdmi_metadata_type1.max_display_mastering_luminance =
++          std::round(av_q2d(mdmd->max_luminance));
++
++      // Convert to unsigned 16-bit value in units of 0.0001 cd/m2,
++      // where 0x0001 represents 0.0001 cd/m2 and 0xFFFF represents 6.5535 cd/m2
++      hdr_metadata.hdmi_metadata_type1.min_display_mastering_luminance =
++          std::round(av_q2d(mdmd->min_luminance) * 10000.0);
++
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_display_mastering_luminance: {}",
++                __FUNCTION__, hdr_metadata.hdmi_metadata_type1.max_display_mastering_luminance);
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - min_display_mastering_luminance: {}",
++                __FUNCTION__, hdr_metadata.hdmi_metadata_type1.min_display_mastering_luminance);
++    }
++
++    const AVContentLightMetadata* clmd = KODI::UTILS::GetContentLightMetadata(picture);
++    if (clmd)
++    {
++      hdr_metadata.hdmi_metadata_type1.max_cll = clmd->MaxCLL;
++      hdr_metadata.hdmi_metadata_type1.max_fall = clmd->MaxFALL;
++
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_cll: {}", __FUNCTION__,
++                hdr_metadata.hdmi_metadata_type1.max_cll);
++      CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_fall: {}", __FUNCTION__,
++                hdr_metadata.hdmi_metadata_type1.max_fall);
++    }
++
++  }
++  return hdr_metadata;
++}
++} // namespace
++
++bool CWinSystemGbm::CanKeepHDR10Signal(const VideoPicture& picture) const
++{
++  const auto settingsComponent = CServiceBroker::GetSettingsComponent();
++  const auto settings = settingsComponent ? settingsComponent->GetSettings() : nullptr;
++  if (!settings || !settings->GetBool(SETTING_WINSYSTEM_IS_HDR_DISPLAY))
++    return false;
++
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm || !drm->HasQuirk(QUIRK_NEEDSPRIMARY) || !drm->IsActive() ||
++      !drm->IsSelectedModeCommitted() || drm->LastCommitFellBack() ||
++      drm->IsSDRRestorePending() || drm->HasPendingRequest() || drm->HasPendingCB1Page() ||
++      drm->HasColorRangeTransition() || drm->HDR10PlusActive() || !m_hdrBlob.IsValid() ||
++      m_eotf != KODI::UTILS::Eotf::PQ || picture.color_transfer != AVCOL_TRC_SMPTE2084 ||
++      KODI::UTILS::GetColorimetry(picture) != m_colorimetry || !m_queuedColorspace)
++    return false;
++
++  const auto* connector = drm->GetConnector();
++  const auto* crtc = drm->GetCrtc();
++  return connector && crtc && crtc->GetPropertyValue("ACTIVE") == 1 &&
++      connector->GetPropertyValue("HDR_OUTPUT_METADATA") == m_hdrBlob.Get() &&
++      connector->GetPropertyValue("Colorspace") == m_queuedColorspace;
++}
++
++bool CWinSystemGbm::PresentHDR10Handoff(const VideoPicture& picture)
++{
++  if (picture.hdrType != StreamHdrType::HDR_TYPE_HDR10 || !CanKeepHDR10Signal(picture))
++    return false;
++
++  const auto drm = std::static_pointer_cast<CDRMAtomic>(m_DRM);
++  const auto metadata = MakeHDRMetadata(picture, m_eotf);
++  CDRMPropertyBlob candidate(drm->GetFileDescriptor(), &metadata, sizeof(metadata));
++  if (!candidate.IsValid())
++    return false;
++
++  auto& surface = m_GBM->GetDevice().GetSurface();
++  auto* buffer = surface.LockTransactionalBuffer();
++  const bool accepted = buffer && drm->FlipPageWithHDR10Metadata(buffer, candidate.Get());
++  surface.CompleteTransactionalBuffer(accepted);
++  if (!accepted)
++    return false;
++
++  surface.EndTransactionalMode();
++  m_hdrBlob = std::move(candidate);
++  m_queuedHdrMetadata = m_hdrBlob.Get();
++  CLog::Log(LOGDEBUG, "HDR10 handoff committed picture and metadata blob {} together", m_hdrBlob.Get());
++  return true;
++}
++
+ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
+ {
+   if (!videoPicture)
+@@ -1405,72 +1528,9 @@
+   if (connector->SupportsProperty("HDR_OUTPUT_METADATA") && m_info &&
+       m_info->SupportsHDRStaticMetadataType1() && m_info->SupportsEOTF(eotf))
+   {
+-    hdr_output_metadata hdr_metadata = {};
+-
+-    hdr_metadata.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
+-    hdr_metadata.hdmi_metadata_type1.eotf = static_cast<uint8_t>(eotf);
+-    hdr_metadata.hdmi_metadata_type1.metadata_type = KODI::UTILS::HDMI_STATIC_METADATA_TYPE1;
+-
++    const auto hdr_metadata = MakeHDRMetadata(*videoPicture, eotf);
+     if (hdr_metadata.hdmi_metadata_type1.eotf)
+     {
+-      const AVMasteringDisplayMetadata* mdmd =
+-          KODI::UTILS::GetMasteringDisplayMetadata(*videoPicture);
+-      if (mdmd && mdmd->has_primaries)
+-      {
+-        // Convert to unsigned 16-bit values in units of 0.00002,
+-        // where 0x0000 represents zero and 0xC350 represents 1.0000
+-        for (int i = 0; i < 3; i++)
+-        {
+-          hdr_metadata.hdmi_metadata_type1.display_primaries[i].x =
+-              std::round(av_q2d(mdmd->display_primaries[i][0]) * 50000.0);
+-          hdr_metadata.hdmi_metadata_type1.display_primaries[i].y =
+-              std::round(av_q2d(mdmd->display_primaries[i][1]) * 50000.0);
+-
+-          CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - display_primaries[{}].x: {}",
+-                    __FUNCTION__, i, hdr_metadata.hdmi_metadata_type1.display_primaries[i].x);
+-          CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - display_primaries[{}].y: {}",
+-                    __FUNCTION__, i, hdr_metadata.hdmi_metadata_type1.display_primaries[i].y);
+-        }
+-        hdr_metadata.hdmi_metadata_type1.white_point.x =
+-            std::round(av_q2d(mdmd->white_point[0]) * 50000.0);
+-        hdr_metadata.hdmi_metadata_type1.white_point.y =
+-            std::round(av_q2d(mdmd->white_point[1]) * 50000.0);
+-
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - white_point.x: {}", __FUNCTION__,
+-                  hdr_metadata.hdmi_metadata_type1.white_point.x);
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - white_point.y: {}", __FUNCTION__,
+-                  hdr_metadata.hdmi_metadata_type1.white_point.y);
+-      }
+-      if (mdmd && mdmd->has_luminance)
+-      {
+-        // Convert to unsigned 16-bit value in units of 1 cd/m2,
+-        // where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2
+-        hdr_metadata.hdmi_metadata_type1.max_display_mastering_luminance =
+-            std::round(av_q2d(mdmd->max_luminance));
+-
+-        // Convert to unsigned 16-bit value in units of 0.0001 cd/m2,
+-        // where 0x0001 represents 0.0001 cd/m2 and 0xFFFF represents 6.5535 cd/m2
+-        hdr_metadata.hdmi_metadata_type1.min_display_mastering_luminance =
+-            std::round(av_q2d(mdmd->min_luminance) * 10000.0);
+-
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_display_mastering_luminance: {}",
+-                  __FUNCTION__, hdr_metadata.hdmi_metadata_type1.max_display_mastering_luminance);
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - min_display_mastering_luminance: {}",
+-                  __FUNCTION__, hdr_metadata.hdmi_metadata_type1.min_display_mastering_luminance);
+-      }
+-
+-      const AVContentLightMetadata* clmd = KODI::UTILS::GetContentLightMetadata(*videoPicture);
+-      if (clmd)
+-      {
+-        hdr_metadata.hdmi_metadata_type1.max_cll = clmd->MaxCLL;
+-        hdr_metadata.hdmi_metadata_type1.max_fall = clmd->MaxFALL;
+-
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_cll: {}", __FUNCTION__,
+-                  hdr_metadata.hdmi_metadata_type1.max_cll);
+-        CLog::Log(LOGDEBUG, LOGVIDEO, "CWinSystemGbm::{} - max_fall: {}", __FUNCTION__,
+-                  hdr_metadata.hdmi_metadata_type1.max_fall);
+-      }
+-
+       m_hdrBlob = CDRMPropertyBlob(drm->GetFileDescriptor(), &hdr_metadata, sizeof(hdr_metadata));
+     }
+ 
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.h
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
+@@ -61,6 +61,7 @@
+   bool SupportsFencing() override { return true; }
+   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
+   bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false, bool async = false);
++  bool FlipPageWithHDR10Metadata(struct gbm_bo* bo, uint32_t blob);
+   bool HasPendingCB1Page() const { return m_cb1Pending; }
+   bool HasPendingRequest() const { return m_need_modeset || (m_req && !m_req->Empty()); }
+   bool CompleteCB1Page(int timeoutMs = 0);
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+@@ -374,7 +374,7 @@
+   if (CServiceBroker::GetLogging().CanLogComponent(LOGWINDOWING))
+     m_req->LogAtomicRequest();
+ 
+-  if ((strict || m_req->sdrRestore) && m_propertyFailure)
++  if ((strict || m_req->sdrRestore || m_colorRangeTransition) && m_propertyFailure)
+   {
+     return reject("properties", EINVAL);
+   }
+@@ -645,6 +645,24 @@
+     if (fd >= 0) close(fd);
+   }
+   return accepted;
++}
++
++bool CDRMAtomic::FlipPageWithHDR10Metadata(struct gbm_bo* bo, uint32_t blob)
++{
++  auto* fb = DrmFbGetFromBo(bo);
++  if (!fb)
++    return false;
++
++  // Treat a new static packet and framebuffer as one color transition.
++  // Ordinary fallback would submit the new framebuffer with the old packet.
++  if (!AddProperty(m_connector, "HDR_OUTPUT_METADATA", blob))
++  {
++    FinishRequest(false);
++    return false;
++  }
++  m_colorRangeTransition = true;
++  m_lastPageAccepted = DrmAtomicCommit(fb->fb_id, 0, true, false);
++  return m_lastPageAccepted;
+ }
+ 
+ bool CDRMAtomic::TestFramebuffer(struct gbm_bo* bo)
