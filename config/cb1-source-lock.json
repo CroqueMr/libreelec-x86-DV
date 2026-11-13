@@ -266,7 +266,7 @@
     "tests/cb1/test_gbm_colour_owner.py": "7cd5f28b565aeb5b5a8fa863d57091ef17bce5b8d7b47ae0d299bb0a2a81703d",
     "tests/cb1/test_gbm_colour_transition.py": "5b6c02ada6f365084031325b4960b84c4442944fe1c435725ab0165a4668e3e8",
     "tests/cb1/test_hdr10plus_atomic.py": "783241ac78270e1896c4bf46ac3353d5d76658a7e9ac074a03ef6c91f9e7d9e8",
-    "tests/cb1/test_native_render_receipt.py": "877849ca0c42e4e6babae9044dd0d77696b85fbb5ed6cff3ce5abdec71232aef",
+    "tests/cb1/test_native_render_receipt.py": "a2f13092490a0b712fe04d5beafc6f1429ecafb8a4265111f78aadb4cbf06e0c",
     "tests/cb1/test_ordinary_gui_transfer.py": "1e502440841fe984327ee172b5b1eaa29f26fedf176a3ec5911f4341530b2711",
     "projects/Generic/patches/kodi/kodi-9997-gbm-colour-buffer-lifetime.patch": "1cc1ba2c54ea1bae5915b30f60aa94433e5018501156010b2153a25f9945a08c",
     "tests/cb1/gbm_colour_buffer.cpp": "df8e2e8c0152bedec55abb2de964255c78d7d144803e4757539f8a5ff7b4fdfc",
