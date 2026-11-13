@@ -13,7 +13,7 @@ class HDR10LinkDepthTests(unittest.TestCase):
         video = body(source, 'bool CVideoPlayer::OpenVideoStream(')
         guard = body(video, 'if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC')
         self.assertLess(video.index(guard), video.index('SetVideoResolution('))
-        self.assertIn('PlaybackNotification::RenderingUnavailable(reason)', guard)
+        self.assertIn('m_errorDetail = CDVPlaybackInfo::ReasonLabel(reason);', guard)
         self.assertIn('m_bAbortRequest = true;', guard)
         defaults = body(source, 'void CVideoPlayer::OpenDefaultStreams(')
         self.assertLess(defaults.index('if (m_bAbortRequest)'), defaults.index('// open audio stream'))

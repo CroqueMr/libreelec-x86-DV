@@ -1,0 +1,201 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26126,10 +26126,6 @@
+ msgid "Choose the default playback circuit for HDR10 sources. New files use this default. Playback-menu choices apply only to the current file. Adaptive requires a TV profile. Kodi default uses native Kodi playback."
+ msgstr ""
+ 
+-msgctxt "#40875"
+-msgid "Requested rendering is unavailable. Playback stopped."
+-msgstr ""
+-
+ msgctxt "#40876"
+ msgid "Playback modes | Source: {0}"
+ msgstr ""
+@@ -26573,3 +26569,7 @@
+ msgctxt "#41223"
+ msgid "Requires 10-bit HDMI"
+ msgstr ""
++
++msgctxt "#41224"
++msgid "Dolby Vision picture metadata is missing or unusable."
++msgstr ""
+diff --git a/xbmc/application/ApplicationMessageHandling.cpp b/xbmc/application/ApplicationMessageHandling.cpp
+--- a/xbmc/application/ApplicationMessageHandling.cpp
++++ b/xbmc/application/ApplicationMessageHandling.cpp
+@@ -819,8 +819,11 @@
+     }
+ 
+     case GUI_MSG_PLAYBACK_ERROR:
+-      MESSAGING::HELPERS::ShowOKDialogText(CVariant{16026}, CVariant{16027});
+-      return true;
++    {
++      const int detail = message.GetParam1();
++      MESSAGING::HELPERS::ShowOKDialogText(CVariant{16026}, CVariant{detail != 0 ? detail : 16027});
++      return true;
++    }
+ 
+     case GUI_MSG_PLAYLISTPLAYER_STARTED:
+     case GUI_MSG_PLAYLISTPLAYER_CHANGED:
+diff --git a/xbmc/application/ApplicationPlayerCallback.cpp b/xbmc/application/ApplicationPlayerCallback.cpp
+--- a/xbmc/application/ApplicationPlayerCallback.cpp
++++ b/xbmc/application/ApplicationPlayerCallback.cpp
+@@ -439,11 +439,20 @@
+ 
+ void CApplicationPlayerCallback::OnPlayBackError()
+ {
++  OnPlayBackError(0);
++}
++
++void CApplicationPlayerCallback::OnPlayBackError(int detail)
++{
+   //@todo Playlists can be continued by calling OnPlaybackEnded instead
+-  // open error dialog
+-  CGUIMessage msg(GUI_MSG_PLAYBACK_ERROR, 0, 0);
+-  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
+-  OnPlayBackStopped();
++  // Finish display restoration before opening the circuit error dialog.
++  if (detail != 0)
++    OnPlayBackStopped();
++
++  CGUIMessage msg(GUI_MSG_PLAYBACK_ERROR, 0, 0, detail);
++  CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg);
++  if (detail == 0)
++    OnPlayBackStopped();
+ }
+ 
+ void CApplicationPlayerCallback::OnQueueNextItem()
+diff --git a/xbmc/application/ApplicationPlayerCallback.h b/xbmc/application/ApplicationPlayerCallback.h
+--- a/xbmc/application/ApplicationPlayerCallback.h
++++ b/xbmc/application/ApplicationPlayerCallback.h
+@@ -28,6 +28,7 @@
+   void OnPlayBackResumed() override;
+   void OnPlayBackStopped() override;
+   void OnPlayBackError() override;
++  void OnPlayBackError(int detail) override;
+   void OnQueueNextItem() override;
+   void OnPlayBackSeek(int64_t iTime, int64_t seekOffset) override;
+   void OnPlayBackSeekChapter(int iChapter) override;
+diff --git a/xbmc/cores/IPlayerCallback.h b/xbmc/cores/IPlayerCallback.h
+--- a/xbmc/cores/IPlayerCallback.h
++++ b/xbmc/cores/IPlayerCallback.h
+@@ -26,6 +26,7 @@
+   virtual void OnPlayBackResumed() {}
+   virtual void OnPlayBackStopped() = 0;
+   virtual void OnPlayBackError() = 0;
++  virtual void OnPlayBackError(int) { OnPlayBackError(); }
+   virtual void OnQueueNextItem() = 0;
+   virtual void OnPlayBackSeek(int64_t iTime, int64_t seekOffset) {}
+   virtual void OnPlayBackSeekChapter(int iChapter) {}
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
+@@ -92,7 +92,6 @@
+   }
+   static void Emit(const std::string& text);
+   static void EmitAI(int mode);
+-  static void RenderingUnavailable(OutputReason reason);
+ private:
+   inline static std::atomic<bool> m_pending{false};
+   inline static std::atomic<uint64_t> m_generation{0};
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -1488,6 +1488,7 @@
+ 
+ void CVideoPlayer::Prepare()
+ {
++  m_errorDetail = 0;
+ #ifdef HAVE_DVBRIDGE
+   DVBRIDGE::SelectOutputSettings();
+ #endif
+@@ -3164,12 +3165,13 @@
+   m_bStop = true;
+ 
+   bool error = m_error;
++  const int errorDetail = m_errorDetail;
+   bool close = m_bCloseRequest;
+   m_outboundEvents->Submit([=]() {
+     if (close)
+       cb->OnPlayBackStopped();
+     else if (error)
+-      cb->OnPlayBackError();
++      cb->OnPlayBackError(errorDetail);
+     else
+       cb->OnPlayBackEnded();
+   });
+@@ -3753,7 +3755,13 @@
+       CLog::Log(LOGDEBUG, "CVideoPlayer - CDVDMsg::PLAYER_ABORT");
+       m_bAbortRequest = true;
+ #ifdef HAVE_DVBRIDGE
+-      if (const auto error = std::dynamic_pointer_cast<CDVDMsgBool>(pMsg); error && error->m_value)
++      if (const auto error = std::dynamic_pointer_cast<CDVDMsgInt>(pMsg))
++      {
++        m_error = true;
++        m_errorDetail = error->m_value;
++      }
++      else if (const auto error = std::dynamic_pointer_cast<CDVDMsgBool>(pMsg);
++               error && error->m_value)
+         m_error = true;
+ #endif
+     }
+@@ -4601,7 +4609,8 @@
+       constexpr auto reason = DVBRIDGE::OutputReason::HDR10LinkDepthTooLow;
+       CLog::Log(LOGERROR, "Dolby Vision playback unavailable: profile={} reason={}",
+                 hint.dovi.dv_profile, static_cast<int>(reason));
+-      DVBRIDGE::PlaybackNotification::RenderingUnavailable(reason);
++      m_error = true;
++      m_errorDetail = CDVPlaybackInfo::ReasonLabel(reason);
+       m_bAbortRequest = true;
+       return false;
+     }
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.h b/xbmc/cores/VideoPlayer/VideoPlayer.h
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.h
+@@ -579,6 +579,7 @@
+   CPlayerOptions m_playerOptions;
+   bool m_bAbortRequest;
+   bool m_error;
++  int m_errorDetail{0};
+   bool m_bCloseRequest;
+ 
+   ECacheState  m_caching;
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -1030,8 +1030,11 @@
+   CLog::Log(LOGERROR, "Dolby Vision playback unavailable: stream={} source_revision={} profile={} reason={}",
+       picture->doviSourceBinding.stream, picture->doviSourceBinding.revision,
+       picture->doviSourceInfo.profile, static_cast<int>(reason));
+-  DVBRIDGE::PlaybackNotification::RenderingUnavailable(reason);
+-  m_messageParent.Put(std::make_shared<CDVDMsgBool>(CDVDMsg::PLAYER_ABORT, true));
++  const int detail = authoredDV && reason == DVBRIDGE::OutputReason::SourceIneligible &&
++                             picture->doviMetadata.Size() == 0
++                         ? 41224
++                         : CDVPlaybackInfo::ReasonLabel(reason);
++  m_messageParent.Put(std::make_shared<CDVDMsgInt>(CDVDMsg::PLAYER_ABORT, detail));
+   return true;
+ }
+ #endif
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -366,17 +366,4 @@
+   const int label=mode==1 ? 40867 : 40868;
+   Emit(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(label));
+ }
+-void DVBRIDGE::PlaybackNotification::RenderingUnavailable(OutputReason reason)
+-{
+-  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+-  const int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
+-  if (reason == OutputReason::HDR10LinkDepthTooLow)
+-  {
+-    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
+-        localizer.Get(40822), localizer.Get(reasonId), 3500, false);
+-    return;
+-  }
+-  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
+-      localizer.Get(40863),localizer.Get(40875)+(reasonId ? " "+localizer.Get(reasonId) : ""),3000,false);
+-}
+-#endif
++#endif
