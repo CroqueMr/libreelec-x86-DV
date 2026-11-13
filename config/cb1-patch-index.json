@@ -1497,5 +1497,13 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Integrate EASU plus RCAS and share preset selection.",
       "system/shaders/GLES/2.0/gles_fsr1_rcas.frag": "Integrate EASU plus RCAS and share preset selection."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-master-reference-upscalers.patch": {
+    "owner": "Run selected shaders after Dolby Vision reconstruction and before packing.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/ShaderUpscalerPresets.h": "Share preset loading and fit the Master Reference picture.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Share preset loading and fit the Master Reference picture.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Share preset loading and fit the Master Reference picture."
+    }
   }
 }

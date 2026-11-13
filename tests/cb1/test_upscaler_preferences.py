@@ -63,6 +63,58 @@ int main()
         shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_rcas.frag"
         self.assertIn("FsrRcas", shader.read_text())
 
+    def test_master_reference_keeps_requested_shader_filter(self):
+        renderer = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp").read_text()
+        start = renderer.index("ESCALINGMETHOD OutputScalingMethod(")
+        end = renderer.index("} // namespace", start)
+        execute("""
+#include <cassert>
+
+enum ESCALINGMETHOD
+{
+  VS_SCALINGMETHOD_AUTO, VS_SCALINGMETHOD_LINEAR, VS_SCALINGMETHOD_LANCZOS3,
+  VS_SCALINGMETHOD_FSRCNNX, VS_SCALINGMETHOD_ANIME4K, VS_SCALINGMETHOD_FSR1_RCAS
+};
+enum dvbridge_mode { DVBRIDGE_MODE_SDR, DVBRIDGE_MODE_MASTER_REFERENCE };
+struct dvbridge_geometry { float crop[4]; float placement[4]; };
+struct CDVBridgeGLES { struct Layer { ESCALINGMETHOD scalingMethod, autoScalingMethod; }; };
+namespace KODI::VIDEO::UPSCALER
+{
+int selected;
+int Get(bool hdr, ESCALINGMETHOD) { return hdr ? selected : VS_SCALINGMETHOD_FSR1_RCAS; }
+bool Enlarges(float fromW, float fromH, float toW, float toH)
+{
+  return toW > fromW || toH > fromH;
+}
+bool UsesShaderHooks(int method)
+{
+  return method == VS_SCALINGMETHOD_FSRCNNX || method == VS_SCALINGMETHOD_ANIME4K;
+}
+}
+""" + renderer[start:end] + """
+int main()
+{
+  using KODI::VIDEO::UPSCALER::selected;
+  CDVBridgeGLES::Layer layer{VS_SCALINGMETHOD_LINEAR, VS_SCALINGMETHOD_LANCZOS3};
+  dvbridge_geometry scaled{{0,0,1920,1080}, {0,0,3840,2160}};
+  dvbridge_geometry unscaled{{0,0,3840,2160}, {0,0,3840,2160}};
+  const ESCALINGMETHOD presets[] = {
+    VS_SCALINGMETHOD_FSRCNNX, VS_SCALINGMETHOD_ANIME4K, VS_SCALINGMETHOD_FSR1_RCAS
+  };
+  for (const auto preset : presets)
+  {
+    selected = preset;
+    assert(OutputScalingMethod(layer, scaled, DVBRIDGE_MODE_MASTER_REFERENCE) == preset);
+    assert(OutputScalingMethod(layer, unscaled, DVBRIDGE_MODE_MASTER_REFERENCE) ==
+           VS_SCALINGMETHOD_LINEAR);
+    assert(OutputScalingMethod(layer, scaled, DVBRIDGE_MODE_SDR) == VS_SCALINGMETHOD_LINEAR);
+  }
+  selected = VS_SCALINGMETHOD_AUTO;
+  assert(OutputScalingMethod(layer, scaled, DVBRIDGE_MODE_MASTER_REFERENCE) ==
+         VS_SCALINGMETHOD_LANCZOS3);
+}
+""")
+
     def test_settings_and_conditional_information_row(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for setting in ("videoplayer.sdrupscaler", "videoplayer.hdrupscaler"):
