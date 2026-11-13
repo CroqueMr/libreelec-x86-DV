@@ -97,6 +97,24 @@ int main(void)
     next.pts=1.04;
     assert(cb1_hdr10_temporal_push(ctx,&next,motion,(struct cb1_ai_identity){1,27,1})==CB1_AI_READY);
     cb1_hdr10_temporal_destroy(&ctx);
+    /* A re-timed still can advance lookahead beyond the next real decoded picture. */
+    ctx=cb1_hdr10_temporal_create();assert(ctx);
+    cb1_hdr10_temporal_reset(ctx,7,8);
+    const struct cb1_ai_identity hold={7,268,8}, resumed={7,269,8};
+    struct cb1_hdr10_descriptor still={.pts=11.136122};
+    still.global[1]=.5f;still.global[2]=.25f;
+    assert(cb1_hdr10_temporal_push(ctx,&still,motion,hold)==CB1_AI_READY);
+    assert(cb1_hdr10_temporal_advance(ctx,11.344663666666664)==CB1_AI_READY);
+    still.pts=11.177834;
+    assert(cb1_hdr10_temporal_push(ctx,&still,motion,resumed)==CB1_AI_READY);
+    assert(cb1_hdr10_temporal_push(ctx,&still,motion,(struct cb1_ai_identity){7,270,8})==CB1_AI_INVALID);
+    still.pts=11.16;
+    assert(cb1_hdr10_temporal_push(ctx,&still,motion,(struct cb1_ai_identity){7,270,8})==CB1_AI_INVALID);
+    assert(cb1_hdr10_temporal_poll(ctx,resumed,&out)==CB1_AI_PENDING);
+    cb1_hdr10_temporal_end(ctx);
+    assert(cb1_hdr10_temporal_poll(ctx,resumed,&out)==CB1_AI_READY);
+    assert(out.pts==11.177834 && out.observed_until==out.pts);
+    cb1_hdr10_temporal_destroy(&ctx);
     /* A future timestamp gap cannot change an earlier one-second window. */
     struct cb1_hdr10_temporal *control=cb1_hdr10_temporal_create();assert(control);
     ctx=cb1_hdr10_temporal_create();assert(ctx);

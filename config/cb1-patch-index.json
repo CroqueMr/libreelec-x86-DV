@@ -1386,6 +1386,12 @@
       "drivers/gpu/drm/i915/display/intel_display_params.c": "Add an opt-in LLDV format request to native Alder Lake-N HDMI."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-ai-clip-retirement.patch": {
+    "owner": "Retire failed HDR10 analysis when changing clips.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Use the existing fenced restart for an old clip whose GPU collection has failed."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": {
     "owner": "CB1 Player-Led Dolby Vision playback",
     "files": {
