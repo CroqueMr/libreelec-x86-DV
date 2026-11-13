@@ -398,6 +398,7 @@ int main(){
  struct {int width=3840,height=2160,x=0,y=0;bool ignore_l5=false;} geometry;
  int m_pendingInfo=3;bool m_direct=true,m_fallback=false;
  int revision=7;Preferences preferences;ReturnedPolicy policy;
+ const ReturnedPolicy requested{7};
  FIRST
  POLICY
  assert(CLog::lines.size()==2);
@@ -409,6 +410,7 @@ int main(){
  for(auto key:{"bl_texture_ids=11,12","el_texture_ids=21,22"})
   assert(frame.find(key)!=std::string::npos);
  const auto& settings=CLog::lines[1];
+ assert(settings.find("requested=7 effective=2")!=std::string::npos);
  for(auto key:{"tv_peak=1500","tv_panel=2","tv_gamut=3","tv_profile_valid=true","method=1","encoded_active_area=false"})
   assert(settings.find(key)!=std::string::npos);
  enhancement=nullptr;
