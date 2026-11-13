@@ -1499,5 +1499,15 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Expose a paired native HDR10 frame commit.",
       "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Submit metadata and framebuffer together without ordinary fallback."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-bluray-audio-handoff.patch": {
+    "owner": "Blu-ray Java playlist audio handoff",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Discard a superseded playlist probe and keep PCM across natural BD-J handoffs.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Track a retained PCM worker until its next stream is selected.",
+      "xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp": "Drain and pause PCM before the next playlist starts.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose held BD-J selections after probing.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Distinguish a held selection from natural play item boundaries."
+    }
   }
 }

@@ -13,8 +13,12 @@ class HDR10DVHandoffTests(unittest.TestCase):
         start = process.index("    // should we open a new demuxer?")
         end = process.index("    // handle eventual seeks", start)
         execute(r'''
+#include <algorithm>
 #include <cassert>
+#include <vector>
 struct CDVDMsg { enum Message { GENERAL_FLUSH }; };
+enum class StreamType { AUDIO };
+struct CDemuxStream { StreamType type; bool disabled; int dvdNavId; };
 struct Player
 {
   struct CDVDInputStream { enum { NEXTSTREAM_NONE, NEXTSTREAM_OPEN, DVDSTREAM_TYPE_PVRMANAGER }; };
@@ -32,13 +36,21 @@ struct Player
     bool flush = false;
     int GetPacketCount(CDVDMsg::Message) const { return flush; }
   } m_messenger;
-  bool bluray, probeFlush, m_pDemuxer = false, m_bAbortRequest = false;
+  struct Demuxer
+  {
+    std::vector<CDemuxStream*> GetStreams() { return {}; }
+  } demuxer, *m_pDemuxer = nullptr;
+  struct { int iSelectedAudioStream = -1; } m_dvd;
+  int m_CurrentAudio{};
+  bool m_bdjAudioHandoff = false;
+  bool bluray, probeFlush, m_bAbortRequest = false;
+  void CloseStream(int&, bool) { m_bdjAudioHandoff = false; }
   bool flushedBeforeRead = false;
   bool IsBlurayInput() const { return bluray; }
   bool EvaluateIsStreaming() const { return false; }
   bool OpenDemuxStream()
   {
-    m_pDemuxer = true;
+    m_pDemuxer = &demuxer;
     m_messenger.flush = probeFlush;
     return true;
   }
@@ -126,10 +138,14 @@ int main()
 #include <cassert>
 #include <memory>
 #define CB1_HAS_HDR10_AI
-struct CDVDMsg { enum { VIDEO_DRAIN }; explicit CDVDMsg(int) {} };
+struct CDVDMsg { enum { VIDEO_DRAIN, GENERAL_EOF }; explicit CDVDMsg(int) {} };
+constexpr int DVD_PLAYSPEED_NORMAL = 1000;
+struct IDVDStreamPlayer { enum { SYNC_INSYNC }; };
 struct Player {
  enum { CACHESTATE_DONE, LOGINFO };
- struct Stream { bool inited=true; void Clear(){} };
+ int m_playSpeed=DVD_PLAYSPEED_NORMAL;
+ bool m_bdjAudioHandoff=false, m_HasAudio=true;
+ struct Stream { bool inited=true; int id=1, syncState=IDVDStreamPlayer::SYNC_INSYNC; void Clear(){} };
  Stream m_CurrentAudio, m_CurrentVideo, m_CurrentSubtitle;
  struct { void reset(){} } m_syncStartPtsWait;
  struct { void clear(){} } m_bdjPresentationEvents;
@@ -142,6 +158,12 @@ struct Player {
   int drains=0;
   void SendMessage(std::shared_ptr<CDVDMsg>){++drains;}
  } video, *m_VideoPlayerVideo=&video;
+ struct Audio {
+  bool passthrough=false;
+  int drains=0;
+  bool IsPassthrough() const { return passthrough; }
+  void SendMessage(std::shared_ptr<CDVDMsg>) { ++drains; }
+ } audio, *m_VideoPlayerAudio=&audio;
  struct CLog { template<class... A> static void Log(A...){} };
  bool demuxClosed=false;
  int drainsAtAudioClose=-1;
@@ -164,6 +186,15 @@ int main() {
  Player uninitialized;
  uninitialized.m_CurrentVideo.inited=false;
  uninitialized.Handoff(); assert(uninitialized.drainsAtAudioClose==0);
+ Player natural;
+ natural.m_bdjDraining=true;
+ natural.Handoff();
+ assert(natural.audio.drains==1 && natural.drainsAtAudioClose==-1 && natural.m_bdjAudioHandoff);
+ Player passthrough;
+ passthrough.m_bdjDraining=true;
+ passthrough.audio.passthrough=true;
+ passthrough.Handoff();
+ assert(passthrough.audio.drains==0 && passthrough.drainsAtAudioClose==1);
 }
 '''.replace("HANDOFF", handoff))
 
