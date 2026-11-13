@@ -21,7 +21,9 @@
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Match the accepted RGB HDMI signal to the rendered SDR target.",
       "xbmc/windowing/gbm/WinSystemGbm.h": "Match the accepted RGB HDMI signal to the rendered SDR target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Match the accepted RGB HDMI signal to the rendered SDR target.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Match the accepted RGB HDMI signal to the rendered SDR target."
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Match the accepted RGB HDMI signal to the rendered SDR target.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Stage the SDR RGB range inside the existing connector transaction.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Stage the SDR RGB range inside the existing connector transaction."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": {

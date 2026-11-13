@@ -16,6 +16,32 @@ def compile_run(test,program,cases=('',),flags=()):
                 test.assertEqual(run.returncode,0,run.stderr)
 
 class SDRLiveSettingsTests(unittest.TestCase):
+    def test_sdr_range_change_cannot_reuse_pixels_in_the_previous_range(self):
+        source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text(encoding='utf-8')
+        method=body(source,'bool CDVBridgeGLES::SetSDROutputRange(')
+        compile_run(self,r"""
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+namespace DVBRIDGE { uint64_t NextRevisionAfter(uint64_t prior){return prior+1;} }
+struct Renderer {
+ bool m_hdr10Limited=false,m_pending=false,m_prepared=false;
+ uint64_t m_geometryRevision=1,m_committedRevision=20;
+ struct {uint64_t revision=25;} m_pendingIdentity;
+ bool SetSDROutputRange(bool limited) METHOD
+};
+int main(){
+ Renderer r;
+ r.m_pending=true;
+ assert(r.SetSDROutputRange(false));
+ assert(!r.SetSDROutputRange(true) && r.m_geometryRevision==1);
+ r.m_pending=false;
+ assert(r.SetSDROutputRange(true) && r.m_hdr10Limited && r.m_geometryRevision==26);
+ assert(r.SetSDROutputRange(true) && r.m_geometryRevision==26);
+ assert(r.SetSDROutputRange(false) && !r.m_hdr10Limited && r.m_geometryRevision==27);
+}
+""".replace('METHOD',method))
+
     def test_same_mode_live_pause_failure_and_rollback_use_the_matching_gui_gamma(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(encoding='utf-8')
         shader=body((TREE/'xbmc/rendering/gles/GuiCompositeShaderGLES.cpp').read_text(encoding='utf-8'),

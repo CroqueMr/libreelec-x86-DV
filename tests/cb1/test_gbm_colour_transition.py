@@ -54,7 +54,7 @@ struct State{
  bool Captured()const{return captured;}
  std::optional<uint64_t> Before(const char*name)const{
   auto it=before.find(name);return it==before.end()?std::optional<uint64_t>{}:it->second;}
- bool Stage(CDRMAtomic&d,bool restore){assert(restore);
+ bool Stage(CDRMAtomic&d,bool restore,std::optional<uint64_t> range={}){assert(restore && !range);
   for(const auto&[name,value]:before)if(!d.AddProperty(d.GetConnector(),name.c_str(),value))return false;
   return true;}
  enum class Backend{KERNEL,NVIDIA};Backend CapturedBackend(){return Backend::KERNEL;}
@@ -65,10 +65,11 @@ struct Surface{Surface&GetDevice(){return *this;}Surface&GetSurface(){return *th
 struct CWinSystemGbmGLESContext:CWinSystemGbm{
  State m_cb1ConnectorState,m_dvState;
  bool m_cb1RestoringPreferences=false,m_dvOrdinaryFrame=false,m_dvStopPending=false;
- bool m_dvOutputSurface=false,m_dvEndPending=false;
+ bool m_dvOutputSurface=false,m_dvEndPending=false,m_sdrConversion=false;
  std::shared_ptr<void>m_nativeDVProperties;
  std::optional<uint64_t>m_hdrDeepColorPrevious,m_queuedHdrMetadata;
  std::optional<bool>m_cb1LimitedRange,m_cb1OrdinaryLimitedRange;
+ std::optional<uint64_t>m_sdrBroadcastRange;
  unsigned hdrPreparations=0;bool guiLimited=false;
  std::shared_ptr<Surface>m_GBM=std::make_shared<Surface>();
  struct EGL{bool TrySwapBuffers(){return true;}}m_eglContext;

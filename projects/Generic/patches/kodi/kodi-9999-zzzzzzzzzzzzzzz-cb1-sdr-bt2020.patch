@@ -110,7 +110,25 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
      next.sdrBlack=settings->GetNumber("dvbridge.sdrblack");
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -1860,8 +1860,10 @@
+@@ -1641,6 +1641,17 @@
+   return true;
+ }
+ 
++bool CDVBridgeGLES::SetSDROutputRange(bool limited)
++{
++  if (m_hdr10Limited == limited) return true;
++  if (m_pending || m_prepared) return false;
++  m_geometryRevision = DVBRIDGE::NextRevisionAfter(
++      std::max({m_geometryRevision, m_committedRevision, m_pendingIdentity.revision}));
++  if (!m_geometryRevision) return false;
++  m_hdr10Limited = limited;
++  return true;
++}
++
+ void CDVBridgeGLES::Reset()
+ {
+   Summary("reset");
+@@ -1860,8 +1871,10 @@
        std::equal(std::begin(geometry.crop), std::end(geometry.crop), std::begin(m_sourceGeometry.crop)) &&
        std::equal(std::begin(geometry.placement), std::end(geometry.placement), std::begin(m_sourceGeometry.placement)) &&
        base.scalingMethod == m_spatialMethod;
@@ -123,7 +141,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    m_sourceGeometry = geometry;
    m_geometryKnown = true;
    uint64_t revision = std::max({preferences.revision,base.binding.revision,m_geometryRevision});
-@@ -2359,9 +2361,14 @@
+@@ -2359,9 +2372,14 @@
        default: return failed("unsupported-format",int(pixels.format));
      }
      const double gamma=m_requested.sdrPreset==0 ? 2.4 : m_requested.sdrPreset==1 ? 2.2 : m_requested.sdrGamma;
@@ -139,7 +157,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
      pixels.pixels=std::move(rgb);
      pixels.stride=-int(pixels.width*8);
      pixels.format=AV_PIX_FMT_RGBA64LE;
-@@ -3057,7 +3064,9 @@
+@@ -3057,7 +3075,9 @@
    const auto* hdrOutput = HDR10Output();
    // Capture the executed mapping before commit releases its pending plan.
    const double displayBlack = hdrOutput ? hdrOutput->policy.expert_black_nits : 0;
@@ -150,7 +168,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    const float peak = m_effectiveMode == DVBRIDGE_MODE_HDR10PLUS ? 992.0f :
        hdrOutput ? hdrOutput->nominal_target.hdr.max_luma :
        m_advanced && m_effectiveMode == DVBRIDGE_MODE_ENHANCED_DV ? static_cast<float>(m_requested.peak) :
-@@ -3189,7 +3198,7 @@
+@@ -3189,7 +3209,7 @@
    output.displayBlack = expert?displayBlack:0;
    if (m_effectiveMode==DVBRIDGE_MODE_SDR && hdrOutput)
    {
@@ -161,7 +179,15 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    }
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
-@@ -338,6 +338,7 @@
+@@ -218,6 +218,7 @@
+   bool PlayerLed() const { return m_playerLed; }
+   bool SetHDR10Session(const dvbridge_hdr10_session& session, uint64_t stream = 0,
+                       bool limited = false);
++  bool SetSDROutputRange(bool limited);
+   bool RebindOutputSurface(bool hdr10, bool sdr = false, unsigned int framebuffer = 0);
+   void Reset();
+   bool Prepare(const Layer& base, const Layer* enhancement,
+@@ -338,6 +339,7 @@
    dvbridge_geometry m_sourceGeometry{};
    ESCALINGMETHOD m_spatialMethod{VS_SCALINGMETHOD_MAX};
    uint64_t m_geometryRevision{1};
@@ -622,7 +648,47 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    SetHDR(nullptr); // The native method returns false for SDR, including SDR-only displays.
    if (drm->GetConnector()->SupportsProperty("HDR_OUTPUT_METADATA") &&
        !drm->AddProperty(drm->GetConnector(), "HDR_OUTPUT_METADATA", 0)) return false;
-@@ -2425,6 +2467,11 @@
+@@ -2302,13 +2344,20 @@
+   {
+     m_cb1LimitedRange = RequestedLimitedColor();
+     m_cb1OrdinaryLimitedRange = OrdinaryShaderLimitedColor();
++    auto* connector = drm->GetConnector();
++    if (*m_cb1LimitedRange && connector &&
++        !connector->IsPropertyImmutable("Broadcast RGB").value_or(false))
++      m_sdrBroadcastRange = connector->GetPropertyEnumValue("Broadcast RGB", "Limited 16:235");
+   }
+   return true;
+ }
+ 
+ std::optional<bool> CWinSystemGbmGLESContext::TransportLimitedColor() const
+ {
+-  return m_cb1RestoringPreferences ? m_cb1OrdinaryLimitedRange : m_cb1LimitedRange;
++  if (m_cb1RestoringPreferences) return m_cb1OrdinaryLimitedRange;
++  // When the driver owns RGB quantization, give it full-range pixels.
++  if (m_sdrConversion && m_cb1ConnectorState.Before("Broadcast RGB")) return false;
++  return m_cb1LimitedRange;
+ }
+ 
+ bool CWinSystemGbmGLESContext::StageCB1ConnectorPreferences(bool restore)
+@@ -2316,7 +2365,8 @@
+   m_cb1RestoringPreferences = restore;
+   if (!m_cb1ConnectorState.Captured()) return true;
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+-  return drm && m_cb1ConnectorState.Stage(*drm, restore);
++  return drm && m_cb1ConnectorState.Stage(*drm, restore,
++      m_sdrConversion ? m_sdrBroadcastRange : std::nullopt);
+ }
+ 
+ bool CWinSystemGbmGLESContext::StageTransportPreferences()
+@@ -2339,6 +2389,7 @@
+   m_cb1RestoringPreferences = false;
+   m_cb1LimitedRange.reset();
+   m_cb1OrdinaryLimitedRange.reset();
++  m_sdrBroadcastRange.reset();
+   DeferConnectorPreferences();
+ }
+ 
+@@ -2425,6 +2476,11 @@
    }
    m_hdrConversion = hdr10;
    m_sdrConversion = sdr;
@@ -634,7 +700,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    if (!StageCB1ConnectorPreferences(false)) return failure("connector-preferences");
    DeferConnectorPreferences();
    m_compositeShader.reset();
-@@ -2602,7 +2649,11 @@
+@@ -2602,7 +2658,11 @@
      m_masterSafety.Begin(masterBinding.stream,preferences.revision,masterBinding.revision,picture.pts,
          capabilities.isDV && preferences.output==DVBRIDGE::OutputMode::MasterReference);
    }
@@ -647,7 +713,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    const auto binding = picture.doviSourceBinding.Valid() ?
        picture.doviSourceBinding : picture.doviMetadata.Binding();
    if (HasPendingDVOutputSurface() &&
-@@ -2685,6 +2736,7 @@
+@@ -2685,6 +2745,7 @@
      return true;
    }
    if (!HasPendingDVOutputSurface() && !SetVideoOutput(&picture)) return false;
@@ -655,6 +721,15 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    if (requested)
    {
      if (CDVBridgeGLES::Context::NewContextBlocked() ||
+@@ -2888,7 +2949,7 @@
+   if (m_cb1FramePending && m_dvFrame) return true;
+   m_cb1FramePending = false;
+   m_dvFrame = false;
+-  if (!BeginDVBridge())
++  if (!BeginDVBridge() || (m_sdrConversion && !m_dvBridge->SetSDROutputRange(UseLimitedColor())))
+     return false;
+   if (m_dvBridge->PlayerLedCpuPending() && CB1AsyncAvailable())
+   {
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 @@ -261,6 +261,9 @@
@@ -667,3 +742,66 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    std::optional<dvbridge_mode> m_dvConfiguredOutput;
    std::optional<dvbridge_mode> m_dvPriorConfiguredOutput;
    DVBRIDGE::OutputSelection m_dvSelection;
+@@ -291,6 +294,7 @@
+   CDVBridgeState m_cb1ConnectorState;
+   bool m_cb1RestoringPreferences{};
+   std::optional<bool> m_cb1LimitedRange, m_cb1OrdinaryLimitedRange;
++  std::optional<uint64_t> m_sdrBroadcastRange;
+   DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
+   DVBRIDGE::DiagnosticFailures m_dvScreenshotFailures;
+   DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -217,9 +217,9 @@
+   return std::nullopt;
+ }
+ 
+-bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore)
+-{
+-  return StageTransport(drm, restore, 0);
++bool CDVBridgeState::Stage(CDRMAtomic& drm, bool restore, std::optional<uint64_t> broadcastRange)
++{
++  return StageTransport(drm, restore, 0, broadcastRange);
+ }
+ 
+ bool CDVBridgeState::StagePlayerLed(CDRMAtomic& drm, uint64_t format)
+@@ -228,7 +228,8 @@
+          StageTransport(drm, false, format);
+ }
+ 
+-bool CDVBridgeState::StageTransport(CDRMAtomic& drm, bool restore, uint64_t playerLedFormat)
++bool CDVBridgeState::StageTransport(CDRMAtomic& drm, bool restore, uint64_t playerLedFormat,
++                                   std::optional<uint64_t> broadcastRange)
+ {
+   if (!Captured() || m_owner != &drm || m_changes.front().object != drm.GetConnector())
+     return false;
+@@ -236,6 +237,8 @@
+   for (const auto& change : m_changes)
+   {
+     uint64_t value = restore ? change.before : change.during;
++    if (!restore && broadcastRange && change.name == "Broadcast RGB")
++      value = *broadcastRange;
+     if (playerLedFormat && change.name == "CB1_LLDV_FORMAT")
+       value = playerLedFormat;
+     else if (playerLedFormat && (change.name == "DVBRIDGE_DV_STANDARD_LAB" ||
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.h
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.h
+@@ -17,7 +17,7 @@
+   bool Capture(CDRMAtomic&, uint64_t ownVsif = 0, bool legacyVsif = false);
+   bool CaptureColorPreferences(CDRMAtomic&, std::optional<uint64_t> defaultMaxBpc);
+   std::optional<uint64_t> Before(const char* name) const;
+-  bool Stage(CDRMAtomic&, bool restore);
++  bool Stage(CDRMAtomic&, bool restore, std::optional<uint64_t> broadcastRange = {});
+   bool CapturePlayerLed(CDRMAtomic&);
+   bool StagePlayerLed(CDRMAtomic&, uint64_t format);
+   void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
+@@ -37,7 +37,8 @@
+   bool Read(CDRMAtomic&, std::vector<Change>&, CDRMObject*, const char*, uint64_t,
+             bool required, bool blob, const char* enumName);
+   bool CaptureTransport(CDRMAtomic&, uint64_t ownVsif, bool legacyVsif, bool playerLed);
+-  bool StageTransport(CDRMAtomic&, bool restore, uint64_t playerLedFormat);
++  bool StageTransport(CDRMAtomic&, bool restore, uint64_t playerLedFormat,
++                      std::optional<uint64_t> broadcastRange = {});
+   std::vector<Change> m_changes;
+   CDRMAtomic* m_owner = nullptr;
+   Backend m_backend = Backend::NONE;
