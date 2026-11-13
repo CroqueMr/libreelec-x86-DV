@@ -150,17 +150,19 @@ int main(void)
     struct cb1_hdr10plus_analysis *ctx=cb1_hdr10plus_analysis_create(gpu.log,gpu.gl->gpu);
     assert(ctx);
     {
-        enum {W=256,H=128,N=W*H};
+        enum {W=260,H=132,N=W*H};
         float *pixels=calloc(N*4,sizeof(float));assert(pixels);
         for(unsigned i=0;i<N;i++){
-            pixels[4*i]=(float)pq(i<16384?0:i<24576?160:4000);
+            unsigned stripe=(i%W+i/W)%4;
+            pixels[4*i]=(float)pq(stripe<2?0:stripe==2?160:4000);
             pixels[4*i+3]=1;
         }
         pl_tex t=reference_texture(gpu.gl->gpu,W,H,pixels);free(pixels);
         struct dvbridge_identity id={99,1,1};
         assert(cb1_hdr10plus_analysis_submit(ctx,t,(pl_rect2d){0,0,W,H},id,1)==CB1_HDR10PLUS_ANALYSIS_PENDING);
         struct cb1_hdr10plus_statistics s=result(ctx,id);
-        assert(s.count==N && s.histogram[0]==16384 && s.histogram[10]==8192 && s.histogram[250]==8192);
+        assert(s.count==N && s.histogram[0]==N/2 && s.histogram[10]==N/4 && s.histogram[250]==N/4);
+        assert(s.y99_nits==1056 && s.y100_percent==75);
         assert(fabs(s.average_maxrgb-1040)<.1);
         pl_tex_destroy(gpu.gl->gpu,&t);
     }
