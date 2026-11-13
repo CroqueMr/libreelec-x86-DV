@@ -1223,6 +1223,12 @@
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-bluray-flush-before-new-packets.patch": {
+    "owner": "Blu-ray demux reopen and player queue synchronization",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Handle the pending flush before submitting new packets and wait only for initialized workers."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr10-ai-queue-continuity.patch": {
     "owner": "HDR10-to-Dolby Vision input draining and anticipation",
     "files": {
