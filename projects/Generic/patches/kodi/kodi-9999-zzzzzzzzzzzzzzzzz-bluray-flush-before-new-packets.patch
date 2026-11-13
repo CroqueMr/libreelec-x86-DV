@@ -1,0 +1,40 @@
+Subject: [PATCH] Synchronize Blu-ray flushes before delivering new packets
+
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -1761,6 +1761,11 @@
+         OpenDefaultStreams();
+ 
+       UpdatePlayState(0);
++
++      // Probing a Blu-ray can emit PLAYLIST_STOP. Process its pending flush
++      // before delivering packets from the new demuxer to the decoder.
++      if (IsBlurayInput() && m_messenger.GetPacketCount(CDVDMsg::GENERAL_FLUSH) > 0)
++        continue;
+     }
+ 
+     // handle eventual seeks due to playspeed
+@@ -4951,10 +4956,19 @@
+       m_processInfo->IsTempoAllowed(static_cast<float>(m_playSpeed) / DVD_PLAYSPEED_NORMAL))
+   {
+     // make sure players are properly flushed, should put them in stalled state
+-    auto msg = std::make_shared<CDVDMsgGeneralSynchronize>(1s, SYNCSOURCE_AUDIO | SYNCSOURCE_VIDEO);
+-    m_VideoPlayerAudio->SendMessage(msg, 1);
+-    m_VideoPlayerVideo->SendMessage(msg, 1);
+-    msg->Wait(m_bStop, 0);
++    const bool audioReady = m_VideoPlayerAudio->IsInited();
++    const bool videoReady = m_VideoPlayerVideo->IsInited();
++    const unsigned int sources = (audioReady ? SYNCSOURCE_AUDIO : 0) |
++                                 (videoReady ? SYNCSOURCE_VIDEO : 0);
++    if (sources)
++    {
++      auto msg = std::make_shared<CDVDMsgGeneralSynchronize>(1s, sources);
++      if (audioReady)
++        m_VideoPlayerAudio->SendMessage(msg, 1);
++      if (videoReady)
++        m_VideoPlayerVideo->SendMessage(msg, 1);
++      msg->Wait(m_bStop, 0);
++    }
+ 
+     // purge any pending PLAYER_STARTED messages
+     m_messenger.Flush(CDVDMsg::PLAYER_STARTED);

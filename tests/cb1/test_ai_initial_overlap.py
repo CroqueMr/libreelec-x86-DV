@@ -145,7 +145,7 @@ struct CDVBridgeGLES {
  struct Context {
   struct State {bool aiStopping=false,aiNextFailed=false,attached=false;
    struct GL {void* gpu;};GL* gl=nullptr;
-   struct NextHDR10AI {Layer layer;Binding binding;double pts;DVBRIDGE::OutputPreferences preferences;};
+   struct NextHDR10AI {Layer layer;Binding binding;DVBRIDGE::OutputPreferences preferences;};
    std::optional<NextHDR10AI> aiNext;
   } state,*m_state=&state;
   HDR10AISource source;bool beganBuffered=true;
@@ -157,7 +157,7 @@ struct CDVBridgeGLES {
   cb1_ai_status BeginHDR10AI(const char*,const DVBRIDGE::OutputPreferences&,Binding,double,uint64_t,bool buffered=true){
    source.active=true;beganBuffered=buffered;return CB1_AI_READY;
   }
-  cb1_ai_status AnalyseHDR10AI(const Layer& layer,double){++source.analysed;source.last=layer.binding.picture;return CB1_AI_READY;}
+  cb1_ai_status AnalyseHDR10AI(const Layer& layer){++source.analysed;source.last=layer.binding.picture;return CB1_AI_READY;}
   HDR10AISource::Decision PrepareHDR10AIQueue(std::span<const Layer>,const DVBRIDGE::OutputPreferences&,
    const char*,uint64_t,bool,cb1_ai_result*,bool,uint64_t);
  };
@@ -177,14 +177,16 @@ int main(){
  CDVBridgeGLES::Context native;preferences.hdr10Source=DVBRIDGE::HDR10SourceMode::Native;
  assert(native.PrepareHDR10AIQueue(queue,preferences,"bundle",0,false,&result,false,0)==Decision::Native);
  assert(!native.source.active && native.source.analysed==0);
- for(auto mode:{DVBRIDGE::HDR10SourceMode::ReferenceDV,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
-  CDVBridgeGLES::Context prepared;prepared.state.attached=true;
-  prepared.source.active=prepared.source.covered=true;prepared.source.last=10;
-  preferences.hdr10Source=mode;
-  assert(prepared.PrepareHDR10AIQueue(queue,preferences,"bundle",500,false,&result,false,0)==Decision::Prepare);
-  assert(prepared.source.analysed==0 && prepared.state.aiNext);
-  assert(prepared.state.aiNext->layer.binding.picture==11);
- }
+ for(double boundary:{1.0,1.001})
+  for(auto mode:{DVBRIDGE::HDR10SourceMode::ReferenceDV,DVBRIDGE::HDR10SourceMode::EnhancedDV}){
+   CDVBridgeGLES::Context prepared;prepared.state.attached=true;
+   prepared.source.active=prepared.source.covered=true;prepared.source.last=10;
+   preferences.hdr10Source=mode;
+   queue.back().pts=boundary;
+   assert(prepared.PrepareHDR10AIQueue(queue,preferences,"bundle",500,false,&result,false,0)==Decision::Prepare);
+   assert(prepared.source.analysed==0 && prepared.state.aiNext);
+   assert(prepared.state.aiNext->layer.binding.picture==11);
+  }
 }
 '''.replace('FUNCTION',code)
         with tempfile.TemporaryDirectory() as temporary:

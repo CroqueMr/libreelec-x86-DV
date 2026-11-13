@@ -1223,6 +1223,45 @@
       "drivers/gpu/drm/i915/display/intel_display_regs.h": "Import exact upstream register definitions without changing valid BXT/ICL/TGL pipe encodings."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-bluray-flush-before-new-packets.patch": {
+    "owner": "Blu-ray demux reopen and player queue synchronization",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Handle the pending flush before submitting new packets and wait only for initialized workers."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr10-ai-queue-continuity.patch": {
+    "owner": "HDR10-to-Dolby Vision input draining and anticipation",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Drain the outgoing video before waiting on audio at a stream boundary.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Anticipate the first sample beyond the sealed prediction horizon.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Keep the analysis interface independent of the current presentation window.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Admit ordered samples independently of the presentation window.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h": "Expose the source analysis input without a presentation timestamp."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-native-dv-renderer-handoff.patch": {
+    "owner": "Native Dolby Vision renderer handoff",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Keep committed DV only between compatible hardware renderers.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Expose the renderer handoff result to RenderManager.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Transfer native DV explicitly and restore output if adoption fails.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Defer admission until the successor imports its own Dolby Vision frame.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Pass output ownership when configuring the successor.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Keep stable Master Reference scanout while resetting source-dependent work.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Master Reference output retention to VAAPI."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-dv-renderer-handoff.patch": {
+    "owner": "Keep the committed HDR10-to-Dolby Vision output while a compatible VAAPI renderer is replaced.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Check the next VAAPI renderer format and preserve output ownership.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Expose the renderer handoff.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Keep stop ownership while the next analysis queue primes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Hand over the active scanout at renderer replacement.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Retain the committed native Dolby Vision scanout and discard unsubmitted frame work.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the render-thread output ownership checks."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9995-cb1-bluray-overlay.patch": {
     "summary": "Respect HDMV staged HIDE and palette/image updates per plane",
     "component": "kodi",
@@ -1434,6 +1473,48 @@
     "owner": "Schedule ready Intel HDMI SCDC recovery without the ordinary HPD retry delay.",
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-bdj-presentation-clock.patch": {
+    "owner": "Blu-ray Java presentation timing and playlist transitions",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Release disc notifications on presentation and handle playlist handoffs.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Store the pending Blu-ray Java presentation stamps.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Feed libbluray presentation sequences and report navigation boundaries.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose Blu-ray Java presentation controls to VideoPlayer."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": {
+    "owner": "Native AMD HDR10 renderer handoff",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Carry static HDR metadata with each renderer buffer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Identify an AMD native HDR10 output transfer.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Transfer compatible AMD HDR10 output ownership.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Stage static metadata from the frame after rendering.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Keep the display surface when replacing a compatible renderer.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep frame metadata until its presentation attempt.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Wait for video and submit its metadata with its framebuffer.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose the native HDR10 output handoff to GBM GLES.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Promote the metadata blob only after accepted scanout.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Expose a paired native HDR10 frame commit.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Submit metadata and framebuffer together without ordinary fallback."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-bluray-audio-handoff.patch": {
+    "owner": "Blu-ray Java playlist audio handoff",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Discard a superseded playlist probe and keep PCM across natural BD-J handoffs.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Track a retained PCM worker until its next stream is selected.",
+      "xbmc/cores/VideoPlayer/VideoPlayerAudio.cpp": "Drain and pause PCM before the next playlist starts.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose held BD-J selections after probing.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Distinguish a held selection from natural play item boundaries."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-zz-amd-static-pq-handoff.patch": {
+    "owner": "AMD static PQ scanout across compatible source changes",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Use the effective static PQ output for the paired DRM commit.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Share the same eligibility check when replacing the renderer."
     }
   }
 }

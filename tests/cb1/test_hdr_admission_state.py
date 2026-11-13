@@ -8,8 +8,9 @@ from test_native_video_source import TREE, body
 
 class HDRAdmissionStateTests(unittest.TestCase):
     def test_rejected_and_accepted_metadata_requests(self):
-        code = body((TREE / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text(),
-                    'bool CWinSystemGbm::SetHDR(')
+        source = (TREE / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
+        code = body(source, 'bool CWinSystemGbm::SetHDR(')
+        metadata = body(source, 'hdr_output_metadata MakeHDRMetadata(')
         program = r'''
 #include <cassert>
 #include <cmath>
@@ -74,6 +75,7 @@ struct SettingsComponent {
 struct CServiceBroker {static inline auto component=std::make_shared<SettingsComponent>();
  static auto GetSettingsComponent() {return component;}};
 struct CLog {template<class... T>static void Log(T...) {} template<class... T>static void LogF(T...) {}};
+hdr_output_metadata MakeHDRMetadata(const VideoPicture& picture, KODI::UTILS::Eotf eotf) @@MAKE_HDR_METADATA@@
 struct CWinSystemGbm {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<DisplayInfo> m_info=std::make_shared<DisplayInfo>();
@@ -142,7 +144,7 @@ int main(int argc,char** argv) {
    assert(!window.SetHDR(nullptr) && drm->pending);
  }
 }
-'''.replace('BODY', code)
+'''.replace('BODY', code).replace('@@MAKE_HDR_METADATA@@', metadata)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test.cpp').write_text(program)
