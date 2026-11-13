@@ -9,6 +9,8 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "tests/cb1/test_bluray_seamless_playitem.py": "d927c9708dc1da15366020d1420c7d458f17bba15ce638cd037ca0be3f79c782",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-seamless-playitems.patch": "88dce790d7fa87efd221a758792092090b517e9fc07890e0f1b84dba03aa1c16",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
@@ -201,7 +203,7 @@
     "tests/cb1/test_bluray_still_source.py": "db966bee9dbbd93f4dd0d4c2b9bcbfa21bb956328f310d87b449c314b195a8ef",
     "tests/cb1/test_libbluray_playmarks.py": "083b47ea0ac7991d4e8a56705019bcbfa5ba15847c9dba82a899c60b0d19fea6",
     "tests/cb1/test_libbluray_video_preroll.py": "ccef6350d36176d37a470c49f2e566b37bfe7cf20cd4ba2838ef4ddacc24ac5e",
-    "tests/cb1/test_bluray_navigation_drain.py": "ed11fa05d463bb838a02ec4389d333cbcb952feeb269ad4665653082f843b24b",
+    "tests/cb1/test_bluray_navigation_drain.py": "1ffd4050d99c38b51d5d61b209ad9b4370a7c7af04c85844ca8c9fb8ba2ce1b8",
     "tests/cb1/test_bluray_video_window.py": "db8b191acece4e078689ad0c40c9bf3f8b4ade70a01b75250de3f2f740dac036",
     "tests/cb1/test_bluray_video_disposition.py": "9b55913bd1dee73327eccf7d05ba178084625539368863e60df2603015742c6e",
     "tests/cb1/test_decode_startup_diagnostics.py": "a2dab43412f415ea8138a1218be7fe9d31e2c84cd14b814238bc12be4165b017",
