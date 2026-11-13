@@ -63,7 +63,8 @@ struct OutputPreferences {
  double peak=1000;int panel=0,gamut=2,lldvFormat=0;
  bool ProfileValid(int=0)const PROFILE
  dvbridge_policy Policy()const{return {.revision=1,.mode=mode};}
- dvbridge_policy HDR10Policy(bool=false)const{return Policy();}
+ dvbridge_policy HDR10PolicyFor(HDR10SourceMode)const{return Policy();}
+ HDR10SourceMode HLGMode()const{return HDR10SourceMode::Native;}
  auto HDR10Mode(bool)const{return hdr10Source;}
 };
 using Caps=OutputCapabilities;
