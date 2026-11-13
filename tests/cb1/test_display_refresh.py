@@ -1,4 +1,4 @@
-"""A failed video-start EDID read cannot erase the last usable display."""
+"""Display capability refresh follows the current connector EDID."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,9 +16,10 @@ class DisplayRefreshTests(unittest.TestCase):
 #include <memory>
 #include <optional>
 #include <vector>
-constexpr int LOGDEBUG=0;
+constexpr int LOGDEBUG=0, DRM_MODE_CONNECTED=1, DRM_MODE_DISCONNECTED=2;
 struct CLog {template<class... T> static void LogF(T&&...) {}};
 struct drmModeConnector {uint32_t connector_id=7;int count_props=2;
+ int connection=DRM_MODE_CONNECTED;
  uint32_t props[2]={19,42};uint64_t prop_values[2]={0,22};};
 struct Blob {uint32_t length;void* data;};using drmModePropertyBlobPtr=Blob*;
 static unsigned probes,queries,freed_connectors,freed_blobs;
@@ -64,6 +65,11 @@ int main(){
  null_data=false;blob_length=0;assert(c.GetEDID(true).empty());
  blob_length=32769;assert(c.GetEDID(true).empty());
  assert(freed_connectors==7 && freed_blobs==5 && !probes && kernel_dv);
+ live.connection=DRM_MODE_DISCONNECTED;
+ blob_length=2;assert(c.GetEDID(true).empty());
+ assert(freed_connectors==8 && freed_blobs==5 && !probes);
+ live.connection=DRM_MODE_CONNECTED;
+ assert((c.GetEDID(true)==std::vector<uint8_t>{3,4}));
  assert(c.m_connector->connector_id==7); // Native connector/mode ownership is untouched.
 }
 '''.replace('METHOD',method)
@@ -75,7 +81,7 @@ int main(){
             result=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
 
-    def test_actual_refresh_preserves_valid_information(self):
+    def test_actual_refresh_invalidates_and_reacquires_display_information(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
         self.assertIn('bool CWinSystemGbm::RefreshDisplayInfoForVideo()', source,
                       'video-start display refresh is missing')
@@ -107,12 +113,15 @@ struct CWinSystemGbm {
 };
 int main() {
  CWinSystemGbm window;
- auto* original=window.m_info.get();
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(window.RefreshDisplayInfoForVideo() && !window.m_info && window.m_displayEdid.empty());
+ assert(!window.RefreshDisplayInfoForVideo());
  window.m_DRM->connector.next={255};
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(!window.RefreshDisplayInfoForVideo() && !window.m_info);
  window.m_DRM->connector.next={1};
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==1);
+ assert(!window.RefreshDisplayInfoForVideo());
+ window.m_DRM->connector.next={255};
+ assert(window.RefreshDisplayInfoForVideo() && !window.m_info && window.m_displayEdid.empty());
  window.m_DRM->connector.next={2};
  assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==2);
  assert(window.m_displayEdid==std::vector<uint8_t>{2});
