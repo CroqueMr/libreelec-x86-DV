@@ -118,7 +118,7 @@ struct CLinuxRendererGLES:CBaseRenderer {
  bool IsGuiLayer(){return gui;}
  bool HasRenderedFrame() const override @@RECEIPT@@
  bool ValidateRenderTarget(){return firstPass;}
- void ClearBackBuffer(){++clears;} void DrawBlackBars(){} void ManageRenderArea(){}
+ void ClearBackBuffer(){++clears;} void DrawBlackBars(){} void UpdateActiveArea(int){} void ManageRenderArea(){}
  bool UploadTexture(int){++uploadCalls;return upload;}
  bool RenderHook(int){return false;} void UpdateVideoFilter(){}
  void RenderSinglePass(int,int){++draws;} void RenderToFBO(int,int){++draws;}
