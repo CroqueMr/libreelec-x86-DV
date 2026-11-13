@@ -130,9 +130,10 @@ struct CDVDMsg { enum { VIDEO_DRAIN }; explicit CDVDMsg(int) {} };
 struct Player {
  enum { CACHESTATE_DONE, LOGINFO };
  struct Stream { bool inited=true; void Clear(){} };
- Stream m_CurrentAudio, m_CurrentVideo;
+ Stream m_CurrentAudio, m_CurrentVideo, m_CurrentSubtitle;
  struct { void reset(){} } m_syncStartPtsWait;
- struct { void Clear(){} } m_CurrentSubtitle;
+ struct { void clear(){} } m_bdjPresentationEvents;
+ bool m_bdjDraining=false;
  struct Renderer {
   bool ai=true;
   bool HDR10AILookahead(){return ai;}
@@ -141,13 +142,13 @@ struct Player {
   int drains=0;
   void SendMessage(std::shared_ptr<CDVDMsg>){++drains;}
  } video, *m_VideoPlayerVideo=&video;
- struct CLog { static void Log(int,const char*){} };
+ struct CLog { template<class... A> static void Log(A...){} };
  bool demuxClosed=false;
  int drainsAtAudioClose=-1;
  void CloseDemuxer(){demuxClosed=true;}
  void SetCaching(int){}
  void CloseStream(Stream& stream,bool wait) {
-  assert(demuxClosed && wait);
+  assert(demuxClosed && (wait || &stream==&m_CurrentSubtitle));
   if (&stream==&m_CurrentAudio) drainsAtAudioClose=video.drains;
  }
  void Handoff() {

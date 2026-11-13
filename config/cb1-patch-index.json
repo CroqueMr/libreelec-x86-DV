@@ -1474,5 +1474,14 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-bdj-presentation-clock.patch": {
+    "owner": "Blu-ray Java presentation timing and playlist transitions",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Release disc notifications on presentation and handle playlist handoffs.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.h": "Store the pending Blu-ray Java presentation stamps.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Feed libbluray presentation sequences and report navigation boundaries.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Expose Blu-ray Java presentation controls to VideoPlayer."
+    }
   }
 }
