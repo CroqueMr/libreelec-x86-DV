@@ -9,10 +9,11 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "tests/cb1/test_vaapi_resource_lifetime.py": "6202599c38d1729f04f2eab3c0a319561332c632ba37cfaeaa531e154b72f1b7",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-native-dv-renderer-handoff.patch": "7a4bf4b599ddb4a9f29e00bf730ca918adf5c74de8d8179451b41c047aba1265",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-bluray-flush-before-new-packets.patch": "fd7fedda6a77d04abbcd6b3f7fe69d14130996bee7fc09c305cc275f4560babc",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr10-ai-queue-continuity.patch": "14e8a9593761dd3390ac377e80776382918745f8c6fb24a4ea91813eee08fc68",
-    "tests/cb1/test_hdr10_dv_handoff.py": "9783710f0601cc4f4c445ad298000f2cd2d3b712b1844e968435a57a80f3d554",
+    "tests/cb1/test_hdr10_dv_handoff.py": "97ae5c79745f1b85d15b734dc70c85efe1503ebf2aaeb472b029b10977d93e94",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-dv-renderer-handoff.patch": "8c1456ed17bc9d9ca3d02228da26df8bc7dc039c867fe9762af0e0e450a9cb97",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
@@ -157,7 +158,7 @@
     "tests/cb1/test_audio_track_bitrate.py": "0e83dd09868b3aedf4d769981703f3069516e5360ea90736d89e446fc1b080ba",
     "tests/cb1/test_process_info_readability.py": "4e7ce3a7389b62ff052cf7bf07dc3ecefcae6d1f2f3b539ea834663ae2140847",
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
-    "tests/cb1/test_ai_reentry.py": "0c239d9324b8ace2538814af051096289bc7eefc9738d190a1dd22c94fb10dca",
+    "tests/cb1/test_ai_reentry.py": "1ee41d278e84cabce3daae892853abadbeb5014ccfb21bb10709feaf7ded416a",
     "tests/cb1/test_ai_reference_phase.py": "07d8909154c77a93491e29ca149085f185bff919c049bbd712178a3e2256453a",
     "tests/cb1/test_output_menu_recovery.py": "15b6bb64ab2090f19e526b22efbb45fa87578f89b1588e1582a853f79835c7fd",
     "tests/cb1/test_hdr10plus_selection.py": "889f8f2290f20261faabbe4dc892334e239c942983f57defa06e56081c9cfe2a",
@@ -359,7 +360,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "025629b811b8b4419ee1c16f0c5723a5896548ce97ca3c4e1db95613f20b3ee5",
+    "config/cb1-patch-index.json": "05e1b0977db35c72d8a5ba23846e6316160c2b753acf0c2d14a6e9a8b2f7fe99",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780"
   },
   "staging": {
