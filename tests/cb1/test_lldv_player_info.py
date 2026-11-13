@@ -294,7 +294,7 @@ int main()
     def test_cpu_preparation_retires_a_completed_scanout_without_waiting(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         render = body(source, 'bool CWinSystemGbmGLESContext::RenderDVBridge(')
-        start = render.index('  if (!BeginDVBridge())')
+        start = render.index('  if (!BeginDVBridge()')
         retire = render[start:render.index('  const auto capture',start)]
         run(self, {'test.cpp': r'''
 #include <cassert>
@@ -304,9 +304,12 @@ struct Window
   {
     bool pending=true;
     bool PlayerLedCpuPending() const {return pending;}
+    bool SetSDROutputRange(bool) {assert(false); return false;}
   } bridge;
   Bridge* m_dvBridge=&bridge;
   bool ready=true,async=true,signalled=false,rejected=false;
+  bool m_sdrConversion=false;
+  bool UseLimitedColor() const {return false;}
   int polls=0,leases=4;
   bool BeginDVBridge() const {return ready;}
   bool CB1AsyncAvailable() const {return async;}

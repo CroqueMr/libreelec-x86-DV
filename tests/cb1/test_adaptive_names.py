@@ -270,13 +270,14 @@ struct CSettings:CSettingsBase {
  bool Load(const TiXmlNode*){return true;}
  bool Load(const TiXmlElement* root,bool& updated) @@LOAD@@
 };
-int main(){for(bool reverse:{false,true})for(int saved:{0,1,2,3,4,5,6}){
+int main(){for(bool reverse:{false,true})for(bool sdrSettings:{false,true})for(int saved:{0,1,2,3,4,5,6}){
  TiXmlElement root;
  if(reverse)root.Add("dvbridge.fastchroma","true");
  root.Add("dvbridge.outputmode",std::to_string(saved));
  if(!reverse)root.Add("dvbridge.fastchroma","true");
+ if(sdrSettings)root.Add("dvbridge.sdrpreset","0");
  CSettings settings;bool updated=false;assert(settings.Load(&root,updated));
- assert(settings.loaded["dvbridge.outputmode"]==std::to_string(saved==3||saved==6?5:saved));
+ assert(settings.loaded["dvbridge.outputmode"]==std::to_string(saved==3||(saved==6&&!sdrSettings)?5:saved));
  assert(settings.loaded["dvbridge.fastchroma"]=="true"); // Retired, never read or migrated.
  assert(root.children[reverse?1:0]->text==std::to_string(saved));
 }}

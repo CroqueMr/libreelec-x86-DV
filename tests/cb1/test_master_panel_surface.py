@@ -31,7 +31,7 @@ class MasterPanelSurface(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #include <iostream>
-enum {DVBRIDGE_MODE_DISABLED=0,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_MASTER_REFERENCE=5};
+enum {DVBRIDGE_MODE_DISABLED=0,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_SDR=6};
 namespace DVBRIDGE { uint64_t NextRevisionAfter(uint64_t value){return value+1;} }
 struct Binding {uint64_t stream=1,picture=42,revision=7;bool operator==(const Binding&)const=default;};
 struct Layer {Binding binding;bool lease=true;int scalingMethod=0;};
@@ -44,7 +44,8 @@ struct Admission {
  bool m_committedPacked=true,m_direct=true,m_dvPolicyActive=false;
  bool m_overlayVisible=true,m_pendingOverlayVisible=true;
  bool m_nativeOverlayEnabled=true;int m_nativeOverlay=0;
- int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;}policy;
+ int m_effectiveMode=5,m_committedMode=5,m_sdrGamut=1;
+ struct {int mode=5;struct {int gamut=1;}sdr;}policy;
  int m_spatialMethod=0;
  struct {uint64_t revision=3;} preferences;
  Binding m_committedBinding,m_pendingBinding,m_failedIdentity{0,0,0},m_pendingIdentity;

@@ -30,13 +30,17 @@ class NvidiaBufferRestore(unittest.TestCase):
 struct gbm_bo {unsigned format=1;};
 constexpr unsigned DRM_FORMAT_XRGB8888=1,DRM_FORMAT_ARGB8888=2;
 constexpr unsigned DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
+enum {DVBRIDGE_GAMUT_BT709,DVBRIDGE_GAMUT_BT2020};
+enum {AVCOL_TRC_BT709,AVCOL_PRI_BT709,AVCOL_PRI_BT2020,AVCOL_SPC_BT709,AVCOL_SPC_BT2020_NCL};
+struct VideoPicture {int color_transfer{},color_primaries{},color_space{},colorBits{};};
 unsigned gbm_bo_get_format(gbm_bo* bo){return bo->format;}
 unsigned gbm_bo_get_width(gbm_bo*){return 3840;}
 unsigned gbm_bo_get_height(gbm_bo*){return 2160;}
 struct CResolutionUtils {static bool IsCB1RefreshRate(double){return true;}};
 struct DRM {virtual ~DRM()=default;};
 struct CDRMAtomic:DRM {
- struct Connector {bool SupportsProperty(const char*){return false;}}connector;
+ struct Connector {bool SupportsProperty(const char*){return false;}
+  std::optional<int> GetPropertyEnumValue(const char*,const char*)const{return {};}}connector;
  struct Mode {unsigned hdisplay=3840,vdisplay=2160,flags=0,htotal=4400,vtotal=2250,clock=594000;}mode;
  bool stageOK=true,commitOK=true,active=false;unsigned accepted=0,missing=0;
  gbm_bo* acceptedBuffer=nullptr;
@@ -81,6 +85,10 @@ struct Window {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
  CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
+ std::optional<int> m_queuedColorspace;
+ int GetOutputBitDepth(){return 8;}
+ void SetHDR(const VideoPicture*){assert(false);}
+ void SetColorimetry(const VideoPicture*){assert(false);}
  double m_preparedRenderPts{};
  std::optional<uint64_t>m_hdrDeepColorPrevious;
  struct AlternateScanout {unsigned accepted{};void Presented(){++accepted;}};
@@ -95,6 +103,10 @@ struct Window {
  @SIGNATURE@
  bool Ordinary(bool rendered){@ORDINARY@}
  bool HDR(std::shared_ptr<gbm_bo> carrier={}){bool presented=false,asynchronous=false;
+   constexpr bool signalChange=false;
+   constexpr int gamut=DVBRIDGE_GAMUT_BT709;
+   std::optional<int> m_sdrSignal;
+   [[maybe_unused]] bool signalRejected=false;
    struct {int hdr10plus=0,informationGeneration=1;bool hdr10plusAccepted=false;}submitted;
    @HDR@
    return presented;

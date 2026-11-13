@@ -40,7 +40,7 @@ namespace DVBRIDGE {
  enum class OutputMode {Disabled=2,Standard=0,HDR10=1,MasterReference=4,SDR=6}; enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR,PlayerLed};
  enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired,ProcessingPending};
  enum class HDR10SourceMode {Native,ReferenceDV};
- struct Policy {int mode=0;};
+ struct Policy {int mode=0;struct {int gamut=0;}sdr;};
  struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
    double peak=1000;int panel=0,gamut=2;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
    ::DVBRIDGE::Policy Policy()const{return {};}};
@@ -97,7 +97,11 @@ struct CWinSystemGbmEGLContext {
   if(transaction){++stages;pending=formatChanges;} depth=targetDepth;return true;
  }
 };
+enum {DVBRIDGE_GAMUT_BT709=1,DVBRIDGE_GAMUT_BT2020=3};
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
+ enum class SDRBT2020Support { Available };
+ SDRBT2020Support GetSDRBT2020Support()const{return SDRBT2020Support::Available;}
+ bool m_sdrBT2020Rejected{};
  bool requested=false,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
  bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;

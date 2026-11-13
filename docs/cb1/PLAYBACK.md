@@ -58,7 +58,7 @@ Presentation-margin diagnostics remain available. GUI, capture, pause and
 discontinuous pictures are excluded from those measurements.
 
 **HDR/DV to SDR target** configures HDR10, HDR10+ and Dolby Vision conversion to
-BT.709 SDR. It does not change native SDR playback.
+SDR, using BT.709 by default. It does not change native SDR playback.
 
 ## FEL upscaling and frame preparation
 
@@ -179,9 +179,11 @@ build version, CPU/GPU, display and HDMI route. No automatic upload is performed
 ## SDR rendering target
 
 SDR Rendering reconstructs the original Dolby Vision base, applicable enhancement/FEL
-and RPU before mapping to BT.709. HDR10/HDR10+ use their original decoded image.
-It works on SDR-only displays without Dolby Vision or HDR transport. The accepted
-output carries no Dolby Vision, HDR10 or HDR10+ metadata.
+and RPU before mapping to SDR. HDR10/HDR10+ use their original decoded image.
+**SDR output gamut** defaults to BT.709. BT.2020 is available when the active HDMI
+driver and display advertise BT.2020 RGB. If the output rejects it, playback
+renders a fresh BT.709 frame. Player Process Info shows the accepted gamut, peak
+and gamma. The output carries no Dolby Vision, HDR10 or HDR10+ metadata.
 
 The independent SDR target offers Reference (100 nits, gamma 2.4), Bright room
 (200 nits, gamma 2.2), or Custom / Projector. Custom peak is 20–500 nits,

@@ -266,16 +266,23 @@ int main(){for(bool videoLayer:{false,true})for(bool reusable:{false,true})for(b
         self.run_cpp(r'''
 #include <cassert>
 #include <memory>
+#include <optional>
 void glFinish(){}
+enum dvbridge_gamut { DVBRIDGE_GAMUT_BT709, DVBRIDGE_GAMUT_BT2020 };
+constexpr int PL_COLOR_PRIM_BT_2020=3;
 struct DRM{virtual~DRM()=default;};struct CDRMAtomic:DRM{};
 struct CDVBridgeGLES{
  struct Submission{int sourceSideData=0;};
+ struct Output{struct Container{int primaries=PL_COLOR_PRIM_BT_2020;}container;}output;
+ const Output* HDR10Output()const{return &output;}
  unsigned resolves=0;bool ResolveHDR10(bool){++resolves;return true;}
  bool Pack(int,int,int,bool){++resolves;return true;}
  Submission CaptureSubmission(){return {};}bool Advanced(){return true;}
 };
 struct Window{
  bool m_dvFrame=true;int m_nWidth=3840,m_nHeight=2160,m_videoSourceSideData=1;
+ bool m_sdrConversion=false;
+ std::optional<dvbridge_gamut> m_sdrSignal;
  bool m_pascalHDRActive=false;
  struct PascalScanout {
    unsigned blits=0;

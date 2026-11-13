@@ -27,6 +27,7 @@ enum dvbridge_sdr_preset { DVBRIDGE_SDR_REFERENCE, DVBRIDGE_SDR_BRIGHT, DVBRIDGE
 struct dvbridge_sdr_profile {
     enum dvbridge_sdr_preset preset;
     double peak_nits, gamma, black_nits; /* Custom only; presets have fixed values. */
+    enum dvbridge_gamut gamut; /* Unset retains BT.709 for existing callers. */
 };
 bool dvbridge_sdr_target(const struct dvbridge_sdr_profile *profile,
     double *peak_nits, double *gamma, double *black_nits);
