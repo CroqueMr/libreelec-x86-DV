@@ -1450,5 +1450,15 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Select the analysed head before enabling display clock catch-up."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hlg-analysis-resync.patch": {
+    "owner": "Keep HLG playback synchronized while the requested Dolby Vision output primes.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h": "Bound priming by the elapsed time and progress of the current epoch.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Timestamp analysis progress and prediction on the same monotonic clock.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Reserve the existing analysis pool for HLG AV1 before a live switch.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Reprime seekable HLG playback at its current position when entering Dolby Vision.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Wait for priming before enabling normal clock catch-up."
+    }
   }
 }

@@ -276,7 +276,7 @@
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-glass.png": "1cd03200df33574d2cf1a0c5baac776cf8ad4fe623b62e202a22e9ed0961350b",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-bar.png": "5799eb929ce7ab181314821ae40dcac23451d8c933ccb0b0b38b44fab3dc1179",
     "tests/cb1/test_player_columns_contract.py": "6610477ce5d826f52890322838857d659e5e78d29591c45533b9fcd8d2f9b9d6",
-    "tests/cb1/test_ai_initial_overlap.py": "a4c3aa7fc301bfa2825b7928ff9417406380a8f721269412536c0d355acdffb1",
+    "tests/cb1/test_ai_initial_overlap.py": "e901eef43ea5598e594b44884c90e83405bb29536456d39239f7b05ad2ffe229",
     "tests/cb1/test_process_info_wording.py": "390a2cc0d2771e8c4601568e0eede1e2e6865db9880814bf663242a17184af83",
     "docs/superpowers/plans/2026-11-09-sdr-hlg-player-info.md": "932455791c9443ebe66e911b550ee33e1d40311fff694a40e15cbd17b8ace86a",
     "tests/cb1/test_sdr_hlg_routes.py": "ea1711ea5e30867a79aaef8b367bdfa2bb862e8cf3a6ffb36a3f9740e6b42881",
@@ -355,9 +355,10 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "634a5eb5212f9c214c88e31befe63bc77effc11462b5918454a74cbc86a67e8c",
+    "config/cb1-patch-index.json": "977d5a9136eee78d06735e47fb7a6c5dc774fd13145b8a6bd8e05cb2fd2b419e",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": "3e683019e5cb9c6e47b7ec7e3ec2a32c9f81eb65d0dc06522788b9a5053e6d79"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": "3e683019e5cb9c6e47b7ec7e3ec2a32c9f81eb65d0dc06522788b9a5053e6d79",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hlg-analysis-resync.patch": "ab12f4bc214bea5c1d49093327e07759a34a908c262f695c924337862fd38529"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
