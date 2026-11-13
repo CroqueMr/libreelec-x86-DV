@@ -136,13 +136,38 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +    if (hdrInputUsed && !layer.hlg)
      {
        // Attest the same nominal input selection the SDR tone mapper consumes.
-@@ -1940,4 +1940,5 @@
+@@ -1866,11 +1866,14 @@
+   m_geometryKnown = true;
+   uint64_t revision = std::max({preferences.revision,base.binding.revision,m_geometryRevision});
+-  bool masterOverlayRefresh = false;
++  bool asyncOverlayRefresh = false;
+   if (!m_pending && m_hasCommitted && base.binding == m_committedBinding &&
+       revision == m_committedRevision && (!allowPacked || !m_committedPacked ||
+           m_nativeOverlayRevision != m_committedOverlayRevision))
+   {
+-    masterOverlayRefresh = policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE &&
+-        sameGeometry && allowPacked && m_committedPacked;
++    // The SDR GUI is blended into the resolved film target. Rebuilding that
++    // target for the same picture needs a new identity, but keeps the scanout.
++    asyncOverlayRefresh = sameGeometry && allowPacked &&
++        ((policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && m_committedPacked) ||
++         (policy.mode == DVBRIDGE_MODE_SDR && !m_committedPacked));
+     // Explicit refresh of an equal-PTS source is a new processing transaction.
+     revision = m_geometryRevision = DVBRIDGE::NextRevisionAfter(revision);
+@@ -1907,5 +1910,5 @@
+       m_committedMode == policy.mode && base.binding.stream == m_committedBinding.stream &&
+       base.binding.revision == m_committedBinding.revision &&
+-      (revision == m_committedRevision || masterOverlayRefresh);
++      (revision == m_committedRevision || asyncOverlayRefresh);
+   if (m_dvPolicyActive)
+   {
+@@ -1940,4 +1943,5 @@
  #ifdef CB1_HAS_HDR10_AI
    m_aiFrame = m_aiOutputAccepted = false;
 +  m_sourceHLG = base.hlg;
  #endif
    m_guiComposed = false;
-@@ -1965,6 +1966,8 @@
+@@ -1965,6 +1969,8 @@
    m_pendingSDRHDRInputValues = {};
    m_pendingIdentity = {base.binding.stream,base.binding.picture,revision};
 +  const auto requested = !base.sourceInfo.profile && policy.mode == DVBRIDGE_MODE_SDR ?
@@ -152,14 +177,14 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +      DVBRIDGE::PolicyCode(requested),DVBRIDGE::PolicyCode(policy),
        admissionIdentity.Valid() ? admissionIdentity :
            DVBRIDGE::SourceBinding{base.binding.stream,base.binding.picture,preferences.revision});
-@@ -1988,5 +1991,5 @@
+@@ -1988,5 +1994,5 @@
      DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge policy requested: source={}/{}/{} policy={} requested={} effective={} eligible={} fallback={} l2_trims_disabled={} method={} tv_peak={} tv_panel={} tv_gamut={} tv_profile_valid={} encoded_active_area={}",
          base.binding.stream,base.binding.picture,base.binding.revision,revision,
 -        int(preferences.Policy().mode),int(policy.mode),!m_fallback,m_fallback,preferences.L2TrimsDisabled(policy.mode),
 +        int(requested.mode),int(policy.mode),!m_fallback,m_fallback,preferences.L2TrimsDisabled(policy.mode),
          preferences.method,preferences.peak,preferences.panel,preferences.gamut,preferences.ProfileValid(),geometry.ignore_l5);
      const auto admission=DVBRIDGE::StreamTelemetry::Read().transaction;
-@@ -3154,4 +3157,5 @@
+@@ -3154,4 +3160,5 @@
  #ifdef CB1_HAS_HDR10_AI
      output.sdrHDRSource=m_pendingSourceInfo.profile==0;
 +    output.sdrHLGSource=output.sdrHDRSource && m_sourceHLG;

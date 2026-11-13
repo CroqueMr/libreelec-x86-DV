@@ -47,6 +47,96 @@ int main(){
             run = subprocess.run([str(root/'check')], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_sdr_gui_redraw_keeps_async_scanout(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        prepare = body(source, 'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
+        begin = prepare.index('  bool ', prepare.index('uint64_t revision ='))
+        refresh = prepare[begin:prepare.index('  if (m_failedIdentity', begin)]
+        begin = prepare.index('  const bool eligible', begin)
+        admission = prepare[begin:prepare.index('  if (m_dvPolicyActive)', begin)]
+        program = r"""
+#include <cassert>
+#include <cstdint>
+#include "dvbridge_policy.h"
+
+struct Binding
+{
+  int stream = 1, picture = 2, revision = 3;
+  bool operator==(const Binding&) const = default;
+};
+
+namespace DVBRIDGE
+{
+uint64_t NextRevisionAfter(uint64_t revision) { return revision + 1; }
+}
+
+struct State
+{
+  struct FrameStatus { static constexpr bool Failed = false; };
+  bool m_pending = false, m_hasCommitted = true, m_committedPacked = false;
+  bool sameGeometry = true, allowPacked = true, allowAsync = true, asyncSetting = true;
+  bool m_fallback = false, m_pendingHDR10Fallback = false, m_directUsable = true;
+  int m_nativeOverlayRevision = 0, m_committedOverlayRevision = 0;
+  uint64_t m_committedRevision = 10, m_geometryRevision = 10;
+  Binding m_committedBinding;
+  enum dvbridge_mode m_committedMode = DVBRIDGE_MODE_SDR, mode = DVBRIDGE_MODE_SDR;
+  struct { Binding binding; bool lease = true; } base;
+  struct Layer { bool lease; };
+  const Layer* enhancement = nullptr;
+
+  bool prepare(uint64_t revision = 10)
+  {
+    const auto policy = dvbridge_policy{.mode = mode};
+    REFRESH
+    ADMISSION
+    return eligible;
+  }
+};
+
+int main()
+{
+  State redraw;
+  assert(redraw.prepare() && redraw.m_geometryRevision == 11);
+  assert(!State{}.prepare(11)); // real settings revision
+  State geometry;
+  geometry.sameGeometry = false;
+  assert(!geometry.prepare());
+  State mode;
+  mode.m_committedMode = DVBRIDGE_MODE_STANDARD;
+  assert(!mode.prepare());
+  State lease;
+  lease.base.lease = false;
+  assert(!lease.prepare());
+  State unavailable;
+  unavailable.allowAsync = false;
+  assert(!unavailable.prepare());
+  State blocked;
+  blocked.asyncSetting = false;
+  assert(!blocked.prepare());
+  State capture;
+  capture.allowPacked = false;
+  assert(!capture.prepare());
+  State ordinary;
+  ordinary.mode = ordinary.m_committedMode = DVBRIDGE_MODE_HDR10_EXPERT;
+  assert(!ordinary.prepare());
+  State master;
+  master.mode = master.m_committedMode = DVBRIDGE_MODE_MASTER_REFERENCE;
+  master.m_committedPacked = true;
+  master.m_nativeOverlayRevision = 1;
+  assert(master.prepare() && master.m_geometryRevision == 11);
+}
+""".replace('REFRESH', refresh).replace('ADMISSION', admission)
+        repo = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'check.cpp').write_text(program)
+            built = subprocess.run(['c++', '-std=c++20', '-I' + str(repo / 'CB1/src'),
+                                    str(root / 'check.cpp'), '-o', str(root / 'check')],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            run = subprocess.run([str(root / 'check')], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_effective_route_keeps_fences_and_all_safety_guards(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         implementation = body(source, 'bool CWinSystemGbmGLESContext::CB1AsyncAvailable() const')

@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "32143c497499c60ee1a83f5292ac64fba2576ccc4a8214762b2c5088977f3160",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzz-pascal-hdr10-scanout.patch": "62593eeb9d7593b49584e3e92e1b4fbb5a190016897dba2a7394d61347085d26",
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
@@ -284,7 +284,7 @@
     "tests/cb1/test_sdr_gui_transfer.py": "e109d3b5064d4209ab49e6c755fe58aaa6cae0f8f520caadaa0c1cb299aee840",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-card.png": "d248cfeb28cdb4f96e58271ba284761a1bddc1b94ff90faad7f6d1998696e19b",
     "tests/cb1/test_process_info_skin_recovery.py": "0e766ea606f5874c802215be713d6b06f900f2702a5c1e734a0a0ae32dfaa75e",
-    "tests/cb1/test_async_output_admission.py": "18871eb5f2b5fceeb463d8d010da916d546405a3bc4cf2af65a8c72e6ab11746",
+    "tests/cb1/test_async_output_admission.py": "120ef983bb7182288a9d45bd4ca5ba9877946ee319438b5858f443eac6b72fdf",
     "tests/cb1/test_process_info_metadata.py": "05b9b610232c1a6d771db6427096ea8984ab26c550d85e79ed55430a0ded4495",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-chip.png": "c09cad7da82f242339d55e4f37b28c143ef16eb33e35d293c4f2ce7b169c3a41",
     "docs/cb1/PROCESSING.md": "1d092be18d55e7948e80178a2cf7ee21e5b98e7079ded213523d773b676556f7",
