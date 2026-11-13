@@ -1,26 +1,65 @@
 From: Codex <codex@openai.com>
-Subject: [PATCH] drm/i915: prioritize completed HDMI checks over HPD retries
+Subject: [PATCH] drm/i915: keep urgent HDMI recovery ahead of HPD retries
 
 --- a/drivers/gpu/drm/i915/display/intel_hotplug.c
 +++ b/drivers/gpu/drm/i915/display/intel_hotplug.c
-@@ -463,7 +463,7 @@
+@@ -463,8 +463,20 @@
  	}
  	hotplug->hdmi_ready_encoders |= ready;
  	if (ready && hdmi_ready_encoders(display))
--		queue_delayed_detection_work(display, &hotplug->hotplug_work, 0);
 +		mod_delayed_detection_work(display, &hotplug->hotplug_work, 0);
- 	spin_unlock_irq(&display->irq.lock);
++	spin_unlock_irq(&display->irq.lock);
++}
++
++static void queue_hotplug_event_work(struct intel_display *display)
++{
++	struct intel_hotplug *hotplug = &display->hotplug;
++
++	/* A new edge on a retrying pin is a fresh event, not a retry. */
++	if (hotplug->event_bits & hotplug->retry_bits &
++	    ~get_blocked_hpd_pin_mask(display))
++		mod_delayed_detection_work(display, &hotplug->hotplug_work, 0);
++	else
+ 		queue_delayed_detection_work(display, &hotplug->hotplug_work, 0);
+-	spin_unlock_irq(&display->irq.lock);
  }
  
-@@ -660,8 +660,9 @@
+ static void i915_digport_work_func(struct work_struct *work)
+@@ -514,8 +526,7 @@
+ 	if (old_bits) {
+ 		spin_lock_irq(&display->irq.lock);
+ 		display->hotplug.event_bits |= old_bits;
+-		queue_delayed_detection_work(display,
+-					     &display->hotplug.hotplug_work, 0);
++		queue_hotplug_event_work(display);
+ 		spin_unlock_irq(&display->irq.lock);
+ 	}
+ }
+@@ -660,9 +671,14 @@
  		spin_lock_irq(&display->irq.lock);
  		display->hotplug.retry_bits |= retry;
  
 -		mod_delayed_detection_work(display,
 -					   &display->hotplug.hotplug_work,
-+		/* A commit may have made an HDMI check ready during this pass. */
-+		mod_delayed_detection_work(display, &hotplug->hotplug_work,
-+					   hdmi_ready_encoders(display) ? 0 :
- 					   msecs_to_jiffies(HPD_RETRY_DELAY));
+-					   msecs_to_jiffies(HPD_RETRY_DELAY));
++		/* Preserve urgent work queued while this pass was running. */
++		if ((retry & hotplug->event_bits &
++		     ~get_blocked_hpd_pin_mask(display)) ||
++		    hdmi_ready_encoders(display))
++			mod_delayed_detection_work(display, &hotplug->hotplug_work, 0);
++		else
++			mod_delayed_detection_work(display, &hotplug->hotplug_work,
++						   msecs_to_jiffies(HPD_RETRY_DELAY));
  		spin_unlock_irq(&display->irq.lock);
  	}
+ }
+@@ -795,8 +811,7 @@
+ 	if (queue_dig)
+ 		queue_work(display->hotplug.dp_wq, &display->hotplug.dig_port_work);
+ 	if (queue_hp)
+-		queue_delayed_detection_work(display,
+-					     &display->hotplug.hotplug_work, 0);
++		queue_hotplug_event_work(display);
+ 
+ 	spin_unlock(&display->irq.lock);
+ }
