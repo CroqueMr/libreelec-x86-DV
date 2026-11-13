@@ -44,6 +44,16 @@ int main()
         shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_easu.frag"
         self.assertIn("FsrEasuTap", shader.read_text())
 
+    def test_cnn_presets_are_admitted_only_for_compatible_sdr(self):
+        settings = ET.parse(TREE / "system/settings/settings.xml")
+        for output, available in (("sdr", True), ("hdr", False)):
+            for label in ("41231", "41232"):
+                preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+                                       f"/constraints/options/option[@label='{label}']")
+                self.assertEqual(preset is not None, available)
+        renderer = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp").read_text()
+        self.assertIn("RenderShaderUpscaler(index, preset)", renderer)
+
     def test_settings_and_conditional_information_row(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for setting in ("videoplayer.sdrupscaler", "videoplayer.hdrupscaler"):

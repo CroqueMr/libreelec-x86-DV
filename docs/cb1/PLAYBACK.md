@@ -137,6 +137,12 @@ Kodi profile uses bilinear. The separate **Auto** choice uses Kodi's automatic
 filter selection. Player Information shows the effective filter when the video
 is enlarged.
 
+FSR 1 (EASU), FSRCNNX x2 and Anime4K Fast are optional SDR filters. FSR runs in
+Kodi's existing GLES multipass scaler. The CNN presets use the existing
+libplacebo OpenGL backend for compatible 8-bit SDR video. Unsupported formats,
+geometry or shader failures return to the configured native Kodi scaler.
+The shader presets retain the existing HDR/Dolby Vision path.
+
 Reconstruction and processing precede final spatial scaling and tunnel packing.
 FEL upscaling is a separate enhancement-layer operation.
 

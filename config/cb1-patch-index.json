@@ -1468,5 +1468,18 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/VideoShaders/VideoFilterShaderGLES.cpp": "Integrate the opt-in FSR 1 EASU filter.",
       "system/shaders/GLES/2.0/gles_fsr1_easu.frag": "Integrate the opt-in FSR 1 EASU filter."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": {
+    "owner": "Reuse libplacebo for opt-in SDR FSRCNNX and Anime4K during actual enlargement.",
+    "files": {
+      "xbmc/cores/VideoSettings.h": "Offer fixed SDR shader presets in Kodi.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Offer fixed SDR shader presets in Kodi.",
+      "system/settings/settings.xml": "Offer fixed SDR shader presets in Kodi.",
+      "addons/resource.language.en_gb/resources/strings.po": "Offer fixed SDR shader presets in Kodi.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Offer fixed SDR shader presets in Kodi.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Offer fixed SDR shader presets in Kodi.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Offer fixed SDR shader presets in Kodi.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Offer fixed SDR shader presets in Kodi."
+    }
   }
 }
