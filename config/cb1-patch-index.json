@@ -1,4 +1,19 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-dv-active-area-view.patch": {
+    "owner": "Fit each picture's Dolby Vision L5 active area with the Dolby Vision active area view mode.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Name the Dolby Vision active area view mode.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp": "Crop to the active area and fit it when that enlarges the picture.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h": "Hold the next picture's active area.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Read L5 from each rendered picture before its render area is computed.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Declare the per-picture L5 reader.",
+      "xbmc/cores/VideoSettings.h": "Add the Dolby Vision active area view mode.",
+      "xbmc/interfaces/json-rpc/PlayerOperations.cpp": "Accept activearea in Player.SetViewMode.",
+      "xbmc/interfaces/json-rpc/schema/types.json": "Accept activearea in Player.ViewMode.",
+      "xbmc/settings/MediaSettings.cpp": "Keep a saved Dolby Vision active area default view mode.",
+      "xbmc/video/ViewModeSettings.cpp": "List the mode after Auto."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": {
     "owner": "Show one playback error with the selected circuit failure reason.",
     "files": {
