@@ -298,6 +298,18 @@ int main(void)
     for(unsigned i=0;i<16;i++)assert(isfinite(actual[i]) && actual[i]>=0 && actual[i]<=1.001);
     assert(actual[0]>.1 && actual[0]<actual[4]);
     float static_hdr10[16];memcpy(static_hdr10,actual,sizeof(actual));
+    p.sdr.gamut=DVBRIDGE_GAMUT_BT2020;
+    assert(dvbridge_render_sdr_policy_rgb(r,&p,&id,&frame,NULL,0,0,0,g));
+    o=dvbridge_render_policy_output(r);
+    assert(o && o->container.primaries==PL_COLOR_PRIM_BT_2020 &&
+        o->container.transfer==PL_COLOR_TRC_GAMMA24 && !o->hdr10.max_luminance);
+    assert(dvbridge_render_sdr_policy_resolve(r,output,false,false,8));
+    reference_read(gpu.gl->gpu,output,0,0,2,2,actual);
+    assert(fabsf(actual[0]-static_hdr10[0])<.01f);
+    assert(fabsf(actual[12]-static_hdr10[12])>.01f || fabsf(actual[13]-static_hdr10[13])>.01f);
+    p.sdr.gamut=DVBRIDGE_GAMUT_P3_D65;
+    assert(dvbridge_policy_validate(&p)==DVBRIDGE_POLICY_INVALID_VALUE);
+    p.sdr.gamut=DVBRIDGE_GAMUT_UNSET;
     frame.color.hdr.scene_max[0]=frame.color.hdr.scene_max[1]=frame.color.hdr.scene_max[2]=400;
     frame.color.hdr.scene_avg=100;
     assert(dvbridge_render_sdr_policy_rgb(r,&p,&id,&frame,NULL,0,0,0,g));

@@ -2583,9 +2583,12 @@ bool dvbridge_render_policy_committed(const struct dvbridge_renderer *r,
     *snapshot=r->policy_committed; return true;
 }
 
-static struct pl_color_space sdr_container(double peak,double gamma,double black)
+static struct pl_color_space sdr_container(const struct dvbridge_sdr_profile *profile,
+                                           double peak,double gamma,double black)
 {
-    return (struct pl_color_space){.primaries=PL_COLOR_PRIM_BT_709,
+    const enum pl_color_primaries primaries = profile->gamut==DVBRIDGE_GAMUT_BT2020 ?
+        PL_COLOR_PRIM_BT_2020 : PL_COLOR_PRIM_BT_709;
+    return (struct pl_color_space){.primaries=primaries,
         .transfer=gamma==2.2?PL_COLOR_TRC_GAMMA22:PL_COLOR_TRC_GAMMA24,
         .hdr={.min_luma=fmax(black,PL_COLOR_HDR_BLACK),.max_luma=peak}};
 }
@@ -2697,7 +2700,7 @@ bool dvbridge_render_sdr_policy_rgb(struct dvbridge_renderer *r,
         if(!raw_sdr_source_valid(source) || !configure_target(r,geometry) || !ensure_rgb(r))return false;
         if(!ai_render_pixels(r,source,geometry,NULL,false,NULL,NULL))return false;
     }
-    struct pl_color_space target=sdr_container(peak,gamma,black);
+    struct pl_color_space target=sdr_container(&policy->sdr,peak,gamma,black);
     r->policy_pending=(struct dvbridge_hdr10_policy_output){.identity=*id,.policy=*policy,
         .nominal_target=target,.container=target,.geometry=geometry,.fel_reconstructed=fel};
     r->policy_ready=r->ready=true;return true;
@@ -2725,7 +2728,7 @@ static bool render_sdr_direct(struct dvbridge_renderer *r,
     const struct pl_frame *el=source->enhancement_layer;
     struct dvbridge_color mapped={0};
     if(metadata && !dvbridge_map_color(&mapped,metadata,bytes,el!=NULL))return false;
-    struct pl_color_space container=sdr_container(peak,gamma,black);
+    struct pl_color_space container=sdr_container(&policy->sdr,peak,gamma,black);
     struct direct_output direct;
     direct_target_init(&direct,target,flip,limited,bits,false);
     direct.sdr_target=&container;

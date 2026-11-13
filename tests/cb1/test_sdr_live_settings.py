@@ -75,12 +75,12 @@ struct Window{
 };
 int main(int argc,char**argv){assert(argc==2);std::string test=argv[1];Window w;const auto initial=textures;w.m_guiCacheValid=true;
  if(test=="live"){w.m_dvSelection.policy.sdr.preset=DVBRIDGE_SDR_BRIGHT;assert(w.Prepare());assert(w.m_compositeShader->m_ootfGamma==-2.2f&&!w.m_guiCacheValid);}
- if(test=="paused"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01};assert(w.Begin());assert(w.m_compositeShader->m_ootfGamma==-2.6f&&!w.m_guiCacheValid);}
+ if(test=="paused"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01,DVBRIDGE_GAMUT_UNSET};assert(w.Begin());assert(w.m_compositeShader->m_ootfGamma==-2.6f&&!w.m_guiCacheValid);}
  if(test=="unchanged"){for(unsigned i=0;i<100;++i){assert(w.Prepare()&&w.Begin());}assert(textures==initial&&w.m_guiCacheValid);}
  if(test=="lut-failure"){w.m_dvSelection.policy.sdr.preset=DVBRIDGE_SDR_BRIGHT;failLUT=true;assert(!w.Prepare()&&!w.Begin());failLUT=false;assert(w.Begin());assert(w.m_compositeShader->m_ootfGamma==-2.2f);}
- if(test=="invalid-target"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,NAN,.01};assert(!w.Prepare()&&!w.Begin());}
- if(test=="rollback"){w.Snapshot();w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01};assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));assert(w.Rollback());assert(w.m_compositeShader->m_ootfGamma==-2.4f);}
- if(test=="rollback-failure"){w.Snapshot();w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01};assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));failLUT=true;assert(!w.Rollback()&&w.m_dvRollbackFailed&&w.m_dvRejectedSurface);}
+ if(test=="invalid-target"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,NAN,.01,DVBRIDGE_GAMUT_UNSET};assert(!w.Prepare()&&!w.Begin());}
+ if(test=="rollback"){w.Snapshot();w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01,DVBRIDGE_GAMUT_UNSET};assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));assert(w.Rollback());assert(w.m_compositeShader->m_ootfGamma==-2.4f);}
+ if(test=="rollback-failure"){w.Snapshot();w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01,DVBRIDGE_GAMUT_UNSET};assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));failLUT=true;assert(!w.Rollback()&&w.m_dvRollbackFailed&&w.m_dvRejectedSurface);}
 }
 """
         program=program.replace('SHADER',shader).replace('SETGUI',body(source,'bool CWinSystemGbmGLESContext::SetGuiCompositing(')).replace(

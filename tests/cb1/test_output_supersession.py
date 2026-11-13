@@ -169,6 +169,7 @@ struct CDVBridgeGLES {
  dvbridge_geometry m_sourceGeometry{};bool m_geometryKnown=false,m_hasCommitted=false,m_committedPacked=false;
  bool m_direct=false,m_dvPolicyActive=false,m_pendingOverlayVisible=false,m_overlayVisible=false,m_nativeOverlayEnabled=false,m_directUsable=false,m_fallback=false;
  bool Advanced(){return false;}void Reset(){m_pending=m_prepared=false;}int m_spatialMethod=0,m_pendingHDR10Fallback=0,m_nativeOverlay=0;
+ dvbridge_gamut m_sdrGamut{};
  uint64_t m_geometryRevision=0,m_committedRevision=0,m_nativeOverlayRevision=0,m_committedOverlayRevision=0,m_pendingOverlayRevision=0;
  Binding m_committedBinding{},m_pendingBinding{},m_pendingIdentity{};
  decltype(VideoPicture::doviMetadata)m_pendingMetadata;
@@ -235,6 +236,7 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
+ bool m_dvPQSubtitleDraws=false;
  bool m_cb1FramePending=false,m_dvFrame=false,m_dvNativeGui=false;
  bool m_failedHDR10SetupRestore=false,m_dvShutdownFence=false;
  bool completeOK=true,pollOK=true,restoreOK=true,modeOK=true,recoveryOK=true;
@@ -251,6 +253,10 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  int ordinaryStages=0;
  std::optional<dvbridge_mode>m_dvPriorConfiguredOutput,m_dvConfiguredOutput;std::optional<std::array<unsigned,5>>m_hdr10Signal;
  std::optional<unsigned> m_hdrDeepColorPrevious;
+ enum class SDRBT2020Support { Available, Display, Driver };
+ SDRBT2020Support sdrSupport=SDRBT2020Support::Available;
+ SDRBT2020Support GetSDRBT2020Support()const{return sdrSupport;}
+ bool m_sdrBT2020Rejected{};
  unsigned m_dvPendingStream=0,m_dvPendingPolicy=0,m_dvFailedStream=0,m_dvFailedPolicy=0;
  struct {void Cancel(){}bool Commits(uint64_t){return true;}CModeChangeHold::Kind Holding(){return CModeChangeHold::Kind::START;}} m_modeHold;
  CHeldModeAnnouncement m_modeAnnouncement;
@@ -410,9 +416,16 @@ int main(){
  }
  {
   CWinSystemGbmGLESContext w;pendingMaster(w);request(Mode::SDR);DVBRIDGE::current.sdrPreset=2;DVBRIDGE::current.sdrGamma=2.6;
-  check(w.PrepareDVOutputFrame(picture),"first pending SDR configuration admitted");
+  DVBRIDGE::current.sdrBT2020=true;
+  w.sdrSupport=CWinSystemGbmGLESContext::SDRBT2020Support::Driver;
+  check(w.PrepareDVOutputFrame(picture)&&w.m_dvSelection.policy.sdr.gamut==DVBRIDGE_GAMUT_BT709,
+      "unsupported wide gamut remains BT.709 through surface setup");
+  w.sdrSupport=CWinSystemGbmGLESContext::SDRBT2020Support::Available;
+  w.m_sdrBT2020Rejected=true;
+  check(w.PrepareDVOutputFrame(picture)&&w.m_dvSelection.policy.sdr.gamut==DVBRIDGE_GAMUT_BT709,
+      "a rejected wide gamut remains BT.709 for this playback policy");
   const auto previous=w.m_dvPendingPolicy;++DVBRIDGE::current.revision;DVBRIDGE::current.sdrGamma=2.2;
-  check(w.PrepareDVOutputFrame(picture)&&w.m_dvPendingPolicy!=previous,"same effective SDR mode with changed target revision rekeys pending owner");
+  check(w.PrepareDVOutputFrame(picture)&&w.m_dvPendingPolicy!=previous&&w.m_dvSelection.policy.sdr.gamut==DVBRIDGE_GAMUT_BT2020,"same effective SDR mode with changed target revision rekeys pending owner");
  }
  {CWinSystemGbmGLESContext w;w.m_dvSuperseded=true;check(w.EndDVBridge()&&!w.m_dvSuperseded,"successful already-ordinary cleanup clears cancellation state");}
  {

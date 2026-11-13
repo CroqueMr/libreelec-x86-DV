@@ -36,7 +36,11 @@ struct CWinSystemBase {
  auto GetEotf() const {return eotf;}
 };
 namespace KODI::WINDOWING::GBM {
- struct CWinSystemGbmGLESContext : CWinSystemBase {bool HasDVBridgeScreenshot() const {return cb1;}};
+ struct CWinSystemGbmGLESContext : CWinSystemBase {
+  bool sdr=false;
+  bool HasDVBridgeScreenshot() const {return cb1;}
+  bool IsDVBridgeScreenshotSDR() const {return cb1 && sdr;}
+ };
 }
 struct CServiceBroker {
  static inline KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
@@ -100,6 +104,10 @@ int main() {
  auto cb1=std::dynamic_pointer_cast<Texture>(renderer.Convert(entry));
  assert(cb1->loadedState==0 && cb1!=limited && "CB1 composition must not reuse pre-encoded limited PQ");
  assert(renderer.Convert(entry)==cb1);
+ CServiceBroker::window.sdr=true;
+ auto cb1SDR=std::dynamic_pointer_cast<Texture>(renderer.Convert(entry));
+ assert(cb1SDR->loadedState==1 && cb1SDR!=cb1 && "CB1 SDR composite consumes an sRGB palette");
+ assert(renderer.Convert(entry)==cb1SDR);
 }
 '''
         helper = ''

@@ -1,4 +1,29 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": {
+    "owner": "Configure, render and signal the BT.2020 SDR output target.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Expose and persist the SDR output gamut preference.",
+      "system/settings/settings.xml": "Expose and persist the SDR output gamut preference.",
+      "system/shaders/GLES/2.0/gles_gui_composite.frag": "Convert SDR overlays to the rendered target gamut.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Expose and persist the SDR output gamut preference.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Publish the accepted gamut and update its renderer identity.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Publish the accepted gamut and update its renderer identity.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h": "Normalize SDR captures to sRGB.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Route converted PQ subtitles through the SDR compositor.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Use the existing sRGB bitmap palette conversion for SDR composition.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Expose and persist the SDR output gamut preference.",
+      "xbmc/dialogs/DVPlaybackModes.h": "Expose and persist the SDR output gamut preference.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Publish the accepted gamut and update its renderer identity.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.cpp": "Convert SDR overlays to the rendered target gamut.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.h": "Convert SDR overlays to the rendered target gamut.",
+      "xbmc/settings/Settings.cpp": "Expose and persist the SDR output gamut preference.",
+      "xbmc/settings/windows/GUIControlSettings.cpp": "Expose and persist the SDR output gamut preference.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Match the accepted RGB HDMI signal to the rendered SDR target.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Match the accepted RGB HDMI signal to the rendered SDR target.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Match the accepted RGB HDMI signal to the rendered SDR target.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Match the accepted RGB HDMI signal to the rendered SDR target."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": {
     "owner": "Show one playback error with the selected circuit failure reason.",
     "files": {

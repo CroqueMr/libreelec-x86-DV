@@ -107,7 +107,10 @@ int main(){
 #include "dvbridge_policy.h"
 #include <cassert>
 int main() {
- struct {dvbridge_policy policy; struct {struct {double min_luma=0;} hdr;} nominal_target;} rendered;
+ constexpr int PL_COLOR_PRIM_BT_2020=3;
+ struct {dvbridge_policy policy; struct {struct {double min_luma=0;} hdr;} nominal_target;
+         struct {int primaries=0;} container;} rendered;
+ auto m_effectiveMode=DVBRIDGE_MODE_HDR10_EXPERT;
  rendered.policy.tv.gamut=DVBRIDGE_GAMUT_P3_D65;
  rendered.policy.expert_black_nits=0.0042;
  auto* hdrOutput=&rendered;
@@ -118,12 +121,14 @@ int main() {
  struct {unsigned revision=17;} m_pendingIdentity;
  VideoProcessingInfo::Output output;
  const float peak=1234.5;
- auto publish=[&](dvbridge_mode m_effectiveMode) { PUBLICATION };
- publish(DVBRIDGE_MODE_HDR10_EXPERT);
+ auto publish=[&](dvbridge_mode m_effectiveMode,int displayGamut) { PUBLICATION };
+ publish(DVBRIDGE_MODE_HDR10_EXPERT,displayGamut);
  assert(output.gamut==2 && output.manualPeak==1234.5 && output.displayBlack==0.0042);
  assert(output.revision==17);
- publish(DVBRIDGE_MODE_ENHANCED_DV);
+ publish(DVBRIDGE_MODE_ENHANCED_DV,displayGamut);
  assert(output.gamut==1 && output.manualPeak==9999 && output.displayBlack==0);
+ m_effectiveMode=DVBRIDGE_MODE_SDR;rendered.container.primaries=PL_COLOR_PRIM_BT_2020;
+ { CAPTURE publish(DVBRIDGE_MODE_SDR,displayGamut); assert(output.gamut==DVBRIDGE_GAMUT_BT2020); }
 }
 '''.replace('CAPTURE',capture).replace('PUBLICATION',publication)
         with tempfile.TemporaryDirectory(prefix='cb1-accepted-mapping-') as temp:
@@ -193,6 +198,8 @@ int main() {
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
  output.displayBlack=0;refresh();
  assert(properties["DV.TVProfile"]=="BT.709 / 100 nits / 2.4");
+ output.gamut=3;refresh();
+ assert(properties["DV.TVProfile"]=="BT.2020 / 100 nits / 2.4");
  assert(properties["DV.DisplayBlack"]=="0 nits" && properties["DV.HDR10Target"].empty());
  output.flags=0;refresh();
  assert(properties["DV.TVProfile"].empty() && properties["DV.DisplayBlack"].empty());

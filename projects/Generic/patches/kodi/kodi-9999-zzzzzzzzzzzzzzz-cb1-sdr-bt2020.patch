@@ -1,0 +1,669 @@
+Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
+
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26573,3 +26573,27 @@
+ msgctxt "#41224"
+ msgid "Dolby Vision picture metadata is missing or unusable."
+ msgstr ""
++
++msgctxt "#41230"
++msgid "SDR output gamut"
++msgstr ""
++
++msgctxt "#41231"
++msgid "Select the colour gamut used by SDR Rendering. BT.709 is compatible with standard SDR displays."
++msgstr ""
++
++msgctxt "#41232"
++msgid "BT.709"
++msgstr ""
++
++msgctxt "#41233"
++msgid "BT.2020"
++msgstr ""
++
++msgctxt "#41234"
++msgid "The display does not advertise BT.2020 RGB."
++msgstr ""
++
++msgctxt "#41235"
++msgid "The active HDMI driver cannot signal BT.2020 RGB."
++msgstr ""
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -26,6 +26,16 @@
+         <setting id="dvbridge.sdrpreset" type="integer" label="41133" help="41134">
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+           <constraints><options><option label="41135">0</option><option label="41136">1</option><option label="41137">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrgamut" type="action" label="41230" help="41231">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.sdrgamutvalue" type="integer" label="41230">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
++          <default>0</default>
++          <constraints><options><option label="41232">0</option><option label="41233">1</option></options></constraints>
+           <control type="list" format="string" />
+         </setting>
+         <setting id="dvbridge.sdrpeak" type="number" label="41138" help="41134">
+--- a/system/shaders/GLES/2.0/gles_gui_composite.frag
++++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
+@@ -15,6 +15,7 @@
+ uniform sampler2D u_lutTF;      // linear -> PQ LUT (1024 entries, sdrPeak baked in)
+ uniform highp float u_ootfGamma; // HLG OOTF or negative SDR target gamma
+                                 // PQ: 0.0 (use LUT path instead)
++uniform bool u_sdrBT2020;
+ uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
+ uniform highp vec2 u_outputRange; // CB1 exact bit-depth scale and black code.
+ uniform highp float u_playerLedScale;
+@@ -66,9 +67,10 @@
+     return;
+   }
+ 
+-  // SDR movie composition stays in BT.709 and uses the independent target gamma.
++  // SDR overlays follow the film's gamut before encoding its target gamma.
+   if (u_ootfGamma < 0.0)
+   {
++    if (u_sdrBT2020) linear = bt709_to_bt2020 * linear;
+     highp vec3 result = pow(max(linear, vec3(0.0)), vec3(-1.0 / u_ootfGamma));
+ #if defined(KODI_LIMITED_RANGE)
+     result = result * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -45,6 +45,7 @@
+   HDR10SourceMode hdr10PlusSource{HDR10SourceMode::Native};
+   HLGSourceMode hlgSource{HLGSourceMode::Native};
+   int sdrPreset{0};
++  bool sdrBT2020{};
+   double sdrPeak{100}, sdrGamma{2.4}, sdrBlack{0};
+   int method{0}, panel{0}, gamut{0};
+   double peak{0};
+@@ -76,7 +77,7 @@
+   {
+     return output == other.output && hdr10Source == other.hdr10Source &&
+         hdr10PlusSource == other.hdr10PlusSource && hlgSource == other.hlgSource &&
+-        sdrPreset == other.sdrPreset &&
++        sdrPreset == other.sdrPreset && sdrBT2020 == other.sdrBT2020 &&
+         std::bit_cast<uint64_t>(sdrPeak) == std::bit_cast<uint64_t>(other.sdrPeak) &&
+         std::bit_cast<uint64_t>(sdrGamma) == std::bit_cast<uint64_t>(other.sdrGamma) &&
+         std::bit_cast<uint64_t>(sdrBlack) == std::bit_cast<uint64_t>(other.sdrBlack) && method == other.method &&
+@@ -123,7 +124,8 @@
+   {
+     dvbridge_policy result{};
+     result.revision = revision;
+-    result.sdr={static_cast<dvbridge_sdr_preset>(sdrPreset),sdrPeak,sdrGamma,sdrBlack};
++    result.sdr={static_cast<dvbridge_sdr_preset>(sdrPreset),sdrPeak,sdrGamma,sdrBlack,
++        sdrBT2020 ? DVBRIDGE_GAMUT_BT2020 : DVBRIDGE_GAMUT_BT709};
+     switch (output)
+     {
+       case OutputMode::PlayerLed: result.mode = DVBRIDGE_MODE_PLAYER_LED; break;
+@@ -241,6 +243,7 @@
+   if (settings)
+   {
+     next.sdrPreset=settings->GetInt("dvbridge.sdrpreset");
++    next.sdrBT2020=settings->GetInt("dvbridge.sdrgamutvalue")==1;
+     next.sdrPeak=settings->GetNumber("dvbridge.sdrpeak");
+     next.sdrGamma=settings->GetNumber("dvbridge.sdrgamma");
+     next.sdrBlack=settings->GetNumber("dvbridge.sdrblack");
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1860,8 +1860,10 @@
+       std::equal(std::begin(geometry.crop), std::end(geometry.crop), std::begin(m_sourceGeometry.crop)) &&
+       std::equal(std::begin(geometry.placement), std::end(geometry.placement), std::begin(m_sourceGeometry.placement)) &&
+       base.scalingMethod == m_spatialMethod;
+-  if (m_geometryKnown && !sameGeometry)
+-    m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max(preferences.revision,base.binding.revision));
++  if ((m_geometryKnown && !sameGeometry) ||
++      (policy.mode == DVBRIDGE_MODE_SDR && policy.sdr.gamut != m_sdrGamut))
++    m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max({preferences.revision,base.binding.revision,m_geometryRevision}));
++  if (policy.mode == DVBRIDGE_MODE_SDR) m_sdrGamut = policy.sdr.gamut;
+   m_sourceGeometry = geometry;
+   m_geometryKnown = true;
+   uint64_t revision = std::max({preferences.revision,base.binding.revision,m_geometryRevision});
+@@ -2359,9 +2361,14 @@
+       default: return failed("unsupported-format",int(pixels.format));
+     }
+     const double gamma=m_requested.sdrPreset==0 ? 2.4 : m_requested.sdrPreset==1 ? 2.2 : m_requested.sdrGamma;
++    const auto* output=HDR10Output();
++    const bool wide=output && output->container.primaries==PL_COLOR_PRIM_BT_2020;
++    const auto matrix=wide ? pl_get_color_mapping_matrix(pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
++        pl_raw_primaries_get(PL_COLOR_PRIM_BT_709),PL_INTENT_RELATIVE_COLORIMETRIC) : pl_matrix3x3_identity;
+     auto rgb=std::make_unique<uint8_t[]>(size_t(pixels.width)*pixels.height*8);
+     if (!DVBRIDGE::DecodeSDRScreenshot(pixels.pixels.get(),pixels.width,pixels.height,
+-        format,m_outputBits,m_hdr10Limited,gamma,reinterpret_cast<uint16_t*>(rgb.get()))) return failed("decode",int(pixels.format));
++        format,m_outputBits,m_hdr10Limited,gamma,reinterpret_cast<uint16_t*>(rgb.get()),
++        wide ? matrix.m : nullptr)) return failed("decode",int(pixels.format));
+     pixels.pixels=std::move(rgb);
+     pixels.stride=-int(pixels.width*8);
+     pixels.format=AV_PIX_FMT_RGBA64LE;
+@@ -3057,7 +3064,9 @@
+   const auto* hdrOutput = HDR10Output();
+   // Capture the executed mapping before commit releases its pending plan.
+   const double displayBlack = hdrOutput ? hdrOutput->policy.expert_black_nits : 0;
+-  const int displayGamut = hdrOutput ? static_cast<int>(hdrOutput->policy.tv.gamut) : 0;
++  const int displayGamut = !hdrOutput ? 0 : m_effectiveMode == DVBRIDGE_MODE_SDR ?
++      (hdrOutput->container.primaries == PL_COLOR_PRIM_BT_2020 ?
++          DVBRIDGE_GAMUT_BT2020 : DVBRIDGE_GAMUT_BT709) : hdrOutput->policy.tv.gamut;
+   const float peak = m_effectiveMode == DVBRIDGE_MODE_HDR10PLUS ? 992.0f :
+       hdrOutput ? hdrOutput->nominal_target.hdr.max_luma :
+       m_advanced && m_effectiveMode == DVBRIDGE_MODE_ENHANCED_DV ? static_cast<float>(m_requested.peak) :
+@@ -3189,7 +3198,7 @@
+   output.displayBlack = expert?displayBlack:0;
+   if (m_effectiveMode==DVBRIDGE_MODE_SDR && hdrOutput)
+   {
+-    output.gamut=DVBRIDGE_GAMUT_BT709; output.manualPeak=peak;
++    output.gamut=displayGamut; output.manualPeak=peak;
+     output.displayBlack=hdrOutput->nominal_target.hdr.min_luma;
+     output.sdrGamma=m_requested.sdrPreset==0 ? 2.4 : m_requested.sdrPreset==1 ? 2.2 : m_requested.sdrGamma;
+   }
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -338,6 +338,7 @@
+   dvbridge_geometry m_sourceGeometry{};
+   ESCALINGMETHOD m_spatialMethod{VS_SCALINGMETHOD_MAX};
+   uint64_t m_geometryRevision{1};
++  dvbridge_gamut m_sdrGamut{DVBRIDGE_GAMUT_UNSET};
+   bool m_geometryKnown{};
+   bool Failure(const char* stage);
+   void PreparedAudit(std::string_view sdr = {});
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeScreenshot.h
+@@ -13,7 +13,8 @@
+ // Capture the final SDR target (movie and GUI), normalized to full-range sRGB.
+ // ReadFramebufferRegion supplies contiguous rows; preserve their GL order here.
+ inline bool DecodeSDRScreenshot(const uint8_t* pixels,unsigned width,unsigned height,
+-    SDRScreenshotFormat format,unsigned bits,bool limited,double gamma,uint16_t* out)
++    SDRScreenshotFormat format,unsigned bits,bool limited,double gamma,uint16_t* out,
++    const float (*gamut)[3] = nullptr)
+ {
+   if (!pixels || !out || !width || !height || bits<8 || bits>16 ||
+       !std::isfinite(gamma) || gamma<1.8 || gamma>2.8) return false;
+@@ -23,26 +24,35 @@
+   const double scale=limited ? double(219u<<(bits-8))/maximum : 1;
+   const unsigned codeMaximum=format==SDRScreenshotFormat::RGBA16 ? 65535 :
+       format==SDRScreenshotFormat::RGB10 ? 1023 : 255;
+-  std::vector<uint16_t> transfer(codeMaximum+1);
++  const auto encode=[](double linear) {
++    linear=std::clamp(linear,0.0,1.0);
++    const double srgb=linear<=0.0031308 ? 12.92*linear : 1.055*std::pow(linear,1.0/2.4)-0.055;
++    return static_cast<uint16_t>(std::lround(std::clamp(srgb,0.0,1.0)*65535));
++  };
++  std::vector<uint16_t> transfer(gamut ? 0 : codeMaximum+1);
++  std::vector<double> linear(gamut ? codeMaximum+1 : 0);
+   for (unsigned code=0;code<=codeMaximum;++code)
+   {
+     const double value=double(code)/codeMaximum;
+-    const double linear=std::pow(std::clamp((value-offset)/scale,0.0,1.0),gamma);
+-    const double srgb=linear<=0.0031308 ? 12.92*linear : 1.055*std::pow(linear,1.0/2.4)-0.055;
+-    transfer[code]=static_cast<uint16_t>(std::lround(std::clamp(srgb,0.0,1.0)*65535));
++    const double decoded=std::pow(std::clamp((value-offset)/scale,0.0,1.0),gamma);
++    if (gamut) linear[code]=decoded;
++    else transfer[code]=encode(decoded);
+   }
+   const size_t step=format==SDRScreenshotFormat::RGBA16 ? 8 : 4;
+   for (size_t i=0;i<size_t(width)*height;++i)
+   {
+     const auto* p=pixels+i*step;
+     const uint32_t packed=uint32_t(p[0]) | uint32_t(p[1])<<8 | uint32_t(p[2])<<16 | uint32_t(p[3])<<24;
++    unsigned codes[3];
+     for (unsigned c=0;c<3;++c)
+     {
+-      const unsigned code=format==SDRScreenshotFormat::RGBA16 ? unsigned(p[2*c]) | unsigned(p[2*c+1])<<8 :
++      codes[c]=format==SDRScreenshotFormat::RGBA16 ? unsigned(p[2*c]) | unsigned(p[2*c+1])<<8 :
+           format==SDRScreenshotFormat::RGB10 ? (packed>>(10*c))&1023 :
+           p[format==SDRScreenshotFormat::BGRA8 ? 2-c : c];
+-      out[4*i+c]=transfer[code];
+     }
++    for (unsigned c=0;c<3;++c)
++      out[4*i+c]=gamut ? encode(gamut[c][0]*linear[codes[0]] +
++          gamut[c][1]*linear[codes[1]] + gamut[c][2]*linear[codes[2]]) : transfer[codes[c]];
+     out[4*i+3]=format==SDRScreenshotFormat::RGBA16 ? unsigned(p[6]) | unsigned(p[7])<<8 :
+         format==SDRScreenshotFormat::RGB10 ? 65535 : unsigned(p[3])*257;
+   }
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
+@@ -157,7 +157,8 @@
+ 
+   // during HDR composite the m_isHDROverlay overlays render via
+   // RenderHDROverlays instead
+-  const bool hdrComposite = CServiceBroker::GetWinSystem()->IsHdrComposite();
++  const bool hdrComposite = CServiceBroker::GetWinSystem()->IsHdrComposite() &&
++      !ShouldConvertPQPaletteToSRGB(true);
+   const RenderStereoView stereoView =
+       CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
+ 
+@@ -196,7 +197,7 @@
+ // FBO's sRGB->HDR conversion
+ void CRenderer::RenderHDROverlays(int idx)
+ {
+-  if (!CServiceBroker::GetWinSystem()->IsHdrComposite())
++  if (!CServiceBroker::GetWinSystem()->IsHdrComposite() || ShouldConvertPQPaletteToSRGB(true))
+     return;
+ #ifdef HAVE_DVBRIDGE
+   if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+@@ -292,6 +292,11 @@
+   // Convert to sRGB unless the overlay is going to a PQ destination: the HDR
+   // composite, or a GUI layer that is output as an HDR signal.
+   const CWinSystemBase* winSystem = CServiceBroker::GetWinSystem();
++#ifdef HAVE_DVBRIDGE
++  if (const auto* gbm = dynamic_cast<const KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(winSystem);
++      gbm && gbm->IsDVBridgeScreenshotSDR())
++    return true; // The SDR compositor expects sRGB overlays, including PQ bitmap palettes.
++#endif
+   const bool destinationIsPQ =
+       winSystem->IsHdrComposite() || winSystem->GetEotf() != KODI::UTILS::Eotf::TRADITIONAL_SDR;
+   return !destinationIsPQ;
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -281,6 +281,50 @@
+   return {};
+ }
+ 
++int SDRBT2020Unavailable()
++{
++#ifdef HAVE_GBM
++  const auto* gbm = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbm*>(CServiceBroker::GetWinSystem());
++  if (gbm)
++  {
++    switch (gbm->GetSDRBT2020Support())
++    {
++      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Available: return 0;
++      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Display: return 41234;
++      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Driver: break;
++    }
++  }
++#endif
++  return 41235;
++}
++
++void ShowSDRGamutMenu()
++{
++  const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  auto* dialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
++  if (!dialog)
++    return;
++
++  const int reason = SDRBT2020Unavailable();
++  dialog->Reset();
++  dialog->SetHeading(strings.Get(41230));
++  dialog->SetUseDetails(true);
++  dialog->Add(CFileItem(strings.Get(41232)));
++  const auto label = strings.Get(41233);
++  CFileItem wide(reason ? "[COLOR grey]" + label + "[/COLOR]" : label);
++  wide.SetProperty("disabled", reason != 0);
++  if (reason)
++    wide.SetLabel2(strings.Get(reason));
++  dialog->Add(wide);
++  dialog->SetSelected(reason ? 0 : settings->GetInt("dvbridge.sdrgamutvalue"));
++  dialog->Open();
++  const int selected = dialog->GetSelectedItem();
++  if (dialog->IsConfirmed() && (selected == 0 || (selected == 1 && !SDRBT2020Unavailable())) &&
++      settings->SetInt("dvbridge.sdrgamutvalue", selected))
++    settings->Save();
++}
++
+ void ShowLldvFormatMenu()
+ {
+   using namespace DVBRIDGE;
+@@ -342,11 +386,19 @@
+       LldvFormatLabel(format, forced));
+ }
+ 
++std::string CDVPlaybackModes::SDRGamutLabel()
++{
++  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
++      settings->GetInt("dvbridge.sdrgamutvalue")==1 && !SDRBT2020Unavailable() ? 41233 : 41232);
++}
++
+ void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
+ {
+   if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
+   else if (setting && setting->GetId()=="dvbridge.playback") ShowMenu(true);
+   else if (setting && setting->GetId()=="dvbridge.lldvformat") ShowLldvFormatMenu();
++  else if (setting && setting->GetId()=="dvbridge.sdrgamut") ShowSDRGamutMenu();
+ }
+ 
+ 
+--- a/xbmc/dialogs/DVPlaybackModes.h
++++ b/xbmc/dialogs/DVPlaybackModes.h
+@@ -16,6 +16,7 @@
+   static bool ConfigureProfile();
+   static std::string DefaultPlaybackLabel();
+   static std::string LldvPreferenceLabel();
++  static std::string SDRGamutLabel();
+   void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
+   void OnSettingsLoaded() override;
+   void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -432,7 +432,8 @@
+         std::string(data.transaction.stage) : "");
+     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
+     SetProperty("DV.TVProfile", active && data.output.effective==8 ?
+-        StringUtils::Format("BT.709 / {:g} nits / {:g}", data.output.target,data.output.sdrGamma) :
++        StringUtils::Format("{} / {:g} nits / {:g}",
++            data.output.gamut == 3 ? "BT.2020" : "BT.709", data.output.target, data.output.sdrGamma) :
+         active && (data.output.lldv || data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
+         StringUtils::Format("{}{} / {:g} nits",
+             data.output.panel==1 || data.output.panel==2 ? localizer.Get(40833+data.output.panel)+" · " : "",
+--- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
++++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
+@@ -64,6 +64,7 @@
+   m_hProj = glGetUniformLocation(ProgramHandle(), "u_proj");
+   m_hOotfGamma = glGetUniformLocation(ProgramHandle(), "u_ootfGamma");
+   m_hInputPQ = glGetUniformLocation(ProgramHandle(), "u_inputPQ");
++  m_hSDRBT2020 = glGetUniformLocation(ProgramHandle(), "u_sdrBT2020");
+   m_hOutputRange = glGetUniformLocation(ProgramHandle(), "u_outputRange");
+   m_hPlayerLedScale = glGetUniformLocation(ProgramHandle(), "u_playerLedScale");
+   m_hPlayerLedGui = glGetUniformLocation(ProgramHandle(), "u_playerLedGui");
+@@ -82,6 +83,7 @@
+ 
+   glUniform1f(m_hOotfGamma, m_ootfGamma);
+   glUniform1i(m_hInputPQ, m_inputPQ);
++  glUniform1i(m_hSDRBT2020, m_sdrBT2020);
+   glUniform2f(m_hOutputRange, m_outputScale, m_outputOffset);
+   glUniform1f(m_hPlayerLedScale, m_playerLedScale);
+   if (m_playerLedScale > 0)
+--- a/xbmc/rendering/gles/GuiCompositeShaderGLES.h
++++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.h
+@@ -22,6 +22,7 @@
+ 
+   void SetProjection(const GLfloat* proj) { m_proj = proj; }
+   void SetInputPQ(bool value) { m_inputPQ = value; }
++  void SetSDRBT2020(bool value) { m_sdrBT2020 = value; }
+   void SetOutputRange(float scale, float offset) { m_outputScale = scale; m_outputOffset = offset; }
+ 
+   bool CreateLUTs(int colorTransfer, float sdrGamma = 2.4f);
+@@ -56,7 +57,7 @@
+   GLuint m_lutDegammaTexId{0};
+   GLuint m_lutTFTexId{0};
+   float m_ootfGamma{0.0f};
+-  bool m_inputPQ{false};
++  bool m_inputPQ{false}, m_sdrBT2020{false};
+   float m_outputScale{1.0f}, m_outputOffset{0.0f};
+ 
+   GLint m_hPos{-1};
+@@ -66,7 +67,7 @@
+   GLint m_hLutTF{-1};
+   GLint m_hProj{-1};
+   GLint m_hOotfGamma{-1};
+-  GLint m_hInputPQ{-1};
++  GLint m_hInputPQ{-1}, m_hSDRBT2020{-1};
+   GLint m_hOutputRange{-1};
+   GLint m_hPlayerLedScale{-1}, m_hPlayerLedGui{-1}, m_hPlayerLedSubtitles{-1};
+   float m_playerLedScale{};
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -219,12 +219,15 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+   std::unique_ptr<TiXmlElement> migrated;
+-  bool hasHDR10PlusPreference = false;
++  bool hasHDR10PlusPreference = false, hasSDRTarget = false;
+   for (const auto* setting = root->FirstChildElement("setting"); setting;
+        setting = setting->NextSiblingElement("setting"))
+-    if (setting->Attribute("id") &&
+-        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
+-      hasHDR10PlusPreference = true;
++  {
++    const char* id = setting->Attribute("id");
++    if (!id) continue;
++    hasHDR10PlusPreference |= std::string_view(id) == "dvbridge.hdr10plussource";
++    hasSDRTarget |= std::string_view(id) == "dvbridge.sdrpreset";
++  }
+   for (const auto* setting = root->FirstChildElement("setting"); setting;
+        setting = setting->NextSiblingElement("setting"))
+   {
+@@ -235,7 +238,7 @@
+                                std::string_view(value) == "3";
+     const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
+             std::string_view(id) == "dvbridge.outputmode" &&
+-            (std::string_view(value) == "3" || std::string_view(value) == "6") ?
++            (std::string_view(value) == "3" || (!hasSDRTarget && std::string_view(value) == "6")) ?
+             std::optional<int>{5} : std::nullopt;
+     if (!legacy) continue;
+     if (!migrated) migrated.reset(root->Clone()->ToElement());
+@@ -672,7 +675,7 @@
+ #ifdef HAVE_DVBRIDGE
+   GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
+       {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
+-       "dvbridge.playback", "dvbridge.lldvformat"});
++       "dvbridge.playback", "dvbridge.lldvformat", "dvbridge.sdrgamut"});
+ #endif
+   // register any ISettingCallback implementations
+   GetSettingsManager()->RegisterCallback(
+--- a/xbmc/settings/windows/GUIControlSettings.cpp
++++ b/xbmc/settings/windows/GUIControlSettings.cpp
+@@ -1139,6 +1139,8 @@
+             strText=CDVPlaybackModes::DefaultPlaybackLabel();
+           else if (m_pSetting->GetId()=="dvbridge.lldvformat")
+             strText=CDVPlaybackModes::LldvPreferenceLabel();
++          else if (m_pSetting->GetId()=="dvbridge.sdrgamut")
++            strText=CDVPlaybackModes::SDRGamutLabel();
+           else
+ #endif
+             strText = m_pButton->GetLabel2();
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1600,6 +1600,18 @@
+   const bool accepted = drm->FlipPageTransactional(ready ? bo : nullptr, false, async && stable);
+   if (!drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(accepted);
+   return accepted;
++}
++
++CWinSystemGbm::SDRBT2020Support CWinSystemGbm::GetSDRBT2020Support() const
++{
++  // CB1's existing SDR scanout stages RGB via CaptureColorPreferences.
++  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector || !connector->GetType().starts_with("HDMI") ||
++      !connector->GetPropertyEnumValue("Colorspace", "BT2020_RGB"))
++    return SDRBT2020Support::Driver;
++  if (!m_info || !m_info->SupportsColorimetry(KODI::UTILS::Colorimetry::BT2020_RGB))
++    return SDRBT2020Support::Display;
++  return SDRBT2020Support::Available;
+ }
+ 
+ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -110,6 +110,8 @@
+   bool IsHDRDisplay() override;
+   CHDRCapabilities GetDisplayHDRCapabilities() const override;
+ #ifdef HAVE_DVBRIDGE
++  enum class SDRBT2020Support { Available, Display, Driver };
++  SDRBT2020Support GetSDRBT2020Support() const;
+   DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const;
+   bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed,
+                          bool async = false, gbm_bo* carrier = nullptr,
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -538,12 +538,17 @@
+     if (!m_dvFrame || !StageCB1ConnectorPreferences(false)) return;
+     bool presented = false;
+     CDVBridgeGLES::Submission submitted;
++    const auto* output = m_sdrConversion && m_dvBridge ? m_dvBridge->HDR10Output() : nullptr;
++    const auto gamut = output && output->container.primaries == PL_COLOR_PRIM_BT_2020 ?
++        DVBRIDGE_GAMUT_BT2020 : DVBRIDGE_GAMUT_BT709;
++    const bool signalChange = output && m_sdrSignal != gamut;
++    bool signalRejected = false;
+     if (m_dvFrame && m_dvBridge && m_dvBridge->ResolveHDR10(UseLimitedColor()))
+     {
+       submitted = m_dvBridge->CaptureSubmission();
+       submitted.sourceSideData = m_videoSourceSideData;
+-      const bool asynchronous = !m_pascalHDRActive && CreateCB1GPUFence(submitted);
+-      if (!m_pascalHDRActive && !asynchronous && !m_dvBridge->Advanced()) glFinish();
++      const bool asynchronous = !signalChange && !m_pascalHDRActive && CreateCB1GPUFence(submitted);
++      if (!m_pascalHDRActive && !asynchronous && (signalChange || !m_dvBridge->Advanced())) glFinish();
+       auto carrier = m_pascalHDRActive ? m_pascalHDRScanout->Blit() : nullptr;
+       if (m_pascalHDRActive ? static_cast<bool>(carrier) : m_eglContext.TrySwapBuffers())
+       {
+@@ -551,7 +556,22 @@
+         auto& surface = m_GBM->GetDevice().GetSurface();
+         auto* bo = carrier ? surface.AdoptTransactionalBuffer(carrier.get(), carrier) :
+                              surface.LockTransactionalBuffer();
+-        const bool valid = drm && bo &&
++        bool signalReady = true;
++        if (drm && bo && signalChange)
++        {
++          VideoPicture signal;
++          const bool wide = gamut == DVBRIDGE_GAMUT_BT2020;
++          signal.color_transfer = AVCOL_TRC_BT709;
++          signal.color_primaries = wide ? AVCOL_PRI_BT2020 : AVCOL_PRI_BT709;
++          signal.color_space = wide ? AVCOL_SPC_BT2020_NCL : AVCOL_SPC_BT709;
++          signal.colorBits = GetOutputBitDepth();
++          SetHDR(nullptr);
++          SetColorimetry(&signal); // Set after clearing HDR so the SDR commit retains the selected tag.
++          const auto* connector = drm->GetConnector();
++          signalReady = !wide || (connector && m_queuedColorspace &&
++              m_queuedColorspace == connector->GetPropertyEnumValue("Colorspace", "BT2020_RGB"));
++        }
++        const bool valid = drm && bo && signalReady &&
+             (m_sdrConversion || (drm->GetConnector()->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR") ?
+              drm->AddProperty(drm->GetConnector(), "DVBRIDGE_HDR10_DEEP_COLOR", 1) :
+              FloatOutputUsable()));
+@@ -562,6 +582,11 @@
+         presented = drm && (nvidiaRestore ? (valid && FlipDVBridgePage(m_dvState,true,false,true,bo)) :
+                             drm->FlipPageTransactional(valid ? bo : nullptr, false, asynchronous));
+         CompleteCB1Mode(presented,true);
++        if (signalChange && bo)
++        {
++          if (presented) m_sdrSignal = gamut;
++          else signalRejected = gamut == DVBRIDGE_GAMUT_BT2020;
++        }
+         submitted.hdr10plusAccepted = presented && drm && drm->HDR10PlusActive();
+         if (!drm || !drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(presented);
+         if (carrier && presented) m_pascalHDRScanout->Presented();
+@@ -588,7 +613,17 @@
+       if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)) drm->SetDVActivationPending(false);
+       m_dvState.Restored();
+     }
+-    else RejectDVOutputSurface();
++    else
++    {
++      if (signalRejected)
++      {
++        CLog::Log(LOGWARNING, "CB1 SDR: BT.2020 HDMI output rejected; rendering BT.709 instead");
++        m_sdrBT2020Rejected = true;
++        m_dvActivating = true; // An in-place gamut change may have no pending EGL surface.
++        m_dvSuperseded = true; // Retire the rejected gamut without failing the SDR circuit.
++      }
++      RejectDVOutputSurface();
++    }
+     m_cb1FramePending = m_dvFrame = false;
+     return;
+   }
+@@ -1274,7 +1309,7 @@
+   //   D2P:          "FBO is empty/clean AND back buffer cache is invalid"
+   bool hasPQSubtitles = false;
+ #ifdef HAVE_DVBRIDGE
+-  hasPQSubtitles = HasDVBridgeScreenshot() && m_dvPQSubtitleDraws != 0;
++  hasPQSubtitles = !m_sdrConversion && HasDVBridgeScreenshot() && m_dvPQSubtitleDraws != 0;
+ #endif
+   if (m_guiWillRender)
+   {
+@@ -1331,6 +1366,11 @@
+       const float maximum = (1u << bits) - 1;
+       m_compositeShader->SetOutputRange((219u << (bits - 8)) / maximum,
+                                       (16u << (bits - 8)) / maximum);
++    }
++    if (m_sdrConversion)
++    {
++      const auto* output = m_dvBridge->HDR10Output();
++      m_compositeShader->SetSDRBT2020(output && output->container.primaries == PL_COLOR_PRIM_BT_2020);
+     }
+     if (playerLed)
+     {
+@@ -1435,6 +1475,7 @@
+   m_compositeShader->SetInputPQ(false);
+   m_compositeShader->SetOutputRange(1.0f, 0.0f);
+   m_compositeShader->SetPlayerLed();
++  m_compositeShader->SetSDRBT2020(false);
+ 
+   glDisableVertexAttribArray(posLoc);
+   glDisableVertexAttribArray(texLoc);
+@@ -1992,6 +2033,7 @@
+     m_dvActivationReason = DVBRIDGE::OutputReason::None;
+     m_dvFailedStream = m_dvFailedPolicy = 0;
+   }
++  m_sdrBT2020Rejected = false;
+   if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)) drm->ResetDVActivation();
+ }
+ 
+@@ -2014,6 +2056,11 @@
+   {
+     m_dvConfiguredOutput.reset();
+     m_dvRecoveryPending = false;
++    if (m_sdrBT2020Rejected)
++    {
++      std::lock_guard lock(m_dvCapabilityMutex);
++      m_dvActivationReason = DVBRIDGE::OutputReason::None;
++    }
+     return true;
+   }
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+@@ -2104,12 +2151,7 @@
+   m_failedHDR10SetupRestore = true;
+   if (m_hdrDeepColorPrevious && !drm->AddProperty(drm->GetConnector(),
+       "DVBRIDGE_HDR10_DEEP_COLOR", *m_hdrDeepColorPrevious)) return false;
+-  VideoPicture output;
+-  output.color_transfer = AVCOL_TRC_BT709;
+-  output.color_primaries = AVCOL_PRI_BT709;
+-  output.color_space = AVCOL_SPC_BT709;
+-  output.colorBits = GetOutputBitDepth();
+-  SetColorimetry(&output);
++  m_sdrSignal.reset(); // The first rendered frame supplies the actual gamut.
+   SetHDR(nullptr); // The native method returns false for SDR, including SDR-only displays.
+   if (drm->GetConnector()->SupportsProperty("HDR_OUTPUT_METADATA") &&
+       !drm->AddProperty(drm->GetConnector(), "HDR_OUTPUT_METADATA", 0)) return false;
+@@ -2425,6 +2467,11 @@
+   }
+   m_hdrConversion = hdr10;
+   m_sdrConversion = sdr;
++  if (sdr && m_dvPQSubtitleDraws)
++  {
++    m_dvPQSubtitleDraws = 0;
++    CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++  }
+   if (!StageCB1ConnectorPreferences(false)) return failure("connector-preferences");
+   DeferConnectorPreferences();
+   m_compositeShader.reset();
+@@ -2602,7 +2649,11 @@
+     m_masterSafety.Begin(masterBinding.stream,preferences.revision,masterBinding.revision,picture.pts,
+         capabilities.isDV && preferences.output==DVBRIDGE::OutputMode::MasterReference);
+   }
+-  const auto selection = SelectedDVOutput(&picture, preferences, selectionCapabilities);
++  auto selection = SelectedDVOutput(&picture, preferences, selectionCapabilities);
++  if (selection.route == DVBRIDGE::OutputRoute::SDR &&
++      selection.policy.sdr.gamut == DVBRIDGE_GAMUT_BT2020 &&
++      (m_sdrBT2020Rejected || GetSDRBT2020Support() != SDRBT2020Support::Available))
++    selection.policy.sdr.gamut = DVBRIDGE_GAMUT_BT709;
+   const auto binding = picture.doviSourceBinding.Valid() ?
+       picture.doviSourceBinding : picture.doviMetadata.Binding();
+   if (HasPendingDVOutputSurface() &&
+@@ -2685,6 +2736,7 @@
+     return true;
+   }
+   if (!HasPendingDVOutputSurface() && !SetVideoOutput(&picture)) return false;
++  m_dvSelection = selection;
+   if (requested)
+   {
+     if (CDVBridgeGLES::Context::NewContextBlocked() ||
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -261,6 +261,9 @@
+   unsigned m_dvAttemptFailures{};
+   DVBRIDGE::OutputRoute m_dvRejectedRoute{DVBRIDGE::OutputRoute::Vanilla};
+   DVBRIDGE::OutputReason m_dvActivationReason{DVBRIDGE::OutputReason::None};
++  // Render-thread ownership. Empty signal requires a fresh SDR property commit.
++  std::optional<dvbridge_gamut> m_sdrSignal;
++  bool m_sdrBT2020Rejected{};
+   std::optional<dvbridge_mode> m_dvConfiguredOutput;
+   std::optional<dvbridge_mode> m_dvPriorConfiguredOutput;
+   DVBRIDGE::OutputSelection m_dvSelection;
