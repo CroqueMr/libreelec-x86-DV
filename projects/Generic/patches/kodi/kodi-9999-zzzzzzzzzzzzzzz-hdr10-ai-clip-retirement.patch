@@ -1,0 +1,19 @@
+Subject: [PATCH] Fence terminal HDR10 analysis before starting the next source
+
+A failure from the retiring source cannot become ready by polling it again.
+Use the context's existing fenced stop/retry path without releasing a surface
+still owned by the GPU or consuming the next source's prediction budget.
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
+@@ -79,6 +79,10 @@
+     const auto status = Collect();
+     if (status != CB1_AI_READY)
+     {
++      // Terminal work belongs to the retiring source. The context owner
++      // fences it before releasing its lease and starting the new source.
++      if (status != CB1_AI_PENDING)
++        return CB1_AI_INVALID;
+       if (m_active && m_activation.Observe(status,Identity(binding),now) == Decision::Native)
+       {
+         m_fallback = true;

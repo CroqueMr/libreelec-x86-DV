@@ -37,7 +37,8 @@ struct HDR10AISource {
  DVBRIDGE::HDR10AIActivation m_activation;
  bool Current(DVBRIDGE::SourceBinding,const DVBRIDGE::OutputPreferences&){return m_resetPending;}
  cb1_ai_identity Identity(DVBRIDGE::SourceBinding b){return {b.stream,b.picture,m_revision};}
- cb1_ai_status Collect(){return CB1_AI_PENDING;}
+ cb1_ai_status collectStatus=CB1_AI_PENDING;
+ cb1_ai_status Collect(){return collectStatus;}
  cb1_ai_status RecordStatus(const char*,cb1_ai_status status){return status;}
  cb1_ai_status Begin(pl_gpu,const char*,const DVBRIDGE::OutputPreferences&,DVBRIDGE::SourceBinding,double,uint64_t,bool,bool=false);
 };
@@ -51,6 +52,13 @@ int main(){
  assert(s.Begin(&s,"bundle",p,b,0,1099,true)==CB1_AI_PENDING);
  assert(s.Begin(&s,"bundle",p,b,0,1100,true)==CB1_AI_INCOMPATIBLE);
  assert(s.m_fallback);
+ for (auto failure : {CB1_AI_INVALID, CB1_AI_INCOMPATIBLE})
+ {
+   HDR10AISource successor;
+   successor.collectStatus = failure;
+   assert(successor.Begin(&successor,"bundle",p,b,0,0,true)==CB1_AI_INVALID);
+   assert(successor.m_job && successor.m_resetPending && !successor.m_fallback);
+ }
 }
 '''.replace('FUNCTION',code)
         with tempfile.TemporaryDirectory() as temporary:
