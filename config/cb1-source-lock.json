@@ -293,7 +293,7 @@
     "docs/cb1/KODI-INFORMATION.md": "a2293e08036e8b1e69c4c825ac360043c1f26c0097577e83f82bca7b71ff72d9",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": "3c7b176030f75e5fa09636609877fd0d2fd0759ad928558e4c9b75efb7ca5ef1",
     "tests/cb1/test_sdr_final_gui.py": "ffacd82f5694e9f98e983a5a3537d6ed8b21f29cbb246bd5a912206e02b11a14",
-    "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": "99ce6d1d2980308888b1272317e5bc0c217a0e7d41b2736577ab75e1e7f58250",
+    "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": "89b8ff230c5e3f7112cc8777350af923d0572a4f68b8248c8133ec9c22dd55ba",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": "c0a1c77fa5d8241891e7c74d787e5917899c4c865b35485fba794ce25c4d1771",
     "tests/cb1/test_tv_profile_admission.py": "c5eebadb52147670991912263c0c7f4af4657bd0210ff825365f74ef7fcb812d",
     "tests/cb1/test_master_startup.py": "959e2e66b3b642cd125ff614d779fd712dae08c2fccc31c2d67e80c437be4909",
@@ -381,7 +381,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": {
       "source": "src/cb1_hdr10_ai.c",
-      "sha256": "99ce6d1d2980308888b1272317e5bc0c217a0e7d41b2736577ab75e1e7f58250"
+      "sha256": "89b8ff230c5e3f7112cc8777350af923d0572a4f68b8248c8133ec9c22dd55ba"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.h": {
       "source": "src/cb1_hdr10_ai.h",
@@ -389,7 +389,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_extrema.c": {
       "source": "src/cb1_hdr10_extrema.c",
-      "sha256": "8cf5468317adcd0380786507b2821df4ef5df5efdcf70d7df900015f39a50788"
+      "sha256": "ce0d84f88ca64261fec39e654c4ef461867e7df4eb362d938f12fe907255057c"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_extrema.h": {
       "source": "src/cb1_hdr10_extrema.h",
@@ -441,7 +441,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_statistics.c": {
       "source": "src/cb1_hdr10_statistics.c",
-      "sha256": "9f90ac7e3ad35e50380f7fedac82a2b84835d406e91bccc2037e3c72705c17a5"
+      "sha256": "14b78140d88eaa8f6efd14c13cd15dc7b84aaedcb5b8e50f07a82f53c49490cb"
     },
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_statistics.h": {
       "source": "src/cb1_hdr10_statistics.h",
