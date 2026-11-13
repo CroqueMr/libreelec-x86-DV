@@ -17,7 +17,7 @@
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_Clamp_Highlights.glsl": "0802e56d849aae9446a8df7b38f1963358641c942985f620b37adc5ca40c2889",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_AutoDownscalePre_x4.glsl": "5af62d8cd844916dc1126613e13bad3beab195787f93a71200b47c6ec78f2e41",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_AutoDownscalePre_x2.glsl": "8c58291740146bd766a4d73f132775a797fe80f7d07919b5d767e27a5dc85656",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "06c9dba5969e819e33d73ea3de46af5a20a120c99b048d35d5bfb5c2adab2a89",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "b12710316bc79512aa850460341769883cfa19deecb00d1f8ab81252b97700de",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "422a2ccc6efe21a73ddfe39b51334e85be2b916c5dbd86dfd1d394f80e2c4849",
     "tests/cb1/test_upscaler_preferences.py": "4551e2c8c670c5d1c6f7a676cf078f7764ab4f789817615268fb75bc375e4a9e",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "223a565aaaf975ab244203a7ec4bdd4e20e00e8edf71bf803d27317c049d74ab",

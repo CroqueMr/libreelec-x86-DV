@@ -198,7 +198,7 @@
    if (m_dvRequested)
    {
      auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
-@@ -1458,6 +1526,112 @@
+@@ -1458,6 +1526,122 @@
  }
  #endif
  
@@ -212,7 +212,7 @@
 +      (buf.m_srcPrimaries != AVCOL_PRI_BT709 && buf.m_srcPrimaries != AVCOL_PRI_UNSPECIFIED) ||
 +      (buf.m_srcColTransfer != AVCOL_TRC_BT709 && buf.m_srcColTransfer != AVCOL_TRC_UNSPECIFIED) ||
 +      m_videoSettings.m_Brightness != 50.f || m_videoSettings.m_Contrast != 50.f ||
-+      glIsEnabled(GL_BLEND) || glIsEnabled(GL_SCISSOR_TEST))
++      glIsEnabled(GL_BLEND))
 +    return false;
 +
 +  CRect src, dst, view;
@@ -280,11 +280,18 @@
 +  output.repr.levels = m_fullRange ? PL_COLOR_LEVELS_FULL : PL_COLOR_LEVELS_LIMITED;
 +  output.color = pl_color_space_bt709;
 +  output.crop = {dst.x1, dst.y1, dst.x2, dst.y2};
++  const GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
++  GLint scissor[4];
++  glGetIntegerv(GL_SCISSOR_BOX, scissor);
++  const bool fullScissor = !scissorEnabled ||
++      (scissor[0] == 0 && scissor[1] == 0 && scissor[2] == width && scissor[3] == height);
++
 +  bool rendered = false;
 +  const bool sourceReady = std::all_of(image.planes, image.planes + image.num_planes,
 +                                      [](const auto& plane) { return plane.texture != nullptr; });
-+  if (sourceReady && target)
++  if (sourceReady && target && fullScissor)
 +  {
++    glDisable(GL_SCISSOR_TEST);
 +    auto params = pl_render_default_params;
 +    params.hooks = scaler.hooks.data();
 +    params.num_hooks = static_cast<int>(scaler.hooks.size());
@@ -301,6 +308,9 @@
 +  }
 +  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 +  glViewport(viewport[0], viewport[1], width, height);
++  glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
++  if (scissorEnabled)
++    glEnable(GL_SCISSOR_TEST);
 +  pl_tex_destroy(gpu, &output.planes[0].texture);
 +  for (int i = 0; i < image.num_planes; ++i)
 +    pl_tex_destroy(gpu, &image.planes[i].texture);
@@ -311,7 +321,7 @@
  bool CLinuxRendererGLES::Render(unsigned int flags, int index)
  {
    // obtain current field, if interlaced
-@@ -1503,6 +1677,10 @@
+@@ -1503,6 +1687,10 @@
  #endif
  #ifdef HAVE_DVBRIDGE
    int upscaler = -1;
