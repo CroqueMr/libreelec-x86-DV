@@ -135,6 +135,18 @@ int main(){
    delayed.PrepareNextRender();
    assert(delayed.m_presentsource==3 && delayed.m_queued.front()==4);
  }
+ // An accurate seek may retain the prior output delay and a filled queue.
+ // Present the analysed head first instead of catching up on a paused clock.
+ for(bool paused : {false,true}){
+   window.async=true;window.age=0;
+   CRenderManager priming;priming.renderer.lookahead=true;
+   priming.m_showVideo=false;priming.m_aiGuiReady=false;
+   priming.m_dvdClock.paused=paused;priming.m_displayLatency=125000;
+   priming.m_queued={2,3,4};
+   priming.m_Queue[4].pts=4766000;
+   priming.PrepareNextRender();
+   assert(priming.m_presentsource==2 && priming.m_queued.front()==3);
+ }
  // With an anchored refresh phase, a picture one frame behind is replaced at once.
  // Without it, Kodi's hysteresis keeps the picture until lateness is sustained.
  window.async=true;window.age=8333.333333333;

@@ -1444,5 +1444,11 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Use the shared analysis queue with existing VAAPI imports.",
       "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Keep VAAPI-specific texture readiness and pool sizing."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": {
+    "owner": "Prime the first analysed HDR picture on its own timeline.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Select the analysed head before enabling display clock catch-up."
+    }
   }
 }
