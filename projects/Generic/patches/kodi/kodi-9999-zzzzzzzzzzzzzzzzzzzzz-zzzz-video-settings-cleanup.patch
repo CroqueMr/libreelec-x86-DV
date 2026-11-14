@@ -1670,11 +1670,12 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
 diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/windows/GUIControlSettings.cpp
 --- a/xbmc/settings/windows/GUIControlSettings.cpp
 +++ b/xbmc/settings/windows/GUIControlSettings.cpp
-@@ -681,6 +681,15 @@
+@@ -681,11 +681,21 @@
      if (!optionsValid || options.Size() <= 0)
        return false;
  
-+    if (m_pSetting->GetId() == "dvbridge.hdr10plussource")
++    const bool hdr10PlusPlayback = m_pSetting->GetId() == "dvbridge.hdr10plussource";
++    if (hdr10PlusPlayback)
 +    {
 +      for (const auto& item : options)
 +      {
@@ -1686,7 +1687,13 @@ diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/window
      dialog->Reset();
      dialog->SetHeading(CVariant{Localize(m_pSetting->GetLabel())});
      dialog->SetItems(options);
-@@ -1139,6 +1148,10 @@
+     dialog->SetMultiSelection(control->CanMultiSelect());
+-    dialog->SetUseDetails(control->UseDetails());
++    dialog->SetUseDetails(control->UseDetails() || hdr10PlusPlayback);
+     dialog->Open();
+ 
+     if (!dialog->IsConfirmed())
+@@ -1139,6 +1149,10 @@
              strText=CDVPlaybackModes::DefaultPlaybackLabel();
            else if (m_pSetting->GetId()=="dvbridge.lldvformat")
              strText=CDVPlaybackModes::LldvPreferenceLabel();

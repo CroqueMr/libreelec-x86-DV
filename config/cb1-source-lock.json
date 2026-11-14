@@ -375,7 +375,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "fd444beb154e2998681808fbd4ac7601fb034b7f3ba0ad47d87da09b06178db3",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "e470a02344dc290ee87fb6f52dd54db086cd7950e64b19b93b9cd68413e25f5b",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": "13e02c5d84622ba42c4c2b60ff1d56fc2465dc2c151fd4035cdd0ff6015b58b7",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": "800ecced3dbb85531bd6e698a140fae4c0558091055006a899917b22752fa80f",
     "tests/cb1/test_video_settings_layout.py": "0eb26e197513276165c01ef82b07231a425ce2548f01742135feaa5be47e57a1"
   },
   "staging": {
