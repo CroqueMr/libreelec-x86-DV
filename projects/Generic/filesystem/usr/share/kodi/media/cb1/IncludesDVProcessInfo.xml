@@ -412,10 +412,10 @@
   </include>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
-      <right>48</right><bottom>40</bottom><width>600</width><height>518</height>
+      <right>30</right><bottom>40</bottom><width>618</width><height>518</height>
       <control type="image" id="9101">
-        <left>-19</left><top>-19</top><width>638</width><height>556</height>
-        <texture border="60">special://xbmc/media/cb1-glass.png</texture>
+        <width>618</width><height>518</height>
+        <texture border="30">special://xbmc/media/cb1-switch-panel.png</texture>
       </control>
       <control type="label" id="1">
         <left>24</left><top>14</top><width>552</width><height>36</height>

@@ -28,7 +28,13 @@ class QuickSwitchResources(unittest.TestCase):
     def test_compact_geometry_contains_the_largest_source_menu(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
         group = definitions.find("./include[@name='CB1PlaybackModeLayout']/control")
-        self.assertEqual(group.findtext('width'), '600')
+        width = int(group.findtext('width'))
+        surface = group.find("control[@id='9101']")
+        self.assertEqual(int(surface.findtext('width')), width)
+        self.assertEqual(surface.findtext('height'), group.findtext('height'))
+        status = definitions.findall("./include[@name='CB1PlaybackModeRowContents']/control[@type='label']")[1]
+        status_end = int(group.findtext("control[@id='6']/left")) + int(status.findtext('left')) + int(status.findtext('width'))
+        self.assertGreaterEqual(width - status_end, 40)
         rows = definitions.find("./include[@name='CB1PlaybackModeRows']")
         for kind in ('itemlayout', 'focusedlayout'):
             self.assertEqual(rows.find(kind).get('height'), '38')
