@@ -31,6 +31,18 @@ static void player_led_plan(void)
     assert(cb1_player_led_prepare(&p,&cm4,&policy,m,bytes,false));
     assert(p.creative.backend==DVBRIDGE_CREATIVE_CM29_COMPATIBILITY && p.tone_shape[0]==.5);
     assert(!p.creative.l8_coverage.applied && !cm4.peak_nits);
+    struct dvbridge_policy edid={.mode=DVBRIDGE_MODE_PLAYER_LED,
+        .tv={2484,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_BT2020},
+        .expert_black_nits=.8,.lldv_edid_version=1,
+        .lldv_primaries={.68,.31,.246,.703,.15,.052}};
+    assert(cb1_player_led_prepare(&p,&cm4,&edid,m,bytes,false));
+    assert(fabs(p.target.hdr.prim.green.x-.246)<1e-6 && cm4.sop[0]==1.25);
+    assert(p.creative.l8_coverage.applied && p.creative.cm4_output.primaries.red.x==
+        pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3)->red.x);
+    assert(p.tone.output_min==pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,.8));
+    edid.lldv_edid_version=2;
+    edid.expert_black_nits=1.02892230075;
+    assert(cb1_player_led_prepare(&p,&cm4,&edid,m,bytes,false));
     *av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=3,.l3={2064,2048,2048},
         .dvbridge_raw_magic=0x41424456,.dvbridge_original_length=5,
         .dvbridge_original_bytes={0x81,0x08,0x00,0x80,0x00}};

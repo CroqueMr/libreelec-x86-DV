@@ -2,6 +2,7 @@
 /* Original CM4/resolver/fitter and replacement scalar trim kernels.
  * Historical adaptations and replacement scope: docs/GPL2-MIGRATION.md. */
 #include "dvbridge_creative.h"
+#include "cb1_hdr10_expert.h"
 #include "cb1_dv_enhanced.h"
 #include "dvbridge_metadata.h"
 #include "cb1_trim_math.h"
@@ -170,6 +171,9 @@ static bool cm4_targets(const AVDOVIMetadata *m,struct dvbridge_creative_plan *p
     p->cm4_output=(struct dvbridge_cm4_target){.max_pq=(uint16_t)floor(p->target_pq+.5),
         .primaries=*pl_raw_primaries_get(output_prim[p->policy.tv.gamut]),
         .transfer=PL_COLOR_TRC_PQ,.origin=DVBRIDGE_CM4_MANUAL};
+    const struct pl_raw_primaries display=p->policy.lldv_edid_version ?
+        cb1_display_primaries(&p->policy) : p->cm4_output.primaries;
+    int best_gamut=0;
     for(int i=0;i<m->num_ext_blocks;i++){
         const AVDOVIDmData *e=av_dovi_get_ext(m,i);
         if(e->level!=10)continue;
@@ -190,8 +194,19 @@ static bool cm4_targets(const AVDOVIMetadata *m,struct dvbridge_creative_plan *p
                 resolved=cm4_custom_target(t,&a.target)==1;
         }
         if(!resolved){unknown=true;continue;}
-        if((a.target.transfer!=PL_COLOR_TRC_UNKNOWN && a.target.transfer!=p->cm4_output.transfer) ||
-           !cm4_same_gamut(&a.target.primaries,&p->cm4_output.primaries))continue;
+        if(a.target.transfer!=PL_COLOR_TRC_UNKNOWN && a.target.transfer!=p->cm4_output.transfer)continue;
+        int gamut=cm4_same_gamut(&a.target.primaries,&display)?3:0;
+        if(!gamut && p->policy.lldv_edid_version){
+            if(cm4_same_gamut(&a.target.primaries,pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3)))gamut=2;
+            else if(cm4_same_gamut(&a.target.primaries,pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020)))gamut=1;
+        }
+        if(!gamut || gamut<best_gamut)continue;
+        if(gamut>best_gamut){
+            best_gamut=gamut;
+            p->cm4_output.primaries=a.target.primaries;
+            p->cm4_lower=p->cm4_upper=(struct dvbridge_cm4_anchor){0};
+            upper_ambiguous=lower_ambiguous=false;
+        }
         if(a.target.max_pq<=p->cm4_output.max_pq){
             if(!p->cm4_lower.present || a.target.max_pq>p->cm4_lower.target.max_pq){
                 p->cm4_lower=a;lower_ambiguous=false;

@@ -166,6 +166,7 @@ struct CDVBridgeGLES {
  struct {bool asyncEligible=false;}m_submission;
  pl_renderer m_renderer=&rendererToken;pl_opengl m_gl=nullptr;pl_log m_log=nullptr;void*m_packer=&packer;pl_tex m_scanout=nullptr;bool m_pending=false,m_prepared=false,m_live=true,m_hdr10=false;unsigned m_outputBits=0,m_scanoutFramebuffer=0;Binding m_failedIdentity{};
  std::shared_ptr<Context> m_context;
+ uint64_t m_lldvEdidGeneration{};
  dvbridge_geometry m_sourceGeometry{};bool m_geometryKnown=false,m_hasCommitted=false,m_committedPacked=false;
  bool m_direct=false,m_dvPolicyActive=false,m_pendingOverlayVisible=false,m_overlayVisible=false,m_nativeOverlayEnabled=false,m_directUsable=false,m_fallback=false;
  bool Advanced(){return false;}void Reset(){m_pending=m_prepared=false;}int m_spatialMethod=0,m_pendingHDR10Fallback=0,m_nativeOverlay=0;

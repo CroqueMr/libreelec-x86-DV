@@ -99,7 +99,7 @@ int main() {
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
             (root/'test.cpp').write_text(program)
-            build=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             run=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)

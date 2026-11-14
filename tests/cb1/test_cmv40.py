@@ -70,7 +70,7 @@ int main(){
         prepare=body(render,'CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareFrame(')
         selection=re.search(r'  auto policy = selected \?[^;]+;',prepare).group()
         rejection=prepare[prepare.index('  if (!selected &&'):prepare.index('  // Capture the proven observation key')]
-        admission=re.search(r'const auto cmv40 = ([^;]+);',render).group(1)
+        admission=prepare[prepare.index('  auto cmv40 ='):prepare.index('  dvbridge_renderer_set_cmv40')]
         program='''
 #include "cb1_cmv40.h"
 #include "dvbridge_policy.h"
@@ -90,15 +90,19 @@ int main(){
  auto prepareOptions=[&](const dvbridge_policy* selected){auto preferences=p;
   SELECTION
   REJECTION
-  prepared=ADMISSION;++preparations;return FrameStatus::Ready;
+  ADMISSION
+  prepared=cmv40;++preparations;return FrameStatus::Ready;
  };
  assert(prepareOptions(nullptr)==FrameStatus::Ready && prepared.mode==CB1_CMV40_AUTO2);
+ auto lldv=p.Policy();lldv.mode=DVBRIDGE_MODE_PLAYER_LED;lldv.tv.peak_nits=2485;
+ assert(prepareOptions(&lldv)==FrameStatus::Ready && prepared.mode==CB1_CMV40_AUTO2);
+ assert(prepared.tv_peak==2485);
  const auto authored=p;
  p.output=OutputMode::HDR10;p.method=1; // Unconfigured Expert is refused before CM4 preparation.
  assert(!p.ProfileValid(DVBRIDGE_MODE_HDR10_EXPERT));
- assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==1);
+ assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==2);
  p.output=OutputMode::AdaptiveB;p.peak=0;
- assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==1);
+ assert(prepareOptions(nullptr)==FrameStatus::Unsupported && preparations==2);
  p=authored;
  for(auto mode:{DVBRIDGE_MODE_STANDARD,DVBRIDGE_MODE_MASTER_REFERENCE}){
   auto o=p.CMv40Options(mode);
