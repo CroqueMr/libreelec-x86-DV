@@ -1485,5 +1485,13 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Allow retention only when reconfiguring the same picture parameters.",
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Carry the same-input decision to the GUI render owner."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-seek-generation.patch": {
+    "owner": "Discard CB1 pictures invalidated by a decoder flush.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Reject stale decoded pictures before texture upload.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Cancel stale, unsubmitted output without changing the current scanout.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Expose the generation of the pending source picture."
+    }
   }
 }
