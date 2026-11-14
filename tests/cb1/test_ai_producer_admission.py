@@ -98,6 +98,7 @@ struct CRenderManager{
  uint64_t m_aiQueueGeneration=1;int m_presentstep=PRESENT_READY;std::deque<int>m_queued{0,1};
  struct Slot{double pts=9000000,duration=16667;}m_Queue[2];
  double m_aiStartPts=DVD_NOPTS_VALUE;
+ int m_lateframes=0;
  struct ClockSync{bool m_cb1Phase=false;void Reset(){}}m_clockSync;
  struct Clock{void SetVsyncAdjust(int){}}m_dvdClock;
  bool HDR10AIStartupBuffered() @PRODUCER@

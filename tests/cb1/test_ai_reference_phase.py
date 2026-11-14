@@ -47,6 +47,7 @@ namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext:Window {
  bool async=true;std::optional<double> age=8387.119;
  bool CB1AsyncPlayback(){return async;}
+ bool CB1AdaptiveScanout(){return false;}
  std::optional<double> CB1PresentationAge(){return age;}
  std::optional<std::pair<double,uint64_t>> CB1PresentedPicture(){return std::nullopt;}
 };

@@ -604,12 +604,13 @@ constexpr double DVD_NOPTS_VALUE=-1e20;
 struct Manager {
  bool m_aiQueuePreparationStale=false,m_aiGuiReady=true,m_aiQueueReady=true;
  double m_aiStartPts=1;
+ int m_lateframes=4;
  void Publish(bool lookahead,bool next,bool ready){struct {bool lookahead,ready;} outcome{next,ready};
  SELECTION }
 };
 int main(){
  Manager entering;entering.Publish(false,true,false);
- assert(entering.m_aiStartPts==DVD_NOPTS_VALUE && !entering.m_aiGuiReady && !entering.m_aiQueueReady);
+ assert(entering.m_aiStartPts==DVD_NOPTS_VALUE && !entering.m_aiGuiReady && !entering.m_aiQueueReady && entering.m_lateframes==0);
  Manager active;active.Publish(true,true,true);assert(active.m_aiStartPts==1 && active.m_aiGuiReady);
  Manager native;native.Publish(false,false,true);assert(native.m_aiStartPts==1 && native.m_aiGuiReady);
 }
