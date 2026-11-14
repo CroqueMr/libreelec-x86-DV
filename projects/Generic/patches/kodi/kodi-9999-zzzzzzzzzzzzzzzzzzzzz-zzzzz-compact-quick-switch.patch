@@ -12,23 +12,29 @@
 -                            0xfff0f0f0, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
 +                            0xfff2f5f6, 0, 21, 0, false, 1.0f, 1.0f, &resolution);
 +        g_fontManager.LoadTTF("CB1.SwitchTitle", "special://xbmc/media/Fonts/arial.ttf",
-+                            0xfff2f5f6, 0, 30, FONT_STYLE_BOLD, false, 1.0f, 1.0f, &resolution);
++                            0xfff2f5f6, 0, 26, FONT_STYLE_BOLD, false, 1.0f, 1.0f, &resolution);
          g_fontManager.LoadTTF("CB1.SwitchHelp", "special://xbmc/media/Fonts/arial.ttf",
 -                            0xffa0a0a0, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
 +                            0xffc2cccf, 0, 18, 0, false, 1.0f, 1.0f, &resolution);
        }
  #endif
        m_bButtonPressed = false;
-@@ -408,19 +411,22 @@
+@@ -408,19 +411,28 @@
  #ifdef HAVE_DVBRIDGE
    if (GetProperty("CB1.PlaybackModes").asBoolean())
    {
 -    const int maxRows = std::max(1, (GetCoordsRes().iHeight - 80 - 112) / 50);
 -    const float rowsHeight = 50.0f * std::clamp(m_vecList->Size(), 1, maxRows);
 -    const float height = 112.0f + rowsHeight;
-+    constexpr int spacing = 176; // Header, footer and padding in the 1080p app layout.
++    constexpr int listTop = 104;
++    constexpr int footerGap = 10;
++    constexpr int footerHeight = 36;
++    constexpr int padding = 24;
 +    constexpr int rowHeight = 38;
 +    constexpr int margin = 40;
++    const bool hasFooter = std::any_of(m_vecList->begin(), m_vecList->end(),
++                                       [](const auto& item) { return !item->GetLabel2().empty(); });
++    const int spacing = listTop + (hasFooter ? footerGap + footerHeight : 0) + padding;
 +    const int maxRows = std::max(1, (GetCoordsRes().iHeight - 2 * margin - spacing) / rowHeight);
 +    const float rowsHeight = rowHeight * std::clamp(m_vecList->Size(), 1, maxRows);
 +    const float height = spacing + rowsHeight;
@@ -44,7 +50,7 @@
 -    if (auto* help = GetControl(9102))
 -      help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
 +    if (auto* footer = GetControl(9103))
-+      footer->SetPosition(footer->GetXPosition(), 116.0f + rowsHeight);
++      footer->SetPosition(footer->GetXPosition(), listTop + footerGap + rowsHeight);
    }
  #endif
    m_viewControl.SetItems(*m_vecList);

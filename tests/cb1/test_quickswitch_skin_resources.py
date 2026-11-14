@@ -23,7 +23,7 @@ class QuickSwitchResources(unittest.TestCase):
         self.assertEqual(footer.findtext('wrapmultiline'), 'false')
         self.assertEqual(footer.findtext('scroll'), 'false')
         bottom = int(footer_group.findtext('top')) + int(footer.findtext('height'))
-        self.assertGreaterEqual(int(group.findtext('height')) - bottom, 12)
+        self.assertEqual(int(group.findtext('height')) - bottom, 24)
 
     def test_compact_geometry_contains_the_largest_source_menu(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
@@ -35,10 +35,19 @@ class QuickSwitchResources(unittest.TestCase):
         status = definitions.findall("./include[@name='CB1PlaybackModeRowContents']/control[@type='label']")[1]
         view = group.find("control[@id='6']")
         row_left = int(view.findtext('left'))
+        self.assertEqual(row_left, 24)
         self.assertEqual(width, 2 * row_left + int(view.findtext('width')))
-        status_end = row_left + int(status.findtext('left')) + int(status.findtext('width'))
-        self.assertGreaterEqual(width - status_end, 30)
+        self.assertEqual(int(group.findtext("control[@id='1']/top")), row_left)
         rows = definitions.find("./include[@name='CB1PlaybackModeRows']")
+        focus = rows.find("focusedlayout/control[@type='image']")
+        focus_right = int(focus.findtext('left')) + int(focus.findtext('width'))
+        status_right = int(status.findtext('left')) + int(status.findtext('width'))
+        self.assertGreaterEqual(focus_right - status_right, 12)
+        output = next(control for control in group.findall("control[@type='label']")
+                      if 'CB1.SwitchOutput' in control.findtext('label', ''))
+        self.assertEqual(output.findtext('align'), 'right')
+        self.assertEqual(int(output.findtext('left')) + int(output.findtext('width')),
+                         row_left + status_right)
         for kind in ('itemlayout', 'focusedlayout'):
             self.assertEqual(rows.find(kind).get('height'), '38')
         for identifier in ('3', '6'):
