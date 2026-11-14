@@ -84,9 +84,14 @@ int main(){
 #include <cassert>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
 constexpr int LOGINFO=0;
-namespace DVBRIDGE {template<class... T> void DiagnosticLog(T&&...) {}}
+namespace DVBRIDGE {
+template<class... T> void DiagnosticLog(T&&...) {}
+struct LldvDisplay {};
+LldvDisplay ReadLldvDisplay(const uint8_t*,size_t) {return {};}
+}
 namespace UTILS {struct CDisplayInfo {
  int value;
  static std::unique_ptr<CDisplayInfo> Create(const std::vector<uint8_t>& bytes) {
@@ -97,27 +102,37 @@ struct Connector {
  std::vector<uint8_t> next; int reads{};
  std::vector<uint8_t> GetEDID(bool refresh) {assert(refresh); ++reads; return next;}
  unsigned GetId() const {return 7;}
+ unsigned id=7;
+ unsigned* GetConnectorId() {return &id;}
+ bool IsConnected() const {return true;}
 };
 struct DRM {Connector connector; Connector* GetConnector() {return &connector;}};
 struct CWinSystemGbm {
  std::unique_ptr<DRM> m_DRM=std::make_unique<DRM>();
  std::unique_ptr<UTILS::CDisplayInfo> m_info=std::make_unique<UTILS::CDisplayInfo>(1);
  std::vector<uint8_t> m_displayEdid{1};
+ std::mutex m_lldvEdidMutex;
+ std::vector<uint8_t> m_lldvEdid;
+ DVBRIDGE::LldvDisplay m_lldvDisplay;
+ uint32_t m_lldvEdidConnector{};
+ uint64_t m_lldvEdidGeneration{};
  bool RefreshDisplayInfoForVideo() METHOD
 };
 int main() {
  CWinSystemGbm window;
  auto* original=window.m_info.get();
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
  window.m_DRM->connector.next={255};
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
  window.m_DRM->connector.next={1};
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(window.RefreshDisplayInfoForVideo() && window.m_info.get()==original);
+ assert(!window.RefreshDisplayInfoForVideo());
  window.m_DRM->connector.next={2};
  assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==2);
  assert(window.m_displayEdid==std::vector<uint8_t>{2});
  window.m_DRM.reset();
- assert(!window.RefreshDisplayInfoForVideo() && window.m_info->value==2);
+ assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==2);
+ assert(window.m_lldvEdid.empty() && window.m_lldvEdidGeneration==5);
 }
 '''.replace('METHOD', method)
         with tempfile.TemporaryDirectory() as temporary:

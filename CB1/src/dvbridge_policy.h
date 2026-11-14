@@ -47,6 +47,10 @@ struct dvbridge_policy {
     unsigned expert_output_bits;
     bool expert_output_limited;
     struct dvbridge_sdr_profile sdr;
+    /* Player-led only. RGB xy after EDID quantization correction, with D65. */
+    uint64_t lldv_edid_generation;
+    unsigned lldv_edid_version;
+    double lldv_primaries[6];
 };
 struct dvbridge_identity { uint64_t stream, picture, revision; };
 enum dvbridge_policy_status {

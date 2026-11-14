@@ -78,7 +78,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t revision=1;return ++
  struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};static Snapshot Read(){return {};}};}
 HEADER
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR,PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 enum class StreamHdrType{HDR_TYPE_NONE,HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
@@ -155,7 +155,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   stored->ints["dvbridge.cmv40"]=1;
   auto preferences=FrameOutputSettings();
   auto policy=preferences.Policy();
-  assert(PolicyCode(policy)==9 && preferences.ProfileValid(policy.mode));
+  assert(PolicyCode(policy)==9 && policy.tv.peak_nits==0);
   assert(preferences.CMv40Options(policy.mode).mode==1);
   OutputCapabilities caps;
   caps.sourceKnown=caps.isDV=caps.processingKnown=caps.nativeDV=caps.hdr10=true;
@@ -168,6 +168,21 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
  }
  if(scenario=="strict"){
   OutputCapabilities caps;caps.sourceKnown=caps.isDV=caps.processingKnown=caps.hdr10=true;
+  auto lldv = initial;
+  lldv.output=OutputMode::PlayerLed;
+  lldv.expertPeak=0;
+  assert(SelectOutput(lldv,caps).reason==OutputReason::NoPlayerLedTransport);
+  caps.playerLed=true;
+  caps.lldvEdidGeneration=4;
+  caps.lldvDisplay.sink.version=2;
+  caps.lldvDisplay.peak=2484;
+  caps.lldvDisplay.primaries={.68,.31,.246,.703,.15,.052};
+  caps.processing[DVBRIDGE_MODE_PLAYER_LED]={true,OutputReason::None};
+  const auto selectedLldv=SelectOutput(lldv,caps);
+  assert(selectedLldv.route==OutputRoute::PlayerLed && selectedLldv.lldvEdidGeneration==4);
+  assert(selectedLldv.policy.tv.peak_nits==2484 && selectedLldv.policy.lldv_edid_version==2);
+  lldv.expertPeak=800;
+  assert(SelectOutput(lldv,caps).policy.tv.peak_nits==2484);
   for(auto& mode:caps.processing)mode={true,OutputReason::None};
   for(auto output:{OutputMode::Standard,OutputMode::MasterReference,OutputMode::AdaptiveB}){
    auto p=initial;p.output=output;auto selected=SelectOutput(p,caps);

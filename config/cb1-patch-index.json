@@ -1435,5 +1435,28 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": {
+    "owner": "Use the connector Dolby Vision EDID as the LLDV rendering target.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Read, apply or report the active LLDV EDID target.",
+      "system/settings/settings.xml": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/cores/VideoProcessingInfo.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/settings/SettingConditions.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/utils/DVBridgeLldv.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
+    }
   }
 }

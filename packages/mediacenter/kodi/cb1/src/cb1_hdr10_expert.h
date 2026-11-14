@@ -24,6 +24,7 @@ bool cb1_player_led_prepare(struct cb1_hdr10_expert_plan *out,
     const void *metadata,size_t bytes,bool paired);
 /* Finite validated Expert policy only. Native output/range is not a user trim. */
 float cb1_hdr10_expert_ceiling(const struct dvbridge_policy *policy);
+struct pl_raw_primaries cb1_display_primaries(const struct dvbridge_policy *policy);
 /* Linear target RGB chroma only; luminance trims execute in the tone LUT. */
 bool cb1_hdr10_expert_trim(pl_shader shader,const struct dvbridge_creative_plan *plan,
                           enum pl_color_primaries primaries);

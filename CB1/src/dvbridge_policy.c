@@ -29,6 +29,18 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
        (policy->adaptive!=DVBRIDGE_ADAPTIVE_A && policy->mode!=DVBRIDGE_MODE_ENHANCED_DV))
         return DVBRIDGE_POLICY_INVALID_VALUE;
     const struct dvbridge_tv_profile *tv = &policy->tv;
+    if(policy->lldv_edid_version){
+        if(policy->lldv_edid_version>2 || (policy->mode!=DVBRIDGE_MODE_PLAYER_LED &&
+            policy->mode!=DVBRIDGE_MODE_HDR10_EXPERT))return DVBRIDGE_POLICY_INVALID_VALUE;
+        const double *xy=policy->lldv_primaries;
+        for(unsigned i=0;i<6;i+=2){
+            unsigned j=(i+2)%6;
+            if(!isfinite(xy[i]) || !isfinite(xy[i+1]) || xy[i]<=0 || xy[i+1]<=0 ||
+               xy[i]+xy[i+1]>1.000001 ||
+               (xy[j]-xy[i])*(.3290-xy[i+1])-(xy[j+1]-xy[i+1])*(.3127-xy[i])<=.000001)
+                return DVBRIDGE_POLICY_INVALID_VALUE;
+        }
+    }
     if (tv->panel < DVBRIDGE_PANEL_UNSET || tv->panel > DVBRIDGE_PANEL_LCD ||
         tv->gamut < DVBRIDGE_GAMUT_UNSET || tv->gamut > DVBRIDGE_GAMUT_BT2020 ||
         !isfinite(tv->peak_nits) || tv->peak_nits < 0 || tv->peak_nits > 10000)
@@ -43,7 +55,7 @@ enum dvbridge_policy_status dvbridge_policy_validate(const struct dvbridge_polic
         return DVBRIDGE_POLICY_TV_PROFILE_REQUIRED;
     if(calibrated &&
        (tv->peak_nits<50 || !isfinite(policy->expert_black_nits) ||
-        policy->expert_black_nits<0 || policy->expert_black_nits>.5 ||
+        policy->expert_black_nits<0 || policy->expert_black_nits>(policy->lldv_edid_version ? 1 : .5) ||
         policy->expert_black_nits>=tv->peak_nits ||
         (policy->expert_output_bits && (policy->expert_output_bits<10 || policy->expert_output_bits>16))))
         return DVBRIDGE_POLICY_INVALID_VALUE;

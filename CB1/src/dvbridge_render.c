@@ -1866,6 +1866,19 @@ struct player_led_render {
     bool masked, rendered;
 };
 
+static bool player_led_convert(pl_shader shader,const struct pl_raw_primaries *from,
+                               const struct pl_raw_primaries *to)
+{
+    const pl_matrix3x3 m=pl_get_color_mapping_matrix(from,to,PL_INTENT_RELATIVE_COLORIMETRIC);
+    float columns[3][3];
+    for(int i=0;i<3;i++)for(int j=0;j<3;j++)columns[j][i]=m.m[i][j];
+    const struct pl_shader_var matrix={.var=pl_var_mat3("player_led_basis"),
+        .data=columns,.dynamic=true};
+    return pl_shader_custom(shader,&(struct pl_custom_shader){.input=PL_SHADER_SIG_COLOR,
+        .output=PL_SHADER_SIG_COLOR,.variables=&matrix,.num_variables=1,
+        .body="color.rgb=player_led_basis*color.rgb;\n",.description="LLDV linear RGB basis"});
+}
+
 static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params *p)
 {
     struct player_led_render *render=priv;
@@ -1922,8 +1935,16 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
         .description="Restore signal black before creative grading"};
     if(preserve_black && lift_black && !pl_shader_custom(p->sh,&zero))
         return (struct pl_hook_res){.failed=true};
-    if(plan->creative.backend==DVBRIDGE_CREATIVE_CM4 && !dvbridge_creative_cm4_shader(p->sh,&render->cm4))
-        return (struct pl_hook_res){.failed=true};
+    const bool edid=plan->creative.policy.lldv_edid_version;
+    const struct pl_raw_primaries *basis=pl_raw_primaries_get(plan->target.primaries);
+    const struct pl_raw_primaries *target=&plan->target.hdr.prim;
+    if(edid && !player_led_convert(p->sh,basis,target))return (struct pl_hook_res){.failed=true};
+    if(plan->creative.backend==DVBRIDGE_CREATIVE_CM4){
+        const struct pl_raw_primaries *trim=&plan->creative.cm4_output.primaries;
+        if((edid && !player_led_convert(p->sh,target,trim)) ||
+           !dvbridge_creative_cm4_shader(p->sh,&render->cm4) ||
+           (edid && !player_led_convert(p->sh,trim,target)))return (struct pl_hook_res){.failed=true};
+    }
     /* libplacebo's final plane swizzle clips to [0,1], even on float targets. */
     float relative=PL_COLOR_SDR_WHITE/plan->creative.policy.tv.peak_nits;
     struct pl_shader_var output_scale={.var=pl_var_float("player_led_relative"),.data=&relative,.dynamic=true};
@@ -2246,11 +2267,10 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
         draw_buffer != GL_COLOR_ATTACHMENT0 || (GLuint) attachment != dst_name || level)
         return false;
 
-    enum pl_color_primaries prim = policy->tv.gamut == DVBRIDGE_GAMUT_BT709 ? PL_COLOR_PRIM_BT_709 :
-        policy->tv.gamut == DVBRIDGE_GAMUT_P3_D65 ? PL_COLOR_PRIM_DISPLAY_P3 : PL_COLOR_PRIM_BT_2020;
+    const struct pl_raw_primaries prim = cb1_display_primaries(policy);
     /* An exact identity keeps zero channels at zero before the PQ curve. */
-    pl_matrix3x3 matrix = prim == PL_COLOR_PRIM_BT_2020 ? pl_matrix3x3_identity :
-        pl_get_color_mapping_matrix(pl_raw_primaries_get(prim),
+    pl_matrix3x3 matrix = !policy->lldv_edid_version && policy->tv.gamut == DVBRIDGE_GAMUT_BT2020 ?
+        pl_matrix3x3_identity : pl_get_color_mapping_matrix(&prim,
             pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020), PL_INTENT_RELATIVE_COLORIMETRIC);
     float columns[3][3];
     for (int row = 0; row < 3; row++)
