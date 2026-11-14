@@ -1,4 +1,10 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
+    "owner": "Restore clipping before drawing the Kodi GUI.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Reapply Kodi scissors on composited and direct GUI draws."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": {
     "owner": "Trace Player Info and playback OSD timing in debug logs.",
     "files": {

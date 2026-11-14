@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": "355e9255542f8b38c99dc1ef8f677e64d332f57bc988506b91a3e5f915650117",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "75b7b94eda37309baded53d43b6eab311c213f1035803b153d5cdc2fa493f643",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
@@ -60,7 +61,7 @@
     "tests/cb1/test_nvidia_mode_restore.py": "78ea2f68ce64b2282e3f25075a439d8970a289d9eb3bb864b811d86fcfc3f994",
     "tests/cb1/test_nvidia_refresh_cycle.py": "5b54bc8d6f299fe2146e59540076f7dd0e80ffc086cf29c08508009318b91720",
     "tests/cb1/test_gui_viewport.py": "a25a487cf7e0b9db346e4a1e30fc4f1b8befeca964bcf528bdeb58f10fbea7b5",
-    "tests/cb1/test_gui_composite_clip.py": "63fc7214a0e6b8a7cb515388f39cb3f25bfb3a0cd8b0d10d6e9ffa27c73ce062",
+    "tests/cb1/test_gui_composite_clip.py": "d6b87dcc778f9db5d1c5876e8cbe2399de52a66a4644855a8d258b6b3e6d5aa5",
     "tests/cb1/test_nvidia_buffer_restore.py": "5ae76c3b33ac43255a697409f1dac507f867602469f27cfa858d3c57c535f9a8",
     "tests/cb1/test_sdr_output_restore.py": "a14e2e20be12810c49275e8df33d6305e3bb88e0d284be5d534f77fcfc708a79",
     "tests/cb1/test_nvidia_transitions.py": "266bf0147142144b2697fb906c37f3a0166badf30139626c59c87b286cf21089",
@@ -356,7 +357,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "62ea31f26cf726528fbf31987f986d6044b0c1804f55c9c074bd3340731f93ba",
+    "config/cb1-patch-index.json": "1dcccbf6535e5f7ec599a283e19d6f523f117efeca0c409baf0febaf34640063",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780"
   },
   "staging": {
