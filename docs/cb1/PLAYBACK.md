@@ -6,8 +6,8 @@ modes appear during playback. Unavailable modes show their blocking reason.
 
 | Source | Available processing |
 | --- | --- |
-| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, LLDV Reference – HDR10 Output, LLDV Reference – Native, HDR10+ Rendering, SDR Rendering or Kodi default |
-| HDR10 | Dolby Vision Rendering, Dolby Vision Adaptive HDR Mapping, SDR Rendering or Kodi default |
+| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 : LLDV Reference conversion, Dolby Vision : LLDV, HDR10+ Rendering, SDR Rendering or Kodi default |
+| HDR10 | Dolby Vision Rendering, Dolby Vision : Adaptive HDR Mapping, SDR Rendering or Kodi default |
 | HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion; SDR Rendering |
 | HLG | Dolby Vision Rendering or Kodi default |
 | SDR / 3D | Native Kodi playback |
@@ -37,14 +37,14 @@ P3-D65 is the default gamut. Keep it unless the display profile calls for anothe
 gamut. The configured peak is a processing reference, not a measurement made by
 the player.
 
-**LLDV Reference – HDR10 Output** uses separate display calibration settings:
+**HDR10 : LLDV Reference conversion** uses separate display calibration settings:
 manual peak brightness (50–10000 nits), OLED/LCD/projector black-level presets or
 a custom black level, and target gamut. Zero peak means not configured.
 The black presets are estimates, not measurements of the display.
 Disable the TV's dynamic tone mapping for this HDR10 output to avoid a second
 dynamic mapping stage.
 
-**LLDV Reference – Native** reads the peak, black level and primaries from the
+**Dolby Vision : LLDV** reads the peak, black level and primaries from the
 active display's Dolby Vision EDID and sends a low-latency Dolby Vision signal.
 The LLDV format selector shows the available HDMI transport and explains any
 display or driver limitation.
@@ -215,3 +215,19 @@ HLG has only Dolby Vision Rendering and native Kodi. The reference
 path normalizes original HLG with the BT.2100 1000-nit / gamma 1.2 reference
 before analysis; it does not invent authored L2/L8 trims. HLG-base Dolby Vision
 P8.4/P10.4 with RPU remains Dolby Vision and retains full reconstruction.
+
+
+### Dolby Vision LLDV format selection
+
+Open **Dolby Vision default playback** and select **Dolby Vision : LLDV**.
+The format selector lists HDMI formats and a reason for unavailable choices.
+Automatic keeps the driver and TV compatibility checks. Player Information
+reports the format actually committed, including the experimental indicator
+for forced 4:2:2. The TV characteristics group shows the target peak and black
+level read from the Dolby Vision EDID.
+
+On supported AMD native-HDMI hardware the experimental 4:2:2 10-bit path
+requires the `amdgpu.dv_lldv=1` boot option. Without it Kodi reports that the
+driver has LLDV disabled. The AMD lab path exposes 10 useful bits in the
+12-bit HDMI transport at supported UHD film timings. AMD 12-bit useful
+output is unavailable through this path. The option applies to LLDV only.

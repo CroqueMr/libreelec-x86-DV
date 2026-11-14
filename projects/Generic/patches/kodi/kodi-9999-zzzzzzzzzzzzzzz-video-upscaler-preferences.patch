@@ -344,7 +344,7 @@
 +#endif
    void UpdateVideoFilter();
    void CheckVideoParameters(int index);
-   void UpdateActiveArea(int index);
+   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
 @@ -152,6 +156,8 @@
    virtual bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
    dvbridge_geometry DVBridgeGeometry();

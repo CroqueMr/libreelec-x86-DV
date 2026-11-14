@@ -54,8 +54,8 @@
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26597,3 +26597,11 @@
- msgctxt "#41267"
- msgid "Neutralize dialogue normalization in supported DTS and DTS-HD passthrough streams."
+ msgctxt "#41306"
+ msgid "FSR 1 (EASU)"
  msgstr ""
 +
 +msgctxt "#41307"
@@ -102,11 +102,7 @@
  #endif
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
-@@ -40,11 +40,21 @@
- #include "cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h"
- #ifdef CB1_HAS_HDR10_AI
- #include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
- #endif
+@@ -40,6 +40,16 @@
  #include "UpscalerSettings.h"
 +#include "filesystem/File.h"
  #include "windowing/gbm/WinSystemGbmGLESContext.h"
@@ -121,13 +117,9 @@
 +#include <iterator>
  #endif
  
- #include <algorithm>
  #include <mutex>
  
-@@ -53,10 +63,65 @@
- #include <libavutil/dovi_meta.h>
- }
- 
+@@ -53,7 +63,62 @@
  using namespace Shaders;
  using namespace Shaders::GLES;
 +

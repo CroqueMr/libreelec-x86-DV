@@ -90,6 +90,7 @@ struct CDVPlaybackModes {
  static bool MenuEnabled(){return true;}static StreamHdrType SourceType(){return source;}
  static bool ShowMenu(bool settingsMenu=false) MENU
  static std::string DefaultPlaybackLabel();
+ static std::string LldvDisplayLuminance(bool){return "1000 nits";}
  static std::string LldvPreferenceLabel(){return "LLDV format";}
  static std::string SDRGamutLabel(){return "BT.709";}
 };

@@ -1,0 +1,1836 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -25907,7 +25907,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40812"
+-msgid "Dolby Vision Reference"
++msgid "Dolby Vision : Reference"
+ msgstr ""
+ 
+ #: system/settings/settings.xml
+@@ -25917,7 +25917,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40814"
+-msgid "Kodi default"
++msgid "Kodi : Default"
+ msgstr ""
+ 
+ #: system/settings/settings.xml
+@@ -25942,7 +25942,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40819"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40820"
+@@ -25954,7 +25954,7 @@
+ msgstr ""
+ 
+ msgctxt "#40922"
+-msgid "HDR10+ Rendering"
++msgid "HDR10+ : Conversion"
+ msgstr ""
+ 
+ msgctxt "#40923"
+@@ -25970,11 +25970,11 @@
+ msgstr ""
+ 
+ msgctxt "#40822"
+-msgid "HDR10 Rendering"
++msgid "HDR10 : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40823"
+-msgid "LLDV Reference – HDR10 Output"
++msgid "HDR10 : LLDV Reference conversion"
+ msgstr ""
+ 
+ msgctxt "#40829"
+@@ -25982,7 +25982,7 @@
+ msgstr ""
+ 
+ msgctxt "#40830"
+-msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. LLDV Reference – HDR10 Output has its own display calibration settings."
++msgid "Used for Adaptive rendering and peak-based CM4 rules when enabled."
+ msgstr ""
+ 
+ msgctxt "#40831"
+@@ -26006,7 +26006,7 @@
+ msgstr ""
+ 
+ msgctxt "#40836"
+-msgid " - TV color gamut"
++msgid " - Adaptive TV colour gamut"
+ msgstr ""
+ 
+ msgctxt "#40837"
+@@ -26103,7 +26103,7 @@
+ msgstr ""
+ 
+ msgctxt "#40864"
+-msgid "Disable TV dynamic tone mapping"
++msgid "Uses the manually configured TV peak, black level and gamut."
+ msgstr ""
+ 
+ msgctxt "#40865"
+@@ -26115,11 +26115,11 @@
+ msgstr ""
+ 
+ msgctxt "#40867"
+-msgid "Dolby Vision Rendering"
++msgid "Dolby Vision : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40868"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40870"
+@@ -26159,11 +26159,11 @@
+ msgstr ""
+ 
+ msgctxt "#40913"
+-msgid "Dolby Vision Master Reference"
++msgid "Dolby Vision : Master Reference"
+ msgstr ""
+ 
+ msgctxt "#40914"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40915"
+@@ -26203,15 +26203,15 @@
+ msgstr ""
+ 
+ msgctxt "#41013"
+-msgid "Choose the default playback circuit for HDR10+ sources. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
++msgid "Choose how HDR10+ sources start. Native sends the original dynamic metadata when supported and uses HDR10 otherwise."
+ msgstr ""
+ 
+ msgctxt "#41014"
+-msgid "Kodi default"
++msgid "HDR10+ : Native"
+ msgstr ""
+ 
+ msgctxt "#40970"
+-msgid "Dolby Vision Rendering"
++msgid "Dolby Vision : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40940"
+@@ -26367,7 +26367,7 @@
+ msgstr ""
+ 
+ msgctxt "#41030"
+-msgid " - HDR10 rendering peak brightness"
++msgid " - HDR10 reference TV peak (nits)"
+ msgstr ""
+ 
+ msgctxt "#41031"
+@@ -26375,7 +26375,7 @@
+ msgstr ""
+ 
+ msgctxt "#41032"
+-msgid " - HDR10 rendering display black level"
++msgid " - HDR10 reference TV black level"
+ msgstr ""
+ 
+ msgctxt "#41033"
+@@ -26399,7 +26399,7 @@
+ msgstr ""
+ 
+ msgctxt "#41038"
+-msgid " - HDR10 rendering custom black level (nits)"
++msgid " - Custom TV black level (nits)"
+ msgstr ""
+ 
+ msgctxt "#41039"
+@@ -26407,7 +26407,7 @@
+ msgstr ""
+ 
+ msgctxt "#41040"
+-msgid " - HDR10 rendering target color gamut"
++msgid " - HDR10 reference TV gamut"
+ msgstr ""
+ 
+ msgctxt "#41041"
+@@ -26431,7 +26431,7 @@
+ msgstr ""
+ 
+ msgctxt "#41130"
+-msgid "SDR Rendering"
++msgid "SDR : Conversion"
+ msgstr ""
+ 
+ msgctxt "#41131"
+@@ -26443,11 +26443,11 @@
+ msgstr ""
+ 
+ msgctxt "#41133"
+-msgid "HDR/DV to SDR target"
++msgid "HDR/DV to SDR conversion target"
+ msgstr ""
+ 
+ msgctxt "#41134"
+-msgid "BT.709 target for HDR10, HDR10+ and Dolby Vision to SDR conversion only. Native SDR playback is unchanged. Custom values set peak luminance, gamma and black floor."
++msgid "Target for HDR10, HDR10+, HLG or Dolby Vision converted to SDR. Custom sets peak luminance, gamma and black level."
+ msgstr ""
+ 
+ msgctxt "#41135"
+@@ -26483,11 +26483,11 @@
+ msgstr ""
+ 
+ msgctxt "#41200"
+-msgid "LLDV output format"
++msgid " - LLDV HDMI format"
+ msgstr ""
+ 
+ msgctxt "#41201"
+-msgid "Choose the format preference for LLDV Reference – Native. Availability depends on the display, driver and current HDMI timing."
++msgid "Choose Automatic or a format supported by the TV and the HDMI driver. The confirmed format is shown in Player Information."
+ msgstr ""
+ 
+ msgctxt "#41202"
+@@ -26495,27 +26495,27 @@
+ msgstr ""
+ 
+ msgctxt "#41203"
+-msgid "YCbCr 4:2:2 · 10 useful bits"
++msgid "YCbCr 4:2:2 / 10-bit"
+ msgstr ""
+ 
+ msgctxt "#41204"
+-msgid "YCbCr 4:2:2 · 12 bits"
++msgid "YCbCr 4:2:2 / 12-bit"
+ msgstr ""
+ 
+ msgctxt "#41205"
+-msgid "RGB 4:4:4 · 10 bits"
++msgid "RGB 4:4:4 / 10-bit"
+ msgstr ""
+ 
+ msgctxt "#41206"
+-msgid "RGB 4:4:4 · 12 bits"
++msgid "RGB 4:4:4 / 12-bit"
+ msgstr ""
+ 
+ msgctxt "#41207"
+-msgid "YCbCr 4:4:4 · 10 bits"
++msgid "YCbCr 4:4:4 / 10-bit"
+ msgstr ""
+ 
+ msgctxt "#41208"
+-msgid "YCbCr 4:4:4 · 12 bits"
++msgid "YCbCr 4:4:4 / 12-bit"
+ msgstr ""
+ 
+ msgctxt "#41209"
+@@ -26523,15 +26523,15 @@
+ msgstr ""
+ 
+ msgctxt "#41210"
+-msgid "Not advertised by the display for LLDV"
++msgid "TV does not support this format"
+ msgstr ""
+ 
+ msgctxt "#41211"
+-msgid "LLDV format not qualified on this driver"
++msgid "Unavailable on this HDMI driver or port"
+ msgstr ""
+ 
+ msgctxt "#41212"
+-msgid "Unavailable at the current HDMI timing"
++msgid "Unavailable at this refresh rate"
+ msgstr ""
+ 
+ msgctxt "#41213"
+@@ -26551,7 +26551,7 @@
+ msgstr ""
+ 
+ msgctxt "#41217"
+-msgid "4:2:2 · 10-bit · Forced · experimental"
++msgid "4:2:2 / 10-bit (forced, experimental)"
+ msgstr ""
+ 
+ msgctxt "#41218"
+@@ -26559,7 +26559,7 @@
+ msgstr ""
+ 
+ msgctxt "#41221"
+-msgid "LLDV Reference – Native"
++msgid "Dolby Vision : LLDV"
+ msgstr ""
+ 
+ msgctxt "#41222"
+@@ -26591,7 +26591,7 @@
+ msgstr ""
+ 
+ msgctxt "#41270"
+-msgid "SDR output gamut"
++msgid " - SDR output gamut"
+ msgstr ""
+ 
+ msgctxt "#41271"
+@@ -26683,11 +26683,11 @@
+ msgstr ""
+ 
+ msgctxt "#41297"
+-msgid "Compatible HDMI mode available after a mode switch"
++msgid "Available at a compatible playback refresh rate"
+ msgstr ""
+ 
+ msgctxt "#41298"
+-msgid "Driver rejected the last HDMI commit for this format"
++msgid "Driver rejected the last HDMI change"
+ msgstr ""
+ 
+ msgctxt "#41299"
+@@ -26733,3 +26733,59 @@
+ msgctxt "#41309"
+ msgid "FSR 1 (EASU + RCAS)"
+ msgstr ""
++
++msgctxt "#41310"
++msgid "HDR10 : Native"
++msgstr ""
++
++msgctxt "#41311"
++msgid "HLG : Native"
++msgstr ""
++
++msgctxt "#41312"
++msgid "Unavailable"
++msgstr ""
++
++msgctxt "#41313"
++msgid "LLDV disabled in the AMD driver"
++msgstr ""
++
++msgctxt "#41314"
++msgid "Forced (experimental)"
++msgstr ""
++
++msgctxt "#41315"
++msgid "TV characteristics"
++msgstr ""
++
++msgctxt "#41316"
++msgid " - LLDV TV peak (EDID)"
++msgstr ""
++
++msgctxt "#41317"
++msgid " - LLDV TV black level (EDID)"
++msgstr ""
++
++msgctxt "#41318"
++msgid "Read from the TV over HDMI."
++msgstr ""
++
++msgctxt "#41319"
++msgid "Display does not accept source HDR10+ metadata"
++msgstr ""
++
++msgctxt "#41320"
++msgid "Driver does not support HDR10+ on this output"
++msgstr ""
++
++msgctxt "#41321"
++msgid "HDR10+ output requires at least 10-bit PQ"
++msgstr ""
++
++msgctxt "#41322"
++msgid "HDR10+ metadata could not be sent"
++msgstr ""
++
++msgctxt "#41323"
++msgid "Falls back to HDR10 on this HDMI output"
++msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -3,6 +3,347 @@
+   <section id="player" label="14200" help="38100">
+     <category id="videoplayer" label="14215" help="38103">
+       <group id="99" label="40810">
++        <setting id="dvbridge.playback" type="action" label="40811" help="40815">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40867">1</option><option label="40868">2</option>
++            <option label="41310">0</option><option label="41130">4</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40970">3</option><option label="41014">0</option><option label="41130">4</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hlgsource" type="integer" label="41131" help="41132">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options><option label="40867">1</option><option label="41311">0</option><option label="41130">2</option></options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.sdrpreset" type="integer" label="41133" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <constraints><options><option label="41135">0</option><option label="41136">1</option><option label="41137">2</option></options></constraints>
++          <dependencies><dependency type="visible"><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or></dependency></dependencies>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrgamut" type="action" label="41270" help="41271">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <dependencies><dependency type="visible"><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.sdrgamutvalue" type="integer" label="41270">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
++          <default>0</default>
++          <constraints><options><option label="41272">0</option><option label="41273">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrpeak" type="number" label="41138" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>100</default>
++          <dependencies><dependency type="visible"><and><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or><condition setting="dvbridge.sdrpreset" operator="is">2</condition></and></dependency></dependencies>
++          <constraints><minimum>20</minimum><maximum>500</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrgamma" type="number" label="41139" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2.4</default>
++          <dependencies><dependency type="visible"><and><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or><condition setting="dvbridge.sdrpreset" operator="is">2</condition></and></dependency></dependencies>
++          <constraints><minimum>1.8</minimum><maximum>2.8</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.sdrblack" type="number" label="41140" help="41134">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or><condition setting="dvbridge.sdrpreset" operator="is">2</condition></and></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>5</maximum><step>0.001</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.lldvformat" type="action" label="41200" help="41201">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.outputmode">7</condition></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
++          <default>0</default><constraints><minimum>0</minimum><maximum>6</maximum></constraints>
++          <control type="list" format="integer" />
++        </setting>
++        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><visible>false</visible>
++          <default>0</default>
++          <constraints>
++            <options>
++              <option label="40812">0</option>
++              <option label="40913">4</option>
++              <option label="40914">5</option>
++              <option label="40814">2</option>
++              <option label="40813">1</option><option label="41130">6</option><option label="41221">7</option>
++            </options>
++          </constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10method" type="integer" label="40820" help="40821">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default><visible>false</visible>
++          <constraints><options>
++            <option label="40822">0</option><option label="40823">1</option><option label="40922">2</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.expertblackcustomset" type="boolean">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default><visible>false</visible>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level>
++          <default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition>
++          </or></dependency></dependencies>
++          <control type="toggle" />
++        </setting>
++        <setting id="dvbridge.cmv40" type="integer" label="40980" help="40981">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">0</condition>
++            <condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition>
++          </or></dependency></dependencies>
++          <constraints><options>
++            <option label="231">0</option><option label="40982">1</option>
++            <option label="40983">2</option><option label="40984">3</option><option label="40985">4</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40trigger" type="integer" label="40986" help="40987" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">3</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition></or></dependency>
++          </dependencies>
++          <constraints><options>
++            <option label="40988">0</option><option label="40989">1000</option>
++            <option label="40990">2000</option><option label="40991">4000</option><option label="40992">10000</option>
++          </options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.cmv40headroom" type="integer" label="40993" help="40994" parent="dvbridge.cmv40">
++          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>20</default>
++          <dependencies>
++            <dependency type="visible" setting="dvbridge.cmv40" operator="is">4</dependency>
++            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition></or></dependency>
++          </dependencies>
++          <constraints><minimum>0</minimum><maximum>50</maximum><step>1</step></constraints>
++          <control type="edit" format="integer" />
++        </setting>
++        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <constraints><options><option label="40910">0</option><option label="40909">1</option><option label="40995">2</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++      </group>
++      <group id="cb1-tv-characteristics" label="41315">
++        <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><or><or><condition setting="dvbridge.outputmode">5</condition><condition setting="dvbridge.outputmode">3</condition><condition setting="dvbridge.hdr10source">2</condition></or><and><or><condition setting="dvbridge.outputmode">0</condition><condition setting="dvbridge.outputmode">4</condition></or><or><condition setting="dvbridge.cmv40">4</condition><and><condition setting="dvbridge.cmv40">3</condition><condition setting="dvbridge.cmv40trigger">0</condition></and></or></and></or></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>10000</maximum><step>1</step></constraints>
++          <control type="edit" format="number" />
++        </setting>
++        <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>0</level><default>2</default>
++          <dependencies><dependency type="visible"><or>
++            <condition setting="dvbridge.outputmode" operator="is">3</condition>
++            <condition setting="dvbridge.outputmode" operator="is">5</condition>
++            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
++          </or></dependency></dependencies>
++          <constraints><options><option label="40833">0</option><option label="40838">1</option><option label="40839">2</option><option label="40840">3</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.tvpanel" type="integer" label="40831" help="40832">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>2</level><default>0</default>
++          <visible>false</visible>
++          <constraints><options><option label="40833">0</option><option label="40834">1</option><option label="40835">2</option></options></constraints>
++          <control type="spinner" format="string" />
++        </setting>
++        <setting id="dvbridge.expertpeak" type="number" label="41030" help="41031">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>10000</maximum><step>0.1</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.expertblack" type="integer" label="41032" help="41033">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><options><option label="41034">0</option><option label="41035">1</option><option label="41036">2</option><option label="41037">3</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.expertblackcustom" type="number" label="41038" help="41039">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
++          <dependencies><dependency type="visible"><and><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and><condition setting="dvbridge.expertblack" operator="is">3</condition></and></dependency></dependencies>
++          <constraints><minimum>0</minimum><maximum>0.5</maximum><step>0.0001</step></constraints>
++          <control type="edit" format="string" />
++        </setting>
++        <setting id="dvbridge.expertgamut" type="integer" label="41040" help="41041">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2</default>
++          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
++          <constraints><options><option label="40839">2</option><option label="40840">3</option><option label="40838">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="dvbridge.lldvdisplaypeak" type="action" label="41316" help="41318">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><enable>false</enable>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.outputmode">7</condition></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++        <setting id="dvbridge.lldvdisplayblack" type="action" label="41317" help="41318">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><enable>false</enable>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.outputmode">7</condition></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
++      </group>
++      <group id="1" label="14230">
++        <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
++          <constraints>
++            <options>
++              <option label="20389">0</option> <!-- musicvideos -->
++              <option label="20343">1</option> <!-- tvshows -->
++              <option label="20360">2</option> <!-- episodes -->
++              <option label="20342">3</option> <!-- movies -->
++              <option label="21345">4</option> <!-- uncategorized -->
++            </options>
++            <delimiter>,</delimiter>
++          </constraints>
++          <level>0</level>
++          <default></default>
++          <control type="list" format="string">
++            <multiselect>true</multiselect>
++            <hidevalue>false</hidevalue>
++          </control>
++        </setting>
++        <setting id="videoplayer.seeksteps" type="list[integer]" label="13556" help="37042">
++          <level>1</level>
++          <default>-600,-300,-180,-60,-30,-10,10,30,60,180,300,600</default>
++          <constraints>
++            <options>videoseeksteps</options>
++            <delimiter>,</delimiter>
++            <minimumitems>2</minimumitems>
++          </constraints>
++          <control type="list" format="string">
++            <multiselect>true</multiselect>
++          </control>
++        </setting>
++        <setting id="videoplayer.seekdelay" type="integer" label="13557" help="37043">
++          <level>1</level>
++          <default>750</default>
++          <constraints>
++            <minimum label="231">0</minimum> <!-- None -->
++            <step>250</step>
++            <maximum>3000</maximum>
++          </constraints>
++          <control type="spinner" format="string">
++            <formatlabel>14046</formatlabel>
++          </control>
++        </setting>
++      </group>
++      <group id="2" label="19177">
++        <setting id="videoplayer.adjustrefreshrate" type="integer" label="170" help="36164">
++          <level>1</level>
++          <default>2</default> <!-- ADJUST_REFRESHRATE_ON_STARTSTOP -->
++          <constraints>
++            <options>
++              <option label="351">0</option> <!-- ADJUST_REFRESHRATE_OFF -->
++              <option label="36035">1</option> <!-- ADJUST_REFRESHRATE_ALWAYS -->
++              <option label="36036">2</option> <!-- ADJUST_REFRESHRATE_ON_STARTSTOP -->
++              <option label="36050">3</option> <!-- ADJUST_REFRESHRATE_ON_START -->
++            </options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="winsystem.ishdrdisplay" type="boolean" label="13436" help="36299">
++          <dependencies>
++            <dependency type="visible">
++              <condition on="property" name="ishdrdisplay" />
++            </dependency>
++          </dependencies>
++          <level>2</level>
++          <default>true</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="videoplayer.usedisplayasclock" type="boolean" label="13510" help="36166">
++          <level>1</level>
++          <default>false</default>
++          <control type="toggle" />
++        </setting>
++        <setting id="videoplayer.errorinaspect" type="integer" label="22021" help="36170">
++          <level>2</level>
++          <default>0</default>
++          <constraints>
++            <minimum label="351">0</minimum>
++            <step>1</step>
++            <maximum>20</maximum>
++          </constraints>
++          <control type="spinner" format="string">
++            <formatlabel>14047</formatlabel>
++          </control>
++        </setting>
++        <setting id="videoplayer.stretch43" type="integer" label="173" help="36171">
++          <level>2</level>
++          <default>0</default> <!-- ViewModeNormal -->
++          <constraints>
++            <options>
++              <option label="630">0</option> <!-- ViewModeNormal -->
++              <option label="633">3</option> <!-- ViewModeWideZoom -->
++              <option label="634">4</option> <!-- ViewModeStretch16x9 -->
++              <option label="644">7</option> <!-- ViewModeStretch16x9 - nonlinear -->
++              <option label="631">1</option> <!-- ViewModeZoom -->
++            </options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
++        <setting id="videoplayer.maxsmoothff" type="integer" label="13558" help="37117">
++          <level>2</level>
++          <default>4</default>
++          <constraints>
++            <options>playerfastforwardspeeds</options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
++      </group>
++      <group id="3" label="14231">
++        <setting id="videoplayer.rendermethod" type="integer" label="13415" help="36153">
++          <level>2</level>
++          <default>0</default> <!-- RENDER_METHOD_AUTO -->
++          <constraints>
++            <options>rendermethods</options>
++          </constraints>
++          <control type="list" format="string" />
++        </setting>
+         <setting id="videoplayer.sdrupscaler" type="integer" label="41302" help="41304">
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
+           <constraints><options>
+@@ -29,346 +370,6 @@
+             <option label="41306">19</option><option label="41309">22</option>
+             <option label="41307">20</option><option label="41308">21</option>
+           </options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
+-          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options>
+-            <option label="40867">1</option><option label="40868">2</option>
+-            <option label="40866">0</option><option label="41130">4</option>
+-          </options></constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+-        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
+-          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options>
+-            <option label="40970">3</option><option label="41014">0</option><option label="41130">4</option>
+-          </options></constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+-        <setting id="dvbridge.hlgsource" type="integer" label="41131" help="41132">
+-          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options><option label="40867">1</option><option label="40866">0</option><option label="41130">2</option></options></constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+-        <setting id="dvbridge.sdrpreset" type="integer" label="41133" help="41134">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+-          <constraints><options><option label="41135">0</option><option label="41136">1</option><option label="41137">2</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.sdrgamut" type="action" label="41270" help="41271">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+-          <control type="button" format="action" />
+-        </setting>
+-        <setting id="dvbridge.sdrgamutvalue" type="integer" label="41270">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
+-          <default>0</default>
+-          <constraints><options><option label="41272">0</option><option label="41273">1</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.sdrpeak" type="number" label="41138" help="41134">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>100</default>
+-          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
+-          <constraints><minimum>20</minimum><maximum>500</maximum><step>0.1</step></constraints>
+-          <control type="edit" format="string" />
+-        </setting>
+-        <setting id="dvbridge.sdrgamma" type="number" label="41139" help="41134">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2.4</default>
+-          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
+-          <constraints><minimum>1.8</minimum><maximum>2.8</maximum><step>0.1</step></constraints>
+-          <control type="edit" format="string" />
+-        </setting>
+-        <setting id="dvbridge.sdrblack" type="number" label="41140" help="41134">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+-          <dependencies><dependency type="visible"><condition setting="dvbridge.sdrpreset" operator="is">2</condition></dependency></dependencies>
+-          <constraints><minimum>0</minimum><maximum>5</maximum><step>0.001</step></constraints>
+-          <control type="edit" format="string" />
+-        </setting>
+-        <setting id="dvbridge.playback" type="action" label="40811" help="40815">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+-          <control type="button" format="action" />
+-        </setting>
+-        <setting id="dvbridge.lldvformat" type="action" label="41200" help="41201">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+-          <control type="button" format="action" />
+-        </setting>
+-        <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
+-          <default>0</default><constraints><minimum>0</minimum><maximum>6</maximum></constraints>
+-          <control type="list" format="integer" />
+-        </setting>
+-        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>0</level><visible>false</visible>
+-          <default>0</default>
+-          <constraints>
+-            <options>
+-              <option label="40812">0</option>
+-              <option label="40913">4</option>
+-              <option label="40914">5</option>
+-              <option label="40814">2</option>
+-              <option label="40813">1</option><option label="41130">6</option><option label="41221">7</option>
+-            </options>
+-          </constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+-        <setting id="dvbridge.hdr10method" type="integer" label="40820" help="40821">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>2</level><default>0</default><visible>false</visible>
+-          <constraints><options>
+-            <option label="40822">0</option><option label="40823">1</option><option label="40922">2</option>
+-          </options></constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+-        <setting id="dvbridge.expertpeak" type="number" label="41030" help="41031">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+-          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
+-          <constraints><minimum>0</minimum><maximum>10000</maximum><step>0.1</step></constraints>
+-          <control type="edit" format="string" />
+-        </setting>
+-        <setting id="dvbridge.expertblack" type="integer" label="41032" help="41033">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+-          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
+-          <constraints><options><option label="41034">0</option><option label="41035">1</option><option label="41036">2</option><option label="41037">3</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.expertblackcustom" type="number" label="41038" help="41039">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>0</default>
+-          <dependencies><dependency type="visible"><and><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and><condition setting="dvbridge.expertblack" operator="is">3</condition></and></dependency></dependencies>
+-          <constraints><minimum>0</minimum><maximum>0.5</maximum><step>0.0001</step></constraints>
+-          <control type="edit" format="string" />
+-        </setting>
+-        <setting id="dvbridge.expertblackcustomset" type="boolean">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default><visible>false</visible>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.expertgamut" type="integer" label="41040" help="41041">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>2</default>
+-          <dependencies><dependency type="visible"><and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and></dependency></dependencies>
+-          <constraints><options><option label="40839">2</option><option label="40840">3</option><option label="40838">1</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>0</level><default>0</default>
+-          <dependencies><dependency type="visible"><or>
+-            <and><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or><or><condition setting="dvbridge.cmv40" operator="is">4</condition><and><condition setting="dvbridge.cmv40" operator="is">3</condition><condition setting="dvbridge.cmv40trigger" operator="is">0</condition></and></or></and>
+-            <condition setting="dvbridge.outputmode" operator="is">3</condition>
+-            <condition setting="dvbridge.outputmode" operator="is">5</condition>
+-            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
+-          </or></dependency></dependencies>
+-          <constraints><minimum>0</minimum><maximum>10000</maximum><step>1</step></constraints>
+-          <control type="edit" format="number" />
+-        </setting>
+-        <setting id="dvbridge.tvpanel" type="integer" label="40831" help="40832">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>2</level><default>0</default>
+-          <visible>false</visible>
+-          <constraints><options><option label="40833">0</option><option label="40834">1</option><option label="40835">2</option></options></constraints>
+-          <control type="spinner" format="string" />
+-        </setting>
+-        <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>0</level><default>2</default>
+-          <dependencies><dependency type="visible"><or>
+-            <condition setting="dvbridge.outputmode" operator="is">3</condition>
+-            <condition setting="dvbridge.outputmode" operator="is">5</condition>
+-            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
+-          </or></dependency></dependencies>
+-          <constraints><options><option label="40833">0</option><option label="40838">1</option><option label="40839">2</option><option label="40840">3</option></options></constraints>
+-          <control type="spinner" format="string" />
+-        </setting>
+-        <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
+-          <requirement>HAVE_DVBRIDGE</requirement>
+-          <level>2</level>
+-          <default>true</default>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+-          <dependencies><dependency type="visible"><or>
+-            <condition setting="dvbridge.outputmode" operator="is">3</condition>
+-            <condition setting="dvbridge.outputmode" operator="is">5</condition>
+-            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
+-          </or></dependency></dependencies>
+-          <control type="button" format="action" />
+-        </setting>
+-        <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
+-          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
+-          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
+-          <dependencies><dependency type="visible"><or>
+-            <condition setting="dvbridge.outputmode" operator="is">0</condition>
+-            <condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition>
+-          </or></dependency></dependencies>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.cmv40" type="integer" label="40980" help="40981">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
+-          <dependencies><dependency type="visible"><or>
+-            <condition setting="dvbridge.outputmode" operator="is">0</condition>
+-            <condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition>
+-          </or></dependency></dependencies>
+-          <constraints><options>
+-            <option label="231">0</option><option label="40982">1</option>
+-            <option label="40983">2</option><option label="40984">3</option><option label="40985">4</option>
+-          </options></constraints>
+-          <control type="spinner" format="string" />
+-        </setting>
+-        <setting id="dvbridge.cmv40trigger" type="integer" label="40986" help="40987" parent="dvbridge.cmv40">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>0</default>
+-          <dependencies>
+-            <dependency type="visible" setting="dvbridge.cmv40" operator="is">3</dependency>
+-            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition></or></dependency>
+-          </dependencies>
+-          <constraints><options>
+-            <option label="40988">0</option><option label="40989">1000</option>
+-            <option label="40990">2000</option><option label="40991">4000</option><option label="40992">10000</option>
+-          </options></constraints>
+-          <control type="spinner" format="string" />
+-        </setting>
+-        <setting id="dvbridge.cmv40headroom" type="integer" label="40993" help="40994" parent="dvbridge.cmv40">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>20</default>
+-          <dependencies>
+-            <dependency type="visible" setting="dvbridge.cmv40" operator="is">4</dependency>
+-            <dependency type="visible"><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition><condition setting="dvbridge.outputmode" operator="is">7</condition></or></dependency>
+-          </dependencies>
+-          <constraints><minimum>0</minimum><maximum>50</maximum><step>1</step></constraints>
+-          <control type="edit" format="integer" />
+-        </setting>
+-        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
+-          <constraints><options><option label="40910">0</option><option label="40909">1</option><option label="40995">2</option></options></constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-      </group>
+-      <group id="1" label="14230">
+-        <setting id="videoplayer.autoplaynextitem" type="list[integer]" label="13433" help="36152">
+-          <constraints>
+-            <options>
+-              <option label="20389">0</option> <!-- musicvideos -->
+-              <option label="20343">1</option> <!-- tvshows -->
+-              <option label="20360">2</option> <!-- episodes -->
+-              <option label="20342">3</option> <!-- movies -->
+-              <option label="21345">4</option> <!-- uncategorized -->
+-            </options>
+-            <delimiter>,</delimiter>
+-          </constraints>
+-          <level>0</level>
+-          <default></default>
+-          <control type="list" format="string">
+-            <multiselect>true</multiselect>
+-            <hidevalue>false</hidevalue>
+-          </control>
+-        </setting>
+-        <setting id="videoplayer.seeksteps" type="list[integer]" label="13556" help="37042">
+-          <level>1</level>
+-          <default>-600,-300,-180,-60,-30,-10,10,30,60,180,300,600</default>
+-          <constraints>
+-            <options>videoseeksteps</options>
+-            <delimiter>,</delimiter>
+-            <minimumitems>2</minimumitems>
+-          </constraints>
+-          <control type="list" format="string">
+-            <multiselect>true</multiselect>
+-          </control>
+-        </setting>
+-        <setting id="videoplayer.seekdelay" type="integer" label="13557" help="37043">
+-          <level>1</level>
+-          <default>750</default>
+-          <constraints>
+-            <minimum label="231">0</minimum> <!-- None -->
+-            <step>250</step>
+-            <maximum>3000</maximum>
+-          </constraints>
+-          <control type="spinner" format="string">
+-            <formatlabel>14046</formatlabel>
+-          </control>
+-        </setting>
+-      </group>
+-      <group id="2" label="19177">
+-        <setting id="videoplayer.adjustrefreshrate" type="integer" label="170" help="36164">
+-          <level>1</level>
+-          <default>2</default> <!-- ADJUST_REFRESHRATE_ON_STARTSTOP -->
+-          <constraints>
+-            <options>
+-              <option label="351">0</option> <!-- ADJUST_REFRESHRATE_OFF -->
+-              <option label="36035">1</option> <!-- ADJUST_REFRESHRATE_ALWAYS -->
+-              <option label="36036">2</option> <!-- ADJUST_REFRESHRATE_ON_STARTSTOP -->
+-              <option label="36050">3</option> <!-- ADJUST_REFRESHRATE_ON_START -->
+-            </options>
+-          </constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="winsystem.ishdrdisplay" type="boolean" label="13436" help="36299">
+-          <dependencies>
+-            <dependency type="visible">
+-              <condition on="property" name="ishdrdisplay" />
+-            </dependency>
+-          </dependencies>
+-          <level>2</level>
+-          <default>true</default>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="videoplayer.usedisplayasclock" type="boolean" label="13510" help="36166">
+-          <level>1</level>
+-          <default>false</default>
+-          <control type="toggle" />
+-        </setting>
+-        <setting id="videoplayer.errorinaspect" type="integer" label="22021" help="36170">
+-          <level>2</level>
+-          <default>0</default>
+-          <constraints>
+-            <minimum label="351">0</minimum>
+-            <step>1</step>
+-            <maximum>20</maximum>
+-          </constraints>
+-          <control type="spinner" format="string">
+-            <formatlabel>14047</formatlabel>
+-          </control>
+-        </setting>
+-        <setting id="videoplayer.stretch43" type="integer" label="173" help="36171">
+-          <level>2</level>
+-          <default>0</default> <!-- ViewModeNormal -->
+-          <constraints>
+-            <options>
+-              <option label="630">0</option> <!-- ViewModeNormal -->
+-              <option label="633">3</option> <!-- ViewModeWideZoom -->
+-              <option label="634">4</option> <!-- ViewModeStretch16x9 -->
+-              <option label="644">7</option> <!-- ViewModeStretch16x9 - nonlinear -->
+-              <option label="631">1</option> <!-- ViewModeZoom -->
+-            </options>
+-          </constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-        <setting id="videoplayer.maxsmoothff" type="integer" label="13558" help="37117">
+-          <level>2</level>
+-          <default>4</default>
+-          <constraints>
+-            <options>playerfastforwardspeeds</options>
+-          </constraints>
+-          <control type="list" format="string" />
+-        </setting>
+-      </group>
+-      <group id="3" label="14231">
+-        <setting id="videoplayer.rendermethod" type="integer" label="13415" help="36153">
+-          <level>2</level>
+-          <default>0</default> <!-- RENDER_METHOD_AUTO -->
+-          <constraints>
+-            <options>rendermethods</options>
+-          </constraints>
+           <control type="list" format="string" />
+         </setting>
+         <setting id="videoplayer.hqscalers" type="integer" parent="videoplayer.rendermethod" label="13435" help="36154">
+diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
+--- a/xbmc/cores/VideoProcessingInfo.h
++++ b/xbmc/cores/VideoProcessingInfo.h
+@@ -68,6 +68,7 @@
+     std::array<unsigned, 2> scenePQ{}; // effective max/avg after L3
+     unsigned trimGroups{};
+     bool cm4Appended{};
++    bool forced{};
+     unsigned edidVersion{};
+     std::array<double, 6> primaries{};
+     std::array<double, 6> reportedPrimaries{};
+@@ -104,6 +105,7 @@
+     std::optional<PlayerLed> lldv{};
+   } output;
+   std::optional<VideoOutputType> outputType;
++  int nativeHDR10PlusFallbackLabel{};
+   uint64_t informationGeneration{};
+   bool referenceWarning{};
+   unsigned profile{}, level{}, major{}, minor{}, compatibility{};
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+@@ -105,6 +105,25 @@
+       default: return output.flags & HDR10 ? "HDR10 Rendering" : "Dolby Vision Reference";
+     }
+   }
++  // The same label IDs are used by the default menus and Quick Switch.
++  static constexpr int PolicyLabel(int mode, bool rendering = false)
++  {
++    switch (mode)
++    {
++      case 0: return 40814;
++      case 1: return rendering ? 40867 : 40812;
++      case 2: return 40822;
++      case 3: return 40823;
++      case 4:
++      case 6: return 40914;
++      case 5: return 40913;
++      case 7: return 40922;
++      case 8: return 41130;
++      case PlayerLedMode: return 41221;
++      default: return 0;
++    }
++  }
++
+   static const char* RequestedPolicy(int mode, bool hdr10AI = false, bool hdr10PlusDV = false)
+   {
+     if ((hdr10PlusDV || hdr10AI) && mode == 1) return "Dolby Vision Rendering";
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+@@ -73,7 +73,7 @@
+   output.creativeReason = plan.reason;
+   output.felUpscaling = fel && felUpscaled ? 2 : -1;
+   output.lldv = Trims{{plan.analysis[1], plan.analysis[2]}, groups,
+-                      plan.cmv40_status == CB1_CMV40_APPEND, plan.policy.lldv_edid_version,
++                      plan.cmv40_status == CB1_CMV40_APPEND, connector.activeForced, plan.policy.lldv_edid_version,
+                       connector.display.primaries,
+                       connector.display.reported};
+   return output;
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -6,8 +6,6 @@
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "cores/VideoPlayer/Interface/StreamInfo.h"
+-#include "GUIDialogNumeric.h"
+-#include "guilib/GUIKeyboardFactory.h"
+ #include "GUIDialogKaiToast.h"
+ #include "GUIDialogSelect.h"
+ #include "GUIDialogBusy.h"
+@@ -89,56 +87,6 @@
+   return source.hdrType;
+ }
+ 
+-bool CDVPlaybackModes::ConfigureProfile()
+-{
+-  const auto component=CServiceBroker::GetSettingsComponent();
+-  const auto settings=component ? component->GetSettings() : nullptr;
+-  auto* dialog=CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
+-  if (!settings || !dialog) return false;
+-  auto preferences=DVBRIDGE::FrameOutputSettings();
+-  {
+-    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+-    DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
+-  }
+-  const bool expert=preferences.output==DVBRIDGE::OutputMode::HDR10 && preferences.method==1;
+-  const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+-  std::string peak=StringUtils::Format("{:g}",expert?preferences.expertPeak:preferences.peak);
+-  if (expert ? !CGUIKeyboardFactory::ShowAndGetInput(peak,strings.Get(41030),false) :
+-               !CGUIDialogNumeric::ShowAndGetNumber(peak,strings.Get(40829))) return false;
+-  double value{};
+-  try
+-  {
+-    size_t length{};
+-    value=std::stod(peak,&length);
+-    if (length!=peak.size() || !std::isfinite(value) || value<(expert?50:0.000001) || value>10000) return false;
+-  }
+-  catch (const std::exception&) { return false; }
+-  dialog->Reset(); dialog->SetHeading(40836);
+-  for(int id : {40838,40839,40840}) dialog->Add(strings.Get(id));
+-  const int currentGamut=expert?preferences.expertGamut:preferences.gamut;
+-  dialog->SetSelected(currentGamut>0 ? currentGamut-1 : 1);
+-  dialog->Open();
+-  if (!dialog->IsConfirmed()) return false;
+-  const int gamut=dialog->GetSelectedItem()+1;
+-  auto profile=preferences;
+-  if(expert){profile.expertPeak=value;profile.expertGamut=gamut;}
+-  else{profile.peak=value;profile.gamut=gamut;}
+-  if (!(expert?profile.ExpertProfileValid():profile.ProfileValid())) return false;
+-  {
+-    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+-    const char* peakKey=expert?"dvbridge.expertpeak":"dvbridge.tvpeak";
+-    const char* gamutKey=expert?"dvbridge.expertgamut":"dvbridge.tvgamut";
+-    if (!settings->SetNumber(peakKey,value) || !settings->SetInt(gamutKey,gamut))
+-    {
+-      settings->SetNumber(peakKey,expert?preferences.expertPeak:preferences.peak);
+-      settings->SetInt(gamutKey,currentGamut);
+-      return false;
+-    }
+-  }
+-  settings->Save();
+-  return true;
+-}
+-
+ std::string CDVPlaybackModes::DefaultPlaybackLabel()
+ {
+   std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+@@ -163,13 +111,13 @@
+                          nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
+   const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
+   if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
+-  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,40866},{2,0,41130}};
++  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,41311},{2,0,41130}};
+   const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
+ #ifdef CB1_HAS_HDR10_AI
+-  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866},{4,0,41130}};
++  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,41310},{4,0,41130}};
+   constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014},{4,0,41130}};
+ #else
+-  constexpr Choice hdr10Choices[]={{0,0,40866}};
++  constexpr Choice hdr10Choices[]={{0,0,41310}};
+   constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
+ #endif
+   const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
+@@ -334,72 +282,44 @@
+   if (!dialog)
+     return;
+ 
+-  const bool usableTiming = status.currentTiming || status.availableTiming;
+-  const auto preferred =
+-      ChooseLldvFormat(status.sink, status.driverFormats, usableTiming, status.forced42210);
+-  const auto requiresForcing = [&status](LldvFormat format) {
+-    return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+-  };
+-  const auto saved = settings->GetInt("dvbridge.lldvformatvalue");
++  const auto preferred = SelectLldvTransport(status, 0, true);
++  const auto saved = LldvFormatPreference(settings->GetInt("dvbridge.lldvformatvalue"));
+   dialog->Reset();
+   dialog->SetHeading(strings.Get(41200));
+   dialog->SetUseDetails(true);
+-  int firstFormat = 0;
+-  const auto addDetail = [dialog, &firstFormat](const std::string& label, const std::string& value) {
+-    CFileItem item(label);
+-    item.SetLabel2(value);
+-    item.SetProperty("disabled", true);
+-    dialog->Add(item);
+-    ++firstFormat;
+-  };
+-  const auto summary = LldvUnavailableLabel(status, saved, true);
+-  const auto requested = saved ? LldvFormatPreference(saved) : preferred;
+-  addDetail(strings.Get(41288), strings.Get(summary ? summary :
+-      status.rejected != LldvFormat::Auto && status.rejected == requested ? 41298 : 41289));
+-  const auto& display = status.display;
+-  if (display.sink.length)
+-    addDetail(strings.Get(41290), StringUtils::Format("v{} Â· {}", display.sink.version,
+-        strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41291 :
+-                    dvbridge_lldv_422(display.sink) ? 41292 : 41293)));
+-  if (display.status == LldvEdidStatus::Incomplete)
+-    addDetail(strings.Get(41281), StringUtils::Format("{} / {} bytes", display.received, display.expected));
+-  if (display.peak > 0)
+-  {
+-    addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
+-    addDetail(strings.Get(41295), StringUtils::Format("R {:.4f},{:.4f}  G {:.4f},{:.4f}  B {:.4f},{:.4f}",
+-        display.reported[0], display.reported[1], display.reported[2], display.reported[3],
+-        display.reported[4], display.reported[5]));
+-  }
+-  addDetail(strings.Get(41296), strings.Get((status.driverFormats || status.forced42210) ? 41289 : 41211));
+-  addDetail(strings.Get(41299), strings.Get(status.currentTiming ? 41289 : status.availableTiming ? 41297 : 41212));
+   for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
+   {
+     const auto format = static_cast<LldvFormat>(i);
+     const int reason = LldvUnavailableLabel(status, i, true);
+-    const bool disabled = reason != 0;
+-    const auto label = strings.Get(LldvFormatLabel(format, requiresForcing(format)));
+-    CFileItem item(disabled ? "[COLOR grey]" + label + "[/COLOR]" : label);
+-    item.SetProperty("disabled", disabled);
+-    if (disabled)
++    const bool forced = LldvRequiresForcing(format, status.driverFormats, status.forced42210);
++    const auto label = strings.Get(LldvFormatLabel(format, forced));
++    CFileItem item(i && reason ? "[COLOR grey]" + label + "[/COLOR]" : label);
++    // Keep Auto selectable so a saved format can be cleared even when HDMI is unavailable.
++    item.SetProperty("disabled", i != 0 && reason != 0);
++    if (reason)
+       item.SetLabel2(strings.Get(reason));
+-    else if (format != LldvFormat::Auto && format == status.rejected)
++    else if ((i == 0 ? preferred.format : format) == status.rejected &&
++             status.rejected != LldvFormat::Auto)
+       item.SetLabel2(strings.Get(41298));
+     else if (i == 0)
+-      item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
+-          : strings.Get(LldvFormatLabel(preferred, requiresForcing(preferred))));
+-    else if (format == status.active)
+-      item.SetLabel2(strings.Get(status.activeForced && !requiresForcing(format) ? 41218 : 41214));
+-    else
+-      item.SetLabel2(strings.Get(format == LldvFormat::Y422_10 ? 41216 : 41215));
++      item.SetLabel2(strings.Get(LldvFormatLabel(preferred.format, preferred.forced)));
++    else if (!status.currentTiming)
++      item.SetLabel2(strings.Get(41297));
+     dialog->Add(item);
+   }
+-  dialog->SetSelected(firstFormat + saved);
++
++  dialog->SetSelected(static_cast<int>(saved));
+   dialog->Open();
++  if (!dialog->IsConfirmed())
++    return;
++
++  const int choice = dialog->GetSelectedItem();
+   const auto current = ReadLldvConnector();
+-  const int choice = dialog->GetSelectedItem() - firstFormat;
+-  if (dialog->IsConfirmed() && choice >= 0 && choice <= static_cast<int>(LldvFormat::Y444_12) &&
+-      current.connectorId == status.connectorId && current.edidGeneration == status.edidGeneration &&
+-      !LldvUnavailableLabel(current, choice, true) && settings->SetInt("dvbridge.lldvformatvalue", choice))
++  if (choice >= 0 && choice <= static_cast<int>(LldvFormat::Y444_12) &&
++      (choice == 0 || (current.connectorId == status.connectorId &&
++                       current.edidGeneration == status.edidGeneration &&
++                       !LldvUnavailableLabel(current, choice, true))) &&
++      settings->SetInt("dvbridge.lldvformatvalue", choice))
+     settings->Save();
+ }
+ } // namespace
+@@ -409,12 +329,22 @@
+   using namespace DVBRIDGE;
+   const auto status = ReadLldvConnector();
+   const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+-  const auto format = status.active == LldvFormat::Auto ?
+-      LldvFormatPreference(settings->GetInt("dvbridge.lldvformatvalue")) : status.active;
+-  const bool forced = status.active != LldvFormat::Auto ? status.activeForced :
+-      LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+-  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+-      LldvFormatLabel(format, forced));
++  const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  const int saved = settings->GetInt("dvbridge.lldvformatvalue");
++  if (LldvUnavailableLabel(status, saved, true))
++    return strings.Get(41312);
++  const auto format = LldvFormatPreference(saved);
++  return strings.Get(LldvFormatLabel(format,
++      LldvRequiresForcing(format, status.driverFormats, status.forced42210)));
++}
++
++std::string CDVPlaybackModes::LldvDisplayLuminance(bool peak)
++{
++  const auto display = ReadLldvConnector().display;
++  if (display.status != DVBRIDGE::LldvEdidStatus::Ready)
++    return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(41312);
++  return peak ? StringUtils::Format("{:.0f} nits", display.peak) :
++                StringUtils::Format("{:.4f} nits", display.black);
+ }
+ 
+ std::string CDVPlaybackModes::SDRGamutLabel()
+@@ -426,8 +356,7 @@
+ 
+ void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
+ {
+-  if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
+-  else if (setting && setting->GetId()=="dvbridge.playback") ShowMenu(true);
++  if (setting && setting->GetId()=="dvbridge.playback") ShowMenu(true);
+   else if (setting && setting->GetId()=="dvbridge.lldvformat") ShowLldvFormatMenu();
+   else if (setting && setting->GetId()=="dvbridge.sdrgamut") ShowSDRGamutMenu();
+ }
+diff --git a/xbmc/dialogs/DVPlaybackModes.h b/xbmc/dialogs/DVPlaybackModes.h
+--- a/xbmc/dialogs/DVPlaybackModes.h
++++ b/xbmc/dialogs/DVPlaybackModes.h
+@@ -13,9 +13,9 @@
+   static bool MenuEnabled();
+   static StreamHdrType SourceType();
+   static bool ShowMenu(bool settingsMenu = false);
+-  static bool ConfigureProfile();
+   static std::string DefaultPlaybackLabel();
+   static std::string LldvPreferenceLabel();
++  static std::string LldvDisplayLuminance(bool peak);
+   static std::string SDRGamutLabel();
+   void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
+   void OnSettingsLoaded() override;
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -180,15 +180,6 @@
+   return text;
+ }
+ 
+-std::string PolicyText(std::string text)
+-{
+-  if (text.starts_with("Dolby Vision "))
+-    text.replace(0, 13, "DV ");
+-  if (const auto at = text.find("Adaptive HDR Mapping"); at != std::string::npos)
+-    text.replace(at, 20, "Adaptive");
+-  return text;
+-}
+-
+ std::string TargetList(std::vector<long> nits, const std::vector<unsigned>& unknown)
+ {
+   std::sort(nits.begin(), nits.end());
+@@ -312,6 +303,7 @@
+     SetProperty("DV.SourceColour", data.profile == 5 || (data.profile == 10 && !data.compatibility) ?
+         std::string("IPT-PQc2") : DVBRIDGE::SourceColour(data.tags.primaries, data.tags.transfer,
+         data.tags.primariesGuessed, data.tags.fullRange));
++    const auto& localizer = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+     const auto active = data.output.flags;
+     const bool hdr10 = active & CDVPlaybackInfo::HDR10;
+     const bool lldv = active && data.output.lldv.has_value();
+@@ -367,7 +359,9 @@
+     SetProperty("DV.FEL", active ? (active & CDVPlaybackInfo::FEL ? "Full FEL" : "No FEL") : "");
+     SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
+         (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
+-    SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
++    const auto mode = VideoProcessingInfoGUI::Mode(data);
++    SetProperty("DV.Mode", mode.empty() ? localizer.Get(40814) : mode);
++    SetProperty("DV.CB1Active", active != 0);
+     const int upscaler = CServiceBroker::GetDataCacheCore().GetVideoUpscaler();
+     const int upscalerLabel = upscaler < 0 ? 0 : KODI::VIDEO::UPSCALER::Label(upscaler);
+     SetProperty("DV.VideoUpscaler", upscalerLabel ?
+@@ -383,13 +377,9 @@
+     SetProperty("DV.PartialBlocks", hdr10 && data.output.effective==3 && metadata ?
+         std::string(data.blocks[1] ? "L1 max/avg" : "")+
+         (data.blocks[3] ? (data.blocks[1] ? "; L3 max/avg" : "L3 max/avg") : "") : "");
+-    SetProperty("DV.ActivePolicy", active ? std::string(CDVPlaybackInfo::RequestedPolicy(data.output.effective)) : "Kodi default");
++    SetProperty("DV.ActivePolicy", mode.empty() ? localizer.Get(40814) : mode);
+     if (active && data.output.hdr10AI)
+     {
+-      const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+-      const int label=data.output.hdr10PlusDV ? 40970 : data.output.effective==1 ? 40867 : 40868;
+-      SetProperty("DV.Mode", localizer.Get(label));
+-      SetProperty("DV.ActivePolicy", localizer.Get(label));
+       const bool ai=!data.output.aiModel.empty();
+       SetProperty("DV.Reconstruction", "AI-generated L1/L3");
+       if (ai)
+@@ -415,16 +405,19 @@
+         SetProperty("DV.OutputL1", StringUtils::Format("{} | {} | {}",
+             data.output.emittedL1[0],data.output.emittedL1[1],data.output.emittedL1[2]));
+     }
+-    const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+     const auto reasonText=[&](VideoProcessingReason reason) {
+       const int id=CDVPlaybackInfo::ReasonLabel(static_cast<DVBRIDGE::OutputReason>(reason));
+       return id ? localizer.Get(id) : std::string{};
+     };
+-    SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) : "");
++    SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) :
++        data.nativeHDR10PlusFallbackLabel ? localizer.Get(data.nativeHDR10PlusFallbackLabel) : "");
+     SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
+         StringUtils::Format("{}-bit",data.output.minimumLinkBits) : "");
+     SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
+-    SetProperty("DV.SignalIntent", lldv ? "LLDV / YCbCr 4:2:2" : active & CDVPlaybackInfo::HDMI ?
++    SetProperty("DV.SignalIntent", lldv ?
++        StringUtils::Format("LLDV / YCbCr 4:2:2 / {}-bit{}", data.output.bits,
++                            data.output.lldv->forced ? " / " + localizer.Get(41314) : "") :
++        active & CDVPlaybackInfo::HDMI ?
+         (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
+         active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
+         hdr10 ? "PQ / BT.2020" : "");
+@@ -443,10 +436,11 @@
+           data.transaction.effective!=data.output.effective ||
+           data.transaction.reason!=data.output.reason) :
+           (data.transaction.requested || data.transaction.reason!=VideoProcessingReason::None)));
+-    SetProperty("DV.ProcessingVisible", bool(active) || transaction);
+-    SetProperty("DV.RequestedPolicy", transaction ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.transaction.requested,
+-        data.transaction.hdr10AI)) :
+-        active ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.output.requested,data.output.hdr10AI)) : "");
++    SetProperty("DV.ProcessingVisible", bool(active) || transaction || data.nativeHDR10PlusFallbackLabel);
++    const int requestedLabel = transaction ?
++        CDVPlaybackInfo::PolicyLabel(data.transaction.requested, data.transaction.hdr10AI) :
++        active ? CDVPlaybackInfo::PolicyLabel(data.output.requested, data.output.hdr10AI) : 0;
++    SetProperty("DV.RequestedPolicy", requestedLabel ? localizer.Get(requestedLabel) : "");
+     SetProperty("DV.AdmissionReason", transaction ? reasonText(data.transaction.reason) : "");
+     SetProperty("DV.AtomicResult", transaction && data.transaction.atomicError ?
+         StringUtils::Format("{} / {} / {}",data.transaction.atomicError,
+diff --git a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+--- a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
++++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+@@ -21,12 +21,23 @@
+   }
+   static std::string Mode(const VideoProcessingInfo& info)
+   {
+-    if (!info.output.flags) return "";
+-    if (CDVPlaybackInfo::IsHDR10PlusDV(info.output)) return CDVPlaybackInfo::Mode(info.output);
+-    if (info.output.hdr10AI)
+-      return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+-          info.output.effective==1 ? 40867 : 40868);
+-    return CDVPlaybackInfo::Mode(info.output);
++    const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++    const auto& output = info.output;
++    if (output.flags)
++    {
++      auto mode = output.lldv ? CDVPlaybackInfo::PlayerLedMode : output.effective;
++      if (mode == 7 && !(output.flags & CDVPlaybackInfo::HDR10PLUS))
++        mode = 2;
++      return strings.Get(CDVPlaybackInfo::PolicyLabel(mode, output.hdr10AI || output.hdr10PlusDV));
++    }
++
++    if (info.outputType == VideoOutputType::HDR10Plus)
++      return strings.Get(41014);
++    if (info.outputType == VideoOutputType::HDR10)
++      return strings.Get(41310);
++    if (info.outputType == VideoOutputType::HLG)
++      return strings.Get(41311);
++    return "";
+   }
+   static bool GetLabel(uint32_t id, const VideoProcessingInfo& info, std::string& value)
+   {
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -514,7 +514,12 @@
+   const bool hlgSource=hlgMenu || setting->GetId()=="dvbridge.hlgsource";
+   const bool hdr10PlusMenu=setting->GetId()=="dvbridge.hdr10plusplaybackchoice";
+   const bool hdr10Menu=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10playbackchoice";
+-  const auto preferences=DVBRIDGE::FrameOutputSettings();
++  auto preferences = DVBRIDGE::FrameOutputSettings();
++  if (!hdr10Menu && !hlgMenu && !menu)
++  {
++    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++    DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
++  }
+   const auto data=DVBRIDGE::StreamTelemetry::Read();
+   auto caps=data.transaction.capabilities;
+   auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+@@ -600,12 +605,13 @@
+           gamut<1 || gamut>3 ? 40912 : 40845;
+     }
+     const bool profile=reason==DVBRIDGE::OutputReason::TVProfileRequired || reason==DVBRIDGE::OutputReason::SDRTargetInvalid;
+-    if (reasonId && !profile && reason!=DVBRIDGE::OutputReason::ProcessingPending)
+-      option.label+=" / "+localizer.Get(40851);
++    // Native HDR10+ is still usable as HDR10 if the chain cannot send dynamic metadata.
++    const bool fallbackHDR10 = hdr10PlusSource && mode == 0 && !caps.hdr10plus;
+     option.label2=reasonId ? localizer.Get(reasonId) :
++        fallbackHDR10 ? localizer.Get(41323) :
+         guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
+     // Settings must allow selection before the required profile controls appear.
+-    const bool configure=profile && !menu && !hdr10Menu && !hdr10PlusMenu && !hlgMenu;
++    const bool configure=profile && !menu && !hdr10Menu && !hlgMenu;
+     option.properties.emplace_back("disabled",reasonId!=0 && !configure);
+   }
+ }
+diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -221,11 +221,16 @@
+ #ifdef HAVE_DVBRIDGE
+   std::unique_ptr<TiXmlElement> migrated;
+   bool hasHDR10PlusPreference = false;
++  bool hasSDRPreference = false;
+   for (const auto* setting = root->FirstChildElement("setting"); setting;
+        setting = setting->NextSiblingElement("setting"))
+-    if (setting->Attribute("id") &&
+-        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
+-      hasHDR10PlusPreference = true;
++  {
++    const char* id = setting->Attribute("id");
++    if (!id)
++      continue;
++    hasHDR10PlusPreference |= std::string_view(id) == "dvbridge.hdr10plussource";
++    hasSDRPreference |= std::string_view(id) == "dvbridge.sdrpreset";
++  }
+   for (const auto* setting = root->FirstChildElement("setting"); setting;
+        setting = setting->NextSiblingElement("setting"))
+   {
+@@ -236,7 +241,8 @@
+                                std::string_view(value) == "3";
+     const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
+             std::string_view(id) == "dvbridge.outputmode" &&
+-            (std::string_view(value) == "3" || std::string_view(value) == "6") ?
++            (std::string_view(value) == "3" ||
++             (std::string_view(value) == "6" && !hasSDRPreference)) ?
+             std::optional<int>{5} : std::nullopt;
+     if (!legacy) continue;
+     if (!migrated) migrated.reset(root->Clone()->ToElement());
+@@ -723,7 +729,7 @@
+   GetSettingsManager()->RegisterCallback(&upscalerPreferences,
+       {KODI::VIDEO::UPSCALER::SDR, KODI::VIDEO::UPSCALER::HDR});
+   GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
+-      {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
++      {"dvbridge.expertblack","dvbridge.expertblackcustom",
+        "dvbridge.playback", "dvbridge.lldvformat", "dvbridge.sdrgamut"});
+ #endif
+   // register any ISettingCallback implementations
+diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/windows/GUIControlSettings.cpp
+--- a/xbmc/settings/windows/GUIControlSettings.cpp
++++ b/xbmc/settings/windows/GUIControlSettings.cpp
+@@ -1139,6 +1139,10 @@
+             strText=CDVPlaybackModes::DefaultPlaybackLabel();
+           else if (m_pSetting->GetId()=="dvbridge.lldvformat")
+             strText=CDVPlaybackModes::LldvPreferenceLabel();
++          else if (m_pSetting->GetId() == "dvbridge.lldvdisplaypeak")
++            strText = CDVPlaybackModes::LldvDisplayLuminance(true);
++          else if (m_pSetting->GetId() == "dvbridge.lldvdisplayblack")
++            strText = CDVPlaybackModes::LldvDisplayLuminance(false);
+           else if (m_pSetting->GetId()=="dvbridge.sdrgamut")
+             strText=CDVPlaybackModes::SDRGamutLabel();
+           else
+diff --git a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
+--- a/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
++++ b/xbmc/settings/windows/GUIWindowSettingsCategory.cpp
+@@ -9,6 +9,11 @@
+ #include "GUIWindowSettingsCategory.h"
+ 
+ #include "GUIPassword.h"
++#ifdef HAVE_DVBRIDGE
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
++#include "settings/lib/Setting.h"
++#endif
+ #include "GUIUserMessages.h"
+ #include "ServiceBroker.h"
+ #include "application/ApplicationComponents.h"
+@@ -24,6 +29,7 @@
+ #include "view/ViewStateSettings.h"
+ #include "windowing/WinSystem.h"
+ 
++#include <algorithm>
+ #include <array>
+ #include <string>
+ 
+@@ -199,6 +205,30 @@
+   CGUIDialogSettingsManagerBase::OnWindowLoaded();
+ }
+ 
++#ifdef HAVE_DVBRIDGE
++void CGUIWindowSettingsCategory::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
++{
++  CGUIDialogSettingsManagerBase::OnSettingChanged(setting);
++  if (!IsActive() || !setting || !setting->GetId().starts_with("dvbridge.") ||
++      m_iSection != SETTINGS_PLAYER ||
++      m_iCategory < 0 || m_iCategory >= static_cast<int>(m_categories.size()) ||
++      m_categories[m_iCategory]->GetId() != "videoplayer")
++    return;
++
++  const auto& category = m_categories[m_iCategory];
++  const auto groups = category->GetGroups(static_cast<SettingLevel>(GetSettingLevel()));
++  const bool visible = std::ranges::any_of(groups, [](const auto& group) {
++    return group->GetId() == "cb1-tv-characteristics";
++  });
++  const bool present = GetSettingControl("dvbridge.tvpeak") != nullptr;
++  if (present != visible)
++  {
++    CGUIMessage update(GUI_MSG_UPDATE, GetID(), GetID());
++    CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(update, GetID());
++  }
++}
++#endif
++
+ int CGUIWindowSettingsCategory::GetSettingLevel() const
+ {
+   return (int)CViewStateSettings::GetInstance().GetSettingLevel();
+diff --git a/xbmc/settings/windows/GUIWindowSettingsCategory.h b/xbmc/settings/windows/GUIWindowSettingsCategory.h
+--- a/xbmc/settings/windows/GUIWindowSettingsCategory.h
++++ b/xbmc/settings/windows/GUIWindowSettingsCategory.h
+@@ -32,6 +32,9 @@
+   void OnWindowLoaded() override;
+ 
+   // implementation of CGUIDialogSettingsBase
++#ifdef HAVE_DVBRIDGE
++  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
++#endif
+   int GetSettingLevel() const override;
+   std::shared_ptr<CSettingSection> GetSection() override;
+   bool Save() override;
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -250,6 +250,7 @@
+   LldvDisplay display;
+   uint64_t edidGeneration{};
+   LldvFormat rejected{LldvFormat::Auto};
++  bool amdDriverDisabled{false};
+ };
+ 
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
+@@ -258,6 +259,7 @@
+   if (status.display.status != LldvEdidStatus::Ready)
+     return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41300 :
+         41280 + static_cast<int>(status.display.status);
++  if (status.amdDriverDisabled) return 41313;
+   if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+@@ -292,6 +294,7 @@
+     case 0: return "available";
+     case 41210: return "format-not-advertised-by-tv";
+     case 41211: return "format-not-supported-by-driver-or-port";
++    case 41313: return "lldv-disabled-in-amd-driver";
+     case 41212: return "hdmi-timing-unavailable";
+     default: return "no-common-format";
+   }
+diff --git a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -425,9 +425,7 @@
+   upscalers.emplace_back(41309, VS_SCALINGMETHOD_FSR1_RCAS);
+   upscalers.emplace_back(41307, VS_SCALINGMETHOD_FSRCNNX);
+   upscalers.emplace_back(41308, VS_SCALINGMETHOD_ANIME4K);
+-  AddSpinner(groupVideo, SDR, 41302, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
+-  AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+-#else
++#endif
+   /* remove unsupported methods */
+   for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
+   {
+@@ -437,8 +435,11 @@
+       it = entries.erase(it);
+   }
+ 
+-  AddSpinner(groupVideo, SETTING_VIDEO_SCALINGMETHOD, 16300, SettingLevel::Basic, static_cast<int>(videoSettings.m_ScalingMethod), entries);
+-
++  AddSpinner(groupVideo, SETTING_VIDEO_SCALINGMETHOD, 16300, SettingLevel::Basic,
++             static_cast<int>(videoSettings.m_ScalingMethod), entries);
++#ifdef HAVE_DVBRIDGE
++  AddSpinner(groupVideo, SDR, 41302, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
++  AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+ #endif
+ 
+   AddVideoStreams(groupVideoStream, SETTING_VIDEO_STREAM);
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -40,6 +40,7 @@
+ #include <array>
+ #include <vector>
+ #include <mutex>
++#include <fstream>
+ #include <cmath>
+ #include <string.h>
+ 
+@@ -211,6 +212,16 @@
+     std::vector<uint8_t> edid = connector->GetEDID();
+ #ifdef HAVE_DVBRIDGE
+     std::lock_guard lock(m_lldvEdidMutex);
++    auto* version = drmGetVersion(m_DRM->GetFileDescriptor());
++    m_lldvAmdDriverDisabled = false;
++    if (version)
++    {
++      char enabled{};
++      if (version->name && std::string_view(version->name) == "amdgpu" &&
++          std::ifstream("/sys/module/amdgpu/parameters/dv_lldv") >> enabled)
++        m_lldvAmdDriverDisabled = enabled == 'N';
++      drmFreeVersion(version);
++    }
+     m_lldvEdid = edid;
+     m_lldvDisplay = DVBRIDGE::ReadLldvDisplay(edid.data(), edid.size());
+     m_lldvEdidConnector = *connector->GetConnectorId();
+@@ -1661,7 +1672,9 @@
+       status.rejected = m_lldvRejected.format;
+     status.sink = status.display.sink;
+   }
+-  if (connector && connector->IsConnected() && connector->SupportsProperty("CB1_LLDV_FORMAT"))
++  status.amdDriverDisabled = m_lldvAmdDriverDisabled && status.connectorId &&
++      connector->GetType() == "HDMI-A" && !connector->SupportsProperty("CB1_LLDV_FORMAT");
++  if (status.connectorId && connector->SupportsProperty("CB1_LLDV_FORMAT"))
+   {
+     const auto native10 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 useful bits");
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -266,6 +266,7 @@
+   std::vector<uint8_t> m_lldvEdid;
+   DVBRIDGE::LldvDisplay m_lldvDisplay;
+   uint32_t m_lldvEdidConnector{};
++  bool m_lldvAmdDriverDisabled{false};
+   uint64_t m_lldvEdidGeneration{};
+   DVBRIDGE::LldvTransport m_lldvRejected;
+ #endif
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -771,7 +771,7 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+     AnnounceCB1Mode(false);
+-    StageNativeHDR10Plus(CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
++    const int nativeHDR10PlusFallback = StageNativeHDR10Plus(CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
+         CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->HasVisibleOverlay());
+ #endif
+     CWinSystemGbm::FlipPage(rendered, videoLayer, async);
+@@ -799,6 +799,9 @@
+         const auto now=std::chrono::steady_clock::now();
+         const auto previous = cache.GetVideoProcessingInfo();
+         if (generation!=previousGeneration || now>=next || previous.output.flags ||
++            previous.nativeHDR10PlusFallbackLabel !=
++                (GetEotf() == KODI::UTILS::Eotf::PQ && !drm->HDR10PlusActive() ?
++                 nativeHDR10PlusFallback : 0) ||
+             (previous.outputType == VideoOutputType::HDR10Plus) != drm->HDR10PlusActive())
+         {
+           auto info=DVBRIDGE::NativeProcessingInfo(DVBRIDGE::StreamTelemetry::Read());
+@@ -806,6 +809,8 @@
+           info.outputType = drm->HDR10PlusActive() ? VideoOutputType::HDR10Plus :
+               GetEotf() == KODI::UTILS::Eotf::PQ ? VideoOutputType::HDR10 :
+               GetEotf() == KODI::UTILS::Eotf::HLG ? VideoOutputType::HLG : VideoOutputType::SDR;
++          if (info.outputType == VideoOutputType::HDR10 && nativeHDR10PlusFallback)
++            info.nativeHDR10PlusFallbackLabel = nativeHDR10PlusFallback;
+           if (cache.SetVideoProcessingInfo(info.informationGeneration,info))
+           {
+             previousGeneration=generation;
+@@ -978,26 +983,39 @@
+   return true;
+ }
+ 
+-void CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)
++int CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)
+ {
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+-  if (!drm) return;
++  if (!drm) return 0;
+   std::optional<std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES>> packet;
+   const auto& source = m_videoSourceSideData;
+   const uint64_t generation = CServiceBroker::GetDataCacheCore().GetVideoProcessingGeneration();
+   const auto* metadata = source && source->Generation() == generation ? source->HDR10Plus() : nullptr;
+   const char* reason = "no-source-metadata";
++  int fallbackLabel = 0;
+   if (metadata)
+   {
+     const auto* display = GetDisplayInfo();
+     if (GetEotf() != KODI::UTILS::Eotf::PQ)
++    {
+       reason = "output-not-pq";
++      fallbackLabel = 41321;
++    }
+     else if (GetOutputBitDepth() < 10)
++    {
+       reason = "output-buffer-below-10-bit";
++      fallbackLabel = 41321;
++    }
+     else if (!drm->GetConnector() || !drm->GetConnector()->SupportsProperty("HDR10PLUS_METADATA"))
++    {
+       reason = "driver-unsupported";
++      fallbackLabel = 41320;
++    }
+     else if (!display || display->HDR10PlusVersion() < metadata->application_version)
++    {
+       reason = "display-unsupported";
++      fallbackLabel = 41319;
++    }
+     else
+     {
+       std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES> bytes{};
+@@ -1005,6 +1023,7 @@
+       reason = status == CB1_HDR10PLUS_OK ? "staged" :
+           status == CB1_HDR10PLUS_INVALID ? "invalid-metadata" : "unrepresentable-metadata";
+       if (status == CB1_HDR10PLUS_OK) packet = bytes;
++      fallbackLabel = 41322; // Published only if HDR10+ was not accepted.
+     }
+   }
+   drm->StageHDR10Plus(std::move(packet), generation);
+@@ -1045,6 +1064,7 @@
+       }
+     }
+   }
++  return fallbackLabel;
+ }
+ #endif
+ 
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -207,7 +207,7 @@
+   bool FinishPlayerLedFrame(const CDVBridgeGLES::PlayerLedFrame& frame, double pts);
+   std::optional<CDVBridgeGLES::PlayerLedFrame> m_playerLedPage;
+   double m_playerLedPagePts{};
+-  void StageNativeHDR10Plus(bool overlay);
++  int StageNativeHDR10Plus(bool overlay);
+   std::string m_hdr10plusReason;
+   uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
+ #endif

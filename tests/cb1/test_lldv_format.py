@@ -103,6 +103,7 @@ struct Connector
   uint32_t id=17;
   std::optional<uint64_t> active=0;
   bool connected=true;
+  std::string_view GetType() const { return "HDMI-A"; }
   const Mode* advertised{};
   int GetModesCount() const { return advertised ? 1 : 0; }
   const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
@@ -140,6 +141,7 @@ struct Window
   mutable std::mutex m_lldvEdidMutex;
   LldvDisplay m_lldvDisplay;
   uint32_t m_lldvEdidConnector=17;
+  bool m_lldvAmdDriverDisabled=false;
   uint64_t m_lldvEdidGeneration=2;
   LldvTransport m_lldvRejected;
   LldvConnectorStatus Read() const OWNER
@@ -211,7 +213,7 @@ int main()
   assert(readback.connectorId==17 && !readback.activeForced);
   assert(SelectLldvTransport(readback, 0).edidGeneration==2);
   window.m_lldvDisplay.status=LldvEdidStatus::Incomplete;
-  assert(LldvUnavailableLabel(window.Read(), 0, true)==41230);
+  assert(LldvUnavailableLabel(window.Read(), 0, true)==41281);
   assert(!SelectLldvTransport(window.Read(), 0).connectorId);
   window.m_lldvDisplay.status=LldvEdidStatus::Ready;
   ++window.m_lldvEdidGeneration;

@@ -21,7 +21,7 @@ class RenderingLabelsTests(unittest.TestCase):
         method=settings.find(".//setting[@id='dvbridge.hdr10method']")
         dynamic=next(option for option in method.findall('./constraints/options/option')
                      if option.text=='2')
-        self.assertEqual(labels[dynamic.get('label')],'HDR10+ Rendering')
+        self.assertEqual(labels[dynamic.get('label')],'HDR10+ : Conversion')
         panel=ET.parse(Path(__file__).resolve().parents[2]/
             'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
         for node in panel.iter('param'):
@@ -42,10 +42,10 @@ class RenderingLabelsTests(unittest.TestCase):
         table=re.search(r'dvChoices\[\]=(.*?);',source,re.S).group(1)
         choices=re.findall(r'\{(\d+),(\d+),(\d+)\}',table)
         self.assertEqual([labels[label] for _,_,label in choices],[
-            'Dolby Vision Reference', 'Dolby Vision Master Reference',
-            'Dolby Vision Adaptive HDR Mapping', 'Kodi default',
-            'HDR10 Rendering', 'LLDV Reference – HDR10 Output', 'HDR10+ Rendering', 'SDR Rendering',
-            'LLDV Reference – Native'])
+            'Dolby Vision : Reference', 'Dolby Vision : Master Reference',
+            'Dolby Vision : Adaptive HDR Mapping', 'Kodi : Default',
+            'HDR10 : Rendering', 'HDR10 : LLDV Reference conversion', 'HDR10+ : Conversion', 'SDR : Conversion',
+            'Dolby Vision : LLDV'])
         for key in ('dvbridge.outputmode','dvbridge.hdr10method'):
             self.assertEqual(settings.find(f".//setting[@id='{key}']").findtext('visible'),'false')
         self.assertIn('setting->GetId()=="dvbridge.playback") ShowMenu(true)',source)
@@ -64,10 +64,12 @@ class RenderingLabelsTests(unittest.TestCase):
     def test_kodi_default_exists_for_every_input(self):
         catalog=(TREE/'addons/resource.language.en_gb/resources/strings.po').read_text()
         labels=dict(re.findall(r'msgctxt "#(\d+)"\s+msgid "([^"\n]*)"',catalog))
-        for key in ('40814','40866','41014'):
-            self.assertEqual(labels[key],'Kodi default')
+        self.assertEqual(labels['40814'], 'Kodi : Default')
+        self.assertEqual(labels['41310'], 'HDR10 : Native')
+        self.assertEqual(labels['41014'], 'HDR10+ : Native')
+        self.assertEqual(labels['41311'], 'HLG : Native')
         settings=ET.parse(TREE/'system/settings/settings.xml')
-        for key,label in [('dvbridge.hdr10source','40866'),('dvbridge.hdr10plussource','41014')]:
+        for key,label in [('dvbridge.hdr10source','41310'),('dvbridge.hdr10plussource','41014')]:
             node=settings.find(f".//setting[@id='{key}']")
             self.assertEqual(node.find(f"constraints/options/option[@label='{label}']").text,'0')
         self.assertIn(('2','0','40814'),re.findall(r'\{(\d+),(\d+),(\d+)\}',
@@ -81,11 +83,11 @@ class RenderingLabelsTests(unittest.TestCase):
                           ('dvbridge.hdr10plussource','HDR10+ default playback'),
                           ('dvbridge.hlgsource','HLG default playback')]:
             self.assertEqual(labels[settings.find(f".//setting[@id='{key}']").get('label')],title)
-        self.assertEqual(labels['40867'],'Dolby Vision Rendering')
-        self.assertEqual(labels['40868'],'Dolby Vision Adaptive HDR Mapping')
-        self.assertEqual(labels['40970'],'Dolby Vision Rendering')
-        self.assertEqual(labels['40823'],'LLDV Reference – HDR10 Output')
-        self.assertEqual(labels['41133'],'HDR/DV to SDR target')
+        self.assertEqual(labels['40867'],'Dolby Vision : Rendering')
+        self.assertEqual(labels['40868'],'Dolby Vision : Adaptive HDR Mapping')
+        self.assertEqual(labels['40970'],'Dolby Vision : Rendering')
+        self.assertEqual(labels['40823'],'HDR10 : LLDV Reference conversion')
+        self.assertEqual(labels['41133'],'HDR/DV to SDR conversion target')
         self.assertIn('HDR10',labels['41134']);self.assertIn('Dolby Vision',labels['41134'])
         for key in ('dvbridge.optimizedgui','dvbridge.encodedactivearea'):
             self.assertIsNone(settings.find(f".//setting[@id='{key}']"))

@@ -1593,5 +1593,30 @@
       "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Stage the SDR RGB range inside the existing connector transaction.",
       "xbmc/windowing/gbm/drm/DVBridgeState.h": "Stage the SDR RGB range inside the existing connector transaction."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": {
+    "owner": "Keep output preferences in native Kodi settings and present confirmed HDR formats.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Organize playback settings, label the circuits, or report native output state.",
+      "system/settings/settings.xml": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/cores/VideoProcessingInfo.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/dialogs/DVPlaybackModes.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/settings/SettingConditions.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/settings/Settings.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/settings/windows/GUIControlSettings.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/settings/windows/GUIWindowSettingsCategory.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/settings/windows/GUIWindowSettingsCategory.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/utils/DVBridgeLldv.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Organize playback settings, label the circuits, or report native output state."
+    }
   }
 }

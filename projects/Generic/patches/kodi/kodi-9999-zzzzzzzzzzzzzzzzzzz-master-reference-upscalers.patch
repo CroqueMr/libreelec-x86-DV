@@ -67,9 +67,7 @@
 +} // namespace KODI::VIDEO::UPSCALER
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
-@@ -38,7 +38,7 @@
- #include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
- #endif
+@@ -40,5 +40,5 @@
  #include "UpscalerSettings.h"
 -#include "filesystem/File.h"
 +#include "ShaderUpscalerPresets.h"

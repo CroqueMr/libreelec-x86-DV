@@ -185,38 +185,25 @@ int main(){using namespace DVBRIDGE;
     def test_requested_labels_compile_against_actual_cached_contract(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
-        requested = source.split('    SetProperty("DV.RequestedPolicy",',1)[1].split(';',1)[0]
-        from test_native_video_source import body
-        policy_text = body(source, 'std::string PolicyText(')
-        native = body((tree/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h').read_text(), 'struct Output')
-        renderer = (tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
-        # Native telemetry omits AI fields when the AI feature is not compiled.
-        declarations = '''
-#include <array>
-#include "dvbridge_policy.h"
-#include "cb1_cmv40.h"
-enum class OutputReason { None };
-struct NativeOutput @@NATIVE@@;
 
-'''.replace('@@NATIVE@@', native)
-        program = r'''
+        self.assertIn('CDVPlaybackInfo::PolicyLabel(data.transaction.requested', source)
+        self.assertIn('localizer.Get(requestedLabel)', source)
+        program = r"""
 #include "cores/VideoProcessingInfo.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
 #include <cassert>
-@@DECLARATIONS@@
-std::string PolicyText(std::string text) @@POLICY_TEXT@@
-std::string label(VideoProcessingInfo data,bool transaction=true,bool active=true){return @@REQUESTED@@;}
-int main(){VideoProcessingInfo data;data.transaction.requested=1;
- assert(label(data)=="DV Reference");
- data.transaction.hdr10AI=true;assert(label(data)=="DV Rendering");
- data.transaction.requested=4;assert(label(data)=="DV Adaptive");
- data.transaction.requested=3;assert(label(data)=="LLDV Reference – HDR10 Output");
- data.transaction.requested=9;assert(label(data)=="LLDV Reference – Native");
- data.output.requested=8;assert(label(data,false)=="SDR Rendering");
- assert(label(data,false,false).empty());
- assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
- assert(CDVPlaybackInfo::IsHDR10AI(data.output));}
-'''.replace('@@REQUESTED@@', requested.rstrip()[:-1]).replace('@@DECLARATIONS@@', declarations).replace('@@POLICY_TEXT@@', policy_text)
+int main()
+{
+  assert(CDVPlaybackInfo::PolicyLabel(1) == 40812);
+  assert(CDVPlaybackInfo::PolicyLabel(1, true) == 40867);
+  assert(CDVPlaybackInfo::PolicyLabel(3) == 40823);
+  assert(CDVPlaybackInfo::PolicyLabel(4) == CDVPlaybackInfo::PolicyLabel(6));
+  assert(CDVPlaybackInfo::PolicyLabel(7) == 40922);
+  assert(CDVPlaybackInfo::PolicyLabel(8) == 41130);
+  assert(CDVPlaybackInfo::PolicyLabel(9) == 41221);
+  assert(CDVPlaybackInfo::PolicyLabel(-1) == 0);
+}
+"""
         repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

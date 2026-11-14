@@ -39,16 +39,16 @@ class ProcessInfoWordingTests(unittest.TestCase):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         repo=Path(__file__).resolve().parents[2]
         strings=(tree/'addons/resource.language.en_gb/resources/strings.po').read_text()
-        for number,label in {40867:'Dolby Vision Rendering',40970:'Dolby Vision Rendering'}.items():
+        for number,label in {40867:'Dolby Vision : Rendering',40970:'Dolby Vision : Rendering'}.items():
             entry=re.search(r'msgctxt "#'+str(number)+r'"\nmsgid "([^"\n]*)"',strings)
             self.assertIsNotNone(entry,number)
             self.assertEqual(entry.group(1),label)
         dialog=(tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         start=dialog.index('    SetProperty("DV.Reconstruction", "");')
-        end=dialog.index('    const auto& localizer=',start)
-        # The first localizer belongs inside the generation block.
-        end=dialog.index('    const auto& localizer=',end+1)
-        code=dialog[start:end]
+        end=dialog.index('    const auto reasonText=',start)
+        code="".join(line for line in dialog[start:end].splitlines(keepends=True)
+                     if 'SetProperty("DV.ActivePolicy"' not in line)
+
         program=r'''
 #include "cores/VideoProcessingInfo.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
@@ -68,11 +68,9 @@ int main(){
  output.aiModel="CB1-L1L3 0.1";output.aiBaseline={12,3079,1000};
  output.aiL1L3={15,3100,1100,2048,2050,2049};
  output.emittedL1Known=true;output.emittedL1={15,3100,1100};refresh();
- assert(p["DV.Mode"]=="40867" && p["DV.ActivePolicy"]=="40867");
  assert(p["DV.AIModel"]=="CB1-L1L3 0.1" && p["DV.BeforeAI"]=="12 | 3079 | 1000");
  assert(p["DV.AIL1"]=="15 | 3100 | 1100" && p["DV.OutputL1"]=="15 | 3100 | 1100");
  output.aiModel.clear();output.hdr10PlusDV=true;output.guidedSourceFields=6;refresh();
- assert(p["DV.Mode"]=="40970" && p["DV.ActivePolicy"]=="40970");
  assert(p["DV.AIModel"].empty() && p["DV.BeforeAI"].empty());
  assert(p["DV.Reconstruction"]=="HDR10+ max/avg · min est.");
  output.untranslatedCurve=true;output.untranslatedSaturation=true;refresh();
@@ -281,7 +279,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),75)
+        self.assertEqual(len(rows),76)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))

@@ -2,8 +2,8 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26589,3 +26589,87 @@
- msgctxt "#41276"
- msgid "Dolby Vision active area"
+ msgctxt "#41275"
+ msgid "The active HDMI driver cannot signal BT.2020 RGB."
  msgstr ""
 +
 +msgctxt "#41280"
