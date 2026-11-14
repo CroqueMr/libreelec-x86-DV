@@ -1,4 +1,14 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": {
+    "owner": "Trace Player Info and playback OSD timing in debug logs.",
+    "files": {
+      "xbmc/application/Application.cpp": "Sample GUI draw, composition and presentation while a playback overlay is open.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Record bounded render buffer timeout details at debug level.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Measure Player Info initialization and data refresh.",
+      "xbmc/utils/DVBridgeOverlayTrace.h": "Collect and summarize debug-only playback overlay timings.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Measure DRM submission and existing fence waits without changing their behavior."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": {
     "owner": "Expose CB1 diagnostic detail in Kodi System logging.",
     "files": {

@@ -9,6 +9,15 @@ Kodi's debug and component logging settings.
 
 `DVBRIDGE_DIAGNOSTICS=0` disables the supplement for developer builds.
 
+To investigate playback stutter when an overlay opens, select **Enhanced** and
+enable Kodi's **Enable debug logging** under **Settings → System → Logging**.
+The `CB1 overlay` summary reports the first and slowest calls for Player Info
+refresh and GUI draw, plus peak times for composition, presentation, DRM
+submission and fence polling. These are wall-clock call durations. The
+`CB1 render buffer timeout` line reports the wait time, the last published
+render buffer counts and the playback counters. `opened_ms` and `now_ms`
+use the same monotonic clock. Disable debug logging after reproducing the issue.
+
 For an issue, attach `kodi.log` with the build version, exact CPU/GPU, display,
 HDMI connection chain, source format and selected mode. For 3D, include the source
 layout and selected output mode. Distinguish visible stutter, reported drops,
