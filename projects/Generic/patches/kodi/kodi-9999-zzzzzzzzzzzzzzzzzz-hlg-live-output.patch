@@ -1,0 +1,96 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h
+@@ -107,6 +107,7 @@
+   // Render info, can be called before configure
+   virtual CRenderInfo GetRenderInfo() { return CRenderInfo(); }
+ #ifdef CB1_HAS_HDR10_AI
++  virtual void PreserveHDR10AIOutputOnReconfigure(const VideoPicture&) {}
+   virtual bool HDR10AIQueueEligible() const { return false; }
+   virtual bool HDR10AILookahead() const { return false; }
+   virtual bool HDR10AIFramePending() const { return false; }
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -337,6 +337,16 @@
+   return true;
+ }
+ 
++#ifdef CB1_HAS_HDR10_AI
++void CLinuxRendererGLES::PreserveHDR10AIOutputOnReconfigure(const VideoPicture& picture)
++{
++  // Growing the software analysis queue must keep native HLG until the DV frame is ready.
++  m_preserveHLGOutput = picture.hdrType == StreamHdrType::HDR_TYPE_HLG &&
++      m_passthroughHDR && !m_dvRequested && picture.videoBuffer->GetFormat() == m_format &&
++      SoftwareHDR10AIBufferCount(picture, m_fps, m_renderOrientation) > m_softwareAIBuffers;
++}
++#endif
++
+ bool CLinuxRendererGLES::ConfigChanged(const VideoPicture &picture)
+ {
+   if (picture.videoBuffer->GetFormat() != m_format)
+@@ -1270,6 +1280,9 @@
+   if (m_bConfigured)
+   {
+     m_hdrFboActive = false;
++#ifdef CB1_HAS_HDR10_AI
++    outputStopped |= m_preserveHLGOutput;
++#endif
+     if (!outputStopped)
+     {
+       CServiceBroker::GetWinSystem()->SetGuiCompositing(false);
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -83,6 +83,7 @@
+   CRenderInfo GetRenderInfo() override;
+   bool ConfigChanged(const VideoPicture& picture) override;
+ #ifdef CB1_HAS_HDR10_AI
++  void PreserveHDR10AIOutputOnReconfigure(const VideoPicture& picture) override;
+   bool HDR10AIQueueEligible() const override { return m_softwareAIBuffers > NUM_BUFFERS; }
+   bool HDR10AILookahead() const override { return HDR10AIQueueEligible() && m_aiLookahead; }
+   bool HDR10AIFrameCommitted() const override;
+@@ -107,6 +108,7 @@
+   bool m_aiLookahead{};
+   bool m_aiOutputPending{false};
+   bool m_aiFrameRendered{true};
++  bool m_preserveHLGOutput{false};
+ #endif
+   // Returns 0 if scaling is below hqscalers threshold.
+   // Otherwise returns the scale factor: < 1.0 = downscale, > 1.0 = upscale.
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -159,6 +159,10 @@
+ 
+   {
+     std::unique_lock lock(m_statelock);
++#ifdef CB1_HAS_HDR10_AI
++    m_aiSameInputReconfigure = m_renderState == STATE_CONFIGURED &&
++        m_picture.IsSameParams(picture) && m_orientation == orientation && m_NumberBuffers == buffers;
++#endif
+     m_picture.SetParams(picture);
+     m_nativeDVRate = false;
+ #ifdef HAVE_DVBRIDGE
+@@ -205,6 +209,10 @@
+ 
+   if (m_pRenderer)
+   {
++#ifdef CB1_HAS_HDR10_AI
++    if (m_aiSameInputReconfigure)
++      m_pRenderer->PreserveHDR10AIOutputOnReconfigure(*m_pConfigPicture);
++#endif
+     DeleteRenderer();
+   }
+ 
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+@@ -186,6 +186,7 @@
+   std::atomic_bool m_aiGUIOwnsRenderer{false};
+   bool m_aiQueueReady{true},m_aiEnd{};
+   bool m_aiQueuePreparationStale{};
++  bool m_aiSameInputReconfigure{};
+   bool m_aiStartupBuffered{};
+   bool m_aiFullscreenRequested{},m_aiGuiReady{},m_aiFullscreenWanted{};
+   double m_aiStartPts{DVD_NOPTS_VALUE};

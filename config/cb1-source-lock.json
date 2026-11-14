@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-hlg-live-output.patch": "d0ea2195821774337720ae32a6a9bf40104197fa2eebeee07c035f50c57e8589",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": "5b21cfecbd76dbbd5b3ee85a1890a587153bc9e008e51b6883ceaf1365af4f4a",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-placed-packing.patch": "71bf2d65e86a2012945de1991303ce942056158d3f61a3cc6cef761591b206f1",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-software-hdr-import.patch": "aaf49ee53475ce0e4d332cdda9882f8558701a3f38a65ffbc5946e63318bcd12",
@@ -177,7 +178,7 @@
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
     "tests/cb1/test_fel_terminal.py": "15537e4d283cc3a75c5dec8095770c1bd68343853d01875d14f688021d15dbc8",
     "tests/cb1/test_optional_gui.py": "cd34349c3b323eb87c51c024bd71ca7e98757e1f501c70340c21bca26554800a",
-    "tests/cb1/test_software_dv_import.py": "c2a090c4205152d4a36f2bc9ba6cb33292990d6f15a6b88c7ddcd5923c55ddbf",
+    "tests/cb1/test_software_dv_import.py": "a08eec3b4248e90a7ba571320d65048c871def7dbfb296bb388fac109f0efad7",
     "tests/cb1/test_hdr10plus_recovery.py": "396f49e90f7580c23e9c005ff18526d77ffc6e38b0e8b994d5f3fac84ac6485a",
     "tests/cb1/hdr10plus_recovery.c": "9710fbf973db9145b51b9d09eb62975af4085c077a740ba02bf219dc4ae081f1",
     "projects/Generic/patches/linux/linux-9942-intel-hdr10plus-internal-recovery.patch": "a24160e0a629a878da72695941f3a0e638356e4d82af6f429d850ec274618d7b",
@@ -357,7 +358,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "cef6f3508ecf3f0cae8eff2df3ed8133838d8d2328ce2c1a7b13624ba47128e8",
+    "config/cb1-patch-index.json": "cb32e0697f7659fe47f439ad98a03838302da5a370b86b5979cce7f434a8b35f",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": "3e683019e5cb9c6e47b7ec7e3ec2a32c9f81eb65d0dc06522788b9a5053e6d79",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hlg-analysis-resync.patch": "ab12f4bc214bea5c1d49093327e07759a34a908c262f695c924337862fd38529"

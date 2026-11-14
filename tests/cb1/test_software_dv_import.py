@@ -25,6 +25,74 @@ class SoftwareDVImportTests(unittest.TestCase):
         self.assertIn('SoftwareHDR10AIBufferCount(picture, m_fps, m_renderOrientation)', changed)
         self.assertIn('> m_softwareAIBuffers', changed)
 
+    def test_hlg_queue_growth_preserves_only_an_active_native_output(self):
+        renderer = TREE / 'xbmc/cores/VideoPlayer/VideoRenderers'
+        manager = (renderer / 'RenderManager.cpp').read_text()
+        source = (renderer / 'LinuxRendererGLES.cpp').read_text()
+        prepare = 'void CLinuxRendererGLES::PreserveHDR10AIOutputOnReconfigure('
+        self.assertTrue(prepare in source, "The software renderer must own output retention")
+        configure = body(manager, 'bool CRenderManager::Configure()')
+        self.assertIn('if (m_aiSameInputReconfigure)', configure)
+        self.assertLess(configure.index('PreserveHDR10AIOutputOnReconfigure'),
+                        configure.index('DeleteRenderer()'))
+        teardown = body(source, 'void CLinuxRendererGLES::UnInit()')
+        self.assertLess(teardown.index('m_preserveHLGOutput'),
+                        teardown.index('SetVideoOutput(nullptr)'))
+        program = r'''
+#include <cassert>
+enum class StreamHdrType {HDR_TYPE_HLG, HDR_TYPE_HDR10};
+struct VideoPicture {
+  struct Buffer { int format{1}; int GetFormat() const { return format; } };
+  Buffer* videoBuffer;
+  StreamHdrType hdrType{StreamHdrType::HDR_TYPE_HLG};
+};
+unsigned required{27};
+unsigned SoftwareHDR10AIBufferCount(const VideoPicture&, float, unsigned) { return required; }
+struct Renderer {
+  bool m_passthroughHDR{true}, m_dvRequested{}, m_preserveHLGOutput{};
+  int m_format{1};
+  float m_fps{24};
+  unsigned m_renderOrientation{}, m_softwareAIBuffers{6};
+  void Prepare(const VideoPicture& picture) BODY
+};
+int main()
+{
+  VideoPicture::Buffer buffer;
+  VideoPicture picture{&buffer};
+  Renderer renderer;
+  renderer.Prepare(picture);
+  assert(renderer.m_preserveHLGOutput);
+  renderer.m_passthroughHDR = false;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  renderer.m_passthroughHDR = true;
+  renderer.m_dvRequested = true;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  renderer.m_dvRequested = false;
+  buffer.format = 2;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  buffer.format = 1;
+  picture.hdrType = StreamHdrType::HDR_TYPE_HDR10;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  picture.hdrType = StreamHdrType::HDR_TYPE_HLG;
+  required = 6;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+}
+'''.replace('BODY', body(source, prepare))
+        with tempfile.TemporaryDirectory() as directory:
+            src = Path(directory) / 'check.cpp'
+            binary = Path(directory) / 'check'
+            src.write_text(program)
+            built = subprocess.run(['c++', '-std=c++20', str(src), '-o', str(binary)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            run = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_planar_ten_bit_frame_is_admitted_before_output_selection(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text()
         upload=body(source,'bool CLinuxRendererGLES::UploadTexture(')
