@@ -53,7 +53,7 @@ struct Settings {
 };
 auto stored=std::make_shared<Settings>();
 struct Component {auto GetSettings(){return stored;}} component;
-struct CVariant {bool value=false;CVariant()=default;CVariant(bool b):value(b){}bool asBoolean()const{return value;}};
+struct CVariant {bool value=false;CVariant()=default;CVariant(bool b):value(b){}CVariant(const std::string&){}bool asBoolean()const{return value;}};
 struct IntegerSettingOption {std::string label,label2;int value;std::vector<std::pair<std::string,CVariant>> properties;
  IntegerSettingOption(std::string l,int v):label(l),value(v){}};
 struct CSetting {std::string id;const auto& GetId()const{return id;}};
@@ -71,7 +71,14 @@ struct CGUIDialogSelect {
 constexpr int WINDOW_DIALOG_SELECT=1,LOGINFO=1;
 struct Manager {template<class T>T* GetWindow(int){return &dialog;}} manager;
 struct GUI {Manager& GetWindowManager(){return manager;}} gui;
-struct CServiceBroker {static auto GetSettingsComponent(){return &component;}
+enum class VideoOutputType { DolbyVision, HDR10, HDR10Plus, HLG, SDR };
+struct VideoProcessingInfo {
+ std::optional<VideoOutputType> outputType;
+ struct { unsigned flags=0; bool lldv=false; } output;
+};
+struct DataCacheCore { VideoProcessingInfo GetVideoProcessingInfo() const {return {};} };
+struct CServiceBroker {static DataCacheCore GetDataCacheCore(){return {};}
+ static auto GetSettingsComponent(){return &component;}
  static auto& GetResourcesComponent(){return resources;}static auto GetGUI(){return &gui;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t revision=1;return ++revision;}
  template<class... T>void DiagnosticLog(T...){}

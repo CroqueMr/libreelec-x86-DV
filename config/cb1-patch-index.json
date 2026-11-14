@@ -1,4 +1,12 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzzz-compact-quick-switch.patch": {
+    "owner": "Own the compact in-playback Quick Switch presentation.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Localize the Quick Switch title, status and short labels.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Present the input, output and availability for in-playback choices.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Load the app fonts and size the panel to its items."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": {
     "owner": "Trace Player Info and playback OSD timing in debug logs.",
     "files": {

@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class PlaybackLayoutOwnership(unittest.TestCase):
-    def test_beta4_selector_keeps_its_layout_and_native_lists_unmodified(self):
+    def test_quick_switch_resizes_without_changing_native_lists(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         from test_native_video_source import body
         source = (tree/'xbmc/dialogs/GUIDialogSelect.cpp').read_text()
@@ -21,29 +21,64 @@ class PlaybackLayoutOwnership(unittest.TestCase):
         program = r'''
 #include <algorithm>
 #include <cassert>
+#include <string>
+#include <vector>
 struct Control {
  float x=1220,y=2,h=9;
  float GetXPosition()const{return x;} float GetYPosition()const{return y;}
  void SetPosition(float a,float b){x=a;y=b;} void SetHeight(float v){h=v;}
 };
 struct Property {bool value;bool asBoolean()const{return value;}};
-struct List {int count;int Size()const{return count;}};
+struct Item {
+ std::string label2;
+ const std::string& GetLabel2() const {return label2;}
+};
+struct List {
+ explicit List(int count): items(count, &plain) {}
+ Item plain, withHelp{"Unavailable reason"};
+ std::vector<const Item*> items;
+ int Size()const{return items.size();}
+ auto begin()const{return items.begin();}
+ auto end()const{return items.end();}
+};
 constexpr int CONTROL_SIMPLE_LIST=3,CONTROL_DETAILED_LIST=6;
 struct Dialog {
- bool playback;List rows;List* m_vecList=&rows;Control group,image,list,help;
+ bool playback;List rows;List* m_vecList=&rows;Control group,image,simple,detailed,footer;
  Property GetProperty(const char*)const{return {playback};}
- Control* GetControl(int id){return id==9100?&group:id==9101?&image:id==9102?&help:&list;}
+ Control* GetControl(int id){
+  switch(id){
+   case 9100:return &group;
+   case 9101:return &image;
+   case 9103:return &footer;
+   case CONTROL_SIMPLE_LIST:return &simple;
+   case CONTROL_DETAILED_LIST:return &detailed;
+   default:assert(false);return nullptr;
+  }
+ }
  struct Resolution{int iHeight=1080;};Resolution GetCoordsRes()const{return {};}
  void apply(){GEOMETRY}
 };
 int main(){
- for(auto [count,expected]:{std::pair{0,50}, {1,50}, {3,150}, {6,300}, {7,350}, {20,850}}){
-  Dialog native{false,{count}};native.apply();assert(native.group.h==9 && native.list.h==9);
-  Dialog d{true,{count}};d.apply();
-  assert(d.list.h==expected && d.group.x==1220 && d.group.y+d.group.h==1040);
-  assert(d.group.y>=40);
-  assert(d.image.h==d.group.h && d.help.y==70+expected);
-  assert(d.help.y+38<=d.group.h-4);
+ for(int count : {0, 1, 3, 9, 40}){
+  Dialog native{false,List(count)};native.apply();
+  assert(native.group.h==9 && native.simple.h==9 && native.detailed.h==9);
+  for(bool hasFooter : {false, true}){
+   if(hasFooter && count==0) continue;
+   Dialog d{true,List(count)};
+   if(hasFooter) d.rows.items.back()=&d.rows.withHelp;
+   d.apply();
+   const int expectedRows=count==0?1:std::min(count, hasFooter?21:22);
+   const int rowsHeight=38*expectedRows;
+   assert(d.simple.h==rowsHeight && d.detailed.h==rowsHeight);
+   assert(d.group.x==1220 && d.group.y+d.group.h==1040 && d.group.y>=40);
+   assert(d.image.h==d.group.h);
+   if(hasFooter){
+    assert(d.footer.y==104+rowsHeight+10);
+    assert(d.footer.y+36+24==d.group.h);
+   }else{
+    assert(104+rowsHeight+24==d.group.h);
+   }
+  }
  }
 }
 '''.replace('GEOMETRY', geometry)
@@ -57,13 +92,13 @@ int main(){
         layout=ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
         group=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9100']")
         self.assertIsNotNone(group)
-        self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
+        self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('42','40','608'))
         for ident in ('3', '6'):
             node=group.find("control[@id='"+ident+"']")
-            self.assertEqual(tuple(node.findtext(tag) for tag in ('left','top','width')), ('20','64','620'))
+            self.assertEqual(tuple(node.findtext(tag) for tag in ('left','top','width')), ('24','104','560'))
         rows=layout.find(".//include[@name='CB1PlaybackModeRows']")
         for kind in ('itemlayout','focusedlayout'):
-            self.assertEqual(rows.find(kind).attrib, {'width':'620','height':'50'})
+            self.assertEqual(rows.find(kind).attrib, {'width':'560','height':'38'})
 
     def test_native_skin_selection_layout_is_not_replaced(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
