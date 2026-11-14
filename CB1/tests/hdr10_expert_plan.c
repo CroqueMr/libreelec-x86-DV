@@ -40,6 +40,9 @@ static void player_led_plan(void)
     assert(p.creative.l8_coverage.applied && p.creative.cm4_output.primaries.red.x==
         pl_raw_primaries_get(PL_COLOR_PRIM_DISPLAY_P3)->red.x);
     assert(p.tone.output_min==pl_hdr_rescale(PL_HDR_NITS,PL_HDR_PQ,.8));
+    edid.lldv_edid_version=2;
+    edid.expert_black_nits=1.02892230075;
+    assert(cb1_player_led_prepare(&p,&cm4,&edid,m,bytes,false));
     *av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=3,.l3={2064,2048,2048},
         .dvbridge_raw_magic=0x41424456,.dvbridge_original_length=5,
         .dvbridge_original_bytes={0x81,0x08,0x00,0x80,0x00}};

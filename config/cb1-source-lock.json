@@ -299,8 +299,8 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_placebo.h": "1ae453d519231b702dcf128fa6a5c8347491485f746023bf5f7c8ef478ccfef4",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "d2514b7ec155375d170ef8775b279841260608c6975eec737ae02f4692eb6f83",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "e605ed3163b61614e8fdd668670e2b4204b91262fe880f3db2c10576e2ad8de0",
-    "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "854a126a73baa9a2bc627de7957cd78a6acae1abb279b620bbcc1ff2c06aeca1",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "6c4c99b0fd795663ec4b278557567eb6d9448a2ad36f30c9e9fe206ee60f25e5",
+    "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "3db1e828d9d2e01356325ba545a6150b8836c8b72f4c03140151afee91eaefcb",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "54e6605543c43ee21c7a5c89c184e42fc7fbab6df17f1ae78697ea0e4c40e5c4",
     "tests/cb1/test_diagnostics_runtime.py": "7788bc522c91d111195842c384f035df6f2c2c12ca3576deaee7bc22242503fd",
     "tests/cb1/test_fel_facts.py": "763be93a55dcd11a811288ccf9276f314184ce5cd602c5c26d2ce66a5c5f4568",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "a5888bb4d097c217a9fc3c579ec6b49d9b7ec734d14bbb18f79fcdf4f6ae0aad",
@@ -553,7 +553,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": {
       "source": "src/dvbridge_policy.c",
-      "sha256": "854a126a73baa9a2bc627de7957cd78a6acae1abb279b620bbcc1ff2c06aeca1"
+      "sha256": "3db1e828d9d2e01356325ba545a6150b8836c8b72f4c03140151afee91eaefcb"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": {
       "source": "src/dvbridge_policy.h",
@@ -597,7 +597,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "6c4c99b0fd795663ec4b278557567eb6d9448a2ad36f30c9e9fe206ee60f25e5"
+      "sha256": "54e6605543c43ee21c7a5c89c184e42fc7fbab6df17f1ae78697ea0e4c40e5c4"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
