@@ -56,6 +56,7 @@ struct Admission {
  bool PollReady(){return true;}void Cancel(){m_pending=false;}
  bool result=false;uint64_t selectedRevision=0;
  FrameStatus run(){
+  const auto scalingMethod = base.scalingMethod;
   @@ADMISSION@@
   result=eligible;selectedRevision=revision;return FrameStatus::Ready;
  }

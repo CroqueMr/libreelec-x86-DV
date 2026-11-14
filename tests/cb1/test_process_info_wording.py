@@ -27,7 +27,8 @@ RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'VideoPlayer.AudioStreamCount','VideoPlayer.HdrType']
 # Kodi labels the panel adds to the RC3 set: scan type, codec, decoded surface, deinterlacer.
 ADDED_LABELS=['Player.Process(videoscantype)','Player.Process(pixformat)',
-              'Player.Process(deintmethod)','VideoPlayer.VideoCodec','Property(DV.LocalCM4)']
+              'Player.Process(deintmethod)','VideoPlayer.VideoCodec','Property(DV.LocalCM4)',
+              'Property(DV.VideoUpscaler)']
 
 
 
