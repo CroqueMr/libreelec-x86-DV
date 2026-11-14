@@ -211,7 +211,7 @@ int main()
   assert(readback.connectorId==17 && !readback.activeForced);
   assert(SelectLldvTransport(readback, 0).edidGeneration==2);
   window.m_lldvDisplay.status=LldvEdidStatus::Incomplete;
-  assert(LldvUnavailableLabel(window.Read(), 0, true)==41226);
+  assert(LldvUnavailableLabel(window.Read(), 0, true)==41230);
   assert(!SelectLldvTransport(window.Read(), 0).connectorId);
   window.m_lldvDisplay.status=LldvEdidStatus::Ready;
   ++window.m_lldvEdidGeneration;

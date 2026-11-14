@@ -47,6 +47,9 @@ template<class...T>bool DiagnosticLog(int,fmt::format_string<T...>f,T&&...a){
  if(message.starts_with("DVBridge policy prepared:"))auditLines.push_back(message);
  return true;
 }
+template<class...T>bool DiagnosticEssentialLog(int level,fmt::format_string<T...>f,T&&...a){
+ return DiagnosticLog(level,f,std::forward<T>(a)...);
+}
 template<class...T>void ObserveDiagnostic(T...){}
 void DiagnosticReserveProgress(){}
 void DiagnosticStage(const char*){}

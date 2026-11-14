@@ -416,7 +416,12 @@ struct CLog {
 };
 namespace DVBRIDGE {
  bool DiagnosticsEnabled(){return false;}
- template<class... T>void DiagnosticLog(T...){}
+ template<class... T>void DiagnosticEssentialLog(T...){}
+ enum class OverlayStage {Commit};
+ struct OverlayTimer {
+  explicit OverlayTimer(OverlayStage){}
+  void Finish(){errno=EIO;} // Logging may overwrite errno after an atomic commit.
+ };
 }
 uint64_t DVNowMs(){return 1;} uint64_t DVNowNs(){return 1;}
 void CollectDVKernelLog(){}

@@ -1,92 +1,92 @@
 diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
-@@ -26573,3 +26573,87 @@
- msgctxt "#41224"
- msgid "Dolby Vision picture metadata is missing or unusable."
+@@ -26589,3 +26589,87 @@
+ msgctxt "#41228"
+ msgid "Normal keeps CB1 warnings, errors and key playback and display events. Enhanced includes detailed CB1 diagnostics. Kodi debug logging is controlled separately."
  msgstr ""
 +
-+msgctxt "#41225"
++msgctxt "#41229"
 +msgid "Display EDID unavailable"
 +msgstr ""
 +
-+msgctxt "#41226"
++msgctxt "#41230"
 +msgid "Display EDID incomplete"
 +msgstr ""
 +
-+msgctxt "#41227"
++msgctxt "#41231"
 +msgid "Display EDID invalid"
 +msgstr ""
 +
-+msgctxt "#41228"
++msgctxt "#41232"
 +msgid "TV does not announce Dolby Vision"
 +msgstr ""
 +
-+msgctxt "#41229"
++msgctxt "#41233"
 +msgid "Unsupported or ambiguous Dolby Vision EDID block"
 +msgstr ""
 +
-+msgctxt "#41230"
++msgctxt "#41234"
 +msgid "TV does not announce Low-Latency Dolby Vision"
 +msgstr ""
 +
-+msgctxt "#41231"
++msgctxt "#41235"
 +msgid "Invalid LLDV luminance in EDID"
 +msgstr ""
 +
-+msgctxt "#41232"
++msgctxt "#41236"
 +msgid "Invalid LLDV primaries in EDID"
 +msgstr ""
 +
-+msgctxt "#41233"
++msgctxt "#41237"
 +msgid "LLDV availability"
 +msgstr ""
 +
-+msgctxt "#41234"
++msgctxt "#41238"
 +msgid "Available"
 +msgstr ""
 +
-+msgctxt "#41235"
++msgctxt "#41239"
 +msgid "Dolby Vision EDID"
 +msgstr ""
 +
-+msgctxt "#41236"
++msgctxt "#41240"
 +msgid "Low-Latency only"
 +msgstr ""
 +
-+msgctxt "#41237"
++msgctxt "#41241"
 +msgid "Standard and Low-Latency"
 +msgstr ""
 +
-+msgctxt "#41238"
++msgctxt "#41242"
 +msgid "Standard only"
 +msgstr ""
 +
-+msgctxt "#41239"
++msgctxt "#41243"
 +msgid "EDID peak / black"
 +msgstr ""
 +
-+msgctxt "#41240"
++msgctxt "#41244"
 +msgid "EDID primaries"
 +msgstr ""
 +
-+msgctxt "#41241"
++msgctxt "#41245"
 +msgid "Driver transport"
 +msgstr ""
 +
-+msgctxt "#41242"
++msgctxt "#41246"
 +msgid "Compatible HDMI mode available after a mode switch"
 +msgstr ""
 +
-+msgctxt "#41243"
++msgctxt "#41247"
 +msgid "Driver rejected the last HDMI commit for this format"
 +msgstr ""
 +
-+msgctxt "#41244"
++msgctxt "#41248"
 +msgid "HDMI timing"
 +msgstr ""
 +
-+msgctxt "#41245"
++msgctxt "#41249"
 +msgid "EDID target gamut exceeds BT.2020"
 +msgstr ""
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
@@ -223,7 +223,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/core
    bool hdr10plus{}, playerLed{};
 +  LldvDisplay lldvDisplay;
 +  uint64_t lldvEdidGeneration{};
-+  int lldvUnavailableLabel{41225};
++  int lldvUnavailableLabel{41229};
    uint64_t hdr10MaxBpc{}; // Zero means the HDMI ceiling is unknown.
  
    bool HDR10DepthLimited() const { return hdr10MaxBpc != 0 && hdr10MaxBpc < 10; }
@@ -375,24 +375,24 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +  };
 +  const auto summary = LldvUnavailableLabel(status, saved, true);
 +  const auto requested = saved ? LldvFormatPreference(saved) : preferred;
-+  addDetail(strings.Get(41233), strings.Get(summary ? summary :
-+      status.rejected != LldvFormat::Auto && status.rejected == requested ? 41243 : 41234));
++  addDetail(strings.Get(41237), strings.Get(summary ? summary :
++      status.rejected != LldvFormat::Auto && status.rejected == requested ? 41247 : 41238));
 +  const auto& display = status.display;
 +  if (display.sink.length)
-+    addDetail(strings.Get(41235), StringUtils::Format("v{} · {}", display.sink.version,
-+        strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41236 :
-+                    dvbridge_lldv_422(display.sink) ? 41237 : 41238)));
++    addDetail(strings.Get(41239), StringUtils::Format("v{} · {}", display.sink.version,
++        strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41240 :
++                    dvbridge_lldv_422(display.sink) ? 41241 : 41242)));
 +  if (display.status == LldvEdidStatus::Incomplete)
-+    addDetail(strings.Get(41226), StringUtils::Format("{} / {} bytes", display.received, display.expected));
++    addDetail(strings.Get(41230), StringUtils::Format("{} / {} bytes", display.received, display.expected));
 +  if (display.peak > 0)
 +  {
-+    addDetail(strings.Get(41239), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
-+    addDetail(strings.Get(41240), StringUtils::Format("R {:.4f},{:.4f}  G {:.4f},{:.4f}  B {:.4f},{:.4f}",
++    addDetail(strings.Get(41243), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
++    addDetail(strings.Get(41244), StringUtils::Format("R {:.4f},{:.4f}  G {:.4f},{:.4f}  B {:.4f},{:.4f}",
 +        display.reported[0], display.reported[1], display.reported[2], display.reported[3],
 +        display.reported[4], display.reported[5]));
 +  }
-+  addDetail(strings.Get(41241), strings.Get((status.driverFormats || status.forced42210) ? 41234 : 41211));
-+  addDetail(strings.Get(41244), strings.Get(status.currentTiming ? 41234 : status.availableTiming ? 41242 : 41212));
++  addDetail(strings.Get(41245), strings.Get((status.driverFormats || status.forced42210) ? 41238 : 41211));
++  addDetail(strings.Get(41248), strings.Get(status.currentTiming ? 41238 : status.availableTiming ? 41246 : 41212));
    for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
    {
      const auto format = static_cast<LldvFormat>(i);
@@ -409,7 +409,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +    if (disabled)
 +      item.SetLabel2(strings.Get(reason));
 +    else if (format != LldvFormat::Auto && format == status.rejected)
-+      item.SetLabel2(strings.Get(41243));
++      item.SetLabel2(strings.Get(41247));
 +    else if (i == 0)
        item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
            : strings.Get(LldvFormatLabel(preferred, requiresForcing(preferred))));
@@ -703,8 +703,8 @@ diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
 +                                bool allowModeSwitch)
 +{
 +  if (status.display.status != LldvEdidStatus::Ready)
-+    return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41245 :
-+        41225 + static_cast<int>(status.display.status);
++    return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41249 :
++        41229 + static_cast<int>(status.display.status);
 +  if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
 +  auto format = LldvFormatPreference(preference);
 +  if (format == LldvFormat::Auto)

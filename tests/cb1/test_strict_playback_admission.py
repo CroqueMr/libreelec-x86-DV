@@ -36,7 +36,7 @@ struct Base{virtual ~Base()=default;};
 namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext:Base{
  std::mutex m_dvCapabilityMutex;DVBRIDGE::Binding m_dvFatalBinding;bool m_dvFatalConsumed=false;
  DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::ActivationFailed;
- struct Capabilities{int lldvUnavailableLabel=41245;};
+ struct Capabilities{int lldvUnavailableLabel=41249;};
  Capabilities GetDVOutputCapabilities(const VideoPicture*) const{return {};}
  DVBRIDGE::OutputReason ConsumeDVPlaybackFailure(DVBRIDGE::SourceBinding binding) CONSUME
 };}
@@ -64,7 +64,7 @@ int main(){VideoPicture picture;Worker worker;
  picture.doviMetadata.size=32;
  assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==40844);
  window.m_dvFatalConsumed=false;window.m_dvFatalReason=DVBRIDGE::OutputReason::NoPlayerLedTransport;
- assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==41245);
+ assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==41249);
  window.m_dvFatalConsumed=false;DVBRIDGE::prefs.output=DVBRIDGE::OutputMode::Standard;
  picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;picture.stereoMode="left_right";
  assert(!worker.HandleDVPlaybackFailure(&picture));picture.stereoMode.clear();

@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 TREE = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
 
@@ -53,7 +54,9 @@ int main(){
  for(unsigned i=0;i<24;++i)assert(DiagnosticLog(LOGINFO,"startup {}",i));
  CDVBridgeGLES r;r.PreparedAudit();
  assert(r.m_auditPreparedSerial==0&&CLog::lines.size()==24&&StreamTelemetry::stages==1);
- testNow+=30001;r.PreparedAudit();assert(r.m_auditPreparedSerial==17&&CLog::lines.size()==25);
+ testNow+=30001;SetDetailedDiagnostics(false);r.PreparedAudit();
+ assert(r.m_auditPreparedSerial==0&&CLog::lines.size()==24&&StreamTelemetry::stages==2);
+ SetDetailedDiagnostics(true);r.PreparedAudit();assert(r.m_auditPreparedSerial==17&&CLog::lines.size()==25);
  for(unsigned i=0;i<1000;++i){r.PreparedAudit();}assert(CLog::lines.size()==25);
  ++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==18&&CLog::lines.size()==26);
  testEnabled=false;++r.m_auditSerial;r.PreparedAudit();assert(r.m_auditPreparedSerial==18&&CLog::lines.size()==26);
@@ -500,6 +503,70 @@ constexpr int LOGDEBUG=0,LOGINFO=1,LOGWARNING=2,LOGERROR=3;
 struct CLog {
  inline static std::vector<int> levels;
  template<class...T>static void Log(int level,fmt::format_string<T...>,T&&...){levels.push_back(level);}
+};
+'''})
+
+    def test_logging_detail_is_in_system_logging_with_enhanced_default(self):
+        settings = ET.parse(TREE / "system/settings/settings.xml")
+        group = settings.find("./section[@id='system']/category[@id='logging']/group[@id='1']")
+        self.assertIsNotNone(group)
+        setting = group.find("./setting[@id='debug.cb1logdetail']")
+        self.assertIsNotNone(setting)
+        self.assertEqual(setting.attrib["type"], "integer")
+        self.assertEqual(setting.findtext("level"), "1")
+        self.assertEqual(setting.findtext("default"), "1")
+        self.assertEqual(setting.findtext("requirement"), "HAVE_DVBRIDGE")
+        strings = (TREE / "addons/resource.language.en_gb/resources/strings.po").read_text()
+        options = {option.text: option.attrib["label"] for option in
+                   setting.findall("./constraints/options/option")}
+        self.assertEqual(set(options), {"0", "1"})
+        for value, label in (("0", "Normal"), ("1", "Enhanced")):
+            self.assertIn(f'msgctxt "#{options[value]}"\nmsgid "{label}"', strings)
+        self.assertIsNotNone(group.find("./setting[@id='debug.showloginfo']"))
+
+    def test_logging_detail_default_and_live_switch(self):
+        self.run_cpp(r'''
+#include "utils/DVBridgeDiagnosticLog.h"
+#include <cassert>
+#include <string>
+#include <vector>
+int main()
+{
+  using namespace DVBRIDGE;
+  DiagnosticOpen();
+  ObserveDiagnostic(1, 1, 1, 1, "prepare", true, false);
+  assert(DiagnosticLog(LOGINFO, "startup detail"));
+  SetDetailedDiagnostics(false);
+  assert(!DiagnosticLog(LOGINFO, "texture detail"));
+  assert(!DiagnosticProgressLog(LOGINFO, "analysis counters"));
+  assert(!DiagnosticRendererCounterLog(LOGINFO, "renderer counters"));
+  assert(DiagnosticEssentialLog(LOGINFO, "output selected"));
+  assert(DiagnosticLog(LOGWARNING, "warning"));
+  DiagnosticFailureLog("atomic-commit", true, LOGERROR, "failure");
+  DiagnosticPresented(1);
+  DiagnosticFinal("stop");
+  assert(CLog::lines.size() == 6);
+  assert(CLog::lines[1].starts_with("output selected"));
+  assert(CLog::lines[2].starts_with("warning"));
+  assert(CLog::lines[3].starts_with("failure"));
+  assert(CLog::lines[4].starts_with("DV decode startup: stage=first-presented"));
+  assert(CLog::lines[5].starts_with("DVBridge playback end:"));
+  SetDetailedDiagnostics(true);
+  assert(DiagnosticLog(LOGINFO, "detail restored"));
+}
+''', {'utils/log.h': r'''
+#pragma once
+#include <fmt/format.h>
+#include <vector>
+constexpr int LOGDEBUG=0, LOGINFO=1, LOGWARNING=2, LOGERROR=3;
+struct CLog
+{
+  inline static std::vector<std::string> lines;
+  template<class... T>
+  static void Log(int, fmt::format_string<T...> fmt, T&&... args)
+  {
+    lines.push_back(fmt::format(fmt, std::forward<T>(args)...));
+  }
 };
 '''})
 
