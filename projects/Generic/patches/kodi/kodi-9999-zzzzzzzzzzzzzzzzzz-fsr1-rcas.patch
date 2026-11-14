@@ -4,28 +4,28 @@
              <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
              <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
              <option label="16323">17</option><option label="16322">18</option>
--            <option label="41230">19</option>
-+            <option label="41230">19</option><option label="41233">22</option>
-             <option label="41231">20</option><option label="41232">21</option>
+-            <option label="41306">19</option>
++            <option label="41306">19</option><option label="41309">22</option>
+             <option label="41307">20</option><option label="41308">21</option>
            </options></constraints>
            <control type="list" format="string" />
 @@ -26,6 +26,8 @@
              <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
              <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
              <option label="16323">17</option><option label="16322">18</option>
-+            <option label="41230">19</option><option label="41233">22</option>
-+            <option label="41231">20</option><option label="41232">21</option>
++            <option label="41306">19</option><option label="41309">22</option>
++            <option label="41307">20</option><option label="41308">21</option>
            </options></constraints>
            <control type="list" format="string" />
          </setting>
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26605,3 +26605,7 @@
- msgctxt "#41232"
+ msgctxt "#41308"
  msgid "Anime4K Fast"
  msgstr ""
 +
-+msgctxt "#41233"
++msgctxt "#41309"
 +msgid "FSR 1 (EASU + RCAS)"
 +msgstr ""
 --- a/xbmc/cores/VideoSettings.h
@@ -63,10 +63,10 @@
 @@ -47,6 +52,7 @@
      case VS_SCALINGMETHOD_SPLINE36_FAST: return 16323; // Spline36 Fast
      case VS_SCALINGMETHOD_SPLINE36: return 16322; // Spline36
-     case VS_SCALINGMETHOD_FSR1: return 41230;
-+    case VS_SCALINGMETHOD_FSR1_RCAS: return 41233;
-     case VS_SCALINGMETHOD_FSRCNNX: return 41231;
-     case VS_SCALINGMETHOD_ANIME4K: return 41232;
+     case VS_SCALINGMETHOD_FSR1: return 41306;
++    case VS_SCALINGMETHOD_FSR1_RCAS: return 41309;
+     case VS_SCALINGMETHOD_FSRCNNX: return 41307;
+     case VS_SCALINGMETHOD_ANIME4K: return 41308;
      default: return 0;
 --- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
 +++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
@@ -74,13 +74,13 @@
        upscalers.push_back(entry);
    }
    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
--  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
-   upscalers.emplace_back(41230, VS_SCALINGMETHOD_FSR1);
-+  upscalers.emplace_back(41233, VS_SCALINGMETHOD_FSR1_RCAS);
-   upscalers.emplace_back(41231, VS_SCALINGMETHOD_FSRCNNX);
-   upscalers.emplace_back(41232, VS_SCALINGMETHOD_ANIME4K);
-   AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
-+  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+-  AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+   upscalers.emplace_back(41306, VS_SCALINGMETHOD_FSR1);
++  upscalers.emplace_back(41309, VS_SCALINGMETHOD_FSR1_RCAS);
+   upscalers.emplace_back(41307, VS_SCALINGMETHOD_FSRCNNX);
+   upscalers.emplace_back(41308, VS_SCALINGMETHOD_ANIME4K);
+   AddSpinner(groupVideo, SDR, 41302, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
++  AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
  #else
    /* remove unsupported methods */
    for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )

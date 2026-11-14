@@ -3,31 +3,31 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26573,3 +26573,27 @@
- msgctxt "#41224"
- msgid "Dolby Vision picture metadata is missing or unusable."
+ msgctxt "#41228"
+ msgid "Normal keeps CB1 warnings, errors and key playback and display events. Enhanced includes detailed CB1 diagnostics. Kodi debug logging is controlled separately."
  msgstr ""
 +
-+msgctxt "#41230"
++msgctxt "#41270"
 +msgid "SDR output gamut"
 +msgstr ""
 +
-+msgctxt "#41231"
++msgctxt "#41271"
 +msgid "Select the colour gamut used by SDR Rendering. BT.709 is compatible with standard SDR displays."
 +msgstr ""
 +
-+msgctxt "#41232"
++msgctxt "#41272"
 +msgid "BT.709"
 +msgstr ""
 +
-+msgctxt "#41233"
++msgctxt "#41273"
 +msgid "BT.2020"
 +msgstr ""
 +
-+msgctxt "#41234"
++msgctxt "#41274"
 +msgid "The display does not advertise BT.2020 RGB."
 +msgstr ""
 +
-+msgctxt "#41235"
++msgctxt "#41275"
 +msgid "The active HDMI driver cannot signal BT.2020 RGB."
 +msgstr ""
 --- a/system/settings/settings.xml
@@ -38,14 +38,14 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
            <constraints><options><option label="41135">0</option><option label="41136">1</option><option label="41137">2</option></options></constraints>
 +          <control type="list" format="string" />
 +        </setting>
-+        <setting id="dvbridge.sdrgamut" type="action" label="41230" help="41231">
++        <setting id="dvbridge.sdrgamut" type="action" label="41270" help="41271">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
 +          <control type="button" format="action" />
 +        </setting>
-+        <setting id="dvbridge.sdrgamutvalue" type="integer" label="41230">
++        <setting id="dvbridge.sdrgamutvalue" type="integer" label="41270">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
 +          <default>0</default>
-+          <constraints><options><option label="41232">0</option><option label="41233">1</option></options></constraints>
++          <constraints><options><option label="41272">0</option><option label="41273">1</option></options></constraints>
            <control type="list" format="string" />
          </setting>
          <setting id="dvbridge.sdrpeak" type="number" label="41138" help="41134">
@@ -299,12 +299,12 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
 +    switch (gbm->GetSDRBT2020Support())
 +    {
 +      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Available: return 0;
-+      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Display: return 41234;
++      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Display: return 41274;
 +      case KODI::WINDOWING::GBM::CWinSystemGbm::SDRBT2020Support::Driver: break;
 +    }
 +  }
 +#endif
-+  return 41235;
++  return 41275;
 +}
 +
 +void ShowSDRGamutMenu()
@@ -317,10 +317,10 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
 +
 +  const int reason = SDRBT2020Unavailable();
 +  dialog->Reset();
-+  dialog->SetHeading(strings.Get(41230));
++  dialog->SetHeading(strings.Get(41270));
 +  dialog->SetUseDetails(true);
-+  dialog->Add(CFileItem(strings.Get(41232)));
-+  const auto label = strings.Get(41233);
++  dialog->Add(CFileItem(strings.Get(41272)));
++  const auto label = strings.Get(41273);
 +  CFileItem wide(reason ? "[COLOR grey]" + label + "[/COLOR]" : label);
 +  wide.SetProperty("disabled", reason != 0);
 +  if (reason)
@@ -345,7 +345,7 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
 +{
 +  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
 +  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
-+      settings->GetInt("dvbridge.sdrgamutvalue")==1 && !SDRBT2020Unavailable() ? 41233 : 41232);
++      settings->GetInt("dvbridge.sdrgamutvalue")==1 && !SDRBT2020Unavailable() ? 41273 : 41272);
 +}
 +
  void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
@@ -369,16 +369,12 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
 --- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
-@@ -432,7 +432,8 @@
-         std::string(data.transaction.stage) : "");
-     SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
+@@ -434,3 +434,4 @@
      SetProperty("DV.TVProfile", active && data.output.effective==8 ?
 -        StringUtils::Format("BT.709 / {:g} nits / {:g}", data.output.target,data.output.sdrGamma) :
 +        StringUtils::Format("{} / {:g} nits / {:g}",
 +            data.output.gamut == 3 ? "BT.2020" : "BT.709", data.output.target, data.output.sdrGamma) :
          active && (data.output.lldv || data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
-         StringUtils::Format("{}{} / {:g} nits",
-             data.output.panel==1 || data.output.panel==2 ? localizer.Get(40833+data.output.panel)+" · " : "",
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 @@ -64,6 +64,7 @@
@@ -427,35 +423,6 @@ Subject: [PATCH] Add BT.2020 to the CB1 SDR rendering target
    float m_playerLedScale{};
 --- a/xbmc/settings/Settings.cpp
 +++ b/xbmc/settings/Settings.cpp
-@@ -219,12 +219,15 @@
- 
- #ifdef HAVE_DVBRIDGE
-   std::unique_ptr<TiXmlElement> migrated;
--  bool hasHDR10PlusPreference = false;
-+  bool hasHDR10PlusPreference = false, hasSDRTarget = false;
-   for (const auto* setting = root->FirstChildElement("setting"); setting;
-        setting = setting->NextSiblingElement("setting"))
--    if (setting->Attribute("id") &&
--        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
--      hasHDR10PlusPreference = true;
-+  {
-+    const char* id = setting->Attribute("id");
-+    if (!id) continue;
-+    hasHDR10PlusPreference |= std::string_view(id) == "dvbridge.hdr10plussource";
-+    hasSDRTarget |= std::string_view(id) == "dvbridge.sdrpreset";
-+  }
-   for (const auto* setting = root->FirstChildElement("setting"); setting;
-        setting = setting->NextSiblingElement("setting"))
-   {
-@@ -235,7 +238,7 @@
-                                std::string_view(value) == "3";
-     const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
-             std::string_view(id) == "dvbridge.outputmode" &&
--            (std::string_view(value) == "3" || std::string_view(value) == "6") ?
-+            (std::string_view(value) == "3" || (!hasSDRTarget && std::string_view(value) == "6")) ?
-             std::optional<int>{5} : std::nullopt;
-     if (!legacy) continue;
-     if (!migrated) migrated.reset(root->Clone()->ToElement());
 @@ -672,7 +675,7 @@
  #ifdef HAVE_DVBRIDGE
    GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),

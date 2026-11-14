@@ -35,9 +35,9 @@
 @@ -42,6 +47,8 @@
      case VS_SCALINGMETHOD_SPLINE36_FAST: return 16323; // Spline36 Fast
      case VS_SCALINGMETHOD_SPLINE36: return 16322; // Spline36
-     case VS_SCALINGMETHOD_FSR1: return 41230;
-+    case VS_SCALINGMETHOD_FSRCNNX: return 41231;
-+    case VS_SCALINGMETHOD_ANIME4K: return 41232;
+     case VS_SCALINGMETHOD_FSR1: return 41306;
++    case VS_SCALINGMETHOD_FSRCNNX: return 41307;
++    case VS_SCALINGMETHOD_ANIME4K: return 41308;
      default: return 0;
    }
  }
@@ -46,34 +46,34 @@
 @@ -13,6 +13,7 @@
              <option label="16304">7</option><option label="16315">8</option><option label="16305">9</option>
              <option label="16323">17</option><option label="16322">18</option>
-             <option label="41230">19</option>
-+            <option label="41231">20</option><option label="41232">21</option>
+             <option label="41306">19</option>
++            <option label="41307">20</option><option label="41308">21</option>
            </options></constraints>
            <control type="list" format="string" />
          </setting>
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26597,3 +26597,11 @@
- msgctxt "#41230"
- msgid "FSR 1 (EASU)"
+ msgctxt "#41267"
+ msgid "Neutralize dialogue normalization in supported DTS and DTS-HD passthrough streams."
  msgstr ""
 +
-+msgctxt "#41231"
++msgctxt "#41307"
 +msgid "FSRCNNX x2"
 +msgstr ""
 +
-+msgctxt "#41232"
++msgctxt "#41308"
 +msgid "Anime4K Fast"
 +msgstr ""
 --- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
 +++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
 @@ -423,6 +423,8 @@
    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-   AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
-   upscalers.emplace_back(41230, VS_SCALINGMETHOD_FSR1);
-+  upscalers.emplace_back(41231, VS_SCALINGMETHOD_FSRCNNX);
-+  upscalers.emplace_back(41232, VS_SCALINGMETHOD_ANIME4K);
-   AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
+   AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
+   upscalers.emplace_back(41306, VS_SCALINGMETHOD_FSR1);
++  upscalers.emplace_back(41307, VS_SCALINGMETHOD_FSRCNNX);
++  upscalers.emplace_back(41308, VS_SCALINGMETHOD_ANIME4K);
+   AddSpinner(groupVideo, SDR, 41302, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
  #else
    /* remove unsupported methods */
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
@@ -102,9 +102,11 @@
  #endif
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
-@@ -38,13 +38,78 @@
- #include "cores/DataCacheCore.h"
- #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+@@ -40,11 +40,21 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h"
+ #ifdef CB1_HAS_HDR10_AI
+ #include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
+ #endif
  #include "UpscalerSettings.h"
 +#include "filesystem/File.h"
  #include "windowing/gbm/WinSystemGbmGLESContext.h"
@@ -119,7 +121,12 @@
 +#include <iterator>
  #endif
  
+ #include <algorithm>
  #include <mutex>
+ 
+@@ -53,10 +63,65 @@
+ #include <libavutil/dovi_meta.h>
+ }
  
  using namespace Shaders;
  using namespace Shaders::GLES;
@@ -181,6 +188,8 @@
  
  CLinuxRendererGLES::CLinuxRendererGLES()
  {
+   m_format = AV_PIX_FMT_NONE;
+ 
 @@ -1062,6 +1127,8 @@
      m_renderQuality = RQ_MULTIPASS;
        return;
