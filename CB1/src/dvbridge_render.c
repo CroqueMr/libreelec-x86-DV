@@ -4173,14 +4173,10 @@ bool dvbridge_render_dv_policy_commit(struct dvbridge_renderer *r,
         r->enhanced_committed=r->dv.enhanced_plan;r->enhanced_pts=r->dv.pts;
         r->enhanced_stream=id->stream;r->enhanced_has_committed=true;
     }else r->enhanced_has_committed=false;
+    /* All resolved authored Adaptive frames have finished analysis. The final
+     * draw can still read image storage, which the ordered handoff protects. */
     bool handoff=r->dv.borrowed_storage && r->dv.enhanced_pixels && !r->dv.ai_source &&
-        r->dv.enhanced_plan.status==CB1_DVE_READY && r->dv.prepacked && r->enhanced_skip_aux &&
-        !r->overlay_visible && !r->dv.enhanced_overlay &&
-        out->value.policy.adaptive!=DVBRIDGE_ADAPTIVE_A &&
-        (r->enhanced_placed_y>=0 ||
-         (out->value.geometry.source_width==3840 && out->value.geometry.source_height==2160 &&
-          !out->value.geometry.x && !out->value.geometry.y &&
-          out->value.geometry.width==3840 && out->value.geometry.height==2160));
+        out->value.policy.adaptive!=DVBRIDGE_ADAPTIVE_A;
     r->dv_committed=out->value;r->dv_has_committed=true;dvbridge_render_dv_policy_cancel(r);
     r->dv.ordered_handoff=handoff;return true;
 }

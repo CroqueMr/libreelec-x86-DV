@@ -1472,7 +1472,8 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Use the playback clock to check whether Adaptive has missed a picture.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Identify Adaptive scanout with asynchronous preparation configured.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Adaptive scanout to the presentation scheduler."
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Adaptive scanout to the presentation scheduler.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Retain native placement and compose visible GUI in the Adaptive final draw."
     }
   }
 }
