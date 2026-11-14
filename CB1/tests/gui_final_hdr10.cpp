@@ -106,7 +106,10 @@ enum {DVBRIDGE_GAMUT_BT709=1,DVBRIDGE_GAMUT_P3_D65=2,PL_INTENT_RELATIVE_COLORIME
 enum pl_color_primaries {PL_COLOR_PRIM_BT_709,PL_COLOR_PRIM_DISPLAY_P3,PL_COLOR_PRIM_BT_2020};
 auto pl_raw_primaries_get(pl_color_primaries primaries){return primaries;}
 struct ColorMatrix {float m[3][3];};
-ColorMatrix pl_get_color_mapping_matrix(pl_color_primaries,pl_color_primaries,int)
+template<class Policy> pl_color_primaries cb1_display_primaries(const Policy* policy)
+{return policy->tv.gamut==DVBRIDGE_GAMUT_BT709?PL_COLOR_PRIM_BT_709:
+    policy->tv.gamut==DVBRIDGE_GAMUT_P3_D65?PL_COLOR_PRIM_DISPLAY_P3:PL_COLOR_PRIM_BT_2020;}
+ColorMatrix pl_get_color_mapping_matrix(pl_color_primaries,const pl_color_primaries*,int)
 {return {{{1,0,0},{0,1,0},{0,0,1}}};}
 struct CWinSystemGbmGLESContext {
   GUIFramebuffer m_guiFbo,m_dvPQSubtitleFbo;

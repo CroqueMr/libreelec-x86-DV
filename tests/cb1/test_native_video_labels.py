@@ -73,7 +73,7 @@ int main() {
 '''.replace('PLAYBACK',playback).replace('IDS',ids).replace('HELPER',code).replace('REGISTRATION',registration).replace('COUNT',match[1])
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary); (root/'test.cpp').write_text(program)
-            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc/cores'),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
+            build=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),'-I'+str(TREE/'xbmc/cores'),str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             run=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(run.returncode,0,run.stderr)

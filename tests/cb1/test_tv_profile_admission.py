@@ -36,6 +36,7 @@ Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double pe
  struct {double peak;int gamut;double expertPeak;int expertGamut;} preferences{peak,gamut,peak,gamut};
  struct Localizer {std::string Get(int id) {return std::to_string(id);}} localizer;
  Option option;int mode=guided?1:requestedMode;
+ struct {int lldvUnavailableLabel=41245;} caps;
  int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
  SECTION
  return option;
@@ -62,6 +63,8 @@ int main() {
  const auto detail=CDVPlaybackInfo::Detail("HDR10",Output{});
  assert(detail.find("SDR Rendering")!=std::string::npos && detail.find("metadata")==std::string::npos);
  assert(std::string(CDVPlaybackInfo::Reason(R::SDRTargetInvalid))=="sdr-target-invalid");
+ auto lldv=annotate(R::NoPlayerLedTransport,false,false,0,0);
+ assert(lldv.properties.back().second && lldv.label2=="41245");
  auto pending=annotate(R::ProcessingPending,true,false,1000,2);
  assert(pending.label=="Adaptive" && pending.label2=="41142" && pending.properties.back().second);
  auto sourceGuided=annotate(R::None,false,true,1000,2,true);
