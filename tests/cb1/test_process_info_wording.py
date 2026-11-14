@@ -27,7 +27,8 @@ RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'VideoPlayer.AudioStreamCount','VideoPlayer.HdrType']
 # Kodi labels the panel adds to the RC3 set: scan type, codec, decoded surface, deinterlacer.
 ADDED_LABELS=['Player.Process(videoscantype)','Player.Process(pixformat)',
-              'Player.Process(deintmethod)','VideoPlayer.VideoCodec','Property(DV.LocalCM4)']
+              'Player.Process(deintmethod)','VideoPlayer.VideoCodec','Property(DV.LocalCM4)',
+              'Property(DV.VideoUpscaler)']
 
 
 
@@ -272,7 +273,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),72)
+        self.assertEqual(len(rows),73)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))

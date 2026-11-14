@@ -71,6 +71,7 @@ public:
  int m_hardwareFELFilter{},m_pendingFELFilter{-1},m_pendingFELBackend{},m_reportedFELKey{-1};
  uint64_t m_reportedFELStream{};
  void CaptureMetadata(const CDVMetadataBuffer& metadata,bool fel) CAPTURE
+ struct Context { int Upscaler() const { return -1; } } context, *m_context=&context;
  Submission CaptureSubmission() const GETTER
  void ObserveHDR10PlusSubmission(const Submission&) const {}
  void Accepted(const Submission& submission) {ACCEPTED}

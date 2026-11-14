@@ -40,7 +40,7 @@ struct Buffer{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture
  std::shared_ptr<VideoBuffer>videoBuffer=std::make_shared<VideoBuffer>();
  Metadata doviMetadata;double doviPts=100;bool loaded=false;YuvImage image;
  Plane fields[1][3]={{{11,3840,1920},{12,1920,960},{13,1920,960}}};};
-struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},width{},height{};
+struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},autoScalingMethod{},width{},height{};
  double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{},hdr10PlusSource{};HDR hdr;
  struct{unsigned texture;int width,height;}planes[3]{};};};
 struct WindowBase{virtual ~WindowBase()=default;};
@@ -56,6 +56,7 @@ struct CLinuxRendererGLES{
  bool UploadNV12Texture(int){return false;} bool UploadPackedYUVTexture(int){return false;}
  bool UploadPlanarYUVTexture(int){uploads++;return true;}
  void CalculateTextureSourceRects(int,int){} int SelectScalingMethod(){return 9;}
+ int AutoUpscalingOverride() { return 0; }
  int DVBridgeGeometry(){return 42;}
  bool BuildDVBridgeLayer(int index,CDVBridgeGLES::Layer& layer) BUILD
  bool UploadTexture(int index) UPLOAD
