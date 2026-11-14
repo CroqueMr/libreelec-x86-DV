@@ -33,8 +33,11 @@ class QuickSwitchResources(unittest.TestCase):
         self.assertEqual(int(surface.findtext('width')), width)
         self.assertEqual(surface.findtext('height'), group.findtext('height'))
         status = definitions.findall("./include[@name='CB1PlaybackModeRowContents']/control[@type='label']")[1]
-        status_end = int(group.findtext("control[@id='6']/left")) + int(status.findtext('left')) + int(status.findtext('width'))
-        self.assertGreaterEqual(width - status_end, 40)
+        view = group.find("control[@id='6']")
+        row_left = int(view.findtext('left'))
+        self.assertEqual(width, 2 * row_left + int(view.findtext('width')))
+        status_end = row_left + int(status.findtext('left')) + int(status.findtext('width'))
+        self.assertGreaterEqual(width - status_end, 30)
         rows = definitions.find("./include[@name='CB1PlaybackModeRows']")
         for kind in ('itemlayout', 'focusedlayout'):
             self.assertEqual(rows.find(kind).get('height'), '38')

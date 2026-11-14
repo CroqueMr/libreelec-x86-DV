@@ -412,47 +412,47 @@
   </include>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
-      <right>30</right><bottom>40</bottom><width>618</width><height>518</height>
+      <right>42</right><bottom>40</bottom><width>606</width><height>518</height>
       <control type="image" id="9101">
-        <width>618</width><height>518</height>
+        <width>606</width><height>518</height>
         <texture border="30">special://xbmc/media/cb1-switch-panel.png</texture>
       </control>
       <control type="label" id="1">
-        <left>24</left><top>14</top><width>552</width><height>36</height>
+        <left>27</left><top>14</top><width>552</width><height>36</height>
         <font>CB1.SwitchTitle</font><textcolor>FFF2F5F6</textcolor><aligny>center</aligny>
         <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
       <control type="label">
-        <left>24</left><top>55</top><width>238</width><height>34</height>
+        <left>27</left><top>55</top><width>238</width><height>34</height>
         <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
         <label>$LOCALIZE[14125]  $INFO[Window.Property(CB1.SwitchInput)]</label>
         <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="label">
-        <left>276</left><top>55</top><width>300</width><height>34</height>
+        <left>279</left><top>55</top><width>300</width><height>34</height>
         <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
         <label>$LOCALIZE[40879]  $INFO[Window.Property(CB1.SwitchOutput)]</label>
         <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="image">
-        <left>24</left><top>94</top><width>552</width><height>1</height>
+        <left>27</left><top>94</top><width>552</width><height>1</height>
         <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
       </control>
       <control type="list" id="3">
-        <left>24</left><top>104</top><width>552</width><height>342</height>
+        <left>27</left><top>104</top><width>552</width><height>342</height>
         <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="list" id="6">
-        <left>24</left><top>104</top><width>552</width><height>342</height>
+        <left>27</left><top>104</top><width>552</width><height>342</height>
         <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="group" id="9103">
-        <left>24</left><top>458</top><width>552</width><height>42</height>
+        <left>27</left><top>458</top><width>552</width><height>42</height>
         <visible>!String.IsEmpty(Container(6).ListItem.Label2)</visible>
         <control type="image"><width>552</width><height>42</height>
           <texture border="8" colordiffuse="FF2C3438">special://xbmc/media/cb1-chip.png</texture>
