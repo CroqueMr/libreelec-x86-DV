@@ -22,8 +22,18 @@ class QuickSwitchResources(unittest.TestCase):
         self.assertEqual(footer.findtext('label'), '$INFO[Container(6).ListItem.Label2]')
         self.assertEqual(footer.findtext('wrapmultiline'), 'false')
         self.assertEqual(footer.findtext('scroll'), 'false')
-        bottom = int(footer_group.findtext('top')) + int(footer.findtext('height'))
-        self.assertEqual(int(group.findtext('height')) - bottom, 24)
+        divider, = footer_group.findall("control[@type='image']")
+        header_divider = next(control for control in group.findall("control[@type='image']")
+                              if control.findtext('height') == '1')
+        self.assertEqual(ET.tostring(divider.find('texture')).strip(),
+                         ET.tostring(header_divider.find('texture')).strip())
+        self.assertEqual(divider.findtext('width'), header_divider.findtext('width'))
+        self.assertEqual(footer.findtext('top'), '8')
+        self.assertEqual(footer.findtext('height'), '24')
+        self.assertEqual(group.findtext('bottom'), '56')
+        bottom = sum(int(node.findtext(tag)) for node, tag in
+                     ((footer_group, 'top'), (footer, 'top'), (footer, 'height')))
+        self.assertEqual(int(group.findtext('height')) - bottom, 12)
 
     def test_compact_geometry_contains_the_largest_source_menu(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
@@ -175,7 +185,12 @@ int main(){
         import resource
         from test_native_video_source import body
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
-        owner = body(body(source, 'bool CDVPlaybackModes::ShowMenu('), 'for(const auto& option : options)')
+        menu = body(source, 'bool CDVPlaybackModes::ShowMenu(')
+        self.assertIn('GetLldvConnectorStatus().sink.status == DV_EDID_STANDARD', menu)
+        owner = body(menu, 'for(const auto& option : options)')
+        strings = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) /
+                   'addons/resource.language.en_gb/resources/strings.po').read_text()
+        self.assertIn('msgctxt "#40881"\nmsgid "Master Reference is recommended over LLDV."', strings)
         code = r'''
 #include <cassert>
 #include <map>
@@ -183,12 +198,13 @@ int main(){
 #include <vector>
 constexpr int LOGINFO=1;
 namespace DVBRIDGE {template<class... T>void DiagnosticLog(T...) {}}
+namespace DVBRIDGE {enum class OutputMode { PlayerLed = 7 };}
 struct Value {bool flag=false;std::string text;bool asBoolean()const{return flag;}};
 struct CFileItem {
  explicit CFileItem(const std::string& name): label(name) {}
- std::string label;
+ std::string label, label2;
  std::map<std::string,Value> properties;
- void SetLabel2(const std::string&){}
+ void SetLabel2(const std::string& value){label2=value;}
  void SetProperty(const std::string& n,bool v){properties[n].flag=v;}
  void SetProperty(const std::string& n,const char* v){properties[n].text=v;}
  void SetProperty(const std::string& n,const std::string& v){properties[n].text=v;}
@@ -198,15 +214,21 @@ struct Option {int value;std::string label,label2;std::vector<std::pair<std::str
 struct Dialog {std::vector<CFileItem> items;void Add(const CFileItem& i){items.push_back(i);}};
 int main(){
  Dialog d;auto* dialog=&d;
- const bool settingsMenu = false;
+ bool settingsMenu = false;
+ bool recommendMaster = true;
  const bool cb1Active = true;
  const int current = 2;
  struct Strings { std::string Get(int id) const { return std::to_string(id); } } strings;
- struct Choice { int label; };
- const Choice choices[]{{1}, {40868}, {40914}};
- std::vector<Option> options{{0,"A","",{}},{1,"B","",{{"disabled",true}}},{2,"C","",{{"disabled",false}}}};
+ struct Choice { int label, output; };
+ const Choice choices[]{{1,0}, {40868,0}, {40914,0}, {41221,7}};
+ std::vector<Option> options{{0,"A","",{}},{1,"B","",{{"disabled",true}}},{2,"C","",{{"disabled",false}}},
+                             {3,"LLDV","",{}}};
+ const auto populate = [&]{
+ d.items.clear();
  for(const auto& option:options) OWNER
- assert(d.items.size()==3);
+ };
+ populate();
+ assert(d.items.size()==4);
  assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF2F5F6");
  assert(d.items[1].GetProperty("CB1.TextColor").text=="FFBEC7CB");
  assert(d.items[1].label=="40880" && d.items[2].label=="40880");
@@ -215,6 +237,22 @@ int main(){
  assert(d.items[1].GetProperty("CB1.SwitchStatus").text=="40851");
  assert(d.items[2].GetProperty("CB1.SwitchStatus").text=="40878");
  assert(d.items[1].GetProperty("disabled").asBoolean());
+ assert(d.items[2].label2.empty());
+ assert(d.items[3].label2=="40881");
+ recommendMaster = false;
+ populate();
+ assert(d.items[3].label2.empty());
+ recommendMaster = true;
+ settingsMenu = true;
+ populate();
+ assert(d.items[3].label2.empty());
+ settingsMenu = false;
+ options[3].properties = {{"disabled",true}};
+ populate();
+ assert(d.items[3].label2.empty());
+ options[3].label2 = "Could not use that transport";
+ populate();
+ assert(d.items[3].label2=="Could not use that transport");
 }
 '''.replace('OWNER', owner)
         with tempfile.TemporaryDirectory() as tmp:

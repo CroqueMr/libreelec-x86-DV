@@ -412,9 +412,9 @@
   </include>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
-      <right>42</right><bottom>40</bottom><width>608</width><height>516</height>
+      <right>42</right><bottom>56</bottom><width>608</width><height>500</height>
       <control type="image" id="9101">
-        <width>608</width><height>516</height>
+        <width>608</width><height>500</height>
         <texture border="30">special://xbmc/media/cb1-switch-panel.png</texture>
       </control>
       <control type="label" id="1">
@@ -424,13 +424,13 @@
       </control>
       <control type="label" id="2"><visible>false</visible></control>
       <control type="label">
-        <left>24</left><top>61</top><width>238</width><height>26</height>
+        <left>24</left><top>61</top><width>196</width><height>26</height>
         <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
         <label>$LOCALIZE[14125]  $INFO[Window.Property(CB1.SwitchInput)]</label>
         <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="label">
-        <left>268</left><top>61</top><width>300</width><height>26</height>
+        <left>224</left><top>61</top><width>344</width><height>26</height>
         <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><align>right</align><aligny>center</aligny>
         <label>$LOCALIZE[40879]  $INFO[Window.Property(CB1.SwitchOutput)]</label>
         <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
@@ -452,13 +452,13 @@
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="group" id="9103">
-        <left>24</left><top>456</top><width>560</width><height>36</height>
+        <left>24</left><top>456</top><width>560</width><height>32</height>
         <visible>!String.IsEmpty(Container(6).ListItem.Label2)</visible>
-        <control type="image"><width>560</width><height>36</height>
-          <texture border="8" colordiffuse="FF2C3438">special://xbmc/media/cb1-chip.png</texture>
+        <control type="image"><width>560</width><height>1</height>
+          <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
         </control>
         <control type="label" id="9102">
-          <left>32</left><width>514</width><height>36</height>
+          <left>32</left><top>8</top><width>514</width><height>24</height>
           <font>CB1.SwitchHelp</font><textcolor>FFE0E6E8</textcolor><aligny>center</aligny>
           <label>$INFO[Container(6).ListItem.Label2]</label>
           <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
