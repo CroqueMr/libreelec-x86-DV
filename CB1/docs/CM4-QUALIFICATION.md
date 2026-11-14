@@ -1,10 +1,10 @@
 # CM4 processing scope
 
 The independent `cb1-cm4-v1` scalar/spatial operator is a numerical reference,
-not the complete **RC3 HDR10 Rendering Reference** runtime. That runtime uses
+not the complete **LLDV Reference – HDR10 Output** runtime. That runtime uses
 explicit player-led PQ mapping and available L2 compatibility; it does not stack
 L3 or a full L8 creative pass onto the curve. L8 spatial and secondary controls
-remain unexecuted. [Current runtime contract](ALGORITHMS.md#dolby-vision-to-hdr10-rendering-reference).
+remain unexecuted. [Current runtime contract](ALGORITHMS.md#dolby-vision-to-lldv-reference--hdr10-output).
 
 Authored-Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1` for trim-guided
 expansion and scene-curve output metadata. Compatible L8 anchors take precedence

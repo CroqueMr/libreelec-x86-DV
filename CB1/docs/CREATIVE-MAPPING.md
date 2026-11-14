@@ -16,7 +16,7 @@ native PQ curve; it does not execute the full L8 operator described below.
 | L2 target | Select exact, lower/upper, or master-neutral anchor | Interpolate in normalized PQ, not nits |
 | L2 slope, offset, power | Decode `code/4096 + 0.5`, `code/4096 - 0.5`, `code/4096 + 0.5` | Neutral code 2048 |
 | L2 chroma, saturation | Decode `code/4096 - 0.5` | Neutral code 2048 |
-| L2 `ms_weight` | Resolve selected HDR10 Rendering Reference metadata; preserve without execution | Signed sentinel `-1` distinct; no qualified spatial implementation |
+| L2 `ms_weight` | Resolve selected LLDV Reference – HDR10 Output metadata; preserve without execution | Signed sentinel `-1` distinct; no qualified spatial implementation |
 | L8 | Resolve typed primary/optional fields and compare parsed/raw values | Independent CM4 scalar/spatial reference; original block length preserved |
 | L10 | Resolve and validate custom target bounds/primaries against raw bytes | No guessed unknown IDs or preset overrides |
 | L9 | Use Display P3, BT.709, BT.2020 or validated custom mastering primaries | Distinct from BT.2020 transport primaries |
@@ -99,13 +99,13 @@ criteria. The reference is not a complete TV mapper or a panel measurement.
 
 ## Rendering boundary
 
-RC3 HDR10 Rendering Reference reconstructs BL and matched applicable EL once,
+LLDV Reference – HDR10 Output reconstructs BL and matched applicable EL once,
 then maps raw L1 scene guidance through its explicit player-led PQ curve.
 Compatible L2 primary controls shape that tone LUT with protected endpoints;
 chroma executes in bounded target-gamut RGB. L3 offsets and a full L8 creative
 operator are not added to this runtime. Final BT.2020/PQ encoding and Kodi
 scaling do not add a second scene tone map. Source metadata is immutable.
-[Runtime equations](ALGORITHMS.md#dolby-vision-to-hdr10-rendering-reference).
+[Runtime equations](ALGORITHMS.md#dolby-vision-to-lldv-reference--hdr10-output).
 
 Adaptive HDR Mapping
 expands reconstructed pixels using the original metadata and emits consistent
@@ -160,7 +160,7 @@ describes creative intent, not a complete numerical mapper. Independent CM4
 reference outputs and tolerances qualify this project's numerical contract only.
 
 The independent CM4 scalar/spatial reference is retained for numerical/API
-qualification. Published RC3 HDR10 Rendering Reference uses explicit PQ mapping
+qualification. LLDV Reference – HDR10 Output uses explicit PQ mapping
 and available L2 compatibility instead; it does not execute a full L8 creative pass.
 Dolby Vision Adaptive HDR Mapping uses `cb1-dve-pixel-v1`; the older `cb1-dve-v7`
 fitter remains an offline numerical reference, not the selected playback path.
@@ -177,12 +177,12 @@ processing from quantization error; they do not establish Dolby equivalence.
 
 See [algorithms and metadata](ALGORITHMS.md) for the current equations.
 
-RC3 HDR10 Rendering Reference uses raw L1 statistics, without folding L3. Missing
+LLDV Reference – HDR10 Output uses raw L1 statistics, without folding L3. Missing
 or unusable L1 uses valid static source descriptors from the same frame. All-black
 L1 remains valid. Source metadata is immutable and structural/raw corruption
 remains invalid. This runtime is separate from the scalar/spatial reference.
 
 The Dolby [trim-controls guide](https://professionalsupport.dolby.com/s/article/The-Dolby-Vision-Trim-Controls)
-limits secondary six-vector trims to SDR generation. HDR10 Rendering Reference preserves their
+limits secondary six-vector trims to SDR generation. LLDV Reference – HDR10 Output preserves their
 presence and raw values but does not execute them in HDR10. Generic offline
 operators and Adaptive guidance retain their existing behavior.

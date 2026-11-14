@@ -75,7 +75,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40821"
-+msgid "HDR10 Rendering uses source metadata. HDR10 Rendering Reference maps to the configured display peak, black level and gamut. HDR10+ sends picture statistics and representable trims to a compatible display."
++msgid "HDR10 Rendering uses source metadata. LLDV Reference – HDR10 Output maps to the configured display peak, black level and gamut. HDR10+ sends picture statistics and representable trims to a compatible display."
 +msgstr ""
 +
 +msgctxt "#40922"
@@ -99,7 +99,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40823"
-+msgid "HDR10 Rendering Reference"
++msgid "LLDV Reference – HDR10 Output"
 +msgstr ""
 +
 +msgctxt "#40829"
@@ -107,7 +107,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40830"
-+msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. HDR10 Rendering Reference has its own display calibration settings."
++msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. LLDV Reference – HDR10 Output has its own display calibration settings."
 +msgstr ""
 +
 +msgctxt "#40831"
@@ -240,11 +240,11 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +msgstr ""
 +
 +msgctxt "#40867"
-+msgid "Dolby Vision rendering (AI)"
++msgid "Dolby Vision Rendering"
 +msgstr ""
 +
 +msgctxt "#40868"
-+msgid "Dolby Vision Adaptive HDR Mapping (AI)"
++msgid "Dolby Vision Adaptive HDR Mapping"
 +msgstr ""
 +
 +msgctxt "#40870"

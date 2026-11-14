@@ -38,7 +38,7 @@ class ProcessInfoWordingTests(unittest.TestCase):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         repo=Path(__file__).resolve().parents[2]
         strings=(tree/'addons/resource.language.en_gb/resources/strings.po').read_text()
-        for number,label in {40867:'Dolby Vision rendering (AI)',40970:'Dolby Vision Rendering'}.items():
+        for number,label in {40867:'Dolby Vision Rendering',40970:'Dolby Vision Rendering'}.items():
             entry=re.search(r'msgctxt "#'+str(number)+r'"\nmsgid "([^"\n]*)"',strings)
             self.assertIsNotNone(entry,number)
             self.assertEqual(entry.group(1),label)

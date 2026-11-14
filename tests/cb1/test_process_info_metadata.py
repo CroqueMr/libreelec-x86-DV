@@ -151,7 +151,7 @@ int main() {
  assert(TargetList({48,100,300,600,1000,2000,4000,10000},{50,51})=="8: 48–10000 nits · 2 custom");
  assert(L10Displays(levels).find("displays")!=std::string::npos);
  mockWidth=-1;
- assert(PolicyText("Dolby Vision Adaptive HDR Mapping (AI)")=="DV Adaptive (AI)");
+ assert(PolicyText("Dolby Vision Adaptive HDR Mapping")=="DV Adaptive");
 
 }
 '''.replace('HELPERS', helpers())
