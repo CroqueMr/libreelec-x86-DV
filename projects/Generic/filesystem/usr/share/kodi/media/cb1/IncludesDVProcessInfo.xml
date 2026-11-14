@@ -33,7 +33,7 @@
   </variable>
   <variable name="DVPanelMode">
     <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + String.IsEqual(Window(playerprocessinfo).Property(DV.CB1Active),true)">[COLOR FF65E18D]$INFO[Window(playerprocessinfo).Property(DV.Mode)][/COLOR]</value>
-    <value>Kodi playback</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">$INFO[Window(playerprocessinfo).Property(DV.Mode)]</value>
   </variable>
   <variable name="DVRenderMeterColor">
     <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + String.IsEqual(Window(playerprocessinfo).Property(DV.CB1Active),true)">FF65E18D</value>
