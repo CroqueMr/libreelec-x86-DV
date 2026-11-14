@@ -40,10 +40,15 @@ int main()
   SourceBinding id{7,2,9};
   LldvConnectorStatus connector{};
   connector.sink.status=DV_EDID_LLDV_ONLY; connector.sink.lldv_422=true;
+  connector.display.status=LldvEdidStatus::Ready;
+  connector.display.primaries={.68,.32,.25,.70,.15,.05};
+  connector.edidGeneration=2;
   connector.driverFormats=LLDV_422; connector.currentTiming=true;
   connector.connectorId=17; connector.timingCommitted=true;
-  LldvTransport packed{17,LldvFormat::Y422_10,false};
+  LldvTransport packed{17,LldvFormat::Y422_10,false,2};
   dvbridge_creative_plan plan{};
+  plan.policy.lldv_edid_generation=2;
+  plan.policy.lldv_edid_version=2;
   plan.policy.tv={1000,DVBRIDGE_PANEL_OLED,DVBRIDGE_GAMUT_P3_D65};
   plan.policy.expert_black_nits=0.002;
   plan.status=DVBRIDGE_CREATIVE_READY;
@@ -69,6 +74,9 @@ int main()
   connector.connectorId=18; // A late receipt from another connector is insufficient.
   assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.connectorId=17;
+  ++connector.edidGeneration;
+  assert(!outputFor(CB1_MASTER_READY,id,id,true));
+  --connector.edidGeneration;
   connector.active=LldvFormat::Y422_12;
   assert(!outputFor(CB1_MASTER_READY,id,id,true)); // Carrier packed at 10 bits.
   connector.active=LldvFormat::Y422_10;
@@ -84,6 +92,7 @@ int main()
   packed.forced=true;
   auto forced=outputFor(CB1_MASTER_READY,id,id,true);
   assert(forced && forced->bits==10 && forced->minimumLinkBits==12);
+  assert(forced->lldv->edidVersion==2 && forced->lldv->primaries[0]==.68);
   connector.active=LldvFormat::Y422_12;
   assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.active=LldvFormat::Y422_10;

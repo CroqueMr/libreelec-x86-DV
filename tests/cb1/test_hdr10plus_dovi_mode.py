@@ -131,7 +131,7 @@ int main(){
 namespace DVBRIDGE { ENUMS
 PREFERENCES
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputPreferences prefs;
 OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=prefs;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
@@ -348,7 +348,7 @@ ENUMS
 PREFERENCES
 BUDGET
 enum class OutputRoute { Vanilla, NativeDV, HDR10, SDR, PlayerLed };
-struct OutputSelection { OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{}; };
+struct OutputSelection { OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{}; };
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 template<class T> void source_plus(T& caps,bool value) {
@@ -469,7 +469,7 @@ namespace DVBRIDGE {
 ENUMS
 PREFERENCES
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputSelection gated(const OutputPreferences& preferences,OutputCapabilities caps,bool m_aiReady,bool m_aiFallback=false,bool current=true){
  auto result=select(preferences,caps);
@@ -751,7 +751,7 @@ inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Nativ
 inline std::atomic<HDR10SourceMode> hlgPlaybackMode{HDR10SourceMode::Native};
 OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=current;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 struct Picture {

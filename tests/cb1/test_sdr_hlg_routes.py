@@ -46,7 +46,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}
 HEADER
 namespace DVBRIDGE {
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 int main(){

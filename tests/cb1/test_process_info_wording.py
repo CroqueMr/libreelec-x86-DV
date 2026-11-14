@@ -160,6 +160,7 @@ int main() {
  auto SetProperty=[&](const char* key,const std::string& value){properties[key]=value;};
  struct {std::string Get(int id) const {return id==40834 ? "OLED" : id==40835 ? "LCD" : "";}} localizer;
  auto refresh=[&]{const auto active=output.flags;const bool hdr10=active&CDVPlaybackInfo::HDR10;
+  const bool lldv=active && data.output.lldv.has_value();
   STATEMENTS
  };
  output.flags=CDVPlaybackInfo::HDR10;output.effective=3;
@@ -185,9 +186,9 @@ int main() {
  output.effective=4;output.gamut=3;output.manualPeak=2000;refresh();
  assert(properties["DV.TVProfile"]=="BT.2020 / 2000 nits");
  assert(properties["DV.DisplayBlack"].empty());
- output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.gamut=2;
+ output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.lldv->edidVersion=2;output.gamut=2;
  output.target=800;output.displayBlack=0.002;refresh();
- assert(properties["DV.TVProfile"]=="P3-D65 / 800 nits");
+ assert(properties["DV.TVProfile"]=="EDID v2 · 800 nits");
  assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
  output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
@@ -272,7 +273,9 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),72)
+        self.assertEqual(len(rows),75)
+        self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
+                             for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))

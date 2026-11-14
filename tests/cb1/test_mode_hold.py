@@ -227,15 +227,21 @@ struct Settings {Settings* GetSettings(){return this;}int GetInt(const char*){re
 struct CServiceBroker {static Settings* GetSettingsComponent(){static Settings s;return &s;}};
 struct Timer {int deadline=0,sets=0;void Set(std::chrono::milliseconds d){deadline=now+d.count();++sets;}
  bool IsTimePast(){return now>=deadline;}};
+using namespace std::chrono_literals;
+namespace DVBRIDGE {enum class OutputRoute {NativeDV,PlayerLed};}
 struct Resource {int resets=0;void OnResetDisplay(){++resets;}};
 struct Window {
  CHeldModeAnnouncement m_modeAnnouncement;CModeChangeHold m_modeHold;
  bool m_bRenderCreated=true,m_dispReset=false,pending=false;
- int lost=0;Timer m_dispResetTimer;std::mutex m_resourceSection;
+ int lost=0;Timer m_dispResetTimer,m_lldvEdidRefresh;
+ struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::NativeDV;} m_dvSelection;
+ std::mutex m_resourceSection;
  Resource audio;std::vector<Resource*> m_resources{&audio};
  void OnLostDevice(){if(!m_dispReset){m_dispReset=true;++lost;}}
  void PresentFrame(bool,bool){}
  void RefreshHDR10LinkDepth(){}
+ bool RefreshDisplayInfoForVideo(){return false;}
+ void RefreshDVOutputCapabilities(){}
  bool HasPendingDVOutputSurface(){return pending;}
  void announce(bool transport) ANNOUNCE
  void complete(bool accepted,bool transport) COMPLETE

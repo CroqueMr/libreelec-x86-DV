@@ -670,6 +670,7 @@ int main() {
 #include <stdexcept>
 #include "utils/DVBridgeDiagnosticState.h"
 #include "windowing/gbm/ModeChangeHold.h"
+#include "utils/DVBridgeLldv.h"
 #include <atomic>
 using namespace KODI::WINDOWING::GBM;
 #define HAVE_DVBRIDGE
@@ -732,8 +733,8 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
-  int m_dvLldvStatus{};
-  int GetLldvConnectorStatus() const {return m_dvLldvStatus;}
+  DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
+  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const {return m_dvLldvStatus;}
   bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
   bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
   bool SupportsNativeDVOutput(bool current=true) const {return !current || m_DRM->rate<=60;}

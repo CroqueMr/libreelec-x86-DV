@@ -44,11 +44,11 @@ struct Admission {
  bool m_committedPacked=true,m_direct=true,m_dvPolicyActive=false;
  bool m_overlayVisible=true,m_pendingOverlayVisible=true;
  bool m_nativeOverlayEnabled=true;int m_nativeOverlay=0;
- int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;}policy;
+ int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;uint64_t lldv_edid_generation{};}policy;
  int m_spatialMethod=0;
  struct {uint64_t revision=3;} preferences;
  Binding m_committedBinding,m_pendingBinding,m_failedIdentity{0,0,0},m_pendingIdentity;
- uint64_t m_committedRevision=7,m_geometryRevision=0;
+ uint64_t m_committedRevision=7,m_geometryRevision=0,m_lldvEdidGeneration=0;
  uint64_t m_nativeOverlayRevision=2,m_committedOverlayRevision=1,m_pendingOverlayRevision=2;
  bool allowAsync=true,asyncSetting=true,fallback=false,m_fallback=false;
  bool m_pendingHDR10Fallback=false,m_directUsable=false,m_pendingMetadata=false;

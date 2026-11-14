@@ -7,7 +7,7 @@
 #include <utility>
 #include "utils/DVBridgeLldv.h"
 constexpr uint32_t DRM_FORMAT_XRGB8888=1, DRM_FORMAT_ARGB8888=2;
-constexpr int LOGDEBUG=0;
+constexpr int LOGDEBUG=0, LOGWARNING=1;
 struct CLog {template<class... T>static void Log(T...) {}};
 struct gbm_bo {bool locked=false;};
 unsigned gbm_bo_get_width(gbm_bo*) {return 3840;}
@@ -117,6 +117,8 @@ struct Manager {int dirty=0;Manager& GetWindowManager(){return *this;}void MarkD
 struct CServiceBroker {static Manager* GetGUI(){static Manager value;return &value;}};
 struct Bridge{void Disable(){assert(false);}};
 struct Window {
+  std::mutex m_lldvEdidMutex;
+  DVBRIDGE::LldvTransport m_lldvRejected{};
   std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
   std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
   std::shared_ptr<Bridge> m_videoLayerBridge;
@@ -133,6 +135,7 @@ struct Window {
     LldvConnectorStatus status;
     status.connectorId=17;status.currentTiming=true;status.timingCommitted=true;
     status.sink.status=DV_EDID_LLDV_ONLY;status.sink.lldv_422=true;
+    status.display.status=LldvEdidStatus::Ready;
     status.driverFormats=LLDV_422;
     status.active=static_cast<LldvFormat>(drm.active);
     return status;
