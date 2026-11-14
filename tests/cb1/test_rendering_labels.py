@@ -52,8 +52,8 @@ class RenderingLabelsTests(unittest.TestCase):
         # An action reuses the dialog; no shadow setting or raw-to-view callbacks.
         # Those callbacks reverse native per-setting/output lock order under RPC.
         self.assertNotIn('SyncPlaybackChoice',source)
-        self.assertIn('dialog->SetUseDetails(!settingsMenu);',source,
-                      'Settings use the compact native list; Quick Switch keeps details')
+        self.assertIn('dialog->SetUseDetails(true);',source,
+                      'Both settings and Quick Switch show HDMI availability reasons')
         registered=(TREE/'xbmc/settings/Settings.cpp').read_text()
         callback=registered[registered.index('RegisterCallback(&CDVPlaybackModes::GetInstance()'):]
         callback=callback[:callback.index('});')]

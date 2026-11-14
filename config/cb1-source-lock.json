@@ -16,7 +16,7 @@
     "tests/cb1/test_hdr10_link_depth.py": "f283854d9c976d0aa57adc9083d4a40716cb8b5575256644725d911ef3b07444",
     "tests/cb1/test_pascal_packages.py": "799b342ed6828c1dce03a3c9b32a73bb247bd048bed3875059d079ce7883bed1",
     "tests/cb1/test_nvidia_pascal_build.py": "4fb9bacc63a9e1af8dd5613732a1ada60ddb6067586a4310b2cd029f184b8b3a",
-    "tests/cb1/test_rendering_labels.py": "4fc8db77075e872568c395484bf338c9471fae302b698ad24bd5fde26530450a",
+    "tests/cb1/test_rendering_labels.py": "0a2e879da3594f7c09ecc04304854bc156158c2b647e2ce42ed6e4df84e733c5",
     "docs/cb1/PLAYBACK.md": "a2c56239eb594e1e61eec7c5ef8c2965cf7610eaae3b2e1f52690da409229abf",
     "packages/multimedia/bdj-runtime/package.mk": "1c0e1163651be3f08d75c1524bea594f6ab8bd8b11849cfa141e8018a18d8638",
     "packages/multimedia/bdj-runtime/profile.d/90-bdj.conf": "a1328b1ad9daf6f7710b53cc10686e7b6329cdb497d3fabb6f7b7585a1924a56",
@@ -340,7 +340,7 @@
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
     "tests/cb1/test_master_fallback.py": "b491d2ca9a92fbf9e4f5afe454b0f674d0741dc503574021956e7f67bc9b407e",
     "tests/cb1/test_master_reference.py": "6f451f60c9765cc6b1fcd7dd0cc614399e6e4846a7dc1ac3924d41d9f3aba449",
-    "tests/cb1/test_playback_defaults.py": "a8cf57d2b75b0e1114741f6a4b72fc412c14db1949701754cea1d64847383778",
+    "tests/cb1/test_playback_defaults.py": "22b17b25e569cbf4a309696c11bffb82ff0b9761765328dd119cc414845f6aa9",
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "9c55bc203411d2bb357c58ffb806768dc6d67d3acb590a66c71cedd12171834e",
     "tests/cb1/test_cb1_presentation_sync.py": "de1f170c9fe676fad3058137bedaf90ee64d899cbcffd07b9d5d7088b66716a2",
@@ -375,7 +375,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "fd444beb154e2998681808fbd4ac7601fb034b7f3ba0ad47d87da09b06178db3",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "e470a02344dc290ee87fb6f52dd54db086cd7950e64b19b93b9cd68413e25f5b",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": "47afa3f97c23ceaef5dccedee044ad822f4caa7c0196dfbdf2d5ca90a4577a84",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": "146f8dc49a4cf3109087757aceec2d72e545ace423aaa73c858f670eb2140f41",
     "tests/cb1/test_video_settings_layout.py": "a302248d733805a44e4658ae66bd403904d770197d44eaa016de887afde52fe3"
   },
   "staging": {

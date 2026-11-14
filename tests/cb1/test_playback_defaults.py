@@ -60,7 +60,7 @@ struct CSetting {std::string id;const auto& GetId()const{return id;}};
 struct CSettingInt:CSetting {CSettingInt(std::string value){id=value;}};
 struct Strings {std::string Get(int id)const{return std::to_string(id);}};
 struct Resources {const Strings& GetLocalizeStrings(){static Strings s;return s;}} resources;
-struct CFileItem {CFileItem(std::string){}void SetLabel2(std::string){}void SetProperty(std::string,CVariant){}
+struct CFileItem {CFileItem(std::string){}void SetLabel(std::string){}void SetLabel2(std::string){}void SetProperty(std::string,CVariant){}
  void SetProperty(std::string,const char*){}CVariant GetProperty(std::string){return {};}};
 struct CGUIDialogSelect {
  int selected=0,current=-1;bool confirmed=true;std::vector<CFileItem> items;

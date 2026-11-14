@@ -1196,7 +1196,29 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
    constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
  #endif
    const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
-@@ -334,72 +282,44 @@
+@@ -202,7 +150,7 @@
+     dialog->Reset();
+     dialog->SetHeading(settingsMenu ? strings.Get(40811) :
+         StringUtils::Format(strings.Get(40876), hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
+-    dialog->SetUseDetails(!settingsMenu);
++    dialog->SetUseDetails(true);
+     for(const auto& option : options)
+     {
+       DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
+@@ -210,8 +158,10 @@
+       CFileItem item(option.label);
+       item.SetLabel2(option.label2);
+       for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
+-      item.SetProperty("CB1.TextColor", item.GetProperty("disabled").asBoolean() ?
+-                                      "FFA0A0A0" : "FFF0F0F0");
++      const bool disabled = item.GetProperty("disabled").asBoolean();
++      if (settingsMenu && disabled)
++        item.SetLabel("[COLOR grey]" + option.label + "[/COLOR]");
++      item.SetProperty("CB1.TextColor", disabled ? "FFA0A0A0" : "FFF0F0F0");
+       dialog->Add(item);
+     }
+     dialog->SetSelected(current);
+@@ -334,72 +284,44 @@
    if (!dialog)
      return;
  
@@ -1293,7 +1315,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
      settings->Save();
  }
  } // namespace
-@@ -409,12 +329,22 @@
+@@ -409,12 +331,22 @@
    using namespace DVBRIDGE;
    const auto status = ReadLldvConnector();
    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -1322,7 +1344,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  }
  
  std::string CDVPlaybackModes::SDRGamutLabel()
-@@ -426,8 +356,7 @@
+@@ -426,8 +358,7 @@
  
  void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
  {
