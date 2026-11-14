@@ -16,13 +16,29 @@ class QuickSwitchResources(unittest.TestCase):
     def test_footer_is_a_single_line_with_bottom_padding(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
         group = definitions.find("./include[@name='CB1PlaybackModeLayout']/control")
-        footer = group.find("control[@id='9102']")
+        footer_group = group.find("control[@id='9103']")
+        footer = footer_group.find("control[@id='9102']")
         self.assertEqual(footer.get('type'), 'label')
         self.assertEqual(footer.findtext('label'), '$INFO[Container(6).ListItem.Label2]')
         self.assertEqual(footer.findtext('wrapmultiline'), 'false')
         self.assertEqual(footer.findtext('scroll'), 'false')
-        bottom = int(footer.findtext('top')) + int(footer.findtext('height'))
+        bottom = int(footer_group.findtext('top')) + int(footer.findtext('height'))
         self.assertGreaterEqual(int(group.findtext('height')) - bottom, 12)
+
+    def test_compact_geometry_contains_the_largest_source_menu(self):
+        definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
+        group = definitions.find("./include[@name='CB1PlaybackModeLayout']/control")
+        self.assertEqual(group.findtext('width'), '600')
+        rows = definitions.find("./include[@name='CB1PlaybackModeRows']")
+        for kind in ('itemlayout', 'focusedlayout'):
+            self.assertEqual(rows.find(kind).get('height'), '38')
+        for identifier in ('3', '6'):
+            view = group.find(f"control[@id='{identifier}']")
+            self.assertEqual(int(view.findtext('height')), 9 * 38)
+        for label in [*group.findall("control[@type='label']"), *definitions.findall("./include[@name='CB1PlaybackModeRowContents']/control[@type='label']")]:
+            if label.findtext('visible') != 'false':
+                self.assertEqual(label.findtext('scroll'), 'false')
+                self.assertEqual(label.findtext('wrapmultiline'), 'false')
 
     def test_app_window_has_a_closed_include_and_asset_graph(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml').getroot()
@@ -127,7 +143,7 @@ int main(){
             self.assertEqual(run.returncode, 0, run.stderr)
 
     @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi tree')
-    def test_every_item_derives_explicit_color_from_its_admission_flag(self):
+    def test_disabled_selected_and_available_rows_have_distinct_states(self):
         import resource
         from test_native_video_source import body
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
@@ -146,18 +162,28 @@ struct CFileItem {
  void SetLabel2(const std::string&){}
  void SetProperty(const std::string& n,bool v){properties[n].flag=v;}
  void SetProperty(const std::string& n,const char* v){properties[n].text=v;}
+ void SetProperty(const std::string& n,const std::string& v){properties[n].text=v;}
  Value GetProperty(const std::string& n)const{auto i=properties.find(n);return i==properties.end()?Value{}:i->second;}
 };
 struct Option {int value;std::string label,label2;std::vector<std::pair<std::string,bool>> properties;};
 struct Dialog {std::vector<CFileItem> items;void Add(const CFileItem& i){items.push_back(i);}};
 int main(){
  Dialog d;auto* dialog=&d;
+ const bool settingsMenu = false;
+ const bool cb1Active = true;
+ const int current = 2;
+ struct Strings { std::string Get(int id) const { return std::to_string(id); } } strings;
+ struct Choice { int label; };
+ const Choice choices[]{{1}, {2}, {3}};
  std::vector<Option> options{{0,"A","",{}},{1,"B","",{{"disabled",true}}},{2,"C","",{{"disabled",false}}}};
  for(const auto& option:options) OWNER
  assert(d.items.size()==3);
- assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF0F0F0");
- assert(d.items[1].GetProperty("CB1.TextColor").text=="FFA0A0A0");
- assert(d.items[2].GetProperty("CB1.TextColor").text=="FFF0F0F0");
+ assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF2F5F6");
+ assert(d.items[1].GetProperty("CB1.TextColor").text=="FFA2ACB1");
+ assert(d.items[2].GetProperty("CB1.TextColor").text=="FF65E18D");
+ assert(d.items[0].GetProperty("CB1.SwitchStatus").text.empty());
+ assert(d.items[1].GetProperty("CB1.SwitchStatus").text=="40851");
+ assert(d.items[2].GetProperty("CB1.SwitchStatus").text=="40878");
  assert(d.items[1].GetProperty("disabled").asBoolean());
 }
 '''.replace('OWNER', owner)
