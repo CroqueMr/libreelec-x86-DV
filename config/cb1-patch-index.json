@@ -1435,5 +1435,17 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-passthrough-dialnorm.patch": {
+    "owner": "CB1 passthrough dialnorm (adapted from pannal T4c)",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Label the live audio passthrough switches.",
+      "system/settings/settings.xml": "Expose opt-in controls under System Audio.",
+      "xbmc/cores/AudioEngine/Utils/AEStreamInfo.cpp": "Rewrite supported complete output frames and maintain transport checksums.",
+      "xbmc/cores/AudioEngine/Utils/AEStreamInfo.h": "Carry passthrough-only settings on the stream parser instance.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Audio/DVDAudioCodecPassthrough.cpp": "Apply native setting values only to the matching passthrough codec.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Audio/DVDAudioCodecPassthrough.h": "Keep live references to native audio settings.",
+      "xbmc/settings/Settings.h": "Define the passthrough dialnorm setting IDs."
+    }
   }
 }
