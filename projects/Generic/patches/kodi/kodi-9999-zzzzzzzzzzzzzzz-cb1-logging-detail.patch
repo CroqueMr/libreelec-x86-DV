@@ -1,0 +1,343 @@
+Subject: [PATCH] Expose CB1 log detail in Kodi System logging
+
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26573,3 +26573,19 @@
+ msgctxt "#41224"
+ msgid "Dolby Vision picture metadata is missing or unusable."
+ msgstr ""
++
++msgctxt "#41225"
++msgid "CB1 log detail"
++msgstr ""
++
++msgctxt "#41226"
++msgid "Normal"
++msgstr ""
++
++msgctxt "#41227"
++msgid "Enhanced"
++msgstr ""
++
++msgctxt "#41228"
++msgid "Normal keeps CB1 warnings, errors and key playback and display events. Enhanced includes detailed CB1 diagnostics. Kodi debug logging is controlled separately."
++msgstr ""
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -4157,6 +4157,18 @@
+     </category>
+     <category id="logging" label="14092" help="36391">
+       <group id="1" label="14260">
++        <setting id="debug.cb1logdetail" type="integer" label="41225" help="41228">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <level>1</level>
++          <default>1</default>
++          <constraints>
++            <options>
++              <option label="41226">0</option>
++              <option label="41227">1</option>
++            </options>
++          </constraints>
++          <control type="spinner" format="string" />
++        </setting>
+         <setting id="debug.showloginfo" type="boolean" label="20191" help="36392">
+           <level>1</level>
+           <default>false</default>
+--- a/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+@@ -1050,7 +1050,7 @@
+   DVBRIDGE::StreamTelemetry::SourceBits(pPicture->colorBits,pPicture->pixelFormat,pPicture->doviSourceInfo,
+       {static_cast<int>(pPicture->color_primaries),static_cast<int>(pPicture->color_transfer),
+        pPicture->colorPrimariesGuessed,pPicture->color_range==1,pPicture->strDVELType});
+-  if (DVBRIDGE::DiagnosticsEnabled())
++  if (DVBRIDGE::DetailedDiagnosticsEnabled())
+   {
+     ++m_diagnosticPictures;
+     const auto now = DVBRIDGE::DiagnosticNowMs();
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1087,7 +1087,7 @@
+       m_pendingIdentity.revision},"Prepared");
+   // An unevaluated SDR selector leaves both the epoch and retry limiter pending.
+   if (m_effectiveMode==DVBRIDGE_MODE_SDR && sdr.empty()) return;
+-  if (m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DiagnosticsEnabled() &&
++  if (m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DetailedDiagnosticsEnabled() &&
+       m_auditPrepared.Record(DVBRIDGE::DiagnosticNowMs(),"prepared",m_auditSerial))
+   {
+     try
+@@ -1406,7 +1406,7 @@
+       packMs += std::chrono::duration<double,std::milli>(end - begin).count();
+       if (++samples == 120)
+       {
+-        if (std::getenv("CB1_PRESENTATION_AUDIT"))
++        if (DVBRIDGE::DetailedDiagnosticsEnabled() && std::getenv("CB1_PRESENTATION_AUDIT"))
+           CLog::Log(LOGINFO, "CB1 LLDV packing: gpu_wait_ms={:.3f} cpu_ms={:.3f}", waitMs / samples, packMs / samples);
+         samples = 0;
+         waitMs = packMs = 0;
+@@ -1981,7 +1981,7 @@
+   }
+   // A phase remains pending across failed/superseded pictures and exhausted
+   // log budgets. Only its emitted report consumes this source/settings epoch.
+-  if (m_auditRequestedSerial!=m_auditSerial && DVBRIDGE::DiagnosticsEnabled() &&
++  if (m_auditRequestedSerial!=m_auditSerial && DVBRIDGE::DetailedDiagnosticsEnabled() &&
+       m_auditRequested.Record(DVBRIDGE::DiagnosticNowMs(),"requested",m_auditSerial))
+   {
+     m_auditRequestedSerial=m_auditSerial;
+@@ -2131,7 +2131,7 @@
+     m_pending = m_prepared && fenced;
+     result = m_pending ? FrameStatus::Ready : FrameStatus::Failed;
+     if (result==FrameStatus::Ready && policy.mode==DVBRIDGE_MODE_SDR && directQuery>=0 &&
+-        m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DiagnosticsEnabled())
++        m_auditPreparedSerial!=m_auditSerial && DVBRIDGE::DetailedDiagnosticsEnabled())
+       sdrAudit=SDRPreparationAudit(bl.frame,enhancement ? &el.frame : nullptr,metadata,
+           geometry,m_scanout,m_outputBits,m_hdr10Limited,base.pts,elPts,
+           {int(originalDV)+2*int(originalHDR),allowPacked,m_directUsable,bool(m_scanout),
+@@ -3019,7 +3019,7 @@
+     // Immutable session policy is announced only on its first accepted frame.
+     // Picture reset and changing CM/FEL metadata do not start a new session.
+     if (m_hdr10 && DVBRIDGE::DiagnosticsEnabled() && m_presentations == 1)
+-      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge presented: policy=Basic target={} nits origin={} creative_trims=not-applied framebuffer_bits={}",
++      DVBRIDGE::DiagnosticEssentialLog(LOGINFO, "DVBridge presented: policy=Basic target={} nits origin={} creative_trims=not-applied framebuffer_bits={}",
+           target, level6 ? "RPU-L6" : "RPU-source-PQ", m_outputBits);
+     if (m_hdr10 && m_pendingHDR10Fallback != m_hdr10FallbackReason)
+     {
+@@ -3029,9 +3029,9 @@
+         const auto now = DVBRIDGE::DiagnosticNowMs();
+         const char* reason = m_hdr10FallbackReason == 1 ? "missing-L1" : "unusable-L1";
+         if (m_hdr10FallbackReason && m_hdr10Fallbacks.Record(now, reason))
+-          DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge Basic HDR10: presented static fallback reason={}", reason);
++          DVBRIDGE::DiagnosticEssentialLog(LOGINFO, "DVBridge Basic HDR10: presented static fallback reason={}", reason);
+         else if (!m_hdr10FallbackReason && m_hdr10Fallbacks.Recovered(now))
+-          DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge Basic HDR10: presented L1 mapping recovered");
++          DVBRIDGE::DiagnosticEssentialLog(LOGINFO, "DVBridge Basic HDR10: presented L1 mapping recovered");
+       }
+     }
+   }
+@@ -3290,7 +3290,7 @@
+   DVBRIDGE::StreamTelemetry::PublishNativeInfo(submission.informationGeneration);
+   const auto acceptedOutput=DVBRIDGE::StreamTelemetry::Read().output;
+ #ifdef CB1_HAS_HDR10_AI
+-  if (m_aiFrame && DVBRIDGE::DiagnosticsEnabled() && m_aiSummary.Due(DVBRIDGE::DiagnosticNowMs()))
++  if (m_aiFrame && DVBRIDGE::DetailedDiagnosticsEnabled() && m_aiSummary.Due(DVBRIDGE::DiagnosticNowMs()))
+   {
+     m_aiSummary.Emitted(DVBRIDGE::DiagnosticNowMs());
+     const auto metrics=m_context->HDR10AI().Metrics();
+@@ -3329,7 +3329,7 @@
+           m_committedBinding.stream,m_committedBinding.picture,m_committedBinding.revision,
+           m_committedRevision,acceptedOutput.effective,acceptedOutput.bits,acceptedOutput.authoredLegacy,acceptedOutput.sampleCount,
+           acceptedOutput.creativeStatus,acceptedOutput.creativeReason,acceptedOutput.creativeApplied,acceptedOutput.creativeEdited);
+-      DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge output selection: requested={} effective={} reason={} minimum_link_bits={} profile={} bl={} el={} rpu={} hdr_origin={}",
++      DVBRIDGE::DiagnosticEssentialLog(LOGINFO,"DVBridge output selection: requested={} effective={} reason={} minimum_link_bits={} profile={} bl={} el={} rpu={} hdr_origin={}",
+           CDVPlaybackInfo::RequestedPolicy(acceptedOutput.requested,CDVPlaybackInfo::IsHDR10AI(acceptedOutput),CDVPlaybackInfo::IsHDR10PlusDV(acceptedOutput)),
+           CDVPlaybackInfo::RequestedPolicy(acceptedOutput.effective,CDVPlaybackInfo::IsHDR10AI(acceptedOutput),CDVPlaybackInfo::IsHDR10PlusDV(acceptedOutput)),
+           CDVPlaybackInfo::Reason(acceptedOutput.reason),acceptedOutput.minimumLinkBits,
+@@ -3341,7 +3341,7 @@
+           acceptedOutput.flags & CDVPlaybackInfo::HDR10 ? (acceptedOutput.effective>=3 ? "manual-tv-profile" :
+               acceptedOutput.level6 ? "source-L6" : "reference-default") : "source-RPU");
+     }
+-    if (m_failures.Recovered(now)) DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge renderer recovered: policy unchanged");
++    if (m_failures.Recovered(now)) DVBRIDGE::DiagnosticEssentialLog(LOGINFO,"DVBridge renderer recovered: policy unchanged");
+   }
+   m_prepared = m_packed = m_pending = false;
+   m_submission = {};
+--- a/xbmc/settings/Settings.h
++++ b/xbmc/settings/Settings.h
+@@ -452,6 +452,7 @@
+   static constexpr auto SETTING_POWERMANAGEMENT_WAKEONACCESS = "powermanagement.wakeonaccess";
+   static constexpr auto SETTING_POWERMANAGEMENT_WAITFORNETWORK = "powermanagement.waitfornetwork";
+   static constexpr auto SETTING_POWERMANAGEMENT_RESTARTPLAYER = "powermanagement.restartplayer";
++  static constexpr auto SETTING_DEBUG_CB1LOGDETAIL = "debug.cb1logdetail";
+   static constexpr auto SETTING_DEBUG_SHOWLOGINFO = "debug.showloginfo";
+   static constexpr auto SETTING_DEBUG_EXTRALOGGING = "debug.extralogging";
+   static constexpr auto SETTING_DEBUG_SETEXTRALOGLEVEL = "debug.setextraloglevel";
+--- a/xbmc/utils/DVBridgeDiagnosticLog.h
++++ b/xbmc/utils/DVBridgeDiagnosticLog.h
+@@ -67,22 +67,29 @@
+ }
+ 
+ template<class... Args>
++bool DiagnosticEssentialLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
++{
++  if (!DiagnosticsEnabled()) return false;
++  try
++  {
++    std::lock_guard lock(diagnosticMutex);
++    return WriteDiagnosticLocked(DiagnosticEvent::Normal, level, format, std::forward<Args>(args)...);
++  }
++  catch (...) { return false; } // Diagnostics cannot escape into a C callback or playback.
++}
++
++template<class... Args>
+ bool DiagnosticLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
+ {
+-  if (!DiagnosticsEnabled()) return false;
+-  try
+-  {
+-    std::lock_guard lock(diagnosticMutex);
+-    return WriteDiagnosticLocked(DiagnosticEvent::Normal, level, format, std::forward<Args>(args)...);
+-  }
+-  catch (...) { return false; } // Diagnostics cannot escape into a C callback or playback.
++  if (level < LOGWARNING && !DetailedDiagnosticsEnabled()) return false;
++  return DiagnosticEssentialLog(level, format, std::forward<Args>(args)...);
+ }
+ 
+ // Summary owns the periodic and reset-coalescing bounds for these counters.
+ template<class... Args>
+ bool DiagnosticRendererCounterLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
+ {
+-  if (!DiagnosticsEnabled()) return false;
++  if (!DetailedDiagnosticsEnabled()) return false;
+   try
+   {
+     std::lock_guard lock(diagnosticMutex);
+@@ -101,7 +108,7 @@
+ template<class... Args>
+ bool DiagnosticProgressLog(int level, fmt::format_string<Args...> format, Args&&... args) noexcept
+ {
+-  if (!DiagnosticsEnabled()) return false;
++  if (!DetailedDiagnosticsEnabled()) return false;
+   try
+   {
+     std::lock_guard lock(diagnosticMutex);
+@@ -137,8 +144,9 @@
+     // A decoder can reopen before the renderer adopts its first new picture.
+     if (!diagnosticSession.Stream() || stream == diagnosticSession.Stream())
+       diagnosticSession.Stage(stage);
+-    WriteDiagnosticLocked(DiagnosticEvent::Normal, LOGINFO,
+-                          "DV decode startup: decoder_stream={} stage={} fel={} pending={}",
++    if (DetailedDiagnosticsEnabled())
++      WriteDiagnosticLocked(DiagnosticEvent::Normal, LOGINFO,
++                            "DV decode startup: decoder_stream={} stage={} fel={} pending={}",
+                           stream, stage, fel, pending);
+   }
+   catch (...) {}
+--- a/xbmc/utils/DVBridgeDiagnosticState.h
++++ b/xbmc/utils/DVBridgeDiagnosticState.h
+@@ -1,5 +1,6 @@
+ /* SPDX-License-Identifier: GPL-2.0-or-later */
+ #pragma once
++#include <atomic>
+ #include <chrono>
+ #include <cstdint>
+ #include <cstdlib>
+@@ -19,6 +20,18 @@
+     return !setting || setting[0] != '0' || setting[1] != '\0';
+   }();
+   return enabled;
++}
++
++inline std::atomic<bool> detailedDiagnostics{true};
++
++inline void SetDetailedDiagnostics(bool enabled)
++{
++  detailedDiagnostics.store(enabled, std::memory_order_relaxed);
++}
++
++inline bool DetailedDiagnosticsEnabled()
++{
++  return DiagnosticsEnabled() && detailedDiagnostics.load(std::memory_order_relaxed);
+ }
+ 
+ inline uint64_t DiagnosticNowMs()
+--- a/xbmc/utils/log.cpp
++++ b/xbmc/utils/log.cpp
+@@ -19,6 +19,9 @@
+ #include "settings/SettingsContainer.h"
+ #include "settings/lib/Setting.h"
+ #include "settings/lib/SettingsManager.h"
++#ifdef HAVE_DVBRIDGE
++#include "utils/DVBridgeDiagnosticState.h"
++#endif
+ #include "utils/Map.h"
+ #include "utils/StringUtils.h"
+ #include "utils/URIUtils.h"
+@@ -113,6 +116,9 @@
+ void CLog::OnSettingsLoaded()
+ {
+   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
++#ifdef HAVE_DVBRIDGE
++  DVBRIDGE::SetDetailedDiagnostics(settings->GetInt(CSettings::SETTING_DEBUG_CB1LOGDETAIL) != 0);
++#endif
+   m_componentLogEnabled = settings->GetBool(CSettings::SETTING_DEBUG_EXTRALOGGING);
+   SetComponentLogLevel(settings->GetList(CSettings::SETTING_DEBUG_SETEXTRALOGLEVEL));
+ }
+@@ -123,6 +129,13 @@
+     return;
+ 
+   const std::string& settingId = setting->GetId();
++#ifdef HAVE_DVBRIDGE
++  if (settingId == CSettings::SETTING_DEBUG_CB1LOGDETAIL)
++  {
++    DVBRIDGE::SetDetailedDiagnostics(std::static_pointer_cast<const CSettingInt>(setting)->GetValue() != 0);
++    return;
++  }
++#endif
+   if (settingId == CSettings::SETTING_DEBUG_EXTRALOGGING)
+     m_componentLogEnabled = std::static_pointer_cast<const CSettingBool>(setting)->GetValue();
+   else if (settingId == CSettings::SETTING_DEBUG_SETEXTRALOGLEVEL)
+@@ -142,7 +155,11 @@
+                                                 SettingOptionsLoggingComponentsFiller);
+   settingsManager->RegisterSettingsHandler(this);
+   settingsManager->RegisterCallback(
+-      this, {CSettings::SETTING_DEBUG_EXTRALOGGING, CSettings::SETTING_DEBUG_SETEXTRALOGLEVEL});
++      this, {CSettings::SETTING_DEBUG_EXTRALOGGING, CSettings::SETTING_DEBUG_SETEXTRALOGLEVEL,
++#ifdef HAVE_DVBRIDGE
++             CSettings::SETTING_DEBUG_CB1LOGDETAIL,
++#endif
++            });
+ 
+   if (path.empty())
+     return;
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+@@ -56,7 +56,8 @@
+ 
+ void CollectDVKernelLog()
+ {
+-  DVBRIDGE::CollectKernelLog();
++  if (DVBRIDGE::DetailedDiagnosticsEnabled())
++    DVBRIDGE::CollectKernelLog();
+ }
+ }
+ 
+@@ -130,7 +131,9 @@
+ 
+ void CDRMAtomic::ReportDVCommit(const char* stage) noexcept try
+ {
+-  DVBRIDGE::DiagnosticLog(LOGINFO,
++  if (std::string_view(stage) != "atomic-commit" && !DVBRIDGE::DetailedDiagnosticsEnabled())
++    return;
++  DVBRIDGE::DiagnosticEssentialLog(LOGINFO,
+       "DVBridge activation: stage={} result=accepted requested_dv={} restoring={}", stage,
+       m_req && m_req->requestedDV ? std::to_string(*m_req->requestedDV) : "unavailable",m_dvRestoring);
+ }
+@@ -431,7 +434,7 @@
+       ReportDVCommit("atomic-commit");
+     }
+     if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Recovered(DVNowMs()))
+-      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
++      DVBRIDGE::DiagnosticEssentialLog(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
+           m_dvFailures.Count(), m_dvFailures.Recoveries());
+   }
+   FinishRequest(true);
+@@ -858,7 +861,7 @@
+   if (m_signalKnown && state == m_signalState)
+     return;
+   const auto error = m_connector ? m_connector->PropertyInventoryError() : std::nullopt;
+-  if (DVBRIDGE::DiagnosticLog(LOGINFO,
++  if (DVBRIDGE::DiagnosticEssentialLog(LOGINFO,
+       "DVBridge signal: origin=accepted-commit-cache connector={} crtc={} dv_property={} dv_value={} hdr_property={} hdr_value={} colorspace_property={} colorspace_value={} max_bpc_property={} max_bpc_ceiling={} rgb_property={} rgb_value={} active_property={} active_value={} mode={}x{} clock_khz={} inventory_error={} nv_vsif_property={} nv_vsif_value={} dither_property={} dither_value={} color_format_property={} color_format_value={}",
+       state[0], state[1], dv.Presence(),dv.Value(),hdr.Presence(),hdr.Value(),
+       color.Presence(),color.Value(),bpc.Presence(),bpc.Value(),rgb.Presence(),rgb.Value(),
+--- a/xbmc/windowing/gbm/drm/DRMUtils.cpp
++++ b/xbmc/windowing/gbm/drm/DRMUtils.cpp
+@@ -91,7 +91,8 @@
+   if (changes.Report(DVBRIDGE::DiagnosticNowMs(), snapshot))
+   {
+     CLog::Log(LOGINFO, "DVBridge route: {}", snapshot);
+-    DVBRIDGE::CollectKernelLog();
++    if (DVBRIDGE::DetailedDiagnosticsEnabled())
++      DVBRIDGE::CollectKernelLog();
+   }
+ }
+ #endif
