@@ -1,4 +1,29 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": {
+    "owner": "Trace Player Info and playback OSD timing in debug logs.",
+    "files": {
+      "xbmc/application/Application.cpp": "Sample GUI draw, composition and presentation while a playback overlay is open.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Record bounded render buffer timeout details at debug level.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Measure Player Info initialization and data refresh.",
+      "xbmc/utils/DVBridgeOverlayTrace.h": "Collect and summarize debug-only playback overlay timings.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Measure DRM submission and existing fence waits without changing their behavior."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": {
+    "owner": "Expose CB1 diagnostic detail in Kodi System logging.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Localize the Kodi logging setting and its options.",
+      "system/settings/settings.xml": "Expose log detail in the Kodi System logging category.",
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Reduce periodic video health detail in Normal mode.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep selected output and renderer recovery diagnostics.",
+      "xbmc/settings/Settings.h": "Name the native setting ID.",
+      "xbmc/utils/DVBridgeDiagnosticLog.h": "Separate essential diagnostics from verbose detail.",
+      "xbmc/utils/DVBridgeDiagnosticState.h": "Store the active detail mode for logging producers.",
+      "xbmc/utils/log.cpp": "Read persisted detail and react to Kodi settings changes.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Keep accepted output state and reduce kernel collection in Normal mode.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Keep route summaries and limit supplemental kernel collection to Enhanced mode."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": {
     "owner": "Show one playback error with the selected circuit failure reason.",
     "files": {
