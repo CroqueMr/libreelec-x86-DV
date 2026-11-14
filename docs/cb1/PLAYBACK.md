@@ -6,10 +6,10 @@ modes appear during playback. Unavailable modes show their blocking reason.
 
 | Source | Available processing |
 | --- | --- |
-| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 Rendering Reference, HDR10+ Rendering, SDR Rendering or Kodi default |
-| HDR10 | Dolby Vision rendering (AI), Adaptive HDR Mapping (AI), SDR Rendering or Kodi default |
+| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, LLDV Reference – HDR10 Output, LLDV Reference – Native, HDR10+ Rendering, SDR Rendering or Kodi default |
+| HDR10 | Dolby Vision Rendering, Dolby Vision Adaptive HDR Mapping, SDR Rendering or Kodi default |
 | HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion; SDR Rendering |
-| HLG | Dolby Vision rendering (AI) or Kodi default |
+| HLG | Dolby Vision Rendering or Kodi default |
 | SDR / 3D | Native Kodi playback |
 
 The **Dolby Vision default playback**, **HDR10 default playback**, **HDR10+ default playback**
@@ -37,13 +37,17 @@ P3-D65 is the default gamut. Keep it unless the display profile calls for anothe
 gamut. The configured peak is a processing reference, not a measurement made by
 the player.
 
-**HDR10 Rendering Reference** uses separate display calibration settings:
+**LLDV Reference – HDR10 Output** uses separate display calibration settings:
 manual peak brightness (50–10000 nits), OLED/LCD/projector black-level presets or
 a custom black level, and target gamut. Zero peak means not configured.
 The black presets are estimates, not measurements of the display.
-Disable the TV's dynamic tone mapping for this player-led mode to avoid a second
-dynamic mapping stage. Dolby Vision output remains TV-Led: the TV still performs
-its Dolby Vision display mapping.
+Disable the TV's dynamic tone mapping for this HDR10 output to avoid a second
+dynamic mapping stage.
+
+**LLDV Reference – Native** reads the peak, black level and primaries from the
+active display's Dolby Vision EDID and sends a low-latency Dolby Vision signal.
+The LLDV format selector shows the available HDMI transport and explains any
+display or driver limitation.
 
 [Compare FEL upscalers: VAAPI, Bilinear, Reference and former Nearest neighbour](FEL-UPSCALING.md).
 
@@ -188,7 +192,7 @@ The independent SDR target offers Reference (100 nits, gamma 2.4), Bright room
 gamma 1.8–2.8 and black floor 0–5 nits below the peak. These are rendering
 targets, not measurements of the screen. HDR calibration is preserved separately.
 
-HLG has only Dolby Vision Reference Rendering (AI) and native Kodi. The reference
+HLG has only Dolby Vision Rendering and native Kodi. The reference
 path normalizes original HLG with the BT.2100 1000-nit / gamma 1.2 reference
 before analysis; it does not invent authored L2/L8 trims. HLG-base Dolby Vision
 P8.4/P10.4 with RPU remains Dolby Vision and retains full reconstruction.

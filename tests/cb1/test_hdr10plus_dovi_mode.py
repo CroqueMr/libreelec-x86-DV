@@ -971,7 +971,7 @@ int main(){
  assert(Requested(output)=="Dolby Vision Rendering");
  output.requested=output.effective=4;
  assert(VideoProcessingInfoGUI::Mode(info)=="localized Adaptive AI");
- assert(Effective(output)=="Dolby Vision Adaptive HDR Mapping (AI)");
+ assert(Effective(output)=="Dolby Vision Adaptive HDR Mapping");
  output.hdr10AI=false;output.requested=output.effective=1;
  assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision Reference");
  assert(Requested(output)=="Dolby Vision Reference");assert(Origin(output)=="source-RPU");

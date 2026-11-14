@@ -30,15 +30,16 @@ source contains creative trims or that every output mode applies every field.
 | Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
 | Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
 | Dolby Vision | HDR10 Rendering | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
-| Dolby Vision | HDR10 Rendering Reference | HDR10 | Map to the display's peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | LLDV Reference – HDR10 Output | HDR10 | Map to the display's peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | LLDV Reference – Native | Dolby Vision, Low Latency | Use the display target from its Dolby Vision EDID |
 | Dolby Vision | HDR10+ Rendering | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
-| HDR10 | Dolby Vision Rendering (AI) | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
-| HDR10 | Dolby Vision Adaptive HDR Mapping (AI) | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
+| HDR10 | Dolby Vision Rendering | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
+| HDR10 | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
 | HDR10+ | Dolby Vision Rendering | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and labelled estimates when incomplete |
 
 For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
 
-HDR10 Rendering Reference uses separate manual peak, black-floor and gamut settings.
+LLDV Reference – HDR10 Output uses separate manual peak, black-floor and gamut settings.
 Adaptive HDR Mapping requires a manual display profile. AI conversion uses the
 included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
 Native HDR10, HLG and SDR remain the player's responsibility.

@@ -8,7 +8,7 @@ CB1 is an in-process C library. The current consumer is Kodi's GBM/GLES path.
 | `dvbridge_policy.h` | Output mode and manual display profile |
 | `dvbridge_render.h` | Frame-bound processing and presentation transactions |
 | `dvbridge_creative.h` | CM2.9/CM4 processing and metadata coverage |
-| `cb1_hdr10_expert.h` | Published RC3 frame-owned HDR10 Rendering Reference plan and L2 compatibility |
+| `cb1_hdr10_expert.h` | Frame-owned plan for LLDV Reference – HDR10 Output and L2 compatibility |
 | `cb1_hdr10_ai.h` | Optional asynchronous HDR10 analysis and inference |
 | `cb1_circuit.h` | Engine and circuit version identifiers |
 | `cb1_master_reference.h` | Validated raw integer reference descriptor |
@@ -27,7 +27,7 @@ CB1 lock. Other players require a native adapter.
 
 CB1 does not control audio, input devices, player menus or HDMI connectors.
 
-Published RC3 HDR10 Rendering Reference requires matched
+LLDV Reference – HDR10 Output requires matched
 `PL_CB1_EXPERT_TONE_ABI` libplacebo headers/library and rebuilt consumers. Its policy
 owns separate peak, black floor and gamut. `cb1_tone_shape` carries three signed
 curve controls in the native LUT/cache identity. `expert_output_bits` and

@@ -58,7 +58,7 @@ display peak or an output brightness cap.
 | RPU reconstruction data | Reconstruct source pixels | Reconstruct before conversion | Same reconstruction as Reference |
 | L1 min/max/average | Transport | Maximum/average guide scene mapping; minimum validated and retained | Guide expansion; transform authored scene descriptors through the applied curve |
 | L3 offsets | Transport | Retained, not executed | Fold once; emit neutral offsets when the block is present |
-| L2 CM2.9 trims | Transport | HDR10 Rendering Reference applies compatible primary controls | Guide luminance retention and color protection |
+| L2 CM2.9 trims | Transport | LLDV Reference – HDR10 Output applies compatible primary controls | Guide luminance retention and color protection |
 | L5 active area | Transport and mask borders | Preserve active-area geometry | Output geometry; full-raster signalling while overlays are visible |
 | L6 HDR mastering | Transport | Source reference and static HDR descriptors | Retained if present; not relabelled as measured output |
 | L8 CM4 trims | Transport | Retained; available L2 compatibility only | Guide luminance retention and color protection |
@@ -118,7 +118,7 @@ Source MaxCLL/MaxFALL are not relabeled as measured output statistics.
 
 These are rendering coefficients, not user calibration measurements.
 
-## Dolby Vision to HDR10 Rendering Reference
+## Dolby Vision to LLDV Reference – HDR10 Output
 
 The frame-owned plan binds reconstruction, source descriptors, explicit tone
 mapping, target gamut, compatible L2 controls and HDR10 signaling. Required FEL

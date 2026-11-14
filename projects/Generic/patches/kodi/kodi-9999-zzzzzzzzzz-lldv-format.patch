@@ -459,7 +459,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#41201"
-+msgid "Choose the format preference for Dolby Vision Player-Led. Availability depends on the display, driver and current HDMI timing."
++msgid "Choose the format preference for LLDV Reference – Native. Availability depends on the display, driver and current HDMI timing."
 +msgstr ""
 +
 +msgctxt "#41202"
@@ -546,7 +546,7 @@ index 3f91e85..71a7dbc 100644
        case 6:return "Dolby Vision Adaptive HDR Mapping";
        case 7:return "HDR10+ Rendering";
        case 8:return "SDR Rendering";
-+      case PlayerLedMode:return "Dolby Vision Player-Led";
++      case PlayerLedMode:return "LLDV Reference – Native";
        default:return "";
      }
    }
