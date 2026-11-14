@@ -205,6 +205,7 @@ int main(){
 #include <optional>
 namespace DVBRIDGE { ENUMS
 PREFERENCES
+uint64_t DiagnosticNowMs(){return 1;}
 }
 CLASS
 static unsigned creates{};
@@ -791,7 +792,7 @@ void Import(Window* window,const Picture& picture){
 struct ICallbackHWAccel {virtual unsigned GetHDR10AIBufferCount()const=0;virtual void PrepareHDR10AIReopen()=0;};
 struct Decoder:ICallbackHWAccel{
  struct Hints{StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;
-  struct{bool rpu_present_flag=false;}dovi;int fpsrate=24,fpsscale=1;}m_hints;
+  struct{bool rpu_present_flag=false;}dovi;AVCodecID codec=AV_CODEC_ID_HEVC;int fpsrate=24,fpsscale=1;}m_hints;
  bool m_interlaced=false;enum{STATE_NONE,STATE_HW}m_decoderState=STATE_HW;
  unsigned GetHDR10AIBufferCount()const override COUNT
  void PrepareHDR10AIReopen()override REOPEN
