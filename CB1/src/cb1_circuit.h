@@ -22,6 +22,7 @@ enum cb1_circuit {
     CB1_HDR10_SDR,
     CB1_HLG_DV_REFERENCE,
     CB1_DV_DV_LLDV,
+    CB1_HLG_SDR,
     CB1_CIRCUIT_COUNT
 };
 

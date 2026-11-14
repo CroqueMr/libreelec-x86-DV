@@ -93,6 +93,16 @@ int main(){
  c.processingKnown=true;
  p.hlgSource=HLGSourceMode::ReferenceDV;
  assert(SelectOutput(p,c).reason==OutputReason::NoDVTransport);
+ p.hlgSource=HLGSourceMode::SDR;
+ assert(!c.nativeDV && !c.hdr10);
+ assert(SelectOutput(p,c).reason==OutputReason::RestoreFailed);
+ c.processing[DVBRIDGE_MODE_SDR]={true,OutputReason::None};
+ assert(SelectOutput(p,c).route==OutputRoute::SDR);
+ p.sdrPreset=2;p.sdrPeak=0;
+ assert(SelectOutput(p,c).reason==OutputReason::SDRTargetInvalid);
+ p.sdrPreset=0;
+ p.hlgSource=HLGSourceMode::ReferenceDV;
+ c.processing[DVBRIDGE_MODE_SDR]={false,OutputReason::RestoreFailed};
  c.nativeDV=true;
  c.processingKnown=false;
  assert(SelectOutput(p,c).reason==OutputReason::ProcessingPending);
@@ -148,6 +158,18 @@ int main(){
   assert(plus.hdr10Source==HDR10SourceMode::SDR && dv.output==OutputMode::SDR);
   assert(hlg.revision==before.revision && plus.revision==before.revision && dv.revision==before.revision);
  }
+ stored->ints["dvbridge.hlgsource"]=2;
+ auto sdr=FrameOutputSettings(false,true);
+ assert(sdr.hlgSource==HLGSourceMode::SDR && sdr.hdr10Source==HDR10SourceMode::SDR);
+ assert(hlgPlaybackMode.load()==HDR10SourceMode::SDR);
+ {
+  std::lock_guard lock(OutputSettingsMutex());
+  activeOutputSelectors=ReadDefaultOutputSelectors();
+  activeOutputSelectors->hlgSource=HLGSourceMode::Native;
+ }
+ auto native=FrameOutputSettings(false,true);
+ assert(native.hdr10Source==HDR10SourceMode::Native && native.revision!=sdr.revision);
+ assert(stored->ints["dvbridge.hlgsource"]==2);
 }
 '''.replace('HEADER',header).replace('SELECTOR',selector).replace('QUALIFIED',qualified)
         repo=Path(__file__).resolve().parents[2]

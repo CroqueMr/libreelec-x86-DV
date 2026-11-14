@@ -1553,5 +1553,18 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Share preset loading and fit the Master Reference picture.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Share preset loading and fit the Master Reference picture."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": {
+    "owner": "Expose HLG to SDR through the existing SDR playback policy.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "HLG SDR selection, rendering, or reporting.",
+      "system/settings/settings.xml": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "HLG SDR selection, rendering, or reporting.",
+      "xbmc/settings/SettingConditions.cpp": "HLG SDR selection, rendering, or reporting."
+    }
   }
 }
