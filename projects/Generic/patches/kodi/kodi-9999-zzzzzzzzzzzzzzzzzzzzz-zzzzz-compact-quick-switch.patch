@@ -64,7 +64,7 @@
  #include "application/ApplicationComponents.h"
  #include "application/ApplicationPlayer.h"
  #include "cores/VideoPlayer/Interface/StreamInfo.h"
-@@ -201,24 +202,54 @@
+@@ -201,24 +202,55 @@
          int(nativeSource), source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
          int(preferences.output), int(preferences.hdr10Source));
      dialog->Reset();
@@ -101,14 +101,15 @@
            option.value, option.label, option.label2);
 -      CFileItem item(option.label);
 +      const int label = choices[option.value].label;
-+      CFileItem item(settingsMenu ? option.label : strings.Get(label == 40868 ? 40914 : label));
++      const int quickSwitchLabel = (label == 40868 || label == 40914) ? 40880 : label;
++      CFileItem item(settingsMenu ? option.label : strings.Get(quickSwitchLabel));
        item.SetLabel2(option.label2);
        for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
 -      item.SetProperty("CB1.TextColor", item.GetProperty("disabled").asBoolean() ?
 -                                      "FFA0A0A0" : "FFF0F0F0");
 +      const bool disabled = item.GetProperty("disabled").asBoolean();
 +      const bool active = !settingsMenu && option.value == current;
-+      item.SetProperty("CB1.TextColor", disabled ? "FFA2ACB1" :
++      item.SetProperty("CB1.TextColor", disabled ? "FFBEC7CB" :
 +                                      active && cb1Active ? "FF65E18D" : "FFF2F5F6");
 +      if (!settingsMenu)
 +        item.SetProperty("CB1.SwitchStatus", disabled ? strings.Get(40851) :
@@ -126,7 +127,7 @@
      if (selected<0 || selected>=count) return true;
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
-@@ -26127,7 +26127,19 @@
+@@ -26127,7 +26127,23 @@
  msgstr ""
  
  msgctxt "#40876"
@@ -144,6 +145,10 @@
 +
 +msgctxt "#40879"
 +msgid "Output"
++msgstr ""
++
++msgctxt "#40880"
++msgid "Dolby Vision Adaptive HDR"
  msgstr ""
  
  msgctxt "#40907"

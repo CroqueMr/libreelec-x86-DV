@@ -459,7 +459,7 @@
         </control>
         <control type="label" id="9102">
           <left>32</left><width>514</width><height>36</height>
-          <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
+          <font>CB1.SwitchHelp</font><textcolor>FFE0E6E8</textcolor><aligny>center</aligny>
           <label>$INFO[Container(6).ListItem.Label2]</label>
           <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
         </control>
@@ -468,7 +468,7 @@
   </include>
   <include name="CB1PlaybackModeRowContents">
     <control type="image">
-      <left>13</left><top>10</top><width>18</width><height>18</height>
+      <left>9</left><top>10</top><width>18</width><height>18</height>
       <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
     </control>
     <control type="label">

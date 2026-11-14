@@ -49,8 +49,8 @@ class QuickSwitchResources(unittest.TestCase):
         status_inset = focus_right - status_right
         tick_inset = int(tick.findtext('left')) - int(focus.findtext('left'))
         self.assertGreaterEqual(status_inset, 16)
-        # The tick texture adds about three pixels of transparent padding.
-        self.assertEqual(status_inset, tick_inset + 3)
+        circuit_left = int(circuit.findtext('left'))
+        self.assertGreaterEqual(circuit_left - tick_inset - int(tick.findtext('width')), 5)
         footer = group.find("control[@id='9103']/control[@id='9102']")
         self.assertEqual(footer.findtext('left'), circuit.findtext('left'))
         output = next(control for control in group.findall("control[@type='label']")
@@ -185,7 +185,8 @@ constexpr int LOGINFO=1;
 namespace DVBRIDGE {template<class... T>void DiagnosticLog(T...) {}}
 struct Value {bool flag=false;std::string text;bool asBoolean()const{return flag;}};
 struct CFileItem {
- explicit CFileItem(const std::string&){}
+ explicit CFileItem(const std::string& name): label(name) {}
+ std::string label;
  std::map<std::string,Value> properties;
  void SetLabel2(const std::string&){}
  void SetProperty(const std::string& n,bool v){properties[n].flag=v;}
@@ -202,12 +203,13 @@ int main(){
  const int current = 2;
  struct Strings { std::string Get(int id) const { return std::to_string(id); } } strings;
  struct Choice { int label; };
- const Choice choices[]{{1}, {2}, {3}};
+ const Choice choices[]{{1}, {40868}, {40914}};
  std::vector<Option> options{{0,"A","",{}},{1,"B","",{{"disabled",true}}},{2,"C","",{{"disabled",false}}}};
  for(const auto& option:options) OWNER
  assert(d.items.size()==3);
  assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF2F5F6");
- assert(d.items[1].GetProperty("CB1.TextColor").text=="FFA2ACB1");
+ assert(d.items[1].GetProperty("CB1.TextColor").text=="FFBEC7CB");
+ assert(d.items[1].label=="40880" && d.items[2].label=="40880");
  assert(d.items[2].GetProperty("CB1.TextColor").text=="FF65E18D");
  assert(d.items[0].GetProperty("CB1.SwitchStatus").text.empty());
  assert(d.items[1].GetProperty("CB1.SwitchStatus").text=="40851");
