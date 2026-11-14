@@ -1,0 +1,116 @@
+From: Satyajit Roy <sroy14@alum.utk.edu>
+Subject: [PATCH] drm/amd/display: fix HDMI RGB quantization on 7.2.6
+
+Backport upstream bdcd0411d7d1 (Propagate HDMI RGB quantization
+selectability) and 7fca7acd60a2 (Honor Broadcast RGB for BT.2020 RGB output).
+Fold in eb5650d1f367 (Default HDMI RGB output to limited range on CTA
+modes) by Adrian Betschart, with the signal-type guard from the follow-up
+for drm/amd#6052 so native DisplayPort keeps its Auto behavior.
+
+Also recognize CTA 4K modes carried with an HDMI VIC in the VSIF. For
+those timings DRM deliberately leaves the AVI VIC at zero.
+
+Link: https://gitlab.freedesktop.org/drm/amd/-/issues/5796
+Link: https://www.mail-archive.com/amd-gfx%40lists.freedesktop.org/msg154457.html
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
+@@ -197,6 +197,7 @@
+ 	edid_caps->edid_hdmi = connector->display_info.is_hdmi;
+ 
+ 	if (edid_caps->edid_hdmi) {
++		edid_caps->qs_bit = connector->display_info.rgb_quant_range_selectable;
+ 		populate_hdmi_info_from_connector(link->dc->config.enable_frl, &connector->display_info.hdmi, edid_caps);
+ 		drm_dbg_driver(connector->dev, "%s: HDMI_FRL [%s] max_frl_rate %d\n", __func__, connector->name, edid_caps->max_frl_rate);
+ 		if (edid_caps->frl_dsc_support)
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -6872,9 +6872,30 @@
+ 	return (enum dc_aspect_ratio) mode_in->picture_aspect_ratio;
+ }
+ 
++/*
++ * CTA video timings use limited RGB in Auto, except VIC 1 (640x480).
++ * HDMI 1.4 4K modes can carry an HDMI VIC instead of an AVI VIC.
++ */
++static bool rgb_output_is_limited_range(const struct dc_crtc_timing *timing,
++					const struct drm_connector_state *state,
++					enum signal_type signal)
++{
++	switch (state->hdmi.broadcast_rgb) {
++	case DRM_HDMI_BROADCAST_RGB_FULL:
++		return false;
++	case DRM_HDMI_BROADCAST_RGB_LIMITED:
++		return true;
++	default:
++		return dc_is_hdmi_signal(signal) &&
++		       state->connector->display_info.is_hdmi &&
++		       (timing->vic > 1 || timing->hdmi_vic);
++	}
++}
++
+ static enum dc_color_space
+ get_output_color_space(const struct dc_crtc_timing *dc_crtc_timing,
+-		       const struct drm_connector_state *connector_state)
++		       const struct drm_connector_state *connector_state,
++		       enum signal_type signal)
+ {
+ 	enum dc_color_space color_space = COLOR_SPACE_SRGB;
+ 
+@@ -6896,16 +6917,20 @@
+ 		break;
+ 	case DRM_MODE_COLORIMETRY_BT2020_RGB:
+ 	case DRM_MODE_COLORIMETRY_BT2020_YCC:
+-		if (dc_crtc_timing->pixel_encoding == PIXEL_ENCODING_RGB)
+-			color_space = COLOR_SPACE_2020_RGB_FULLRANGE;
+-		else
++		if (dc_crtc_timing->pixel_encoding == PIXEL_ENCODING_RGB) {
++			if (rgb_output_is_limited_range(dc_crtc_timing, connector_state, signal))
++				color_space = COLOR_SPACE_2020_RGB_LIMITEDRANGE;
++			else
++				color_space = COLOR_SPACE_2020_RGB_FULLRANGE;
++		} else {
+ 			color_space = COLOR_SPACE_2020_YCBCR_LIMITED;
++		}
+ 		break;
+ 	case DRM_MODE_COLORIMETRY_DEFAULT: // ITU601
+ 	default:
+ 		if (dc_crtc_timing->pixel_encoding == PIXEL_ENCODING_RGB) {
+ 			color_space = COLOR_SPACE_SRGB;
+-			if (connector_state->hdmi.broadcast_rgb == DRM_HDMI_BROADCAST_RGB_LIMITED)
++			if (rgb_output_is_limited_range(dc_crtc_timing, connector_state, signal))
+ 				color_space = COLOR_SPACE_SRGB_LIMITED;
+ 		/*
+ 		 * 27030khz is the separation point between HDTV and SDTV
+@@ -7190,7 +7215,8 @@
+ 	}
+ 
+ 	amdgpu_dm_hdr10_select_format(stream, connector_state, mode_in, requested_bpc);
+-	stream->output_color_space = get_output_color_space(timing_out, connector_state);
++	stream->output_color_space = get_output_color_space(timing_out, connector_state,
++							    stream->signal);
+ 	stream->content_type = get_output_content_type(connector_state);
+ }
+ 
+@@ -11950,7 +11976,8 @@
+ 
+ 		if ((new_con_state->hdmi.broadcast_rgb != old_con_state->hdmi.broadcast_rgb) &&
+ 			(dm_old_crtc_state->stream->output_color_space !=
+-				get_output_color_space(&dm_new_crtc_state->stream->timing, new_con_state)))
++				get_output_color_space(&dm_new_crtc_state->stream->timing, new_con_state,
++						       dm_new_crtc_state->stream->signal)))
+ 			output_color_space_changed = true;
+ 
+ 		abm_changed = dm_new_crtc_state->abm_level !=
+@@ -11973,7 +12000,8 @@
+ 
+ 		if (output_color_space_changed) {
+ 			dm_new_crtc_state->stream->output_color_space
+-				= get_output_color_space(&dm_new_crtc_state->stream->timing, new_con_state);
++				= get_output_color_space(&dm_new_crtc_state->stream->timing, new_con_state,
++						       dm_new_crtc_state->stream->signal);
+ 
+ 			stream_update.output_color_space = &dm_new_crtc_state->stream->output_color_space;
+ 		}

@@ -356,7 +356,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "f5b26c88d8e1431af7fe5d0e232550038d0a6717286075d64a307fecdc6fa14d",
+    "config/cb1-patch-index.json": "9b635bc67459f4b7e555d6a63cdc36c7cc0de3eff2dab60c310ac1ec14bbae5c",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "e666452646e9a748d6cd931a18d49d611ce8acdcd8983415ced425670b67dc77",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-master-reference-upscalers.patch": "03e57c8e4f10325101d22fb14307442dd720f0c09a06e850ddd55e7f7dffdb48",
@@ -376,7 +376,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "e470a02344dc290ee87fb6f52dd54db086cd7950e64b19b93b9cd68413e25f5b",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzz-video-settings-cleanup.patch": "800ecced3dbb85531bd6e698a140fae4c0558091055006a899917b22752fa80f",
-    "tests/cb1/test_video_settings_layout.py": "0eb26e197513276165c01ef82b07231a425ce2548f01742135feaa5be47e57a1"
+    "tests/cb1/test_video_settings_layout.py": "0eb26e197513276165c01ef82b07231a425ce2548f01742135feaa5be47e57a1",
+    "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": "5158f22790955e72b99bd6f8d6c7feb87bb44176ff06a5a4882cccdb5ea8e940"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
