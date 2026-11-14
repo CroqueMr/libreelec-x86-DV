@@ -1601,6 +1601,7 @@
       "system/settings/settings.xml": "Organize playback settings, label the circuits, or report native output state.",
       "xbmc/cores/VideoProcessingInfo.h": "Organize playback settings, label the circuits, or report native output state.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Organize playback settings, label the circuits, or report native output state.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Organize playback settings, label the circuits, or report native output state.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Organize playback settings, label the circuits, or report native output state.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Organize playback settings, label the circuits, or report native output state.",
       "xbmc/dialogs/DVPlaybackModes.h": "Organize playback settings, label the circuits, or report native output state.",

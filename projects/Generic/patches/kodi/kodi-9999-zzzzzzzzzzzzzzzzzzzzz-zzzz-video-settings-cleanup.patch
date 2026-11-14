@@ -111,7 +111,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  
  msgctxt "#41013"
 -msgid "Choose the default playback circuit for HDR10+ sources. New files use this default. Playback-menu choices apply only to the current file. Kodi default uses native Kodi playback."
-+msgid "Choose how HDR10+ sources start. Native sends the original dynamic metadata when supported and uses HDR10 otherwise."
++msgid "Kodi default uses ordinary Kodi HDR playback. HDR10+ Native sends the source dynamic metadata when the TV and HDMI driver support it."
  msgstr ""
  
  msgctxt "#41014"
@@ -355,7 +355,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
-@@ -3,6 +3,347 @@
+@@ -3,6 +3,348 @@
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
        <group id="99" label="40810">
@@ -374,7 +374,8 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
 +          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
 +          <constraints><options>
-+            <option label="40970">3</option><option label="41014">0</option><option label="41130">4</option>
++            <option label="40970">3</option><option label="41014">5</option>
++            <option label="40866">0</option><option label="41130">4</option>
 +          </options></constraints>
 +          <control type="list" format="string"><usedetails>true</usedetails></control>
 +        </setting>
@@ -703,7 +704,7 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
          <setting id="videoplayer.sdrupscaler" type="integer" label="41302" help="41304">
            <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
            <constraints><options>
-@@ -29,346 +370,6 @@
+@@ -29,346 +371,6 @@
              <option label="41306">19</option><option label="41309">22</option>
              <option label="41307">20</option><option label="41308">21</option>
            </options></constraints>
@@ -1098,6 +1099,54 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/core
    static const char* RequestedPolicy(int mode, bool hdr10AI = false, bool hdr10PlusDV = false)
    {
      if ((hdr10PlusDV || hdr10AI) && mode == 1) return "Dolby Vision Rendering";
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -19,7 +19,11 @@
+ namespace DVBRIDGE
+ {
+ enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5, SDR = 6, PlayerLed = 7 };
+-enum class HDR10SourceMode : int { Native = 0, ReferenceDV = 1, EnhancedDV = 2, HDR10PlusDV = 3, SDR = 4 };
++enum class HDR10SourceMode : int
++{
++  Native = 0, ReferenceDV = 1, EnhancedDV = 2, HDR10PlusDV = 3, SDR = 4, HDR10PlusPassthrough = 5
++};
++
+ enum class HLGSourceMode : int { Native = 0, ReferenceDV = 1, SDR = 2 };
+ 
+ // Decoder ingress sees the last complete frame-boundary preference snapshot.
+@@ -166,7 +170,11 @@
+   }
+   HDR10SourceMode HDR10Mode(bool hdr10Plus) const
+   {
+-    return hdr10Plus ? hdr10PlusSource : hdr10Source;
++    if (!hdr10Plus)
++      return hdr10Source;
++    // Passthrough uses Kodi's native renderer. HDMI signalling uses the saved selector.
++    return hdr10PlusSource == HDR10SourceMode::HDR10PlusPassthrough ?
++        HDR10SourceMode::Native : hdr10PlusSource;
+   }
+   dvbridge_policy HDR10Policy(bool hdr10Plus = false) const
+   {
+@@ -232,7 +240,8 @@
+       static_cast<HDR10SourceMode>(hdr10) : HDR10SourceMode::Native;
+   const int plus=settings->GetInt("dvbridge.hdr10plussource");
+   result.hdr10PlusSource=plus==3 ? HDR10SourceMode::HDR10PlusDV :
+-      plus==4 ? HDR10SourceMode::SDR : HDR10SourceMode::Native;
++      plus==4 ? HDR10SourceMode::SDR :
++      plus==5 ? HDR10SourceMode::HDR10PlusPassthrough : HDR10SourceMode::Native;
+   const int hlg=settings->GetInt("dvbridge.hlgsource");
+   if (hlg==1 || hlg==2) result.hlgSource=static_cast<HLGSourceMode>(hlg);
+   return result;
+@@ -298,7 +307,7 @@
+   hdr10PlusPlaybackMode.store(next.hdr10PlusSource);
+   hlgPlaybackMode.store(next.HLGMode());
+   // Resolve only the returned copy; alternating inputs must not churn revisions.
+-  if (hdr10Plus) next.hdr10Source = next.hdr10PlusSource;
++  if (hdr10Plus) next.hdr10Source = next.HDR10Mode(true);
+   if (hlg) next.hdr10Source = next.HLGMode();
+   return next;
+ }
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
@@ -1122,10 +1171,20 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  #include "GUIDialogKaiToast.h"
  #include "GUIDialogSelect.h"
  #include "GUIDialogBusy.h"
-@@ -89,56 +87,6 @@
-   return source.hdrType;
- }
+@@ -33,6 +31,7 @@
+ #endif
+ #include "utils/log.h"
+ #include "threads/IRunnable.h"
++#include <algorithm>
+ #include <cstdio>
  
+ namespace
+@@ -87,56 +86,6 @@
+   if (!source.valid || (!source.stereoMode.empty() && source.stereoMode!="mono"))
+     return StreamHdrType::HDR_TYPE_NONE;
+   return source.hdrType;
+-}
+-
 -bool CDVPlaybackModes::ConfigureProfile()
 -{
 -  const auto component=CServiceBroker::GetSettingsComponent();
@@ -1174,12 +1233,10 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 -  }
 -  settings->Save();
 -  return true;
--}
--
+ }
+ 
  std::string CDVPlaybackModes::DefaultPlaybackLabel()
- {
-   std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
-@@ -163,13 +111,13 @@
+@@ -163,14 +112,14 @@
                           nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
    const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
    if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
@@ -1188,24 +1245,53 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
    const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
  #ifdef CB1_HAS_HDR10_AI
 -  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866},{4,0,41130}};
+-  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014},{4,0,41130}};
 +  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,41310},{4,0,41130}};
-   constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014},{4,0,41130}};
++  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{5,0,41014},{0,0,40866},{4,0,41130}};
  #else
 -  constexpr Choice hdr10Choices[]={{0,0,40866}};
+-  constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
 +  constexpr Choice hdr10Choices[]={{0,0,41310}};
-   constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
++  constexpr Choice hdr10PlusChoices[]={{5,0,41014},{0,0,40866}};
  #endif
    const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
-@@ -202,7 +150,7 @@
+   const int count=hlgSource ? std::size(hlgChoices) : hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
+@@ -185,14 +134,16 @@
+       DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
+     }
+     std::vector<IntegerSettingOption> options;
+-    int current=-1;
++    int currentChoice=-1;
+     for(int i=0;i<count;++i)
+     {
+       options.emplace_back(strings.Get(choices[i].label),i);
+       const auto& choice=choices[i];
+-      if (hlgSource ? (int(preferences.hlgSource)==choice.output) : hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
++      if (hlgSource ? (int(preferences.hlgSource)==choice.output) :
++          hdr10PlusSource ? (int(preferences.hdr10PlusSource)==choice.output) :
++          hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
+           (int(preferences.output)==choice.output &&
+-          (choice.output!=1 || preferences.method==choice.method))) current=i;
++          (choice.output!=1 || preferences.method==choice.method))) currentChoice=i;
+     }
+     CSettingConditions::DVOutputOptions(choiceSetting,options);
+     DVBRIDGE::DiagnosticLog(LOGINFO,
+@@ -202,16 +153,24 @@
      dialog->Reset();
      dialog->SetHeading(settingsMenu ? strings.Get(40811) :
          StringUtils::Format(strings.Get(40876), hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
 -    dialog->SetUseDetails(!settingsMenu);
 +    dialog->SetUseDetails(true);
++    int current = -1;
++    std::vector<int> visibleChoices;
      for(const auto& option : options)
      {
++      if (option.value == currentChoice ||
++          (current == -1 && hdr10PlusSource && choices[option.value].output == 0))
++        current = static_cast<int>(visibleChoices.size());
++      visibleChoices.push_back(option.value);
        DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
-@@ -210,8 +158,10 @@
+           option.value, option.label, option.label2);
        CFileItem item(option.label);
        item.SetLabel2(option.label2);
        for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
@@ -1218,7 +1304,29 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
        dialog->Add(item);
      }
      dialog->SetSelected(current);
-@@ -334,72 +284,44 @@
+@@ -220,13 +179,18 @@
+     dialog->SetProperty("CB1.PlaybackModes", CVariant{});
+     if (!dialog->IsConfirmed()) return true;
+     const int selected=dialog->GetSelectedItem();
+-    if (selected<0 || selected>=count) return true;
++    if (selected < 0 || selected >= static_cast<int>(visibleChoices.size())) return true;
+     // Admission may change during the dialog's nested event loop.
+     if (!settingsMenu && SourceType()!=nativeSource) return true;
++    const int selectedChoice = visibleChoices[selected];
+     CSettingConditions::DVOutputOptions(choiceSetting,options);
+-    for(const auto& [name,value] : options[selected].properties)
++    const auto option = std::find_if(options.begin(), options.end(), [selectedChoice](const auto& item) {
++      return item.value == selectedChoice;
++    });
++    if (option == options.end()) return true;
++    for(const auto& [name,value] : option->properties)
+       if (name=="disabled" && value.asBoolean()) return true;
+-    const auto& choice=choices[selected];
++    const auto& choice=choices[selectedChoice];
+     {
+       std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+       if (settingsMenu)
+@@ -334,72 +298,44 @@
    if (!dialog)
      return;
  
@@ -1315,7 +1423,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
      settings->Save();
  }
  } // namespace
-@@ -409,12 +331,22 @@
+@@ -409,12 +345,22 @@
    using namespace DVBRIDGE;
    const auto status = ReadLldvConnector();
    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -1344,7 +1452,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  }
  
  std::string CDVPlaybackModes::SDRGamutLabel()
-@@ -426,8 +358,7 @@
+@@ -426,8 +372,7 @@
  
  void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
  {
@@ -1510,16 +1618,39 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
    const auto data=DVBRIDGE::StreamTelemetry::Read();
    auto caps=data.transaction.capabilities;
    auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
-@@ -600,12 +605,13 @@
+@@ -550,11 +555,22 @@
+       4,0,2,3,6,7,8};
+ #ifdef CB1_HAS_HDR10_AI
+   constexpr int hdr10MenuModes[]{1,4,0,7};
+-  constexpr int hdr10PlusMenuModes[]{1,0,7};
++  constexpr int hdr10PlusMenuModes[]{1,0,0,7};
+ #else
+   constexpr int hdr10MenuModes[]{0};
+-  constexpr int hdr10PlusMenuModes[]{0};
+-#endif
++  constexpr int hdr10PlusMenuModes[]{0,0};
++#endif
++  // Filter on the active HDMI chain. Values stay stable for persisted settings and Quick Switch.
++  if (hdr10PlusSource && !caps.hdr10plus)
++  {
++#ifdef CB1_HAS_HDR10_AI
++    constexpr int nativeMenuIndex = 1;
++#else
++    constexpr int nativeMenuIndex = 0;
++#endif
++    const int nativeChoice = hdr10PlusMenu ? nativeMenuIndex : 5;
++    std::erase_if(list, [nativeChoice](const auto& option) { return option.value == nativeChoice; });
++  }
+   for(auto& option : list)
+   {
+     const int mode=hlgSource ? (option.value==2 ? DVBRIDGE_MODE_SDR :
+@@ -600,12 +616,10 @@
            gamut<1 || gamut>3 ? 40912 : 40845;
      }
      const bool profile=reason==DVBRIDGE::OutputReason::TVProfileRequired || reason==DVBRIDGE::OutputReason::SDRTargetInvalid;
 -    if (reasonId && !profile && reason!=DVBRIDGE::OutputReason::ProcessingPending)
 -      option.label+=" / "+localizer.Get(40851);
-+    // Native HDR10+ is still usable as HDR10 if the chain cannot send dynamic metadata.
-+    const bool fallbackHDR10 = hdr10PlusSource && mode == 0 && !caps.hdr10plus;
      option.label2=reasonId ? localizer.Get(reasonId) :
-+        fallbackHDR10 ? localizer.Get(41323) :
          guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
      // Settings must allow selection before the required profile controls appear.
 -    const bool configure=profile && !menu && !hdr10Menu && !hdr10PlusMenu && !hlgMenu;
@@ -1786,7 +1917,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
            if (cache.SetVideoProcessingInfo(info.informationGeneration,info))
            {
              previousGeneration=generation;
-@@ -978,26 +983,39 @@
+@@ -978,26 +983,44 @@
    return true;
  }
  
@@ -1797,6 +1928,11 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 -  if (!drm) return;
 +  if (!drm) return 0;
    std::optional<std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES>> packet;
++  if (DVBRIDGE::hdr10PlusPlaybackMode.load() != DVBRIDGE::HDR10SourceMode::HDR10PlusPassthrough)
++  {
++    drm->StageHDR10Plus(std::nullopt, CServiceBroker::GetDataCacheCore().GetVideoProcessingGeneration());
++    return 0;
++  }
    const auto& source = m_videoSourceSideData;
    const uint64_t generation = CServiceBroker::GetDataCacheCore().GetVideoProcessingGeneration();
    const auto* metadata = source && source->Generation() == generation ? source->HDR10Plus() : nullptr;
@@ -1828,7 +1964,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      else
      {
        std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES> bytes{};
-@@ -1005,6 +1023,7 @@
+@@ -1005,6 +1028,7 @@
        reason = status == CB1_HDR10PLUS_OK ? "staged" :
            status == CB1_HDR10PLUS_INVALID ? "invalid-metadata" : "unrepresentable-metadata";
        if (status == CB1_HDR10PLUS_OK) packet = bytes;
@@ -1836,7 +1972,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
      }
    }
    drm->StageHDR10Plus(std::move(packet), generation);
-@@ -1045,6 +1064,7 @@
+@@ -1045,6 +1069,7 @@
        }
      }
    }

@@ -21,6 +21,7 @@ class HDR10PlusDiagnostics(unittest.TestCase):
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <atomic>
 #include <cstring>
 #include <iterator>
 #include <memory>
@@ -30,6 +31,9 @@ class HDR10PlusDiagnostics(unittest.TestCase):
 #include <fmt/format.h>
 constexpr int LOGINFO=1;
 namespace DVBRIDGE {
+enum class HDR10SourceMode { Native, HDR10PlusPassthrough };
+inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::HDR10PlusPassthrough};
+
 inline bool admit=true;
 inline std::vector<std::string> lines;
 template<class...T>bool DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){

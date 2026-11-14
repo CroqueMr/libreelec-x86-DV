@@ -38,7 +38,11 @@ class VideoSettingsLayout(unittest.TestCase):
                       "HDR10+ : Native", "HDR/DV to SDR conversion target", " - SDR output gamut"):
             self.assertIn(f'msgid "{label}"', self.strings)
         native = self.video.find(".//setting[@id='dvbridge.hdr10plussource']/constraints/options/option[@label='41014']")
-        self.assertEqual(native.text, "0")
+        self.assertEqual(native.text, "5")
+        kodi = self.video.find(".//setting[@id='dvbridge.hdr10plussource']/constraints/options/option[@label='40866']")
+        self.assertEqual(kodi.text, "0")
+        options = self.video.find(".//setting[@id='dvbridge.hdr10plussource']/constraints/options")
+        self.assertEqual([option.get("label") for option in options], ["40970", "41014", "40866", "41130"])
 
     def test_lldv_selector_has_no_diagnostic_rows(self):
         dialog = (self.kodi / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")

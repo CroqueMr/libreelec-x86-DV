@@ -12,9 +12,11 @@ metadata-guided HDR10+-to-Dolby Vision conversion.
 
 Intel, AMD and NVIDIA use their supported native-HDMI driver routes, an accepted
 dynamic-metadata transaction and at least 10-bit output. Native and converted
-HDR10+ share the output contract. HDR10+ stays native by default, including with
-a saved general HDR10 AI preference. Dolby Vision conversion requires explicit
-selection of the metadata-guided mode and an admitted Dolby Vision output.
+HDR10+ share the output contract. For HDR10+ sources, Kodi default uses ordinary
+HDR playback. Select HDR10+ Native to transmit the source dynamic metadata.
+Kodi offers this choice only when both the HDMI driver and display advertise
+support. Dolby Vision conversion requires explicit selection of the
+metadata-guided mode and an admitted Dolby Vision output.
 [Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
 ## Metadata conversion

@@ -14,6 +14,7 @@ class HDR10PlusSourceTests(unittest.TestCase):
         SnapshotChecks().compile_run(r'''
 #include "cores/VideoSourceSideData.h"
 #include <cassert>
+#include <atomic>
 #include <array>
 #include <optional>
 #include <string>
@@ -37,6 +38,9 @@ struct CServiceBroker {static inline Cache cache;static Cache& GetDataCacheCore(
 enum {LOGINFO=1};
 struct CLog {template<class... A>static void Log(A...) {}};
 namespace DVBRIDGE {
+enum class HDR10SourceMode { Native, HDR10PlusPassthrough };
+inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::HDR10PlusPassthrough};
+
 inline std::vector<std::string> messages;
 template<class... A>bool DiagnosticLog(int,fmt::format_string<A...> f,A&&...args){
  messages.push_back(fmt::format(f,std::forward<A>(args)...));return true;
@@ -61,6 +65,10 @@ int main() {
  const int perc[]={1,5,10,25,50,75,90,95,99};p.num_distribution_maxrgb_percentiles=9;
  for(int i=0;i<9;++i)p.distribution_maxrgb[i]={(uint8_t)perc[i],{i==1?0:i==2?255:5000,100000}};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,1,AV_CODEC_ID_HEVC,frame,nullptr);
+ w.StageNativeHDR10Plus(false);assert(drm->packet && drm->generation==7);
+ DVBRIDGE::hdr10PlusPlaybackMode=DVBRIDGE::HDR10SourceMode::Native;
+ assert(w.StageNativeHDR10Plus(false)==0 && !drm->packet);
+ DVBRIDGE::hdr10PlusPlaybackMode=DVBRIDGE::HDR10SourceMode::HDR10PlusPassthrough;
  w.StageNativeHDR10Plus(false);assert(drm->packet && drm->generation==7);
  assert((*drm->packet)[30]==0x40 && (*drm->packet)[8]==10);
  auto first=*drm->packet;

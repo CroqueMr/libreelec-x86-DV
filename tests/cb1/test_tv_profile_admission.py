@@ -58,8 +58,7 @@ int main() {
  auto validHDR=annotate(R::SDRTargetInvalid,true,false,1000,2,false,false,7);
  assert(validHDR.properties.back().second && validHDR.label2=="41141");
  assert(!annotate(R::SDRTargetInvalid,false,false,1000,2,false,false,7,true).properties.back().second);
- const auto native=annotate(R::None,false,false,1000,2,false,false,0,true);
- assert(!native.properties.back().second && native.label2=="41323");
+
  static_assert(int(R::NoHDR10PlusTransport)==8 && int(R::SDRTargetInvalid)==9 && int(R::ProcessingPending)==10);
  assert(CDVPlaybackInfo::ReasonLabel(R::TVProfileRequired)==40845);
  struct Output{unsigned flags=CDVPlaybackInfo::SDR;int effective=8;bool fallback=false;};

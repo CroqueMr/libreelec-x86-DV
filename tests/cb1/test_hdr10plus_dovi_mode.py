@@ -512,6 +512,7 @@ int main(){
 #include "dvbridge_policy.h"
 #include "cb1_cmv40.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <bit>
@@ -541,15 +542,21 @@ int main(){
   for(bool plus:{false,true}){
    auto setting=std::make_shared<Setting>(plus ? "dvbridge.hdr10plusplaybackchoice" : "dvbridge.hdr10playbackchoice");
    caps.isHDR10Plus=plus;caps.hdr10PlusSource=plus;
-   std::vector<Option> list;for(int i=0;i<(plus?2:3);++i)list.emplace_back(i);
-   admit(setting,list,caps);
-   const int native=plus?1:2;
-   assert(!list[native].properties.back().second);
-   if(plus){
-    const int reference=0;
-    assert(!list[reference].properties.back().second);
+   for (bool sink : {false,true}) {
+    caps.hdr10plus=sink;
+    std::vector<Option> list;for(int i=0;i<(plus?4:3);++i)list.emplace_back(i);
+    admit(setting,list,caps);
+    const int kodiDefaultChoice=2;
+    const auto kodi=std::find_if(list.begin(),list.end(),[=](const auto& option){return option.value==kodiDefaultChoice;});
+    assert(kodi!=list.end() && !kodi->properties.back().second);
+    if(plus){
+     assert(list.size()==(sink?4u:3u));
+     const bool native=std::any_of(list.begin(),list.end(),[](const auto& option){return option.value==1;});
+     assert(native==sink);
+     assert(!list[0].properties.back().second && list[0].label2=="40971");
+     assert(list.back().value==3 && !list.back().properties.back().second);
+    }
    }
-   if(plus)assert(list[0].label2=="40971");
   }
  }
 }

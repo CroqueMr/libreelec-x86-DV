@@ -69,7 +69,7 @@ class RenderingLabelsTests(unittest.TestCase):
         self.assertEqual(labels['41014'], 'HDR10+ : Native')
         self.assertEqual(labels['41311'], 'HLG : Native')
         settings=ET.parse(TREE/'system/settings/settings.xml')
-        for key,label in [('dvbridge.hdr10source','41310'),('dvbridge.hdr10plussource','41014')]:
+        for key,label in [('dvbridge.hdr10source','41310'),('dvbridge.hdr10plussource','40866')]:
             node=settings.find(f".//setting[@id='{key}']")
             self.assertEqual(node.find(f"constraints/options/option[@label='{label}']").text,'0')
         self.assertIn(('2','0','40814'),re.findall(r'\{(\d+),(\d+),(\d+)\}',
