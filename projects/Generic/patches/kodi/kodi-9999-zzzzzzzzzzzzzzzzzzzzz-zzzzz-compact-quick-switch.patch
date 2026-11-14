@@ -38,7 +38,8 @@
 +      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - margin - height);
        group->SetHeight(height);
      }
-     if (auto* background = GetControl(9101)) background->SetHeight(height);
+-    if (auto* background = GetControl(9101)) background->SetHeight(height);
++    if (auto* background = GetControl(9101)) background->SetHeight(height + 38.0f);
      for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
        if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
 -    if (auto* help = GetControl(9102))

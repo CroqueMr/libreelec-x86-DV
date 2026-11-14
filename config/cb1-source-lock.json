@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzzz-compact-quick-switch.patch": "a26c5f40d3b2c598267bfb9c6cd14923d4b57a3bc0a5b7ce6e6b1483dc14fb74",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzzz-compact-quick-switch.patch": "d10500676b979ca2fbc43df804997b64d08c79d65e24c19933c6bd67284e4368",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "75b7b94eda37309baded53d43b6eab311c213f1035803b153d5cdc2fa493f643",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
@@ -48,7 +48,7 @@
     "projects/Generic/patches/linux/linux-9900-09-include__linux__hdmi.h.patch": "fc52a46f7745449a0bfd6fe499050c8147dfe32b59d8a3a6f3c08e8b87f7cd91",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9001-dv-v1-legacy.patch": "09c2da66eddfc83b1ca16aaa12f8d1e8c3c3278c30b3bf2b17372674ce5db070",
     "packages/graphics/nvidia-open-kernel-modules/package.mk": "f080649c9bca3a505fc63cbaa81a5111c6b5ffb6d743091c30a7e8ca716afacf",
-    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "ea307dc5b9f9d3997bfae2bb69b1ebf68674d41250a808fb47ebb4da0b6d98d5",
+    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "c04e930933f1615cc364818e5c230742223203d49387ddb68516f44f280a268c",
     "packages/mediacenter/kodi/package.mk": "ef24c300221f81cefdb11f70c6ac4f37ada97a9ec97602040a8bfc3f1c7c4af5",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "f46665ad8db5131cc6e155b295fe3de8d33c4eadb2f7df8f62dac238967eefab",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
