@@ -18,10 +18,25 @@ class ProcessInfoSkinRecoveryTests(unittest.TestCase):
             end += 1
         program = r'''
 #include <cassert>
+#include <chrono>
 #include <string>
 #define HAVE_DVBRIDGE
 constexpr int GUI_MSG_WINDOW_INIT=1;
-namespace DVBRIDGE {bool enabled=true;bool EnhancedInfoEnabled() {return enabled;}}
+constexpr int LOGDEBUG=0;
+struct CLog {template<class... Args> static void Log(Args&&...) {}};
+namespace DVBRIDGE {
+ bool enabled=true, debug=false;
+ bool EnhancedInfoEnabled() {return enabled;}
+ bool OverlayDebugEnabled() {return debug;}
+ using OverlayClock=std::chrono::steady_clock;
+ unsigned OverlayElapsedUs(OverlayClock::time_point) {return 0;}
+ constexpr char PLAYER_INFO_CB1[]="player-info-cb1", PLAYER_INFO_KODI[]="player-info-kodi";
+ struct Trace {
+  const char* kind{};
+  unsigned openedMs{};
+  void Observe(const char* value) {kind=value;}
+ } overlayTrace;
+}
 struct RESOLUTION_INFO {int width,height;RESOLUTION_INFO(int w,int h):width(w),height(h){}};
 struct CGUIMessage {int type;int GetMessage() const {return type;}};
 constexpr int FONT_STYLE_NORMAL=0,FONT_STYLE_BOLD=1,FONT_STYLE_UPPERCASE=8;
@@ -62,10 +77,12 @@ int main() {
  dialog.OnMessage(open);
  assert(g_fontManager.loads==10);
  assert(dialog.resolution.width==1920 && dialog.resolution.height==1080);
- DVBRIDGE::enabled=false;dialog.OnMessage(open);
+ DVBRIDGE::debug=true;DVBRIDGE::enabled=false;dialog.OnMessage(open);
  assert(dialog.loaded=="DialogPlayerProcessInfo.xml");
+ assert(DVBRIDGE::overlayTrace.kind==DVBRIDGE::PLAYER_INFO_KODI);
  DVBRIDGE::enabled=true;dialog.OnMessage(open);
  assert(dialog.loaded=="special://xbmc/media/cb1/DialogPlayerProcessInfo.xml");
+ assert(DVBRIDGE::overlayTrace.kind==DVBRIDGE::PLAYER_INFO_CB1);
  CGUIMessage other{42};dialog.OnMessage(other);
  assert(dialog.loaded=="special://xbmc/media/cb1/DialogPlayerProcessInfo.xml");
 }

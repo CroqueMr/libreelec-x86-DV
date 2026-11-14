@@ -29,7 +29,7 @@ template<class...T>void DiagnosticFailureLog(const char* stage,bool,int level,fm
 class PlaybackStallDiagnostics(unittest.TestCase):
     def test_native_health_uses_current_worker_not_prior_cb1_flags(self):
         source = (runtime.TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
-        start = source.index('  if (DVBRIDGE::DiagnosticsEnabled()',
+        start = source.index('  if (DVBRIDGE::DetailedDiagnosticsEnabled()',
                              source.index('CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture('))
         health = source[start:source.index('  DVBRIDGE::StreamTelemetry::Counters(', start)]
         start = source.index('  m_diagnosticRender.Reset();', source.index('void CVideoPlayerVideo::OpenStream('))
@@ -54,7 +54,7 @@ namespace StringUtils {
 }
 namespace DVBRIDGE {
  bool enabled=true;uint64_t now=1000;
- bool DiagnosticsEnabled(){return enabled;}
+ bool DetailedDiagnosticsEnabled(){return enabled;}
  uint64_t DiagnosticNowMs(){return now;}
 }
 struct CDVPlaybackInfo {inline static std::atomic<unsigned>presented{0};};

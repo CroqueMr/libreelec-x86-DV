@@ -105,7 +105,7 @@ struct dvbridge_gl_frame {Frame frame;};
 struct Geometry {int x=0,y=0,width=8,height=8,target_width=8,target_height=8;};
 int directCalls=0,stagedCalls=0,resolveCalls=0,releases=0;
 bool query=true,drawOK=true,resolveOK=true;
-namespace DVBRIDGE {bool DiagnosticsEnabled(){return false;}}
+namespace DVBRIDGE {bool DetailedDiagnosticsEnabled(){return false;}}
 std::string SDRPreparationAudit(const Frame&,const Frame*,const Metadata&,Geometry,int,unsigned,bool,double,double,const std::array<int,7>&){return {};}
 template<class...T>bool dvbridge_render_sdr_policy_direct_eligible(T...){return query;}
 template<class...T>bool dvbridge_render_hdr10_policy_direct(T...){++directCalls;return drawOK;}
