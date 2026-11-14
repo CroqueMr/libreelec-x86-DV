@@ -1460,5 +1460,15 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": {
+    "component": "linux",
+    "summary": "Admit Standard DV on RX 550 Polaris12 at UHD 23.976.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Scope the DRM property and atomic mode checks to the reported HDMI route.",
+      "drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c": "Save, bypass and restore the input CSC on DCE112 when the tunnel uses it.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Keep the tunnel at 24 bits in the line buffer.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Program the DCE formatter and CSC at native stream setup."
+    }
   }
 }
