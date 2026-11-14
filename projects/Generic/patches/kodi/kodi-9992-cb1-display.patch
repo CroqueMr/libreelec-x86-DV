@@ -2542,7 +2542,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (result && std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
      FlipPage(true, false, false);
  
-@@ -304,6 +349,125 @@
+@@ -304,6 +349,128 @@
    return result;
  }
  
@@ -2552,11 +2552,14 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
 +  if (!connector) return false;
 +  auto edid = connector->GetEDID(true);
-+  if (edid.empty() || edid == m_displayEdid) return false;
-+  auto information = UTILS::CDisplayInfo::Create(edid);
-+  if (!information) return false;
++  if (edid == m_displayEdid)
++    return false;
++  // An absent or invalid EDID withdraws the previous sink's capabilities.
++  auto information = edid.empty() ? nullptr : UTILS::CDisplayInfo::Create(edid);
++  if (!information && !m_info)
++    return false;
++  m_displayEdid = information ? std::move(edid) : std::vector<uint8_t>{};
 +  m_info = std::move(information);
-+  m_displayEdid = std::move(edid);
 +  DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge display refresh: connector={} changed=true",connector->GetId());
 +  return true;
 +}
@@ -7434,7 +7437,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
 --- a/xbmc/windowing/gbm/drm/DRMConnector.cpp
 +++ b/xbmc/windowing/gbm/drm/DRMConnector.cpp
-@@ -99,10 +99,22 @@
+@@ -99,10 +99,31 @@
    return GetType() + "-" + std::to_string(m_connector->connector_type_id);
  }
  
@@ -7451,8 +7454,17 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    if (!current) return {};
 +    const auto property = GetPropertyId("EDID");
 +    blob_id = 0;
-+    for (int i=0;i<current->count_props;++i)
-+      if (current->props[i] == property) blob_id = current->prop_values[i];
++    if (current->connection == DRM_MODE_CONNECTED)
++    {
++      for (int i = 0; i < current->count_props; ++i)
++      {
++        if (current->props[i] == property)
++        {
++          blob_id = current->prop_values[i];
++          break;
++        }
++      }
++    }
 +    drmModeFreeConnector(current);
 +  }
  
