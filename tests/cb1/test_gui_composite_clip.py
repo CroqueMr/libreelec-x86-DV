@@ -103,18 +103,29 @@ int main() {
   clipped.context.scissors={100,200,3000,2000};
   scissorEnabled=false;
   assert(clipped.BeginGuiComposite(true));
-  assert(drawsAt(1900,1950) && !drawsAt(50,1950) && "GUI text escapes Kodi's clip");
+  assert(drawsAt(1900,1950) && !drawsAt(50,1950) && !drawsAt(1900,100) &&
+         "GUI text escapes Kodi's clip");
   CWinSystemGbmGLESContext hdr;
   hdr.m_dvState.captured=false;hdr.m_hdrConversion=true;
   rawClip={0,276,3840,1884};bottomCleared=false;scissorEnabled=false;
   assert(hdr.BeginGuiComposite(true) && bottomCleared && scissorEnabled);
-  // Vanilla compositing retains its existing clip; no CB1 state is owned here.
+  // Recovery can clear the scanout with scissors disabled before a CB1
+  // renderer is initialized. The ordinary GUI draw must reapply Kodi's clip.
   CWinSystemGbmGLESContext vanilla;
-  vanilla.m_dvState.captured=false;rawClip={100,200,3000,1800};
+  vanilla.m_dvState.captured=false;
+  vanilla.context.scissors={100,200,3000,1800};
+  rawClip={0,0,3840,2160};
   scissorEnabled=false;
-  assert(vanilla.BeginGuiComposite(true) && !scissorEnabled);
-  assert(rawClip.contains(200,300) && !rawClip.contains(1900,1950));
+  assert(vanilla.BeginGuiComposite(true) && scissorEnabled);
+  assert(drawsAt(200,300) && !drawsAt(50,300) && !drawsAt(1900,1950));
+  // The ordinary path can draw directly instead of binding the GUI FBO.
+  vanilla.m_guiCompositing=false;
+  scissorEnabled=false;
+  rawClip={0,0,3840,2160};
+  assert(!vanilla.BeginGuiComposite(true) && scissorEnabled);
+  assert(drawsAt(200,300) && !drawsAt(50,300) && !drawsAt(1900,1950));
   // No GUI drawing leaves the active framebuffer's clip alone.
+  scissorEnabled=false;
   assert(master.BeginGuiComposite(false) && !scissorEnabled);
   assert(!rawClip.contains(1900,1950));
   // Failure to bind the GUI FBO falls through to native GUI drawing, which
