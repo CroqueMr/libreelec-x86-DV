@@ -5,7 +5,9 @@
 bool dvbridge_sdr_target(const struct dvbridge_sdr_profile *p,double *peak,double *gamma,double *black)
 {
     if(!p || !peak || !gamma || !black || p->preset<DVBRIDGE_SDR_REFERENCE ||
-       p->preset>DVBRIDGE_SDR_CUSTOM)return false;
+       p->preset>DVBRIDGE_SDR_CUSTOM ||
+       (p->gamut!=DVBRIDGE_GAMUT_UNSET && p->gamut!=DVBRIDGE_GAMUT_BT709 &&
+        p->gamut!=DVBRIDGE_GAMUT_BT2020))return false;
     double n=p->preset==DVBRIDGE_SDR_REFERENCE?100:p->preset==DVBRIDGE_SDR_BRIGHT?200:p->peak_nits;
     double g=p->preset==DVBRIDGE_SDR_REFERENCE?2.4:p->preset==DVBRIDGE_SDR_BRIGHT?2.2:p->gamma;
     double b=p->preset==DVBRIDGE_SDR_CUSTOM?p->black_nits:0;

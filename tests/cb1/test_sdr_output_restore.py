@@ -68,6 +68,7 @@ struct Window{
  bool m_cb1RestoringPreferences=false;
  bool m_dvOrdinaryFrame=true,m_dvStopPending=false,m_dvRollbackFailed=false;
  bool m_dvActivating=false,m_dvRecoveryPending=false,m_dvSuperseded=false,m_dvRejectedSurface=false;
+ bool m_sdrBT2020Rejected=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
  bool m_hdrConversion=false,m_sdrConversion=false,m_dvFatalConsumed=false,m_dvFallbackActive=false;
  bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
