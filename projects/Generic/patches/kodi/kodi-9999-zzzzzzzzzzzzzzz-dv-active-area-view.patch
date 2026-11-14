@@ -12,11 +12,11 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26573,3 +26573,7 @@
- msgctxt "#41224"
- msgid "Dolby Vision picture metadata is missing or unusable."
+ msgctxt "#41275"
+ msgid "The active HDMI driver cannot signal BT.2020 RGB."
  msgstr ""
 +
-+msgctxt "#41225"
++msgctxt "#41276"
 +msgid "Dolby Vision active area"
 +msgstr ""
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.cpp
@@ -234,7 +234,7 @@ diff --git a/xbmc/video/ViewModeSettings.cpp b/xbmc/video/ViewModeSettings.cpp
  {
    { 630,   ViewModeNormal },
    { 16316, ViewModeAuto },
-+  { 41225, ViewModeActiveArea },
++  { 41276, ViewModeActiveArea },
    { 631,   ViewModeZoom },
    { 39008, ViewModeZoom120Width },
    { 39009, ViewModeZoom110Width },

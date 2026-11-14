@@ -7,8 +7,8 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26573,3 +26573,35 @@
- msgctxt "#41224"
- msgid "Dolby Vision picture metadata is missing or unusable."
+ msgctxt "#41306"
+ msgid "FSR 1 (EASU)"
  msgstr ""
 +
 +msgctxt "#41260"

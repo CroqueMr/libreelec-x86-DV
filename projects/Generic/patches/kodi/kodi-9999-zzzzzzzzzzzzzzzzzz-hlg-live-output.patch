@@ -72,17 +72,18 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      m_picture.SetParams(picture);
      m_nativeDVRate = false;
  #ifdef HAVE_DVBRIDGE
-@@ -205,6 +209,10 @@
- 
+@@ -209,5 +213,11 @@
+ #endif
    if (m_pRenderer)
-   {
++  {
 +#ifdef CB1_HAS_HDR10_AI
 +    if (m_aiSameInputReconfigure)
 +      m_pRenderer->PreserveHDR10AIOutputOnReconfigure(*m_pConfigPicture);
 +#endif
      DeleteRenderer();
-   }
++  }
  
+   CreateRenderer();
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h

@@ -30,7 +30,7 @@
 +{
 +  switch (method)
 +  {
-+    case -1: return 41225; // Kodi default
++    case -1: return 41301; // Kodi default
 +    case VS_SCALINGMETHOD_NEAREST: return 16301;  // Nearest neighbour
 +    case VS_SCALINGMETHOD_LINEAR: return 16302;  // Bilinear
 +    case VS_SCALINGMETHOD_CUBIC_B_SPLINE: return 16303;  // Bicubic B-Spline
@@ -54,10 +54,10 @@
    <section id="player" label="14200" help="38100">
      <category id="videoplayer" label="14215" help="38103">
        <group id="99" label="40810">
-+        <setting id="videoplayer.sdrupscaler" type="integer" label="41226" help="41228">
++        <setting id="videoplayer.sdrupscaler" type="integer" label="41302" help="41304">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
 +          <constraints><options>
-+            <option label="41225">-1</option><option label="16316">16</option>
++            <option label="41301">-1</option><option label="16316">16</option>
 +            <option label="16301">0</option><option label="16302">1</option>
 +            <option label="16303">2</option><option label="16314">3</option>
 +            <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
@@ -66,10 +66,10 @@
 +          </options></constraints>
 +          <control type="list" format="string" />
 +        </setting>
-+        <setting id="videoplayer.hdrupscaler" type="integer" label="41227" help="41228">
++        <setting id="videoplayer.hdrupscaler" type="integer" label="41303" help="41304">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
 +          <constraints><options>
-+            <option label="41225">-1</option><option label="16316">16</option>
++            <option label="41301">-1</option><option label="16316">16</option>
 +            <option label="16301">0</option><option label="16302">1</option>
 +            <option label="16303">2</option><option label="16314">3</option>
 +            <option label="16321">4</option><option label="16326">5</option><option label="16330">6</option>
@@ -84,27 +84,27 @@
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26573,3 +26573,23 @@
- msgctxt "#41224"
- msgid "Dolby Vision picture metadata is missing or unusable."
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
  msgstr ""
 +
-+msgctxt "#41225"
++msgctxt "#41301"
 +msgid "Kodi default"
 +msgstr ""
 +
-+msgctxt "#41226"
++msgctxt "#41302"
 +msgid "SDR upscaler"
 +msgstr ""
 +
-+msgctxt "#41227"
++msgctxt "#41303"
 +msgid "HDR and Dolby Vision upscaler"
 +msgstr ""
 +
-+msgctxt "#41228"
++msgctxt "#41304"
 +msgid "Select the filter used to enlarge video for this output. Kodi default keeps the existing video scaling settings."
 +msgstr ""
 +
-+msgctxt "#41229"
++msgctxt "#41305"
 +msgid "Upscaler"
 +msgstr ""
 --- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
@@ -138,15 +138,15 @@
  
 +#ifdef HAVE_DVBRIDGE
 +  using namespace KODI::VIDEO::UPSCALER;
-+  TranslatableIntegerSettingOptions upscalers{{41225, KODI_DEFAULT}};
++  TranslatableIntegerSettingOptions upscalers{{41301, KODI_DEFAULT}};
 +  for (const auto& entry : entries)
 +  {
 +    if (Label(entry.value))
 +      upscalers.push_back(entry);
 +  }
 +  const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-+  AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
-+  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
++  AddSpinner(groupVideo, SDR, 41302, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
++  AddSpinner(groupVideo, HDR, 41303, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
 +#else
    /* remove unsupported methods */
    for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
@@ -344,7 +344,7 @@
 +#endif
    void UpdateVideoFilter();
    void CheckVideoParameters(int index);
-   AVColorPrimaries GetSrcPrimaries(AVColorPrimaries srcPrimaries, unsigned int width, unsigned int height);
+   void UpdateActiveArea(int index);
 @@ -152,6 +156,8 @@
    virtual bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
    dvbridge_geometry DVBridgeGeometry();
@@ -472,15 +472,11 @@
    if (policy.mode == DVBRIDGE_MODE_HDR10PLUS && !m_hdr10plusSubmits)
      DVBRIDGE::DiagnosticReserveProgress();
    if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && !allowPacked)
-@@ -1859,7 +1896,7 @@
-       geometry.target_height == m_sourceGeometry.target_height &&
-       std::equal(std::begin(geometry.crop), std::end(geometry.crop), std::begin(m_sourceGeometry.crop)) &&
+@@ -1859,3 +1896,3 @@
        std::equal(std::begin(geometry.placement), std::end(geometry.placement), std::begin(m_sourceGeometry.placement)) &&
 -      base.scalingMethod == m_spatialMethod;
 +      scalingMethod == m_spatialMethod;
-   if (m_geometryKnown && !sameGeometry)
-     m_geometryRevision = DVBRIDGE::NextRevisionAfter(std::max(preferences.revision,base.binding.revision));
-   m_sourceGeometry = geometry;
+   if ((m_geometryKnown && !sameGeometry) ||
 @@ -1944,7 +1981,7 @@
    m_pendingOverlayRevision = m_nativeOverlayRevision;
    m_pendingOverlayVisible = m_overlayVisible;
@@ -701,7 +697,7 @@
 +      {KODI::VIDEO::UPSCALER::SDR, KODI::VIDEO::UPSCALER::HDR});
    GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
        {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
-        "dvbridge.playback", "dvbridge.lldvformat"});
+        "dvbridge.playback", "dvbridge.lldvformat", "dvbridge.sdrgamut"});
 @@ -738,6 +790,7 @@
  {
  #ifdef HAVE_DVBRIDGE

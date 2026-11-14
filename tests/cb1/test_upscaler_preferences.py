@@ -37,7 +37,7 @@ int main()
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for output in ("sdr", "hdr"):
             preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
-                                   "/constraints/options/option[@label='41230']")
+                                   "/constraints/options/option[@label='41306']")
             self.assertIsNotNone(preset)
         renderer = TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp"
         self.assertIn("new FSR1FilterShader", renderer.read_text())
@@ -47,7 +47,7 @@ int main()
     def test_cnn_presets_are_offered_for_both_output_preferences(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for output in ("sdr", "hdr"):
-            for label in ("41231", "41232"):
+            for label in ("41307", "41308"):
                 preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
                                        f"/constraints/options/option[@label='{label}']")
                 self.assertIsNotNone(preset)
@@ -58,7 +58,7 @@ int main()
         settings = ET.parse(TREE / "system/settings/settings.xml")
         for output in ("sdr", "hdr"):
             preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
-                                   "/constraints/options/option[@label='41233']")
+                                   "/constraints/options/option[@label='41309']")
             self.assertIsNotNone(preset)
         shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_rcas.frag"
         self.assertIn("FsrRcas", shader.read_text())
