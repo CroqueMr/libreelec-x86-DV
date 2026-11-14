@@ -96,7 +96,7 @@ struct CVideoPlayer {
  struct { int iSelectedSPUStream=4771,iSelectedAudioStream=-1; } m_dvd;
  struct { bool videoOnly=false; } m_playerOptions;
  struct { bool Contains(StreamType,int,long,int) const { return true; } } m_SelectionStreams;
- bool m_bAbortRequest=false;
+ bool m_bAbortRequest=false, m_bdjAudioHandoff=false;
  int cachingChanges=0;
  IDVDStreamPlayer* GetStreamPlayer(int) { return &subtitle; }
  void SetCaching(int) { ++cachingChanges; }
