@@ -117,6 +117,7 @@ int main(int argc,char **argv)
     bool domain_only=argc>1 && !strcmp(argv[1],"domain");
     bool area_only=argc>1 && !strcmp(argv[1],"area");
     bool placed_only=argc>1 && !strcmp(argv[1],"placed");
+    bool exact_placement=argc>1 && !strcmp(argv[1],"exactplacement");
     bool warm_placed=argc>1 && !strcmp(argv[1],"warmplaced");
     bool stages=argc>1 && !strcmp(argv[1],"stages");
     bool benchmark=stages || (argc>1 && !strcmp(argv[1],"bench"));
@@ -150,16 +151,27 @@ int main(int argc,char **argv)
     const struct dvbridge_geometry cases[]={
         {1920,1080,0,0,3840,2160},{2560,1440,0,0,3840,2160},
         {1280,720,0,0,3840,2160},{2048,1152,0,0,3840,2160},
-        {1920,800,0,280,3840,1600},{3840,2160,0,0,3840,2160}};
+        {1920,800,0,280,3840,1600},{3840,2160,0,0,3840,2160},
+        {3840,1920,0,80,3840,1920,3840,2160,{0,0,3840,1920},{0,80,3840,2000}}};
+    assert(dvbridge_adaptive_placed_rows(cases[6])==80);
+    assert(dvbridge_adaptive_placed_rows(cases[4])==-1);
+    struct dvbridge_geometry fractional=cases[6],cropped=cases[6];
+    fractional.placement[1]+=.5f;fractional.placement[3]+=.5f;
+    cropped.crop[1]=1;
+    assert(dvbridge_adaptive_placed_rows(fractional)==-1);
+    assert(dvbridge_adaptive_placed_rows(cropped)==-1);
     for(unsigned preset=DVBRIDGE_ADAPTIVE_B_FP32;preset<=DVBRIDGE_ADAPTIVE_B_FP16;preset++)
     for(unsigned c=0;c<sizeof(cases)/sizeof(*cases);c++){
         policy.adaptive=preset;
         if(benchmark && preset!=DVBRIDGE_ADAPTIVE_B_FP16)continue;
-        if(stages && c!=0 && c!=5)continue;
+        if(stages && c!=0 && c!=5 && c!=6)continue;
         if(gui_only && c!=5)continue;
         if(placed_only && c!=4)continue;
+        if(exact_placement && c!=6)continue;
         if(warm_placed && c!=3 && c!=4)continue;
         struct dvbridge_geometry geometry=cases[c];
+        m->num_ext_blocks=c==6?3:2;
+        if(c==6)*av_dovi_get_ext(m,2)=(AVDOVIDmData){.level=5,.l5={.top_offset=9,.bottom_offset=19}};
         size_t count=(size_t)geometry.source_width*geometry.source_height;
         float *pixels=malloc(count*4*sizeof(float));assert(pixels);
         for(size_t i=0;i<count;i++)for(unsigned j=0;j<4;j++)
@@ -228,6 +240,9 @@ int main(int argc,char **argv)
                         "Native-grid rejection must retain output-raster L5 geometry");
                     retire(r);goto next_geometry;
                 }
+                if(c==6 && optimized && !gui_state)
+                    assert(r->enhanced_prepack && r->enhanced_skip_aux &&
+                        "An unscaled full-width picture must be packed directly in its placed rows");
                 if(optimized && !gui_state){
                     bool native=r->enhanced_input && (r->enhanced_input->params.w!=3840 ||
                         r->enhanced_input->params.h!=2160);
@@ -259,7 +274,7 @@ int main(int argc,char **argv)
                     preset,c,flip,gui_state,optimized);
                 assert(resolved);
                 read_carrier(fbo,optimized?actual:control);
-                if(c==4 && !gui_state && !flip){
+                if((c==4 || c==6) && !gui_state && !flip){
                     unsigned char *image=optimized?actual:control;
                     assert(image[0]==128 && image[1]==16 && "Placed Adaptive must clear reused borders to transport black");
                 }

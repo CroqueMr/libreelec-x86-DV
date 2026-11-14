@@ -104,6 +104,7 @@ int main(void)
         assert(wait_result(ctx, &out) == CB1_AI_INVALID);
         assert(!memcmp(&out, &saved, sizeof(out)));
     }
+    assert(cb1_hdr10_extrema_set_coalesced(ctx, true));
     float *large = calloc(3840*2160*4, sizeof(float));
     assert(large);
     large[4*(3840*2160-1)+2] = 1.f;
