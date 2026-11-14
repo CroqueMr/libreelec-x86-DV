@@ -160,8 +160,8 @@ int main(){
             self.assertEqual(node.findtext('constraints/step'),step)
             text=ET.tostring(node,encoding='unicode')
             self.assertIn('dvbridge.hdr10method',text)
-        source=(TREE/'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
-        self.assertIn('expert ? !CGUIKeyboardFactory::ShowAndGetInput',source)
+        tv=settings.find(".//group[@id='cb1-tv-characteristics']")
+        self.assertIsNotNone(tv.find("setting[@id='dvbridge.expertpeak']"))
         conditions=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         self.assertIn('dvbridge_tv_profile{preferences.expertPeak',conditions)
 

@@ -123,7 +123,7 @@ int main(){
    values=panel.find('./variable[@name="'+name+'"]').findall('value')
    active=values[0]
    self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))',active.get('condition',''))
-   self.assertIn('!String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)',active.get('condition',''))
+   self.assertIn('String.IsEqual(Window(playerprocessinfo).Property(DV.CB1Active),true)',active.get('condition',''))
    self.assertIn('FF65E18D',active.text)
    self.assertNotIn('65E18D',values[-1].text)
  def test_panel_has_no_translucent_surface_or_inherited_fade(self):

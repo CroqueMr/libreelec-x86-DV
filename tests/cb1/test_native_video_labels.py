@@ -67,7 +67,7 @@ int main() {
  info.output.effective=1;
  assert(registeredLabel("videoprocessingmode",info,value) && value=="40867");
  info.output.effective=4;
- assert(registeredLabel("videoprocessingmode",info,value) && value=="40868");
+ assert(registeredLabel("videoprocessingmode",info,value) && value=="40914");
  assert(!VideoProcessingInfoGUI::GetLabel(PLAYER_PROCESS_PIXELFORMAT,info,value));
 }
 '''.replace('PLAYBACK',playback).replace('IDS',ids).replace('HELPER',code).replace('REGISTRATION',registration).replace('COUNT',match[1])

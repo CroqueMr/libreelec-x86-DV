@@ -32,7 +32,7 @@ struct StreamTelemetry {static int Read(){return 0;}};
 VideoProcessingInfo NativeProcessingInfo(int){VideoProcessingInfo info;return info;}
 }
 struct Drm {bool plus=false;bool HDR10PlusActive(){return plus;}};
-void accepted(Drm* drm) BODY
+void accepted(Drm* drm, int nativeHDR10PlusFallback = 0) BODY
 int main(){
  Drm drm;
  for(auto [input,output] : {std::pair{Eotf::TRADITIONAL_SDR,VideoOutputType::SDR},
@@ -43,6 +43,8 @@ int main(){
  assert(cache.info.outputType==VideoOutputType::HDR10Plus);
  drm.plus=false;accepted(&drm);assert(cache.info.outputType==VideoOutputType::HDR10);
  assert(!cache.info.output.flags);
+ accepted(&drm, 41319);assert(cache.info.nativeHDR10PlusFallbackLabel==41319);
+ drm.plus=true;accepted(&drm,41319);assert(cache.info.nativeHDR10PlusFallbackLabel==0);
 }
 '''.replace('BODY', code)
         with tempfile.TemporaryDirectory() as temporary:

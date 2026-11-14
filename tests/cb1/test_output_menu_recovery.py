@@ -22,6 +22,7 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <mutex>
 #include <vector>
 using dvbridge_mode=int;
 constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_SDR=7;
@@ -37,6 +38,9 @@ struct Preferences { OutputMode output{}; HDR10SourceMode hdr10Source{};
  double peak=1000,expertPeak=1000; int gamut=2,expertGamut=2;
  bool ProfileValid(int=0) const { return peak>0 && gamut>0; } } preferences;
 Preferences FrameOutputSettings() {return preferences;}
+std::mutex& OutputSettingsMutex() {static std::mutex lock;return lock;}
+struct Selectors {void Apply(Preferences& value) const {value=preferences;}};
+Selectors ReadDefaultOutputSelectors() {return {};}
 struct Identity { bool valid{}; bool Valid() const {return valid;} };
 struct Snapshot {struct {OutputCapabilities capabilities; Identity identity;} transaction;};
 struct StreamTelemetry { static inline Snapshot value; static Snapshot Read() {return value;} };

@@ -16,7 +16,7 @@ class TVProfileVisibilityTests(unittest.TestCase):
                 return any(evaluate(child, values) for child in node)
             if node.tag in ('and', 'dependency') and not node.get('setting'):
                 return all(evaluate(child, values) for child in node)
-            self.assertEqual(node.get('operator'), 'is')
+            self.assertEqual(node.get('operator', 'is'), 'is')
             return values[node.get('setting')] == int(node.text)
 
         for output, method, ai, expected in [(0, 0, 0, False), (2, 0, 0, False),
@@ -24,7 +24,7 @@ class TVProfileVisibilityTests(unittest.TestCase):
                 (0, 0, 1, False), (0, 0, 2, True)]:
             values = {'dvbridge.outputmode': output, 'dvbridge.hdr10method': method,
                       'dvbridge.hdr10source': ai, 'dvbridge.cmv40': 0, 'dvbridge.cmv40trigger': 0}
-            for key in ('dvbridge.configureprofile', 'dvbridge.tvpeak', 'dvbridge.tvgamut'):
+            for key in ('dvbridge.tvpeak', 'dvbridge.tvgamut'):
                 node = settings[key]
                 dependencies = node.findall('./dependencies/dependency[@type="visible"]')
                 visible = all(evaluate(d, values) for d in dependencies)

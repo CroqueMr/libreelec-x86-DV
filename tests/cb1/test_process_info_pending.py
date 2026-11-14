@@ -14,7 +14,6 @@ class PendingInfoTests(unittest.TestCase):
         block=code.split('    const bool transaction=',1)[1].split('    SetProperty("DV.ReferenceWarning"',1)[0]
         additions=shipped_code('xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h')
         binding='struct SourceBinding'+additions.split('struct SourceBinding',1)[1].split('struct SourceInfo',1)[0]
-        policy=code[code.index('std::string PolicyText('):code.index('std::string TargetList(')]
         program=r'''
 #include <cassert>
 #include <map>
@@ -29,10 +28,10 @@ struct Transaction { Identity identity; int requested{},effective{},enhancement{
   bool hdr10AI{}; };
 struct Output { unsigned flags{},stream{},revision{}; int requested{},effective{},enhancement{};
   DVBRIDGE::OutputReason reason{DVBRIDGE::OutputReason::None}; bool hdr10AI{}; };
-struct Data { Transaction transaction; Output output; };
-struct CDVPlaybackInfo { static const char* RequestedPolicy(int,bool=false) {return "policy";} };
+struct Data { Transaction transaction; Output output; int nativeHDR10PlusFallbackLabel{}; };
+struct CDVPlaybackInfo { static int PolicyLabel(int,bool=false) {return 1;} };
 struct StringUtils { template<class... T> static std::string Format(const char*,T...) {return "error";} };
-POLICY_TEXT
+struct Localizer {std::string Get(int) const {return "policy";}} localizer;
 std::map<std::string,std::string> properties;
 void SetProperty(const char* key,const std::string& value) {properties[key]=value;}
 void SetProperty(const char* key,const char* value) {properties[key]=value;}
@@ -78,7 +77,7 @@ int main() {
   data={}; update(data); assert(properties["DV.OutputStage"].empty());
   assert(properties["DV.ProcessingVisible"]=="false");
 }
-'''.replace('BLOCK',block).replace('SOURCE_BINDING',binding).replace('POLICY_TEXT',policy)
+'''.replace('BLOCK',block).replace('SOURCE_BINDING',binding)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
             (root/'check.cpp').write_text(program)

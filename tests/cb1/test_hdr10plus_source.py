@@ -8,7 +8,7 @@ from pathlib import Path
 class HDR10PlusSourceTests(unittest.TestCase):
     def test_only_selected_pq_frame_is_staged_and_stale_metadata_is_cleared(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        signature='void CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)'
+        signature='int CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)'
         implementation=body(source,signature) if signature in source else '{}'
         serializer=Path(__file__).resolve().parents[2]/'CB1/src/cb1_hdr10plus.c'
         SnapshotChecks().compile_run(r'''
@@ -50,7 +50,7 @@ struct CWinSystemGbmGLESContext {
  int depth=10;int GetOutputBitDepth()const{return depth;}
  const Display* GetDisplayInfo() const {return &display;}
  auto GetEotf() const {return eotf;}
- void StageNativeHDR10Plus(bool overlay) BODY
+ int StageNativeHDR10Plus(bool overlay) BODY
 };
 int main() {
  CWinSystemGbmGLESContext w;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);

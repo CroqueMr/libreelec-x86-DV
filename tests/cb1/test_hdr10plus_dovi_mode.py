@@ -503,7 +503,7 @@ int main(){
         options = body((TREE/'xbmc/settings/SettingConditions.cpp').read_text(),
                        'void CSettingConditions::DVOutputOptions(')
         # External service lookups precede this native per-option admission loop.
-        context = options[options.index('  const bool menu='):options.index('  const auto preferences=')]
+        context = options[options.index('  const bool menu='):options.index('  auto preferences =')]
         admission = context + options[options.index('  const bool method='):options.rindex('}')]
         admission = admission.replace('!data.transaction.identity.Valid()', 'pending')
         self.compile_run(r'''
