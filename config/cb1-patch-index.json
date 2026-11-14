@@ -1475,5 +1475,15 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Adaptive scanout to the presentation scheduler.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Retain native placement and compose visible GUI in the Adaptive final draw."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-hlg-live-output.patch": {
+    "owner": "Keep native HLG on scanout while the software renderer grows its analysis queue.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h": "Expose the existing renderer teardown seam for HDR analysis reconfiguration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Retain the current HLG output until the first Dolby Vision picture is ready.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Track retention on the retiring renderer only.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Allow retention only when reconfiguring the same picture parameters.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Carry the same-input decision to the GUI render owner."
+    }
   }
 }
