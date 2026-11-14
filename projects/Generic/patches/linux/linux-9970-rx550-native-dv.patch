@@ -1,0 +1,197 @@
+Subject: [PATCH] drm/amd/display: admit the RX 550 at UHD 23.976 for Standard DV
+
+Use the existing DCE transport on Polaris12 1002:699f. Shut off formatter
+expansion during the byte tunnel, use the native sRGB bypass and make
+8-bit truncation explicit. The normal stream programs its own state again.
+
+Hades #20 supplied physical symptoms and register observations. This patch
+extends CB1's existing Vega M path and keeps the other DCE routes unchanged.
+
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -25,6 +25,18 @@
+ module_param_named(dv_lldv, dv_lldv, bool, 0444);
+ MODULE_PARM_DESC(dv_lldv, "Expose experimental player-led 4:2:2 on native AMD HDMI");
+ 
++static bool dv_rx550(const struct dc_context *ctx)
++{
++	return ctx && ctx->dce_version == DCE_VERSION_11_2 &&
++		ctx->asic_id.chip_id == 0x699f; /* Polaris12 / Lexa */
++}
++
++static bool dv_rx550_mode(const struct drm_display_mode *mode)
++{
++	return mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
++		mode->clock == 296703 && drm_match_cea_mode(mode) == 93;
++}
++
+ static bool dv_display_supported(enum dce_version version)
+ {
+ 	/* Explicit families, not a >= comparison that enables unknown hardware. */
+@@ -50,8 +62,9 @@
+ {
+ 	struct amdgpu_device *adev = drm_to_adev(connector->base.dev);
+ 
+-	const bool family = adev->dm.dc &&
+-		dv_display_supported(adev->dm.dc->ctx->dce_version);
++	const struct dc_context *ctx = adev->dm.dc ? adev->dm.dc->ctx : NULL;
++	const bool rx550 = dv_rx550(ctx);
++	const bool family = ctx && (rx550 || dv_display_supported(ctx->dce_version));
+ 	const bool hdmi = connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA &&
+ 		connector->dc_link &&
+ 		connector->dc_link->connector_signal == SIGNAL_TYPE_HDMI_TYPE_A;
+@@ -72,7 +85,7 @@
+ 			drm_object_attach_property(&connector->base.base,
+ 					connector->dv_standard_property, 0);
+ 	}
+-	if (dv_lldv) {
++	if (dv_lldv && !rx550) {
+ 		static const struct drm_prop_enum_list formats[] = {
+ 			{ 0, "Off" },
+ 			{ 1, "YCbCr 4:2:2 10 bits forced" },
+@@ -214,10 +227,11 @@
+ 	struct dc_info_packet avi_packet, vsp_packet;
+ 	u8 wire[HDMI_INFOFRAME_SIZE(DOLBY_VENDOR)];
+ 	const bool lldv = state->lldv_format != 0;
++	const bool rx550 = dv_rx550(stream->ctx);
+ 	struct drm_dvbridge_link link = {
+ 		.requested = amdgpu_dm_dv_transport(state),
+ 		.lab_enabled = (lldv ? dv_lldv : dv_standard) && stream->ctx &&
+-			dv_display_supported(stream->ctx->dce_version),
++			(rx550 ? !lldv : dv_display_supported(stream->ctx->dce_version)),
+ 		.sink_standard = lldv ? lldv_sink_supported(&caps, mode) :
+ 			dv_sink_supported(&caps, mode),
+ 		.hdmi = stream->signal == SIGNAL_TYPE_HDMI_TYPE_A &&
+@@ -239,6 +253,8 @@
+ 
+ 	if (!link.requested)
+ 		return 0;
++	if (rx550 && !dv_rx550_mode(mode))
++		return -EOPNOTSUPP;
+ 	if (state->hdr10_deep_color || (lldv && (state->dv_standard ||
+ 	    state->lldv_format != 1 || state->base.hdr10plus_metadata)))
+ 		return -EINVAL;
+@@ -302,7 +318,7 @@
+ 	stream->output_color_space = COLOR_SPACE_SRGB;
+ 	stream->out_transfer_func.type = TF_TYPE_BYPASS;
+ 	stream->out_transfer_func.tf = TRANSFER_FUNCTION_LINEAR;
+-	stream->dither_option = DITHER_OPTION_DISABLE;
++	stream->dither_option = rx550 ? DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE;
+ 	stream->qs_bit = 1;
+ 	return 0;
+ }
+@@ -448,13 +464,15 @@
+ 		    dm->freesync_config.state == VRR_STATE_ACTIVE_VARIABLE ||
+ 		    cs->ctm || cs->gamma_lut || cs->degamma_lut || cs->vrr_enabled ||
+ 		    cs->async_flip || !dv_identity_tf(dm->regamma_tf) ||
+-		    stream->dither_option != DITHER_OPTION_DISABLE ||
++		    stream->dither_option != (dv_rx550(stream->ctx) ?
++			DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE) ||
+ 		    stream->out_transfer_func.type != TF_TYPE_BYPASS ||
+ 		    stream->gamut_remap_matrix.enable_remap || stream->csc_color_matrix.enable_adjustment ||
+ 		    stream->output_color_space != COLOR_SPACE_SRGB ||
+ 		    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
+ 		    !stream->avi_infopacket.valid || !stream->vsp_infopacket.valid ||
+ 		    /* Recheck the DC raster after global validation, not only the plane. */
++		    (dv_rx550(stream->ctx) && !dv_rx550_mode(&cs->mode)) ||
+ 		    stream->timing.flags.INTERLACE ||
+ 		    stream->timing.timing_3d_format != TIMING_3D_FORMAT_NONE ||
+ 		    stream->timing.h_border_left || stream->timing.h_border_right ||
+--- a/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c
++++ b/drivers/gpu/drm/amd/display/dc/dce/dce_ipp.c
+@@ -146,7 +146,8 @@
+ {
+ 	struct dce_ipp *ipp_dce = TO_DCE_IPP(ipp);
+ 
+-	if (ipp->ctx->dce_version == DCE_VERSION_11_22 && REG(INPUT_CSC_CONTROL)) {
++	/* The DCE112 register map is used by Vega M and Polaris. */
++	if (REG(INPUT_CSC_CONTROL)) {
+ 		if (params->mode == IPP_PRESCALE_MODE_BYPASS_LUT) {
+ 			if (!ipp_dce->dv_csc_saved) {
+ 				REG_GET(INPUT_CSC_CONTROL, INPUT_CSC_GRPH_MODE,
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+@@ -1521,7 +1521,8 @@
+ 		const struct dc_stream_state *stream)
+ {
+ 	/* RGB8 tunnel bytes must not pass through DCE's 10-bit normalization. */
+-	if (stream->dv_standard && plane_state->ctx->dce_version == DCE_VERSION_11_22)
++	if (stream->dv_standard && (plane_state->ctx->dce_version == DCE_VERSION_11_22 ||
++				    plane_state->ctx->dce_version == DCE_VERSION_11_2))
+ 		return LB_PIXEL_DEPTH_24BPP;
+ 	return plane_state->ctx->dce_version > DCE_VERSION_MAX ?
+ 		LB_PIXEL_DEPTH_36BPP : LB_PIXEL_DEPTH_30BPP;
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+@@ -1632,6 +1632,20 @@
+ 		&pipe_ctx->plane_res.scl_data);
+ }
+ 
++static void dce110_program_stream_expansion(struct output_pixel_processor *opp,
++					   const struct dc_stream_state *stream)
++{
++	/* Undefined depth clears FMT expansion without re-enabling it. Only
++	 * the packed Polaris byte stream needs this override on DCE.
++	 */
++	enum dc_color_depth depth = stream->timing.display_color_depth;
++
++	if (stream->dv_standard && stream->ctx->dce_version == DCE_VERSION_11_2)
++		depth = COLOR_DEPTH_UNDEFINED;
++	opp->funcs->opp_set_dyn_expansion(opp, COLOR_SPACE_YCBCR601, depth,
++					  stream->signal);
++}
++
+ static enum dc_status dce110_enable_stream_timing(
+ 		struct pipe_ctx *pipe_ctx,
+ 		struct dc_state *context,
+@@ -1747,18 +1761,10 @@
+ 		&stream->bit_depth_params,
+ 		&stream->clamping);
+ 
+-	pipe_ctx->stream_res.opp->funcs->opp_set_dyn_expansion(
+-			pipe_ctx->stream_res.opp,
+-			COLOR_SPACE_YCBCR601,
+-			stream->timing.display_color_depth,
+-			stream->signal);
++	dce110_program_stream_expansion(pipe_ctx->stream_res.opp, stream);
+ 
+ 	while (odm_pipe) {
+-		odm_pipe->stream_res.opp->funcs->opp_set_dyn_expansion(
+-				odm_pipe->stream_res.opp,
+-				COLOR_SPACE_YCBCR601,
+-				stream->timing.display_color_depth,
+-				stream->signal);
++		dce110_program_stream_expansion(odm_pipe->stream_res.opp, stream);
+ 
+ 		odm_pipe->stream_res.opp->funcs->opp_program_fmt(
+ 				odm_pipe->stream_res.opp,
+@@ -2764,7 +2770,9 @@
+ {
+ 	struct default_adjustment default_adjust = { 0 };
+ 
+-	default_adjust.force_hw_default = false;
++	/* Select the native sRGB bypass instead of its programmable identity. */
++	default_adjust.force_hw_default = pipe_ctx->stream->dv_standard &&
++		pipe_ctx->stream->ctx->dce_version == DCE_VERSION_11_2;
+ 	default_adjust.in_color_space = pipe_ctx->plane_state->color_space;
+ 	default_adjust.out_color_space = pipe_ctx->stream->output_color_space;
+ 	default_adjust.csc_adjust_type = GRAPHICS_CSC_ADJUST_TYPE_SW;
+@@ -3032,7 +3040,8 @@
+ 
+ 	bp = dc->ctx->dc_bios;
+ 	for (i = 0; i < dc->res_pool->pipe_count; i++) {
+-		if (dc->ctx->dce_version == DCE_VERSION_11_22 && dc->res_pool->ipps[i])
++		if ((dc->ctx->dce_version == DCE_VERSION_11_22 ||
++		     dc->ctx->dce_version == DCE_VERSION_11_2) && dc->res_pool->ipps[i])
+ 			dce_ipp_reset_dv(dc->res_pool->ipps[i]);
+ 		xfm = dc->res_pool->transforms[i];
+ 		xfm->funcs->transform_reset(xfm);
+@@ -3194,6 +3203,8 @@
+ 
+ 	/* Moved programming gamma from dc to hwss */
+ 	if (dc->ctx->dce_version == DCE_VERSION_11_22 ||
++			(dc->ctx->dce_version == DCE_VERSION_11_2 &&
++			 dc->ctx->asic_id.chip_id == 0x699f) ||
+ 			pipe_ctx->plane_state->update_flags.bits.full_update ||
+ 			pipe_ctx->plane_state->update_flags.bits.in_transfer_func_change ||
+ 			pipe_ctx->plane_state->update_flags.bits.gamma_change)

@@ -115,12 +115,14 @@ int main(void)
  assert(mmio[0][1]==0x90);
  dce_ipp_program_prescale(&a.base,&ordinary);
  assert(mmio[0][1]==0x92);
- // The same register map on other DCE generations stays native.
- for(int i=0;i<3;i+=2) {
-    ctx.dce_version=i;mmio[0][1]=0xc3;
-    dce_ipp_program_prescale(&a.base,&dv);
-    assert(mmio[0][1]==0xc3);
- }
+ // Polaris shares the register map and restores its ordinary input CSC.
+ ctx.dce_version=DCE_VERSION_11_2; mmio[0][1]=0xc3;
+ dce_ipp_program_prescale(&a.base,&dv); assert(mmio[0][1]==0xc0);
+ dce_ipp_program_prescale(&a.base,&ordinary); assert(mmio[0][1]==0xc3);
+ // Other register maps do not expose the graphics CSC register.
+ const struct dce_ipp_registers other={0};
+ a.regs=&other;ctx.dce_version=DCE_VERSION_12_0;
+ dce_ipp_program_prescale(&a.base,&dv);assert(mmio[0][1]==0xc3);
 }
 '''.replace('@@STRUCTURES@@',structures).replace('@@IPP@@',reset+'\n'+
              function(ipp,'dce_ipp_program_prescale')).replace('@@INIT@@',init_loop)
@@ -140,7 +142,7 @@ struct dce_hwseq {struct {
  bool(*set_input_transfer_func)(struct dc *,struct pipe_ctx *,const struct dc_plane_state *);
  bool(*set_output_transfer_func)(struct dc *,struct pipe_ctx *,const struct dc_stream_state *);
 }funcs;};
-struct dc {struct {int dce_version;} *ctx;struct dce_hwseq *hwseq;};
+struct dc {struct {int dce_version; struct {unsigned chip_id;}asic_id;} *ctx;struct dce_hwseq *hwseq;};
 struct dc_plane_state {struct {struct {bool full_update,in_transfer_func_change,gamma_change;}bits;}update_flags;};
 struct dc_stream_state {bool dv_standard;};
 struct pipe_ctx {struct dc_plane_state *plane_state;struct dc_stream_state *stream;};
@@ -156,7 +158,7 @@ static void native_color_dispatch(struct dc *dc,struct pipe_ctx *pipe_ctx)
 int main(void)
 {
  struct dce_hwseq hws={.funcs={input,output}};
- struct {int dce_version;}ctx={DCE_VERSION_11_22};
+ struct {int dce_version; struct {unsigned chip_id;}asic_id;}ctx={.dce_version=DCE_VERSION_11_22};
  struct dc dc={(void *)&ctx,&hws};struct dc_plane_state plane={0};
  struct dc_stream_state stream={0};struct pipe_ctx pipe={&plane,&stream};
  native_color_dispatch(&dc,&pipe);assert(input_calls==1 && !output_calls);
@@ -164,9 +166,10 @@ int main(void)
  native_color_dispatch(&dc,&pipe);assert(input_calls==3);
  stream.dv_standard=false;native_color_dispatch(&dc,&pipe);assert(input_calls==4);
  ctx.dce_version=DCE_VERSION_11_2;native_color_dispatch(&dc,&pipe);assert(input_calls==4);
- ctx.dce_version=DCE_VERSION_12_0;native_color_dispatch(&dc,&pipe);assert(input_calls==4);
+ ctx.asic_id.chip_id=0x699f;native_color_dispatch(&dc,&pipe);assert(input_calls==5);
+ ctx.dce_version=DCE_VERSION_12_0;native_color_dispatch(&dc,&pipe);assert(input_calls==5);
  plane.update_flags.bits.full_update=true;native_color_dispatch(&dc,&pipe);
- assert(input_calls==5 && output_calls==1);
+ assert(input_calls==6 && output_calls==1);
 }
 ''')
 

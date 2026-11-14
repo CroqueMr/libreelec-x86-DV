@@ -13,7 +13,7 @@ class AMDCapabilityDiagnosticsTests(unittest.TestCase):
     def test_attach_reports_validated_families_and_rejects_unknown_routes(self):
         path = Path(os.environ['CB1_KERNEL_SOURCE']) / 'drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c'
         source = path.read_text()
-        gate = function(source, 'dv_display_supported')
+        gate = '\n'.join(function(source, name) for name in ('dv_rx550', 'dv_display_supported'))
         attach = function(source, 'amdgpu_dm_dv_attach')
         families = sorted(set(re.findall(r'\b(?:DCN|DCE)_VERSION_\w+', gate)) | {'DCN_VERSION_4_01', 'DCN_VERSION_4_02'})
         code = r'''
@@ -24,7 +24,8 @@ class AMDCapabilityDiagnosticsTests(unittest.TestCase):
 #include <string.h>
 enum dce_version {FAMILIES};
 enum {DRM_MODE_CONNECTOR_HDMIA=1,SIGNAL_TYPE_HDMI_TYPE_A=2,DRM_MODE_PROP_ATOMIC=3};
-struct dc {struct {enum dce_version dce_version;}*ctx;};
+struct dc_context {enum dce_version dce_version; struct {unsigned chip_id;}asic_id;};
+struct dc {struct dc_context *ctx;};
 struct amdgpu_device {struct {struct dc* dc;}dm;}device;
 struct amdgpu_dm_connector {
  struct {void* dev;struct {unsigned id;}base;int connector_type;}base;
@@ -49,7 +50,7 @@ static void drm_info(void* dev,const char* fmt,...){
 GATE
 ATTACH
 int main(){
- struct {enum dce_version dce_version;}ctx={DCN_VERSION_3_2};
+ struct dc_context ctx={.dce_version=DCN_VERSION_3_2};
  struct dc dc={.ctx=(void*)&ctx};device.dm.dc=&dc;
  struct {int connector_signal;}link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector c={.base={.base={.id=409},.connector_type=DRM_MODE_CONNECTOR_HDMIA},.dc_link=(void*)&link};
@@ -71,6 +72,10 @@ int main(){
  amdgpu_dm_dv_attach(&c);assert(properties==1 && strstr(message,"dv_parameter=0"));
  dv_lldv=true;properties=0;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
+ ctx.dce_version=DCE_VERSION_11_2; ctx.asic_id.chip_id=0x699f; dv_standard=true; properties=0;
+ amdgpu_dm_dv_attach(&c);assert(properties==2 && strstr(message,"family_supported=1"));
+ ctx.asic_id.chip_id=0x67df;properties=0;
+ amdgpu_dm_dv_attach(&c);assert(properties==0 && strstr(message,"family_supported=0"));
  device.dm.dc=NULL;properties=0;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"family_supported=0"));
 }
