@@ -436,7 +436,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 --- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
-@@ -432,15 +432,32 @@
+@@ -432,15 +432,28 @@
          std::string(data.transaction.stage) : "");
      SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
 -    SetProperty("DV.TVProfile", active && data.output.effective==8 ?
@@ -463,10 +463,6 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
 +        const auto& display = *data.output.lldv;
 +        const auto j = i * 2;
 +        value = StringUtils::Format("{:.4f}, {:.4f}", display.primaries[j], display.primaries[j + 1]);
-+        if (display.reportedPrimaries[j] != display.primaries[j] ||
-+            display.reportedPrimaries[j + 1] != display.primaries[j + 1])
-+          value = StringUtils::Format("{:.4f}, {:.4f} â†’ {}", display.reportedPrimaries[j],
-+                                      display.reportedPrimaries[j + 1], value);
 +      }
 +      SetProperty(keys[i], value);
 +    }

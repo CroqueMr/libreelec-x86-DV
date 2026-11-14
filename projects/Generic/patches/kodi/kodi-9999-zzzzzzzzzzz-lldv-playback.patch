@@ -406,7 +406,7 @@ index 46fd28f..6bcb328 100644
      if (reset && emitted) m_lastResetReported = resetSnapshot;
      m_lastReported = m_presentations;
      return;
-@@ -1213,8 +1227,255 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
+@@ -1213,8 +1227,256 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::TakeFELPrefetch(const std::shared_ptr<
    return FrameStatus::Ready;
  }
  
@@ -625,7 +625,8 @@ index 46fd28f..6bcb328 100644
 +    const cb1_lldv_cpu_frame input{reinterpret_cast<const float*>(slot.host->data),
 +        slot.carrier->data, slot.carrier->stride, identity ? nullptr : &matrix.m[0][0],
 +        slot.policy.tv.peak_nits,
-+        slot.frame->transport.format == DVBRIDGE::LldvFormat::Y422_10 ? 10u : 12u, true, true,
++        // Host rows already follow the mapped picture in scanout order.
++        slot.frame->transport.format == DVBRIDGE::LldvFormat::Y422_10 ? 10u : 12u, true, false,
 +        slot.activeRows[0], slot.activeRows[1]};
 +    const bool packed = cb1_lldv_cpu_submit(worker, &input) && cb1_lldv_cpu_ready(worker, true);
 +    return slot.carrier->Sync(DMA_BUF_SYNC_END) && packed;

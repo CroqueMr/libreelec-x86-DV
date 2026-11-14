@@ -19,8 +19,11 @@ class VideoSettingsLayout(unittest.TestCase):
     def test_defaults_and_sdr_controls_are_consecutive(self):
         settings = self.video.find("group[@id='99']").findall("setting")
         ids = [setting.attrib["id"] for setting in settings if setting.findtext("visible") != "false"]
-        self.assertEqual(ids[:4], ["dvbridge.playback", "dvbridge.hdr10source",
+        self.assertEqual(ids[:5], ["dvbridge.playback", "dvbridge.lldvformat", "dvbridge.hdr10source",
                                    "dvbridge.hdr10plussource", "dvbridge.hlgsource"])
+        condition = self.video.find(".//setting[@id='dvbridge.lldvformat']/dependencies/dependency[@type='visible']/condition")
+        self.assertEqual(condition.get("setting"), "dvbridge.outputmode")
+        self.assertEqual(condition.text, "7")
         self.assertEqual(ids[ids.index("dvbridge.sdrpreset") + 1], "dvbridge.sdrgamut")
 
     def test_scalers_and_tv_profile_use_the_native_groups(self):

@@ -279,7 +279,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),76)
+        self.assertEqual(len(rows),78)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
@@ -288,7 +288,8 @@ int main() {
         def row_for(prop):
             return next(r for r in rows if r.find('./param[@name="value"]').get('value')==
                         '$INFO[Window(playerprocessinfo).Property('+prop+')]')
-        expected={'DV.Fallback':'Fallback'}
+        expected={'DV.Fallback':'Fallback', 'DV.SignalIntent':'Signal',
+                  'DV.HdmiFormat':'HDMI format', 'DV.DriverMode':'Driver mode'}
         for prop,label in expected.items():
             self.assertEqual(row_for(prop).find('./param[@name="label"]').get('value'),label)
         # Each list of levels is a row of chips under its own caption.

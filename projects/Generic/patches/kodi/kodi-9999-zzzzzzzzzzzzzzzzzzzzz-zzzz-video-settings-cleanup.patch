@@ -368,6 +368,11 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
 +          <control type="button" format="action" />
 +        </setting>
++        <setting id="dvbridge.lldvformat" type="action" label="41200" help="41201">
++          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
++          <dependencies><dependency type="visible"><condition setting="dvbridge.outputmode">7</condition></dependency></dependencies>
++          <control type="button" format="action" />
++        </setting>
 +        <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
 +          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
 +          <constraints><options>
@@ -423,11 +428,6 @@ diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 +          <dependencies><dependency type="visible"><and><or><condition setting="dvbridge.outputmode">6</condition><condition setting="dvbridge.hdr10source">4</condition><condition setting="dvbridge.hdr10plussource">4</condition><condition setting="dvbridge.hlgsource">2</condition></or><condition setting="dvbridge.sdrpreset" operator="is">2</condition></and></dependency></dependencies>
 +          <constraints><minimum>0</minimum><maximum>5</maximum><step>0.001</step></constraints>
 +          <control type="edit" format="string" />
-+        </setting>
-+        <setting id="dvbridge.lldvformat" type="action" label="41200" help="41201">
-+          <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
-+          <dependencies><dependency type="visible"><condition setting="dvbridge.outputmode">7</condition></dependency></dependencies>
-+          <control type="button" format="action" />
 +        </setting>
 +        <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
 +          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
@@ -1489,7 +1489,7 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
        const bool ai=!data.output.aiModel.empty();
        SetProperty("DV.Reconstruction", "AI-generated L1/L3");
        if (ai)
-@@ -415,16 +405,19 @@
+@@ -415,16 +405,18 @@
          SetProperty("DV.OutputL1", StringUtils::Format("{} | {} | {}",
              data.output.emittedL1[0],data.output.emittedL1[1],data.output.emittedL1[2]));
      }
@@ -1505,10 +1505,9 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
          StringUtils::Format("{}-bit",data.output.minimumLinkBits) : "");
      SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
 -    SetProperty("DV.SignalIntent", lldv ? "LLDV / YCbCr 4:2:2" : active & CDVPlaybackInfo::HDMI ?
-+    SetProperty("DV.SignalIntent", lldv ?
-+        StringUtils::Format("LLDV / YCbCr 4:2:2 / {}-bit{}", data.output.bits,
-+                            data.output.lldv->forced ? " / " + localizer.Get(41314) : "") :
-+        active & CDVPlaybackInfo::HDMI ?
++    SetProperty("DV.HdmiFormat", lldv ? "YCbCr 4:2:2" : "");
++    SetProperty("DV.DriverMode", lldv && data.output.lldv->forced ? localizer.Get(41314) : "");
++    SetProperty("DV.SignalIntent", lldv ? "LLDV" : active & CDVPlaybackInfo::HDMI ?
          (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
          active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
          hdr10 ? "PQ / BT.2020" : "");
