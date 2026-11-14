@@ -1505,5 +1505,17 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Share preset loading and fit the Master Reference picture.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Share preset loading and fit the Master Reference picture."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-upscaler-source-resolution.patch": {
+    "owner": "Select a video upscaler by source resolution.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Describe the two resolution preferences.",
+      "system/settings/settings.xml": "Expose the two resolution preferences.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Define the Full HD boundary and the setting IDs.",
+      "xbmc/settings/Settings.cpp": "Cache and select the two resolution preferences.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Expose the two resolution preferences during playback."
+    }
   }
 }

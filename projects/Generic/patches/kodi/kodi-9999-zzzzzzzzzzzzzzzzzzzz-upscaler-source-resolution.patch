@@ -1,0 +1,208 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 5533b76..2ae3a03 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26579,15 +26579,15 @@ msgid "Kodi default"
+ msgstr ""
+ 
+ msgctxt "#41226"
+-msgid "SDR upscaler"
++msgid "Upscaler – 1080p and above"
+ msgstr ""
+ 
+ msgctxt "#41227"
+-msgid "HDR and Dolby Vision upscaler"
++msgid "Upscaler – Below 1080p"
+ msgstr ""
+ 
+ msgctxt "#41228"
+-msgid "Select the filter used to enlarge video for this output. Kodi default keeps the existing video scaling settings."
++msgid "Select the filter based on the source video resolution. Kodi default keeps the existing video scaling settings."
+ msgstr ""
+ 
+ msgctxt "#41229"
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+index a91abbe..d0f947f 100644
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -3,7 +3,7 @@
+   <section id="player" label="14200" help="38100">
+     <category id="videoplayer" label="14215" help="38103">
+       <group id="99" label="40810">
+-        <setting id="videoplayer.sdrupscaler" type="integer" label="41226" help="41228">
++        <setting id="videoplayer.upscaler1080pandabove" type="integer" label="41226" help="41228">
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
+           <constraints><options>
+             <option label="41225">-1</option><option label="16316">16</option>
+@@ -17,7 +17,7 @@
+           </options></constraints>
+           <control type="list" format="string" />
+         </setting>
+-        <setting id="videoplayer.hdrupscaler" type="integer" label="41227" help="41228">
++        <setting id="videoplayer.upscalerbelow1080p" type="integer" label="41227" help="41228">
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>-1</default>
+           <constraints><options>
+             <option label="41225">-1</option><option label="16316">16</option>
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+index f7f122d..902db3a 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -204,7 +204,7 @@ ESCALINGMETHOD OutputScalingMethod(const CDVBridgeGLES::Layer& layer,
+                 geometry.placement[2] - geometry.placement[0],
+                 geometry.placement[3] - geometry.placement[1]))
+     return layer.scalingMethod;
+-  const int method = Get(mode != DVBRIDGE_MODE_SDR, layer.scalingMethod);
++  const int method = Get(geometry.source_width, geometry.source_height, layer.scalingMethod);
+   if (mode != DVBRIDGE_MODE_MASTER_REFERENCE &&
+       (method == VS_SCALINGMETHOD_FSR1_RCAS || UsesShaderHooks(method)))
+     return layer.scalingMethod;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+index c8340b1..20eafa2 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -921,8 +921,7 @@ ESCALINGMETHOD CLinuxRendererGLES::ResolveScalingMethod(ESCALINGMETHOD method) c
+ ESCALINGMETHOD CLinuxRendererGLES::AutoUpscalingOverride() const
+ {
+   using namespace KODI::VIDEO::UPSCALER;
+-  if (Get(false, KODI_DEFAULT) == VS_SCALINGMETHOD_AUTO ||
+-      Get(true, KODI_DEFAULT) == VS_SCALINGMETHOD_AUTO)
++  if (Get(m_sourceWidth, m_sourceHeight, KODI_DEFAULT) == VS_SCALINGMETHOD_AUTO)
+     return ResolveScalingMethod(VS_SCALINGMETHOD_AUTO);
+   return VS_SCALINGMETHOD_LINEAR;
+ }
+@@ -950,7 +949,7 @@ void CLinuxRendererGLES::UpdateVideoFilter()
+           srcRect.Width(), srcRect.Height(), dstRect.Width(), dstRect.Height()))
+   {
+     const auto override = static_cast<ESCALINGMETHOD>(
+-        KODI::VIDEO::UPSCALER::Get(m_passthroughHDR, requested));
++        KODI::VIDEO::UPSCALER::Get(m_sourceWidth, m_sourceHeight, requested));
+     if (override == requested || Supports(override))
+       requested = override;
+   }
+@@ -1692,7 +1691,8 @@ bool CLinuxRendererGLES::Render(unsigned int flags, int index)
+ #endif
+ #ifdef HAVE_DVBRIDGE
+   int upscaler = -1;
+-  const int preset = KODI::VIDEO::UPSCALER::Get(m_passthroughHDR, KODI::VIDEO::UPSCALER::KODI_DEFAULT);
++  const int preset = KODI::VIDEO::UPSCALER::Get(
++      m_sourceWidth, m_sourceHeight, KODI::VIDEO::UPSCALER::KODI_DEFAULT);
+   if (KODI::VIDEO::UPSCALER::UsesShaderHooks(preset) && RenderShaderUpscaler(index, preset))
+     upscaler = preset;
+   else
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h b/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
+index 7cc3c3b..056a17c 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h
+@@ -7,8 +7,8 @@
+ 
+ namespace KODI::VIDEO::UPSCALER
+ {
+-inline constexpr auto SDR = "videoplayer.sdrupscaler";
+-inline constexpr auto HDR = "videoplayer.hdrupscaler";
++inline constexpr auto AT_LEAST_1080P = "videoplayer.upscaler1080pandabove";
++inline constexpr auto BELOW_1080P = "videoplayer.upscalerbelow1080p";
+ inline constexpr int KODI_DEFAULT = -1;
+ 
+ constexpr int Select(int method, int kodi)
+@@ -22,7 +22,12 @@ constexpr bool Enlarges(float width, float height, float targetWidth, float targ
+          (targetWidth - width >= 0.5f || targetHeight - height >= 0.5f);
+ }
+ 
+-int Get(bool hdr, int kodi);
++constexpr bool IsAtLeast1080p(unsigned int width, unsigned int height)
++{
++  return width >= 1920 || height >= 1080;
++}
++
++int Get(unsigned int sourceWidth, unsigned int sourceHeight, int kodi);
+ constexpr bool UsesFSR1(int method)
+ {
+   return method == VS_SCALINGMETHOD_FSR1 || method == VS_SCALINGMETHOD_FSR1_RCAS;
+diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
+index 027b4b8..458f187 100644
+--- a/xbmc/settings/Settings.cpp
++++ b/xbmc/settings/Settings.cpp
+@@ -625,8 +625,8 @@ public:
+   {
+     using namespace KODI::VIDEO::UPSCALER;
+     const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+-    Set(SDR, settings->GetInt(SDR));
+-    Set(HDR, settings->GetInt(HDR));
++    Set(AT_LEAST_1080P, settings->GetInt(AT_LEAST_1080P));
++    Set(BELOW_1080P, settings->GetInt(BELOW_1080P));
+   }
+ 
+   void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override
+@@ -635,10 +635,10 @@ public:
+         std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
+   }
+ 
+-  int Get(bool highDynamicRange, int kodi) const
++  int Get(bool atLeast1080p, int kodi) const
+   {
+     using namespace KODI::VIDEO::UPSCALER;
+-    const int method = (highDynamicRange ? hdr : sdr).load(std::memory_order_relaxed);
++    const int method = (atLeast1080p ? atLeast1080pMethod : below1080pMethod).load(std::memory_order_relaxed);
+     return Select(method, kodi);
+   }
+ 
+@@ -646,19 +646,19 @@ private:
+   void Set(const std::string& id, int method)
+   {
+     using namespace KODI::VIDEO::UPSCALER;
+-    auto& preference = id == HDR ? hdr : sdr;
++    auto& preference = id == AT_LEAST_1080P ? atLeast1080pMethod : below1080pMethod;
+     preference.store(Label(method) ? method : KODI_DEFAULT, std::memory_order_relaxed);
+   }
+ 
+-  std::atomic<int> sdr{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
+-  std::atomic<int> hdr{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
++  std::atomic<int> below1080pMethod{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
++  std::atomic<int> atLeast1080pMethod{KODI::VIDEO::UPSCALER::KODI_DEFAULT};
+ };
+ UpscalerPreferences upscalerPreferences;
+ } // namespace
+ 
+-int KODI::VIDEO::UPSCALER::Get(bool hdr, int kodi)
++int KODI::VIDEO::UPSCALER::Get(unsigned int sourceWidth, unsigned int sourceHeight, int kodi)
+ {
+-  return upscalerPreferences.Get(hdr, kodi);
++  return upscalerPreferences.Get(IsAtLeast1080p(sourceWidth, sourceHeight), kodi);
+ }
+ #endif
+ 
+@@ -721,7 +721,7 @@ void CSettings::InitializeISettingCallbacks()
+ {
+ #ifdef HAVE_DVBRIDGE
+   GetSettingsManager()->RegisterCallback(&upscalerPreferences,
+-      {KODI::VIDEO::UPSCALER::SDR, KODI::VIDEO::UPSCALER::HDR});
++      {KODI::VIDEO::UPSCALER::AT_LEAST_1080P, KODI::VIDEO::UPSCALER::BELOW_1080P});
+   GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),
+       {"dvbridge.configureprofile","dvbridge.expertblack","dvbridge.expertblackcustom",
+        "dvbridge.playback", "dvbridge.lldvformat"});
+diff --git a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+index aafccb8..644dac6 100644
+--- a/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
++++ b/xbmc/video/dialogs/GUIDialogVideoSettings.cpp
+@@ -95,7 +95,7 @@ void CGUIDialogVideoSettings::OnSettingChanged(const std::shared_ptr<const CSett
+     appPlayer->SetVideoSettings(vs);
+   }
+ #ifdef HAVE_DVBRIDGE
+-  else if (settingId == KODI::VIDEO::UPSCALER::SDR || settingId == KODI::VIDEO::UPSCALER::HDR)
++  else if (settingId == KODI::VIDEO::UPSCALER::AT_LEAST_1080P || settingId == KODI::VIDEO::UPSCALER::BELOW_1080P)
+   {
+     const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+     settings->SetInt(settingId, std::static_pointer_cast<const CSettingInt>(setting)->GetValue());
+@@ -425,8 +425,10 @@ void CGUIDialogVideoSettings::InitializeSettings()
+   upscalers.emplace_back(41233, VS_SCALINGMETHOD_FSR1_RCAS);
+   upscalers.emplace_back(41231, VS_SCALINGMETHOD_FSRCNNX);
+   upscalers.emplace_back(41232, VS_SCALINGMETHOD_ANIME4K);
+-  AddSpinner(groupVideo, SDR, 41226, SettingLevel::Basic, settings->GetInt(SDR), upscalers);
+-  AddSpinner(groupVideo, HDR, 41227, SettingLevel::Basic, settings->GetInt(HDR), upscalers);
++  AddSpinner(groupVideo, AT_LEAST_1080P, 41226, SettingLevel::Basic,
++             settings->GetInt(AT_LEAST_1080P), upscalers);
++  AddSpinner(groupVideo, BELOW_1080P, 41227, SettingLevel::Basic,
++             settings->GetInt(BELOW_1080P), upscalers);
+ #else
+   /* remove unsupported methods */
+   for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
