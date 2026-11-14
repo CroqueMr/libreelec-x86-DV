@@ -1,0 +1,63 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -1541,6 +1541,7 @@
+       m_dvdClock.IsPaused() && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
+ 
+   bool cb1Async = false;
++  bool adaptive = false;
+   std::optional<double> completionAge;
+ #ifdef HAVE_DVBRIDGE
+   if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+@@ -1551,6 +1552,7 @@
+     if (cb1Async)
+       if (const auto presented = window->CB1PresentedPicture())
+         m_clockSync.m_cb1Latency.Completed(presented->first, presented->second);
++    adaptive = window->CB1AdaptiveScanout() && !isPaused && m_dvdClock.GetClockSpeed() == 1.0;
+   }
+   m_clockSync.m_cb1LatencyActive = cb1Async;
+ #endif
+@@ -1646,7 +1648,15 @@
+       // refresh phase the pictures sit half a refresh from this boundary, so no
+       // hysteresis is needed and a picture of lag is removed at once.
+       double x = physicalPhase && completionAge ? 0 : (m_lateframes <= 6 ? 0.98 : 0);
+-      if (latePts < m_Queue[*iter].pts + x * frametime)
++      const auto& next = m_Queue[*iter];
++      double duration = frametime;
++#ifdef CB1_HAS_HDR10_AI
++      if (next.duration > 0) duration = next.duration;
++#endif
++      // Queue lead schedules preparation. Use the playback clock to check
++      // whether Adaptive has actually missed the next picture's interval.
++      if ((adaptive && frameOnScreen < next.pts + duration) ||
++          latePts < next.pts + x * frametime)
+         break;
+       idx = *iter;
+       ++iter;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -108,6 +108,12 @@
+     }
+   }
+   return CWinSystemGbmEGLContext::GetDisplayLatency();
++}
++
++bool CWinSystemGbmGLESContext::CB1AdaptiveScanout() const
++{
++  return m_dvState.Captured() && m_dvSelection.policy.mode == DVBRIDGE_MODE_ENHANCED_DV &&
++      m_dvContext && m_dvContext->AsyncPreparationConfigured();
+ }
+ 
+ std::optional<double> CWinSystemGbmGLESContext::CB1PresentationAge() const
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -144,6 +144,7 @@
+   {
+     return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
+   }
++  bool CB1AdaptiveScanout() const;
+   std::optional<double> CB1PresentationAge() const;
+   // Kodi presentation timestamp and KMS completion time of the latest presented CB1 picture.
+   std::optional<std::pair<double, uint64_t>> CB1PresentedPicture() const;

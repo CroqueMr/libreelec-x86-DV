@@ -1466,5 +1466,13 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Use the packed Adaptive path when the picture only needs vertical placement."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": {
+    "owner": "Keep the Adaptive presentation queue in order until a picture is actually late.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Use the playback clock to check whether Adaptive has missed a picture.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Identify Adaptive scanout with asynchronous preparation configured.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Adaptive scanout to the presentation scheduler."
+    }
   }
 }
