@@ -183,10 +183,9 @@ static const char small_header[]=
     "vec2 rg=unpackHalf2x16(packHalf2x16(value.rg));"
     "float b=unpackHalf2x16(packHalf2x16(value.bb)).x;return vec4(rg,b,1);}";
 
-static enum cb1_ai_status hlg_small(struct cb1_hdr10_ingress *ctx,const struct pl_frame *source,pl_tex *out)
+enum cb1_ai_status cb1_hdr10_ingress_hlg_preview(struct cb1_hdr10_ingress *ctx,pl_tex rgb,pl_tex *out)
 {
-    pl_tex rgb;
-    enum cb1_ai_status status=cb1_hdr10_ingress_rgb(ctx,source,&rgb);if(status!=CB1_AI_READY)return status;
+    if(!ctx || !rgb || !out)return CB1_AI_INVALID;
     /* Reuse the existing preview storage, halving before the last fit so a
      * narrow bright feature cannot alias into the model's whole motion grid. */
     for(unsigned pass=0;pass<6 && (rgb->params.w>256 || rgb->params.h>144);pass++){
@@ -213,6 +212,13 @@ static enum cb1_ai_status hlg_small(struct cb1_hdr10_ingress *ctx,const struct p
     pl_dispatch_abort(ctx->dispatch,&sh);
     if(!ok)return CB1_AI_INVALID;
     *out=ctx->small;return CB1_AI_READY;
+}
+
+static enum cb1_ai_status hlg_small(struct cb1_hdr10_ingress *ctx,const struct pl_frame *source,pl_tex *out)
+{
+    pl_tex rgb;
+    enum cb1_ai_status status=cb1_hdr10_ingress_rgb(ctx,source,&rgb);
+    return status==CB1_AI_READY?cb1_hdr10_ingress_hlg_preview(ctx,rgb,out):status;
 }
 
 enum cb1_ai_status cb1_hdr10_ingress_small(struct cb1_hdr10_ingress *ctx,

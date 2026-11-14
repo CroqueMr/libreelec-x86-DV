@@ -296,10 +296,10 @@ enum cb1_ai_status cb1_hdr10_statistics_poll(struct cb1_hdr10_statistics *ctx,
 
 /* Internal AI batch; the owner must flush on success and partial failure. */
 enum cb1_ai_status cb1_hdr10_statistics_queue_pending(struct cb1_hdr10_statistics *ctx,
-    pl_tex texture,pl_tex bounds,struct cb1_ai_identity id)
+    pl_tex texture,pl_tex bounds,struct cb1_ai_identity id,bool full_features)
 {
     if(!texture || !bounds)return CB1_AI_INVALID;
-    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false,NULL,true);
+    return submit(ctx,texture,(struct cb1_hdr10_bounds){0,0,texture->params.w,texture->params.h,0,65535},id,bounds,false,NULL,full_features);
 }
 
 

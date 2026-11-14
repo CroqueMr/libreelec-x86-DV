@@ -151,6 +151,7 @@ bool dvbridge_frame_area(unsigned margins[4],const void*,size_t,dvbridge_geometr
 void dvbridge_gl_frame_set_chroma(dvbridge_gl_frame*,pl_chroma_location){}
 pl_chroma_location dvbridge_map_chroma(AVChromaLocation){return PL_CHROMA_LEFT;}
 bool dvbridge_map_color(dvbridge_color*,const void*,size_t,bool){return false;}
+int dvbridge_adaptive_placed_rows(dvbridge_geometry){return -1;}
 dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare_packed(dvbridge_renderer*,const dvbridge_policy*,const dvbridge_identity*,const pl_frame*,const void*,size_t,double,double,dvbridge_geometry,pl_tex,bool,const dvbridge_native_overlay*){return DVBRIDGE_DV_UNSUPPORTED;}
 dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(dvbridge_renderer*,const dvbridge_policy*,const dvbridge_identity*,const pl_frame*,const void*,size_t,double,double,dvbridge_geometry){return DVBRIDGE_DV_UNSUPPORTED;}
 dvbridge_dv_policy_status dvbridge_render_dv_policy_poll(dvbridge_renderer*){return static_cast<dvbridge_dv_policy_status>(retired);}

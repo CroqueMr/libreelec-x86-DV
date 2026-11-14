@@ -85,6 +85,23 @@ int main(){
  a.Begin(7,9,0);a.WaitForInput();a.Stop();a.InputReady(5000);
  assert(a.Observe(CB1_AI_READY,id,5000)==Decision::Ignore);
  a.Begin(7,9,0);assert(a.Observe(CB1_AI_PENDING,id,1000)==Decision::Native);
+ a.Begin(7,9,0);
+ for(uint64_t time=100;time<3000;time+=100){
+  a.AnalysisCompleted({7,time/100,9},time);
+  assert(a.Observe(CB1_AI_PENDING,id,time)==Decision::Wait);
+ }
+ assert(a.Observe(CB1_AI_PENDING,id,3000)==Decision::Native);
+ a.Begin(7,9,0);
+ a.AnalysisCompleted(id,800);
+ assert(a.Observe(CB1_AI_READY,id,900)==Decision::Prepare);
+ assert(a.Presented(id,true));
+ assert(a.Observe(CB1_AI_PENDING,{7,2,9},1000)==Decision::Wait);
+ a.AnalysisCompleted({7,2,9},1500);
+ assert(a.Observe(CB1_AI_PENDING,{7,2,9},2000)==Decision::Native);
+ a.Begin(7,9,0);
+ a.AnalysisCompleted({7,1,8},800);
+ assert(a.Observe(CB1_AI_PENDING,id,1000)==Decision::Native);
+
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:

@@ -1435,5 +1435,45 @@
     "files": {
       "drivers/gpu/drm/i915/display/intel_hotplug.c": "Prioritize ready HDMI checks and fresh edges on retrying HPD pins."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-software-hdr-import.patch": {
+    "owner": "Share HDR analysis between VAAPI and software-decoded video.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Admit planar HDR sources and share the analysis queue with VAAPI.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Expose software queue capacity and share preparation state.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp": "Use the shared analysis queue with existing VAAPI imports.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h": "Keep VAAPI-specific texture readiness and pool sizing."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": {
+    "owner": "Prime the first analysed HDR picture on its own timeline.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Select the analysed head before enabling display clock catch-up."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hlg-analysis-resync.patch": {
+    "owner": "Keep HLG playback synchronized while the requested Dolby Vision output primes.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h": "Bound priming by the elapsed time and progress of the current epoch.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp": "Timestamp analysis progress and prediction on the same monotonic clock.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Reserve the existing analysis pool for HLG AV1 before a live switch.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Reprime seekable HLG playback at its current position when entering Dolby Vision.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Wait for priming before enabling normal clock catch-up."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-placed-packing.patch": {
+    "owner": "Admit native Dolby Vision packing for unscaled UHD-width pictures.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Use the packed Adaptive path when the picture only needs vertical placement."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": {
+    "owner": "Keep the Adaptive presentation queue in order until a picture is actually late.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Use the playback clock to check whether Adaptive has missed a picture.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Identify Adaptive scanout with asynchronous preparation configured.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose Adaptive scanout to the presentation scheduler.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Retain native placement and compose visible GUI in the Adaptive final draw."
+    }
   }
 }

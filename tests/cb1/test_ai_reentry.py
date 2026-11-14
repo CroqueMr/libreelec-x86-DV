@@ -429,10 +429,10 @@ int main(){
 '''.replace('SELECTION',selection).replace('HDR_TYPES',hdr_types).replace('ELIGIBLE',eligible))
 
     def test_ai_capture_horizon_uses_the_same_repaired_presentation_timeline(self):
-        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text(),
-                    'HDR10AIQueuePreparation CRendererVAAPIGLES::CaptureHDR10AIQueue(')
+        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text(),
+                    'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
         start=source.index('  const auto horizon =')
-        selection=source[start:source.index('  for (const auto idx',start)]
+        selection=source[start:source.index('\n',start)]
         execute(r'''
 #include <cassert>
 constexpr double DVD_TIME_BASE=1000000;
@@ -442,8 +442,8 @@ int main(){struct{double pts=9000000,doviSourcePts=1000000;}picture;auto*head=&p
 '''.replace('SELECTION',selection))
 
     def test_native_output_rejection_is_pending_not_default_ready(self):
-        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text(),
-                    'HDR10AIQueuePreparation CRendererVAAPIGLES::CaptureHDR10AIQueue(')
+        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text(),
+                    'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
         start=source.index('  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native')
         native=source[start:source.index('  return {false,',start)]
         preparation=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/BaseRenderer.h').read_text(),
@@ -604,12 +604,13 @@ constexpr double DVD_NOPTS_VALUE=-1e20;
 struct Manager {
  bool m_aiQueuePreparationStale=false,m_aiGuiReady=true,m_aiQueueReady=true;
  double m_aiStartPts=1;
+ int m_lateframes=4;
  void Publish(bool lookahead,bool next,bool ready){struct {bool lookahead,ready;} outcome{next,ready};
  SELECTION }
 };
 int main(){
  Manager entering;entering.Publish(false,true,false);
- assert(entering.m_aiStartPts==DVD_NOPTS_VALUE && !entering.m_aiGuiReady && !entering.m_aiQueueReady);
+ assert(entering.m_aiStartPts==DVD_NOPTS_VALUE && !entering.m_aiGuiReady && !entering.m_aiQueueReady && entering.m_lateframes==0);
  Manager active;active.Publish(true,true,true);assert(active.m_aiStartPts==1 && active.m_aiGuiReady);
  Manager native;native.Publish(false,false,true);assert(native.m_aiStartPts==1 && native.m_aiGuiReady);
 }
@@ -766,8 +767,8 @@ int main(){
 '''.replace('SELECTION',selection))
 
     def test_mode_reentry_reuses_existing_output_admission_without_reconfiguring_pool(self):
-        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text(),
-                    'HDR10AIQueuePreparation CRendererVAAPIGLES::CaptureHDR10AIQueue(')
+        source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text(),
+                    'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
         selection=source[source.index('  const auto preferences ='):]
         execute(r'''
 #include <cassert>
@@ -790,7 +791,7 @@ struct Preparation {
 };
 using HDR10AIQueuePreparation=Preparation;
 struct Window {
- bool ready=true,fallback=false;
+ bool ready=true,fallback=false,metadataOnly=false;
  bool PrepareHDR10AIQueue(const Picture&,const std::vector<int>&,bool,bool,unsigned long){return ready;}
  bool HDR10AILookaheadActive(){return !fallback && DVBRIDGE::prefs.hdr10Source!=DVBRIDGE::HDR10SourceMode::Native;}
 };
@@ -803,13 +804,17 @@ struct Renderer {
   auto* window=&output;auto head=m_buffers[0].doviSourcePicture;
   std::vector<int> layers;bool end=false,paused=false;unsigned long presentationDeadline=0;
   int index=0;auto binding=head->doviSourceBinding;
+  const bool metadataOnly=output.metadataOnly;
   SELECTION
 };
 bool run(Renderer& r){auto p=r.Capture();if(!p.execute)return p.ready;auto o=p.execute();return p.publish(o)&&o.ready;}
 int main(){
  Renderer r;r.buffered=true;assert(r.Capture().buffered);
+ r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HLG;
+ assert(r.Capture().buffered); // HLG needs the same complete lookahead as PQ.
  r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
- assert(!r.Capture().buffered); // Guided/metadata startup keeps its existing admission.
+ r.output.metadataOnly=true;assert(!r.Capture().buffered);
+ r.output.metadataOnly=false;assert(r.Capture().buffered); // Guided pixel analysis still needs a horizon.
  r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_HDR10;r.buffered=false;
  r.output.ready=false;assert(!run(r));assert(r.admissions==0);
  r.output.ready=true;assert(run(r));assert(r.admissions==1 && r.m_dvRequested && !r.m_aiOutputPending);

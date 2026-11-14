@@ -264,6 +264,9 @@ enum dvbridge_dv_policy_status dvbridge_render_dv_policy_prepare(
     struct dvbridge_renderer *renderer,const struct dvbridge_policy *policy,
     const struct dvbridge_identity *identity,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,struct dvbridge_geometry geometry);
+/* Vertical origin for unscaled full-width placement in the UHD carrier, or -1. */
+int dvbridge_adaptive_placed_rows(struct dvbridge_geometry geometry);
+
 #define DVBRIDGE_ENHANCED_PACKED_API 1
 /* Same pixel/metadata contract with native packing and optional subtitles.
  * Both prepare entry points may return Pending; resolve only after Ready. */

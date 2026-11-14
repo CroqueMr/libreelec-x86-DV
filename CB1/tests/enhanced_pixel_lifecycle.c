@@ -57,7 +57,7 @@ static void exact_prepack(struct dvbridge_renderer *r,unsigned fbo,bool flip)
     }
     free(expected);free(actual);
 }
-static void adaptive_ordered_handoff(pl_gpu,const struct pl_frame *,const AVDOVIMetadata *,size_t);
+static void adaptive_ordered_handoff(pl_gpu,const struct pl_frame *,const AVDOVIMetadata *,size_t,bool);
 static void adaptive_guidance_equivalence(pl_gpu gpu)
 {
     enum {W=3840,H=2160};
@@ -171,7 +171,10 @@ static void adaptive_guidance_equivalence(pl_gpu gpu)
             assert(!glIsSampler(sampler));
         }
         av_free(reference);
-        if(color==1)adaptive_ordered_handoff(gpu,&frame,metadata,bytes);
+        if(color==1){
+            adaptive_ordered_handoff(gpu,&frame,metadata,bytes,false);
+            adaptive_ordered_handoff(gpu,&frame,metadata,bytes,true);
+        }
     }
     av_free(metadata);free(expected);free(actual);
     pl_tex_destroy(gpu,&target);pl_tex_destroy(gpu,&input);
@@ -223,7 +226,7 @@ static void adaptive_storage_ownership(pl_gpu gpu)
     puts("PASS Adaptive storage: capacity/reuse, AI isolation, pending cancellation and deferred destruction");
 }
 static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
-    const AVDOVIMetadata *metadata,size_t bytes)
+    const AVDOVIMetadata *metadata,size_t bytes,bool reject_expansion)
 {
     const size_t size=3840u*2160u*4;unsigned char *reference[2]={malloc(size),malloc(size)},*actual=malloc(size);
     void *expected_metadata[2]={0};size_t expected_bytes[2]={0};assert(reference[0]&&reference[1]&&actual);
@@ -235,6 +238,16 @@ static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
         targets[i]=pl_tex_create(gpu,pl_tex_params(.w=3840,.h=2160,.format=fmt,.renderable=true));assert(targets[i]);
         pl_opengl_unwrap(gpu,targets[i],NULL,NULL,&fbos[i]);
     }
+    pl_tex gui=NULL,lut=NULL,pq=NULL;
+    struct dvbridge_native_overlay overlay={0};
+    if(reject_expansion){
+        gui=reference_texture(gpu,3840,2160,NULL);
+        lut=reference_texture(gpu,1,1,(float[4]){.1,.1,.1,1});
+        pq=reference_texture(gpu,1,1,(float[4]){.2,.2,.2,1});
+        pl_tex_clear(gpu,gui,(float[4]){.1,.05,.025,.5});
+        overlay=(struct dvbridge_native_overlay){.texture=gui,.degamma=lut,.pq=pq,
+            .rect={0,0,3840,2160},.input_pq=true};
+    }
     for(unsigned ordered=0;ordered<2;ordered++){
         struct dvbridge_retirement_owner *owner=dvbridge_retirement_owner_create(gpu);assert(owner);
         struct dvbridge_renderer *r=dvbridge_renderer_create_with_owner(owner);assert(r);
@@ -242,10 +255,18 @@ static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
 
         struct dvbridge_policy policy={.revision=1,.mode=DVBRIDGE_MODE_ENHANCED_DV,
             .adaptive=DVBRIDGE_ADAPTIVE_B_FP16,.tv={2500,DVBRIDGE_PANEL_UNSET,DVBRIDGE_GAMUT_P3_D65}};
+        dvbridge_renderer_set_overlay_visible(r,reject_expansion);
         for(unsigned i=0;i<2;i++){
             const AVDOVIMetadata *m=i?changed:metadata;struct dvbridge_identity id={71,83+i,1};
             assert(dvbridge_render_dv_policy_prepare_packed(r,&policy,&id,frame,m,bytes,i/60.0,i/60.0,
-                (struct dvbridge_geometry){3840,2160,0,0,3840,2160},targets[i],false,NULL)==DVBRIDGE_DV_PENDING);
+                (struct dvbridge_geometry){3840,2160,0,0,3840,2160},targets[i],false,reject_expansion?&overlay:NULL)==DVBRIDGE_DV_PENDING);
+            if(reject_expansion){
+                glFinish();
+                uint32_t record[16];memcpy(record,r->dv.mapped,sizeof(record));
+                record[11]=1;assert(dve_derive(r,record));
+                r->dv.ready=r->ready=true;
+                assert(r->dv.output.value.expansion_reason==CB1_DVE_SOURCE_BOUND);
+            }
             assert(finish(r)==DVBRIDGE_DV_READY);
             const struct dvbridge_dv_policy_output *out=dvbridge_render_dv_policy_output(r);assert(out);
             if(!ordered){expected_bytes[i]=out->bytes;expected_metadata[i]=av_memdup(out->output_metadata,out->bytes);assert(expected_metadata[i]);}
@@ -282,6 +303,9 @@ static void adaptive_ordered_handoff(pl_gpu gpu,const struct pl_frame *frame,
     }
     assert(memcmp(reference[0],reference[1],size) && "The two graded frames must be distinguishable");
     for(unsigned i=0;i<2;i++){free(reference[i]);av_free(expected_metadata[i]);pl_tex_destroy(gpu,&targets[i]);}
+    if(reject_expansion){
+        pl_tex_destroy(gpu,&gui);pl_tex_destroy(gpu,&lut);pl_tex_destroy(gpu,&pq);
+    }
     av_free(changed);free(actual);puts("PASS Adaptive ordered handoff: distinct carriers/RPUs and bounded final-fence retirement");
 }
 
