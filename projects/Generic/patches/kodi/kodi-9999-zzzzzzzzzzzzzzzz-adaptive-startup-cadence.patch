@@ -17,7 +17,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
    }
    m_clockSync.m_cb1LatencyActive = cb1Async;
  #endif
-@@ -1646,7 +1648,15 @@
+@@ -1636,6 +1638,8 @@
+     ++iter;
+     // Catch up against the same deadline used to admit this presentation.
+     const double latePts = renderPts;
++    // A Kodi render tick can run partway through the current scanout.
++    const double scanoutPts = frameOnScreen - std::max(0.0, completionAge.value_or(0.0));
+     while (iter != m_queued.end())
+     {
+       // the slot for rendering in time is [pts .. (pts +  x * frametime)]
+@@ -1646,7 +1650,14 @@
        // refresh phase the pictures sit half a refresh from this boundary, so no
        // hysteresis is needed and a picture of lag is removed at once.
        double x = physicalPhase && completionAge ? 0 : (m_lateframes <= 6 ? 0.98 : 0);
@@ -27,9 +36,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
 +#ifdef CB1_HAS_HDR10_AI
 +      if (next.duration > 0) duration = next.duration;
 +#endif
-+      // Queue lead schedules preparation. Use the playback clock to check
-+      // whether Adaptive has actually missed the next picture's interval.
-+      if ((adaptive && frameOnScreen < next.pts + duration) ||
++      // Preparation lead does not make the next picture late on screen.
++      if ((adaptive && scanoutPts < next.pts + duration) ||
 +          latePts < next.pts + x * frametime)
          break;
        idx = *iter;

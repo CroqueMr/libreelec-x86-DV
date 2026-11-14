@@ -225,7 +225,7 @@ class CB1PresentationSyncTests(unittest.TestCase):
    CRenderManager r;
    r.m_fps=23.976f;r.m_clockSync.m_enabled=true;
    r.m_dvdClock.now=74307;
-   for(int i=1;i<6;++i){
+   for(int i=1;i<7;++i){
      r.m_Queue[i].pts=i*refresh;r.m_Queue[i].duration=refresh;r.m_queued.push_back(i);
    }
    if(async) window.age=1500;
@@ -244,10 +244,17 @@ class CB1PresentationSyncTests(unittest.TestCase):
    r.m_presentstep=PRESENT_READY;
    r.PrepareNextRender();
    assert(r.m_presentsource==2 && r.m_QueueSkip==0);
-   r.m_dvdClock.now=7*refresh;
+   // A CPU tick after the deadline can still be within the last scanout interval.
+   window.age=23030;
+   r.m_dvdClock.now=5*refresh+10000;
    r.m_presentstep=PRESENT_READY;
    r.PrepareNextRender();
-   assert(r.m_presentsource==5 && r.m_QueueSkip>0);
+   assert(r.m_presentsource==3 && r.m_QueueSkip==0);
+   window.age=1500;
+   r.m_dvdClock.now=8*refresh;
+   r.m_presentstep=PRESENT_READY;
+   r.PrepareNextRender();
+   assert(r.m_presentsource==6 && r.m_QueueSkip>0);
  }
 """)
 

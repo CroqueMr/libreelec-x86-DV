@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": "0b238f2f0ac6422782b8ed8e19974e013b16c250ebf4359fd98654f6dfa64102",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": "5b21cfecbd76dbbd5b3ee85a1890a587153bc9e008e51b6883ceaf1365af4f4a",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-placed-packing.patch": "71bf2d65e86a2012945de1991303ce942056158d3f61a3cc6cef761591b206f1",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-software-hdr-import.patch": "aaf49ee53475ce0e4d332cdda9882f8558701a3f38a65ffbc5946e63318bcd12",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
@@ -344,7 +344,7 @@
     "tests/cb1/test_playback_defaults.py": "802c50f4bdb06f6f1db2162df2b51b86dec0bb477742b305706e8a644e401676",
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "ada5a545ad1196d11f8124c3a171dc958f7a01d38d409ecc9daf6d9da9c763bb",
-    "tests/cb1/test_cb1_presentation_sync.py": "78bebfb32cc0cc672acef0d7c04a4e6b6c31988a5147dad7fcfbdb15cab23ac1",
+    "tests/cb1/test_cb1_presentation_sync.py": "dc6b814a12a90bf276f55e5bdbe8f55c88d7991756a60480c9c1bba49d0e554e",
     "projects/Generic/patches/linux/linux-9946-amd-player-led-lab.patch": "a86716656a94383aa02bd19cd5f17b1b5f8447d8e60f426f63be7e4228284c88",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzz-hdr10-link-depth.patch": "67534b69854296820633304c28bd4c170b4a99f2dee721b13ff20e4629ac18ac",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzz-lldv-playback.patch": "254ec85ee72fe20545f742e786f4c510bba4a62e6b07aa8e4f719635fa87f125",
