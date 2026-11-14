@@ -88,7 +88,9 @@ struct CSettingConditions {
  static void DVOutputOptions(const std::shared_ptr<CSettingInt>& setting,std::vector<IntegerSettingOption>& options)
  {
   if (!hdr10PlusSink && setting->GetId()=="dvbridge.hdr10plusplaybackchoice")
-    std::erase_if(options,[](const auto& option){return option.label=="41014";});
+    for (auto& option : options)
+      if (option.label=="41014")
+        option.properties.emplace_back("disabled",true);
  }
 };
 struct StringUtils {template<class... T>static std::string Format(std::string text,T...){return text;}};
@@ -146,22 +148,24 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   SelectOutputSettings();auto next=FrameOutputSettings();assert(next.output==initial.output&&next.method==initial.method);
   assert(next.hdr10Source==initial.hdr10Source&&next.hdr10PlusSource==initial.hdr10PlusSource&&next.hlgSource==initial.hlgSource);
  }
- if(scenario=="hdr10plus-hidden"){
-  stored->ints["dvbridge.hdr10plussource"]=5;
+ if(scenario=="hdr10plus-disabled"){
+  stored->ints["dvbridge.hdr10plussource"]=0;
   SelectOutputSettings();
   CSettingConditions::hdr10PlusSink=false;
 #ifdef CB1_HAS_HDR10_AI
   assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,1));
-  assert(dialog.current==1 && dialog.items.size()==3);
+  assert(dialog.current==2 && dialog.items.size()==4);
   assert(FrameOutputSettings(true).hdr10PlusSource==HDR10SourceMode::Native);
-  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,2));
+  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,3));
   assert(FrameOutputSettings(true).hdr10PlusSource==HDR10SourceMode::SDR);
+  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,2));
 #else
   assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,0));
-  assert(dialog.current==0 && dialog.items.size()==1);
-  assert(FrameOutputSettings(true).hdr10PlusSource==HDR10SourceMode::Native);
+  assert(dialog.current==1 && dialog.items.size()==2);
+  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,1));
 #endif
-  assert(stored->ints["dvbridge.hdr10plussource"]==5);
+  assert(FrameOutputSettings(true).hdr10PlusSource==HDR10SourceMode::Native);
+  assert(stored->ints["dvbridge.hdr10plussource"]==0);
  }
  if(scenario=="settings"){
   assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,6,true));
@@ -234,7 +238,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
             for flags in ([],['-DCB1_TEST_NO_AI']):
                 built=subprocess.run(['c++','-std=c++20',*flags,'-I'+str(ROOT/'CB1/src'),'-I'+str(TREE/'xbmc'),str(code),'-o',str(binary)],capture_output=True,text=True)
                 self.assertEqual(built.returncode,0,built.stderr)
-                for scenario in ('default-edits','live','settings','label','legacy-toggles','strict','player-led','hdr10plus-hidden'):
+                for scenario in ('default-edits','live','settings','label','legacy-toggles','strict','player-led','hdr10plus-disabled'):
                     with self.subTest(flags=flags,scenario=scenario):
                         ran=subprocess.run([str(binary),scenario],capture_output=True,text=True)
                         self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)

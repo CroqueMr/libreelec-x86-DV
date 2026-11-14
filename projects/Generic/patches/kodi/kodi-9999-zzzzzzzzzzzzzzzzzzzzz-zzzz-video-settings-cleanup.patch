@@ -28,7 +28,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#40820"
-@@ -25954,7 +25954,7 @@
+@@ -25954,11 +25954,11 @@
  msgstr ""
  
  msgctxt "#40922"
@@ -37,6 +37,11 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#40923"
+-msgid "No HDR10+ output"
++msgid "No HDR10+ via HDMI"
+ msgstr ""
+ 
+ msgctxt "#40925"
 @@ -25970,11 +25970,11 @@
  msgstr ""
  
@@ -1171,20 +1176,10 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  #include "GUIDialogKaiToast.h"
  #include "GUIDialogSelect.h"
  #include "GUIDialogBusy.h"
-@@ -33,6 +31,7 @@
- #endif
- #include "utils/log.h"
- #include "threads/IRunnable.h"
-+#include <algorithm>
- #include <cstdio>
- 
- namespace
-@@ -87,56 +86,6 @@
-   if (!source.valid || (!source.stereoMode.empty() && source.stereoMode!="mono"))
-     return StreamHdrType::HDR_TYPE_NONE;
+@@ -89,56 +87,6 @@
    return source.hdrType;
--}
--
+ }
+ 
 -bool CDVPlaybackModes::ConfigureProfile()
 -{
 -  const auto component=CServiceBroker::GetSettingsComponent();
@@ -1233,10 +1228,12 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 -  }
 -  settings->Save();
 -  return true;
- }
- 
+-}
+-
  std::string CDVPlaybackModes::DefaultPlaybackLabel()
-@@ -163,14 +112,14 @@
+ {
+   std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+@@ -163,14 +111,14 @@
                           nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
    const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
    if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
@@ -1256,13 +1253,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  #endif
    const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
    const int count=hlgSource ? std::size(hlgChoices) : hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
-@@ -185,14 +134,16 @@
-       DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
-     }
-     std::vector<IntegerSettingOption> options;
--    int current=-1;
-+    int currentChoice=-1;
-     for(int i=0;i<count;++i)
+@@ -190,7 +138,9 @@
      {
        options.emplace_back(strings.Get(choices[i].label),i);
        const auto& choice=choices[i];
@@ -1271,27 +1262,18 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 +          hdr10PlusSource ? (int(preferences.hdr10PlusSource)==choice.output) :
 +          hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
            (int(preferences.output)==choice.output &&
--          (choice.output!=1 || preferences.method==choice.method))) current=i;
-+          (choice.output!=1 || preferences.method==choice.method))) currentChoice=i;
+           (choice.output!=1 || preferences.method==choice.method))) current=i;
      }
-     CSettingConditions::DVOutputOptions(choiceSetting,options);
-     DVBRIDGE::DiagnosticLog(LOGINFO,
-@@ -202,16 +153,24 @@
+@@ -202,7 +152,7 @@
      dialog->Reset();
      dialog->SetHeading(settingsMenu ? strings.Get(40811) :
          StringUtils::Format(strings.Get(40876), hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
 -    dialog->SetUseDetails(!settingsMenu);
 +    dialog->SetUseDetails(true);
-+    int current = -1;
-+    std::vector<int> visibleChoices;
      for(const auto& option : options)
      {
-+      if (option.value == currentChoice ||
-+          (current == -1 && hdr10PlusSource && choices[option.value].output == 0))
-+        current = static_cast<int>(visibleChoices.size());
-+      visibleChoices.push_back(option.value);
        DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
-           option.value, option.label, option.label2);
+@@ -210,8 +160,10 @@
        CFileItem item(option.label);
        item.SetLabel2(option.label2);
        for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
@@ -1304,29 +1286,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
        dialog->Add(item);
      }
      dialog->SetSelected(current);
-@@ -220,13 +179,18 @@
-     dialog->SetProperty("CB1.PlaybackModes", CVariant{});
-     if (!dialog->IsConfirmed()) return true;
-     const int selected=dialog->GetSelectedItem();
--    if (selected<0 || selected>=count) return true;
-+    if (selected < 0 || selected >= static_cast<int>(visibleChoices.size())) return true;
-     // Admission may change during the dialog's nested event loop.
-     if (!settingsMenu && SourceType()!=nativeSource) return true;
-+    const int selectedChoice = visibleChoices[selected];
-     CSettingConditions::DVOutputOptions(choiceSetting,options);
--    for(const auto& [name,value] : options[selected].properties)
-+    const auto option = std::find_if(options.begin(), options.end(), [selectedChoice](const auto& item) {
-+      return item.value == selectedChoice;
-+    });
-+    if (option == options.end()) return true;
-+    for(const auto& [name,value] : option->properties)
-       if (name=="disabled" && value.asBoolean()) return true;
--    const auto& choice=choices[selected];
-+    const auto& choice=choices[selectedChoice];
-     {
-       std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
-       if (settingsMenu)
-@@ -334,72 +298,44 @@
+@@ -334,72 +286,44 @@
    if (!dialog)
      return;
  
@@ -1423,7 +1383,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
      settings->Save();
  }
  } // namespace
-@@ -409,12 +345,22 @@
+@@ -409,12 +333,22 @@
    using namespace DVBRIDGE;
    const auto status = ReadLldvConnector();
    const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
@@ -1452,7 +1412,7 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
  }
  
  std::string CDVPlaybackModes::SDRGamutLabel()
-@@ -426,8 +372,7 @@
+@@ -426,8 +360,7 @@
  
  void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
  {
@@ -1618,7 +1578,7 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
    const auto data=DVBRIDGE::StreamTelemetry::Read();
    auto caps=data.transaction.capabilities;
    auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
-@@ -550,11 +555,22 @@
+@@ -550,11 +555,18 @@
        4,0,2,3,6,7,8};
  #ifdef CB1_HAS_HDR10_AI
    constexpr int hdr10MenuModes[]{1,4,0,7};
@@ -1630,21 +1590,28 @@ diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditio
 -#endif
 +  constexpr int hdr10PlusMenuModes[]{0,0};
 +#endif
-+  // Filter on the active HDMI chain. Values stay stable for persisted settings and Quick Switch.
-+  if (hdr10PlusSource && !caps.hdr10plus)
-+  {
 +#ifdef CB1_HAS_HDR10_AI
-+    constexpr int nativeMenuIndex = 1;
++  constexpr int nativeHDR10PlusMenuIndex = 1;
 +#else
-+    constexpr int nativeMenuIndex = 0;
++  constexpr int nativeHDR10PlusMenuIndex = 0;
 +#endif
-+    const int nativeChoice = hdr10PlusMenu ? nativeMenuIndex : 5;
-+    std::erase_if(list, [nativeChoice](const auto& option) { return option.value == nativeChoice; });
-+  }
++  const int nativeHDR10PlusChoice = hdr10PlusMenu ? nativeHDR10PlusMenuIndex :
++      static_cast<int>(DVBRIDGE::HDR10SourceMode::HDR10PlusPassthrough);
    for(auto& option : list)
    {
      const int mode=hlgSource ? (option.value==2 ? DVBRIDGE_MODE_SDR :
-@@ -600,12 +616,10 @@
+@@ -566,7 +578,9 @@
+         (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : option.value==6 ? 7 : option.value==7 ? 8 : 0);
+     auto reason=DVBRIDGE::OutputReason::None;
+     const bool guided = hdr10PlusSource && (hdr10PlusMenu ? option.value==0 : option.value==3);
+-    if (mode)
++    if (hdr10PlusSource && option.value == nativeHDR10PlusChoice && !caps.hdr10plus)
++      reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
++    else if (mode)
+     {
+       const bool dv=mode==1 || mode==4 || mode==5;
+       if (guided && hdr10Menu && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
+@@ -600,12 +614,10 @@
            gamut<1 || gamut>3 ? 40912 : 40845;
      }
      const bool profile=reason==DVBRIDGE::OutputReason::TVProfileRequired || reason==DVBRIDGE::OutputReason::SDRTargetInvalid;
@@ -1703,7 +1670,23 @@ diff --git a/xbmc/settings/Settings.cpp b/xbmc/settings/Settings.cpp
 diff --git a/xbmc/settings/windows/GUIControlSettings.cpp b/xbmc/settings/windows/GUIControlSettings.cpp
 --- a/xbmc/settings/windows/GUIControlSettings.cpp
 +++ b/xbmc/settings/windows/GUIControlSettings.cpp
-@@ -1139,6 +1139,10 @@
+@@ -681,6 +681,15 @@
+     if (!optionsValid || options.Size() <= 0)
+       return false;
+ 
++    if (m_pSetting->GetId() == "dvbridge.hdr10plussource")
++    {
++      for (const auto& item : options)
++      {
++        if (item->GetProperty("disabled").asBoolean())
++          item->SetLabel("[COLOR grey]" + item->GetLabel() + "[/COLOR]");
++      }
++    }
++
+     dialog->Reset();
+     dialog->SetHeading(CVariant{Localize(m_pSetting->GetLabel())});
+     dialog->SetItems(options);
+@@ -1139,6 +1148,10 @@
              strText=CDVPlaybackModes::DefaultPlaybackLabel();
            else if (m_pSetting->GetId()=="dvbridge.lldvformat")
              strText=CDVPlaybackModes::LldvPreferenceLabel();

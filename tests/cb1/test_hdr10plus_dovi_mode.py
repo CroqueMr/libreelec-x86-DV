@@ -550,9 +550,10 @@ int main(){
     const auto kodi=std::find_if(list.begin(),list.end(),[=](const auto& option){return option.value==kodiDefaultChoice;});
     assert(kodi!=list.end() && !kodi->properties.back().second);
     if(plus){
-     assert(list.size()==(sink?4u:3u));
-     const bool native=std::any_of(list.begin(),list.end(),[](const auto& option){return option.value==1;});
-     assert(native==sink);
+     assert(list.size()==4);
+     const auto& native=list[1];
+     assert(native.value==1 && native.properties.back().second==!sink);
+     assert(native.label2==(sink?"":"40923"));
      assert(!list[0].properties.back().second && list[0].label2=="40971");
      assert(list.back().value==3 && !list.back().properties.back().second);
     }

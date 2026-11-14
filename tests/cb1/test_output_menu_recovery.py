@@ -33,7 +33,7 @@ struct CDVPlaybackModes {
 };
 namespace DVBRIDGE {
 enum class OutputMode {Standard, HDR10, Disabled};
-enum class HDR10SourceMode {Native, ReferenceDV, EnhancedDV, HDR10PlusDV};
+enum class HDR10SourceMode {Native, ReferenceDV, EnhancedDV, HDR10PlusDV, HDR10PlusPassthrough=5};
 struct Preferences { OutputMode output{}; HDR10SourceMode hdr10Source{};
  double peak=1000,expertPeak=1000; int gamut=2,expertGamut=2;
  bool ProfileValid(int=0) const { return peak>0 && gamut>0; } } preferences;
