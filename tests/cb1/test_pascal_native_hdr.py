@@ -18,10 +18,18 @@ class PascalNativeHDR(unittest.TestCase):
         source = shipped_code("xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp")
         self.assertIn("BindNativePascalHDRFramebuffer()", source)
         self.assertIn("auto carrier = BlitNativePascalHDRFrame()", source)
-        self.assertIn("CWinSystemGbm::FlipPage(rendered, videoLayer, async, carrier)", source)
+        self.assertIn(
+            "CWinSystemGbm::FlipPage(rendered, videoLayer, async, carrier)", source
+        )
         gbm = shipped_code("xbmc/windowing/gbm/WinSystemGbm.cpp")
         self.assertIn("surface.AdoptTransactionalBuffer(carrier.get(), carrier)", gbm)
         self.assertIn("return atomic->LastPageAccepted()", gbm)
+
+    def test_dynamic_metadata_is_staged_before_pascal_handoff(self):
+        source = shipped_code("xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp")
+        self.assertIn("if (carrier) StageNativeHDR10Plus();", source)
+        self.assertIn("\n    StageNativeHDR10Plus();", source)
+        self.assertIn("source->Generation() == generation", source)
 
 
 if __name__ == "__main__":

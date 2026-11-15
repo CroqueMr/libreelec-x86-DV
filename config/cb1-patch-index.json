@@ -1899,5 +1899,12 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": {
+    "owner": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata."
+    }
   }
 }
