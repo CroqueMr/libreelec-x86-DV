@@ -197,7 +197,8 @@ int main(int argc,char**argv){
     def test_stop_successor_survives_resize_rejection_and_idle_gui_retries(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
-        wake = present[1:present.index('#ifdef HAVE_DVBRIDGE')]
+        wake_start = present.index('  if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);')
+        wake = present[wake_start:present.index('#ifdef HAVE_DVBRIDGE', wake_start)]
         ordinary = present[present.index('\n  if (m_dvOrdinaryFrame)\n'):
                            present.index('  if (PresentPlayerLedFrame())')]
         stage = body(source, 'bool CWinSystemGbmGLESContext::PrepareOrdinaryDVOutput(')

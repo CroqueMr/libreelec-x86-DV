@@ -41,6 +41,8 @@ struct GUI {Manager manager;Manager& GetWindowManager(){return manager;}};
 struct Settings {Settings* GetSettings(){return this;}int GetInt(const char*){return 3;}};
 struct CServiceBroker {
  static GUI* GetGUI(){static GUI g;return &g;}
+ struct DataCache {uint64_t GetVideoProcessingGeneration(){return 1;}};
+ static DataCache GetDataCacheCore(){return {};}
  static Settings* GetSettingsComponent(){static Settings s;return &s;}
 };
 struct Timer {void Set(std::chrono::milliseconds){}};
@@ -55,8 +57,9 @@ struct Window {
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
  uint64_t m_dvFailedStream=0,m_dvFailedPolicy=0,m_dvActivationStream=9,m_dvActivationPolicy=2;
  int pastGate=0;
- struct Bridge{bool PlayerLedCpuHealthy(){return true;}};Bridge* m_dvBridge=nullptr;
- bool m_dvActivating=false;
+ struct Bridge{bool PlayerLedCpuHealthy(){return true;}uint64_t PendingSourceGeneration(){return 1;}};Bridge* m_dvBridge=nullptr;
+ bool m_dvActivating=false,m_cb1FramePending=false;
+ void DiscardDVBridgeFrame(){m_cb1FramePending=m_dvFrame=false;}
  void RejectDVOutputSurface(){assert(false);}
  bool CompleteDVBridgePage(int){return pageReady;}
  bool SupportsDVOutputMode(){return supported;}

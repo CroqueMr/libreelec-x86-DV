@@ -51,8 +51,8 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 @@ -158,6 +158,7 @@
-     bool hdr10plusAccepted{};
      cb1_cmv40_status cmv40Status{CB1_CMV40_OFF};
+     int upscaler{-1};
    };
 +  uint64_t PendingSourceGeneration() const { return m_pendingSourceInfo.informationGeneration; }
    Submission CaptureSubmission() const

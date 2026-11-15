@@ -62,7 +62,7 @@
     "tests/cb1/test_gui_viewport.py": "a25a487cf7e0b9db346e4a1e30fc4f1b8befeca964bcf528bdeb58f10fbea7b5",
     "tests/cb1/test_gui_composite_clip.py": "63fc7214a0e6b8a7cb515388f39cb3f25bfb3a0cd8b0d10d6e9ffa27c73ce062",
     "tests/cb1/test_nvidia_buffer_restore.py": "29a21b2e22eefe0194f1ba169e81902db4c461c5528fb618fa2fafb01d7ec35c",
-    "tests/cb1/test_sdr_output_restore.py": "4e15df95b38afc404b317b5768f3135c0ea112fc860aefeda96809803cd69589",
+    "tests/cb1/test_sdr_output_restore.py": "9a09eb9a95d8ac5c117ae138212ec1333a8df73a4fd504e96fbd285a4938e8bb",
     "tests/cb1/test_nvidia_transitions.py": "266bf0147142144b2697fb906c37f3a0166badf30139626c59c87b286cf21089",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
     "projects/Generic/patches/linux/0102-wifi-mt76-mt7921-keep-join-roc-until-authorized.patch": "9ff214adc2fb0f219eb64fad4948b4fb1d5fbca344ae96f4722c2d2f20f9e7dc",
@@ -197,7 +197,7 @@
     "packages/multimedia/libbluray/patches/0002-navigation-read-boundary.patch": "d8e1e9a0a8675f8b8f4928ba377389629c870e3e99c1cc0c50ab562edebed3b7",
     "tests/cb1/test_libbluray_read_boundary.py": "ed67aa52cf379b1717979b894825d80664fcbd11d985eedf6423801219551f61",
     "tests/cb1/test_master_nlq_bound.py": "72db6453bb4b97ca2eb1497bc8c89ff548fd6b46f2722cab3ed5c26759b4f3e9",
-    "tests/cb1/test_mode_hold.py": "295ad1565cca625cb81dfa7bc5e9e619dfe9669b47310996233fc4bf59fbdb4c",
+    "tests/cb1/test_mode_hold.py": "dffdfc3990abfbf00a9cad5229f14ff11b721c941f2b2811f645e606baade95c",
     "tests/cb1/test_stage.py": "951269a7645ec84bbc3dabbb13e84119a6c111d708929855a055002ea05aeb5e",
     "tests/cb1/test_dovi_selection_diagnostics.py": "c8a05988532140a4ecfd993ebc0124bb21f021bcf1419152c139590e67bce8fc",
     "tests/cb1/test_bluray_still_source.py": "db966bee9dbbd93f4dd0d4c2b9bcbfa21bb956328f310d87b449c314b195a8ef",
@@ -404,8 +404,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-software-hdr-import.patch": "a622ffae463fc49f5277f3d1e5d294e5d90929448ad1649975f4252920b874e6",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hdr-analysis-priming.patch": "3e683019e5cb9c6e47b7ec7e3ec2a32c9f81eb65d0dc06522788b9a5053e6d79",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-hlg-analysis-resync.patch": "ab12f4bc214bea5c1d49093327e07759a34a908c262f695c924337862fd38529",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-hlg-live-output.patch": "d0ea2195821774337720ae32a6a9bf40104197fa2eebeee07c035f50c57e8589",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-seek-generation.patch": "54f4fec5dada9fadc9023151686f72ab1ceb3382f08f80605609213d9a06e513",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-hlg-live-output.patch": "c871eb0df99e693e8653811ffe8c79efd35de29eb1b24aec25cea3a57cb8fdf1",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-seek-generation.patch": "bc8aa3e1278459ad0c24f161a7a6e456117874fff87f792afef542cac1402efe",
     "tests/cb1/test_seek_video_generation.py": "4766feec6773ebbd864d785135297d2401bfed7d1fc48727b9cdf65da5b363cd"
   },
   "staging": {
