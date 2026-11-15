@@ -44,7 +44,8 @@ struct Admission {
  bool m_committedPacked=true,m_direct=true,m_dvPolicyActive=false;
  bool m_overlayVisible=true,m_pendingOverlayVisible=true;
  bool m_nativeOverlayEnabled=true;int m_nativeOverlay=0;
- int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;uint64_t lldv_edid_generation{};}policy;
+ int m_effectiveMode=5,m_committedMode=5;struct {int mode=5;uint64_t lldv_edid_generation{};struct {int gamut{};} sdr;}policy;
+ int m_sdrGamut{};
  int m_spatialMethod=0;
  struct {uint64_t revision=3;} preferences;
  Binding m_committedBinding,m_pendingBinding,m_failedIdentity{0,0,0},m_pendingIdentity;
