@@ -211,7 +211,7 @@ int main(){VideoProcessingInfo data;data.transaction.requested=1;
  data.transaction.hdr10AI=true;assert(label(data)=="DV Rendering");
  data.transaction.requested=4;assert(label(data)=="DV Adaptive");
  data.transaction.requested=3;assert(label(data)=="LLDV Reference – HDR10 Output");
- data.transaction.requested=9;assert(label(data)=="LLDV Reference – Native");
+ data.transaction.requested=9;assert(label(data)=="DV LLDV Reference");
  data.output.requested=8;assert(label(data,false)=="SDR Rendering");
  assert(label(data,false,false).empty());
  assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
