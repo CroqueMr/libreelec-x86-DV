@@ -194,17 +194,17 @@ diff --git a/addons/skin.estuary/xml/DialogTextViewer.xml b/addons/skin.estuary/
 +			<centerleft>50%</centerleft>
 +			<centertop>50%</centertop>
 +			<width>780</width>
-+			<height>442</height>
++			<height>492</height>
 +			<include content="DialogBackgroundCommons">
 +				<param name="width" value="780" />
-+				<param name="height" value="442" />
++				<param name="height" value="492" />
 +				<param name="header_label" value="$LOCALIZE[41320]" />
 +			</include>
 +			<control type="textbox">
 +				<top>94</top>
 +				<left>30</left>
 +				<width>320</width>
-+				<height>248</height>
++				<height>300</height>
 +				<font>font13</font>
 +				<label>$INFO[Window.Property(CB1.LldvDetailLabels)]</label>
 +			</control>
@@ -212,14 +212,14 @@ diff --git a/addons/skin.estuary/xml/DialogTextViewer.xml b/addons/skin.estuary/
 +				<top>94</top>
 +				<left>375</left>
 +				<width>375</width>
-+				<height>248</height>
++				<height>300</height>
 +				<align>right</align>
 +				<font>font13</font>
 +				<label>$INFO[Window.Property(CB1.LldvDetailValues)]</label>
 +			</control>
 +			<control type="group">
 +				<left>565</left>
-+				<top>353</top>
++				<top>403</top>
 +				<include content="DefaultDialogButton">
 +					<param name="id" value="9901" />
 +					<param name="width" value="190" />

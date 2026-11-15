@@ -11,7 +11,7 @@
   "integration_files": {
     "projects/Generic/kodi/guisettings.xml": "2704fef2639d7751689d8cd8a5f8ec2a0e87212b261a4c0fc9be72a690ee67a1",
     "tests/cb1/test_stable_video_settings.py": "477e621018eeaf02a62e4df2b701d0a7d67ba038eaef542a7591ef1a17e3d467",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "517ce4f0010621a7b80a68bd27c486a02fc89fea94aa51b3a01d8e8423e96f2e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "65da15951e42b29e24d9a63f5cd76056cbc6abe7c540a636a8fd5503a6d86673",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "df1e0deb2d2368a1110944ae31a5dba1338c857f1fc1d5989651e00b2e3b3ad9",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
