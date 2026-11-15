@@ -63,6 +63,11 @@ class StableVideoSettings(unittest.TestCase):
         status = side.find("control[@type='textbox']")
         self.assertEqual(status.findtext("label"), "$INFO[Window.Property(CB1.LldvStatus)]")
         self.assertGreater(int(status.get("id", "0")), 0)
+        row = ET.parse(TREE / "addons/skin.estuary/xml/Includes.xml").find(
+            ".//include[@name='DefaultSimpleListLayout']/definition/itemlayout")
+        self.assertTrue(any("CB1.LldvFocusNote" in text for text in row.itertext()))
+        lang = (TREE / "addons/resource.language.en_gb/resources/strings.po").read_text(encoding="utf-8")
+        self.assertIn('msgctxt "#41203"\nmsgid "YCbCr 4:2:2 · 10 bits"', lang)
         nav = native.findall("control[@id='3']/onright")
         self.assertTrue(any(link.text == "9001" and "CB1.LldvStatus" in link.get("condition", "")
                             for link in nav))

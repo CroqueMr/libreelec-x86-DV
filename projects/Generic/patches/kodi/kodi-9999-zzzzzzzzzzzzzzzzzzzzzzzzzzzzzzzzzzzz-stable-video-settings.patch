@@ -28,6 +28,43 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#41134"
+@@ -26515,7 +26515,7 @@
+ msgstr ""
+ 
+ msgctxt "#41203"
+-msgid "YCbCr 4:2:2 · 10 useful bits"
++msgid "YCbCr 4:2:2 · 10 bits"
+ msgstr ""
+ 
+ msgctxt "#41204"
+@@ -26539,7 +26539,7 @@
+ msgstr ""
+ 
+ msgctxt "#41209"
+-msgid "Display capabilities unavailable or invalid"
++msgid "No valid display data"
+ msgstr ""
+ 
+ msgctxt "#41210"
+@@ -26547,15 +26547,15 @@
+ msgstr ""
+ 
+ msgctxt "#41211"
+-msgid "LLDV format not qualified on this driver"
++msgid "Not qualified by driver"
+ msgstr ""
+ 
+ msgctxt "#41212"
+-msgid "Unavailable at the current HDMI timing"
++msgid "HDMI mode unsupported"
+ msgstr ""
+ 
+ msgctxt "#41213"
+-msgid "No compatible LLDV format at this timing"
++msgid "No compatible format"
+ msgstr ""
+ 
+ msgctxt "#41214"
 @@ -26611,7 +26611,7 @@
  msgstr ""
  
@@ -75,7 +112,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#41295"
-@@ -26706,10 +26706,6 @@
+@@ -26706,18 +26706,66 @@
  msgid "Driver transport"
  msgstr ""
  
@@ -84,9 +121,11 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 -msgstr ""
 -
  msgctxt "#41298"
- msgid "Driver rejected the last HDMI commit for this format"
+-msgid "Driver rejected the last HDMI commit for this format"
++msgid "Driver rejected format"
  msgstr ""
-@@ -26718,6 +26714,58 @@
+ 
+ msgctxt "#41299"
  msgid "HDMI timing"
  msgstr ""
  
@@ -254,16 +293,17 @@ diff --git a/addons/skin.estuary/xml/Includes.xml b/addons/skin.estuary/xml/Incl
 +					<font>font12</font>
 +					<align>right</align>
 +					<aligny>center</aligny>
-+					<label>$INFO[ListItem.Property(CB1.LldvNote)]</label>
++					<label>$INFO[ListItem.Property(CB1.LldvNote)]$INFO[ListItem.Property(CB1.LldvFocusNote)]</label>
 +					<visible>$PARAM[notes]</visible>
 +				</control>
  			</itemlayout>
  			<focusedlayout width="$PARAM[width]" height="$PARAM[height]">
  				<control type="image">
-@@ -301,6 +313,17 @@
+@@ -300,6 +312,17 @@
+ 						<label>$INFO[ListItem.Label]</label>
  						<scroll>true</scroll>
  					</control>
- 				</control>
++				</control>
 +				<control type="label">
 +					<left>480</left>
 +					<top>0</top>
@@ -274,14 +314,23 @@ diff --git a/addons/skin.estuary/xml/Includes.xml b/addons/skin.estuary/xml/Incl
 +					<aligny>center</aligny>
 +					<label>$INFO[ListItem.Property(CB1.LldvNote)]$INFO[ListItem.Property(CB1.LldvFocusNote)]</label>
 +					<visible>$PARAM[notes]</visible>
-+				</control>
+ 				</control>
  			</focusedlayout>
  		</definition>
- 	</include>
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
-@@ -27,12 +27,14 @@
+@@ -1,5 +1,9 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <includes>
++	<variable name="CB1SelectFontColor">
++		<value condition="!String.IsEmpty(Window.Property(CB1.LldvStatus))">white</value>
++		<value>grey</value>
++	</variable>
+ 	<include name="DefaultDialogSelectLayout">
+ 		<control type="group">
+ 			<centertop>50%</centertop>
+@@ -27,12 +31,15 @@
  				<onup>3</onup>
  				<ondown>3</ondown>
  				<onleft>9001</onleft>
@@ -292,11 +341,17 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  				<include content="DefaultSimpleListLayout">
  					<param name="width" value="890" />
  					<param name="list_id" value="3" />
++					<param name="fontcolor" value="$VAR[CB1SelectFontColor]" />
 +					<param name="notes" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
  				</include>
  			</control>
  			<control type="list" id="6">
-@@ -197,6 +199,7 @@
+@@ -193,10 +200,12 @@
+ 				<align>right</align>
+ 				<textcolor>grey</textcolor>
+ 				<label>$VAR[SelectLabel]</label>
++				<visible>String.IsEmpty(Window.Property(CB1.LldvStatus))</visible>
+ 			</control>
  			<control type="grouplist" id="9001">
  				<left>920</left>
  				<top>80</top>
@@ -304,16 +359,16 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  				<onleft>61</onleft>
  				<itemgap>dialogbuttons_itemgap</itemgap>
  				<onright>3</onright>
-@@ -212,6 +215,20 @@
+@@ -211,6 +220,19 @@
+ 				<include content="DefaultDialogButton">
  					<param name="id" value="7" />
  					<param name="label" value="$LOCALIZE[222]" />
- 				</include>
++				</include>
 +				<control type="textbox" id="9010">
-+					<left>24</left>
-+					<width>252</width>
-+					<height>95</height>
++					<width>300</width>
++					<height>76</height>
++					<align>center</align>
 +					<font>font12</font>
-+					<textcolor>FFEEF2F3</textcolor>
 +					<label>$INFO[Window.Property(CB1.LldvStatus)]</label>
 +					<visible>!String.IsEmpty(Window.Property(CB1.LldvStatus))</visible>
 +				</control>
@@ -321,10 +376,9 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +					<param name="id" value="9" />
 +					<param name="label" value="$LOCALIZE[41320]" />
 +					<param name="visible" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
-+				</include>
+ 				</include>
  			</control>
  		</control>
- 	</include>
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
