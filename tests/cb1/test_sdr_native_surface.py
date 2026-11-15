@@ -48,7 +48,7 @@ struct CDVBridgeGLES {
  };
  std::shared_ptr<Context> m_context;pl_opengl m_gl{};pl_log m_log{};pl_renderer m_renderer{};
  dvbridge_gl_packer* m_packer{};pl_tex m_scanout{};
- bool m_hdr10=false,m_pending=false,m_prepared=false,m_live=true;
+ bool m_hdr10=false,m_pending=false,m_prepared=false,m_live=true,m_playerLed=false;
  struct {void reset(){}} m_playerLedCpu;
  unsigned m_scanoutFramebuffer=99,m_outputBits=0;struct{}m_failedIdentity;
  bool Failure(const char*){return false;}
@@ -128,7 +128,8 @@ constexpr int GL_FRAMEBUFFER=1,GL_FRAMEBUFFER_COMPLETE=2,GL_LINEAR=3;
 int status=GL_FRAMEBUFFER_COMPLETE;
 int glCheckFramebufferStatus(int){return status;}
 bool pl_opengl_wrap(int,const int*){return true;}
-bool admit(bool hdr10,bool sdr,int red,int green,int blue,int samples=0,int encoding=GL_LINEAR){
+bool admit(bool hdr10,bool sdr,int red,int green,int blue,int samples=0,int encoding=GL_LINEAR,
+           bool m_playerLed=false){
  struct{int gpu=0;}gl,*m_gl=&gl;int output=0;bool candidate=false;
  ADMISSION
  return candidate;
@@ -138,6 +139,7 @@ int main(){
   assert(admit(true,true,bits,bits,bits));
   assert(admit(true,false,bits,bits,bits)==(bits>=10));
   assert(admit(false,false,bits,bits,bits)==(bits==8));
+  assert(admit(false,false,bits,bits,bits,0,GL_LINEAR,true)==(bits==8 || bits==10));
  }
  assert(!admit(true,true,7,8,8));assert(!admit(true,true,8,7,8));assert(!admit(true,true,8,8,7));
  assert(!admit(true,true,32,32,32));

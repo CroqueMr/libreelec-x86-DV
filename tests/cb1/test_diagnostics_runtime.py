@@ -287,9 +287,8 @@ int main(){
 '''.replace('BLOCK',witness))
 
     def test_incomplete_profile_reports_the_values_before_output_admission(self):
-        text = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        start = text.index('  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)')
-        end = text.index('  if (m_dvConfiguredOutput', start)
+        report = function('xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp',
+                          'if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)')
         self.run_cpp(r'''
 #include <fmt/format.h>
 #include <cassert>
@@ -321,7 +320,7 @@ int main(){
  window.m_dvSelection.reason=DVBRIDGE::OutputReason::None;
  ++window.preferences.revision;window.Report();assert(DVBRIDGE::lines.size()==2);
 }
-'''.replace('BLOCK',text[start:end]))
+'''.replace('BLOCK',report))
 
     def test_real_render_failure_identifies_ipt_and_target_without_changing_policy(self):
         failure = function('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp', 'bool CDVBridgeGLES::Failure(')
