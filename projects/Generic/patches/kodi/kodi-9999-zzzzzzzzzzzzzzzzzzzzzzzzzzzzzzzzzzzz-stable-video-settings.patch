@@ -345,7 +345,7 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  				</include>
  			</control>
  			<control type="list" id="6">
-@@ -193,10 +200,12 @@
+@@ -193,10 +200,13 @@
  				<align>right</align>
  				<textcolor>grey</textcolor>
  				<label>$VAR[SelectLabel]</label>
@@ -355,10 +355,11 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  				<left>920</left>
  				<top>80</top>
 +				<onleft condition="!String.IsEmpty(Window.Property(CB1.LldvStatus))">3</onleft>
++				<usecontrolcoords>true</usecontrolcoords>
  				<onleft>61</onleft>
  				<itemgap>dialogbuttons_itemgap</itemgap>
  				<onright>3</onright>
-@@ -212,6 +221,19 @@
+@@ -212,6 +222,20 @@
  					<param name="id" value="7" />
  					<param name="label" value="$LOCALIZE[222]" />
  				</include>
@@ -368,6 +369,7 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +					<param name="visible" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
 +				</include>
 +				<control type="textbox" id="9010">
++					<top>10</top>
 +					<width>300</width>
 +					<height>76</height>
 +					<align>center</align>
