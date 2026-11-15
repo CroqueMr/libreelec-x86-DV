@@ -40,6 +40,10 @@ bool ReadFramebufferRegion(int,int,int w,int h,int bits,bool upsideDown,Readback
  return true;
 }}
 struct pl_matrix3x3 {float m[3][3];};
+constexpr int PL_COLOR_PRIM_BT_2020=3,PL_COLOR_PRIM_BT_709=1,PL_INTENT_RELATIVE_COLORIMETRIC=0;
+constexpr pl_matrix3x3 pl_matrix3x3_identity={{{1,0,0},{0,1,0},{0,0,1}}};
+int pl_raw_primaries_get(int p){return p;}
+pl_matrix3x3 pl_get_color_mapping_matrix(int,int,int){return pl_matrix3x3_identity;}
 struct pl_transform3x3 {pl_matrix3x3 mat;float c[3];};
 struct dvbridge_color {int repr;struct {pl_matrix3x3 linear;}dovi;};
 bool dvbridge_map_color(dvbridge_color* out,const void*,size_t,bool paired){
@@ -59,6 +63,8 @@ struct CDVBridgeGLES {
  unsigned m_scanoutFramebuffer=42,m_pendingInfo=2;int pqCalls=0;
  struct {const void* Data(){return this;}size_t Size(){return 10;}}m_pendingMetadata;
  unsigned GetPQFramebuffer(){++pqCalls;return 77;}
+ struct {struct {int primaries=PL_COLOR_PRIM_BT_709;} container;} sdrOutput;
+ auto HDR10Output() const {return &sdrOutput;}
  bool ReadScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out) @@BODY@@
 };
 int main(){
