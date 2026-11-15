@@ -54,8 +54,8 @@
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26597,3 +26597,11 @@
- msgctxt "#41306"
- msgid "FSR 1 (EASU)"
+ msgctxt "#41267"
+ msgid "Neutralize dialogue normalization in supported DTS and DTS-HD passthrough streams."
  msgstr ""
 +
 +msgctxt "#41307"
