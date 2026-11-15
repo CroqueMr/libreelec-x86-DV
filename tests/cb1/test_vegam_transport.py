@@ -129,12 +129,13 @@ int main(void) {
         source = self.source('amdgpu_dm/amdgpu_dm_dv.c')
         name = 'dv_display_supported' if 'dv_display_supported(' in source else 'dv_dcn_supported'
         policy = function(source, name)
+        policy = function(source, 'dv_rx550') + '\n' + policy
         symbols = sorted(set(re.findall(r'\b(?:DCN|DCE)_VERSION_\w+', policy)))
         code = '#include <assert.h>\n#include <stdbool.h>\n#include <string.h>\n'
         code += 'enum dce_version {' + ','.join(symbols) + '};\n'
         code += r'''
 enum { DRM_MODE_CONNECTOR_HDMIA=1, SIGNAL_TYPE_HDMI_TYPE_A=2, DRM_MODE_PROP_ATOMIC=4 };
-struct dc_context { enum dce_version dce_version; };
+struct dc_context { enum dce_version dce_version; struct {unsigned chip_id;}asic_id; };
 struct dc { struct dc_context *ctx; };
 struct amdgpu_device { struct { struct dc *dc; } dm; };
 struct link { int connector_signal; };
@@ -161,7 +162,7 @@ static void drm_object_attach_property(void *base,void *property,int value)
         code += policy + '\n' + function(source, 'amdgpu_dm_dv_attach')
         code += r'''
 int main(void) {
- struct dc_context ctx={DCE_VERSION_11_22}; struct dc dc={&ctx};
+ struct dc_context ctx={.dce_version=DCE_VERSION_11_22}; struct dc dc={&ctx};
  struct amdgpu_device dev={.dm={&dc}};
  struct link link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector con={.base={&dev,DRM_MODE_CONNECTOR_HDMIA,{0}},.dc_link=&link};
@@ -179,7 +180,7 @@ int main(void) {
 '''
         self.run_c(code)
 
-    def test_only_vegam_dv_uses_byte_depth_linebuffer(self):
+    def test_dce112_dv_uses_byte_depth_linebuffer(self):
         helper = function(self.source('dc/core/dc_resource.c'), 'resource_get_lb_depth')
         self.run_c(r'''
 #include <assert.h>
@@ -199,6 +200,8 @@ int main(void) {
  stream.dv_standard=true;
  assert(resource_get_lb_depth(&plane,&stream)==24);
  ctx.dce_version=DCE_VERSION_11_2;
+ assert(resource_get_lb_depth(&plane,&stream)==24);
+ stream.dv_standard=false;
  assert(resource_get_lb_depth(&plane,&stream)==30);
  ctx.dce_version=DCN_VERSION_1_0;
  assert(resource_get_lb_depth(&plane,&stream)==36);

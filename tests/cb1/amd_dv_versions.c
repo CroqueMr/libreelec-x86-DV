@@ -19,7 +19,7 @@ enum dce_version {@@FAMILIES@@};
 enum {DRM_MODE_CONNECTOR_HDMIA=1, SIGNAL_TYPE_HDMI_TYPE_A=2,
       PIXEL_ENCODING_RGB=3, DRM_HDMI_BROADCAST_RGB_FULL=4, COLOR_DEPTH_888=5,
       RMX_OFF=6, COLOR_SPACE_SRGB=7, TF_TYPE_BYPASS=8,
-      TRANSFER_FUNCTION_LINEAR=9, DITHER_OPTION_DISABLE=10};
+      TRANSFER_FUNCTION_LINEAR=9, DITHER_OPTION_DISABLE=10, DITHER_OPTION_TRUN8=11};
 enum {DRM_MODE_FLAG_INTERLACE=1, DRM_MODE_FLAG_DBLSCAN=2,
       DRM_MODE_FLAG_DBLCLK=4, DRM_MODE_FLAG_3D_MASK=8};
 struct dc_edid {unsigned length; u8 raw_edid[256];};
@@ -38,9 +38,10 @@ struct dm_connector_state {
 };
 struct drm_display_mode {int hdisplay,vdisplay,clock,flags,vic,refresh;};
 struct dc_info_packet {u8 hb0,hb1,hb2,sb[32];bool valid;};
+struct dc_context {enum dce_version dce_version; struct {unsigned chip_id;}asic_id;};
 struct dc_stream_state {
     struct {struct dc_edid dc_edid;}*sink;
-    struct {enum dce_version dce_version;}*ctx;
+    struct dc_context *ctx;
     struct {int connector_signal;}*link;
     bool dv_standard,dv_low_latency;
     int signal,output_color_space,dither_option,qs_bit;
@@ -82,7 +83,7 @@ int main(void){
     struct dc_stream_state s={.signal=SIGNAL_TYPE_HDMI_TYPE_A,
         .timing={.pixel_encoding=PIXEL_ENCODING_RGB,.display_color_depth=COLOR_DEPTH_888,
         .h_addressable=3840,.v_addressable=2160,.pix_clk_100hz=2970000}};
-    typeof(*s.ctx) ctx={DCN_VERSION_1_0};s.ctx=&ctx;
+    typeof(*s.ctx) ctx={.dce_version=DCN_VERSION_1_0};s.ctx=&ctx;
     typeof(*s.link) link={SIGNAL_TYPE_HDMI_TYPE_A};s.link=&link;
     typeof(*s.sink) sink;s.sink=&sink;
     edid(&sink.dc_edid,2,11,false,true);
@@ -93,6 +94,21 @@ int main(void){
     assert(!memcmp(s.vsp_infopacket.sb,v2,sizeof(v2)));
     assert(s.timing.vic==95 && s.timing.hdmi_vic==0 && !sum(&s.vsp_infopacket));
     struct dc_info_packet frozen=s.vsp_infopacket;
+    ctx.dce_version=DCE_VERSION_11_2; ctx.asic_id.chip_id=0x699f;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    mode.clock=296703; mode.vic=93; mode.refresh=24; s.timing.pix_clk_100hz=2967030;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+    assert(s.dv_standard && !s.dv_low_latency && s.dither_option==DITHER_OPTION_TRUN8);
+    state.lldv_format=1; state.dv_standard=false; dv_lldv=true;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    state.lldv_format=0; dv_lldv=false;
+    struct dc_stream_state ordinary=s;
+    ordinary.dv_standard=false; ordinary.dither_option=DITHER_OPTION_DISABLE;
+    ordinary.vsp_infopacket.valid=false;
+    assert(amdgpu_dm_dv_configure_stream(&ordinary,&state,&mode)==0);
+    assert(!ordinary.dv_standard && !ordinary.vsp_infopacket.valid && ordinary.dither_option==DITHER_OPTION_DISABLE);
+    state.dv_standard=true;
+    mode.clock=297000; mode.vic=95; mode.refresh=30; s.timing.pix_clk_100hz=2970000;
     const enum dce_version dcn4[]={DCN_VERSION_4_01,DCN_VERSION_4_2,DCN_VERSION_4_2B};
     for(unsigned i=0;i<sizeof(dcn4)/sizeof(dcn4[0]);i++){
         ctx.dce_version=dcn4[i];
