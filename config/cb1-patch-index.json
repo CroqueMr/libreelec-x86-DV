@@ -1887,5 +1887,17 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Carry the native RGB10 transport through selection, presentation or restoration."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": {
+    "owner": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window."
+    }
   }
 }

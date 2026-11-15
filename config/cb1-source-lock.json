@@ -357,7 +357,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "7741b5bcd4f1fcd00238cd0be650b2f40b42d37aa0ec0413a9592f172dbe6b77",
+    "config/cb1-patch-index.json": "a7c77dd8b7d161426be9f3c5f43d1d5230999dec8ca05e378eb2521468451fca",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -422,7 +422,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": "e106d95dae0941f348931d42e8c1e316ac8184272442a1738560a0f53ef3a1df",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-mel-reference-history.patch": "70cb3abdba522a9b8c97009b724b678e87ac9fc5280aa5149b2c81bd0a74bc67",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": "1200204fb13b5345deddc86f04c9ec2fc4b76710313c17ab0347e17e40480400",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": "29752ff4ba43e5093723ace2650416855f07ed296d11442a35b50089f9d6ca1c"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": "29752ff4ba43e5093723ace2650416855f07ed296d11442a35b50089f9d6ca1c",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": "5fd1d1ae63bc065b86c053eb40859c7daba55a19122aee35741ecc973e982b26"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
