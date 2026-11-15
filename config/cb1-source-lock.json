@@ -150,7 +150,7 @@
     "tests/cb1/test_audio_generated_samples.py": "3573ac28af4832564b94cae069a495eb66e2027227d387c9148838ad0b8822bc",
     "tests/cb1/test_process_info_audio_labels.py": "5ad9bd42e048c9a7c504b8e1ce77f912e3ddf8b5c8f9d1852ca424bde447846f",
     "docs/cb1/AUDIO-INFORMATION.md": "6fdc265aade47661b518154e497b82d7d29e6a7c8ae97c0fae32131878b1b116",
-    "tests/cb1/test_audio_sink_lifecycle.py": "260bfcfcb874a7dac2022b7c3ee4172af210b4808f9d080e4284bbd73c9ae62a",
+    "tests/cb1/test_audio_sink_lifecycle.py": "58e7bb2148871a122f2cbcafe530d8e5c56ced1f764ecf6353b524cc53e6b3e6",
     "tests/cb1/test_audio_track_bitrate.py": "0e83dd09868b3aedf4d769981703f3069516e5360ea90736d89e446fc1b080ba",
     "tests/cb1/test_process_info_readability.py": "4e7ce3a7389b62ff052cf7bf07dc3ecefcae6d1f2f3b539ea834663ae2140847",
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
@@ -174,7 +174,8 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "15537e4d283cc3a75c5dec8095770c1bd68343853d01875d14f688021d15dbc8",
+    "tests/cb1/test_fel_terminal.py": "745ba7fb2ddabe01da0903952c45d3f5ac168fc6a0c036b6988b8648788dfdae",
+    "tests/cb1/test_mel_reference_history.py": "af43b5024f201579b3fd238eb0154556358151ce201dfe2c2175ca2b72f13643",
     "tests/cb1/test_optional_gui.py": "cd34349c3b323eb87c51c024bd71ca7e98757e1f501c70340c21bca26554800a",
     "tests/cb1/test_software_dv_import.py": "539cc08623dd1f54c98e117525eff4e4fe99ca7a18f79550ef3ff3784d4e2e90",
     "tests/cb1/test_hdr10plus_recovery.py": "396f49e90f7580c23e9c005ff18526d77ffc6e38b0e8b994d5f3fac84ac6485a",
@@ -206,7 +207,7 @@
     "tests/cb1/test_bluray_navigation_drain.py": "1ffd4050d99c38b51d5d61b209ad9b4370a7c7af04c85844ca8c9fb8ba2ce1b8",
     "tests/cb1/test_bluray_video_window.py": "db8b191acece4e078689ad0c40c9bf3f8b4ade70a01b75250de3f2f740dac036",
     "tests/cb1/test_bluray_video_disposition.py": "9b55913bd1dee73327eccf7d05ba178084625539368863e60df2603015742c6e",
-    "tests/cb1/test_decode_startup_diagnostics.py": "a2dab43412f415ea8138a1218be7fe9d31e2c84cd14b814238bc12be4165b017",
+    "tests/cb1/test_decode_startup_diagnostics.py": "bdf605b2ba132d00f0e6da2bdd91f8890471ceca68f1325af132db50748839da",
     "tests/cb1/test_bluray_image_root.py": "f0a6a37b799d386cd28304a7b65adcc163f757ec7a44b4a6db5e3225af7e0dcb",
     "tests/cb1/test_bluray_display_capabilities.py": "70805149f89fd3ab6b5640236fa31270954b0cf4052f1a6134bf845819901957",
     "tests/cb1/test_bluray_bdj_capability.py": "c03f4d3b59e2f6d5ac0e76a356b468aca28475763f7427545790f12cf92d450e",
@@ -418,7 +419,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-amd-rgb10-lab.patch": "c51837d18357c433c064fc9c47b0035079827e23342d1fe092ebfff31448da52",
     "packages/multimedia/libbluray/patches/0008-bdj-use-the-player-clock.patch": "4972fad494b6ea2ceec04342a88a679769bd69ed0544aa4423c50f5de181fae6",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": "58680c3631e22b913cb29fca5107f747a5a7322acf1245f5748a1b40a020042e",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": "ac84f504cfc0a736517fd045ad5719e22a4c71813e24d409a63ed2c6ccf6de16"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": "ac84f504cfc0a736517fd045ad5719e22a4c71813e24d409a63ed2c6ccf6de16",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-mel-reference-history.patch": "70cb3abdba522a9b8c97009b724b678e87ac9fc5280aa5149b2c81bd0a74bc67",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": "1200204fb13b5345deddc86f04c9ec2fc4b76710313c17ab0347e17e40480400"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
@@ -559,11 +562,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.c": {
       "source": "src/dvbridge_fel.c",
-      "sha256": "baa4a0cdf7f1502101c10d86036e0d245c03a0e457c4594b8e326c13875381be"
+      "sha256": "7b291b3509f393a239a604b4e70c8d7323c725391e548264dd5dc8dc55859d0f"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.h": {
       "source": "src/dvbridge_fel.h",
-      "sha256": "ef389c5a311a87540379af54ab0e430fd5165c5912f1a6ee31c85ca6b4e5fa6a"
+      "sha256": "2986af5b358c4692a9e804e6fccd13c05dfed88722b401e3f061b516f9cce517"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel_seek.h": {
       "source": "src/dvbridge_fel_seek.h",
@@ -595,11 +598,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_metadata.h": {
       "source": "src/dvbridge_metadata.h",
-      "sha256": "749a647a7e375921cebcb1ffd35c9b919a41e5f6e6bb2fc3cc4b6d21b90fb054"
+      "sha256": "ceb1421f122a796e5f70e243dd8175feb11e5f733bf9e4158961b80111eb86a0"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_metadata_bounds.h": {
       "source": "src/dvbridge_metadata_bounds.h",
-      "sha256": "67dfeaee0843dbc7b1c351a9ebc6edab2438684db1fe6905a9db4303ec3143d1"
+      "sha256": "9b21ca0e8c890900edb5ae6a76d6076bab677520a8664cbc8256c55c8d4e9898"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_pack_sources.h.in": {
       "source": "src/dvbridge_pack_sources.h.in",
