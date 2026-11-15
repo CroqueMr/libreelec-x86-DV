@@ -1937,5 +1937,12 @@
       "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Keep compatible startup when native HDR10+ uses the native renderer.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h": "Use the approved Kodi default label in playback notifications."
     }
+  },
+  "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": {
+    "owner": "Backport AMD HDMI RGB quantization for Linux 7.2.6.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Apply CTA RGB range defaults to actual HDMI signals and honor explicit BT.2020 RGB range preferences.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c": "Pass the sink RGB quantization selection capability to Display Core."
+    }
   }
 }
