@@ -1,0 +1,136 @@
+Subject: [PATCH] Join native HDR playback timing with its first framebuffer
+
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h
+@@ -8,7 +8,9 @@
+ 
+ namespace DVBRIDGE
+ {
++enum class NativeHDRSignal { None, HDR10, HLG, Unknown };
+ inline std::atomic<int> modeChangeResolution{-1};
++inline std::atomic<NativeHDRSignal> modeChangeNativeHDR{NativeHDRSignal::None};
+ // A synchronous GUI request must not replace a queued decoder request's intent.
+ inline thread_local std::optional<int> guiModeChangeResolution;
+ // Keep software metadata probes and ordinary HDR/SDR playback on Kodi's path.
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4777,11 +4777,40 @@
+       const bool nativeDV = WantsNativePresentation(hint);
+       RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+ #ifdef HAVE_DVBRIDGE
+-      DVBRIDGE::modeChangeResolution.store(nativeDV ? static_cast<int>(res) : -1);
++      using HDRSignal = DVBRIDGE::NativeHDRSignal;
++      auto hdrSignal = HDRSignal::None;
++      if (!nativeDV && !hint.dovi.dv_profile && !pMenus && !hint.interlaced &&
++          hint.stereo_mode.empty())
++      {
++        const bool hlg = hint.hdrType == StreamHdrType::HDR_TYPE_HLG;
++        const bool hdr10 = hint.hdrType == StreamHdrType::HDR_TYPE_HDR10;
++        // The demuxer may learn the transfer only after decoding the first picture.
++        const bool unknown = hint.hdrType == StreamHdrType::HDR_TYPE_NONE &&
++            hint.colorTransferCharacteristic == AVCOL_TRC_UNSPECIFIED &&
++            (hint.codec == AV_CODEC_ID_HEVC || hint.codec == AV_CODEC_ID_AV1 ||
++             hint.codec == AV_CODEC_ID_VP9);
++        const auto native = DVBRIDGE::HDR10SourceMode::Native;
++        if (hlg || hdr10)
++        {
++          if (DVBRIDGE::FrameOutputSettings(false, hlg).hdr10Source == native)
++            hdrSignal = hlg ? HDRSignal::HLG : HDRSignal::HDR10;
++        }
++        else if (unknown)
++        {
++          const auto preferences = DVBRIDGE::FrameOutputSettings();
++          if (preferences.hdr10Source == native && preferences.hdr10PlusSource == native &&
++              preferences.HLGMode() == native)
++            hdrSignal = HDRSignal::Unknown;
++        }
++      }
++      DVBRIDGE::modeChangeNativeHDR.store(hdrSignal);
++      DVBRIDGE::modeChangeResolution.store(
++          nativeDV || hdrSignal != HDRSignal::None ? static_cast<int>(res) : -1);
+ #endif
+       CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+ #ifdef HAVE_DVBRIDGE
+       DVBRIDGE::modeChangeResolution.store(-1);
++      DVBRIDGE::modeChangeNativeHDR.store(HDRSignal::None);
+ #endif
+       m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode,
+                                               nativeDV);
+--- a/xbmc/windowing/gbm/ModeChangeHold.h
++++ b/xbmc/windowing/gbm/ModeChangeHold.h
+@@ -121,10 +121,15 @@
+     return hdrOnScreen && modeChangeFollows && Possible(c);
+   }
+ 
+-  void Start(int64_t nowMs) { Begin(Kind::START, nowMs + START_MS); }
++  void Start(int64_t nowMs, bool ordinaryPicture = false)
++  {
++    Begin(Kind::START, nowMs + START_MS);
++    m_ordinaryPicture = ordinaryPicture;
++  }
+   void Stop(int64_t nowMs) { Begin(Kind::STOP, nowMs + STOP_MS); }
+ 
+   Kind Holding() const { return m_kind; }
++  bool AwaitsOrdinaryPicture() const { return m_kind == Kind::START && m_ordinaryPicture; }
+ 
+   //! A commit of the ordinary output would be made now: false while a hold lasts. At its deadline
+   //! the hold ends (End::DEADLINE) and the commit goes.
+@@ -201,6 +206,7 @@
+   }
+ 
+   Kind m_kind = Kind::NONE;
++  bool m_ordinaryPicture = false;
+   int64_t m_until = 0;
+   Kind m_endedKind = Kind::NONE;
+   End m_ended = End::NONE;
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -269,15 +269,30 @@
+   if (!RetireDVContext()) return false;
+   const int opening = DVBRIDGE::guiModeChangeResolution.value_or(
+       DVBRIDGE::modeChangeResolution.load());
+-  CLog::Log(LOGINFO,"CB1 HDMI startup: intent={} output_usable={}",
+-      opening, SupportsDVOutputMode());
+-  if (opening >= 0 && SupportsDVOutputMode())
++  using HDRSignal = DVBRIDGE::NativeHDRSignal;
++  const auto hdr = DVBRIDGE::guiModeChangeResolution ? HDRSignal::None
++                                                   : DVBRIDGE::modeChangeNativeHDR.load();
++  bool outputUsable = false;
++  if (hdr == HDRSignal::None)
++    outputUsable = SupportsDVOutputMode();
++  else if (IsHDRDisplay() && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
++                                 SETTING_WINSYSTEM_IS_HDR_DISPLAY))
++  {
++    const auto capabilities = GetDisplayHDRCapabilities();
++    outputUsable = (hdr != HDRSignal::HDR10 && capabilities.SupportsHLG()) ||
++                   (hdr != HDRSignal::HLG && capabilities.SupportsHDR10());
++  }
++  CLog::Log(LOGINFO,"CB1 HDMI startup: intent={} output_usable={}", opening, outputUsable);
++  if (opening >= 0 && outputUsable)
+   {
+     const auto& requested=CDisplaySettings::GetInstance().GetResolutionInfo(static_cast<RESOLUTION>(opening));
+     if (requested.strId == res.strId && requested.iWidth == res.iWidth &&
+         requested.iHeight == res.iHeight && requested.dwFlags == res.dwFlags && HoldCB1Mode(res))
+     {
+-      m_modeHold.Start(DVBRIDGE::DiagnosticNowMs());
++      const bool ordinaryPicture = hdr != HDRSignal::None;
++      if (ordinaryPicture)
++        m_videoSourceSideData.reset();
++      m_modeHold.Start(DVBRIDGE::DiagnosticNowMs(), ordinaryPicture);
+       CRenderSystemGLES::ResetRenderSystem(res.iWidth,res.iHeight);
+       return true;
+     }
+@@ -487,7 +502,12 @@
+   if (!CompleteDVBridgePage(8)) return;
+   // Once the first output owns the mode, its real flip (or restoration) ends
+   // the hold. The ordinary deadline must not turn prepared output into failure.
+-  if (m_modeHold.Holding() == CModeChangeHold::Kind::START && !m_dvFrame &&
++  const bool startupHold = m_modeHold.Holding() == CModeChangeHold::Kind::START;
++  // Only the first actual picture may carry ordinary video timing with its
++  // output properties. The GUI can render while the first picture is pending.
++  const bool ordinaryPicture =
++      m_modeHold.AwaitsOrdinaryPicture() && rendered && m_videoSourceSideData;
++  if (startupHold && !ordinaryPicture && !m_dvFrame &&
+       !(m_dvState.Captured() || m_hdrConversion) &&
+       !m_modeHold.Commits(DVBRIDGE::DiagnosticNowMs()))
+   {

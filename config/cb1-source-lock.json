@@ -197,7 +197,7 @@
     "packages/multimedia/libbluray/patches/0002-navigation-read-boundary.patch": "d8e1e9a0a8675f8b8f4928ba377389629c870e3e99c1cc0c50ab562edebed3b7",
     "tests/cb1/test_libbluray_read_boundary.py": "ed67aa52cf379b1717979b894825d80664fcbd11d985eedf6423801219551f61",
     "tests/cb1/test_master_nlq_bound.py": "72db6453bb4b97ca2eb1497bc8c89ff548fd6b46f2722cab3ed5c26759b4f3e9",
-    "tests/cb1/test_mode_hold.py": "0b717a56371b6d9bb6276cfe149ed4b71c1f6e7e9f67f154bd99de6b8a910e70",
+    "tests/cb1/test_mode_hold.py": "38b6adb05ed687d4fdc936ef4ae938fdb1a80c7b2bb382a9e4d2995380070474",
     "tests/cb1/test_stage.py": "951269a7645ec84bbc3dabbb13e84119a6c111d708929855a055002ea05aeb5e",
     "tests/cb1/test_dovi_selection_diagnostics.py": "c8a05988532140a4ecfd993ebc0124bb21f021bcf1419152c139590e67bce8fc",
     "tests/cb1/test_bluray_still_source.py": "db966bee9dbbd93f4dd0d4c2b9bcbfa21bb956328f310d87b449c314b195a8ef",
@@ -417,7 +417,8 @@
     "projects/Generic/patches/linux/linux-9971-amd-native-lldv-rgb10-lab.patch": "069547b0a6dd4d437d1a10a85723de734f75373468e720e14ef724772667b4a9",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-amd-rgb10-lab.patch": "c51837d18357c433c064fc9c47b0035079827e23342d1fe092ebfff31448da52",
     "packages/multimedia/libbluray/patches/0008-bdj-use-the-player-clock.patch": "4972fad494b6ea2ceec04342a88a679769bd69ed0544aa4423c50f5de181fae6",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": "58680c3631e22b913cb29fca5107f747a5a7322acf1245f5748a1b40a020042e"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": "58680c3631e22b913cb29fca5107f747a5a7322acf1245f5748a1b40a020042e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": "ac84f504cfc0a736517fd045ad5719e22a4c71813e24d409a63ed2c6ccf6de16"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

@@ -7,6 +7,16 @@ from test_native_video_source import TREE, body
 
 
 class ModeHoldTests(unittest.TestCase):
+    def test_native_hdr_start_carries_timing_with_the_first_picture(self):
+        source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        opening = body(source, 'bool CWinSystemGbmGLESContext::SetFullScreen(')
+        present = body(source, 'void CWinSystemGbmGLESContext::PresentFrame(')
+        self.assertIn('modeChangeNativeHDR.load()', opening)
+        self.assertIn('SupportsHDR10()', opening)
+        self.assertIn('SupportsHLG()', opening)
+        self.assertIn('rendered && m_videoSourceSideData', present)
+        self.assertIn('!ordinaryPicture', present)
+
     def test_first_output_keeps_held_mode_until_real_receipt_across_deadline(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         present=body(source,'void CWinSystemGbmGLESContext::PresentFrame(bool rendered, bool videoLayer)')
@@ -39,9 +49,11 @@ struct CDRMAtomic {
 struct Manager {void MarkDirty(){}};
 struct GUI {Manager manager;Manager& GetWindowManager(){return manager;}};
 struct Settings {Settings* GetSettings(){return this;}int GetInt(const char*){return 3;}};
+struct Cache {uint64_t GetVideoProcessingGeneration(){return 1;}};
 struct CServiceBroker {
  static GUI* GetGUI(){static GUI g;return &g;}
  static Settings* GetSettingsComponent(){static Settings s;return &s;}
+ static Cache& GetDataCacheCore(){static Cache c;return c;}
 };
 struct Timer {void Set(std::chrono::milliseconds){}};
 struct State {bool captured=false;bool Captured(){return captured;}};
@@ -55,9 +67,14 @@ struct Window {
  DVBRIDGE::OutputReason m_dvActivationReason=DVBRIDGE::OutputReason::None;
  uint64_t m_dvFailedStream=0,m_dvFailedPolicy=0,m_dvActivationStream=9,m_dvActivationPolicy=2;
  int pastGate=0;
- struct Bridge{bool PlayerLedCpuHealthy(){return true;}};Bridge* m_dvBridge=nullptr;
- bool m_dvActivating=false;
+ struct Bridge {
+   bool PlayerLedCpuHealthy(){return true;}
+   uint64_t PendingSourceGeneration(){return 1;}
+ };Bridge* m_dvBridge=nullptr;
+ bool m_dvActivating=false,m_cb1FramePending=false;
+ std::shared_ptr<int> m_videoSourceSideData;
  void RejectDVOutputSurface(){assert(false);}
+ void DiscardDVBridgeFrame(){assert(false);}
  bool CompleteDVBridgePage(int){return pageReady;}
  bool SupportsDVOutputMode(){return supported;}
  bool SupportsSDRConversion(){return supported;}
@@ -97,6 +114,21 @@ void first_output(bool converted) {
 }
 int main(){
  first_output(false);first_output(true);
+ // Native HDR metadata alone does not let a GUI-only frame consume the mode.
+ Window ordinary;
+ now=0;ordinary.m_modeHold.Start(now, true);
+ ordinary.tick(true,false);
+ assert(ordinary.pastGate==0);
+ ordinary.m_videoSourceSideData=std::make_shared<int>(1);
+ ordinary.tick(false,false);
+ assert(ordinary.pastGate==0);
+ ordinary.tick(true,false);
+ assert(ordinary.pastGate==1);
+ Window nativePending;
+ nativePending.m_modeHold.Start(0);
+ nativePending.m_videoSourceSideData=std::make_shared<int>(1);
+ nativePending.tick(true,false);
+ assert(nativePending.pastGate==0);
  // No producer: the existing deadline still releases the ordinary commit.
  Window idle;now=0;idle.m_modeHold.Start(now);
  now=2999;idle.tick();assert(idle.pastGate==0);
@@ -321,8 +353,13 @@ using RESOLUTION=int;
 constexpr int D3DPRESENTFLAG_MODE3DSBS=1,D3DPRESENTFLAG_MODE3DTB=2,LOGERROR=0,LOGDEBUG=1,LOGINFO=2;
 struct CLog {template<class... T> static void Log(T...) {}};
 struct CEGLUtils {template<class... T> static void Log(T...) {}};
-namespace DVBRIDGE {std::atomic<int> modeChangeResolution{0};
-inline thread_local std::optional<int> guiModeChangeResolution;int DiagnosticNowMs(){return 0;}}
+namespace DVBRIDGE {
+ enum class NativeHDRSignal {None,HDR10,HLG,Unknown};
+ std::atomic<int> modeChangeResolution{0};
+ std::atomic<NativeHDRSignal> modeChangeNativeHDR{NativeHDRSignal::None};
+ inline thread_local std::optional<int> guiModeChangeResolution;
+ int DiagnosticNowMs(){return 0;}
+}
 struct CDisplaySettings {
  static CDisplaySettings& GetInstance(){static CDisplaySettings value;return value;}
  RESOLUTION_INFO GetResolutionInfo(RESOLUTION) const{return {};}
@@ -333,11 +370,22 @@ struct CWinSystemGbm {int commits=0; bool SetFullScreen(bool,RESOLUTION_INFO&,bo
 struct CRenderSystemGLES {static void ResetRenderSystem(int,int){}};
 struct EGL {int swaps=0;bool TrySwapBuffers(){++swaps;return true;}};
 struct Gfx {void SetStereoMode(RenderStereoMode){}};
+struct Settings {Settings* GetSettings(){return this;}bool GetBool(int){return enabled;}bool enabled=true;};
+struct CServiceBroker {static Settings* GetSettingsComponent(){static Settings s;return &s;}};
+constexpr int SETTING_WINSYSTEM_IS_HDR_DISPLAY=0;
+struct Capabilities {
+ bool hlg=false;
+ bool SupportsHDR10() const{return true;}
+ bool SupportsHLG() const{return hlg;}
+};
 struct Window:CWinSystemGbm,CRenderSystemGLES {
  CModeChangeHold m_modeHold;CHeldModeAnnouncement m_modeAnnouncement;
- std::shared_ptr<int> m_dvBridge;
+ std::shared_ptr<int> m_dvBridge,m_videoSourceSideData;
  std::shared_ptr<Base> m_DRM=std::make_shared<CDRMAtomic>();
  EGL m_eglContext;int m_nWidth=3840,m_nHeight=2160;bool held=true;
+ Capabilities hdr;
+ Capabilities GetDisplayHDRCapabilities() const{return hdr;}
+ bool IsHDRDisplay(){return true;}
  bool HoldCB1Mode(RESOLUTION_INFO&){return held;}
  bool EndDVBridge(){return true;} bool RetireDVContext(){return true;}
  bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
@@ -354,6 +402,22 @@ int main(){
  assert(window.m_eglContext.swaps==0 && window.commits==0);
  window.held=false;assert(window.set(true,res,false));
  assert(window.m_eglContext.swaps==1 && window.commits==1);
+
+ DVBRIDGE::modeChangeNativeHDR.store(DVBRIDGE::NativeHDRSignal::HLG);
+ Window hlg;
+ assert(hlg.set(true,res,false));
+ assert(hlg.m_eglContext.swaps==1 && hlg.commits==1);
+ hlg.hdr.hlg=true;
+ hlg.m_videoSourceSideData=std::make_shared<int>(1);
+ assert(hlg.set(true,res,false));
+ assert(hlg.m_eglContext.swaps==1 && hlg.commits==1 && !hlg.m_videoSourceSideData);
+ DVBRIDGE::modeChangeNativeHDR.store(DVBRIDGE::NativeHDRSignal::Unknown);
+ Window unknown;
+ assert(unknown.set(true,res,false));
+ assert(unknown.m_modeHold.AwaitsOrdinaryPicture() && unknown.commits==0);
+ CServiceBroker::GetSettingsComponent()->enabled=false;
+ assert(hlg.set(true,res,false));
+ assert(hlg.m_eglContext.swaps==2 && hlg.commits==2);
 }
 '''.replace('METHOD',method)
         with tempfile.TemporaryDirectory() as temporary:
