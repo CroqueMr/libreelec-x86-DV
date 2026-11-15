@@ -154,6 +154,7 @@ endforeach()
 
 add_executable(enhanced_dv_records enhanced_dv_records.c)
 add_test(NAME fel_adaptive_transfer COMMAND p5_adaptive_images --fel)
+add_test(NAME placed_adaptive_transfer COMMAND p5_adaptive_images --placed)
 add_test(NAME scaled_adaptive_domain COMMAND scaled_adaptive domain)
 add_test(NAME scaled_adaptive_recovery_area COMMAND scaled_adaptive area)
 target_link_libraries(enhanced_dv_records PRIVATE dvbridge_core)

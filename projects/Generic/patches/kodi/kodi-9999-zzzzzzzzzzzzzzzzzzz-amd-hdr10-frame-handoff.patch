@@ -2,7 +2,7 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
 
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
-@@ -93,8 +93,9 @@
+@@ -101,8 +101,9 @@
  
  protected:
    bool m_frameRendered{false};
@@ -12,7 +12,7 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
 +                 RetainedOutput retainedOutput);
    bool ConfigureVideoOutput(const VideoPicture& picture);
  #ifdef CB1_HAS_HDR10_AI
-   bool m_aiOutputPending{false};
+   virtual bool HDR10AITextureReady(int index) const { return m_buffers[index].loaded; }
 @@ -222,6 +223,8 @@
      AVMasteringDisplayMetadata displayMetadata;
      bool hasLightMetadata{false};
@@ -42,7 +42,7 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
 +                            DVHandoff handoff);
    bool HDR10AIQueueEligible() const override { return m_aiBuffers > NUM_BUFFERS; }
    bool HDR10AILookahead() const override;
-   bool HDR10AIFrameCommitted() const override;
+   bool HDR10AITextureReady(int index) const override { return m_vaapiTextures[index] != nullptr; }
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
 @@ -90,11 +90,11 @@
@@ -127,7 +127,7 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
  {
    auto colorimetry = KODI::UTILS::GetColorimetry(picture);
    bool inferred = (picture.color_space == AVCOL_SPC_UNSPECIFIED);
-@@ -226,6 +226,16 @@
+@@ -333,6 +333,16 @@
    m_bValidated = false;
  
  #ifdef CB1_HAS_HDR10_AI
@@ -141,9 +141,9 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
 +    window.BeginHDR10Handoff();
 +    return true;
 +  }
+   m_softwareAIBuffers = SoftwareHDR10AIBufferCount(picture, fps, orientation);
+   m_aiLookahead = HDR10AIQueueEligible();
    m_aiOutputPending = HDR10AILookahead() &&
-       DVBRIDGE::FrameOutputSettings(picture.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS, picture.hdrType == StreamHdrType::HDR_TYPE_HLG).hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
-   if (m_aiOutputPending)
 @@ -239,7 +249,7 @@
    }
  #endif

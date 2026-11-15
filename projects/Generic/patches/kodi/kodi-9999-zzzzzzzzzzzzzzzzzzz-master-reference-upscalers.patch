@@ -68,8 +68,8 @@
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 @@ -38,7 +38,7 @@
- #include "cores/DataCacheCore.h"
- #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
+ #endif
  #include "UpscalerSettings.h"
 -#include "filesystem/File.h"
 +#include "ShaderUpscalerPresets.h"

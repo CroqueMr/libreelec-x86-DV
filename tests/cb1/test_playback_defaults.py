@@ -71,7 +71,14 @@ struct CGUIDialogSelect {
 constexpr int WINDOW_DIALOG_SELECT=1,LOGINFO=1;
 struct Manager {template<class T>T* GetWindow(int){return &dialog;}} manager;
 struct GUI {Manager& GetWindowManager(){return manager;}} gui;
-struct CServiceBroker {static auto GetSettingsComponent(){return &component;}
+constexpr int TMSG_MEDIA_SEEK_TIME=1;
+struct CApplicationPlayer {bool CanSeek(){return false;}bool IsInMenu(){return false;}
+ float GetPlaySpeed(){return 1.0f;}int GetTime(){return 0;}} player;
+struct AppComponents {template<class T>T* GetComponent(){return &player;}} appComponents;
+struct AppMessenger {void PostMsg(int,int){assert(false);}} appMessenger;
+struct CServiceBroker {static auto& GetAppComponents(){return appComponents;}
+ static auto GetAppMessenger(){return &appMessenger;}
+ static auto GetSettingsComponent(){return &component;}
  static auto& GetResourcesComponent(){return resources;}static auto GetGUI(){return &gui;}};
 namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t revision=1;return ++revision;}
  template<class... T>void DiagnosticLog(T...){}

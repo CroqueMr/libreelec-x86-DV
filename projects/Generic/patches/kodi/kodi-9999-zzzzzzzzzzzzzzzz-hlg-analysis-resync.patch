@@ -1,0 +1,213 @@
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10AIActivation.h
+@@ -16,13 +16,13 @@
+   {
+     m_stream = stream;
+     m_revision = revision;
+-    m_waitSince = now;
++    m_started = m_waitSince = now;
+     m_spent = 0;
+     m_deadline = 0;
+     m_waitScheduled = false;
+     m_active = stream && revision;
+     m_waiting = m_active;
+-    m_native = m_event = m_prepared = false;
++    m_native = m_event = m_prepared = m_presented = false;
+     m_paused = false;
+     m_inputPending = false;
+   }
+@@ -32,17 +32,33 @@
+     if (!m_active || m_native || !m_inputPending) return;
+     m_inputPending = false;
+     m_waiting = true;
+-    m_waitSince = m_paused ? m_pauseSince : now;
++    m_started = m_waitSince = m_paused ? m_pauseSince : now;
+   }
+   void SetPaused(bool paused, uint64_t now)
+   {
+     if (paused == m_paused) return;
+     if (paused) m_pauseSince = now;
+-    else if (m_waiting && now >= m_pauseSince) m_waitSince += now - m_pauseSince;
++    else if (now >= m_pauseSince)
++    {
++      if (m_waiting) m_waitSince += now - m_pauseSince;
++      m_started += now - m_pauseSince;
++    }
+     m_paused = paused;
+   }
+ 
+   void SetPresentationDeadline(uint64_t deadline) { m_deadline = deadline; }
++
++  void AnalysisCompleted(cb1_ai_identity id, uint64_t now)
++  {
++    // Priming can process many pictures. Keep the stall limit, and bound the
++    // whole priming interval even when pictures continue to finish.
++    if (!Matches(id) || m_presented || m_prepared || m_inputPending || m_native || m_paused ||
++        now < m_started || now - m_started >= 3000 ||
++        now < m_waitSince || now - m_waitSince >= 1000 - m_spent)
++      return;
++    m_waitSince = now;
++    m_spent = 0;
++  }
+ 
+   Decision Observe(cb1_ai_status status, cb1_ai_identity id, uint64_t now, bool required = true)
+   {
+@@ -55,6 +71,8 @@
+     if (m_inputPending)
+       return Decision::Wait;
+     if (m_paused && now >= m_pauseSince) now = m_pauseSince;
++    if (!m_presented && now >= m_started && now - m_started >= 3000)
++      return Fallback();
+     if (m_waiting)
+     {
+       if (now < m_waitSince && !m_waitScheduled)
+@@ -97,6 +115,7 @@
+     m_prepared = false;
+     if (!success)
+       Fallback();
++    m_presented = success;
+     return success;
+   }
+ 
+@@ -138,8 +157,8 @@
+     return Decision::Native;
+   }
+ 
+-  uint64_t m_stream{}, m_revision{}, m_waitSince{}, m_spent{}, m_pauseSince{}, m_deadline{};
++  uint64_t m_stream{}, m_revision{}, m_started{}, m_waitSince{}, m_spent{}, m_pauseSince{}, m_deadline{};
+   cb1_ai_identity m_identity{};
+-  bool m_active{}, m_waiting{}, m_native{}, m_event{}, m_prepared{}, m_paused{}, m_waitScheduled{}, m_inputPending{};
++  bool m_active{}, m_waiting{}, m_native{}, m_event{}, m_prepared{}, m_presented{}, m_paused{}, m_waitScheduled{}, m_inputPending{};
+ };
+ }
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.cpp
+@@ -1,5 +1,6 @@
+ /* SPDX-License-Identifier: GPL-2.0-or-later */
+ #include "HDR10AISource.h"
++#include "utils/DVBridgeDiagnosticState.h"
+ #include <algorithm>
+ #include <chrono>
+ #include <cmath>
+@@ -35,6 +36,7 @@
+   {
+     m_job = false;
+     m_lastSubmitted = m_jobIdentity.picture;
++    m_activation.AnalysisCompleted(m_jobIdentity, DVBRIDGE::DiagnosticNowMs());
+     m_lease.reset();
+   }
+   return RecordStatus("analysis-collect",status);
+@@ -185,7 +187,8 @@
+   RecordStatus("prediction",status,false);
+   const auto elapsed=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+       std::chrono::steady_clock::now()-started).count());
+-  const auto completed=now+std::min(elapsed,std::numeric_limits<uint64_t>::max()-now);
++  const auto completed=std::max(DVBRIDGE::DiagnosticNowMs(),
++      now+std::min(elapsed,std::numeric_limits<uint64_t>::max()-now));
+   const auto decision = m_activation.Observe(status,Identity(binding),completed,required);
+   if (decision == Decision::Prepare)
+   {
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -1957,7 +1957,12 @@
+       m_hints.hdrType, mode == DVBRIDGE::HDR10SourceMode::HDR10PlusDV) &&
+       !m_hints.dovi.rpu_present_flag;
+   const double fps = m_hints.fpsscale > 0 ? double(m_hints.fpsrate) / m_hints.fpsscale : 0;
+-  return DVBRIDGE::HDR10AIBuffers::Count(hdr10,mode,fps,m_interlaced);
++  // AV1 HLG can enter the lookahead route while already decoding. Allocate
++  // that pool when the VA context opens so a live switch never replays its GOP.
++  const auto poolMode = m_hints.codec == AV_CODEC_ID_AV1 &&
++      m_hints.hdrType == StreamHdrType::HDR_TYPE_HLG ?
++      DVBRIDGE::HDR10SourceMode::ReferenceDV : mode;
++  return DVBRIDGE::HDR10AIBuffers::Count(hdr10,poolMode,fps,m_interlaced);
+ }
+ #endif
+ 
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -16,6 +16,7 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIWindowManager.h"
++#include "messaging/ApplicationMessenger.h"
+ #include "resources/LocalizeStrings.h"
+ #include "resources/ResourcesComponent.h"
+ #include "settings/SettingConditions.h"
+@@ -228,6 +229,7 @@
+     for(const auto& [name,value] : options[selected].properties)
+       if (name=="disabled" && value.asBoolean()) return true;
+     const auto& choice=choices[selected];
++    bool reprime = false;
+     {
+       std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
+       if (settingsMenu)
+@@ -250,7 +252,12 @@
+         if (!DVBRIDGE::activeOutputSelectors)
+           DVBRIDGE::activeOutputSelectors=DVBRIDGE::ReadDefaultOutputSelectors();
+         auto& active=*DVBRIDGE::activeOutputSelectors;
+-        if (hlgSource) active.hlgSource=static_cast<DVBRIDGE::HLGSourceMode>(choice.output);
++        if (hlgSource)
++        {
++          const auto next = static_cast<DVBRIDGE::HLGSourceMode>(choice.output);
++          reprime = next == DVBRIDGE::HLGSourceMode::ReferenceDV && active.hlgSource != next;
++          active.hlgSource = next;
++        }
+         else if (hdr10PlusSource) active.hdr10PlusSource=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
+         else if (hdr10Source) active.hdr10Source=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
+         else {active.output=static_cast<DVBRIDGE::OutputMode>(choice.output);active.method=choice.method;}
+@@ -260,6 +267,12 @@
+ #endif
+     }
+     if (settingsMenu) settings->Save();
++    if (reprime)
++    {
++      const auto player = CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>();
++      if (player->CanSeek() && !player->IsInMenu() && player->GetPlaySpeed() == 1.0f)
++        CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_SEEK_TIME, player->GetTime());
++    }
+     return true;
+   }
+ }
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -432,6 +432,7 @@
+     {
+       m_aiStartPts = DVD_NOPTS_VALUE;
+       m_aiGuiReady = false;
++      m_lateframes = 0;
+     }
+     if (outcome.ready) m_aiQueuePreparationStale = false;
+     m_aiQueueReady = outcome.ready;
+@@ -1505,10 +1506,10 @@
+ void CRenderManager::PrepareNextRender()
+ {
+ #ifdef CB1_HAS_HDR10_AI
+-  if (!m_aiQueueReady && m_aiStartPts == DVD_NOPTS_VALUE) return;
+-  const bool priming = m_pRenderer && m_pRenderer->HDR10AILookahead() &&
+-      (!m_showVideo || (m_aiFullscreenRequested && !m_aiGuiReady));
+-  if (priming && m_aiGuiReady) return;
++  if (!m_aiQueueReady && !m_aiGuiReady) return;
++  const bool aiLookahead = m_pRenderer && m_pRenderer->HDR10AILookahead();
++  const bool priming = aiLookahead && !m_aiGuiReady;
++  if (!m_showVideo && m_aiGuiReady && aiLookahead) return;
+ #endif
+   if (m_queued.empty())
+   {
+@@ -1525,11 +1526,7 @@
+       )
+     return;
+ 
+-  const double frameOnScreen =
+-#ifdef CB1_HAS_HDR10_AI
+-      priming ? m_Queue[m_queued.front()].pts :
+-#endif
+-      m_dvdClock.GetClock();
++  const double frameOnScreen = m_dvdClock.GetClock();
+   const double frametime =
+       1.0 / static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS()) *
+       DVD_TIME_BASE;
