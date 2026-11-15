@@ -193,6 +193,7 @@ struct Source {unsigned RejectedSections(){return 31;}};
 struct Picture {std::shared_ptr<Source> sourceSideData=std::make_shared<Source>();};
 void capture(uint64_t m_videoProcessingGeneration,Picture* pVideoPicture) @@OMISSION@@
 int main(){
+ DVBRIDGE::SetDetailedDiagnostics(true);
  DVBRIDGE::DiagnosticOpen(); Picture picture;
  for(unsigned i=1;i<=200;++i) capture(i,&picture);
  assert(CLog::lines.size()==24);

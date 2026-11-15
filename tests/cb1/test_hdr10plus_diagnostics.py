@@ -168,6 +168,7 @@ int main(){
 #include "utils/DVBridgeDiagnosticLog.h"
 #include <cassert>
 int main(){
+ DVBRIDGE::SetDetailedDiagnostics(true);
  DVBRIDGE::DiagnosticOpen();DVBRIDGE::DiagnosticReserveProgress();
  for(unsigned i=0;i<18;i++)assert(DVBRIDGE::DiagnosticLog(LOGINFO,"detail {}",i));
  assert(!DVBRIDGE::DiagnosticLog(LOGINFO,"startup overflow"));
