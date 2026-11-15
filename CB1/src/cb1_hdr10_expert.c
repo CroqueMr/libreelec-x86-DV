@@ -11,6 +11,17 @@ static double nits(unsigned code)
     return 10000*pow(fmax(v-3424.0/4096,0)/(2413.0/128-(2392.0/128)*v),16384.0/2610);
 }
 
+struct pl_raw_primaries cb1_display_primaries(const struct dvbridge_policy *policy)
+{
+    if(policy->lldv_edid_version){
+        const double *xy=policy->lldv_primaries;
+        return (struct pl_raw_primaries){.red={xy[0],xy[1]},.green={xy[2],xy[3]},
+            .blue={xy[4],xy[5]},.white={.3127,.3290}};
+    }
+    return *pl_raw_primaries_get(policy->tv.gamut==DVBRIDGE_GAMUT_BT709?PL_COLOR_PRIM_BT_709:
+        policy->tv.gamut==DVBRIDGE_GAMUT_P3_D65?PL_COLOR_PRIM_DISPLAY_P3:PL_COLOR_PRIM_BT_2020);
+}
+
 float cb1_hdr10_expert_ceiling(const struct dvbridge_policy *policy)
 {
     double v=pow(policy->tv.peak_nits/10000,2610.0/16384);
@@ -109,7 +120,7 @@ static bool prepare(struct cb1_hdr10_expert_plan *out,struct dvbridge_cm4_coeffi
     enum pl_color_primaries prim=policy->tv.gamut==DVBRIDGE_GAMUT_BT709?PL_COLOR_PRIM_BT_709:
         policy->tv.gamut==DVBRIDGE_GAMUT_P3_D65?PL_COLOR_PRIM_DISPLAY_P3:PL_COLOR_PRIM_BT_2020;
     p.target=(struct pl_color_space){.primaries=prim,.transfer=PL_COLOR_TRC_LINEAR,
-        .hdr={.min_luma=PL_COLOR_HDR_BLACK,.max_luma=peak,.prim=*pl_raw_primaries_get(prim)}};
+        .hdr={.min_luma=PL_COLOR_HDR_BLACK,.max_luma=peak,.prim=cb1_display_primaries(policy)}};
     /* Descriptor of the virtual rendering reference, not measured MaxCLL/FALL. */
     p.signal=(struct dvbridge_hdr10_metadata){.max_luminance=(unsigned)ceil(peak),
         .min_luminance=(unsigned)llround(black*10000)};
@@ -141,7 +152,9 @@ bool cb1_hdr10_expert_trim(pl_shader shader,const struct dvbridge_creative_plan 
     if(!shader || !plan || plan->policy.mode!=DVBRIDGE_MODE_HDR10_EXPERT ||
        dvbridge_policy_validate(&plan->policy)!=DVBRIDGE_POLICY_VALID)return false;
     float chroma[2]={plan->codes[3]/4096-.5,plan->codes[4]/4096-.5};
-    pl_matrix3x3 xyz=pl_get_rgb2xyz_matrix(pl_raw_primaries_get(primaries));
+    const struct pl_raw_primaries display=plan->policy.lldv_edid_version ?
+        cb1_display_primaries(&plan->policy) : *pl_raw_primaries_get(primaries);
+    pl_matrix3x3 xyz=pl_get_rgb2xyz_matrix(&display);
     float luma[3]={xyz.m[1][0],xyz.m[1][1],xyz.m[1][2]};
     float cap=plan->policy.tv.peak_nits/203;
     if((double)cap*203>plan->policy.tv.peak_nits)cap=nextafterf(cap,0);

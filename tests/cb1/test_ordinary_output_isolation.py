@@ -62,7 +62,8 @@ namespace DVBRIDGE {
 }
 struct Capabilities {bool isDV=false,isHDR10=false,isHLG=false,stereoSource=false,processingKnown=true,sourceKnown=false,nativeDV=true;};
 struct Selection {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
- DVBRIDGE::Policy policy;DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;};
+ DVBRIDGE::Policy policy;DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;
+ uint64_t lldvEdidGeneration{};};
 struct CDVBridgeGLES {
  bool PlayerLed()const{return false;}
  struct Context {

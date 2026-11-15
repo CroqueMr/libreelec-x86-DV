@@ -17,7 +17,7 @@ class StrictPlaybackAdmissionTests(unittest.TestCase):
 #include <string>
 constexpr int LOGERROR=1;
 namespace DVBRIDGE {
-enum class OutputMode{Standard,Disabled};enum class HDR10SourceMode{Native,ReferenceDV};enum class OutputReason{None,ActivationFailed,SourceIneligible};
+enum class OutputMode{Standard,Disabled};enum class HDR10SourceMode{Native,ReferenceDV};enum class OutputReason{None,ActivationFailed,SourceIneligible,NoPlayerLedTransport};
 struct Binding{int stream=1,revision=2;bool Valid()const{return true;}};using SourceBinding=Binding;
 struct Preferences{OutputMode output=OutputMode::Disabled;HDR10SourceMode hdr10Source=HDR10SourceMode::ReferenceDV;};
 inline Preferences prefs;inline Preferences FrameOutputSettings(bool=false,bool=false){return prefs;}
@@ -25,6 +25,7 @@ struct PlaybackNotification{static void RenderingUnavailable(OutputReason){}};
 
 }
 struct CDVPlaybackInfo {
+ static const char* Reason(DVBRIDGE::OutputReason){return "test-reason";}
  static int ReasonLabel(DVBRIDGE::OutputReason reason) {
    return reason == DVBRIDGE::OutputReason::SourceIneligible ? 40844 : 40846;
  }
@@ -35,6 +36,8 @@ struct Base{virtual ~Base()=default;};
 namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext:Base{
  std::mutex m_dvCapabilityMutex;DVBRIDGE::Binding m_dvFatalBinding;bool m_dvFatalConsumed=false;
  DVBRIDGE::OutputReason m_dvFatalReason=DVBRIDGE::OutputReason::ActivationFailed;
+ struct Capabilities{int lldvUnavailableLabel=41249;};
+ Capabilities GetDVOutputCapabilities(const VideoPicture*) const{return {};}
  DVBRIDGE::OutputReason ConsumeDVPlaybackFailure(DVBRIDGE::SourceBinding binding) CONSUME
 };}
 KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
@@ -60,6 +63,8 @@ int main(){VideoPicture picture;Worker worker;
  window.m_dvFatalConsumed=false;
  picture.doviMetadata.size=32;
  assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==40844);
+ window.m_dvFatalConsumed=false;window.m_dvFatalReason=DVBRIDGE::OutputReason::NoPlayerLedTransport;
+ assert(worker.HandleDVPlaybackFailure(&picture) && worker.m_messageParent.label==41249);
  window.m_dvFatalConsumed=false;DVBRIDGE::prefs.output=DVBRIDGE::OutputMode::Standard;
  picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;picture.stereoMode="left_right";
  assert(!worker.HandleDVPlaybackFailure(&picture));picture.stereoMode.clear();
