@@ -28,7 +28,7 @@ class DecoderReplayTests(unittest.TestCase):
 #include <string>
 using namespace std::chrono_literals;
 constexpr int LOGWARNING=0,LOGFATAL=1,OUTPUT_AGAIN=1,DVD_PLAYSPEED_PAUSE=0;constexpr double DVD_NOPTS_VALUE=1e20;
-namespace IDVDStreamPlayer{constexpr int SYNC_INSYNC=0;}
+namespace IDVDStreamPlayer{enum {SYNC_WAITSYNC, SYNC_INSYNC};}
 enum MsgQueueReturnCode{MSGQ_OK=1,MSGQ_TIMEOUT=0,MSGQ_ABORT=-1,MSGQ_NOT_INITIALIZED=-2,MSGQ_INVALID_MSG=-3};
 struct CDVDMsg{enum{DEMUXER_PACKET,VIDEO_DRAIN};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
  bool IsType(int)const{return true;}};
