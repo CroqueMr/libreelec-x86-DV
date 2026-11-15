@@ -28,6 +28,7 @@ struct CWinSystemGbmGLESContext : CRenderSystemGLES {
   bool m_guiCacheValid=true;
   unsigned submitted=0;
   bool CompleteDVBridgePage(unsigned) { return !kmsPending; }
+  void BindNativePascalHDRFramebuffer() {}
   void PresentFrame(bool,bool) {
     if (!CompleteDVBridgePage(8)) return;
     if (m_cb1FramePending && m_dvFrame) {

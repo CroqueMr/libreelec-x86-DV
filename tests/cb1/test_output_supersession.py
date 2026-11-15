@@ -196,6 +196,7 @@ struct Connector {bool SupportsProperty(const char*){return true;}std::optional<
 struct DRM {virtual ~DRM()=default;Mode mode;const Mode*GetSelectedMode(){return &mode;}};
 struct gbm_bo;
 struct CDRMAtomic : DRM {
+ void AllowModeset(){}
  unsigned failures=0;unsigned DVActivationFailures(){return failures;}void FailDVActivation(int){++failures;}void ResetDVActivation(){failures=0;}void SetCB1TimingPeriod(uint64_t){}bool CanRetryDVActivation(bool){return true;}int DVActivationError(){return failures?22:0;}
  Plane plane;Plane*GetGuiPlane(){return &plane;}Plane*GetVideoPlane(){return nullptr;}bool FindVideoPlane(unsigned,uint64_t){return true;}bool FindGuiPlane(unsigned,uint64_t){return true;}bool HasQuirk(int){return false;}void SetActive(bool){}bool TestFramebuffer(gbm_bo*){return true;}
  void SetDVActivationPending(bool){} Connector connector;Connector*GetConnector(){return &connector;}bool IsSelectedModeCommitted(){return true;}bool FlipPageTransactional(void*,bool){return true;}
@@ -222,7 +223,7 @@ struct CWinSystemGbmEGLContext:CWinSystemGbm {
  std::unique_ptr<VideoPicture>m_floatOutputPicture;
  Plane*m_priorOutputPlane=nullptr;unsigned m_priorOutputFormat=0;uint64_t m_priorOutputModifier=0;
  virtual int VideoOutputBitDepth(const VideoPicture*p)const{return p?p->colorBits:8;}
- virtual bool PrepareHDR10Scanout(){return false;}
+ virtual bool PrepareHDR10Scanout(const VideoPicture*){return false;}
  virtual bool RetainHDR10ScanoutOnTransition()const{return false;}
  virtual bool RejectDVOutputSurface(){return CompleteDVOutputSurface(false);}
  bool HasPendingDVOutputSurface(){return m_dvSurfacePending;}
@@ -235,7 +236,9 @@ struct CWinSystemGbmEGLContext:CWinSystemGbm {
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=true,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
- bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ enum class PascalHDRMode { None, Conversion, Native };
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None,m_priorPascalHDRMode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode mode){m_pascalHDRMode=mode;}
  unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
