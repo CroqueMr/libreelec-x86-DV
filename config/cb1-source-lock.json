@@ -396,9 +396,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "ead6952eb5f2d1bc2487b8b977df1b8f2cd61390a03e06aa193609fd6e7d9e4d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "1b5b4220eef1e39d66e00ff3e3793b5aa9c28faeef406f46f2c11c3b3bcac5a1",
     "tests/cb1/test_upscaler_preferences.py": "686acf3f7f99ce480eb313e278bc8ca610ee523babbcb52a4076ffa9e851b7c3",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "a59ca427770ef99446622e02e30d422306f51f141d048573b988a28ead3b7573",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "2d08d5fa08e2659fc7987d53bf3df2c801fce11a285e150bdc908615f4f46ef5",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "debf3ef34d69f3a19e4fba645d8e1cd3d737c5206ebbd4c4a7e2858fb277da1e"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "a470b0b585e01911b006f533b2e05dacdc78c9e073a98a8ca729c9864c13ccc8"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
