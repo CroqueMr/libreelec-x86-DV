@@ -84,8 +84,8 @@
 --- a/addons/resource.language.en_gb/resources/strings.po
 +++ b/addons/resource.language.en_gb/resources/strings.po
 @@ -26573,3 +26573,23 @@
- msgctxt "#41275"
- msgid "The active HDMI driver cannot signal BT.2020 RGB."
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
  msgstr ""
 +
 +msgctxt "#41301"

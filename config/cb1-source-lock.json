@@ -169,7 +169,7 @@
     "tests/cb1/test_master_panel_surface.py": "f59a67c4fea97dd5b58714710e193e4b61896e945cc9ac27028accca0e189f08",
     "tests/cb1/test_dtdl_stream_inventory.py": "251c6686094915987206d28729f4995b44472fd242582f5c6b687a9c276522ad",
     "tests/cb1/test_hdr10_expert_settings.py": "5866cda2cc90537f5e8822824b9bbe0b82e41314108893a56ee8c8c7e3c4ee14",
-    "tests/cb1/test_display_refresh.py": "c08940918eb90d023a5085d4f2d1406f8c2230dc59f71287b6cf34b07e2214e0",
+    "tests/cb1/test_display_refresh.py": "0144ca977acc801c91de911933e2c33348c4c360dc846ed9275cc134f2ee82d6",
     "tests/cb1/test_atomic_modeset_retry.py": "0c32e47e72ffe511e23ee2794dc8e39717e7b24c32b39c19898e6fee3f40c078",
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
@@ -351,7 +351,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9007-player-led-lab.patch": "673db821cce19617d06c5f70dfd65bc4f8bb7124646d0baf196e9cba977593bf",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "84030d5a14dea8a5df20df96066f90c557266ac9f301e4137d75e3813acd62ab",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "78ac32981ffda9cb0de8180cb1e829392f2b9eaedd46c646eefcded84ec27beb",
-    "tests/cb1/test_lldv_format.py": "5ba01529f56a3bf2c656537c24f81f6a81afc6b17b26fe0c5fd03d994a2f4baa",
+    "tests/cb1/test_lldv_format.py": "34989400f9ac7306f669e2de9a4290721bca933b31ba1cc68b52a8b805e25185",
     "tests/cb1/test_lldv_player_info.py": "6fb8721ac887d98773d0f6982641406be0091c2ebbae2c57e596241727e87942",
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
@@ -396,9 +396,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "548c461b2fb0bc645ad2504dbcbb2ab7ab57799aaa3f7ffd3ebb2738d91399bd",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "1b5b4220eef1e39d66e00ff3e3793b5aa9c28faeef406f46f2c11c3b3bcac5a1",
     "tests/cb1/test_upscaler_preferences.py": "686acf3f7f99ce480eb313e278bc8ca610ee523babbcb52a4076ffa9e851b7c3",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "2d08d5fa08e2659fc7987d53bf3df2c801fce11a285e150bdc908615f4f46ef5",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "e98a48997c3530bed648e7bd65800c18aca2bbe4381f434ed3f4db687a1d5266",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch": "758846d9a12e06f156af9b2a8256ad95c044213f1125b02e65d8b4ca11179ed4",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "68a779476143de69496ec27bad6f0ad38eac22f269b929b928468ac5c31f76a6",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-sdr-bt2020.patch": "e470a02344dc290ee87fb6f52dd54db086cd7950e64b19b93b9cd68413e25f5b",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-startup-cadence.patch": "5b21cfecbd76dbbd5b3ee85a1890a587153bc9e008e51b6883ceaf1365af4f4a",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-adaptive-placed-packing.patch": "71bf2d65e86a2012945de1991303ce942056158d3f61a3cc6cef761591b206f1",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-software-hdr-import.patch": "a622ffae463fc49f5277f3d1e5d294e5d90929448ad1649975f4252920b874e6",
@@ -409,7 +409,7 @@
     "tests/cb1/test_seek_video_generation.py": "4766feec6773ebbd864d785135297d2401bfed7d1fc48727b9cdf65da5b363cd",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-passthrough-dialnorm.patch": "d6924d21edd330c55e92d55f59ec00c668cfc9c297308553c6a81fd3bb4cc946",
     "tests/cb1/test_audio_passthrough_dialnorm.py": "fa49aa3d1898f0e87a4591cc662900af745e688794b019beeb243c63edd96059",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "dbafe6782d004ee72f5717bd32181c8933ba1183fd4e274e6a81788943b0f1c6"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "4e60f98fe90ce802b3369b5c0d8741b0a601d6528015932bbf2617860d93a496"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
