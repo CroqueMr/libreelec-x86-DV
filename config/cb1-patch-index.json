@@ -122,10 +122,10 @@
     }
   },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": {
-    "summary": "Recognize explicitly associated Dolby Vision layers in HEVC MOV sample entries",
+    "summary": "Recognize and seek explicitly associated Dolby Vision layers in HEVC MOV sample entries",
     "component": "ffmpeg",
     "files": {
-      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references. Log bounded numeric association facts and rejection reasons."
+      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references. Log bounded numeric association facts and rejection reasons. Seek declared layer peers against the selected key presentation time."
     }
   },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hevc-picture-clock.patch": {

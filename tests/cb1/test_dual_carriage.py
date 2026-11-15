@@ -14,7 +14,7 @@ def atom(tag, data):
     return struct.pack('>I4s', len(data)+8, tag)+data
 
 
-def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1', clocks=None, frames=2):
+def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1', clocks=None, frames=2, composition=None):
     """Synthetic framing only, not decodable audiovisual content."""
     packets = [b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc']
     if packet_pair is not None:
@@ -59,7 +59,12 @@ def mp4(kind, packet_pair=None, configuration=None, sample_entry=b'dvh1', clocks
         stsz = atom(b'stsz', struct.pack('>3I', 0, len(packets[i]), frames))
         stco = atom(b'stco', struct.pack('>3I', 0, 1, offset))
         stss = atom(b'stss', struct.pack('>2I', 0, frames)+struct.pack('>'+str(frames)+'I', *range(1, frames+1)))
-        stbl = atom(b'stbl', stsd+stts+stsc+stsz+stco+stss)
+        ctts = b''
+        if composition is not None:
+            offsets = composition[i]
+            entries = b''.join(struct.pack('>2I', 1, offset) for offset in offsets)
+            ctts = atom(b'ctts', struct.pack('>2I', 0, len(offsets))+entries)
+        stbl = atom(b'stbl', stsd+stts+ctts+stsc+stsz+stco+stss)
         mdia = atom(b'mdia', atom(b'mdhd', mdhd)+atom(b'hdlr', hdlr)+atom(b'minf', stbl))
         tref = b''
         if i == 1 and kind not in ('independent', 'declared-no-reference'):
@@ -130,6 +135,11 @@ def transport(kind, m2ts=False, hevc_el=False):
 class DualCarriage(unittest.TestCase):
     def test_mp4_reported_layer_clocks_keep_exact_pts_and_payloads(self):
         self.run_carriage([('clocks-paired.mp4', mp4('paired', clocks=[(24000,1001), (480000,20020)], frames=64), True)])
+
+    def test_mp4_seek_uses_presentation_clock_for_declared_dolby_peer(self):
+        offsets = [[0, 1000, 0, 0], [0, 0, 0, 0]]
+        self.run_carriage([(f'composition-{kind}.mp4', mp4(kind, frames=4, composition=offsets),
+                            kind == 'paired') for kind in ('paired', 'independent')])
 
     def test_joined_length_prefixed_tracks_keep_their_seek_framing(self):
         # Two uniform synthetic 64x64 IDR pictures, generated without media input.
@@ -250,6 +260,23 @@ int main(int argc,char**argv) {
  for(int i=1;i<argc;i+=2)for(int disabled : {0,2}){
   associationLogs.clear();
   CDVDDemuxFFmpeg d;assert(avformat_open_input(&d.m_pFormatContext,argv[i],nullptr,nullptr)==0);
+  if(strstr(argv[i],"composition-")){
+   auto* f=d.m_pFormatContext;
+   const bool grouped=atoi(argv[i+1]);
+   assert(f->nb_stream_groups==unsigned(grouped));
+   f->flags|=AVFMT_FLAG_NOPARSE|AVFMT_FLAG_NOFILLIN;
+   assert(av_seek_frame(f,0,1000,AVSEEK_FLAG_BACKWARD)==0);
+   AVPacket* p=av_packet_alloc();assert(p);
+   int64_t pts[]={AV_NOPTS_VALUE,AV_NOPTS_VALUE};
+   while((pts[0]==AV_NOPTS_VALUE||pts[1]==AV_NOPTS_VALUE)&&av_read_frame(f,p)>=0){
+    assert(p->stream_index>=0&&p->stream_index<2);
+    auto& first=pts[p->stream_index];
+    if(first==AV_NOPTS_VALUE)first=p->pts;
+    av_packet_unref(p);
+   }
+   assert(pts[0]==2000 && pts[1]==(grouped?2000:1000));
+   av_packet_free(&p);avformat_close_input(&d.m_pFormatContext);continue;
+  }
   if(strstr(d.m_pFormatContext->iformat->name,"mov")){
    bool declared=false;
    for(unsigned n=0;n<d.m_pFormatContext->nb_streams;n++){
