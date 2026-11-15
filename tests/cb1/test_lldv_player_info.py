@@ -113,7 +113,7 @@ int main()
   assert(output->target==1000 && output->displayBlack==0.002 && output->lldv->cm4Appended);
   assert(output->lldv->scenePQ[0]==3300 && output->lldv->scenePQ[1]==1800);
   assert(LldvTrimText(output->creativeApplied,output->lldv->trimGroups)=="L2 · SOP");
-  assert(CDVPlaybackInfo::Mode(*output)=="Dolby Vision LLDV Reference");
+  assert(CDVPlaybackInfo::Mode(*output)=="Dolby Vision : LLDV Reference");
 
   StreamSnapshot source;
   source.profile=7; source.metadata=true; source.l1=true;
@@ -154,7 +154,7 @@ int main()
   source.output={}; source.output.flags=CDVPlaybackInfo::HDMI;
   info=NativeProcessingInfo(source);
   assert(!info.output.lldv && info.TransmittedBlocks()[2]);
-  assert(CDVPlaybackInfo::Mode(info.output)=="Dolby Vision Reference");
+  assert(CDVPlaybackInfo::Mode(info.output)=="Dolby Vision : Reference");
   source={}; info=NativeProcessingInfo(source);
   assert(!info.output.lldv && !info.outputType && info.AppliedBlocks().none());
 }

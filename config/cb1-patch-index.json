@@ -1921,5 +1921,21 @@
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary.",
       "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodi’s native text viewer without closing the LLDV selector."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": {
+    "owner": "Stable playback circuit names and HDR10+ choice parity.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Use the approved names and a single CM4 Auto 2 indent.",
+      "system/settings/settings.xml": "Expose distinct HDR10+ Native and Kodi default choices.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Save HDR10+ passthrough independently of the native renderer route.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Show and select the four HDR10+ circuits in Quick Switch.",
+      "xbmc/settings/SettingConditions.cpp": "Disable only the native HDR10+ route when HDMI cannot carry it.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Gate source HDR10+ packets on explicit passthrough and clear them for Kodi default.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Apply the approved circuit names to requested and actual processing.",
+      "xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h": "Identify native HDR10, HDR10+ and HLG from the confirmed output.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the current circuit in Player Information.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Keep compatible startup when native HDR10+ uses the native renderer.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h": "Use the approved Kodi default label in playback notifications."
+    }
   }
 }

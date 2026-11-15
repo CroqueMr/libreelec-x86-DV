@@ -1,0 +1,493 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -25907,7 +25907,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40812"
+-msgid "Dolby Vision Reference"
++msgid "Dolby Vision : Reference"
+ msgstr ""
+ 
+ #: system/settings/settings.xml
+@@ -25917,7 +25917,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40814"
+-msgid "Kodi default"
++msgid "Kodi : Default"
+ msgstr ""
+ 
+ #: system/settings/settings.xml
+@@ -25942,7 +25942,7 @@
+ 
+ #: system/settings/settings.xml
+ msgctxt "#40819"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40820"
+@@ -25954,11 +25954,11 @@
+ msgstr ""
+ 
+ msgctxt "#40922"
+-msgid "HDR10+ Rendering"
++msgid "HDR10+ : Conversion"
+ msgstr ""
+ 
+ msgctxt "#40923"
+-msgid "No HDR10+ output"
++msgid "No HDR10+ via HDMI"
+ msgstr ""
+ 
+ msgctxt "#40925"
+@@ -25970,11 +25970,11 @@
+ msgstr ""
+ 
+ msgctxt "#40822"
+-msgid "HDR10 Rendering"
++msgid "HDR10 : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40823"
+-msgid "LLDV Reference – HDR10 Output"
++msgid "HDR10 : LLDV Reference conversion"
+ msgstr ""
+ 
+ msgctxt "#40829"
+@@ -26111,15 +26111,15 @@
+ msgstr ""
+ 
+ msgctxt "#40866"
+-msgid "Kodi default"
++msgid "Kodi : Default"
+ msgstr ""
+ 
+ msgctxt "#40867"
+-msgid "Dolby Vision Rendering"
++msgid "Dolby Vision : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40868"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40870"
+@@ -26179,11 +26179,11 @@
+ msgstr ""
+ 
+ msgctxt "#40913"
+-msgid "Dolby Vision Master Reference"
++msgid "Dolby Vision : Master Reference"
+ msgstr ""
+ 
+ msgctxt "#40914"
+-msgid "Dolby Vision Adaptive HDR Mapping"
++msgid "Dolby Vision : Adaptive HDR Mapping"
+ msgstr ""
+ 
+ msgctxt "#40915"
+@@ -26227,11 +26227,11 @@
+ msgstr ""
+ 
+ msgctxt "#41014"
+-msgid "Kodi default"
++msgid "HDR10+ : Native"
+ msgstr ""
+ 
+ msgctxt "#40970"
+-msgid "Dolby Vision Rendering"
++msgid "Dolby Vision : Rendering"
+ msgstr ""
+ 
+ msgctxt "#40940"
+@@ -26379,7 +26379,7 @@
+ msgstr ""
+ 
+ msgctxt "#40993"
+-msgid " - CM4.0 Auto 2 headroom (%)"
++msgid "CM4.0 Auto 2 headroom (%)"
+ msgstr ""
+ 
+ msgctxt "#40994"
+@@ -26451,7 +26451,7 @@
+ msgstr ""
+ 
+ msgctxt "#41130"
+-msgid "SDR Rendering"
++msgid "SDR : Conversion"
+ msgstr ""
+ 
+ msgctxt "#41131"
+@@ -26579,7 +26579,7 @@
+ msgstr ""
+ 
+ msgctxt "#41221"
+-msgid "Dolby Vision LLDV Reference"
++msgid "Dolby Vision : LLDV Reference"
+ msgstr ""
+ 
+ msgctxt "#41222"
+@@ -26837,3 +26837,11 @@
+ msgctxt "#41309"
+ msgid "FSR 1 (EASU + RCAS)"
+ msgstr ""
++
++msgctxt "#41310"
++msgid "HDR10 : Native"
++msgstr ""
++
++msgctxt "#41311"
++msgid "HLG : Native"
++msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -11,20 +11,21 @@
+           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+           <constraints><options>
+             <option label="40867">1</option><option label="40868">2</option>
++            <option label="41310">0</option><option label="41130">4</option>
++          </options></constraints>
++          <control type="list" format="string"><usedetails>true</usedetails></control>
++        </setting>
++        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
++          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
++          <constraints><options>
++            <option label="40970">3</option><option label="41014">5</option>
+             <option label="40866">0</option><option label="41130">4</option>
+           </options></constraints>
+           <control type="list" format="string"><usedetails>true</usedetails></control>
+         </setting>
+-        <setting id="dvbridge.hdr10plussource" type="integer" label="41012" help="41013">
+-          <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options>
+-            <option label="40970">3</option><option label="41014">0</option><option label="41130">4</option>
+-          </options></constraints>
+-          <control type="list" format="string"><usedetails>true</usedetails></control>
+-        </setting>
+         <setting id="dvbridge.hlgsource" type="integer" label="41131" help="41132">
+           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+-          <constraints><options><option label="40867">1</option><option label="40866">0</option><option label="41130">2</option></options></constraints>
++          <constraints><options><option label="40867">1</option><option label="41311">0</option><option label="41130">2</option></options></constraints>
+           <control type="list" format="string"><usedetails>true</usedetails></control>
+         </setting>
+         <setting id="dvbridge.sdrpreset" type="integer" label="41133" help="41134">
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -19,7 +19,11 @@
+ namespace DVBRIDGE
+ {
+ enum class OutputMode : int { Standard = 0, HDR10 = 1, Disabled = 2, EnhancedDV = 3, MasterReference = 4, AdaptiveB = 5, SDR = 6, PlayerLed = 7 };
+-enum class HDR10SourceMode : int { Native = 0, ReferenceDV = 1, EnhancedDV = 2, HDR10PlusDV = 3, SDR = 4 };
++enum class HDR10SourceMode : int
++{
++  Native = 0, ReferenceDV = 1, EnhancedDV = 2, HDR10PlusDV = 3, SDR = 4, HDR10PlusPassthrough = 5
++};
++
+ enum class HLGSourceMode : int { Native = 0, ReferenceDV = 1, SDR = 2 };
+ 
+ // Decoder ingress sees the last complete frame-boundary preference snapshot.
+@@ -166,7 +170,11 @@
+   }
+   HDR10SourceMode HDR10Mode(bool hdr10Plus) const
+   {
+-    return hdr10Plus ? hdr10PlusSource : hdr10Source;
++    if (!hdr10Plus)
++      return hdr10Source;
++    // Passthrough uses Kodi's native renderer. HDMI signalling uses the saved selector.
++    return hdr10PlusSource == HDR10SourceMode::HDR10PlusPassthrough ?
++        HDR10SourceMode::Native : hdr10PlusSource;
+   }
+   dvbridge_policy HDR10Policy(bool hdr10Plus = false) const
+   {
+@@ -232,7 +240,8 @@
+       static_cast<HDR10SourceMode>(hdr10) : HDR10SourceMode::Native;
+   const int plus=settings->GetInt("dvbridge.hdr10plussource");
+   result.hdr10PlusSource=plus==3 ? HDR10SourceMode::HDR10PlusDV :
+-      plus==4 ? HDR10SourceMode::SDR : HDR10SourceMode::Native;
++      plus==4 ? HDR10SourceMode::SDR :
++      plus==5 ? HDR10SourceMode::HDR10PlusPassthrough : HDR10SourceMode::Native;
+   const int hlg=settings->GetInt("dvbridge.hlgsource");
+   if (hlg==1 || hlg==2) result.hlgSource=static_cast<HLGSourceMode>(hlg);
+   return result;
+@@ -298,7 +307,7 @@
+   hdr10PlusPlaybackMode.store(next.hdr10PlusSource);
+   hlgPlaybackMode.store(next.HLGMode());
+   // Resolve only the returned copy; alternating inputs must not churn revisions.
+-  if (hdr10Plus) next.hdr10Source = next.hdr10PlusSource;
++  if (hdr10Plus) next.hdr10Source = next.HDR10Mode(true);
+   if (hlg) next.hdr10Source = next.HLGMode();
+   return next;
+ }
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -166,14 +166,14 @@
+                          nativeSource==StreamHdrType::HDR_TYPE_HDR10PLUS;
+   const bool hlgSource=nativeSource==StreamHdrType::HDR_TYPE_HLG;
+   if (!hdr10Source && !hlgSource && nativeSource!=StreamHdrType::HDR_TYPE_DOLBYVISION) return false;
+-  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,40866},{2,0,41130}};
++  constexpr Choice hlgChoices[]={{1,0,40867},{0,0,41311},{2,0,41130}};
+   const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
+ #ifdef CB1_HAS_HDR10_AI
+-  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866},{4,0,41130}};
+-  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{0,0,41014},{4,0,41130}};
++  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,41310},{4,0,41130}};
++  constexpr Choice hdr10PlusChoices[]={{3,0,40970},{5,0,41014},{0,0,40866},{4,0,41130}};
+ #else
+-  constexpr Choice hdr10Choices[]={{0,0,40866}};
+-  constexpr Choice hdr10PlusChoices[]={{0,0,41014}};
++  constexpr Choice hdr10Choices[]={{0,0,41310}};
++  constexpr Choice hdr10PlusChoices[]={{5,0,41014},{0,0,40866}};
+ #endif
+   const Choice* choices=hlgSource ? hlgChoices : hdr10PlusSource ? hdr10PlusChoices : hdr10Source ? hdr10Choices : dvChoices;
+   const int count=hlgSource ? std::size(hlgChoices) : hdr10PlusSource ? std::size(hdr10PlusChoices) : hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
+@@ -193,7 +193,9 @@
+     {
+       options.emplace_back(strings.Get(choices[i].label),i);
+       const auto& choice=choices[i];
+-      if (hlgSource ? (int(preferences.hlgSource)==choice.output) : hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
++      if (hlgSource ? (int(preferences.hlgSource)==choice.output) :
++          hdr10PlusSource ? (int(preferences.hdr10PlusSource)==choice.output) :
++          hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
+           (int(preferences.output)==choice.output &&
+           (choice.output!=1 || preferences.method==choice.method))) current=i;
+     }
+@@ -216,7 +218,7 @@
+         switch (*video.outputType)
+         {
+           case VideoOutputType::DolbyVision:
+-            output = video.output.lldv ? "Dolby Vision LLDV Reference" :
++            output = video.output.lldv ? strings.Get(41221).c_str() :
+                 (video.output.flags & CDVPlaybackInfo::HDMI) ? "Dolby Vision · TV-Led" : "Dolby Vision";
+             break;
+           case VideoOutputType::HDR10: output = "HDR10"; break;
+@@ -249,9 +251,7 @@
+       DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
+           option.value, option.label, option.label2);
+       const auto& choice = choices[option.value];
+-      const int label = choice.label;
+-      const int quickSwitchLabel = (label == 40868 || label == 40914) ? 40880 : label;
+-      CFileItem item(settingsMenu ? option.label : strings.Get(quickSwitchLabel));
++      CFileItem item(settingsMenu ? option.label : strings.Get(choice.label));
+       item.SetLabel2(option.label2);
+       for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
+       const bool disabled = item.GetProperty("disabled").asBoolean();
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -514,7 +514,12 @@
+   const bool hlgSource=hlgMenu || setting->GetId()=="dvbridge.hlgsource";
+   const bool hdr10PlusMenu=setting->GetId()=="dvbridge.hdr10plusplaybackchoice";
+   const bool hdr10Menu=hdr10PlusMenu || setting->GetId()=="dvbridge.hdr10playbackchoice";
+-  const auto preferences=DVBRIDGE::FrameOutputSettings();
++  auto preferences = DVBRIDGE::FrameOutputSettings();
++  if (!hdr10Menu && !hlgMenu && !menu)
++  {
++    std::lock_guard lock(DVBRIDGE::OutputSettingsMutex());
++    DVBRIDGE::ReadDefaultOutputSelectors().Apply(preferences);
++  }
+   const auto data=DVBRIDGE::StreamTelemetry::Read();
+   auto caps=data.transaction.capabilities;
+   auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+@@ -550,11 +555,18 @@
+       4,0,2,3,6,7,8};
+ #ifdef CB1_HAS_HDR10_AI
+   constexpr int hdr10MenuModes[]{1,4,0,7};
+-  constexpr int hdr10PlusMenuModes[]{1,0,7};
++  constexpr int hdr10PlusMenuModes[]{1,0,0,7};
+ #else
+   constexpr int hdr10MenuModes[]{0};
+-  constexpr int hdr10PlusMenuModes[]{0};
+-#endif
++  constexpr int hdr10PlusMenuModes[]{0,0};
++#endif
++#ifdef CB1_HAS_HDR10_AI
++  constexpr int nativeHDR10PlusMenuIndex = 1;
++#else
++  constexpr int nativeHDR10PlusMenuIndex = 0;
++#endif
++  const int nativeHDR10PlusChoice = hdr10PlusMenu ? nativeHDR10PlusMenuIndex :
++      static_cast<int>(DVBRIDGE::HDR10SourceMode::HDR10PlusPassthrough);
+   for(auto& option : list)
+   {
+     const int mode=hlgSource ? (option.value==2 ? DVBRIDGE_MODE_SDR :
+@@ -566,7 +578,9 @@
+         (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 || option.value==5 ? 4 : option.value==4 ? 5 : option.value==6 ? 7 : option.value==7 ? 8 : 0);
+     auto reason=DVBRIDGE::OutputReason::None;
+     const bool guided = hdr10PlusSource && (hdr10PlusMenu ? option.value==0 : option.value==3);
+-    if (mode)
++    if (hdr10PlusSource && option.value == nativeHDR10PlusChoice && !caps.hdr10plus)
++      reason=DVBRIDGE::OutputReason::NoHDR10PlusTransport;
++    else if (mode)
+     {
+       const bool dv=mode==1 || mode==4 || mode==5;
+       if (guided && hdr10Menu && !(pendingHDR10Plus || (caps.sourceKnown && caps.isHDR10Plus)))
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1077,7 +1077,10 @@
+   std::optional<std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES>> packet;
+   const auto& source = m_videoSourceSideData;
+   const uint64_t generation = CServiceBroker::GetDataCacheCore().GetVideoProcessingGeneration();
+-  const auto* metadata = source && source->Generation() == generation ? source->HDR10Plus() : nullptr;
++  const bool passthrough =
++      DVBRIDGE::hdr10PlusPlaybackMode.load() == DVBRIDGE::HDR10SourceMode::HDR10PlusPassthrough;
++  const auto* metadata = passthrough && source && source->Generation() == generation ?
++      source->HDR10Plus() : nullptr;
+   const char* reason = "no-source-metadata";
+   if (metadata)
+   {
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+@@ -93,49 +93,49 @@
+ 
+   template<class Output> static const char* Policy(const Output& output)
+   {
+-    if (IsHDR10PlusDV(output)) return "Dolby Vision Rendering";
++    if (IsHDR10PlusDV(output)) return "Dolby Vision : Rendering";
+     switch (output.effective)
+     {
+-      case 2: return "HDR10 Rendering";
+-      case 3: return "LLDV Reference – HDR10 Output";
+-      case 4: return "Dolby Vision Adaptive HDR Mapping";
+-      case 5: return "Dolby Vision Master Reference";
+-      case 6: return "Dolby Vision Adaptive HDR Mapping";
+-      case 8: return "SDR Rendering";
+-      case 7: return output.flags & HDR10PLUS ? "HDR10+ Rendering" : "HDR10 Rendering";
+-      default: return output.flags & HDR10 ? "HDR10 Rendering" : "Dolby Vision Reference";
++      case 2: return "HDR10 : Rendering";
++      case 3: return "HDR10 : LLDV Reference conversion";
++      case 4: return "Dolby Vision : Adaptive HDR Mapping";
++      case 5: return "Dolby Vision : Master Reference";
++      case 6: return "Dolby Vision : Adaptive HDR Mapping";
++      case 8: return "SDR : Conversion";
++      case 7: return output.flags & HDR10PLUS ? "HDR10+ : Conversion" : "HDR10 : Rendering";
++      default: return output.flags & HDR10 ? "HDR10 : Rendering" : "Dolby Vision : Reference";
+     }
+   }
+   static const char* RequestedPolicy(int mode, bool hdr10AI = false, bool hdr10PlusDV = false)
+   {
+-    if ((hdr10PlusDV || hdr10AI) && mode == 1) return "Dolby Vision Rendering";
++    if ((hdr10PlusDV || hdr10AI) && mode == 1) return "Dolby Vision : Rendering";
+     switch(mode)
+     {
+-      case 0:return "Dolby Vision Disabled (native Kodi)";
+-      case 1:return "Dolby Vision Reference";
+-      case 2:return "HDR10 Rendering";
+-      case 3:return "LLDV Reference – HDR10 Output";
+-      case 4:return "Dolby Vision Adaptive HDR Mapping";
+-      case 5:return "Dolby Vision Master Reference";
+-      case 6:return "Dolby Vision Adaptive HDR Mapping";
+-      case 7:return "HDR10+ Rendering";
+-      case 8:return "SDR Rendering";
+-      case PlayerLedMode:return "Dolby Vision LLDV Reference";
++      case 0:return "Kodi : Default";
++      case 1:return "Dolby Vision : Reference";
++      case 2:return "HDR10 : Rendering";
++      case 3:return "HDR10 : LLDV Reference conversion";
++      case 4:return "Dolby Vision : Adaptive HDR Mapping";
++      case 5:return "Dolby Vision : Master Reference";
++      case 6:return "Dolby Vision : Adaptive HDR Mapping";
++      case 7:return "HDR10+ : Conversion";
++      case 8:return "SDR : Conversion";
++      case PlayerLedMode:return "Dolby Vision : LLDV Reference";
+       default:return "";
+     }
+   }
+ 
+   template<class Output> static std::string Mode(const Output& output)
+   {
+-    if (output.effective==8 && (output.flags & SDR)) return "SDR Rendering";
++    if (output.effective==8 && (output.flags & SDR)) return "SDR : Conversion";
+     if (!output.flags) return "Kodi default";
+     if constexpr (requires { output.lldv; })
+       if (output.lldv) return RequestedPolicy(PlayerLedMode);
+     if (IsHDR10PlusDV(output)) return Policy(output);
+     std::string mode = output.flags & HDR10 ? Policy(output) :
+-        output.effective == 6 ? "Dolby Vision Adaptive HDR Mapping" :
+-        output.effective == 5 ? "Dolby Vision Master Reference" :
+-        output.effective == 4 ? "Dolby Vision Adaptive HDR Mapping" : "Dolby Vision Reference";
++        output.effective == 6 ? "Dolby Vision : Adaptive HDR Mapping" :
++        output.effective == 5 ? "Dolby Vision : Master Reference" :
++        output.effective == 4 ? "Dolby Vision : Adaptive HDR Mapping" : "Dolby Vision : Reference";
+     if (output.fallback)
+       mode += " / compatibility fallback";
+     return mode;
+diff --git a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+--- a/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
++++ b/xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h
+@@ -19,9 +19,19 @@
+       return info.output.flags & CDVPlaybackInfo::CM4 ? "CM2.9 (CM4 added)" : "CM2.9 (CM4 not added)";
+     return "CM2.9";
+   }
+-  static std::string Mode(const VideoProcessingInfo& info)
++  static std::string Mode(const VideoProcessingInfo& info, bool hdr10PlusSource = false)
+   {
+-    if (!info.output.flags) return "";
++    if (!info.output.flags)
++    {
++      const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++      if (info.outputType == VideoOutputType::HDR10Plus)
++        return strings.Get(41014);
++      if (info.outputType == VideoOutputType::HDR10)
++        return hdr10PlusSource ? strings.Get(40866) : strings.Get(41310);
++      if (info.outputType == VideoOutputType::HLG)
++        return strings.Get(41311);
++      return "";
++    }
+     if (CDVPlaybackInfo::IsHDR10PlusDV(info.output)) return CDVPlaybackInfo::Mode(info.output);
+     if (info.output.hdr10AI)
+       return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -367,7 +367,9 @@
+     SetProperty("DV.FEL", active ? (active & CDVPlaybackInfo::FEL ? "Full FEL" : "No FEL") : "");
+     SetProperty("DV.FELUpscaling", active & CDVPlaybackInfo::FEL ?
+         (data.output.felUpscaling == 2 ? "Reference GPU" : data.output.felUpscaling == 0 ? "VAAPI" : data.output.felUpscaling == 1 ? "Bilinear GPU" : "") : "");
+-    SetProperty("DV.Mode", active ? VideoProcessingInfoGUI::Mode(data) : "Kodi default");
++    const auto actualMode = VideoProcessingInfoGUI::Mode(data,
++        CServiceBroker::GetDataCacheCore().HasVideoHDR10PlusSource());
++    SetProperty("DV.Mode", actualMode.empty() ? "Kodi : Default" : actualMode);
+     const int upscaler = CServiceBroker::GetDataCacheCore().GetVideoUpscaler();
+     const int upscalerLabel = upscaler < 0 ? 0 : KODI::VIDEO::UPSCALER::Label(upscaler);
+     SetProperty("DV.VideoUpscaler", upscalerLabel ?
+@@ -383,7 +385,7 @@
+     SetProperty("DV.PartialBlocks", hdr10 && data.output.effective==3 && metadata ?
+         std::string(data.blocks[1] ? "L1 max/avg" : "")+
+         (data.blocks[3] ? (data.blocks[1] ? "; L3 max/avg" : "L3 max/avg") : "") : "");
+-    SetProperty("DV.ActivePolicy", active ? std::string(CDVPlaybackInfo::RequestedPolicy(data.output.effective)) : "Kodi default");
++    SetProperty("DV.ActivePolicy", actualMode.empty() ? "Kodi : Default" : actualMode);
+     if (active && data.output.hdr10AI)
+     {
+       const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4806,7 +4806,7 @@
+           else if (unknown)
+           {
+             const auto preferences = DVBRIDGE::FrameOutputSettings();
+-            if (preferences.hdr10Source == native && preferences.hdr10PlusSource == native &&
++            if (preferences.hdr10Source == native && preferences.HDR10Mode(true) == native &&
+                 preferences.HLGMode() == native)
+               hdrSignal = HDRSignal::Unknown;
+           }
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h
+@@ -61,7 +61,7 @@
+       m_ordinaryFrame=false;
+       if (!notify) return;
+     }
+-    Emit("Kodi default");
++    Emit("Kodi : Default");
+   }
+   template<class Output> static void NativeOutputAccepted(const Output& output)
+   {

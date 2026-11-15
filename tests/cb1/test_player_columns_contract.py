@@ -123,9 +123,14 @@ int main(){
    values=panel.find('./variable[@name="'+name+'"]').findall('value')
    active=values[0]
    self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))',active.get('condition',''))
-   self.assertIn('!String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)',active.get('condition',''))
+   self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))',active.get('condition',''))
    self.assertIn('FF65E18D',active.text)
-   self.assertNotIn('65E18D',values[-1].text)
+   for inactive in values[1:]:
+    self.assertNotIn('65E18D',inactive.text)
+  mode=panel.find('./variable[@name="DVPanelMode"]').findall('value')
+  self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))',mode[1].get('condition',''))
+  self.assertEqual(mode[1].text,'$INFO[Window(playerprocessinfo).Property(DV.Mode)]')
+  self.assertEqual(mode[-1].text,'Kodi : Default')
  def test_panel_has_no_translucent_surface_or_inherited_fade(self):
   panel=ET.parse(PANEL)
   dialog=ET.parse(PANEL.with_name('DialogPlayerProcessInfo.xml'))

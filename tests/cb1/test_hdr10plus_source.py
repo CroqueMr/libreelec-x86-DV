@@ -14,6 +14,7 @@ class HDR10PlusSourceTests(unittest.TestCase):
 #include "cores/VideoSourceSideData.h"
 #include <cassert>
 #include <array>
+#include <atomic>
 #include <optional>
 #include <string>
 #include <vector>
@@ -55,6 +56,8 @@ struct CServiceBroker {
 enum {LOGINFO=1};
 struct CLog {template<class... A>static void Log(A...) {}};
 namespace DVBRIDGE {
+enum class HDR10SourceMode { Native=0, ReferenceDV=1, EnhancedDV=2, HDR10PlusDV=3, SDR=4, HDR10PlusPassthrough=5 };
+inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Native};
 inline std::vector<std::string> messages;
 template<class... A>bool DiagnosticLog(int,fmt::format_string<A...> f,A&&...args){
  messages.push_back(fmt::format(f,std::forward<A>(args)...));return true;
@@ -71,6 +74,8 @@ struct CWinSystemGbmGLESContext {
  void StageNativeHDR10Plus() BODY
 };
 int main() {
+ using DVBRIDGE::HDR10SourceMode;
+ using DVBRIDGE::hdr10PlusPlaybackMode;
  CWinSystemGbmGLESContext w;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);
  AVFrame* frame=av_frame_alloc();auto* hdr=av_dynamic_hdr_plus_create_side_data(frame);
  hdr->itu_t_t35_country_code=0xb5;hdr->application_version=1;hdr->num_windows=1;
@@ -79,6 +84,15 @@ int main() {
  const int perc[]={1,5,10,25,50,75,90,95,99};p.num_distribution_maxrgb_percentiles=9;
  for(int i=0;i<9;++i)p.distribution_maxrgb[i]={(uint8_t)perc[i],{i==1?0:i==2?255:5000,100000}};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,1,AV_CODEC_ID_HEVC,frame,nullptr);
+ w.StageNativeHDR10Plus();assert(!drm->packet);
+ for(auto mode:{HDR10SourceMode::Native,HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV,
+                HDR10SourceMode::HDR10PlusDV,HDR10SourceMode::SDR}) {
+  hdr10PlusPlaybackMode=HDR10SourceMode::HDR10PlusPassthrough;
+  w.StageNativeHDR10Plus();assert(drm->packet);
+  hdr10PlusPlaybackMode=mode;
+  w.StageNativeHDR10Plus();assert(!drm->packet);
+ }
+ hdr10PlusPlaybackMode=HDR10SourceMode::HDR10PlusPassthrough;
  w.StageNativeHDR10Plus();assert(drm->packet && drm->generation==7);
  assert((*drm->packet)[30]==0x40 && (*drm->packet)[8]==10);
  auto first=*drm->packet;

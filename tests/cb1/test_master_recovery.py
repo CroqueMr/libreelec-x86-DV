@@ -51,7 +51,7 @@ int main(){using N=DVBRIDGE::PlaybackNotification;
  N::StartVideo();const auto ordinary=N::Generation();N::RenderedOrdinary(ordinary);
  N::OrdinaryOutputAccepted(false);assert(N::Pending() && notifications==1);
  N::RenderedOrdinary(ordinary);N::OrdinaryOutputAccepted(true);
- assert(!N::Pending() && notifications==2 && notified=="Kodi default");
+ assert(!N::Pending() && notifications==2 && notified=="Kodi : Default");
 }
 '''.replace('@@HEADER@@',header)
         with tempfile.TemporaryDirectory() as directory:

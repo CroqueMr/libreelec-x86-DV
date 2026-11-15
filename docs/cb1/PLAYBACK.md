@@ -6,24 +6,28 @@ modes appear during playback. Unavailable modes show their blocking reason.
 
 | Source | Available processing |
 | --- | --- |
-| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, LLDV Reference – HDR10 Output, LLDV Reference – Native, HDR10+ Rendering, SDR Rendering or Kodi default |
-| HDR10 | Dolby Vision Rendering, Dolby Vision Adaptive HDR Mapping, SDR Rendering or Kodi default |
-| HDR10+ | Kodi default for native HDR10+; Dolby Vision Rendering for metadata-guided conversion; SDR Rendering |
-| HLG | Dolby Vision Rendering or Kodi default |
-| SDR / 3D | Native Kodi playback |
+| Dolby Vision | Dolby Vision : Reference, Dolby Vision : Master Reference, Dolby Vision : Adaptive HDR Mapping, Kodi : Default, HDR10 : Rendering, HDR10 : LLDV Reference conversion, HDR10+ : Conversion, SDR : Conversion, Dolby Vision : LLDV Reference |
+| HDR10 | Dolby Vision : Rendering, Dolby Vision : Adaptive HDR Mapping, HDR10 : Native, SDR : Conversion |
+| HDR10+ | Dolby Vision : Rendering, HDR10+ : Native, Kodi : Default, SDR : Conversion |
+| HLG | Dolby Vision : Rendering, HLG : Native, SDR : Conversion |
+| SDR / 3D | Kodi : Default |
 
 The **Dolby Vision default playback**, **HDR10 default playback**, **HDR10+ default playback**
 and **HLG default playback** selectors store independent defaults. Their right-hand
 values show the saved choices, including the Dolby Vision conversion method.
 Opening or reopening a file, restarting playback or advancing the playlist uses
-that source's default. HLG-based Dolby Vision with RPU uses the Dolby Vision default.
+that source's default. A fresh profile starts with **Dolby Vision : Master Reference**,
+**HDR10 : Native**, **Kodi : Default** for HDR10+ and **HLG : Native**.
+HLG-based Dolby Vision with RPU uses the Dolby Vision default.
 
 Quick rendering selection through **O** or the video-settings button changes only
 the current playback session. Pause, seek, decoder reopening and display recreation
 retain that choice. These live choices never save over a default. Editing a default
 during playback affects the next file; calibration and other tuning still apply live.
-**Kodi default** uses native Kodi playback. An unavailable requested circuit shows
-its reason and cannot silently switch to another circuit; preparation can remain pending.
+**Kodi : Default** uses Kodi's ordinary playback path. For HDR10+ sources it
+sends HDR10. **HDR10+ : Native** sends authored dynamic metadata on a compatible
+HDMI chain. An unavailable requested circuit shows its reason and cannot silently
+switch to another circuit. Preparation can remain pending.
 
 ## TV profile
 
@@ -37,14 +41,14 @@ P3-D65 is the default gamut. Keep it unless the display profile calls for anothe
 gamut. The configured peak is a processing reference, not a measurement made by
 the player.
 
-**LLDV Reference – HDR10 Output** uses separate display calibration settings:
+**HDR10 : LLDV Reference conversion** uses separate display calibration settings:
 manual peak brightness (50–10000 nits), OLED/LCD/projector black-level presets or
 a custom black level, and target gamut. Zero peak means not configured.
 The black presets are estimates, not measurements of the display.
 Disable the TV's dynamic tone mapping for this HDR10 output to avoid a second
 dynamic mapping stage.
 
-**LLDV Reference – Native** reads the peak, black level and primaries from the
+**Dolby Vision : LLDV Reference** reads the peak, black level and primaries from the
 active display's Dolby Vision EDID and sends a low-latency Dolby Vision signal.
 The LLDV format selector shows the available HDMI transport and explains any
 display or driver limitation.

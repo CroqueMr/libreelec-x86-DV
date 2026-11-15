@@ -32,11 +32,12 @@
     <value>Audio</value>
   </variable>
   <variable name="DVPanelMode">
-    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)">[COLOR FF65E18D]$INFO[Window(playerprocessinfo).Property(DV.Mode)][/COLOR]</value>
-    <value>Kodi playback</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">[COLOR FF65E18D]$INFO[Window(playerprocessinfo).Property(DV.Mode)][/COLOR]</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">$INFO[Window(playerprocessinfo).Property(DV.Mode)]</value>
+    <value>Kodi : Default</value>
   </variable>
   <variable name="DVRenderMeterColor">
-    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)">FF65E18D</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">FF65E18D</value>
     <value>FFC6CED2</value>
   </variable>
   <variable name="DVModeDetail">
@@ -261,8 +262,8 @@
     </definition></include>
   <!-- Processing: what CB1 does with it. -->
   <include name="DVRenderingFields"><definition>
-      <include content="DVSection"><param name="label" value="Rendering"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default) | !String.IsEmpty(Player.Process(pixformat)) | String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target)) |[String.IsEqual(VideoPlayer.HdrType,dolbyvision) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)]]]"/></include>
-      <include content="DVInfoRow"><param name="label" value="CB1"/><param name="value" value="Not active"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)"/></include>
+      <include content="DVSection"><param name="label" value="Rendering"/><param name="visible" value="String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) | !String.IsEmpty(Player.Process(pixformat)) | String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target)) |[String.IsEqual(VideoPlayer.HdrType,dolbyvision) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)]]]"/></include>
+      <include content="DVInfoRow"><param name="label" value="CB1"/><param name="value" value="Not active"/><param name="visible" value="String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"/></include>
       <include content="DVInfoRow"><param name="label" value="Decoded surface"/><param name="value" value="$INFO[Player.Process(pixformat)]"/><param name="visible" value="!String.IsEmpty(Player.Process(pixformat))"/></include>
       <include content="DVInfoRow"><param name="label" value="$LOCALIZE[41229]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.VideoUpscaler)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.VideoUpscaler))"/></include>
       <include content="DVInfoRow"><param name="label" value="Deinterlacing"/><param name="value" value="$INFO[Player.Process(deintmethod)]"/><param name="visible" value="String.IsEqual(Player.Process(videoscantype),i) + !String.IsEmpty(Player.Process(deintmethod))"/></include>

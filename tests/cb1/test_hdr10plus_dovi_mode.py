@@ -497,14 +497,15 @@ int main(){
 }
 '''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('SELECTOR',selector).replace('GATE',gate))
 
-    def test_quick_menu_refuses_guided_for_plain_hdr10(self):
+    def test_quick_menu_refuses_native_hdr10plus_without_hdmi_transport(self):
         settings = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h').read_text()
         enums = '\n'.join(re.findall(r'enum class (?:OutputMode|HDR10SourceMode|HLGSourceMode)[^;]+;', settings))
         preferences = 'struct OutputPreferences '+body(settings, 'struct OutputPreferences')+';'
         options = body((TREE/'xbmc/settings/SettingConditions.cpp').read_text(),
                        'void CSettingConditions::DVOutputOptions(')
         # External service lookups precede this native per-option admission loop.
-        context = options[options.index('  const bool menu='):options.index('  const auto preferences=')]
+        menu_flags_end = options.index('\n', options.index('  const bool hdr10Menu='))
+        context = options[options.index('  const bool menu='):menu_flags_end] + '\n'
         admission = context + options[options.index('  const bool method='):options.rindex('}')]
         admission = admission.replace('!data.transaction.identity.Valid()', 'pending')
         self.compile_run(r'''
@@ -538,20 +539,28 @@ int main(){
  caps.sourceKnown=caps.isHDR10=caps.processingKnown=caps.nativeDV=caps.hdr10=true;
  for(auto& p:caps.processing)p={true,DVBRIDGE::OutputReason::None};
  for(auto& p:caps.hdr10Processing)p={true,DVBRIDGE::OutputReason::None};
- {
-  for(bool plus:{false,true}){
-   auto setting=std::make_shared<Setting>(plus ? "dvbridge.hdr10plusplaybackchoice" : "dvbridge.hdr10playbackchoice");
-   caps.isHDR10Plus=plus;caps.hdr10PlusSource=plus;
-   std::vector<Option> list;for(int i=0;i<(plus?2:3);++i)list.emplace_back(i);
-   admit(setting,list,caps);
-   const int native=plus?1:2;
-   assert(!list[native].properties.back().second);
-   if(plus){
-    const int reference=0;
-    assert(!list[reference].properties.back().second);
-   }
-   if(plus)assert(list[0].label2=="40971");
-  }
+ auto hdr10=std::make_shared<Setting>("dvbridge.hdr10playbackchoice");
+ std::vector<Option> hdr10Options{Option(0),Option(1),Option(2),Option(3)};
+ admit(hdr10,hdr10Options,caps);
+ assert(!hdr10Options[2].properties.back().second);
+
+ caps.isHDR10Plus=caps.hdr10PlusSource=true;
+ auto hdr10Plus=std::make_shared<Setting>("dvbridge.hdr10plusplaybackchoice");
+ auto defaults=std::make_shared<Setting>("dvbridge.hdr10plussource");
+ for(bool sink:{false,true}){
+  caps.hdr10plus=sink;
+  std::vector<Option> list{Option(0),Option(1),Option(2),Option(3)};
+  admit(hdr10Plus,list,caps);
+  assert(list.size()==4);
+  assert(list[0].value==0 && !list[0].properties.back().second && list[0].label2=="40971");
+  assert(list[1].value==1 && list[1].properties.back().second==!sink);
+  assert(list[1].label2==(sink?"":"40923"));
+  assert(list[2].value==2 && !list[2].properties.back().second && list[2].label2.empty());
+  assert(list[3].value==3 && !list[3].properties.back().second);
+  std::vector<Option> settings{Option(3),Option(5),Option(0),Option(4)};
+  admit(defaults,settings,caps);
+  assert(settings[1].properties.back().second==!sink);
+  assert(!settings[2].properties.back().second);
  }
 }
 '''.replace('ENUMS',enums).replace('PREFERENCES',preferences).replace('ADMISSION',admission))
@@ -919,7 +928,7 @@ int main(){
  assert(result.output.untranslatedCurve && result.output.untranslatedSaturation);
  assert(result.output.circuit=="CB1-HDR10PDVR.1.0" && result.output.engine=="CB1 1.0");
  assert(result.output.emittedL1[1]==3079);
- assert(CDVPlaybackInfo::Mode(result.output)=="Dolby Vision Rendering");
+ assert(CDVPlaybackInfo::Mode(result.output)=="Dolby Vision : Rendering");
  // Display mapping is a committed-frame fact, independent of later preferences.
  o.flags=CDVPlaybackInfo::HDR10;o.effective=3;o.gamut=2;
  o.manualPeak=1234.5;o.target=1234.5;o.displayBlack=0.0042;
@@ -948,11 +957,15 @@ int main(){
 #include "cb1_hdr10plus_dovi.h"
 #include <cassert>
 struct Localizer {std::string Get(int id)const {
- return id==40867 ? "localized Reference AI" : "localized Adaptive AI";
+ if(id==40867)return "localized Reference AI";
+ if(id==40868)return "localized Adaptive AI";
+ return std::to_string(id);
 }};
 struct Resources {Localizer GetLocalizeStrings()const{return {};}};
 struct CServiceBroker {static Resources GetResourcesComponent(){return {};}};
-struct VideoProcessingInfoGUI {static std::string Mode(const VideoProcessingInfo& info) MODE};
+struct VideoProcessingInfoGUI {
+ static std::string Mode(const VideoProcessingInfo& info, bool hdr10PlusSource=false) MODE
+};
 using Output=decltype(VideoProcessingInfo{}.output);
 std::string Requested(const Output& acceptedOutput){return REQUESTED;}
 std::string Effective(const Output& acceptedOutput){return EFFECTIVE;}
@@ -961,24 +974,31 @@ int main(){
  VideoProcessingInfo info;auto& output=info.output;
  output.flags=CDVPlaybackInfo::HDMI;output.requested=output.effective=1;
  output.hdr10AI=true;output.hdr10PlusDV=true;
- assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision Rendering");
- assert(Requested(output)=="Dolby Vision Rendering");
- assert(Effective(output)=="Dolby Vision Rendering");
+ assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision : Rendering");
+ assert(Requested(output)=="Dolby Vision : Rendering");
+ assert(Effective(output)=="Dolby Vision : Rendering");
  assert(Origin(output)=="source-HDR10+-and-estimates");
  output.guidedSourceFields=CB1_HDR10PLUS_DOVI_MAX|CB1_HDR10PLUS_DOVI_AVG;
  assert(Origin(output)=="source-HDR10+-statistics");
  output.hdr10PlusDV=false;
  assert(VideoProcessingInfoGUI::Mode(info)=="localized Reference AI");
- assert(Requested(output)=="Dolby Vision Rendering");
+ assert(Requested(output)=="Dolby Vision : Rendering");
  output.requested=output.effective=4;
  assert(VideoProcessingInfoGUI::Mode(info)=="localized Adaptive AI");
- assert(Effective(output)=="Dolby Vision Adaptive HDR Mapping");
+ assert(Effective(output)=="Dolby Vision : Adaptive HDR Mapping");
  output.hdr10AI=false;output.requested=output.effective=1;
- assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision Reference");
- assert(Requested(output)=="Dolby Vision Reference");assert(Origin(output)=="source-RPU");
+ assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision : Reference");
+ assert(Requested(output)=="Dolby Vision : Reference");assert(Origin(output)=="source-RPU");
  output.flags=0;assert(VideoProcessingInfoGUI::Mode(info).empty());
+ info.outputType=VideoOutputType::HDR10Plus;
+ assert(VideoProcessingInfoGUI::Mode(info,true)=="41014");
+ info.outputType=VideoOutputType::HDR10;
+ assert(VideoProcessingInfoGUI::Mode(info,true)=="40866");
+ assert(VideoProcessingInfoGUI::Mode(info)=="41310");
+ info.outputType=VideoOutputType::HLG;
+ assert(VideoProcessingInfoGUI::Mode(info)=="41311");
  output.flags=CDVPlaybackInfo::HDR10;output.requested=output.effective=2;
- assert(VideoProcessingInfoGUI::Mode(info)=="HDR10 Rendering");
+ assert(VideoProcessingInfoGUI::Mode(info)=="HDR10 : Rendering");
  assert(Origin(output)=="reference-default");
  output.level6=true;assert(Origin(output)=="source-L6");
  output.requested=output.effective=3;assert(Origin(output)=="manual-tv-profile");

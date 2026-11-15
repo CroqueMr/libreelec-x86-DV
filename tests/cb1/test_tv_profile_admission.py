@@ -61,7 +61,7 @@ int main() {
  assert(CDVPlaybackInfo::ReasonLabel(R::TVProfileRequired)==40845);
  struct Output{unsigned flags=CDVPlaybackInfo::SDR;int effective=8;bool fallback=false;};
  const auto detail=CDVPlaybackInfo::Detail("HDR10",Output{});
- assert(detail.find("SDR Rendering")!=std::string::npos && detail.find("metadata")==std::string::npos);
+ assert(detail.find("SDR : Conversion")!=std::string::npos && detail.find("metadata")==std::string::npos);
  assert(std::string(CDVPlaybackInfo::Reason(R::SDRTargetInvalid))=="sdr-target-invalid");
  auto lldv=annotate(R::NoPlayerLedTransport,false,false,0,0);
  assert(lldv.properties.back().second && lldv.label2=="41300");
