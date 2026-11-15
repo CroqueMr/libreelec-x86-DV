@@ -1,0 +1,200 @@
+diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
+index 1f54f9d..070e8ba 100644
+--- a/xbmc/dialogs/GUIDialogSelect.cpp
++++ b/xbmc/dialogs/GUIDialogSelect.cpp
+@@ -18,6 +18,7 @@
+ #include "resources/ResourcesComponent.h"
+ #include "utils/StringUtils.h"
+ #ifdef HAVE_DVBRIDGE
++#include "guilib/GUIFont.h"
+ #include "guilib/GUIFontManager.h"
+ #include "guilib/GUIIncludes.h"
+ #include "windowing/GraphicContext.h"
+@@ -134,9 +135,11 @@ bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
+         const RESOLUTION_INFO resolution(1920, 1080);
+         SetCoordsRes(resolution);
+         g_fontManager.LoadTTF("CB1.SwitchBody", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xfff0f0f0, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
++                            0xfff2f5f6, 0, 21, 0, false, 1.0f, 1.0f, &resolution);
++        g_fontManager.LoadTTF("CB1.SwitchTitle", "special://xbmc/media/Fonts/arial.ttf",
++                            0xfff2f5f6, 0, 26, FONT_STYLE_BOLD, false, 1.0f, 1.0f, &resolution);
+         g_fontManager.LoadTTF("CB1.SwitchHelp", "special://xbmc/media/Fonts/arial.ttf",
+-                            0xffa0a0a0, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
++                            0xffc2cccf, 0, 18, 0, false, 1.0f, 1.0f, &resolution);
+       }
+ #endif
+       m_bButtonPressed = false;
+@@ -408,19 +411,31 @@ void CGUIDialogSelect::OnInitWindow()
+ #ifdef HAVE_DVBRIDGE
+   if (GetProperty("CB1.PlaybackModes").asBoolean())
+   {
+-    const int maxRows = std::max(1, (GetCoordsRes().iHeight - 80 - 112) / 50);
+-    const float rowsHeight = 50.0f * std::clamp(m_vecList->Size(), 1, maxRows);
+-    const float height = 112.0f + rowsHeight;
++    constexpr int listTop = 104;
++    constexpr int footerGap = 10;
++    constexpr int footerHeight = 32;
++    constexpr int footerPadding = 12;
++    constexpr int padding = 24;
++    constexpr int rowHeight = 38;
++    constexpr int margin = 40;
++    const bool hasFooter = std::any_of(m_vecList->begin(), m_vecList->end(),
++                                       [](const auto& item) { return !item->GetLabel2().empty(); });
++    const int spacing = listTop + (hasFooter ? footerGap + footerHeight + footerPadding : padding);
++    const int bottomMargin = hasFooter ? 56 : margin;
++    const int maxRows =
++        std::max(1, (GetCoordsRes().iHeight - margin - bottomMargin - spacing) / rowHeight);
++    const float rowsHeight = rowHeight * std::clamp(m_vecList->Size(), 1, maxRows);
++    const float height = spacing + rowsHeight;
+     if (auto* group = GetControl(9100))
+     {
+-      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
++      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - bottomMargin - height);
+       group->SetHeight(height);
+     }
+     if (auto* background = GetControl(9101)) background->SetHeight(height);
+     for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
+       if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
+-    if (auto* help = GetControl(9102))
+-      help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
++    if (auto* footer = GetControl(9103))
++      footer->SetPosition(footer->GetXPosition(), listTop + footerGap + rowsHeight);
+   }
+ #endif
+   m_viewControl.SetItems(*m_vecList);
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+index cc9a08a..3eeeee7 100644
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -3,6 +3,7 @@
+ #ifdef HAVE_DVBRIDGE
+ #include "FileItem.h"
+ #include "ServiceBroker.h"
++#include "cores/DataCacheCore.h"
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "cores/VideoPlayer/Interface/StreamInfo.h"
+@@ -33,6 +34,7 @@
+ #endif
+ #include "utils/log.h"
+ #include "threads/IRunnable.h"
++#include <algorithm>
+ #include <cstdio>
+ 
+ namespace
+@@ -201,24 +203,77 @@ bool CDVPlaybackModes::ShowMenu(bool settingsMenu)
+         int(nativeSource), source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
+         int(preferences.output), int(preferences.hdr10Source));
+     dialog->Reset();
+-    dialog->SetHeading(settingsMenu ? strings.Get(40811) :
+-        StringUtils::Format(strings.Get(40876), hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision"));
++    dialog->SetHeading(strings.Get(settingsMenu ? 40811 : 40876));
++    bool cb1Active = false;
++    if (!settingsMenu)
++    {
++      const auto video = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
++      cb1Active = video.output.flags != 0;
++      dialog->SetProperty("CB1.SwitchInput", hlgSource ? "HLG" : hdr10PlusSource ? "HDR10+" : hdr10Source ? "HDR10" : "Dolby Vision");
++      const char* output = nullptr;
++      if (video.outputType)
++      {
++        switch (*video.outputType)
++        {
++          case VideoOutputType::DolbyVision:
++            output = video.output.lldv ? "Dolby Vision LLDV Reference" :
++                (video.output.flags & CDVPlaybackInfo::HDMI) ? "Dolby Vision · TV-Led" : "Dolby Vision";
++            break;
++          case VideoOutputType::HDR10: output = "HDR10"; break;
++          case VideoOutputType::HDR10Plus: output = "HDR10+"; break;
++          case VideoOutputType::HLG: output = "HLG"; break;
++          case VideoOutputType::SDR: output = "SDR"; break;
++        }
++      }
++      dialog->SetProperty("CB1.SwitchOutput", output ? output : strings.Get(40877));
++    }
++    bool recommendMaster = false;
++#ifdef HAVE_GBM
++    if (!settingsMenu && nativeSource == StreamHdrType::HDR_TYPE_DOLBYVISION)
++    {
++      const auto* window =
++          dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbm*>(CServiceBroker::GetWinSystem());
++      recommendMaster = window && window->GetLldvConnectorStatus().sink.status == DV_EDID_STANDARD &&
++          std::ranges::any_of(options, [choices](const auto& option) {
++            return choices[option.value].output ==
++                       static_cast<int>(DVBRIDGE::OutputMode::MasterReference) &&
++                   std::ranges::none_of(option.properties, [](const auto& property) {
++                     return property.first == "disabled" && property.second.asBoolean();
++                   });
++          });
++    }
++#endif
+     dialog->SetUseDetails(!settingsMenu);
+     for(const auto& option : options)
+     {
+       DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
+           option.value, option.label, option.label2);
+-      CFileItem item(option.label);
++      const auto& choice = choices[option.value];
++      const int label = choice.label;
++      const int quickSwitchLabel = (label == 40868 || label == 40914) ? 40880 : label;
++      CFileItem item(settingsMenu ? option.label : strings.Get(quickSwitchLabel));
+       item.SetLabel2(option.label2);
+       for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
+-      item.SetProperty("CB1.TextColor", item.GetProperty("disabled").asBoolean() ?
+-                                      "FFA0A0A0" : "FFF0F0F0");
++      const bool disabled = item.GetProperty("disabled").asBoolean();
++      const bool active = !settingsMenu && option.value == current;
++      item.SetProperty("CB1.TextColor", disabled ? "FFBEC7CB" :
++                                      active && cb1Active ? "FF65E18D" : "FFF2F5F6");
++      if (!settingsMenu)
++      {
++        item.SetProperty("CB1.SwitchStatus", disabled ? strings.Get(40851) :
++                                            active ? strings.Get(40878) : std::string{});
++        if (recommendMaster && !disabled && option.label2.empty() &&
++            choice.output == static_cast<int>(DVBRIDGE::OutputMode::PlayerLed))
++          item.SetLabel2(strings.Get(40881));
++      }
+       dialog->Add(item);
+     }
+     dialog->SetSelected(current);
+     if (!settingsMenu) dialog->SetProperty("CB1.PlaybackModes",true);
+     dialog->Open();
+     dialog->SetProperty("CB1.PlaybackModes", CVariant{});
++    dialog->SetProperty("CB1.SwitchInput", CVariant{});
++    dialog->SetProperty("CB1.SwitchOutput", CVariant{});
+     if (!dialog->IsConfirmed()) return true;
+     const int selected=dialog->GetSelectedItem();
+     if (selected<0 || selected>=count) return true;
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 5dcd325..21d5604 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26127,7 +26127,27 @@ msgid "Choose the default playback circuit for HDR10 sources. New files use this
+ msgstr ""
+ 
+ msgctxt "#40876"
+-msgid "Playback modes | Source: {0}"
++msgid "Quick Switch"
++msgstr ""
++
++msgctxt "#40877"
++msgid "Pending"
++msgstr ""
++
++msgctxt "#40878"
++msgid "Selected"
++msgstr ""
++
++msgctxt "#40879"
++msgid "Output"
++msgstr ""
++
++msgctxt "#40880"
++msgid "Dolby Vision Adaptive HDR"
++msgstr ""
++
++msgctxt "#40881"
++msgid "Master Reference is recommended over LLDV."
+ msgstr ""
+ 
+ msgctxt "#40907"

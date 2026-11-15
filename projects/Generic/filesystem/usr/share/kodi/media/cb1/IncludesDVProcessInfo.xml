@@ -416,61 +416,88 @@
   </include>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
-      <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
+      <right>42</right><bottom>56</bottom><width>608</width><height>500</height>
       <control type="image" id="9101">
-        <left>0</left><top>0</top><width>660</width><height>412</height>
-        <texture colordiffuse="FF1A2123">special://xbmc/media/cb1-white.png</texture>
+        <width>608</width><height>500</height>
+        <texture border="30">special://xbmc/media/cb1-switch-panel.png</texture>
       </control>
       <control type="label" id="1">
-        <left>20</left><top>12</top><width>620</width><height>40</height><font>CB1.SwitchBody</font><textcolor>FFF0F0F0</textcolor><scroll>false</scroll>
+        <left>24</left><top>19</top><width>560</width><height>32</height>
+        <font>CB1.SwitchTitle</font><textcolor>FFF2F5F6</textcolor><aligny>center</aligny>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
+      <control type="label">
+        <left>24</left><top>61</top><width>196</width><height>26</height>
+        <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
+        <label>$LOCALIZE[14125]  $INFO[Window.Property(CB1.SwitchInput)]</label>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      </control>
+      <control type="label">
+        <left>224</left><top>61</top><width>344</width><height>26</height>
+        <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><align>right</align><aligny>center</aligny>
+        <label>$LOCALIZE[40879]  $INFO[Window.Property(CB1.SwitchOutput)]</label>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      </control>
+      <control type="image">
+        <left>24</left><top>94</top><width>560</width><height>1</height>
+        <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
+      </control>
       <control type="list" id="3">
-        <left>20</left><top>64</top><width>620</width><height>300</height>
-        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <left>24</left><top>104</top><width>560</width><height>342</height>
+        <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="list" id="6">
-        <left>20</left><top>64</top><width>620</width><height>300</height>
-        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <left>24</left><top>104</top><width>560</width><height>342</height>
+        <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
-      <control type="label" id="9102">
-        <left>20</left><top>370</top><width>620</width><height>30</height>
-        <font>CB1.SwitchHelp</font><textcolor>FFA0A0A0</textcolor>
-        <label>$INFO[Container(6).ListItem.Label2]</label>
-        <aligny>center</aligny><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      <control type="group" id="9103">
+        <left>24</left><top>456</top><width>560</width><height>32</height>
+        <visible>!String.IsEmpty(Container(6).ListItem.Label2)</visible>
+        <control type="image"><width>560</width><height>1</height>
+          <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
+        </control>
+        <control type="label" id="9102">
+          <left>32</left><top>8</top><width>514</width><height>24</height>
+          <font>CB1.SwitchHelp</font><textcolor>FFE0E6E8</textcolor><aligny>center</aligny>
+          <label>$INFO[Container(6).ListItem.Label2]</label>
+          <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+        </control>
       </control>
     </control>
   </include>
+  <include name="CB1PlaybackModeRowContents">
+    <control type="image">
+      <left>9</left><top>10</top><width>18</width><height>18</height>
+      <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
+    </control>
+    <control type="label">
+      <left>32</left><top>0</top><width>400</width><height>38</height>
+      <font>CB1.SwitchBody</font><aligny>center</aligny>
+      <label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
+      <textcolor>FFF2F5F6</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+    </control>
+    <control type="label">
+      <left>436</left><top>0</top><width>108</width><height>38</height>
+      <font>CB1.SwitchHelp</font><align>right</align><aligny>center</aligny>
+      <label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Property(CB1.SwitchStatus)][/COLOR]</label>
+      <textcolor>FFC2CCCF</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+    </control>
+  </include>
   <include name="CB1PlaybackModeRows">
-    <itemlayout width="620" height="50">
-      <control type="image">
-        <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
-      </control>
-      <control type="label">
-        <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
-      </control>
+    <itemlayout width="560" height="38">
+      <include>CB1PlaybackModeRowContents</include>
     </itemlayout>
-    <focusedlayout width="620" height="50">
+    <focusedlayout width="560" height="38">
       <control type="image">
-        <left>0</left><top>1</top><width>620</width><height>48</height>
-        <texture colordiffuse="FF12A0C7">special://xbmc/media/cb1-white.png</texture>
+        <left>0</left><top>1</top><width>560</width><height>36</height>
+        <texture border="8" colordiffuse="FF435157">special://xbmc/media/cb1-chip.png</texture>
       </control>
-      <control type="image">
-        <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
-      </control>
-      <control type="label">
-        <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
-      </control>
+      <include>CB1PlaybackModeRowContents</include>
     </focusedlayout>
   </include>
 </includes>

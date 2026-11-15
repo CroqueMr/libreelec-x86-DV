@@ -1811,5 +1811,25 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzzz-compact-quick-switch.patch": {
+    "owner": "Own the compact in-playback Quick Switch presentation.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Localize the Quick Switch title, status and short labels.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Present the input, output and availability for in-playback choices.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Load the app fonts and size the panel to its items."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-upscaler-source-resolution.patch": {
+    "owner": "Select a video upscaler by source resolution.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Describe the two resolution preferences.",
+      "system/settings/settings.xml": "Expose the two resolution preferences.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Define the Full HD boundary and the setting IDs.",
+      "xbmc/settings/Settings.cpp": "Cache and select the two resolution preferences.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Expose the two resolution preferences during playback."
+    }
   }
 }
