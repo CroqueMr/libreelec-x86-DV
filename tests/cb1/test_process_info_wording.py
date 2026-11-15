@@ -74,11 +74,11 @@ int main(){
  output.aiModel.clear();output.hdr10PlusDV=true;output.guidedSourceFields=6;refresh();
  assert(p["DV.Mode"]=="40970" && p["DV.ActivePolicy"]=="40970");
  assert(p["DV.AIModel"].empty() && p["DV.BeforeAI"].empty());
- assert(p["DV.Reconstruction"]=="HDR10+ max/avg Â· min est.");
+ assert(p["DV.Reconstruction"]=="HDR10+ max/avg · min est.");
  output.untranslatedCurve=true;output.untranslatedSaturation=true;refresh();
- assert(p["DV.Reconstruction"]=="HDR10+ max/avg Â· min est.");
- output.guidedSourceFields=2;refresh();assert(p["DV.Reconstruction"]=="HDR10+ max Â· min/avg est.");
- output.aiModel="CB1-L1L3 0.1";refresh();assert(p["DV.Reconstruction"]=="HDR10+ max Â· min/avg AI");
+ assert(p["DV.Reconstruction"]=="HDR10+ max/avg · min est.");
+ output.guidedSourceFields=2;refresh();assert(p["DV.Reconstruction"]=="HDR10+ max · min/avg est.");
+ output.aiModel="CB1-L1L3 0.1";refresh();assert(p["DV.Reconstruction"]=="HDR10+ max · min/avg AI");
  output.guidedSourceFields=0;refresh();assert(p["DV.Reconstruction"]=="Min/max/avg: AI");
  assert(p["DV.AIL1"]=="15 | 3100 | 1100");
  output={};refresh();
@@ -176,7 +176,7 @@ int main() {
  assert(properties["DV.DisplayBlack"]=="0.0042 nits");
  assert(properties["DV.HDR10Target"].empty()); // No duplicate peak row.
  output.panel=1;refresh();
- assert(properties["DV.TVProfile"]=="OLED Â· P3-D65 / 1234.5 nits");
+ assert(properties["DV.TVProfile"]=="OLED · P3-D65 / 1234.5 nits");
  output.panel=0;
  output.target=600;output.gamut=1;output.displayBlack=0;
  refresh();
@@ -194,7 +194,7 @@ int main() {
  assert(properties["DV.DisplayBlack"].empty());
  output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.lldv->edidVersion=2;output.gamut=2;
  output.target=800;output.displayBlack=0.002;refresh();
- assert(properties["DV.TVProfile"]=="EDID v2 Â· 800 nits");
+ assert(properties["DV.TVProfile"]=="EDID v2 · 800 nits");
  assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
  output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
@@ -281,7 +281,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),75)
+        self.assertEqual(len(rows),76)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))

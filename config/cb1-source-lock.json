@@ -278,7 +278,7 @@
     "projects/Generic/filesystem/usr/share/kodi/media/cb1-bar.png": "5799eb929ce7ab181314821ae40dcac23451d8c933ccb0b0b38b44fab3dc1179",
     "tests/cb1/test_player_columns_contract.py": "6610477ce5d826f52890322838857d659e5e78d29591c45533b9fcd8d2f9b9d6",
     "tests/cb1/test_ai_initial_overlap.py": "6611982413197b9a620c1fec3dc83b6ecf42c5e9d160a2017a0533f44b9913db",
-    "tests/cb1/test_process_info_wording.py": "0d42d95bf6922f5f242b4cbb79cc1d122e0edf82bc55cdc68d75afcd7998a471",
+    "tests/cb1/test_process_info_wording.py": "031739e7c016125853c26641f407643a9b08248a70b8195ade45fb45920cfdf7",
     "docs/superpowers/plans/2026-11-09-sdr-hlg-player-info.md": "932455791c9443ebe66e911b550ee33e1d40311fff694a40e15cbd17b8ace86a",
     "tests/cb1/test_sdr_hlg_routes.py": "ff0507ae5e79df37fe87750b7c635126203b77685a0bcb2f24dc7fa18337c202",
     "tests/cb1/test_sdr_display_transition.py": "b963a22052a03cdd3d41761a34f2c7a4064607d3afaf80e09041d2a02ad40624",
