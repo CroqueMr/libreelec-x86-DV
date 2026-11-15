@@ -102,9 +102,11 @@
  #endif
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
-@@ -38,18 +38,83 @@
- #include "cores/DataCacheCore.h"
- #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+@@ -40,11 +40,21 @@
+ #include "cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h"
+ #ifdef CB1_HAS_HDR10_AI
+ #include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
+ #endif
  #include "UpscalerSettings.h"
 +#include "filesystem/File.h"
  #include "windowing/gbm/WinSystemGbmGLESContext.h"
@@ -119,10 +121,10 @@
 +#include <iterator>
  #endif
  
+ #include <algorithm>
  #include <mutex>
  
- extern "C"
- {
+@@ -53,10 +63,65 @@
  #include <libavutil/dovi_meta.h>
  }
  
@@ -186,6 +188,8 @@
  
  CLinuxRendererGLES::CLinuxRendererGLES()
  {
+   m_format = AV_PIX_FMT_NONE;
+ 
 @@ -1062,6 +1127,8 @@
      m_renderQuality = RQ_MULTIPASS;
        return;

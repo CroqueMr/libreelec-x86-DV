@@ -1,21 +1,24 @@
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
-@@ -36,9 +36,14 @@
+@@ -36,12 +36,17 @@
  #ifdef HAVE_DVBRIDGE
  #include "cores/VideoSourceSideData.h"
+ #include "cores/DataCacheCore.h"
  #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
 +#include "cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h"
 +#ifdef CB1_HAS_HDR10_AI
 +#include "cores/VideoPlayer/DVDCodecs/Video/HDR10AIBuffers.h"
 +#endif
+ #include "UpscalerSettings.h"
  #include "windowing/gbm/WinSystemGbmGLESContext.h"
  #endif
  
 +#include <algorithm>
  #include <mutex>
  
- using namespace Shaders;
+ extern "C"
+ {
 @@ -175,6 +180,32 @@
    return false;
  }
@@ -46,9 +49,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
 +}
 +#endif
 +
- bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsigned int orientation)
+ bool CLinuxRendererGLES::Configure(const VideoPicture& picture, float fps, unsigned int orientation)
  {
-   auto colorimetry = KODI::UTILS::GetColorimetry(picture);
+   return Configure(picture, fps, orientation, false);
 @@ -197,6 +228,7 @@
    m_sourceWidth = picture.iWidth;
    m_sourceHeight = picture.iHeight;
@@ -68,7 +71,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp b/xbmc/
 +      SoftwareHDR10AIMode(picture.hdrType) != DVBRIDGE::HDR10SourceMode::Native;
    if (m_aiOutputPending)
    {
-     // Keep the GUI output until AI preparation selects DV or native HDR10.
+     // An already committed HDR10-to-DV output can outlive the renderer.
 @@ -310,7 +344,12 @@
      return true;
    }
@@ -242,8 +245,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h b/xbmc/co
    bool HDR10AIFramePending() const override { return HDR10AILookahead() && !m_aiFrameRendered; }
  #endif
  
-@@ -95,6 +102,9 @@
-   bool m_frameRendered{false};
+@@ -103,8 +103,11 @@
+   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation,
+                  bool retainedNativeDV);
    bool ConfigureVideoOutput(const VideoPicture& picture);
  #ifdef CB1_HAS_HDR10_AI
 +  virtual bool HDR10AITextureReady(int index) const { return m_buffers[index].loaded; }
@@ -252,6 +256,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h b/xbmc/co
    bool m_aiOutputPending{false};
    bool m_aiFrameRendered{true};
  #endif
+   // Returns 0 if scaling is below hqscalers threshold.
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
@@ -354,8 +359,9 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
-@@ -50,13 +50,8 @@
-   CRenderInfo GetRenderInfo() override;
+@@ -53,15 +53,10 @@
+   enum class DVHandoff { None, HDR10AI, Native };
+   DVHandoff RetainDVOutput(const VideoPicture& picture, float fps, unsigned int orientation);
    bool HDR10AIQueueEligible() const override { return m_aiBuffers > NUM_BUFFERS; }
    bool HDR10AILookahead() const override;
 -  bool HDR10AIFrameCommitted() const override;
@@ -369,3 +375,4 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES
  #endif
    void ReleaseBuffer(int idx) override;
    bool NeedBuffer(int idx) override;
+ #ifdef HAVE_DVBRIDGE
