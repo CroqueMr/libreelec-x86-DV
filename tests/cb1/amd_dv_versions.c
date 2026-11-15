@@ -19,13 +19,20 @@ enum dce_version {@@FAMILIES@@};
 enum {DRM_MODE_CONNECTOR_HDMIA=1, SIGNAL_TYPE_HDMI_TYPE_A=2,
       PIXEL_ENCODING_RGB=3, DRM_HDMI_BROADCAST_RGB_FULL=4, COLOR_DEPTH_888=5,
       RMX_OFF=6, COLOR_SPACE_SRGB=7, TF_TYPE_BYPASS=8,
-      TRANSFER_FUNCTION_LINEAR=9, DITHER_OPTION_DISABLE=10, DITHER_OPTION_TRUN8=11};
+      TRANSFER_FUNCTION_LINEAR=9, DITHER_OPTION_DISABLE=10, DITHER_OPTION_TRUN8=11,
+      DITHER_OPTION_TRUN10,PIXEL_ENCODING_YCBCR422,COLOR_DEPTH_101010,COLOR_SPACE_2020_YCBCR_LIMITED};
+enum {AMDGPU_LLDV_RGB10_LAB=3,DRM_OUTPUT_COLOR_FORMAT_YCBCR422=2};
 enum {DRM_MODE_FLAG_INTERLACE=1, DRM_MODE_FLAG_DBLSCAN=2,
       DRM_MODE_FLAG_DBLCLK=4, DRM_MODE_FLAG_3D_MASK=8};
 struct dc_edid {unsigned length; u8 raw_edid[256];};
+struct drm_display_info {
+    bool is_hdmi,has_hdmi_infoframe,only_420;
+    unsigned color_formats;
+    int max_tmds_clock;
+};
 struct drm_connector {
     int connector_type;
-    struct {bool is_hdmi,has_hdmi_infoframe;}display_info;
+    struct drm_display_info display_info;
 };
 struct amdgpu_dm_connector {
     struct drm_connector base; bool dv_standard_property,lldv_format_property,timing_changed;
@@ -43,7 +50,7 @@ struct dc_stream_state {
     struct {struct dc_edid dc_edid;}*sink;
     struct dc_context *ctx;
     struct {int connector_signal;}*link;
-    bool dv_standard,dv_low_latency;
+    bool dv_standard,dv_low_latency,dv_native_422;
     int signal,output_color_space,dither_option,qs_bit;
     struct {int type,tf;}out_transfer_func;
     struct {int pixel_encoding,display_color_depth,h_addressable,v_addressable;
@@ -53,6 +60,11 @@ struct dc_stream_state {
 static bool dv_standard=true,dv_lldv=false;
 static int drm_mode_vrefresh(const struct drm_display_mode *m){return m->refresh;}
 static int drm_match_cea_mode(const struct drm_display_mode *m){return m->vic;}
+static bool drm_mode_is_420_only(const struct drm_display_info *i,const struct drm_display_mode *m)
+{
+    (void)m;
+    return i->only_420;
+}
 static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *a,
     struct drm_connector *c,const struct drm_display_mode *m){
     hdmi_avi_infoframe_init(a);a->video_code=m->vic;return 0;
