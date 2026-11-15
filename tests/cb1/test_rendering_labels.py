@@ -85,7 +85,7 @@ class RenderingLabelsTests(unittest.TestCase):
         self.assertEqual(labels['40868'],'Dolby Vision Adaptive HDR Mapping')
         self.assertEqual(labels['40970'],'Dolby Vision Rendering')
         self.assertEqual(labels['40823'],'LLDV Reference – HDR10 Output')
-        self.assertEqual(labels['41133'],'HDR/DV to SDR target')
+        self.assertEqual(labels['41133'],' - HDR/DV to SDR target')
         self.assertIn('HDR10',labels['41134']);self.assertIn('Dolby Vision',labels['41134'])
         for key in ('dvbridge.optimizedgui','dvbridge.encodedactivearea'):
             self.assertIsNone(settings.find(f".//setting[@id='{key}']"))

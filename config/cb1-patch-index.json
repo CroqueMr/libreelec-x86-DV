@@ -1906,5 +1906,17 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": {
+    "owner": "Keep the Stable video settings and LLDV output readable.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Keep subordinate labels consistent.",
+      "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Show EDID diagnostics beside the LLDV format list.",
+      "system/settings/settings.xml": "Group playback and scaling settings and expose SDR controls only for applicable defaults.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Remove the saved override for asynchronous preparation.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous preparation enabled and present CPU-packed LLDV in scanout order.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Keep connector diagnostics outside the selectable items.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary."
+    }
   }
 }

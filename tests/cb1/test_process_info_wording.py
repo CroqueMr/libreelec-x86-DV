@@ -194,7 +194,7 @@ int main() {
  assert(properties["DV.DisplayBlack"].empty());
  output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.lldv->edidVersion=2;output.gamut=2;
  output.target=800;output.displayBlack=0.002;refresh();
- assert(properties["DV.TVProfile"]=="EDID v2 · 800 nits");
+ assert(properties["DV.TVProfile"]=="EDID v2 / 800 nits");
  assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
  output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
@@ -281,7 +281,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),76)
+        self.assertEqual(len(rows),77)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
