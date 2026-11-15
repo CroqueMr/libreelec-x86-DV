@@ -157,7 +157,7 @@ int main(){
         self.assertIn('{"activearea", ViewModeActiveArea}',
                       (TREE/'xbmc/interfaces/json-rpc/PlayerOperations.cpp').read_text())
         strings = (TREE/'addons/resource.language.en_gb/resources/strings.po').read_text()
-        self.assertIn('msgctxt "#41225"\nmsgid "Dolby Vision active area"\n', strings)
+        self.assertIn('msgctxt "#41276"\nmsgid "Dolby Vision active area"\n', strings)
         menu = (TREE/'xbmc/video/ViewModeSettings.cpp').read_text()
         part = menu[menu.index('struct ViewModeProperties'):menu.index('void CViewModeSettings::ViewModesFiller')]
         header = (TREE/'xbmc/cores/VideoSettings.h').read_text()
@@ -165,7 +165,7 @@ int main(){
         program = '#include <cassert>\n#include <cstddef>\n'+enum+r'''
 struct CViewModeSettings{static int GetNextQuickCycleViewMode(int);static int GetViewModeStringIndex(int);};
 '''+part+r'''
-int main(){assert(CViewModeSettings::GetViewModeStringIndex(ViewModeActiveArea)==41225);
+int main(){assert(CViewModeSettings::GetViewModeStringIndex(ViewModeActiveArea)==41276);
  bool listed=false;for(const auto& mode:viewModes)if(mode.viewMode==ViewModeActiveArea&&!mode.hideFromList)listed=true;
  assert(listed);assert(CViewModeSettings::GetNextQuickCycleViewMode(ViewModeAuto)==ViewModeActiveArea);}
 '''
