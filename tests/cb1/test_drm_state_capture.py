@@ -196,14 +196,14 @@ int main() {
   drm.connector.props["HDR_OUTPUT_METADATA"]=33;
   assert(state.Capture(drm));
   assert(state.Stage(drm,false) && drm.staged.at("CB1_LLDV_FORMAT")==0);
-  assert(state.StagePlayerLed(drm,1));
+  assert(state.StagePlayerLed(drm,1,8));
   assert(drm.staged.at("DVBRIDGE_DV_STANDARD_LAB")==0);
   assert(drm.staged.at("CB1_LLDV_FORMAT")==1);
   assert(drm.staged.at("HDR_OUTPUT_METADATA")==0);
-  assert(state.StagePlayerLed(drm,2) && drm.staged.at("CB1_LLDV_FORMAT")==2);
-  assert(!state.StagePlayerLed(drm,0));
+  assert(state.StagePlayerLed(drm,2,8) && drm.staged.at("CB1_LLDV_FORMAT")==2);
+  assert(!state.StagePlayerLed(drm,0,8));
   drm.selected=&drm.reconnected;
-  assert(!state.StagePlayerLed(drm,1) && !state.Stage(drm,true));
+  assert(!state.StagePlayerLed(drm,1,8) && !state.Stage(drm,true));
   assert(state.Captured() && clones==1);
   drm.selected=&drm.connector;
   assert(state.Stage(drm,false));
@@ -215,7 +215,7 @@ int main() {
 
   // The LLDV driver property works independently of the TV-led property.
   drm.connector.props.erase("DVBRIDGE_DV_STANDARD_LAB");
-  assert(state.CapturePlayerLed(drm) && state.StagePlayerLed(drm,1));
+  assert(state.CapturePlayerLed(drm) && state.StagePlayerLed(drm,1,8));
   assert(state.Stage(drm,true));
   state.Restored();
   drm.connector.props["CB1_LLDV_FORMAT"]=1;
@@ -230,7 +230,7 @@ int main() {
   drm.staged.clear();
   assert(state.CapturePlayerLed(drm));
   assert(state.CapturedBackend()==CDVBridgeState::Backend::NVIDIA);
-  assert(state.StagePlayerLed(drm,1));
+  assert(state.StagePlayerLed(drm,1,8));
   assert(drm.staged.at("CB1_LLDV_FORMAT")==1);
   assert(drm.staged.at("NV_HDMI_VSIF_METADATA")==0);
   assert(drm.staged.at("max bpc")==8);

@@ -14,6 +14,7 @@ class GbmColourBuffer(unittest.TestCase):
         program=Path(__file__).with_name('gbm_colour_buffer.cpp').read_text()
         owners={
             'FLIP':body(window,'void CWinSystemGbm::FlipPage('),
+            'FLIP_CARRIER':body(window,'bool CWinSystemGbm::FlipPage('),
             'LLDV':body(window,'bool CWinSystemGbm::FlipPlayerLedPage('),
             'PAGE':body(window,'bool CWinSystemGbm::CompleteDVBridgePage('),
             'LOCK':body(surface,'    LockFrontBuffer()'),

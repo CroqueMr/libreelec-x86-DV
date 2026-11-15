@@ -91,6 +91,11 @@ struct Window {
  void SetColorimetry(const VideoPicture*){assert(false);}
  double m_preparedRenderPts{};
  std::optional<uint64_t>m_hdrDeepColorPrevious;
+ enum class PascalHDRMode {None,Conversion,Native};
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None;
+ std::shared_ptr<gbm_bo> BlitNativePascalHDRFrame(){assert(m_pascalHDRMode!=PascalHDRMode::Native);return {};}
+ bool StageNativePascalHDR10(){assert(false);return false;}
+ void StageNativeHDR10Plus(){assert(false);}
  struct AlternateScanout {unsigned accepted{};void Presented(){++accepted;}};
  AlternateScanout scanout;AlternateScanout* m_pascalHDRScanout=&scanout;
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;

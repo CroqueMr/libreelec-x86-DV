@@ -7,6 +7,8 @@
 #include <utility>
 #include "utils/DVBridgeLldv.h"
 constexpr uint32_t DRM_FORMAT_XRGB8888=1, DRM_FORMAT_ARGB8888=2;
+constexpr uint32_t DRM_FORMAT_XRGB2101010=3, DRM_FORMAT_ARGB2101010=4;
+constexpr uint32_t DRM_FORMAT_XBGR2101010=5, DRM_FORMAT_ABGR2101010=6;
 constexpr int LOGDEBUG=0, LOGWARNING=1;
 struct CLog {template<class... T>static void Log(T...) {}};
 struct gbm_bo {bool locked=false;};
@@ -111,7 +113,9 @@ struct CDVBridgeState {
   bool captured=false;
   bool Captured() const {return captured;}
   bool CapturePlayerLed(CDRMAtomic&) {captured=true;return true;}
-  bool StagePlayerLed(CDRMAtomic& drm,uint64_t format) {drm.requested=format;return true;}
+  bool StagePlayerLed(CDRMAtomic& drm,uint64_t format,uint64_t bpc) {
+    assert(bpc==8);drm.requested=format;return true;
+  }
 };
 struct Manager {int dirty=0;Manager& GetWindowManager(){return *this;}void MarkDirty(){++dirty;}};
 struct CServiceBroker {static Manager* GetGUI(){static Manager value;return &value;}};
@@ -126,6 +130,8 @@ struct Window {
   void DeferConnectorPreferences(){assert(false);}
   void UpdateDriverLimitedRange(){}void RetryConnectorProperties(){}
   void FlipPage(bool rendered,bool videoLayer,bool async) @FLIP@
+  bool FlipPage(bool rendered,bool videoLayer,bool async,
+                const std::shared_ptr<gbm_bo>& carrier) @FLIP_CARRIER@
   bool CompleteDVBridgePage(int timeoutMs=0) @PAGE@
   bool StageTransportPreferences() {return true;}
   DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const

@@ -88,7 +88,7 @@ int main(){
         self.assertEqual(footer.findtext('scroll'), 'false')
         self.assertEqual(footer.findtext('wrapmultiline'), 'false')
 
-    def test_native_skin_selection_layout_is_not_replaced(self):
+    def test_native_skin_selection_layout_is_unchanged_without_lldv_status(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         archive = Path(os.environ['KODI_UPSTREAM_ARCHIVE'])
         names = ('DialogSelect.xml', 'Includes_DialogSelect.xml', 'Variables.xml')
@@ -98,8 +98,54 @@ int main(){
                 member = next(item for item in source.getmembers()
                               if item.name.endswith('/' + relative))
                 with self.subTest(name=name):
-                    self.assertEqual((tree / relative).read_bytes(),
-                                     source.extractfile(member).read())
+                    actual = (tree / relative).read_bytes()
+                    original = source.extractfile(member).read()
+                    if name != 'Includes_DialogSelect.xml':
+                        self.assertEqual(actual, original)
+                        continue
+                    layout = ET.fromstring(actual)
+                    lldv = '!String.IsEmpty(Window.Property(CB1.LldvStatus))'
+                    colors = layout.find("variable[@name='CB1SelectFontColor']")
+                    self.assertIsNotNone(colors)
+                    self.assertEqual([(v.get('condition'), v.text) for v in colors],
+                                     [(lldv, 'white'), (None, 'grey')])
+                    layout.remove(colors)
+                    simple = ET.parse(tree/'addons/skin.estuary/xml/Includes.xml').find(
+                        ".//include[@name='DefaultSimpleListLayout']")
+                    self.assertEqual(simple.findtext("param[@name='fontcolor']"), 'grey')
+                    self.assertEqual(simple.findtext("param[@name='notes']"), 'false')
+                    # Resolve only the LLDV additions for an ordinary selection dialog.
+                    # Compare every remaining node, including navigation and geometry.
+                    for parent in list(layout.iter()):
+                        for child in list(parent):
+                            if (child.get('condition') == lldv or
+                                    child.findtext('visible') == lldv or
+                                    child.find("param[@name='visible'][@value='"+lldv+"']") is not None):
+                                parent.remove(child)
+                            elif child.tag == 'visible' and child.text == lldv[1:]:
+                                parent.remove(child)
+                            elif child.tag == 'param' and child.get('name') in ('fontcolor', 'notes'):
+                                self.assertEqual(child.get('value'),
+                                    '$VAR[CB1SelectFontColor]' if child.get('name') == 'fontcolor' else lldv)
+                                parent.remove(child)
+                    buttons = layout.find(".//include[@name='DefaultDialogSelectLayout']//control[@id='9001']")
+                    coords = buttons.find('usecontrolcoords')
+                    self.assertEqual(coords.text, 'true')
+                    # The ordinary buttons have zero local offsets, so preserving
+                    # their coordinates only affects the removed LLDV status box.
+                    button = ET.parse(tree/'addons/skin.estuary/xml/Includes_Buttons.xml').find(
+                        ".//include[@name='DefaultDialogButton']")
+                    self.assertEqual(button.findtext("param[@name='left']"), '0')
+                    self.assertIsNone(button.find('definition/control/top'))
+                    for include in buttons.findall('include'):
+                        self.assertEqual(include.get('content'), 'DefaultDialogButton')
+                        self.assertIsNone(include.find("param[@name='left']"))
+                        self.assertIsNone(include.find("param[@name='top']"))
+                    buttons.remove(coords)
+                    def structure(node):
+                        return (node.tag, node.attrib, (node.text or '').strip(),
+                                [structure(child) for child in node])
+                    self.assertEqual(structure(layout), structure(ET.fromstring(original)))
 
     def test_master_settings_are_fixed_and_intrinsic_fast_has_no_saved_control(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

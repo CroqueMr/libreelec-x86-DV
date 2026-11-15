@@ -247,7 +247,7 @@ struct pool { struct pool_funcs *funcs; };
 struct dc { struct { bool unify_link_enc_assignment; } config; struct pool *res_pool; };
 struct dc_context { struct dc *dc; };
 struct dc_stream_state {
-    bool dv_standard,dv_low_latency,dpms_off,ignore_msa_timing_param;
+    bool dv_standard,dv_low_latency,dv_native_422,dpms_off,ignore_msa_timing_param;
     int output_color_space,audio_info,signal;
     struct dc_crtc_timing timing;
     struct dc_info_packet vsp_infopacket;
@@ -301,6 +301,17 @@ int main(void)
     assert(dc_is_stream_unchanged(&old,&next));
     assert(!pipe_need_reprogram(&a,&b));
     assert(!dc_is_stream_unchanged(NULL,&next));
+
+    // An LLDV carrier change requires reprogramming even with identical timing and packets.
+    next.dv_standard=true;
+    next.dv_low_latency=true;
+    old=next;
+    next.dv_native_422=true;
+    assert(!dc_is_stream_unchanged(&old,&next));
+    assert(pipe_need_reprogram(&a,&b));
+    old=next;
+    assert(dc_is_stream_unchanged(&old,&next));
+    assert(!pipe_need_reprogram(&a,&b));
 }
 ''')
 
