@@ -110,9 +110,13 @@ struct pl_rect2d {int x0,y0,x1,y1;};
 struct Texture {struct {int w=3840,h=2160;}params;};
 Texture texture;Texture* dvbridge_render_texture(int){return &texture;}
 struct Metadata {const void* Data()const{return this;}size_t Size()const{return sizeof(*this);}};
+struct AVDOVIMetadata {bool scene_refresh_flag;};
+const AVDOVIMetadata* av_dovi_get_color(const AVDOVIMetadata* dovi){return dovi;}
 struct AVDynamicHDRPlus {int value{};};
 struct cb1_hdr10plus_statistics {int value{};double maxscl[3]={100,200,300},average_maxrgb=12.3;
  uint64_t count=2304;uint32_t histogram[256]{};};
+void cb1_hdr10plus_analysis_stage_scene(int*,cb1_hdr10plus_statistics*,bool){}
+enum {DVBRIDGE_MODE_HDR10PLUS=1};
 struct cb1_dv_hdr10plus_report {int coverage=2,reason=0;bool l3_used=true;};
 enum {CB1_HDR10PLUS_ANALYSIS_INVALID,CB1_HDR10PLUS_ANALYSIS_PENDING,
  CB1_HDR10PLUS_ANALYSIS_READY,CB1_HDR10PLUS_ANALYSIS_BUSY,CB1_HDR10PLUS_OK};
@@ -121,7 +125,8 @@ static Identity submitted;static pl_rect2d measured;static int buildCount;
 int* cb1_hdr10plus_analysis_create(int,int){static int ctx;return &ctx;}
 bool dvbridge_frame_area(unsigned* margins,const void*,size_t,int){
  margins[0]=2;margins[1]=4;margins[2]=6;margins[3]=8;return true;}
-int cb1_hdr10plus_analysis_submit(int*,Texture*,pl_rect2d area,Identity id){
+int cb1_hdr10plus_analysis_submit(int*,Texture*,pl_rect2d area,Identity id,unsigned version){
+ assert(version==0);
  measured=area;submitted=id;return state;}
 int cb1_hdr10plus_analysis_poll(int*,Identity id,cb1_hdr10plus_statistics* result){
  if(id.stream!=submitted.stream || id.picture!=submitted.picture || id.revision!=submitted.revision)
@@ -141,6 +146,7 @@ struct CDVBridgeGLES {
  std::optional<AVDynamicHDRPlus>m_hdr10plusMetadata;
  cb1_dv_hdr10plus_report m_hdr10plusReport;
  int m_hdr10plusVersion=0;
+ int m_committedMode{};
  DVBRIDGE::DiagnosticInterval m_hdr10plusDiagnostics;
  DVBRIDGE::DiagnosticFrames m_hdr10plusAnalyzed,m_hdr10plusAccepted;
  mutable DVBRIDGE::DiagnosticFrames m_hdr10plusGenerated;
