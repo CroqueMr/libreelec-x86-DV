@@ -63,6 +63,10 @@ class StableVideoSettings(unittest.TestCase):
         status = side.find("control[@type='textbox']")
         self.assertEqual(status.findtext("label"), "$INFO[Window.Property(CB1.LldvStatus)]")
         self.assertGreater(int(status.get("id", "0")), 0)
+        controls = list(side)
+        cancel = next(control for control in controls if control.find("param[@name='id'][@value='7']") is not None)
+        details = next(control for control in controls if control.find("param[@name='id'][@value='9']") is not None)
+        self.assertEqual(controls[controls.index(cancel) + 1:controls.index(cancel) + 3], [details, status])
         row = ET.parse(TREE / "addons/skin.estuary/xml/Includes.xml").find(
             ".//include[@name='DefaultSimpleListLayout']/definition/itemlayout")
         self.assertTrue(any("CB1.LldvFocusNote" in text for text in row.itertext()))
@@ -85,6 +89,9 @@ class StableVideoSettings(unittest.TestCase):
         self.assertIn("GetWindow<CGUIDialogTextViewer>(WINDOW_DIALOG_TEXT_VIEWER)", select)
         viewer = ET.parse(TREE / "addons/skin.estuary/xml/DialogTextViewer.xml")
         self.assertIn("$INFO[Window.Property(CB1.LldvDetailValues)]", list(viewer.getroot().itertext()))
+        close = next(include for include in viewer.findall(".//include[@content='DefaultDialogButton']")
+                     if include.find("param[@name='id'][@value='9901']") is not None)
+        self.assertIsNone(close.find("param[@name='height']"))
 
 
 if __name__ == "__main__":

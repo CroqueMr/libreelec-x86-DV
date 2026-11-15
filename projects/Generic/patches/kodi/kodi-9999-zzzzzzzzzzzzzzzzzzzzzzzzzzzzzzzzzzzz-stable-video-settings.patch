@@ -221,7 +221,7 @@ diff --git a/addons/skin.estuary/xml/DialogTextViewer.xml b/addons/skin.estuary/
  			<centerleft>50%</centerleft>
  			<top>940</top>
  			<width>48</width>
-@@ -66,7 +71,47 @@
+@@ -66,7 +71,46 @@
  			<aligny>center</aligny>
  			<label>$LOCALIZE[31035] [COLOR=button_focus]$INFO[Container(5).CurrentPage]/$INFO[Container(5).NumPages][/COLOR]</label>
  			<wrapmultiline>true</wrapmultiline>
@@ -257,12 +257,11 @@ diff --git a/addons/skin.estuary/xml/DialogTextViewer.xml b/addons/skin.estuary/
 +				<label>$INFO[Window.Property(CB1.LldvDetailValues)]</label>
 +			</control>
 +			<control type="group">
-+				<left>565</left>
-+				<top>403</top>
++				<left>520</left>
++				<top>389</top>
 +				<include content="DefaultDialogButton">
 +					<param name="id" value="9901" />
-+					<param name="width" value="190" />
-+					<param name="height" value="65" />
++					<param name="width" value="250" />
 +					<param name="label" value="$LOCALIZE[15067]" />
 +					<param name="onclick" value="Action(Close)" />
 +				</include>
@@ -359,10 +358,14 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  				<onleft>61</onleft>
  				<itemgap>dialogbuttons_itemgap</itemgap>
  				<onright>3</onright>
-@@ -211,6 +220,19 @@
- 				<include content="DefaultDialogButton">
+@@ -212,6 +221,19 @@
  					<param name="id" value="7" />
  					<param name="label" value="$LOCALIZE[222]" />
+ 				</include>
++				<include content="DefaultDialogButton">
++					<param name="id" value="9" />
++					<param name="label" value="$LOCALIZE[41320]" />
++					<param name="visible" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
 +				</include>
 +				<control type="textbox" id="9010">
 +					<width>300</width>
@@ -372,13 +375,9 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
 +					<label>$INFO[Window.Property(CB1.LldvStatus)]</label>
 +					<visible>!String.IsEmpty(Window.Property(CB1.LldvStatus))</visible>
 +				</control>
-+				<include content="DefaultDialogButton">
-+					<param name="id" value="9" />
-+					<param name="label" value="$LOCALIZE[41320]" />
-+					<param name="visible" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
- 				</include>
  			</control>
  		</control>
+ 	</include>
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml

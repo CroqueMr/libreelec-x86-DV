@@ -10,8 +10,8 @@
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
     "projects/Generic/kodi/guisettings.xml": "2704fef2639d7751689d8cd8a5f8ec2a0e87212b261a4c0fc9be72a690ee67a1",
-    "tests/cb1/test_stable_video_settings.py": "ee9565de94901dbb066630ccfce11fd3c1dd7dbe6c8f0f34bdc9833d5b82762c",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "a6856a59766b2cf1e8694d57247ab8c11d405eaed1f37555c66fdc7a9cb05c13",
+    "tests/cb1/test_stable_video_settings.py": "4a12b1ac7fd21cd65ea2be9291c631d208f9e12519bb433f35b48383a26a2020",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "638a726ec4f6f43520495eb2db5b8556c0890d6ce3fbfd9d16205c65382531fd",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "df1e0deb2d2368a1110944ae31a5dba1338c857f1fc1d5989651e00b2e3b3ad9",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",
