@@ -16,14 +16,15 @@ enum {DRM_PLANE_TYPE_PRIMARY=1,DRM_PLANE_TYPE_CURSOR,DRM_FORMAT_XRGB8888,DRM_FOR
       DRM_MODE_ROTATE_0,DRM_BLEND_ALPHA_OPAQUE,AMDGPU_HDR_MULT_DEFAULT,ROTATION_ANGLE_0,
       TF_TYPE_BYPASS,VRR_STATE_ACTIVE_FIXED,VRR_STATE_ACTIVE_VARIABLE,DITHER_OPTION_DISABLE,
       COLOR_SPACE_SRGB,SIGNAL_TYPE_HDMI_TYPE_A,TIMING_3D_FORMAT_NONE,PIXEL_ENCODING_RGB,
-      COLOR_DEPTH_888,DRM_MODE_CONNECTOR_HDMIA,DRM_HDMI_BROADCAST_RGB_FULL,RMX_OFF};
+      COLOR_DEPTH_888,DRM_MODE_CONNECTOR_HDMIA,DRM_HDMI_BROADCAST_RGB_FULL,RMX_OFF,DITHER_OPTION_TRUN8};
+enum {DCE_VERSION_11_2=1};
 enum {SHARPNESS_HW_OFF,SHARPNESS_ZERO,SHARPNESS_CUSTOM};
 enum {VISUAL_CONFIRM_DISABLE,VISUAL_CONFIRM_SURFACE};
 enum {DC_CM2_TRANSFER_FUNC_SOURCE_SYSMEM,DC_CM2_TRANSFER_FUNC_SOURCE_VIDMEM};
 enum {DC_CM2_SHAPER_3DLUT_SETTING_BYPASS_ALL,DC_CM2_SHAPER_3DLUT_SETTING_ENABLE_SHAPER};
 struct dc {struct {bool use_spl;}config;
  struct {int visual_confirm;bool disable_spl,always_scale;unsigned force_sharpness,force_sharpness_level;}debug;};
-struct dc_context {struct dc *dc;};
+struct dc_context {struct dc *dc; int dce_version; struct {unsigned chip_id;}asic_id;};
 struct dc_transfer_func {int type;};
 struct dc_3dlut {struct {struct {bool initialized;}bits;}state;};
 struct dc_cm2_func_luts {
@@ -100,7 +101,7 @@ static int hweight32(unsigned n){return __builtin_popcount(n);}
 @@FUNCTIONS@@
 static void checksum(u8*p){u8 n=0;p[127]=0;for(unsigned i=0;i<127;i++)n+=p[i];p[127]=-n;}
 static void check_transport(bool low_latency){
- struct dc display={0};struct dc_context ctx={&display};
+ struct dc display={0};struct dc_context ctx={.dc=&display};
  struct drm_crtc crtc={0};struct drm_connector connector={DRM_MODE_CONNECTOR_HDMIA};
  struct drm_plane plane={DRM_PLANE_TYPE_PRIMARY};
  typeof(*((struct drm_framebuffer*)0)->format)format={DRM_FORMAT_XRGB8888};
