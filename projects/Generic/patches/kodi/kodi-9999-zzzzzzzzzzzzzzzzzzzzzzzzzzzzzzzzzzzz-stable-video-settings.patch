@@ -308,7 +308,7 @@ diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.est
  					<param name="id" value="7" />
  					<param name="label" value="$LOCALIZE[222]" />
  				</include>
-+				<control type="textbox">
++				<control type="textbox" id="9010">
 +					<left>24</left>
 +					<width>252</width>
 +					<height>95</height>
