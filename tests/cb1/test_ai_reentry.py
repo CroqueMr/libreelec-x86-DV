@@ -200,7 +200,7 @@ int main(){
 
     def test_hdr10plus_render_storage_tracks_actual_pool_not_live_processing_policy(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp').read_text()
-        configure=body(source,'bool CRendererVAAPIGLES::Configure(')
+        configure=body(source,'unsigned int orientation, RetainedOutput retainedOutput)')
         selection=configure[configure.index('  CVaapiRenderPicture *pic ='):configure.index('#endif')+len('#endif')]
         changed=body(source,'bool CRendererVAAPIGLES::ConfigChanged(')
         orientation=body(source,'bool CRendererVAAPIGLES::DVBridgeOrientationSupported(')
@@ -239,7 +239,8 @@ struct Renderer {
  int m_vaapiFourcc=0;
  unsigned m_aiBuffers=NUM_BUFFERS,m_renderOrientation=0;
  bool DVBridgeOrientationSupported(unsigned orientation)const ORIENTATION
- void Configure(const VideoPicture& picture,unsigned orientation=0){
+ void SetFps(float) {}
+ void Configure(const VideoPicture& picture,unsigned orientation=0,float fps=24){
   m_renderOrientation=orientation;
   SELECTION
  }
