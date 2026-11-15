@@ -1,0 +1,112 @@
+Subject: [PATCH] Keep disc overlays above and independent of subtitles
+
+Adapt the remaining overlay lifetime and drawing-order fixes from Team Kodi
+and 78andyp, https://github.com/xbmc/xbmc/pull/30272 (GPL-2.0-or-later).
+Reuse the existing CB1 overlay source rather than introducing a second flag.
+
+--- a/xbmc/cores/VideoPlayer/DVDOverlayContainer.cpp
++++ b/xbmc/cores/VideoPlayer/DVDOverlayContainer.cpp
+@@ -11,6 +11,7 @@
+ #include "DVDCodecs/Overlay/DVDOverlay.h"
+ #include "DVDInputStreams/DVDInputStreamNavigator.h"
+ 
++#include <algorithm>
+ #include <memory>
+ #include <mutex>
+ 
+@@ -49,7 +50,12 @@
+       m_overlays[i]->iPTSStopTime = pOverlay->iPTSStartTime;
+   }
+ 
+-  m_overlays.emplace_back(pOverlay);
++  auto position = m_overlays.end();
++  if (pOverlay->GetSource() == DVDOverlaySource::SUBTITLE)
++    position = std::ranges::find_if(m_overlays, [](const auto& overlay) {
++      return overlay->GetSource() == DVDOverlaySource::MENU;
++    });
++  m_overlays.insert(position, pOverlay);
+ }
+ 
+ VecOverlays* CDVDOverlayContainer::GetOverlays()
+@@ -143,6 +149,14 @@
+   return m_overlays.size();
+ }
+ 
++size_t CDVDOverlayContainer::GetSize(DVDOverlaySource source)
++{
++  std::unique_lock lock(*this);
++  return std::ranges::count_if(m_overlays, [source](const auto& overlay) {
++    return overlay->GetSource() == source;
++  });
++}
++
+ bool CDVDOverlayContainer::ContainsOverlayType(DVDOverlayType type)
+ {
+   bool result = false;
+--- a/xbmc/cores/VideoPlayer/DVDOverlayContainer.h
++++ b/xbmc/cores/VideoPlayer/DVDOverlayContainer.h
+@@ -52,6 +52,7 @@
+ 
+   void CleanUp(double pts); // validates all overlays against current pts
+   size_t GetSize();
++  size_t GetSize(DVDOverlaySource source);
+ 
+   void UpdateOverlayInfo(const std::shared_ptr<CDVDInputStreamNavigator>& pStream,
+                          CDVDDemuxSPU* pSpu,
+--- a/xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp
+@@ -212,11 +212,11 @@
+ 
+     if (pts + DVD_SEC_TO_TIME(1) < m_lastPts)
+     {
+-      m_pOverlayContainer->Clear();
++      m_pOverlayContainer->Clear(DVDOverlaySource::SUBTITLE);
+       m_pSubtitleFileParser->Reset();
+     }
+ 
+-    if(m_pOverlayContainer->GetSize() >= 5)
++    if(m_pOverlayContainer->GetSize(DVDOverlaySource::SUBTITLE) >= 5)
+       return;
+ 
+     std::shared_ptr<CDVDOverlay> pOverlay = m_pSubtitleFileParser->Parse(pts);
+@@ -238,6 +238,6 @@
+ bool CVideoPlayerSubtitle::AcceptsData() const
+ {
+   // FIXME : This may still be causing problems + magic number :(
+-  return m_pOverlayContainer->GetSize() < 5;
+-}
+-
++  return m_pOverlayContainer->GetSize(DVDOverlaySource::SUBTITLE) < 5;
++}
++
+--- a/xbmc/cores/VideoPlayer/VideoPlayerSubtitle.h
++++ b/xbmc/cores/VideoPlayer/VideoPlayerSubtitle.h
+@@ -45,7 +45,7 @@
+   void CloseStream(bool bWaitForBuffers) override;
+ 
+   bool IsInited() const override { return true; }
+-  bool IsStalled() const override { return m_pOverlayContainer->GetSize() == 0; }
++  bool IsStalled() const override { return m_pOverlayContainer->GetSize(DVDOverlaySource::SUBTITLE) == 0; }
+ private:
+   CDVDOverlayContainer* m_pOverlayContainer;
+ 
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -958,6 +958,7 @@
+   if (m_pInputStream.use_count() > 1)
+     throw std::runtime_error("m_pInputStream reference count is greater than 1");
+   m_pInputStream.reset();
++  m_overlayContainer.Clear();
+ 
+   CLog::Log(LOGINFO, "Creating InputStream");
+ 
+@@ -3118,7 +3119,8 @@
+   // video and audio. subtitle player does not run on its own thread, hence waitForBuffers makes
+   // no sense here. waitForBuffers is abused to clear overlay container (false clears container)
+   // subtitles are added from video player. after video player has finished, overlays have to be cleared.
+-  CloseStream(m_CurrentSubtitle, false);  // clear overlay container
++  CloseStream(m_CurrentSubtitle, false);
++  m_overlayContainer.Clear();
+ 
+   CServiceBroker::GetWinSystem()->UnregisterRenderLoop(this);
+ 

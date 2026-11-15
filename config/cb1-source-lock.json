@@ -356,9 +356,11 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "230a3ba6d51eca1857d6cf9fd69c01b5c604db60b2bb96caebf6c29350d64a26",
+    "config/cb1-patch-index.json": "ae9c11bf4b77ebf217624efc0ce9fdafc108a6b88601e4d1b12211d0dee99d16",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
-    "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203"
+    "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
+    "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-menu-lifetime.patch": "1d602ab92c563d66b53de93d3d746c5214941e3caedd75aaa920cf6dc88bada7"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
