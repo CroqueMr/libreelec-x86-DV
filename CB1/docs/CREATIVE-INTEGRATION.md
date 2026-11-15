@@ -36,7 +36,7 @@ audio or player integration.
 
 ## Processing scope
 
-RC3 HDR10 Rendering Reference uses an explicit frame-owned PQ tone curve,
+LLDV Reference – HDR10 Output uses an explicit frame-owned PQ tone curve,
 separate display calibration and compatible L2 guidance. It does not execute the
 full independent `cb1-cm4-v1` scalar/spatial reference. L3/L8 are not stacked onto
 this runtime curve; L8 spatial and secondary controls remain unexecuted.
@@ -51,9 +51,9 @@ panel measurement.
 L8 primary and present optional fields are checked against preserved raw RPU
 bytes. L10 PQ limits and present custom primaries are checked independently.
 Unknown target/primary IDs remain unsupported, without a default 100-nit target.
-HDR10 Rendering Reference rejects unknown L9 mastering IDs and inconsistent custom
+LLDV Reference – HDR10 Output rejects unknown L9 mastering IDs and inconsistent custom
 raw/parsed coordinates. Reference and HDR10 Rendering retain their existing
-admission. HDR10 Rendering Reference uses raw L1 maximum/average without folding
+admission. LLDV Reference – HDR10 Output uses raw L1 maximum/average without folding
 L3; minimum is validated and descriptive, not a measured display-black anchor.
 Same-peak different-gamut L8 targets remain distinct; only gamut matches at the
 metadata's signed 16-bit coordinate precision participate in the anchor snapshot.

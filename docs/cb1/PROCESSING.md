@@ -33,7 +33,7 @@ shared direct IPT path in both Master variants.
 
 ## Metadata use
 
-| Metadata | Reference / Master | HDR10 Rendering | HDR10 Rendering Reference | Adaptive |
+| Metadata | Reference / Master | HDR10 Rendering | LLDV Reference – HDR10 Output | Adaptive |
 | --- | --- | --- | --- | --- |
 | RPU mapping / residual | Reconstruct source | Reconstruct source | Reconstruct source | Reconstruct source |
 | L1 scene min/max/average | Forward to TV | Scene guidance | Scene guidance | Expansion strength and output scene descriptors |
@@ -72,9 +72,9 @@ gamut mapping, then encodes BT.2020/PQ HDR10.
 Dynamic Dolby Vision metadata cannot be transported as dynamic metadata in a
 standard HDR10 signal. Its contribution must be reflected in pixels before output.
 
-## Dolby Vision to HDR10 Rendering Reference
+## Dolby Vision to LLDV Reference – HDR10 Output
 
-HDR10 Rendering Reference maps to its separately configured display peak `T`,
+LLDV Reference – HDR10 Output maps to its separately configured display peak `T`,
 black floor and gamut. Enter the peak manually and choose an OLED/LCD/projector
 black preset or a custom black level. Presets are estimates, not measurements.
 P3-D65 is the default gamut. Disable the TV's dynamic tone mapping for this mode

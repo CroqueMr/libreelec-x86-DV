@@ -55,21 +55,23 @@ selection and independent L2-trim removal for Reference and Master Reference.
 | Dolby Vision | **Dolby Vision Reference** | Dolby Vision, TV-Led | Optimized Dolby Vision output with imperceptible quality loss, significantly reducing GPU load |
 | Dolby Vision | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Expand highlights and selected midtones for the configured TV, guided by source metadata |
 | Dolby Vision | **HDR10 Rendering** | HDR10 | Convert using source mastering information and scene guidance, without TV configuration |
-| Dolby Vision | **HDR10 Rendering Reference** | HDR10 | Map to the configured display peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | **LLDV Reference – HDR10 Output** | HDR10 | Map to the configured display peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | **LLDV Reference – Native** | Dolby Vision, Low Latency | Map to the display target read from its Dolby Vision EDID |
 | Dolby Vision | **HDR10+ Rendering** | HDR10+ | Generate frame-owned dynamic output metadata from the Dolby Vision source |
 | Dolby Vision | **Kodi default** | Native Kodi output | Use Kodi's original playback and fallback behavior |
-| HDR10 | **Dolby Vision Rendering (AI)** | Dolby Vision, TV-Led | Generate L1/L3 scene metadata using image analysis and LightGBM, without an enhancement grade |
-| HDR10 | **Dolby Vision Adaptive HDR Mapping (AI)** | Dolby Vision, TV-Led | Combine AI scene metadata with controlled highlight expansion |
+| HDR10 | **Dolby Vision Rendering** | Dolby Vision, TV-Led | Generate L1/L3 scene metadata using image analysis and LightGBM, without an enhancement grade |
+| HDR10 | **Dolby Vision Adaptive HDR Mapping** | Dolby Vision, TV-Led | Combine AI scene metadata with controlled highlight expansion |
 | HDR10 | **Kodi default** | HDR10 | Keep native Kodi HDR10 playback |
 | HDR10+ | **Kodi default** | HDR10+ | Preserve authored dynamic metadata on an admitted deep-colour output |
 | HDR10+ | **Dolby Vision Rendering** | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and labelled estimates when incomplete |
 | Dolby Vision / HDR10 / HDR10+ | **SDR Rendering** | BT.709 SDR | Map the complete original image to an independent SDR display target |
-| HLG | **Dolby Vision Reference Rendering (AI)** | Dolby Vision, TV-Led | Normalize HLG to the reference display before shared scene analysis |
+| HLG | **Dolby Vision Rendering** | Dolby Vision, TV-Led | Normalize HLG to the reference display before shared scene analysis |
 | SDR / HLG | **Kodi default** | Native SDR / HLG | Keep native Kodi playback |
 
-Adaptive HDR Mapping requires a TV profile. HDR10 Rendering Reference has separate
-peak, black-level and gamut settings. Reference, Master Reference, HDR10 Rendering
-and Dolby Vision Rendering (AI) do not require a TV profile.
+Adaptive HDR Mapping requires a TV profile. **LLDV Reference – HDR10 Output** has
+separate peak, black-level and gamut settings. **LLDV Reference – Native** reads
+its target from the active display's Dolby Vision EDID. Reference, Master Reference, HDR10 Rendering
+and Dolby Vision Rendering do not require a TV profile.
 
 **Dolby Vision playback**, **HDR10 playback**, **HDR10+ playback** and **HLG playback** remember
 independent choices. Automatic fallback does not overwrite the next file's saved
@@ -77,7 +79,7 @@ choice. **Kodi default** bypasses CB1 image processing for each source type.
 
 SDR Rendering has its own BT.709 target: Reference (100 nits, gamma 2.4), Bright
 room (200 nits, gamma 2.2), or Custom / Projector. These are rendering references,
-independent of HDR calibration. HLG offers Reference DV or Kodi default only.
+independent of HDR calibration. HLG offers Dolby Vision Rendering or Kodi default only.
 
 For metadata use, curves and mode differences, see [processing and algorithms](docs/cb1/PROCESSING.md).
 The [historical Master Reference / Standard comparison](docs/reports/master-reference-vs-standard-2026-10-21.md)

@@ -2104,7 +2104,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +} // namespace DVBRIDGE
 --- /dev/null
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,157 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#pragma once
 +#include <atomic>
@@ -2191,7 +2191,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +    switch (output.effective)
 +    {
 +      case 2: return "HDR10 Rendering";
-+      case 3: return "HDR10 Rendering Reference";
++      case 3: return "LLDV Reference – HDR10 Output";
 +      case 4: return "Dolby Vision Adaptive HDR Mapping";
 +      case 5: return "Dolby Vision Master Reference";
 +      case 6: return "Dolby Vision Adaptive HDR Mapping";
@@ -2202,15 +2202,13 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +  static const char* RequestedPolicy(int mode, bool hdr10AI = false, bool hdr10PlusDV = false)
 +  {
-+    if (hdr10PlusDV && mode == 1) return "Dolby Vision Rendering";
-+    if (hdr10AI && mode == 1) return "Dolby Vision Rendering";
-+    if (hdr10AI && mode == 4) return "Dolby Vision Adaptive HDR Mapping (AI)";
++    if ((hdr10PlusDV || hdr10AI) && mode == 1) return "Dolby Vision Rendering";
 +    switch(mode)
 +    {
 +      case 0:return "Dolby Vision Disabled (native Kodi)";
 +      case 1:return "Dolby Vision Reference";
 +      case 2:return "HDR10 Rendering";
-+      case 3:return "HDR10 Rendering Reference";
++      case 3:return "LLDV Reference – HDR10 Output";
 +      case 4:return "Dolby Vision Adaptive HDR Mapping";
 +      case 5:return "Dolby Vision Master Reference";
 +      case 6:return "Dolby Vision Adaptive HDR Mapping";

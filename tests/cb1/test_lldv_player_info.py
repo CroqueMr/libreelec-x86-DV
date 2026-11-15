@@ -113,7 +113,7 @@ int main()
   assert(output->target==1000 && output->displayBlack==0.002 && output->lldv->cm4Appended);
   assert(output->lldv->scenePQ[0]==3300 && output->lldv->scenePQ[1]==1800);
   assert(LldvTrimText(output->creativeApplied,output->lldv->trimGroups)=="L2 · SOP");
-  assert(CDVPlaybackInfo::Mode(*output)=="Dolby Vision Player-Led");
+  assert(CDVPlaybackInfo::Mode(*output)=="LLDV Reference – Native");
 
   StreamSnapshot source;
   source.profile=7; source.metadata=true; source.l1=true;

@@ -35,7 +35,7 @@ and AI do not use this lookahead.
 
 The setting affects the FEL enhancement layer only, before reconstruction. It
 does not change BL scaling, the input-chroma recipe, decoding, layer pairing or source metadata.
-Non-FEL sources are unaffected. Reference, HDR10 Rendering, HDR10 Rendering Reference and Adaptive HDR Mapping
+Non-FEL sources are unaffected. Reference, HDR10 Rendering, LLDV Reference – HDR10 Output and Adaptive HDR Mapping
 use the choice when they reconstruct FEL. A policy change invalidates the affected
 import and pending-frame identity. Switching back to VAAPI restores VPP selection.
 
