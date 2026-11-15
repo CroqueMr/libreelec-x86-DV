@@ -44,10 +44,10 @@ class StableVideoSettings(unittest.TestCase):
         source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
         menu = source[source.index("void ShowLldvFormatMenu()"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
         self.assertNotIn("firstFormat", menu)
-        self.assertIn("CB1.LldvEdid", menu)
+        self.assertIn("CB1.LldvStatus", menu)
         self.assertEqual(menu.count("dialog->Add(item)"), 1)
         skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
-        self.assertIn("$INFO[Window.Property(CB1.LldvEdid)]", list(skin.getroot().itertext()))
+        self.assertIn("$INFO[Window.Property(CB1.LldvStatus)]", list(skin.getroot().itertext()))
 
     def test_lldv_selector_uses_one_page_with_a_short_status_in_estuary(self):
         source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
@@ -57,10 +57,25 @@ class StableVideoSettings(unittest.TestCase):
         self.assertNotIn("strings.Get(41296)", menu)
         skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
         native = skin.find(".//include[@name='DefaultDialogSelectLayout']/control")
-        self.assertIn("$INFO[Container(3).ListItem.Label2]", list(native.itertext()))
+        self.assertNotIn("$INFO[Container(3).ListItem.Label2]", list(native.itertext()))
+        self.assertEqual(native.find(".//include/param[@name='id'][@value='9']").get("value"), "9")
         nav = native.findall("control[@id='3']/onright")
-        self.assertTrue(any(link.text == "9001" and "CB1.LldvEdid" in link.get("condition", "")
+        self.assertTrue(any(link.text == "9001" and "CB1.LldvStatus" in link.get("condition", "")
                             for link in nav))
+
+
+    def test_lldv_display_details_use_a_nested_native_viewer(self):
+        menu = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
+        menu = menu[menu.index("void ShowLldvFormatMenu()"):
+                    menu.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
+        self.assertNotIn("41297", menu)
+        self.assertIn('dialog->EnableButton(!estuary, 41320);', menu)
+        for field in ("LldvDetails", "LldvDetailLabels", "LldvDetailValues"):
+            self.assertIn(f'CB1.{field}', menu)
+        select = (TREE / "xbmc/dialogs/GUIDialogSelect.cpp").read_text(encoding="utf-8")
+        self.assertIn("GetWindow<CGUIDialogTextViewer>(WINDOW_DIALOG_TEXT_VIEWER)", select)
+        viewer = ET.parse(TREE / "addons/skin.estuary/xml/DialogTextViewer.xml")
+        self.assertIn("$INFO[Window.Property(CB1.LldvDetailValues)]", list(viewer.getroot().itertext()))
 
 
 if __name__ == "__main__":

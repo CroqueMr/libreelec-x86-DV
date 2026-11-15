@@ -75,61 +75,256 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#41295"
-@@ -26707,7 +26707,7 @@
+@@ -26706,10 +26706,6 @@
+ msgid "Driver transport"
  msgstr ""
  
- msgctxt "#41297"
+-msgctxt "#41297"
 -msgid "Compatible HDMI mode available after a mode switch"
-+msgid "Needs HDMI mode switch"
+-msgstr ""
+-
+ msgctxt "#41298"
+ msgid "Driver rejected the last HDMI commit for this format"
+ msgstr ""
+@@ -26718,6 +26714,58 @@
+ msgid "HDMI timing"
  msgstr ""
  
- msgctxt "#41298"
++msgctxt "#41320"
++msgid "Display details"
++msgstr ""
++
++msgctxt "#41321"
++msgid "LLDV available"
++msgstr ""
++
++msgctxt "#41322"
++msgid "LLDV unavailable"
++msgstr ""
++
++msgctxt "#41323"
++msgid "Dolby Vision EDID"
++msgstr ""
++
++msgctxt "#41324"
++msgid "TV modes"
++msgstr ""
++
++msgctxt "#41325"
++msgid "Peak luminance"
++msgstr ""
++
++msgctxt "#41326"
++msgid "Black level"
++msgstr ""
++
++msgctxt "#41327"
++msgid "Red x/y"
++msgstr ""
++
++msgctxt "#41328"
++msgid "Green x/y"
++msgstr ""
++
++msgctxt "#41329"
++msgid "Blue x/y"
++msgstr ""
++
++msgctxt "#41330"
++msgid "EDID size"
++msgstr ""
++
++msgctxt "#41331"
++msgid "Forced · experimental"
++msgstr ""
++
++msgctxt "#41332"
++msgid "Not advertised by TV"
++msgstr ""
++
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
+ msgstr ""
+diff --git a/addons/skin.estuary/xml/DialogTextViewer.xml b/addons/skin.estuary/xml/DialogTextViewer.xml
+--- a/addons/skin.estuary/xml/DialogTextViewer.xml
++++ b/addons/skin.estuary/xml/DialogTextViewer.xml
+@@ -2,8 +2,10 @@
+ <window>
+ 	<defaultcontrol always="true">1000</defaultcontrol>
+ 	<include>Animation_DialogPopupOpenClose</include>
++	<onload condition="!String.IsEmpty(Window.Property(CB1.LldvDetailLabels))">SetFocus(9901)</onload>
+ 	<controls>
+ 		<control type="group">
++			<visible>String.IsEmpty(Window.Property(CB1.LldvDetailLabels))</visible>
+ 			<left>13%</left>
+ 			<centertop>50%</centertop>
+ 			<height>770</height>
+@@ -30,12 +32,14 @@
+ 			</control>
+ 		</control>
+ 		<control type="button" id="1000">
++			<visible>String.IsEmpty(Window.Property(CB1.LldvDetailLabels))</visible>
+ 			<include>HiddenObject</include>
+ 			<onclick>Action(Close)</onclick>
+ 			<onup>PageUp(3000)</onup>
+ 			<ondown>PageDown(3000)</ondown>
+ 		</control>
+ 		<control type="button">
++			<visible>String.IsEmpty(Window.Property(CB1.LldvDetailLabels))</visible>
+ 			<centerleft>50%</centerleft>
+ 			<top>113</top>
+ 			<width>48</width>
+@@ -46,6 +50,7 @@
+ 			<onclick>Up</onclick>
+ 		</control>
+ 		<control type="button">
++			<visible>String.IsEmpty(Window.Property(CB1.LldvDetailLabels))</visible>
+ 			<centerleft>50%</centerleft>
+ 			<top>940</top>
+ 			<width>48</width>
+@@ -66,7 +71,47 @@
+ 			<aligny>center</aligny>
+ 			<label>$LOCALIZE[31035] [COLOR=button_focus]$INFO[Container(5).CurrentPage]/$INFO[Container(5).NumPages][/COLOR]</label>
+ 			<wrapmultiline>true</wrapmultiline>
+-			<visible>Integer.IsGreater(Container(5).NumPages,1)</visible>
++			<visible>String.IsEmpty(Window.Property(CB1.LldvDetailLabels)) + Integer.IsGreater(Container(5).NumPages,1)</visible>
++		</control>
++		<control type="group">
++			<visible>!String.IsEmpty(Window.Property(CB1.LldvDetailLabels))</visible>
++			<centerleft>50%</centerleft>
++			<centertop>50%</centertop>
++			<width>780</width>
++			<height>442</height>
++			<include content="DialogBackgroundCommons">
++				<param name="width" value="780" />
++				<param name="height" value="442" />
++				<param name="header_label" value="$LOCALIZE[41320]" />
++			</include>
++			<control type="textbox">
++				<top>94</top>
++				<left>30</left>
++				<width>320</width>
++				<height>248</height>
++				<font>font13</font>
++				<label>$INFO[Window.Property(CB1.LldvDetailLabels)]</label>
++			</control>
++			<control type="textbox">
++				<top>94</top>
++				<left>375</left>
++				<width>375</width>
++				<height>248</height>
++				<align>right</align>
++				<font>font13</font>
++				<label>$INFO[Window.Property(CB1.LldvDetailValues)]</label>
++			</control>
++			<control type="group">
++				<left>565</left>
++				<top>353</top>
++				<include content="DefaultDialogButton">
++					<param name="id" value="9901" />
++					<param name="width" value="190" />
++					<param name="height" value="65" />
++					<param name="label" value="$LOCALIZE[15067]" />
++					<param name="onclick" value="Action(Close)" />
++				</include>
++			</control>
+ 		</control>
+ 	</controls>
+ </window>
+diff --git a/addons/skin.estuary/xml/Includes.xml b/addons/skin.estuary/xml/Includes.xml
+--- a/addons/skin.estuary/xml/Includes.xml
++++ b/addons/skin.estuary/xml/Includes.xml
+@@ -201,6 +201,7 @@
+ 		<param name="height">70</param>
+ 		<param name="font">font13</param>
+ 		<param name="fontcolor">grey</param>
++		<param name="notes">false</param>
+ 		<definition>
+ 			<itemlayout width="$PARAM[width]" height="$PARAM[height]">
+ 				<control type="group">
+@@ -247,6 +248,17 @@
+ 						<label>$INFO[ListItem.Label]</label>
+ 					</control>
+ 				</control>
++				<control type="label">
++					<left>480</left>
++					<top>0</top>
++					<right>20</right>
++					<bottom>0</bottom>
++					<font>font12</font>
++					<align>right</align>
++					<aligny>center</aligny>
++					<label>$INFO[ListItem.Property(CB1.LldvNote)]</label>
++					<visible>$PARAM[notes]</visible>
++				</control>
+ 			</itemlayout>
+ 			<focusedlayout width="$PARAM[width]" height="$PARAM[height]">
+ 				<control type="image">
+@@ -301,6 +313,17 @@
+ 						<scroll>true</scroll>
+ 					</control>
+ 				</control>
++				<control type="label">
++					<left>480</left>
++					<top>0</top>
++					<right>20</right>
++					<bottom>0</bottom>
++					<font>font12</font>
++					<align>right</align>
++					<aligny>center</aligny>
++					<label>$INFO[ListItem.Property(CB1.LldvNote)]$INFO[ListItem.Property(CB1.LldvFocusNote)]</label>
++					<visible>$PARAM[notes]</visible>
++				</control>
+ 			</focusedlayout>
+ 		</definition>
+ 	</include>
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
-@@ -27,6 +27,7 @@
+@@ -27,12 +27,14 @@
  				<onup>3</onup>
  				<ondown>3</ondown>
  				<onleft>9001</onleft>
-+				<onright condition="!String.IsEmpty(Window.Property(CB1.LldvEdid))">9001</onright>
++				<onright condition="!String.IsEmpty(Window.Property(CB1.LldvStatus))">9001</onright>
  				<onright>61</onright>
  				<pagecontrol>61</pagecontrol>
  				<scrolltime>200</scrolltime>
-@@ -197,6 +198,7 @@
+ 				<include content="DefaultSimpleListLayout">
+ 					<param name="width" value="890" />
+ 					<param name="list_id" value="3" />
++					<param name="notes" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
+ 				</include>
+ 			</control>
+ 			<control type="list" id="6">
+@@ -197,6 +199,7 @@
  			<control type="grouplist" id="9001">
  				<left>920</left>
  				<top>80</top>
-+				<onleft condition="!String.IsEmpty(Window.Property(CB1.LldvEdid))">3</onleft>
++				<onleft condition="!String.IsEmpty(Window.Property(CB1.LldvStatus))">3</onleft>
  				<onleft>61</onleft>
  				<itemgap>dialogbuttons_itemgap</itemgap>
  				<onright>3</onright>
-@@ -213,6 +215,26 @@
+@@ -212,6 +215,20 @@
+ 					<param name="id" value="7" />
  					<param name="label" value="$LOCALIZE[222]" />
  				</include>
++				<control type="textbox">
++					<left>24</left>
++					<width>252</width>
++					<height>95</height>
++					<font>font12</font>
++					<textcolor>FFEEF2F3</textcolor>
++					<label>$INFO[Window.Property(CB1.LldvStatus)]</label>
++					<visible>!String.IsEmpty(Window.Property(CB1.LldvStatus))</visible>
++				</control>
++				<include content="DefaultDialogButton">
++					<param name="id" value="9" />
++					<param name="label" value="$LOCALIZE[41320]" />
++					<param name="visible" value="!String.IsEmpty(Window.Property(CB1.LldvStatus))" />
++				</include>
  			</control>
-+			<control type="textbox">
-+				<left>944</left>
-+				<top>164</top>
-+				<width>252</width>
-+				<height>390</height>
-+				<font>font12</font>
-+				<textcolor>FFEEF2F3</textcolor>
-+				<label>$INFO[Window.Property(CB1.LldvEdid)]</label>
-+				<visible>!String.IsEmpty(Window.Property(CB1.LldvEdid))</visible>
-+			</control>
-+			<control type="textbox">
-+				<left>944</left>
-+				<top>570</top>
-+				<width>252</width>
-+				<bottom>48</bottom>
-+				<font>font12</font>
-+				<textcolor>FFEEF2F3</textcolor>
-+				<label>$INFO[Container(3).ListItem.Label2]</label>
-+				<visible>!String.IsEmpty(Window.Property(CB1.LldvEdid))</visible>
-+			</control>
  		</control>
  	</include>
- 	<include name="VideoDialogSelectVideoLayout">
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
@@ -348,7 +543,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- a/xbmc/dialogs/DVPlaybackModes.cpp
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -411,35 +411,35 @@
+@@ -411,41 +411,59 @@
    const auto saved = settings->GetInt("dvbridge.lldvformatvalue");
    dialog->Reset();
    dialog->SetHeading(strings.Get(41200));
@@ -360,59 +555,104 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 -    item.SetProperty("disabled", true);
 -    dialog->Add(item);
 -    ++firstFormat;
-+  // Estuary fits all formats in its simple list and shows the focused reason beside it.
++  // Estuary fits all formats in its simple list and displays the notes inline.
 +  const bool estuary = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN) == "skin.estuary";
 +  dialog->SetUseDetails(!estuary);
-+  const auto summary = LldvUnavailableLabel(status, 0, true);
-+  std::string edid = StringUtils::Format("{}: {}", strings.Get(41288),
-+                                         strings.Get(summary ? 40851 : 41289));
-+  if (summary)
-+    edid += '\n' + strings.Get(summary);
-+  else if (!status.currentTiming && status.availableTiming)
-+    edid += '\n' + strings.Get(41297);
++  dialog->EnableButton(!estuary, 41320);
 +
-+  const auto addDetail = [&edid](const std::string& label, const std::string& value) {
-+    edid += '\n' + label + ": " + value;
++  const int summary = LldvUnavailableLabel(status, 0, true);
++  std::string summaryText = strings.Get(summary ? 41322 : 41321);
++  if (summary)
++    summaryText += '\n' + strings.Get(summary);
++  dialog->SetProperty("CB1.LldvStatus", summaryText);
++
++  std::string details, labels, values;
++  const auto addDetail = [&](int id, const std::string& value) {
++    const auto label = strings.Get(id);
++    if (!details.empty())
++    {
++      details += '\n';
++      labels += '\n';
++      values += '\n';
++    }
++    details += label + ": " + value;
++    labels += label;
++    values += value;
    };
 -  const auto summary = LldvUnavailableLabel(status, saved, true);
 -  const auto requested = saved ? LldvFormatPreference(saved) : preferred;
 -  addDetail(strings.Get(41288), strings.Get(summary ? summary :
 -      status.rejected != LldvFormat::Auto && status.rejected == requested ? 41298 : 41289));
    const auto& display = status.display;
-+  if (display.status == LldvEdidStatus::Incomplete)
-+    edid += StringUtils::Format(" ({} / {} bytes)", display.received, display.expected);
    if (display.sink.length)
 -    addDetail(strings.Get(41290), StringUtils::Format("v{} Â· {}", display.sink.version,
-+    addDetail(strings.Get(41290), StringUtils::Format("v{} / {}", display.sink.version,
-         strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41291 :
-                     dvbridge_lldv_422(display.sink) ? 41292 : 41293)));
--  if (display.status == LldvEdidStatus::Incomplete)
+-        strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41291 :
+-                    dvbridge_lldv_422(display.sink) ? 41292 : 41293)));
++  {
++    addDetail(41323, StringUtils::Format("v{}", display.sink.version));
++    addDetail(41324, strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41291 :
++                                dvbridge_lldv_422(display.sink) ? 41292 : 41293));
++  }
++  else
++    addDetail(41323, strings.Get(40851));
+   if (display.status == LldvEdidStatus::Incomplete)
 -    addDetail(strings.Get(41281), StringUtils::Format("{} / {} bytes", display.received, display.expected));
++    addDetail(41330, StringUtils::Format("{} / {} bytes", display.received, display.expected));
    if (display.peak > 0)
    {
 -    addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
 -    addDetail(strings.Get(41295), StringUtils::Format("R {:.4f},{:.4f}  G {:.4f},{:.4f}  B {:.4f},{:.4f}",
-+    addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:g} nits", display.peak, display.black));
-+    edid += StringUtils::Format(
-+        "\n{}\nR {:.4f}, {:.4f}\nG {:.4f}, {:.4f}\nB {:.4f}, {:.4f}", strings.Get(41295),
-         display.reported[0], display.reported[1], display.reported[2], display.reported[3],
+-        display.reported[0], display.reported[1], display.reported[2], display.reported[3],
 -        display.reported[4], display.reported[5]));
-+        display.reported[4], display.reported[5]);
++    addDetail(41325, StringUtils::Format("{:.0f} nits", display.peak));
++    addDetail(41326, StringUtils::Format("{:g} nits", display.black));
++    for (unsigned i = 0; i < 3; ++i)
++      addDetail(41327 + i, StringUtils::Format("{:.4f}, {:.4f}",
++                                             display.reported[i * 2], display.reported[i * 2 + 1]));
    }
 -  addDetail(strings.Get(41296), strings.Get((status.driverFormats || status.forced42210) ? 41289 : 41211));
 -  addDetail(strings.Get(41299), strings.Get(status.currentTiming ? 41289 : status.availableTiming ? 41297 : 41212));
++  dialog->SetProperty("CB1.LldvDetails", details);
++  dialog->SetProperty("CB1.LldvDetailLabels", labels);
++  dialog->SetProperty("CB1.LldvDetailValues", values);
    for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
    {
      const auto format = static_cast<LldvFormat>(i);
-@@ -461,10 +461,12 @@
+     const int reason = LldvUnavailableLabel(status, i, true);
+     const bool disabled = reason != 0;
+-    const auto label = strings.Get(LldvFormatLabel(format, requiresForcing(format)));
++    const bool forced = requiresForcing(format);
++    const auto label = strings.Get(LldvFormatLabel(format, !estuary && forced));
+     CFileItem item(disabled ? "[COLOR grey]" + label + "[/COLOR]" : label);
+     item.SetProperty("disabled", disabled);
+     if (disabled)
+@@ -454,17 +472,29 @@
+       item.SetLabel2(strings.Get(41298));
+     else if (i == 0)
+       item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
+-          : strings.Get(LldvFormatLabel(preferred, requiresForcing(preferred))));
++          : strings.Get(LldvFormatLabel(preferred, !estuary && requiresForcing(preferred))));
+     else if (format == status.active)
+       item.SetLabel2(strings.Get(status.activeForced && !requiresForcing(format) ? 41218 : 41214));
+     else
        item.SetLabel2(strings.Get(format == LldvFormat::Y422_10 ? 41216 : 41215));
++    if (estuary)
++    {
++      if (disabled)
++        item.SetProperty("CB1.LldvFocusNote", strings.Get(reason == 41210 ? 41332 : reason));
++      else if (format != LldvFormat::Auto && format == status.rejected)
++        item.SetProperty("CB1.LldvFocusNote", item.GetLabel2());
++      else if (i == 0 || forced)
++        item.SetProperty("CB1.LldvNote", i == 0 ? item.GetLabel2() : strings.Get(41331));
++    }
      dialog->Add(item);
    }
 -  dialog->SetSelected(firstFormat + saved);
 +  dialog->SetSelected(saved);
-+  dialog->SetProperty("CB1.LldvEdid", edid);
    dialog->Open();
-+  dialog->SetProperty("CB1.LldvEdid", CVariant{});
++  for (const char* key : {"CB1.LldvStatus", "CB1.LldvDetails", "CB1.LldvDetailLabels",
++                          "CB1.LldvDetailValues"})
++    dialog->SetProperty(key, CVariant{});
    const auto current = ReadLldvConnector();
 -  const int choice = dialog->GetSelectedItem() - firstFormat;
 +  const int choice = dialog->GetSelectedItem();
@@ -452,3 +692,57 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
        }
        SetProperty(keys[i], value);
      }
+diff --git a/xbmc/dialogs/GUIDialogSelect.cpp b/xbmc/dialogs/GUIDialogSelect.cpp
+--- a/xbmc/dialogs/GUIDialogSelect.cpp
++++ b/xbmc/dialogs/GUIDialogSelect.cpp
+@@ -18,6 +18,9 @@
+ #include "resources/ResourcesComponent.h"
+ #include "utils/StringUtils.h"
+ #ifdef HAVE_DVBRIDGE
++#include "GUIDialogTextViewer.h"
++#include "guilib/GUIComponent.h"
++#include "guilib/GUIWindowManager.h"
+ #include "guilib/GUIFont.h"
+ #include "guilib/GUIFontManager.h"
+ #include "guilib/GUIIncludes.h"
+@@ -35,6 +38,10 @@
+ #define CONTROL_EXTRA_BUTTON2 8
+ #define CONTROL_CANCEL_BUTTON   7
+ 
++#ifdef HAVE_DVBRIDGE
++constexpr int CONTROL_LLDV_DETAILS = 9;
++#endif
++
+ CGUIDialogSelect::CGUIDialogSelect() : CGUIDialogSelect(WINDOW_DIALOG_SELECT) {}
+ 
+ CGUIDialogSelect::CGUIDialogSelect(int windowId)
+@@ -154,6 +161,29 @@
+   case GUI_MSG_CLICKED:
+     {
+       int iControl = message.GetSenderId();
++#ifdef HAVE_DVBRIDGE
++      if (iControl == CONTROL_LLDV_DETAILS || iControl == CONTROL_EXTRA_BUTTON)
++      {
++        const auto details = GetProperty("CB1.LldvDetails").asString();
++        if (!details.empty())
++        {
++          auto* viewer = CServiceBroker::GetGUI()->GetWindowManager()
++                             .GetWindow<CGUIDialogTextViewer>(WINDOW_DIALOG_TEXT_VIEWER);
++          if (viewer)
++          {
++            viewer->SetHeading(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(41320));
++            viewer->SetText(details);
++            viewer->UseMonoFont(false);
++            for (const char* field : {"CB1.LldvDetailLabels", "CB1.LldvDetailValues"})
++              viewer->SetProperty(field, GetProperty(field));
++            viewer->Open();
++            for (const char* field : {"CB1.LldvDetailLabels", "CB1.LldvDetailValues"})
++              viewer->SetProperty(field, CVariant{});
++          }
++          return true;
++        }
++      }
++#endif
+       if (m_viewControl.HasControl(CONTROL_SIMPLE_LIST))
+       {
+         int iAction = message.GetParam1();

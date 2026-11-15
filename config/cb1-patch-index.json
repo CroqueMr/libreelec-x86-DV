@@ -1911,12 +1911,15 @@
     "owner": "Keep the Stable video settings and LLDV output readable.",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Keep subordinate labels consistent.",
+      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuary’s native dialog controls.",
+      "addons/skin.estuary/xml/Includes.xml": "Show optional inline format notes in the compact select list.",
       "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Show EDID diagnostics beside the LLDV format list.",
       "system/settings/settings.xml": "Group playback and scaling settings and expose SDR controls only for applicable defaults.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Remove the saved override for asynchronous preparation.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous preparation enabled and present CPU-packed LLDV in scanout order.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Keep connector diagnostics outside the selectable items.",
-      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary."
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodi’s native text viewer without closing the LLDV selector."
     }
   }
 }
