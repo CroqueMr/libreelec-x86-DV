@@ -373,7 +373,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-zz-amd-static-pq-handoff.patch": "956ea74ddcf4fe2b542084340f816fd1d0b206a2424c39b4d4bdcea965226dd6",
     "tests/cb1/test_bdj_audio_handoff.py": "d7e2a2d3a67f6742a20add0bbed68f02a5f71cc5187d613130de0019d9e48a9f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-bluray-audio-handoff.patch": "db62f335aeb7491319264a5980ad973371c1b4ff4005982c8f94025c26ec4a4a",
-    "tests/cb1/test_hdr10_frame_handoff.py": "dbbb38c8280722dcbcafaea1c3fe7ab47c3c1c24512e7e9e380fde75f16b8532",
+    "tests/cb1/test_hdr10_frame_handoff.py": "880e124d8ad51ae8ecd757a181add932197635790a84acb46187a898baaa1623",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": "bd7b7d0441237aae210954e878695e531b278349c201df9c1cb1e57518e1fc66",
     "tests/cb1/test_bdj_presentation_timing.py": "e3ee13867d871fd388404fd1cdf8baaff75ba48e3838cfc9c759d318b66c3b06",
     "packages/multimedia/libbluray/patches/0007-bdj-presentation-timing.patch": "889e7701633deaf29d9f4ca5425324b7cbf3e097f0080a1204d4f6c204dbc27c",
@@ -424,7 +424,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": "1200204fb13b5345deddc86f04c9ec2fc4b76710313c17ab0347e17e40480400",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": "29752ff4ba43e5093723ace2650416855f07ed296d11442a35b50089f9d6ca1c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": "5fd1d1ae63bc065b86c053eb40859c7daba55a19122aee35741ecc973e982b26",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": "5ed0d20d581ca3fe5454d1869ed5d563ad0d8e54b4dbc0d9924c3263aad6c776"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": "5ed0d20d581ca3fe5454d1869ed5d563ad0d8e54b4dbc0d9924c3263aad6c776",
+    "tests/cb1/test_pascal_native_hdr.py": "581a48d2807bcd557cfa2c0174aacdfad54aae46a0360fc8a505804ef3152e9c"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
