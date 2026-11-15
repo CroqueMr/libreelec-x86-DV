@@ -14,6 +14,7 @@ struct CDRMObject {
  std::map<std::string,std::map<std::string,uint64_t>> enums;
  std::optional<uint64_t> GetPropertyValue(const char* name) const {
   auto it=cache.find(name);if(it==cache.end())return {};return it->second;}
+ std::optional<bool> IsPropertyImmutable(const char*) const {return false;}
  std::optional<uint64_t> GetPropertyEnumValue(const char* name,const char* label) const {
   auto p=enums.find(name);if(p==enums.end())return {};auto it=p->second.find(label);
   if(it==p->second.end())return {};return it->second;}
@@ -36,11 +37,12 @@ Blob* drmModeGetPropertyBlob(int,uint64_t){return nullptr;}void drmModeFreePrope
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<CDRMUtils> m_DRM=std::make_shared<CDRMAtomic>();
  CDVBridgeState m_dvState,m_cb1ConnectorState;
- bool m_cb1RestoringPreferences=false,m_hdrConversion=false,m_dvOrdinaryFrame=false,m_dvEndPending=false;
+ bool m_cb1RestoringPreferences=false,m_hdrConversion=false,m_sdrConversion=false,m_dvOrdinaryFrame=false,m_dvEndPending=false;
  bool pendingRestore=false,m_dvOutputSurface=false,pendingSurface=false;
  bool requestedLimited=false,ordinaryLimited=false;int deferred=0,colorSpaceRefreshes=0;
  std::shared_ptr<void> m_nativeDVProperties;
  std::optional<bool> m_cb1LimitedRange,m_cb1OrdinaryLimitedRange;
+ std::optional<uint64_t> m_sdrBroadcastRange;
  bool HasPendingDVBridgeRestore() const {return pendingRestore;}
  bool HasPendingDVOutputSurface() const {return pendingSurface;}
  bool RequestedLimitedColor() const{return requestedLimited;}
@@ -89,6 +91,14 @@ int main(){
  w.requestedLimited=false;w.ordinaryLimited=true;
  assert(w.CaptureCB1ConnectorPreferences());assert(w.TransportLimitedColor()==true);
  assert(w.StageCB1ConnectorPreferences(false));assert(output->pending.at("max bpc")==12);
+ w.m_sdrConversion=true;
+ assert(w.TransportLimitedColor()==false); // The driver compresses full-range rendered pixels.
+ assert(w.StageCB1ConnectorPreferences(false) && output->pending.at("Broadcast RGB")==2);
+ assert(w.StageCB1ConnectorPreferences(true) && output->pending.at("Broadcast RGB")==2);
+ assert(w.StageCB1ConnectorPreferences(false));
+ w.m_sdrConversion=false;
+ assert(w.TransportLimitedColor()==true);
+ assert(w.StageCB1ConnectorPreferences(false) && output->pending.at("Broadcast RGB")==1);
  assert(w.m_dvState.CaptureColorPreferences(*output,8));assert(w.m_dvState.Stage(*output,false));
  assert(output->pending.at("max bpc")==8);assert(w.StageTransportPreferences());
  assert(output->pending.at("max bpc")==8); // native DV owner wins over baseline 12bpc
@@ -99,6 +109,22 @@ int main(){
  output->Commit(false);assert(w.m_cb1ConnectorState.Captured());
  assert(w.StageCB1ConnectorPreferences(true));output->Commit(true);w.CompleteCB1ConnectorRestore();
  assert(!w.m_cb1ConnectorState.Captured() && !w.m_cb1LimitedRange && !w.m_cb1OrdinaryLimitedRange);
+ assert(!w.m_sdrBroadcastRange);
+ for (bool hasRange : {false,true}) {
+  CWinSystemGbmGLESContext sdr;
+  auto native=std::dynamic_pointer_cast<CDRMAtomic>(sdr.m_DRM);
+  native->connector.cache["max bpc"]=8;
+  if(hasRange) {
+   native->connector.cache["Broadcast RGB"]=0;
+   native->connector.enums["Broadcast RGB"]={{"Full",1}};
+  }
+  sdr.requestedLimited=true;
+  sdr.m_sdrConversion=true;
+  assert(sdr.CaptureCB1ConnectorPreferences() && sdr.StageCB1ConnectorPreferences(false));
+  assert(sdr.TransportLimitedColor()==!hasRange);
+  assert(native->pending.contains("Broadcast RGB")==hasRange);
+  if(hasRange) assert(native->pending.at("Broadcast RGB")==1);
+ }
  w.m_dvState.Restored();w.m_hdrConversion=false;assert(w.ConnectorPreferencesAllowed());
  for(int flag=0;flag<7;++flag){
   w.pendingRestore=flag==0;w.m_dvOutputSurface=flag==1;w.pendingSurface=flag==2;

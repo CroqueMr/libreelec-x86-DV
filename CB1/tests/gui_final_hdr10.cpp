@@ -58,11 +58,12 @@ struct GUIFramebuffer {
   GLuint Texture()const{return guiTexture;}
 };
 struct CompositeShader {
-  const GLfloat* m_proj{};bool m_inputPQ{};float m_outputScale=1,m_outputOffset=0,m_ootfGamma=0;
+  const GLfloat* m_proj{};bool m_inputPQ{},m_sdrBT2020{};float m_outputScale=1,m_outputOffset=0,m_ootfGamma=0;
   GLuint m_lutDegammaTexId=degammaTexture,m_lutTFTexId=pqTexture;
   GLint m_hProj=glGetUniformLocation(nativeProgram,"u_proj");
   GLint m_hOotfGamma=glGetUniformLocation(nativeProgram,"u_ootfGamma");
   GLint m_hInputPQ=glGetUniformLocation(nativeProgram,"u_inputPQ");
+  GLint m_hSDRBT2020=glGetUniformLocation(nativeProgram,"u_sdrBT2020");
   GLint m_hOutputRange=glGetUniformLocation(nativeProgram,"u_outputRange");
   GLint m_hPlayerLedScale=glGetUniformLocation(nativeProgram,"u_playerLedScale");
   GLint m_hPlayerLedGui=glGetUniformLocation(nativeProgram,"u_playerLedGui");
@@ -71,6 +72,7 @@ struct CompositeShader {
   std::array<float,9> m_playerLedGui{},m_playerLedSubtitles{};
   void SetProjection(const GLfloat* p){m_proj=p;}
   void SetInputPQ(bool p){m_inputPQ=p;}
+  void SetSDRBT2020(bool wide){m_sdrBT2020=wide;}
   void SetOutputRange(float s,float o){m_outputScale=s;m_outputOffset=o;}
   void SetPlayerLed(float peak=0,const std::array<float,9>& guiMatrix={},
                     const std::array<float,9>& subMatrix={})
@@ -91,6 +93,8 @@ struct CompositeShader {
   void Disable(){glUseProgram(0);}
 };
 struct Bridge {
+  struct {struct {int primaries=0;} container;} output;
+  auto HDR10Output()const{return &output;}
   bool m_hdr10=true,m_prepared=true,m_direct=true,m_live=true,m_guiComposed=false;
   bool playerLed{};
   bool PlayerLed()const{return playerLed;}
@@ -111,7 +115,7 @@ ColorMatrix pl_get_color_mapping_matrix(pl_color_primaries,pl_color_primaries,in
 struct CWinSystemGbmGLESContext {
   GUIFramebuffer m_guiFbo,m_dvPQSubtitleFbo;
   bool m_guiWillRender=true,m_guiFboClean=false,m_dvNativeGui=false;
-  bool m_hdrConversion=true,m_dvFrame=true,limited=false;
+  bool m_hdrConversion=true,m_sdrConversion=false,m_dvFrame=true,limited=false;
   unsigned m_dvPQSubtitleDraws=0;bool m_dvPQGuiComposed=false;
   int m_guiFboWidth=width,m_guiFboHeight=height,m_nWidth=width,m_nHeight=height;
   State m_dvState;std::unique_ptr<DRM> m_DRM=std::make_unique<DRM>();
