@@ -31,3 +31,10 @@ class BdjPresentationTiming(unittest.TestCase):
         speed = body(source, "void CVideoPlayer::HandlePlaySpeed()")
         self.assertIn("m_bdjDraining || isInMenu", speed)
         self.assertIn("GENERAL_RESYNC", speed)
+
+    def test_java_clock_uses_presented_pts_and_the_packet_timeline(self):
+        source = (TREE / "xbmc/cores/VideoPlayer/VideoPlayer.cpp").read_text()
+        pump = body(source, "void CVideoPlayer::ProcessBdjPresentation(")
+        self.assertIn("m_CurrentVideo.dispTime", pump)
+        self.assertIn("pts - m_CurrentVideo.dts", pump)
+        self.assertIn("SetBdjPlaybackTime", pump)

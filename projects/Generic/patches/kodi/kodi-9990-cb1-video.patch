@@ -8639,6 +8639,27 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        }
        if (stream->type == StreamType::SUBTITLE)
        {
+@@ -827,8 +844,20 @@
+ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options)
+ {
+   CLog::Log(LOGINFO, "VideoPlayer::OpenFile: {}", CURL::GetRedacted(file.GetPath()));
+ 
++#ifdef HAVE_DVBRIDGE
++  // Refresh on the open request, before the demuxer worker needs the sink.
++  // SendMsg runs immediately when playback is opened by the application thread.
++  MESSAGING::ThreadMessageCallback refresh{
++      [](void*) {
++        auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++            CServiceBroker::GetWinSystem());
++        if (window && window->RefreshDisplayInfoForVideo())
++          window->RefreshDVOutputCapabilities();
++      }, nullptr};
++  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK, 0, 0, &refresh);
++#endif
+   if (IsRunning())
+   {
+     CDVDMsgOpenFile::FileParams params;
+     params.m_item = file;
 @@ -841,6 +858,10 @@
  
    m_item = file;
@@ -8661,21 +8682,6 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CLog::Log(LOGINFO, "CVideoPlayer::CloseFile()");
  
    // set the abort request so that other threads can finish up
-@@ -922,6 +947,14 @@
- 
- bool CVideoPlayer::OpenInputStream()
- {
-+#ifdef HAVE_DVBRIDGE
-+  MESSAGING::ThreadMessageCallback refresh{
-+      [](void*) {
-+        auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
-+        if (window && window->RefreshDisplayInfoForVideo()) window->RefreshDVOutputCapabilities();
-+      },nullptr};
-+  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK,0,0,&refresh);
-+#endif
-   if (m_pInputStream.use_count() > 1)
-     throw std::runtime_error("m_pInputStream reference count is greater than 1");
-   m_pInputStream.reset();
 @@ -978,6 +1011,18 @@
      } // end loop over all subtitle files
    }
@@ -14784,7 +14790,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_srcPrimaries = picture.color_primaries;
    m_srcColorBits = picture.colorBits;
    m_srcFullRange = picture.color_range == 1;
-@@ -207,10 +219,73 @@
+@@ -207,11 +219,79 @@
    // frame is loaded after every call to Configure().
    m_bValidated = false;
  
@@ -14832,7 +14838,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +#endif
 +  }
  
-   CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
+-  CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
 +
 +#ifdef HAVE_DVBRIDGE
 +  m_dvRequested = KODI::WINDOWING::GBM::CWinSystemGbmGLESContext::DVBridgeRequested(&picture);
@@ -14840,11 +14846,16 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  {
 +    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
 +        CServiceBroker::GetWinSystem());
++    const auto route = window ? window->SelectedDVOutput(&picture).route
++                              : DVBRIDGE::OutputRoute::Vanilla;
++    // The TV-led transport publishes its own HDMI colour state in the first
++    // DV commit. Staging the base layer here can switch the connector twice.
++    if (route != DVBRIDGE::OutputRoute::NativeDV)
++      CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
 +    m_passthroughHDR = false;
 +    // Native activation follows source import and its output-surface transaction.
 +    m_hdrFboActive = window &&
-+        (window->SelectedDVOutput(&picture).route != DVBRIDGE::OutputRoute::HDR10 ||
-+         window->ConfigureHDR10Conversion(picture));
++        (route != DVBRIDGE::OutputRoute::HDR10 || window->ConfigureHDR10Conversion(picture));
 +    if (!m_hdrFboActive)
 +    {
 +      m_bConfigured = false;
@@ -14856,8 +14867,10 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +  }
 +#endif
  
++  CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
    m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
    CLog::Log(LOGDEBUG, "LinuxRendererGLES::Configure: HDR passthrough: {}",
+             m_passthroughHDR ? "on" : "off");
 @@ -222,6 +297,9 @@
      CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: HDR passthrough active but GUI "
                            "compositing not supported by windowing system");
