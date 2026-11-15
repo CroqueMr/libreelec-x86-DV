@@ -356,13 +356,15 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "832d6668885c302671b10d928a9198abd187884e422969dc3e27cba60039658d",
+    "config/cb1-patch-index.json": "38a8d5c7220f6c8c98f489631b0cbbe641692046c2a734e7644231a5c8d5f9ed",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-menu-lifetime.patch": "1d602ab92c563d66b53de93d3d746c5214941e3caedd75aaa920cf6dc88bada7",
     "tests/cb1/test_bluray_seamless_playitem.py": "d927c9708dc1da15366020d1420c7d458f17bba15ce638cd037ca0be3f79c782",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-seamless-playitems.patch": "88dce790d7fa87efd221a758792092090b517e9fc07890e0f1b84dba03aa1c16"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-seamless-playitems.patch": "88dce790d7fa87efd221a758792092090b517e9fc07890e0f1b84dba03aa1c16",
+    "tests/cb1/test_bluray_playlist_names.py": "11c224d44fb939c0a83af40ed412900600a16e391389511cc27f6aceac74f3fa",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-bluray-playlist-sidecars.patch": "fadb89dad3b3bc85394fc8bdf94709b0588a16c6db7165e95b03c4ae1c5d181f"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
