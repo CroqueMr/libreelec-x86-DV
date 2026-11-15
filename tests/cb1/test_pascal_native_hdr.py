@@ -28,7 +28,7 @@ class PascalNativeHDR(unittest.TestCase):
     def test_dynamic_metadata_is_staged_before_pascal_handoff(self):
         source = shipped_code("xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp")
         self.assertIn("if (carrier) StageNativeHDR10Plus();", source)
-        self.assertIn("\n    StageNativeHDR10Plus();", source)
+        self.assertIn("nativeHDR10PlusFallback = StageNativeHDR10Plus();", source)
         self.assertIn("source->Generation() == generation", source)
 
 

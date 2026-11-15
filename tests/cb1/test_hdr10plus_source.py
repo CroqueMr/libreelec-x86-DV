@@ -8,7 +8,7 @@ from pathlib import Path
 class HDR10PlusSourceTests(unittest.TestCase):
     def test_only_selected_pq_frame_is_staged_and_stale_metadata_is_cleared(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        implementation=body(source,'void CWinSystemGbmGLESContext::StageNativeHDR10Plus()')
+        implementation=body(source,'int CWinSystemGbmGLESContext::StageNativeHDR10Plus()')
         serializer=Path(__file__).resolve().parents[2]/'CB1/src/cb1_hdr10plus.c'
         SnapshotChecks().compile_run(r'''
 #include "cores/VideoSourceSideData.h"
@@ -71,7 +71,7 @@ struct CWinSystemGbmGLESContext {
  int depth=10;int GetOutputBitDepth()const{return depth;}
  const Display* GetDisplayInfo() const {return &display;}
  auto GetEotf() const {return eotf;}
- void StageNativeHDR10Plus() BODY
+ int StageNativeHDR10Plus() BODY
 };
 int main() {
  using DVBRIDGE::HDR10SourceMode;
@@ -122,12 +122,12 @@ int main() {
  CServiceBroker::components.player.overlay=true;
  w.StageNativeHDR10Plus();assert((*drm->packet)[30]==0xc0);
  CServiceBroker::components.player.overlay=false;
- w.depth=8;w.StageNativeHDR10Plus();assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
+ w.depth=8;assert(w.StageNativeHDR10Plus()==41334);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
  w.depth=10;w.StageNativeHDR10Plus();assert(drm->packet);
  w.depth=16;w.StageNativeHDR10Plus();assert(drm->packet);
  w.eotf=KODI::UTILS::Eotf::TRADITIONAL_SDR;w.StageNativeHDR10Plus();assert(!drm->packet);
- w.eotf=KODI::UTILS::Eotf::PQ;w.display.version=0;w.StageNativeHDR10Plus();assert(!drm->packet);
- w.display.version=1;drm->connector.supported=false;w.StageNativeHDR10Plus();assert(!drm->packet);
+ w.eotf=KODI::UTILS::Eotf::PQ;w.display.version=0;assert(w.StageNativeHDR10Plus()==41336);assert(!drm->packet);
+ w.display.version=1;drm->connector.supported=false;assert(w.StageNativeHDR10Plus()==41335);assert(!drm->packet);
  drm->connector.supported=true;CServiceBroker::cache.generation=8;w.StageNativeHDR10Plus();assert(!drm->packet);
  w.m_videoSourceSideData.reset();w.StageNativeHDR10Plus();assert(!drm->packet);
  av_frame_free(&frame);

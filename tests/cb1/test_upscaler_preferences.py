@@ -133,3 +133,7 @@ int main()
                           for value in item.attrib.values()))
         self.assertEqual(row.find("param[@name='visible']").get("value"),
                          "!String.IsEmpty(Window(playerprocessinfo).Property(DV.VideoUpscaler))")
+        label = row.find("param[@name='label']").get("value")
+        strings = (TREE / "addons/resource.language.en_gb/resources/strings.po").read_text(encoding="utf-8")
+        label_id = label.removeprefix("$LOCALIZE[").removesuffix("]")
+        self.assertIn(f'msgctxt "#{label_id}"\nmsgid "Upscaler"', strings)

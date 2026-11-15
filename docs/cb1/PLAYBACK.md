@@ -138,8 +138,10 @@ their existing capability and safety checks. Movie pixels and metadata are uncha
 ## Geometry, scaling and display modes
 
 Kodi owns the output resolution, refresh-rate whitelist, aspect ratio, zoom and
-video rectangle. **SDR upscaler** and **HDR and Dolby Vision upscaler** select a
-spatial filter for the effective output. Both start at **Kodi default**, which
+video rectangle. **Upscaler – 1080p and above** and **Upscaler – below 1080p**
+select a spatial filter by source resolution, including for HDR and Dolby Vision.
+The first setting applies from 1920 pixels wide or 1080 pixels high, so it also
+covers cropped 1080p films. Both start at **Kodi default**, which
 uses the existing video scaling preference, including per-title settings. A new
 Kodi profile uses bilinear. The separate **Auto** choice uses Kodi's automatic
 filter selection. Player Information shows the effective filter when the video

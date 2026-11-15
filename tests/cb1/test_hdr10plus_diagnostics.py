@@ -13,7 +13,7 @@ class HDR10PlusDiagnostics(unittest.TestCase):
         # Dropping rejection detail, reading beyond the arrays, or staging an
         # unsupported display must fail this real-function/real-serializer check.
         text=(diagnostics.TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        stage=body(text,'void CWinSystemGbmGLESContext::StageNativeHDR10Plus(')
+        stage=body(text,'int CWinSystemGbmGLESContext::StageNativeHDR10Plus(')
         prefix=Path(os.environ['FFMPEG_TEST_PREFIX'])
         repo=Path(__file__).resolve().parents[2]
         program=r'''
@@ -82,7 +82,7 @@ struct CWinSystemGbmGLESContext{
  const Display* GetDisplayInfo(){return &display;}
  KODI::UTILS::Eotf GetEotf(){return KODI::UTILS::Eotf::PQ;}
  unsigned GetOutputBitDepth(){return 10;}
- void StageNativeHDR10Plus() BODY
+ int StageNativeHDR10Plus() BODY
  void StageWithOverlay(bool overlay){CApplicationPlayer::overlay=overlay;StageNativeHDR10Plus();}
  CDRMAtomic& drm(){return *std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);}
 };

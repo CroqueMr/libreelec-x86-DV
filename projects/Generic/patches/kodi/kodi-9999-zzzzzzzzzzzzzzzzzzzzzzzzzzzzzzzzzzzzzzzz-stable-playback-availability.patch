@@ -1,0 +1,374 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -25950,7 +25950,7 @@
+ msgstr ""
+ 
+ msgctxt "#40821"
+-msgid "HDR10 Rendering uses source metadata. LLDV Reference – HDR10 Output maps to the configured display peak, black level and gamut. HDR10+ sends picture statistics and representable trims to a compatible display."
++msgid "HDR10 Rendering uses source metadata. LLDV Reference : HDR10 Output maps to the configured display peak, black level and gamut. HDR10+ sends picture statistics and representable trims to a compatible display."
+ msgstr ""
+ 
+ msgctxt "#40922"
+@@ -25982,7 +25982,7 @@
+ msgstr ""
+ 
+ msgctxt "#40830"
+-msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. LLDV Reference – HDR10 Output has its own display calibration settings."
++msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. LLDV Reference : HDR10 Output has its own display calibration settings."
+ msgstr ""
+ 
+ msgctxt "#40831"
+@@ -26507,7 +26507,7 @@
+ msgstr ""
+ 
+ msgctxt "#41201"
+-msgid "Choose the format preference for Dolby Vision LLDV Reference. Availability depends on the display, driver and current HDMI timing."
++msgid "Choose the format preference for Dolby Vision : LLDV Reference. Availability depends on the display, driver and current HDMI timing."
+ msgstr ""
+ 
+ msgctxt "#41202"
+@@ -26766,6 +26766,34 @@
+ msgid "Not advertised by TV"
+ msgstr ""
+ 
++msgctxt "#41333"
++msgid "LLDV disabled by AMD driver"
++msgstr ""
++
++msgctxt "#41334"
++msgid "HDR10+ needs 10-bit output"
++msgstr ""
++
++msgctxt "#41335"
++msgid "Driver lacks HDR10+"
++msgstr ""
++
++msgctxt "#41336"
++msgid "TV lacks HDR10+"
++msgstr ""
++
++msgctxt "#41337"
++msgid "HDR10+ packet not sent"
++msgstr ""
++
++msgctxt "#41338"
++msgid "HDR10+ metadata unsupported"
++msgstr ""
++
++msgctxt "#41339"
++msgid "4:2:2 · Forced, experimental"
++msgstr ""
++
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
+ msgstr ""
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+@@ -76,7 +76,7 @@
+   output.lldv = Trims{{plan.analysis[1], plan.analysis[2]}, groups,
+                       plan.cmv40_status == CB1_CMV40_APPEND, plan.policy.lldv_edid_version,
+                       connector.display.primaries,
+-                      connector.display.reported};
++                      connector.display.reported, connector.activeForced};
+   return output;
+ }
+ } // namespace DVBRIDGE
+diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
+--- a/xbmc/cores/VideoProcessingInfo.h
++++ b/xbmc/cores/VideoProcessingInfo.h
+@@ -71,6 +71,7 @@
+     unsigned edidVersion{};
+     std::array<double, 6> primaries{};
+     std::array<double, 6> reportedPrimaries{};
++    bool forcedTransport{};
+   };
+   struct Output
+   {
+@@ -104,6 +105,7 @@
+     std::optional<PlayerLed> lldv{};
+   } output;
+   std::optional<VideoOutputType> outputType;
++  int nativeHDR10PlusFallbackLabel{};
+   uint64_t informationGeneration{};
+   bool referenceWarning{};
+   unsigned profile{}, level{}, major{}, minor{}, compatibility{};
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -245,13 +245,17 @@
+           });
+     }
+ #endif
+-    dialog->SetUseDetails(!settingsMenu);
++    dialog->SetUseDetails(true);
+     for(const auto& option : options)
+     {
+       DVBRIDGE::DiagnosticLog(LOGINFO, "Playback mode option: value={} label={} reason={}",
+           option.value, option.label, option.label2);
+       const auto& choice = choices[option.value];
+-      CFileItem item(settingsMenu ? option.label : strings.Get(choice.label));
++      const bool gray = settingsMenu && std::ranges::any_of(option.properties, [](const auto& property) {
++        return property.first == "disabled" && property.second.asBoolean();
++      });
++      CFileItem item(settingsMenu ? (gray ? "[COLOR grey]" + option.label + "[/COLOR]" : option.label)
++                                  : strings.Get(choice.label));
+       item.SetLabel2(option.label2);
+       for(const auto& [name,value] : option.properties) item.SetProperty(name,value);
+       const bool disabled = item.GetProperty("disabled").asBoolean();
+@@ -461,12 +465,12 @@
+   {
+     const auto format = static_cast<LldvFormat>(i);
+     const int reason = LldvUnavailableLabel(status, i, true);
+-    const bool disabled = reason != 0;
++    const bool disabled = format != LldvFormat::Auto && reason != 0;
+     const bool forced = requiresForcing(format);
+     const auto label = strings.Get(LldvFormatLabel(format, !estuary && forced));
+     CFileItem item(disabled ? "[COLOR grey]" + label + "[/COLOR]" : label);
+     item.SetProperty("disabled", disabled);
+-    if (disabled)
++    if (reason)
+       item.SetLabel2(strings.Get(reason));
+     else if (format != LldvFormat::Auto && format == status.rejected)
+       item.SetLabel2(strings.Get(41298));
+@@ -496,8 +500,10 @@
+   const auto current = ReadLldvConnector();
+   const int choice = dialog->GetSelectedItem();
+   if (dialog->IsConfirmed() && choice >= 0 && choice <= static_cast<int>(LldvFormat::Y444_12) &&
+-      current.connectorId == status.connectorId && current.edidGeneration == status.edidGeneration &&
+-      !LldvUnavailableLabel(current, choice, true) && settings->SetInt("dvbridge.lldvformatvalue", choice))
++      (choice == static_cast<int>(LldvFormat::Auto) ||
++       (current.connectorId == status.connectorId && current.edidGeneration == status.edidGeneration &&
++        !LldvUnavailableLabel(current, choice, true))) &&
++      settings->SetInt("dvbridge.lldvformatvalue", choice))
+     settings->Save();
+ }
+ } // namespace
+@@ -507,12 +513,13 @@
+   using namespace DVBRIDGE;
+   const auto status = ReadLldvConnector();
+   const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+-  const auto format = status.active == LldvFormat::Auto ?
+-      LldvFormatPreference(settings->GetInt("dvbridge.lldvformatvalue")) : status.active;
+-  const bool forced = status.active != LldvFormat::Auto ? status.activeForced :
+-      LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+-  return CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(
+-      LldvFormatLabel(format, forced));
++  const int saved = settings->GetInt("dvbridge.lldvformatvalue");
++  const auto format = LldvFormatPreference(saved);
++  const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
++  if (format != LldvFormat::Auto && LldvUnavailableLabel(status, saved, true))
++    return strings.Get(40851);
++  return strings.Get(LldvFormatLabel(format,
++      LldvRequiresForcing(format, status.driverFormats, status.forced42210)));
+ }
+ 
+ std::string CDVPlaybackModes::SDRGamutLabel()
+diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+--- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
++++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
+@@ -422,11 +422,13 @@
+       const int id=CDVPlaybackInfo::ReasonLabel(static_cast<DVBRIDGE::OutputReason>(reason));
+       return id ? localizer.Get(id) : std::string{};
+     };
+-    SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) : "");
++    SetProperty("DV.Fallback", active && data.output.fallback ? reasonText(data.output.reason) :
++        data.nativeHDR10PlusFallbackLabel ? localizer.Get(data.nativeHDR10PlusFallbackLabel) : "");
+     SetProperty("DV.MinimumLinkBits", active && data.output.minimumLinkBits ?
+         StringUtils::Format("{}-bit",data.output.minimumLinkBits) : "");
+     SetProperty("DV.Transport", active ? CDVPlaybackInfo::Transport(data.output.format) : "");
+-    SetProperty("DV.HdmiFormat", lldv ? "YCbCr 4:2:2" : "");
++    SetProperty("DV.HdmiFormat", lldv ?
++        (data.output.lldv->forcedTransport ? localizer.Get(41339) : "YCbCr 4:2:2") : "");
+     SetProperty("DV.SignalIntent", lldv ? "LLDV" : active & CDVPlaybackInfo::HDMI ?
+         (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
+         active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
+@@ -446,7 +448,7 @@
+           data.transaction.effective!=data.output.effective ||
+           data.transaction.reason!=data.output.reason) :
+           (data.transaction.requested || data.transaction.reason!=VideoProcessingReason::None)));
+-    SetProperty("DV.ProcessingVisible", bool(active) || transaction);
++    SetProperty("DV.ProcessingVisible", bool(active) || transaction || data.nativeHDR10PlusFallbackLabel);
+     SetProperty("DV.RequestedPolicy", transaction ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.transaction.requested,
+         data.transaction.hdr10AI)) :
+         active ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.output.requested,data.output.hdr10AI)) : "");
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -253,6 +253,7 @@
+   LldvDisplay display;
+   uint64_t edidGeneration{};
+   LldvFormat rejected{LldvFormat::Auto};
++  bool amdDriverDisabled{};
+ };
+ 
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
+@@ -261,6 +262,7 @@
+   if (status.display.status != LldvEdidStatus::Ready)
+     return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41300 :
+         41280 + static_cast<int>(status.display.status);
++  if (status.amdDriverDisabled) return 41333;
+   if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+@@ -297,6 +299,7 @@
+     case 41210: return "format-not-advertised-by-tv";
+     case 41211: return "format-not-supported-by-driver-or-port";
+     case 41212: return "hdmi-timing-unavailable";
++    case 41333: return "ll-dv-disabled-by-amdgpu";
+     default: return "no-common-format";
+   }
+ }
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -12,6 +12,8 @@
+ #include "OptionalsReg.h"
+ #include "ServiceBroker.h"
+ #include "VideoSyncGbm.h"
++
++#include <fstream>
+ #include "cores/VideoPlayer/VideoReferenceClock.h"
+ #include "drm/DRMAtomic.h"
+ #ifdef HAVE_DVBRIDGE
+@@ -211,6 +213,15 @@
+     std::vector<uint8_t> edid = connector->GetEDID();
+ #ifdef HAVE_DVBRIDGE
+     std::lock_guard lock(m_lldvEdidMutex);
++    m_lldvAmdDriverDisabled = false;
++    if (auto* version = drmGetVersion(m_DRM->GetFileDescriptor()))
++    {
++      char enabled{};
++      if (version->name && std::string_view(version->name) == "amdgpu" &&
++          (std::ifstream("/sys/module/amdgpu/parameters/dv_lldv") >> enabled))
++        m_lldvAmdDriverDisabled = enabled == 'N';
++      drmFreeVersion(version);
++    }
+     m_lldvEdid = edid;
+     m_lldvDisplay = DVBRIDGE::ReadLldvDisplay(edid.data(), edid.size());
+     m_lldvEdidConnector = *connector->GetConnectorId();
+@@ -1747,8 +1758,10 @@
+         status.edidGeneration == m_lldvRejected.edidGeneration)
+       status.rejected = m_lldvRejected.format;
+     status.sink = status.display.sink;
+-  }
+-  if (connector && connector->IsConnected() && connector->SupportsProperty("CB1_LLDV_FORMAT"))
++    status.amdDriverDisabled = m_lldvAmdDriverDisabled && connector->GetType() == "HDMI-A" &&
++                               !connector->SupportsProperty("CB1_LLDV_FORMAT");
++  }
++  if (status.connectorId && connector->SupportsProperty("CB1_LLDV_FORMAT"))
+   {
+     const auto native10 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 useful bits");
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -268,6 +268,7 @@
+   mutable std::mutex m_lldvEdidMutex;
+   std::vector<uint8_t> m_lldvEdid;
+   DVBRIDGE::LldvDisplay m_lldvDisplay;
++  bool m_lldvAmdDriverDisabled{};
+   uint32_t m_lldvEdidConnector{};
+   uint64_t m_lldvEdidGeneration{};
+   DVBRIDGE::LldvTransport m_lldvRejected;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -842,7 +842,7 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+     AnnounceCB1Mode(false);
+-    StageNativeHDR10Plus();
++    const int nativeHDR10PlusFallback = StageNativeHDR10Plus();
+ #endif
+ #ifdef CB1_HAS_HDR10_AI
+     if (m_hdr10HandoffPending)
+@@ -888,7 +888,10 @@
+         const auto generation=cache.GetVideoProcessingGeneration();
+         const auto now=std::chrono::steady_clock::now();
+         const auto previous = cache.GetVideoProcessingInfo();
++        const int fallback = !drm->HDR10PlusActive() && GetEotf() == KODI::UTILS::Eotf::PQ
++                                 ? nativeHDR10PlusFallback : 0;
+         if (generation!=previousGeneration || now>=next || previous.output.flags ||
++            previous.nativeHDR10PlusFallbackLabel != fallback ||
+             (previous.outputType == VideoOutputType::HDR10Plus) != drm->HDR10PlusActive())
+         {
+           auto info=DVBRIDGE::NativeProcessingInfo(DVBRIDGE::StreamTelemetry::Read());
+@@ -896,6 +899,7 @@
+           info.outputType = drm->HDR10PlusActive() ? VideoOutputType::HDR10Plus :
+               GetEotf() == KODI::UTILS::Eotf::PQ ? VideoOutputType::HDR10 :
+               GetEotf() == KODI::UTILS::Eotf::HLG ? VideoOutputType::HLG : VideoOutputType::SDR;
++          info.nativeHDR10PlusFallbackLabel = fallback;
+           if (cache.SetVideoProcessingInfo(info.informationGeneration,info))
+           {
+             previousGeneration=generation;
+@@ -1070,10 +1074,10 @@
+   return true;
+ }
+ 
+-void CWinSystemGbmGLESContext::StageNativeHDR10Plus()
++int CWinSystemGbmGLESContext::StageNativeHDR10Plus()
+ {
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+-  if (!drm) return;
++  if (!drm) return 0;
+   std::optional<std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES>> packet;
+   const auto& source = m_videoSourceSideData;
+   const uint64_t generation = CServiceBroker::GetDataCacheCore().GetVideoProcessingGeneration();
+@@ -1082,17 +1086,27 @@
+   const auto* metadata = passthrough && source && source->Generation() == generation ?
+       source->HDR10Plus() : nullptr;
+   const char* reason = "no-source-metadata";
++  int fallback = 0;
+   if (metadata)
+   {
+     const auto* display = GetDisplayInfo();
+     if (GetEotf() != KODI::UTILS::Eotf::PQ)
+       reason = "output-not-pq";
+     else if (GetOutputBitDepth() < 10)
++    {
+       reason = "output-buffer-below-10-bit";
++      fallback = 41334;
++    }
+     else if (!drm->GetConnector() || !drm->GetConnector()->SupportsProperty("HDR10PLUS_METADATA"))
++    {
+       reason = "driver-unsupported";
++      fallback = 41335;
++    }
+     else if (!display || display->HDR10PlusVersion() < metadata->application_version)
++    {
+       reason = "display-unsupported";
++      fallback = 41336;
++    }
+     else
+     {
+       const bool overlay = CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
+@@ -1101,6 +1115,7 @@
+       const auto status = cb1_hdr10plus_vsif(bytes.data(), metadata, overlay, true);
+       reason = status == CB1_HDR10PLUS_OK ? "staged" :
+           status == CB1_HDR10PLUS_INVALID ? "invalid-metadata" : "unrepresentable-metadata";
++      fallback = status == CB1_HDR10PLUS_OK ? 41337 : 41338;
+       if (status == CB1_HDR10PLUS_OK) packet = bytes;
+     }
+   }
+@@ -1142,6 +1157,7 @@
+       }
+     }
+   }
++  return fallback;
+ }
+ #endif
+ 
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -221,7 +221,7 @@
+   bool FinishPlayerLedFrame(const CDVBridgeGLES::PlayerLedFrame& frame, double pts);
+   std::optional<CDVBridgeGLES::PlayerLedFrame> m_playerLedPage;
+   double m_playerLedPagePts{};
+-  void StageNativeHDR10Plus();
++  int StageNativeHDR10Plus();
+   std::string m_hdr10plusReason;
+   uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
+ #endif

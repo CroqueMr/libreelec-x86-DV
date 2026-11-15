@@ -76,6 +76,14 @@ class StableVideoSettings(unittest.TestCase):
         self.assertTrue(any(link.text == "9001" and "CB1.LldvStatus" in link.get("condition", "")
                             for link in nav))
 
+    def test_lldv_auto_can_clear_a_saved_format_without_hdmi(self):
+        source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
+        menu, preference = source.split("std::string CDVPlaybackModes::LldvPreferenceLabel()", 1)
+        self.assertIn("format != LldvFormat::Auto && reason != 0", menu)
+        self.assertIn("choice == static_cast<int>(LldvFormat::Auto) ||", menu)
+        preference = preference.split("std::string CDVPlaybackModes::SDRGamutLabel()", 1)[0]
+        self.assertNotIn("status.active", preference)
+
 
     def test_lldv_display_details_use_a_nested_native_viewer(self):
         menu = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")

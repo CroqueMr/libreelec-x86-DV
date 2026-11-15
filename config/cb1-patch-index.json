@@ -1944,5 +1944,20 @@
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Apply CTA RGB range defaults to actual HDMI signals and honor explicit BT.2020 RGB range preferences.",
       "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c": "Pass the sink RGB quantization selection capability to Display Core."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-availability.patch": {
+    "owner": "Complete Stable playback availability and output reporting.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Keep the selected and confirmed playback states visible.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Keep the selected and confirmed playback states visible.",
+      "xbmc/cores/VideoProcessingInfo.h": "Keep the selected and confirmed playback states visible.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Keep the selected and confirmed playback states visible.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Keep the selected and confirmed playback states visible.",
+      "xbmc/utils/DVBridgeLldv.h": "Keep the selected and confirmed playback states visible.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep the selected and confirmed playback states visible.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Keep the selected and confirmed playback states visible.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Keep the selected and confirmed playback states visible.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep the selected and confirmed playback states visible."
+    }
   }
 }
