@@ -2978,18 +2978,22 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
  #include "Autorun.h"
  #include "GUIPassword.h"
-@@ -211,8 +217,83 @@
+@@ -211,8 +217,88 @@
    if (!root)
      return false;
  
 +#ifdef HAVE_DVBRIDGE
 +  std::unique_ptr<TiXmlElement> migrated;
 +  bool hasHDR10PlusPreference = false;
++  bool hasSDRPreference = false;
 +  for (const auto* setting = root->FirstChildElement("setting"); setting;
 +       setting = setting->NextSiblingElement("setting"))
-+    if (setting->Attribute("id") &&
-+        std::string_view(setting->Attribute("id")) == "dvbridge.hdr10plussource")
-+      hasHDR10PlusPreference = true;
++  {
++    const char* id = setting->Attribute("id");
++    if (!id) continue;
++    hasHDR10PlusPreference |= std::string_view(id) == "dvbridge.hdr10plussource";
++    hasSDRPreference |= std::string_view(id) == "dvbridge.sdrpreset";
++  }
 +  for (const auto* setting = root->FirstChildElement("setting"); setting;
 +       setting = setting->NextSiblingElement("setting"))
 +  {
@@ -3000,7 +3004,8 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +                               std::string_view(value) == "3";
 +    const auto legacy = legacyHDR10Plus ? std::optional<int>{0} :
 +            std::string_view(id) == "dvbridge.outputmode" &&
-+            (std::string_view(value) == "3" || std::string_view(value) == "6") ?
++            // The SDR preset first shipped alongside the reuse of value 6.
++            (std::string_view(value) == "3" || (!hasSDRPreference && std::string_view(value) == "6")) ?
 +            std::optional<int>{5} : std::nullopt;
 +    if (!legacy) continue;
 +    if (!migrated) migrated.reset(root->Clone()->ToElement());

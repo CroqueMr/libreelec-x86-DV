@@ -142,7 +142,7 @@ static const char crop_reduce_body[] =
 struct cb1_hdr10_extrema {
     pl_gpu gpu;
     pl_dispatch dispatch;
-    pl_tex scan, cropped_scan, temporary[2], bounds, final;
+    pl_tex scan, cropped_scan, temporary[2], cropped_temporary[2], bounds, final;
     GLuint result, framebuffer;
     GLsync fence;
     pl_fmt format;
@@ -231,15 +231,19 @@ static bool dispatch(struct cb1_hdr10_extrema *ctx, pl_tex input, pl_tex output,
             source && cropped?"#define CB1_COMPACT_CROP 1\n":"",shader_header,decode);
         shader_header=compact_header;
     }
+    const bool grouped_rgb_crop = !source && scan && cropped && ctx->tiled && ctx->coalesced;
     char source_header[sizeof(compact_header)+128];
-    snprintf(source_header,sizeof(source_header),"#define SOURCE_TILE 8u\n#define SOURCE_BITS 3u\n%s",shader_header);
+    snprintf(source_header,sizeof(source_header),"#define SOURCE_TILE %s\n#define SOURCE_BITS 3u\n%s%s",
+        grouped_rgb_crop?"16u":"8u",grouped_rgb_crop?
+        "#define source_at(p) texelFetch(pq_input,ivec2(p),0).rgb\n":"",shader_header);
     shader_header=source_header;
     pl_shader shader = pl_dispatch_begin(ctx->dispatch);
     bool ok = !source || !scan || cb1_hdr10_ingress_source_shader(shader,source);
     if(ok && source && scan)ok=pl_shader_custom(shader,&(struct pl_custom_shader){
         .header=direct_codes,.prelude="#define source_at(p) analysis_rgb(ivec2(p)).rgb\n",.output=PL_SHADER_SIG_NONE});
     if(ok)ok = pl_shader_custom(shader, &(struct pl_custom_shader){
-        .description="CB1 HDR10 integer bounds",.header=shader_header,.body=source && scan?(cropped?crop_reduce_body:direct_tile_body):scan?(ctx->tiled?tiled_scan_body:scan_body):reduce_body,
+        .description="CB1 HDR10 integer bounds",.header=shader_header,.body=scan?(cropped && ctx->tiled && (source || ctx->coalesced)?crop_reduce_body:
+                source?direct_tile_body:ctx->tiled?tiled_scan_body:scan_body):reduce_body,
         .output=PL_SHADER_SIG_COLOR,.descriptors=descriptors,.num_descriptors=descriptor_count,
         .variables=uniforms,.num_variables=6});
     if (ok) ok = pl_dispatch_finish(ctx->dispatch, pl_dispatch_params(.shader=&shader,.target=output));
@@ -255,13 +259,14 @@ static bool allocate(struct cb1_hdr10_extrema *ctx, pl_tex *texture, unsigned co
         .renderable=true,.host_readable=count==1));
 }
 
-static bool reduce(struct cb1_hdr10_extrema *ctx, pl_tex input, unsigned count, pl_tex final)
+static bool reduce(struct cb1_hdr10_extrema *ctx, pl_tex input, unsigned count, pl_tex final,
+                   pl_tex temporary[2])
 {
     unsigned next = 0;
     while (count > 1) {
         unsigned groups = (count+127)/128;
-        if (groups != 1 && !allocate(ctx, &ctx->temporary[next], groups)) return false;
-        pl_tex output = groups == 1 ? final : ctx->temporary[next];
+        if (groups != 1 && !allocate(ctx, &temporary[next], groups)) return false;
+        pl_tex output = groups == 1 ? final : temporary[next];
         if (!dispatch(ctx, input, output, count, false, false,NULL)) return false;
         input = output;
         next ^= 1;
@@ -306,7 +311,10 @@ void cb1_hdr10_extrema_destroy(struct cb1_hdr10_extrema **ctx)
 {
     if (!ctx || !*ctx) return;
     pl_dispatch_destroy(&(*ctx)->dispatch);
-    for (unsigned i = 0; i < 2; ++i) pl_tex_destroy((*ctx)->gpu, &(*ctx)->temporary[i]);
+    for (unsigned i = 0; i < 2; ++i) {
+        pl_tex_destroy((*ctx)->gpu, &(*ctx)->temporary[i]);
+        pl_tex_destroy((*ctx)->gpu, &(*ctx)->cropped_temporary[i]);
+    }
     pl_tex_destroy((*ctx)->gpu, &(*ctx)->scan);
     pl_tex_destroy((*ctx)->gpu, &(*ctx)->cropped_scan);
     pl_tex_destroy((*ctx)->gpu, &(*ctx)->bounds);
@@ -367,7 +375,8 @@ static enum cb1_ai_status submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
 #endif
     const unsigned tile_width=source?8:16;
     const unsigned groups=ctx->tiled?((ctx->width+tile_width-1)/tile_width)*((ctx->height+1)/2):(count+127)/128;
-    const unsigned cropped_groups=source?(groups+127)/128:groups;
+    const bool grouped=source || (ctx->tiled && ctx->coalesced);
+    const unsigned cropped_groups=grouped?(groups+127)/128:groups;
     if(ctx->tiled && !allocate(ctx,&ctx->cropped_scan,cropped_groups)){ctx->failed=true;return CB1_AI_INVALID;}
     pl_dispatch_reset_frame(ctx->dispatch);
     /* Records use alpha as data, not opacity. Preserve the caller's blend state. */
@@ -376,13 +385,14 @@ static enum cb1_ai_status submit(struct cb1_hdr10_extrema *ctx,pl_tex texture,
     pl_fmt scan_format=ctx->compact?pl_find_fmt(ctx->gpu,PL_FMT_UNORM,4,16,16,
         PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE):ctx->format;
     if(!scan_format){ctx->compact=false;scan_format=ctx->format;}
-    unsigned scan_width=source?(ctx->width+tile_width-1)/tile_width:groups<256?groups:256;
+    unsigned scan_width=grouped?(ctx->width+tile_width-1)/tile_width:groups<256?groups:256;
     bool ok=scan_format && pl_tex_recreate(ctx->gpu,&ctx->scan,pl_tex_params(.w=scan_width,
         .h=(groups+scan_width-1)/scan_width,.format=scan_format,.sampleable=true,.renderable=true)) &&
         dispatch(ctx,texture,ctx->scan,count,true,false,source) &&
-        reduce(ctx,ctx->scan,groups,ctx->bounds) &&
-        dispatch(ctx,texture,ctx->tiled?ctx->cropped_scan:ctx->scan,source?groups:count,true,true,source) &&
-        reduce(ctx,ctx->tiled?ctx->cropped_scan:ctx->scan,cropped_groups,ctx->final) && download(ctx);
+        reduce(ctx,ctx->scan,groups,ctx->bounds,ctx->temporary) &&
+        dispatch(ctx,texture,ctx->tiled?ctx->cropped_scan:ctx->scan,grouped?groups:count,true,true,source) &&
+        reduce(ctx,ctx->tiled?ctx->cropped_scan:ctx->scan,cropped_groups,ctx->final,
+            grouped?ctx->cropped_temporary:ctx->temporary) && download(ctx);
     if(blend)glEnable(GL_BLEND);
     if(!ok){
         ctx->failed=true;return CB1_AI_INVALID;

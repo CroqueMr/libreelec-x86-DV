@@ -57,7 +57,9 @@ struct Window {virtual ~Window()=default;Gfx gfx;Gfx& GetGfxContext(){return gfx
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext:Window {
  std::optional<double> age;std::optional<std::pair<double,uint64_t>> presented;
- bool CB1AsyncPlayback(){return true;}
+ bool async=true,adaptive=false;
+ bool CB1AsyncPlayback(){return async;}
+ bool CB1AdaptiveScanout(){return adaptive;}
  std::optional<double> CB1PresentationAge(){return age;}
  std::optional<std::pair<double,uint64_t>> CB1PresentedPicture(){return presented;}
 };
@@ -210,6 +212,51 @@ class CB1PresentationSyncTests(unittest.TestCase):
  check("24p@24 startup one frame",{24,24,45},0.25,0.25,0);
  check("24p@24 startup phase error",{24,24,590,0,2,0,18},0.25,0.25,0);
  check("23.976p@24 startup 590 ms",{24,24000.0/1001,590},1.0,0.0,2);''')
+
+    def test_adaptive_catches_up_only_after_a_picture_expires(self):
+        self.assertRuns(r"""
+ // Reproduce the first scheduling decision after the 23.976 Hz modeset.
+ constexpr double refresh=1000000.0/23.976;
+ for(bool async:{false,true}){
+   window={};
+   window.adaptive=true;window.async=async;
+   window.gfx.refresh=23.976;
+   window.gfx.latencyMs=async?83.417:125.125;
+   CRenderManager r;
+   r.m_fps=23.976f;r.m_clockSync.m_enabled=true;
+   r.m_dvdClock.now=74307;
+   for(int i=1;i<7;++i){
+     r.m_Queue[i].pts=i*refresh;r.m_Queue[i].duration=refresh;r.m_queued.push_back(i);
+   }
+   if(async) window.age=1500;
+   r.PrepareNextRender();
+   assert(r.m_presentstep==PRESENT_FLIP && r.m_presentsource==1 && r.m_QueueSkip==0);
+   // A measured pipeline delay still catches up genuinely late pictures.
+   for(int i=0;i<8;++i){
+     const uint64_t start=(i+1)*100000000;
+     r.m_clockSync.m_cb1Latency.Selected(i,start);
+     r.m_clockSync.m_cb1Latency.Completed(i,start+83417000);
+   }
+   window.async=true;
+   window.age=1500;
+   // The first estimate must not skip an on-time head.
+   r.m_dvdClock.now=2*refresh+39000;
+   r.m_presentstep=PRESENT_READY;
+   r.PrepareNextRender();
+   assert(r.m_presentsource==2 && r.m_QueueSkip==0);
+   // A CPU tick after the deadline can still be within the last scanout interval.
+   window.age=23030;
+   r.m_dvdClock.now=5*refresh+10000;
+   r.m_presentstep=PRESENT_READY;
+   r.PrepareNextRender();
+   assert(r.m_presentsource==3 && r.m_QueueSkip==0);
+   window.age=1500;
+   r.m_dvdClock.now=8*refresh;
+   r.m_presentstep=PRESENT_READY;
+   r.PrepareNextRender();
+   assert(r.m_presentsource==6 && r.m_QueueSkip>0);
+ }
+""")
 
     def test_unmatched_rates_stay_within_one_picture(self):
         # Without a matching refresh, the shown picture is valid within one refresh of scanout.
