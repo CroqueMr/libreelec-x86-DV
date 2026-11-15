@@ -39,7 +39,22 @@ template<class...T>bool DiagnosticLog(int,fmt::format_string<T...> f,T&&...a){
 }
 namespace KODI::UTILS {enum class Eotf{PQ};}
 struct Cache{uint64_t GetVideoProcessingGeneration(){return 7;}};
-struct CServiceBroker{static Cache& GetDataCacheCore(){static Cache cache;return cache;}};
+struct CApplicationPlayer{
+ static inline bool overlay=false;
+ bool HasVisibleOverlay()const{return overlay;}
+};
+struct Components{
+ template<class T>T* GetComponent(){static T component;return &component;}
+};
+struct GUI{
+ GUI& GetWindowManager(){return *this;}
+ bool HasVisibleControls(){return false;}
+};
+struct CServiceBroker{
+ static Cache& GetDataCacheCore(){static Cache cache;return cache;}
+ static Components GetAppComponents(){return {};}
+ static GUI* GetGUI(){static GUI gui;return &gui;}
+};
 struct Connector{bool SupportsProperty(const char*){return true;}};
 struct DRMBase{virtual ~DRMBase()=default;};
 struct CDRMAtomic:DRMBase{
@@ -64,7 +79,8 @@ struct CWinSystemGbmGLESContext{
  const Display* GetDisplayInfo(){return &display;}
  KODI::UTILS::Eotf GetEotf(){return KODI::UTILS::Eotf::PQ;}
  unsigned GetOutputBitDepth(){return 10;}
- void StageNativeHDR10Plus(bool overlay) BODY
+ void StageNativeHDR10Plus() BODY
+ void StageWithOverlay(bool overlay){CApplicationPlayer::overlay=overlay;StageNativeHDR10Plus();}
  CDRMAtomic& drm(){return *std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);}
 };
 AVDynamicHDRPlus fixture(){
@@ -91,13 +107,13 @@ int main(){
  using DVBRIDGE::lines;
  CWinSystemGbmGLESContext rejected;rejected.m_videoSourceSideData->metadata=fixture();
  const auto original=rejected.m_videoSourceSideData->metadata;
- rejected.StageNativeHDR10Plus(false);unchanged(rejected,original);
+ rejected.StageWithOverlay(false);unchanged(rejected,original);
  assert(!rejected.drm().packet);
  assert(lines.size()==3 && "rejected source needs its summary and two bounded detail lines");
  assert(lines[0].find("HDR10+ output: unrepresentable-metadata")!=std::string::npos);
  assert(lines[1]=="HDR10+ statistics: distribution=[1:0/100000,5:2094/100000,10:96/100000,25:3/100000,50:4/100000,75:5/100000,90:88/100000,95:720/100000,99:2888/100000] maxscl=[3956/100000,2063/100000,2047/100000] average=93/100000 bright=0/1000");
  assert(lines[2]=="HDR10+ curve: knee=0/4095,0/4095 anchors=[102/1023,205/1023,307/1023,410/1023,512/1023,614/1023,717/1023,819/1023,0/1023]");
- rejected.StageNativeHDR10Plus(true);assert(lines.size()==3);unchanged(rejected,original);
+ rejected.StageWithOverlay(true);assert(lines.size()==3);unchanged(rejected,original);
 
  lines.clear();CWinSystemGbmGLESContext invalid;
  invalid.m_videoSourceSideData->metadata=fixture();auto& p=invalid.m_videoSourceSideData->metadata.params[0];
@@ -107,29 +123,29 @@ int main(){
   p.bezier_curve_anchors[i]={static_cast<int>(i+1),1023};
  }
  const auto malformed=invalid.m_videoSourceSideData->metadata;
- invalid.StageNativeHDR10Plus(false);assert(!invalid.drm().packet);unchanged(invalid,malformed);
+ invalid.StageWithOverlay(false);assert(!invalid.drm().packet);unchanged(invalid,malformed);
  assert(lines.size()==3 && lines[0].find("invalid-metadata")!=std::string::npos);
  assert(lines[1].find("distribution=[1:100/100000,2:101/100000,3:102/100000,4:103/100000,5:104/100000,6:105/100000,7:106/100000,8:107/100000,9:108/100000,10:109/100000,11:110/100000,12:111/100000,13:112/100000,14:113/100000,15:114/100000]")!=std::string::npos);
  assert(lines[2]=="HDR10+ curve: knee=0/4095,0/4095 anchors=[1/1023,2/1023,3/1023,4/1023,5/1023,6/1023,7/1023,8/1023,9/1023,10/1023,11/1023,12/1023,13/1023,14/1023,15/1023]");
- invalid.StageNativeHDR10Plus(false);assert(lines.size()==3);
+ invalid.StageWithOverlay(false);assert(lines.size()==3);
 
  lines.clear();DVBRIDGE::admit=false;CWinSystemGbmGLESContext denied;
- denied.m_videoSourceSideData->metadata=fixture();denied.StageNativeHDR10Plus(false);
+ denied.m_videoSourceSideData->metadata=fixture();denied.StageWithOverlay(false);
  assert(lines.empty() && denied.m_hdr10plusReason.empty() && !denied.drm().packet);
- DVBRIDGE::admit=true;denied.StageNativeHDR10Plus(false);assert(lines.size()==3);
+ DVBRIDGE::admit=true;denied.StageWithOverlay(false);assert(lines.size()==3);
 
  lines.clear();CWinSystemGbmGLESContext unsupported;
  unsupported.display.version=0;unsupported.m_videoSourceSideData->metadata=fixture();
- unsupported.StageNativeHDR10Plus(false);assert(!unsupported.drm().packet && lines.size()==1);
+ unsupported.StageWithOverlay(false);assert(!unsupported.drm().packet && lines.size()==1);
  assert(lines[0].find("display-unsupported")!=std::string::npos);
  unsupported.m_videoSourceSideData->metadata.params[0].bezier_curve_anchors[8]={922,1023};
  const auto valid=unsupported.m_videoSourceSideData->metadata;
- unsupported.StageNativeHDR10Plus(false);assert(!unsupported.drm().packet && lines.size()==1);
- unsupported.display.version=1;unsupported.StageNativeHDR10Plus(true);unchanged(unsupported,valid);
+ unsupported.StageWithOverlay(false);assert(!unsupported.drm().packet && lines.size()==1);
+ unsupported.display.version=1;unsupported.StageWithOverlay(true);unchanged(unsupported,valid);
  assert(unsupported.drm().packet && lines.size()==2 && lines[1].find("output: staged")!=std::string::npos);
  uint8_t expected[31];assert(cb1_hdr10plus_vsif(expected,&valid,true,true)==CB1_HDR10PLUS_OK);
  assert(!std::memcmp(unsupported.drm().packet->data(),expected,sizeof(expected)));
- unsupported.StageNativeHDR10Plus(true);assert(lines.size()==2);
+ unsupported.StageWithOverlay(true);assert(lines.size()==2);
 }
 '''.replace('BODY',stage)
         with tempfile.TemporaryDirectory(prefix='hdr10plus-diagnostics-') as temporary:
@@ -152,6 +168,7 @@ int main(){
 #include "utils/DVBridgeDiagnosticLog.h"
 #include <cassert>
 int main(){
+ DVBRIDGE::SetDetailedDiagnostics(true);
  DVBRIDGE::DiagnosticOpen();DVBRIDGE::DiagnosticReserveProgress();
  for(unsigned i=0;i<18;i++)assert(DVBRIDGE::DiagnosticLog(LOGINFO,"detail {}",i));
  assert(!DVBRIDGE::DiagnosticLog(LOGINFO,"startup overflow"));

@@ -106,7 +106,7 @@ bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
 int CDVBridgeGLES::Context::Upscaler() const { return -1; }
-int KODI::VIDEO::UPSCALER::Get(bool, int kodi) { return kodi; }
+int KODI::VIDEO::UPSCALER::Get(unsigned int, unsigned int, int kodi) { return kodi; }
 struct CDVBridgeGLES::PlayerLedCpu {
   DVBRIDGE::SourceBinding source;
   uint64_t generation{}, revision{};

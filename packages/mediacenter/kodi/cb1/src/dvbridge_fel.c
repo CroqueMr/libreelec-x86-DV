@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Split and hardware-decode the enhancement layer; pair surfaces by exact presentation time. */
 #include "dvbridge_fel.h"
+#include "dvbridge_metadata_bounds.h"
 #include <libavcodec/bsf.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_vaapi.h>
@@ -9,6 +10,7 @@
 #include <string.h>
 
 #define QUEUE_MAX 32
+#define MEL_PACKET_MAX (2 * QUEUE_MAX)
 #define PACKET_BYTES_MAX (64u * 1024u * 1024u)
 #define MAP_MAX (QUEUE_MAX * 2)
 
@@ -61,14 +63,14 @@ static bool picture_identity(struct picture_order *order, const AVPacket *packet
 struct dvbridge_fel {
     AVBSFContext *split;
     AVCodecContext *decoder;
-    AVPacket *packets[QUEUE_MAX];
+    AVPacket *packets[MEL_PACKET_MAX];
     AVFrame *frames[QUEUE_MAX];
     unsigned num_packets, num_frames;
     size_t packet_bytes;
     bool opened, failed, draining, sent_eof, eof, recovering, harvesting, epoch_uncertain;
     struct picture_order base_order, enhancement_order;
-    int64_t packet_order[QUEUE_MAX];
-    bool packet_key[QUEUE_MAX];
+    int64_t packet_order[MEL_PACKET_MAX];
+    bool packet_key[MEL_PACKET_MAX];
     struct { int64_t order, pts; bool key, presentable; } times[MAP_MAX];
     unsigned num_times;
     bool synchronizing;
@@ -80,7 +82,49 @@ struct dvbridge_fel {
     bool source_timed;
     bool source_no_rasl;
     int64_t source_taken;
+    bool mel_deferred, el_started;
 };
+
+static bool self_contained_idr(const AVPacket *packet)
+{
+    unsigned parameter_sets = 0;
+    for (int i = 0; i + 4 < packet->size; ++i) {
+        if (packet->data[i] || packet->data[i + 1] || packet->data[i + 2] != 1)
+            continue;
+        int type = (packet->data[i + 3] >> 1) & 63;
+        if (type < 32)
+            return (type == 19 || type == 20) && parameter_sets == 7;
+        if (type <= 34)
+            parameter_sets |= 1u << (type - 32);
+    }
+    return false;
+}
+
+/* Keep the newest independently decodable suffix. Future FEL may still need
+ * every earlier access unit in its GOP, even when no displayed frame did. */
+static void prune_mel_history(struct dvbridge_fel *f)
+{
+    unsigned keep = 0;
+    for (unsigned i = 1; i < f->num_packets; ++i) {
+        if (f->packet_order[i - 1] > f->source_taken)
+            break;
+        if (f->packet_order[i] <= f->source_taken && f->packet_key[i] &&
+            self_contained_idr(f->packets[i]))
+            keep = i;
+    }
+    if (!keep)
+        return;
+    for (unsigned i = 0; i < keep; ++i) {
+        f->packet_bytes -= f->packets[i]->size;
+        av_packet_free(&f->packets[i]);
+    }
+    f->num_packets -= keep;
+    memmove(f->packets, f->packets + keep, f->num_packets * sizeof(*f->packets));
+    memmove(f->packet_order, f->packet_order + keep, f->num_packets * sizeof(*f->packet_order));
+    memmove(f->packet_key, f->packet_key + keep, f->num_packets * sizeof(*f->packet_key));
+    f->anchor_pts = f->packet_order[0];
+    f->source_no_rasl = true;
+}
 
 /* Keep exact discarded EL identities in the existing bounded map, including
  * an EL arriving before its BL. A decoder error without an identity is fatal. */
@@ -140,6 +184,7 @@ static void clear_queues(struct dvbridge_fel *f)
     f->source_timed = false;
     f->source_no_rasl = false;
     f->source_taken = AV_NOPTS_VALUE;
+    f->mel_deferred = f->el_started = false;
 }
 
 void dvbridge_fel_reset(struct dvbridge_fel *f)
@@ -419,6 +464,7 @@ static bool pump(struct dvbridge_fel *f)
         }
         packet->pts = f->packet_order[0];
         packet->dts = AV_NOPTS_VALUE;
+        f->el_started = true;
         int result = avcodec_send_packet(f->decoder, packet);
         if (result == AVERROR(EAGAIN))
             break;
@@ -552,7 +598,14 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
             }
             goto fail;
         }
-        if (f->num_packets == QUEUE_MAX || copy->size <= 0 ||
+        const unsigned limit = f->mel_deferred ? MEL_PACKET_MAX : QUEUE_MAX;
+        if (f->mel_deferred && !f->el_started &&
+            (f->num_packets >= limit || (size_t)copy->size > PACKET_BYTES_MAX - f->packet_bytes))
+            if (!pump(f)) {
+                av_packet_free(&copy);
+                goto fail;
+            }
+        if (f->num_packets >= limit || copy->size <= 0 ||
             (size_t)copy->size > PACKET_BYTES_MAX - f->packet_bytes ||
             !picture_identity(&f->enhancement_order, copy, &f->packet_order[f->num_packets])) {
             av_packet_free(&copy);
@@ -654,6 +707,9 @@ bool dvbridge_fel_drain(struct dvbridge_fel *f)
         return false; /* EOF cannot supply the missing random-access picture. */
     }
     f->draining = true;
+    // A later base picture can still request its residual during drain.
+    if (f->mel_deferred && !f->el_started)
+        return true;
     return pump(f);
 }
 
@@ -677,7 +733,7 @@ static int take_ready(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
     return 0;
 }
 
-static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
+static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame, bool no_residual)
 {
     unsigned match = 0;
     while (match < f->num_times && f->times[match].pts != pts) ++match;
@@ -689,10 +745,24 @@ static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
         --f->num_times;
         memmove(f->times+i, f->times+i+1, (f->num_times-i)*sizeof(*f->times));
     }
-    if (presentable && !f->failed) pump(f);
+    bool metadata_only = false;
+    if (no_residual && presentable && !f->failed && !f->el_started && !f->synchronizing &&
+        source >= f->anchor_pts) {
+        for (unsigned i = 0; i < f->num_packets; ++i)
+            if (f->packet_order[i] == source) {
+                const int type = vcl_type(f->packets[i]);
+                metadata_only = !f->source_no_rasl || (type != 8 && type != 9);
+                break;
+            }
+    }
+    if (presentable && !metadata_only && !f->failed) pump(f);
     int result = 0;
     if (!presentable)
         result = 2;
+    else if (metadata_only) {
+        f->mel_deferred = true;
+        result = 3;
+    }
     else if (take_ready(f, source, frame)) {
         (*frame)->pts = (*frame)->best_effort_timestamp = pts;
         result = 1;
@@ -706,6 +776,8 @@ static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
     }
     if (result > 0) {
         f->source_taken = source;
+        if (metadata_only)
+            prune_mel_history(f);
         for (unsigned i = 0; i < f->num_times; ++i) if (f->times[i].order == source) {
             --f->num_times;
             memmove(f->times+i, f->times+i+1, (f->num_times-i)*sizeof(*f->times));
@@ -719,7 +791,7 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 {
     if (!f || !frame || *frame || pts == AV_NOPTS_VALUE)
         return -1;
-    if (f->source_timed) return take_source(f, pts, frame);
+    if (f->source_timed) return take_source(f, pts, frame, false);
     /* Return available work before submitting future enhancement pictures. */
     if (take_ready(f, pts, frame))
         return 1;
@@ -761,6 +833,18 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
     }
     /* Future packets alone cannot prove a missing picture or justify substitution. */
     return f->eof || f->num_frames == QUEUE_MAX ? -1 : 0;
+}
+
+int dvbridge_fel_take_mel(struct dvbridge_fel *f, int64_t pts, AVFrame **frame,
+                         const void *data, size_t size)
+{
+    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || !f->source_timed ||
+        !dvbridge_metadata_bounds(data, size))
+        return dvbridge_fel_take(f, pts, frame);
+    const AVDOVIMetadata *metadata = data;
+    const AVDOVIRpuDataHeader *header = av_dovi_get_header(metadata);
+    return take_source(f, pts, frame, header->disable_residual_flag == 1 ||
+                       dvbridge_dv_is_mel(metadata));
 }
 
 bool dvbridge_fel_failed(const struct dvbridge_fel *f)

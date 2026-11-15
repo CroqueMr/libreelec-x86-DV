@@ -25,6 +25,10 @@ bool dvbridge_fel_submit_source(struct dvbridge_fel *fel, const AVPacket *packet
 bool dvbridge_fel_drain(struct dvbridge_fel *fel);
 /* 1: exact pair, 0: need input, 2: discard preroll, -1: missing pair / failure. */
 int dvbridge_fel_take(struct dvbridge_fel *fel, int64_t pts, AVFrame **frame);
+/* Disc playback may return 3 for a matched, validated RPU that needs no residual.
+ * Compressed reference pictures remain available until a self-contained IDR. */
+int dvbridge_fel_take_mel(struct dvbridge_fel *fel, int64_t pts, AVFrame **frame,
+                         const void *metadata, size_t metadata_size);
 bool dvbridge_fel_failed(const struct dvbridge_fel *fel);
 /* Decoder reached EOF and no enhancement surface remains to pair. */
 bool dvbridge_fel_exhausted(const struct dvbridge_fel *fel);

@@ -11,7 +11,7 @@ class NativeHDR10FrameHandoff(unittest.TestCase):
         render = body(gles, "void CWinSystemGbmGLESContext::PresentFrame(")
         self.assertLess(render.index("m_hdr10HandoffPicture"), render.rindex("TrySwapBuffers"))
         self.assertLess(render.index("PresentHDR10Handoff("),
-                        render.index("CWinSystemGbm::FlipPage(rendered, videoLayer, async)"))
+                        render.index("CWinSystemGbm::FlipPage(rendered, videoLayer, async"))
 
     def test_hdr_blob_is_promoted_only_on_paired_commit(self):
         gbm = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()

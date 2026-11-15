@@ -131,7 +131,7 @@ int main(){
 namespace DVBRIDGE { ENUMS
 PREFERENCES
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputPreferences prefs;
 OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=prefs;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
@@ -349,7 +349,7 @@ ENUMS
 PREFERENCES
 BUDGET
 enum class OutputRoute { Vanilla, NativeDV, HDR10, SDR, PlayerLed };
-struct OutputSelection { OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{}; };
+struct OutputSelection { OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{}; };
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 template<class T> void source_plus(T& caps,bool value) {
@@ -391,10 +391,10 @@ int main(){
 #include <cassert>
 #include <cstring>
 int main(){
- assert(!std::strcmp(cb1_engine_version(),"CB1 0.5"));
+ assert(!std::strcmp(cb1_engine_version(),"CB1 1.0"));
  assert(CB1_DV_HDR10PLUS==12 && CB1_HDR10_DV_REFERENCE==7 && CB1_HDR10_DV_ADAPTIVE==8);
  const char* guided=cb1_circuit_version(static_cast<cb1_circuit>(13));
- assert(guided && !std::strcmp(guided,"CB1-HDR10PDVR.0.2"));
+ assert(guided && !std::strcmp(guided,"CB1-HDR10PDVR.1.0"));
 }
 ''', sources=(REPO/'CB1/src/cb1_circuit.c',))
 
@@ -470,7 +470,7 @@ namespace DVBRIDGE {
 ENUMS
 PREFERENCES
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 OutputSelection gated(const OutputPreferences& preferences,OutputCapabilities caps,bool m_aiReady,bool m_aiFallback=false,bool current=true){
  auto result=select(preferences,caps);
@@ -752,7 +752,7 @@ inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Nativ
 inline std::atomic<HDR10SourceMode> hlgPlaybackMode{HDR10SourceMode::Native};
 OutputPreferences FrameOutputSettings(bool plus=false,bool=false){auto value=current;if(plus)value.hdr10Source=value.hdr10PlusSource;return value;}
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection select(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 struct Picture {
@@ -917,7 +917,7 @@ int main(){
  assert(result.informationGeneration==17 && !result.metadata && result.output.hdr10PlusDV);
  assert(result.output.guidedSourceFields==2 && result.output.guidedEstimatedFields==5);
  assert(result.output.untranslatedCurve && result.output.untranslatedSaturation);
- assert(result.output.circuit=="CB1-HDR10PDVR.0.2" && result.output.engine=="CB1 0.5");
+ assert(result.output.circuit=="CB1-HDR10PDVR.1.0" && result.output.engine=="CB1 1.0");
  assert(result.output.emittedL1[1]==3079);
  assert(CDVPlaybackInfo::Mode(result.output)=="Dolby Vision Rendering");
  // Display mapping is a committed-frame fact, independent of later preferences.
@@ -972,7 +972,7 @@ int main(){
  assert(Requested(output)=="Dolby Vision Rendering");
  output.requested=output.effective=4;
  assert(VideoProcessingInfoGUI::Mode(info)=="localized Adaptive AI");
- assert(Effective(output)=="Dolby Vision Adaptive HDR Mapping (AI)");
+ assert(Effective(output)=="Dolby Vision Adaptive HDR Mapping");
  output.hdr10AI=false;output.requested=output.effective=1;
  assert(VideoProcessingInfoGUI::Mode(info)=="Dolby Vision Reference");
  assert(Requested(output)=="Dolby Vision Reference");assert(Origin(output)=="source-RPU");

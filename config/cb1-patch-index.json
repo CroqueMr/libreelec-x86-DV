@@ -1,4 +1,10 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
+    "owner": "Restore clipping before drawing the Kodi GUI.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Reapply Kodi scissors on composited and direct GUI draws."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": {
     "owner": "Trace Player Info and playback OSD timing in debug logs.",
     "files": {
@@ -116,10 +122,10 @@
     }
   },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": {
-    "summary": "Recognize explicitly associated Dolby Vision layers in HEVC MOV sample entries",
+    "summary": "Recognize and seek explicitly associated Dolby Vision layers in HEVC MOV sample entries",
     "component": "ffmpeg",
     "files": {
-      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references. Log bounded numeric association facts and rejection reasons."
+      "libavformat/mov.c": "Accept hvc1/hev1 with an explicit Profile 7 EL configuration and exactly one distinct vdep target; reject ambiguous references. Log bounded numeric association facts and rejection reasons. Seek declared layer peers against the selected key presentation time."
     }
   },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-06-hevc-picture-clock.patch": {
@@ -1523,6 +1529,12 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/HDR10AISource.h": "Expose the source analysis input without a presentation timestamp."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": {
+    "owner": "RenderManager configuration result",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Read the configured renderer state after waiting on its readiness event."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-native-dv-renderer-handoff.patch": {
     "owner": "Native Dolby Vision renderer handoff",
     "files": {
@@ -1586,6 +1598,36 @@
     "files": {
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Use the effective static PQ output for the paired DRM commit.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Share the same eligibility check when replacing the renderer."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": {
+    "owner": "Native HDR timing at playback start",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h": "Identify streams whose first decoded picture can supply static HDR data.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Carry that intent with the requested video cadence.",
+      "xbmc/windowing/gbm/ModeChangeHold.h": "Allow a held video mode to start with native HDR signalling.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Submit the held mode with the first HDR picture."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-mel-reference-history.patch": {
+    "owner": "Blu-ray minimum enhancement layer decoding",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Declare a codec option for Blu-ray navigation.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Enable metadata-only MEL handling for Blu-ray navigation.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Preserve matched metadata and attach an enhancement surface only when one was decoded."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": {
+    "owner": "Video worker startup synchronisation",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Wait for the startup clock message before polling for more decoded pictures."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": {
+    "owner": "ActiveAE sink shutdown",
+    "files": {
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAESink.h": "Track whether audio was submitted since opening or draining the sink.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAESink.cpp": "Close a sink that only received generated keepalive samples promptly."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-dv-active-area-view.patch": {
@@ -1804,6 +1846,80 @@
       "xbmc/windowing/gbm/WinSystemGbm.h": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzz-zzzzz-compact-quick-switch.patch": {
+    "owner": "Own the compact in-playback Quick Switch presentation.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Localize the Quick Switch title, status and short labels.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Present the input, output and availability for in-playback choices.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Load the app fonts and size the panel to its items."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-upscaler-source-resolution.patch": {
+    "owner": "Select a video upscaler by source resolution.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Describe the two resolution preferences.",
+      "system/settings/settings.xml": "Expose the two resolution preferences.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Pass source dimensions to the shared preference lookup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/UpscalerSettings.h": "Define the Full HD boundary and the setting IDs.",
+      "xbmc/settings/Settings.cpp": "Cache and select the two resolution preferences.",
+      "xbmc/video/dialogs/GUIDialogVideoSettings.cpp": "Expose the two resolution preferences during playback."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9947-amd-native-lldv-rgb10-lab.patch": {
+    "owner": "AMD native LLDV validation",
+    "files": {
+      "AMD HDMI transport": "Qualify RGB10 scanout and HDMI YCbCr 4:2:2 for the existing test path."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-amd-rgb10-lab.patch": {
+    "owner": "Present AMD RGB10 LLDV through the native GBM lifecycle.",
+    "files": {
+      "xbmc/utils/DVBridgeLldv.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Carry the native RGB10 transport through selection, presentation or restoration."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": {
+    "owner": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present ordinary PQ playback on Pascal without a 10-bit EGL window.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present ordinary PQ playback on Pascal without a 10-bit EGL window."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": {
+    "owner": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Present native HDR10+ from the Pascal 10-bit scanout with frame-bound dynamic metadata."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": {
+    "owner": "Keep the Stable video settings and LLDV output readable.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Keep subordinate labels consistent.",
+      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuary’s native dialog controls.",
+      "addons/skin.estuary/xml/Includes.xml": "Show optional inline format notes in the compact select list.",
+      "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Show EDID diagnostics beside the LLDV format list.",
+      "system/settings/settings.xml": "Group playback and scaling settings and expose SDR controls only for applicable defaults.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Remove the saved override for asynchronous preparation.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous preparation enabled and present CPU-packed LLDV in scanout order.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Keep connector diagnostics outside the selectable items.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary.",
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodi’s native text viewer without closing the LLDV selector."
     }
   }
 }

@@ -39,7 +39,7 @@ class ProcessInfoWordingTests(unittest.TestCase):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         repo=Path(__file__).resolve().parents[2]
         strings=(tree/'addons/resource.language.en_gb/resources/strings.po').read_text()
-        for number,label in {40867:'Dolby Vision rendering (AI)',40970:'Dolby Vision Rendering'}.items():
+        for number,label in {40867:'Dolby Vision Rendering',40970:'Dolby Vision Rendering'}.items():
             entry=re.search(r'msgctxt "#'+str(number)+r'"\nmsgid "([^"\n]*)"',strings)
             self.assertIsNotNone(entry,number)
             self.assertEqual(entry.group(1),label)
@@ -194,7 +194,7 @@ int main() {
  assert(properties["DV.DisplayBlack"].empty());
  output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.lldv->edidVersion=2;output.gamut=2;
  output.target=800;output.displayBlack=0.002;refresh();
- assert(properties["DV.TVProfile"]=="EDID v2 · 800 nits");
+ assert(properties["DV.TVProfile"]=="EDID v2 / 800 nits");
  assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
  output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
@@ -281,7 +281,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),76)
+        self.assertEqual(len(rows),77)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))

@@ -53,7 +53,8 @@ struct Settings {
 };
 auto stored=std::make_shared<Settings>();
 struct Component {auto GetSettings(){return stored;}} component;
-struct CVariant {bool value=false;CVariant()=default;CVariant(bool b):value(b){}bool asBoolean()const{return value;}};
+struct CVariant {bool value=false;CVariant()=default;CVariant(bool b):value(b){}
+ CVariant(const std::string&){}bool asBoolean()const{return value;}};
 struct IntegerSettingOption {std::string label,label2;int value;std::vector<std::pair<std::string,CVariant>> properties;
  IntegerSettingOption(std::string l,int v):label(l),value(v){}};
 struct CSetting {std::string id;const auto& GetId()const{return id;}};
@@ -76,7 +77,13 @@ struct CApplicationPlayer {bool CanSeek(){return false;}bool IsInMenu(){return f
  float GetPlaySpeed(){return 1.0f;}int GetTime(){return 0;}} player;
 struct AppComponents {template<class T>T* GetComponent(){return &player;}} appComponents;
 struct AppMessenger {void PostMsg(int,int){assert(false);}} appMessenger;
+enum class VideoOutputType {DolbyVision,HDR10,HDR10Plus,HLG,SDR};
+struct DataCacheCore {
+ struct VideoInfo {std::optional<VideoOutputType> outputType;struct {unsigned flags;bool lldv;} output;};
+ VideoInfo GetVideoProcessingInfo(){return {};}
+};
 struct CServiceBroker {static auto& GetAppComponents(){return appComponents;}
+ static DataCacheCore& GetDataCacheCore(){static DataCacheCore core;return core;}
  static auto GetAppMessenger(){return &appMessenger;}
  static auto GetSettingsComponent(){return &component;}
  static auto& GetResourcesComponent(){return resources;}static auto GetGUI(){return &gui;}};
@@ -85,7 +92,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t revision=1;return ++
  struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};static Snapshot Read(){return {};}};}
 HEADER
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR,PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 enum class StreamHdrType{HDR_TYPE_NONE,HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};

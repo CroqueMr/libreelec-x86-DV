@@ -162,22 +162,6 @@ static inline bool dvbridge_dv_area(struct dvbridge_dv *state,unsigned left,unsi
     return out[0]+out[1]<ow && out[2]+out[3]<oh;
 }
 
-static inline bool dvbridge_dv_is_mel(const AVDOVIMetadata *metadata)
-{
-    if(!metadata)return false;
-    const AVDOVIRpuDataHeader *header=av_dovi_get_header(metadata);
-    const AVDOVIDataMapping *mapping=av_dovi_get_mapping(metadata);
-    if(header->disable_residual_flag || header->coef_log2_denom>32 ||
-       mapping->nlq_method_idc!=AV_DOVI_NLQ_LINEAR_DZ)return false;
-    uint64_t maximum=UINT64_C(1)<<header->coef_log2_denom;
-    for(unsigned channel=0;channel<3;channel++){
-        const AVDOVINLQParams *nlq=&mapping->nlq[channel];
-        if(nlq->nlq_offset || nlq->vdr_in_max!=maximum ||
-           nlq->linear_deadzone_slope || nlq->linear_deadzone_threshold)return false;
-    }
-    return true;
-}
-
 static inline void dvbridge_dv_u16(struct dvbridge_dv *state,unsigned value)
 {
     AV_WB16(state->payload+state->size,value);state->size+=2;

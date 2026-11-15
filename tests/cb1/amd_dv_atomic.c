@@ -16,8 +16,10 @@ enum {DRM_PLANE_TYPE_PRIMARY=1,DRM_PLANE_TYPE_CURSOR,DRM_FORMAT_XRGB8888,DRM_FOR
       DRM_MODE_ROTATE_0,DRM_BLEND_ALPHA_OPAQUE,AMDGPU_HDR_MULT_DEFAULT,ROTATION_ANGLE_0,
       TF_TYPE_BYPASS,VRR_STATE_ACTIVE_FIXED,VRR_STATE_ACTIVE_VARIABLE,DITHER_OPTION_DISABLE,
       COLOR_SPACE_SRGB,SIGNAL_TYPE_HDMI_TYPE_A,TIMING_3D_FORMAT_NONE,PIXEL_ENCODING_RGB,
-      COLOR_DEPTH_888,DRM_MODE_CONNECTOR_HDMIA,DRM_HDMI_BROADCAST_RGB_FULL,RMX_OFF,DITHER_OPTION_TRUN8};
-enum {DCE_VERSION_11_2=1};
+      COLOR_DEPTH_888,DRM_MODE_CONNECTOR_HDMIA,DRM_HDMI_BROADCAST_RGB_FULL,RMX_OFF,
+      DRM_FORMAT_XRGB2101010,DRM_FORMAT_XBGR2101010,DITHER_OPTION_TRUN8,DITHER_OPTION_TRUN10,
+      COLOR_SPACE_2020_YCBCR_LIMITED,PIXEL_ENCODING_YCBCR422,COLOR_DEPTH_101010};
+enum {DCE_VERSION_11_2=1,AMDGPU_LLDV_RGB10_LAB=3};
 enum {SHARPNESS_HW_OFF,SHARPNESS_ZERO,SHARPNESS_CUSTOM};
 enum {VISUAL_CONFIRM_DISABLE,VISUAL_CONFIRM_SURFACE};
 enum {DC_CM2_TRANSFER_FUNC_SOURCE_SYSMEM,DC_CM2_TRANSFER_FUNC_SOURCE_VIDMEM};
@@ -41,7 +43,7 @@ struct dc_stream_state {
  const struct dc_transfer_func *func_shaper;
  const struct dc_3dlut *lut3d_func;
  struct {struct dc_edid dc_edid;}*sink;
- bool dv_standard,dv_low_latency;int dither_option,output_color_space,signal;
+ bool dv_standard,dv_low_latency,dv_native_422;int dither_option,output_color_space,signal;
  struct {int type;}out_transfer_func;
  struct {bool enable_remap;}gamut_remap_matrix;
  struct {bool enable_adjustment;}csc_color_matrix;
@@ -129,7 +131,7 @@ static void check_transport(bool low_latency){
  u8*b=sink.dc_edid.raw_edid+128;b[0]=2;b[1]=3;b[2]=16;b[4]=0xeb;
  b[5]=1;b[6]=0x46;b[7]=0xd0;b[9]=(2<<5)|2;b[11]=low_latency?3:2;
  checksum(sink.dc_edid.raw_edid);checksum(b);
- assert(dv_plane_neutral(&ps.base,&cs.base.mode));assert(!amdgpu_dm_dv_atomic_check(&atomic));
+ assert(dv_plane_neutral(&ps.base,&cs.base.mode,false));assert(!amdgpu_dm_dv_atomic_check(&atomic));
  unsigned missed=0;
  #define REJECT(field,bad) do {typeof(field) saved=(field);(field)=(bad);if(amdgpu_dm_dv_atomic_check(&atomic)!=-EINVAL){fprintf(stderr,"Unprotected: %s\n",#field);++missed;}stream.dv_standard=false;assert(!amdgpu_dm_dv_atomic_check(&atomic));stream.dv_standard=true;(field)=saved;assert(!amdgpu_dm_dv_atomic_check(&atomic));}while(0)
  REJECT(dp.in_transfer_func.type,TF_TYPE_BYPASS+1);REJECT(dp.blend_tf.type,TF_TYPE_BYPASS+1);

@@ -35,6 +35,9 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  struct EGL {int* swaps; bool TrySwapBuffers(){++*swaps; return true;}} m_eglContext{&swaps};
  std::shared_ptr<DRM> m_DRM;
  std::unique_ptr<int> m_pascalHDRScanout;
+ enum class PascalHDRMode { None, Native };
+ PascalHDRMode mode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode output){mode=output;}
  bool EndDVBridge(){return endOK;}
  bool RetireDVContext(){retired=retireOK; return retireOK;}
  bool HasPendingDVOutputSurface(){return pending;}
@@ -52,9 +55,12 @@ bool CWinSystemGbmGLESContext::SetFullScreen(bool fullScreen,RESOLUTION_INFO& re
 int main() {
  CWinSystemGbmGLESContext ordinary;
  ordinary.pending=ordinary.m_dvOrdinaryFrame=ordinary.m_dvStopPending=true;
+ ordinary.mode=CWinSystemGbmGLESContext::PascalHDRMode::Native;
+ ordinary.m_pascalHDRScanout=std::make_unique<int>(1);
  assert(ordinary.DestroyWindow());
  // Drawable rollback does not complete the stopped movie's SDR cleanup.
  assert(ordinary.destroyed==1 && ordinary.rollbacks==1 && !ordinary.m_dvOrdinaryFrame && ordinary.m_dvStopPending);
+ assert(ordinary.mode==CWinSystemGbmGLESContext::PascalHDRMode::None && !ordinary.m_pascalHDRScanout);
  CWinSystemGbmGLESContext failed;
  failed.pending=failed.m_dvOrdinaryFrame=true; failed.rollbackOK=false;
  assert(!failed.DestroyWindow() && failed.destroyed==0 && failed.pending);

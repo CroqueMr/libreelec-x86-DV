@@ -103,6 +103,7 @@ struct CWinSystemGbmGLESContext:CRenderSystemGLES {
  DRM drm;DRM* m_DRM=&drm;DVBRIDGE::DiagnosticInterval m_dvGuiDiagnostic;
  bool GetEnabledFrontToBackRendering()const{return false;}
  bool HasDVBridgeScreenshot()const{return false;}bool BeginDVPQSubtitle(){return false;}void EndDVPQSubtitle(){}
+ void BindNativePascalHDRFramebuffer(){}
  bool CanReuseGuiComposite()const @CAPABILITY@
  void SetTransfer(int colorTransfer){@TRANSFER@}
  bool BeginGuiComposite(bool guiWillRender) @BEGIN@
@@ -216,6 +217,7 @@ struct CRenderSystemGLES{unsigned passes=0;bool BeginRender(){++passes;return tr
 struct CWinSystemGbmGLESContext:CRenderSystemGLES{
  bool m_cb1FramePending=true,m_dvFrame=true,held=true;bool&m_guiCacheValid=cache;unsigned commits=0;
  void PresentFrame(bool,bool){if(!held){++commits;m_cb1FramePending=m_dvFrame=false;}}
+ void BindNativePascalHDRFramebuffer(){}
  bool BeginRender() @BEGIN@
 };
 struct CGUIWindow{void Process(unsigned,CDirtyRegionList&){dirty|=animated;}};
@@ -255,7 +257,7 @@ int main(){for(bool videoLayer:{false,true})for(bool reusable:{false,true})for(b
         present=body(native,'void CWinSystemGbmGLESContext::PresentFrame(')
         prefixes=[]
         for marker, submit in [
-                ('if (m_hdrConversion)', '      if (m_pascalHDRActive ?'),
+                ('if (m_hdrConversion)', '      if (pascal ?'),
                 ('if (m_dvState.Captured())', '      if (m_eglContext.TrySwapBuffers())')]:
             route=body(present,marker)
             end=route.index(submit)
@@ -283,7 +285,8 @@ struct Window{
  bool m_dvFrame=true;int m_nWidth=3840,m_nHeight=2160,m_videoSourceSideData=1;
  bool m_sdrConversion=false;
  std::optional<dvbridge_gamut> m_sdrSignal;
- bool m_pascalHDRActive=false;
+ enum class PascalHDRMode { None, Conversion, Native };
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None;
  struct PascalScanout {
    unsigned blits=0;
    std::shared_ptr<int> Blit(){++blits;return std::make_shared<int>();}
@@ -300,7 +303,7 @@ struct Window{
 int main(){for(bool rendered:{false,true}){Window w;
  for(unsigned film=0;film<3;film++){w.HDR(rendered);w.DV(rendered);}
  assert(w.swaps==6&&w.swapped==6&&w.bridge.resolves==6);
- w.m_pascalHDRActive=true;w.HDR(rendered);
+ w.m_pascalHDRMode=Window::PascalHDRMode::Conversion;w.HDR(rendered);
  assert(w.scanout.blits==1&&w.swaps==6&&w.swapped==7);
  w.m_dvFrame=false;w.HDR(rendered);w.DV(rendered);assert(w.swaps==6);
 }}
