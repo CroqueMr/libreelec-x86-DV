@@ -211,7 +211,7 @@ int main(){
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         settings=ET.parse(tree/'system/settings/settings.xml')
         node=settings.find(".//setting[@id='dvbridge.outputmode']")
-        self.assertEqual(node.findtext('default'),'0')
+        self.assertEqual(node.findtext('default'),'4')
         self.assertIn('4',[o.text for o in node.findall('constraints/options/option')])
         bridge=(tree/'xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
         self.assertIn('dvbridge_render_master_reference;',bridge)

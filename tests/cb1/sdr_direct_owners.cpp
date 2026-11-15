@@ -181,7 +181,7 @@ static void setup(CDVBridgeGLES& r){
 }
 @PROVENANCE@
 static void audit_cases(){
- using namespace DVBRIDGE;testEnabled=true;
+ using namespace DVBRIDGE;testEnabled=true;SetDetailedDiagnostics(true);
  // A startup GUI exclusion must not consume the only useful observation.
  // Advance only picture/time; source/settings and the audit epoch stay fixed.
  for(bool eligible:{false,true})for(int admission=0;admission<3;++admission){
