@@ -63,6 +63,40 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgctxt "#41300"
  msgid "EDID target gamut exceeds BT.2020"
  msgstr ""
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -87,6 +87,15 @@
+     }
+   }
+ 
++  HDR10SourceMode HDR10Mode(bool hdr10Plus) const
++  {
++    if (!hdr10Plus)
++      return hdr10Source;
++    // Passthrough uses Kodi's native renderer. HDMI signalling uses the saved selector.
++    return hdr10PlusSource == HDR10SourceMode::HDR10PlusPassthrough ?
++        HDR10SourceMode::Native : hdr10PlusSource;
++  }
++
+   bool SameValues(const OutputPreferences& other) const
+   {
+     return output == other.output && hdr10Source == other.hdr10Source &&
+@@ -167,14 +176,6 @@
+     else if (result.mode == DVBRIDGE_MODE_ENHANCED_DV)
+       result.tv = {peak, static_cast<dvbridge_panel>(panel), static_cast<dvbridge_gamut>(gamut)};
+     return result;
+-  }
+-  HDR10SourceMode HDR10Mode(bool hdr10Plus) const
+-  {
+-    if (!hdr10Plus)
+-      return hdr10Source;
+-    // Passthrough uses Kodi's native renderer. HDMI signalling uses the saved selector.
+-    return hdr10PlusSource == HDR10SourceMode::HDR10PlusPassthrough ?
+-        HDR10SourceMode::Native : hdr10PlusSource;
+   }
+   dvbridge_policy HDR10Policy(bool hdr10Plus = false) const
+   {
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h

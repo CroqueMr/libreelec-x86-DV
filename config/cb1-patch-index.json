@@ -1949,6 +1949,7 @@
     "owner": "Complete Stable playback availability and output reporting.",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Keep the selected and confirmed playback states visible.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Resolve native HDR10+ preferences in both Kodi build configurations.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Keep the selected and confirmed playback states visible.",
       "xbmc/cores/VideoProcessingInfo.h": "Keep the selected and confirmed playback states visible.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Keep the selected and confirmed playback states visible.",

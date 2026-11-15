@@ -44,7 +44,7 @@ namespace DVBRIDGE {
  struct StreamTelemetry {static VideoProcessingInfo Read() {VideoProcessingInfo info; info.informationGeneration=decodedGeneration; info.sourceBits=8; return info;}};
  VideoProcessingInfo NativeProcessingInfo(VideoProcessingInfo info) {return info;}
 }
-void present(DRM* drm,bool videoLayer) { SNIPPET }
+void present(DRM* drm,bool videoLayer) { const int nativeHDR10PlusFallback=0; SNIPPET }
 int main() {
  DRM drm; DVBRIDGE::decodedGeneration=cache.ResetVideoProcessingInfo();
  present(&drm,false); assert(cache.GetVideoProcessingInfo().sourceBits==8);

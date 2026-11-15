@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
-from test_native_video_source import TREE
+from test_native_video_source import TREE, body
 
 
 class RenderingLabelsTests(unittest.TestCase):
@@ -46,15 +46,16 @@ class RenderingLabelsTests(unittest.TestCase):
             'Dolby Vision : Adaptive HDR Mapping', 'Kodi : Default',
             'HDR10 : Rendering', 'HDR10 : LLDV Reference conversion',
             'HDR10+ : Conversion', 'SDR : Conversion', 'Dolby Vision : LLDV Reference'])
-        self.assertIn('CFileItem item(settingsMenu ? option.label : strings.Get(choice.label));',source)
+        self.assertIn('CFileItem item(settingsMenu ? (gray ?',source)
         for key in ('dvbridge.outputmode','dvbridge.hdr10method'):
             self.assertEqual(settings.find(f".//setting[@id='{key}']").findtext('visible'),'false')
         self.assertIn('setting->GetId()=="dvbridge.playback") ShowMenu(true)',source)
         # An action reuses the dialog; no shadow setting or raw-to-view callbacks.
         # Those callbacks reverse native per-setting/output lock order under RPC.
         self.assertNotIn('SyncPlaybackChoice',source)
-        self.assertIn('dialog->SetUseDetails(!settingsMenu);',source,
-                      'Settings use the compact native list; Quick Switch keeps details')
+        selector=body(source,'bool CDVPlaybackModes::ShowMenu(')
+        self.assertIn('dialog->SetUseDetails(true);',selector,
+                      'The default selector and Quick Switch show unavailable reasons')
         registered=(TREE/'xbmc/settings/Settings.cpp').read_text()
         callback=registered[registered.index('RegisterCallback(&CDVPlaybackModes::GetInstance()'):]
         callback=callback[:callback.index('});')]

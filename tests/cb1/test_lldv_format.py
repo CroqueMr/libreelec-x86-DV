@@ -108,6 +108,7 @@ struct Connector
   const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
   uint32_t* GetConnectorId() { return &id; }
   bool IsConnected() const { return connected; }
+  std::string_view GetType() const { return "HDMI-A"; }
   bool SupportsProperty(std::string_view key) const { return key=="CB1_LLDV_FORMAT"; }
   std::optional<uint64_t> GetPropertyEnumValue(std::string_view key, std::string_view name) const
   {
@@ -139,6 +140,7 @@ struct Window
   std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
   mutable std::mutex m_lldvEdidMutex;
   LldvDisplay m_lldvDisplay;
+  bool m_lldvAmdDriverDisabled{};
   uint32_t m_lldvEdidConnector=17;
   uint64_t m_lldvEdidGeneration=2;
   LldvTransport m_lldvRejected;

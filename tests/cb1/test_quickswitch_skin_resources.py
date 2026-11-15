@@ -137,6 +137,7 @@ int main(){
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         owner = body(body(source, 'bool CDVPlaybackModes::ShowMenu('), 'for(const auto& option : options)')
         code = r'''
+#include <algorithm>
 #include <cassert>
 #include <map>
 #include <string>
@@ -146,17 +147,21 @@ namespace DVBRIDGE {
 enum class OutputMode{PlayerLed};
 template<class... T>void DiagnosticLog(T...) {}
 }
-struct Value {bool flag=false;std::string text;bool asBoolean()const{return flag;}};
+struct Value {
+ Value(bool enabled=false):flag(enabled){}
+ bool flag;std::string text;bool asBoolean()const{return flag;}
+};
 struct CFileItem {
  explicit CFileItem(const std::string&){}
  std::map<std::string,Value> properties;
  void SetLabel2(const std::string&){}
  void SetProperty(const std::string& n,bool v){properties[n].flag=v;}
+ void SetProperty(const std::string& n,const Value& v){properties[n]=v;}
  void SetProperty(const std::string& n,const char* v){properties[n].text=v;}
  void SetProperty(const std::string& n,const std::string& v){properties[n].text=v;}
  Value GetProperty(const std::string& n)const{auto i=properties.find(n);return i==properties.end()?Value{}:i->second;}
 };
-struct Option {int value;std::string label,label2;std::vector<std::pair<std::string,bool>> properties;};
+struct Option {int value;std::string label,label2;std::vector<std::pair<std::string,Value>> properties;};
 struct Dialog {std::vector<CFileItem> items;void Add(const CFileItem& i){items.push_back(i);}};
 int main(){
  Dialog d;auto* dialog=&d;

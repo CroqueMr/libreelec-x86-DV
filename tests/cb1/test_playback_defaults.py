@@ -32,6 +32,7 @@ class PlaybackDefaultsTests(unittest.TestCase):
         action = body(control[control.index('void CGUIControlButtonSetting::Update('):], 'case SettingType::Action:')
         selector = body((TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h').read_text(), 'inline OutputSelection SelectOutput(')
         program = r'''
+#include <algorithm>
 #include <atomic>
 #include <bit>
 #include <cmath>
