@@ -303,6 +303,9 @@ int main(){
         signature = "ESCALINGMETHOD CLinuxRendererGLES::SelectScalingMethod() const"
         if signature in text:
             policy = body(text, signature)
+            if "ResolveScalingMethod(" in policy:
+                policy = body(text, "ESCALINGMETHOD CLinuxRendererGLES::ResolveScalingMethod(")
+                policy = "{ auto method=m_videoSettings.m_ScalingMethod;\n" + policy[1:]
         else:
             original = body(text, "void CLinuxRendererGLES::UpdateVideoFilter()")
             supported = original[original.index("  if(!Supports(m_scalingMethod))"):

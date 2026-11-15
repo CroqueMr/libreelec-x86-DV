@@ -162,10 +162,10 @@ Subject: [PATCH] Commit AMD native HDR10 handoff metadata with the successor fra
    if (picture.hasLightMetadata && picture.lightMetadata.MaxCLL)
    {
      buf.hasLightMetadata = picture.hasLightMetadata;
-@@ -1516,6 +1528,29 @@
- #ifdef HAVE_DVBRIDGE
+@@ -1962,6 +1962,29 @@
+   }
    DVBRIDGE::PlaybackNotification::RenderedOrdinary(
-       m_buffers[index].videoBuffer ? m_buffers[index].videoBuffer->PlaybackGeneration() : 0);
+       generation);
 +#ifdef CB1_HAS_HDR10_AI
 +  if (m_passthroughHDR)
 +  {

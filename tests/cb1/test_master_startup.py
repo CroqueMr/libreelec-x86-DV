@@ -76,6 +76,8 @@ struct CDVBridgeGLES {
  bool Failure(const char* stage){++errors;m_failures.Record(1,stage);return false;}
  void Summary(const char* event){++summaries; SUMMARY }
  void BeginDiagnosticStream(uint64_t stream) BEGIN
+ static int OutputScalingMethod(const Layer&, const dvbridge_geometry&, int)
+ { return 0; }
  FrameStatus PrepareFrame(const Layer& base,const Layer* enhancement,
  const CDVMetadataBuffer& metadata,dvbridge_geometry geometry,
  const DVBRIDGE::OutputPreferences& preferences,bool allowPacked,

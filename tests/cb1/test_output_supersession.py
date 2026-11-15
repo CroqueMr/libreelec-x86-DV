@@ -176,6 +176,8 @@ struct CDVBridgeGLES {
  bool PollReady(){return true;}
 
  void BeginDiagnosticStream(unsigned){}bool Failure(const char*){return false;}
+ static int OutputScalingMethod(const Layer& layer, const dvbridge_geometry&, int)
+ { return layer.scalingMethod; }
  FrameStatus PrepareFrame(const Layer& base,const Layer* enhancement,const decltype(VideoPicture::doviMetadata)& metadata,
   dvbridge_geometry geometry,const DVBRIDGE::OutputPreferences& preferences,bool allowPacked,const dvbridge_policy* selected,bool allowAsync) __ACTUAL_BODY_2_END__
  bool Initialize(bool allowSoftware,bool hdr10,std::shared_ptr<Context> context,bool sdr,unsigned framebuffer=0) __ACTUAL_BODY_18_END__
