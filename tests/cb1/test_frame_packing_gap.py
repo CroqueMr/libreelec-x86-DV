@@ -1,6 +1,7 @@
 """Verify the native GBM pre-swap clear on a real GLES backbuffer."""
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -12,7 +13,9 @@ class FramePackingGap(unittest.TestCase):
         tree = Path(os.environ["KODI_NATIVE_SOURCE_TREE"])
         source = (tree / "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp").read_text()
         ordinary = source.split("if (rendered || videoLayer)", 1)[1]
-        pre_fence = ordinary.split("if (rendered)", 1)[1].split(
+        drawing = re.search(r"if \(rendered(?: && !carrier)?\)", ordinary)
+        self.assertIsNotNone(drawing)
+        pre_fence = ordinary[drawing.end():].split(
             "#if defined(EGL_ANDROID_native_fence_sync)", 1)[0]
         program = r'''
 #include <cassert>
