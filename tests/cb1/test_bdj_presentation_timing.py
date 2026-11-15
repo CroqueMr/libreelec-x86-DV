@@ -38,3 +38,13 @@ class BdjPresentationTiming(unittest.TestCase):
         self.assertIn("m_CurrentVideo.dispTime", pump)
         self.assertIn("pts - m_CurrentVideo.dts", pump)
         self.assertIn("SetBdjPlaybackTime", pump)
+
+    def test_video_waits_for_resync_without_polling_the_decoder_again(self):
+        source = (TREE / "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp").read_text()
+        player = body(source, "void CVideoPlayerVideo::Process()")
+        timeout = body(player, "else if (ret == MSGQ_TIMEOUT)")
+        self.assertRegex(timeout.split("processDecoderOutput()", 1)[0],
+                         r"if \(m_syncState == IDVDStreamPlayer::SYNC_WAITSYNC\)\s+continue;")
+        resync = body(player, "else if (pMsg->IsType(CDVDMsg::GENERAL_RESYNC))")
+        self.assertIn("m_syncState = IDVDStreamPlayer::SYNC_INSYNC;", resync)
+        self.assertIn("m_renderManager.ShowVideo(true);", resync)

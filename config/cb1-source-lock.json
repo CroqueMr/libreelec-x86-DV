@@ -357,7 +357,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "99525a795a3b145d2c4389c90cbffc4b0775275af980e2835d5221c51e881b7b",
+    "config/cb1-patch-index.json": "7741b5bcd4f1fcd00238cd0be650b2f40b42d37aa0ec0413a9592f172dbe6b77",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -375,7 +375,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-bluray-audio-handoff.patch": "db62f335aeb7491319264a5980ad973371c1b4ff4005982c8f94025c26ec4a4a",
     "tests/cb1/test_hdr10_frame_handoff.py": "dbbb38c8280722dcbcafaea1c3fe7ab47c3c1c24512e7e9e380fde75f16b8532",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": "bd7b7d0441237aae210954e878695e531b278349c201df9c1cb1e57518e1fc66",
-    "tests/cb1/test_bdj_presentation_timing.py": "9a83caffc5d5c0c392caad0eb438cad14a1dff093764ddf1624f6106aede9414",
+    "tests/cb1/test_bdj_presentation_timing.py": "e3ee13867d871fd388404fd1cdf8baaff75ba48e3838cfc9c759d318b66c3b06",
     "packages/multimedia/libbluray/patches/0007-bdj-presentation-timing.patch": "889e7701633deaf29d9f4ca5425324b7cbf3e097f0080a1204d4f6c204dbc27c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-bdj-presentation-clock.patch": "9e1f64e1f889b88624ae49034dd4fe3ff9c6ec0b636bcef9d923547e5ab1536e",
     "tests/cb1/test_vaapi_resource_lifetime.py": "dd346dabd5ec64bb58f0c0273dac6effc2ef1c26e3d80ea5121e54885a5e7081",
@@ -421,7 +421,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": "58680c3631e22b913cb29fca5107f747a5a7322acf1245f5748a1b40a020042e",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": "ac84f504cfc0a736517fd045ad5719e22a4c71813e24d409a63ed2c6ccf6de16",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-mel-reference-history.patch": "70cb3abdba522a9b8c97009b724b678e87ac9fc5280aa5149b2c81bd0a74bc67",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": "1200204fb13b5345deddc86f04c9ec2fc4b76710313c17ab0347e17e40480400"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": "1200204fb13b5345deddc86f04c9ec2fc4b76710313c17ab0347e17e40480400",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": "29752ff4ba43e5093723ace2650416855f07ed296d11442a35b50089f9d6ca1c"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
