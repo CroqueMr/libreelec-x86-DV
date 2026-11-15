@@ -2369,6 +2369,74 @@ bool dvbridge_pack_player_led_422(struct dvbridge_renderer *r,
     return ok;
 }
 
+bool dvbridge_resolve_player_led_rgb10(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy, pl_tex linear, pl_tex rgb10, bool flip_y)
+{
+    if (!r || !policy || policy->mode != DVBRIDGE_MODE_PLAYER_LED ||
+        dvbridge_policy_validate(policy) != DVBRIDGE_POLICY_VALID ||
+        !linear || !rgb10 || linear == rgb10 || !linear->params.sampleable ||
+        !rgb10->params.renderable || linear->params.w != rgb10->params.w ||
+        linear->params.h != rgb10->params.h)
+        return false;
+
+    if (!r->player_led_dispatch) {
+        r->player_led_dispatch = pl_dispatch_create(NULL, r->gpu);
+        if (!r->player_led_dispatch)
+            return false;
+        pl_dispatch_mark_cb1_stable_pq(r->player_led_dispatch, true);
+    }
+    const struct pl_raw_primaries primaries = cb1_display_primaries(policy);
+    const pl_matrix3x3 matrix = pl_get_color_mapping_matrix(&primaries,
+        pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020), PL_INTENT_RELATIVE_COLORIMETRIC);
+    float columns[3][3];
+    for (int row = 0; row < 3; ++row)
+        for (int col = 0; col < 3; ++col)
+            columns[col][row] = matrix.m[row][col];
+
+    const float scale = policy->tv.peak_nits / PL_COLOR_SDR_WHITE;
+    const int flip = flip_y;
+    const struct pl_shader_var vars[] = {
+        {.var=pl_var_mat3("lldv_matrix"), .data=columns, .dynamic=true},
+        {.var=pl_var_float("lldv_scale"), .data=&scale, .dynamic=true},
+        {.var=pl_var_int("lldv_flip"), .data=&flip, .dynamic=true},
+    };
+    const struct pl_shader_desc input = {
+        .desc={.name="lldv_input", .type=PL_DESC_SAMPLED_TEX},
+        .binding={.object=linear, .sample_mode=PL_TEX_SAMPLE_NEAREST},
+    };
+    pl_dispatch dispatch = r->player_led_dispatch;
+    pl_dispatch_reset_frame(dispatch);
+    pl_shader shader = pl_dispatch_begin(dispatch);
+    bool ok = pl_shader_custom(shader, &(struct pl_custom_shader){
+        .input=PL_SHADER_SIG_NONE, .output=PL_SHADER_SIG_COLOR,
+        .output_w=linear->params.w, .output_h=linear->params.h,
+        .descriptors=&input, .num_descriptors=1, .variables=vars, .num_variables=3,
+        .description="LLDV RGB10 scanout",
+        .body=
+            "ivec2 p=ivec2(gl_FragCoord.xy);\n"
+            "if(lldv_flip!=0)p.y=textureSize(lldv_input,0).y-1-p.y;\n"
+            "vec3 rgb=texelFetch(lldv_input,p,0).rgb;\n"
+            "color=vec4(clamp(lldv_matrix*rgb,0.0,1.0)*lldv_scale,1.0);\n",
+    });
+    if (ok) {
+        pl_shader_delinearize(shader, &pl_color_space_hdr10);
+        GLint draw, viewport[4], scissor[4];
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        glGetIntegerv(GL_SCISSOR_BOX, scissor);
+        struct transport_write_state state;
+        transport_write_begin(&state);
+        ok = pl_dispatch_finish(dispatch, pl_dispatch_params(.shader=&shader, .target=rgb10));
+        ok = glGetError() == GL_NO_ERROR && ok;
+        transport_write_end(&state);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+    }
+    pl_dispatch_abort(dispatch, &shader);
+    return ok;
+}
+
 #undef PLAYER_LED_COLOR_GLSL
 
 pl_tex dvbridge_render_texture(const struct dvbridge_renderer *r)

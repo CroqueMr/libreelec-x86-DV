@@ -45,7 +45,7 @@ class RenderingLabelsTests(unittest.TestCase):
             'Dolby Vision Reference', 'Dolby Vision Master Reference',
             'Dolby Vision Adaptive HDR Mapping', 'Kodi default',
             'HDR10 Rendering', 'LLDV Reference – HDR10 Output', 'HDR10+ Rendering', 'SDR Rendering',
-            'LLDV Reference – Native'])
+            'Dolby Vision LLDV Reference'])
         for key in ('dvbridge.outputmode','dvbridge.hdr10method'):
             self.assertEqual(settings.find(f".//setting[@id='{key}']").findtext('visible'),'false')
         self.assertIn('setting->GetId()=="dvbridge.playback") ShowMenu(true)',source)
