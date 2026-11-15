@@ -7,6 +7,17 @@ from test_native_video_source import TREE, body
 
 
 class ModeHoldTests(unittest.TestCase):
+    def test_disc_stream_changes_delegate_resolution_to_the_render_thread(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
+        opening = body(source, 'bool CVideoPlayer::OpenVideoStream(')
+        resolve = opening.index('const bool nativeDV = WantsNativePresentation(hint);')
+        trigger = opening.index('m_renderManager.TriggerUpdateResolution', resolve)
+        mode = opening[resolve:trigger]
+        synchronous = body(mode, 'if (!pMenus)')
+        self.assertEqual(mode.count('SetVideoResolution('), 1)
+        self.assertIn('SetVideoResolution(', synchronous)
+        self.assertIn('nativeDV', opening[trigger:opening.index(';', trigger)])
+
     def test_native_hdr_start_carries_timing_with_the_first_picture(self):
         source = (TREE / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         opening = body(source, 'bool CWinSystemGbmGLESContext::SetFullScreen(')

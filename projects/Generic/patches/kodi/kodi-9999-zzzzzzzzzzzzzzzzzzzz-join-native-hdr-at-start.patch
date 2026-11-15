@@ -14,46 +14,54 @@ Subject: [PATCH] Join native HDR playback timing with its first framebuffer
  // Keep software metadata probes and ordinary HDR/SDR playback on Kodi's path.
 --- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
-@@ -4777,11 +4777,40 @@
+@@ -4777,11 +4777,45 @@
        const bool nativeDV = WantsNativePresentation(hint);
-       RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+-      RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
++      // Disc navigation can reopen video while the GUI is joining this thread.
++      // Let the render thread change the mode without a synchronous GUI message.
++      if (!pMenus)
++      {
++        RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
  #ifdef HAVE_DVBRIDGE
 -      DVBRIDGE::modeChangeResolution.store(nativeDV ? static_cast<int>(res) : -1);
-+      using HDRSignal = DVBRIDGE::NativeHDRSignal;
-+      auto hdrSignal = HDRSignal::None;
-+      if (!nativeDV && !hint.dovi.dv_profile && !pMenus && !hint.interlaced &&
-+          hint.stereo_mode.empty())
-+      {
-+        const bool hlg = hint.hdrType == StreamHdrType::HDR_TYPE_HLG;
-+        const bool hdr10 = hint.hdrType == StreamHdrType::HDR_TYPE_HDR10;
-+        // The demuxer may learn the transfer only after decoding the first picture.
-+        const bool unknown = hint.hdrType == StreamHdrType::HDR_TYPE_NONE &&
-+            hint.colorTransferCharacteristic == AVCOL_TRC_UNSPECIFIED &&
-+            (hint.codec == AV_CODEC_ID_HEVC || hint.codec == AV_CODEC_ID_AV1 ||
-+             hint.codec == AV_CODEC_ID_VP9);
-+        const auto native = DVBRIDGE::HDR10SourceMode::Native;
-+        if (hlg || hdr10)
++        using HDRSignal = DVBRIDGE::NativeHDRSignal;
++        auto hdrSignal = HDRSignal::None;
++        if (!nativeDV && !hint.dovi.dv_profile && !hint.interlaced &&
++            hint.stereo_mode.empty())
 +        {
-+          if (DVBRIDGE::FrameOutputSettings(false, hlg).hdr10Source == native)
-+            hdrSignal = hlg ? HDRSignal::HLG : HDRSignal::HDR10;
++          const bool hlg = hint.hdrType == StreamHdrType::HDR_TYPE_HLG;
++          const bool hdr10 = hint.hdrType == StreamHdrType::HDR_TYPE_HDR10;
++          // The demuxer may learn the transfer only after decoding the first picture.
++          const bool unknown = hint.hdrType == StreamHdrType::HDR_TYPE_NONE &&
++              hint.colorTransferCharacteristic == AVCOL_TRC_UNSPECIFIED &&
++              (hint.codec == AV_CODEC_ID_HEVC || hint.codec == AV_CODEC_ID_AV1 ||
++               hint.codec == AV_CODEC_ID_VP9);
++          const auto native = DVBRIDGE::HDR10SourceMode::Native;
++          if (hlg || hdr10)
++          {
++            if (DVBRIDGE::FrameOutputSettings(false, hlg).hdr10Source == native)
++              hdrSignal = hlg ? HDRSignal::HLG : HDRSignal::HDR10;
++          }
++          else if (unknown)
++          {
++            const auto preferences = DVBRIDGE::FrameOutputSettings();
++            if (preferences.hdr10Source == native && preferences.hdr10PlusSource == native &&
++                preferences.HLGMode() == native)
++              hdrSignal = HDRSignal::Unknown;
++          }
 +        }
-+        else if (unknown)
-+        {
-+          const auto preferences = DVBRIDGE::FrameOutputSettings();
-+          if (preferences.hdr10Source == native && preferences.hdr10PlusSource == native &&
-+              preferences.HLGMode() == native)
-+            hdrSignal = HDRSignal::Unknown;
-+        }
-+      }
-+      DVBRIDGE::modeChangeNativeHDR.store(hdrSignal);
-+      DVBRIDGE::modeChangeResolution.store(
-+          nativeDV || hdrSignal != HDRSignal::None ? static_cast<int>(res) : -1);
++        DVBRIDGE::modeChangeNativeHDR.store(hdrSignal);
++        DVBRIDGE::modeChangeResolution.store(
++            nativeDV || hdrSignal != HDRSignal::None ? static_cast<int>(res) : -1);
  #endif
-       CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+-      CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
++        CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
  #ifdef HAVE_DVBRIDGE
-       DVBRIDGE::modeChangeResolution.store(-1);
-+      DVBRIDGE::modeChangeNativeHDR.store(HDRSignal::None);
+-      DVBRIDGE::modeChangeResolution.store(-1);
++        DVBRIDGE::modeChangeResolution.store(-1);
++        DVBRIDGE::modeChangeNativeHDR.store(HDRSignal::None);
  #endif
++      }
        m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode,
                                                nativeDV);
 --- a/xbmc/windowing/gbm/ModeChangeHold.h

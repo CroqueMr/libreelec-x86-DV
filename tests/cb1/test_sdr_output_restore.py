@@ -512,6 +512,20 @@ METHODS
 int main(int argc,char** argv){
  assert(argc==2);int scenario=std::stoi(argv[1]);
  CDRMAtomic drm;
+ if(scenario>=10){
+  // The previous Kodi process exited without restoring the kernel transport.
+  const char* transport=scenario==10 ? "DVBRIDGE_DV_STANDARD_LAB" : "CB1_LLDV_FORMAT";
+  drm.mode.clock=594000;
+  drm.connector.cache[transport]=signal[transport]=1;
+  rejectTest=true;
+  assert(!drm.DrmAtomicCommit(42,DRM_MODE_ATOMIC_ALLOW_MODESET,true,false));
+  assert(realCommits==0 && signal[transport]==1);
+  rejectTest=false;
+  assert(drm.DrmAtomicCommit(42,DRM_MODE_ATOMIC_ALLOW_MODESET,true,false));
+  assert(realCommits==1 && signal[transport]==0 && drm.connector.cache[transport]==0);
+  assert(drm.m_committedMode.clock==594000 && !drm.m_sdrRestorePending);
+  return 0;
+ }
  // An accepted HDR movie is the independent physical starting state.
  drm.AddProperty(drm.m_connector,"HDR_OUTPUT_METADATA",17);
  drm.AddProperty(drm.m_connector,"Colorspace",9);
@@ -601,7 +615,7 @@ int main(int argc,char** argv){
                                     '-fsanitize=address,undefined', str(code), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(10):
+            for scenario in range(12):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(binary), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
