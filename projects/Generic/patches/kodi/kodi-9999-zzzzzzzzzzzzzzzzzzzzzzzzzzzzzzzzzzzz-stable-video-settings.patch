@@ -37,25 +37,99 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgstr ""
  
  msgctxt "#41271"
+@@ -26671,7 +26671,7 @@
+ msgstr ""
+ 
+ msgctxt "#41288"
+-msgid "LLDV availability"
++msgid "LLDV"
+ msgstr ""
+ 
+ msgctxt "#41289"
+@@ -26679,23 +26679,23 @@
+ msgstr ""
+ 
+ msgctxt "#41290"
+-msgid "Dolby Vision EDID"
++msgid "EDID"
+ msgstr ""
+ 
+ msgctxt "#41291"
+-msgid "Low-Latency only"
++msgid "LLDV only"
+ msgstr ""
+ 
+ msgctxt "#41292"
+-msgid "Standard and Low-Latency"
++msgid "TV-led + LLDV"
+ msgstr ""
+ 
+ msgctxt "#41293"
+-msgid "Standard only"
++msgid "TV-led only"
+ msgstr ""
+ 
+ msgctxt "#41294"
+-msgid "EDID peak / black"
++msgid "Peak / black"
+ msgstr ""
+ 
+ msgctxt "#41295"
+@@ -26707,7 +26707,7 @@
+ msgstr ""
+ 
+ msgctxt "#41297"
+-msgid "Compatible HDMI mode available after a mode switch"
++msgid "Needs HDMI mode switch"
+ msgstr ""
+ 
+ msgctxt "#41298"
 diff --git a/addons/skin.estuary/xml/Includes_DialogSelect.xml b/addons/skin.estuary/xml/Includes_DialogSelect.xml
 --- a/addons/skin.estuary/xml/Includes_DialogSelect.xml
 +++ b/addons/skin.estuary/xml/Includes_DialogSelect.xml
-@@ -212,6 +212,15 @@
- 					<param name="id" value="7" />
+@@ -27,6 +27,7 @@
+ 				<onup>3</onup>
+ 				<ondown>3</ondown>
+ 				<onleft>9001</onleft>
++				<onright condition="!String.IsEmpty(Window.Property(CB1.LldvEdid))">9001</onright>
+ 				<onright>61</onright>
+ 				<pagecontrol>61</pagecontrol>
+ 				<scrolltime>200</scrolltime>
+@@ -197,6 +198,7 @@
+ 			<control type="grouplist" id="9001">
+ 				<left>920</left>
+ 				<top>80</top>
++				<onleft condition="!String.IsEmpty(Window.Property(CB1.LldvEdid))">3</onleft>
+ 				<onleft>61</onleft>
+ 				<itemgap>dialogbuttons_itemgap</itemgap>
+ 				<onright>3</onright>
+@@ -213,6 +215,26 @@
  					<param name="label" value="$LOCALIZE[222]" />
  				</include>
-+			</control>
+ 			</control>
 +			<control type="textbox">
 +				<left>944</left>
 +				<top>164</top>
 +				<width>252</width>
-+				<bottom>52</bottom>
++				<height>390</height>
 +				<font>font12</font>
++				<textcolor>FFEEF2F3</textcolor>
 +				<label>$INFO[Window.Property(CB1.LldvEdid)]</label>
 +				<visible>!String.IsEmpty(Window.Property(CB1.LldvEdid))</visible>
- 			</control>
++			</control>
++			<control type="textbox">
++				<left>944</left>
++				<top>570</top>
++				<width>252</width>
++				<bottom>48</bottom>
++				<font>font12</font>
++				<textcolor>FFEEF2F3</textcolor>
++				<label>$INFO[Container(3).ListItem.Label2]</label>
++				<visible>!String.IsEmpty(Window.Property(CB1.LldvEdid))</visible>
++			</control>
  		</control>
  	</include>
+ 	<include name="VideoDialogSelectVideoLayout">
 diff --git a/system/settings/settings.xml b/system/settings/settings.xml
 --- a/system/settings/settings.xml
 +++ b/system/settings/settings.xml
@@ -274,10 +348,11 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- a/xbmc/dialogs/DVPlaybackModes.cpp
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
-@@ -412,13 +412,11 @@
+@@ -411,35 +411,35 @@
+   const auto saved = settings->GetInt("dvbridge.lldvformatvalue");
    dialog->Reset();
    dialog->SetHeading(strings.Get(41200));
-   dialog->SetUseDetails(true);
+-  dialog->SetUseDetails(true);
 -  int firstFormat = 0;
 -  const auto addDetail = [dialog, &firstFormat](const std::string& label, const std::string& value) {
 -    CFileItem item(label);
@@ -285,34 +360,51 @@ diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 -    item.SetProperty("disabled", true);
 -    dialog->Add(item);
 -    ++firstFormat;
-+  std::string edid;
++  // Estuary fits all formats in its simple list and shows the focused reason beside it.
++  const bool estuary = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN) == "skin.estuary";
++  dialog->SetUseDetails(!estuary);
++  const auto summary = LldvUnavailableLabel(status, 0, true);
++  std::string edid = StringUtils::Format("{}: {}", strings.Get(41288),
++                                         strings.Get(summary ? 40851 : 41289));
++  if (summary)
++    edid += '\n' + strings.Get(summary);
++  else if (!status.currentTiming && status.availableTiming)
++    edid += '\n' + strings.Get(41297);
++
 +  const auto addDetail = [&edid](const std::string& label, const std::string& value) {
-+    if (!edid.empty())
-+      edid += '\n';
-+    edid += label + ": " + value;
++    edid += '\n' + label + ": " + value;
    };
-   const auto summary = LldvUnavailableLabel(status, saved, true);
-   const auto requested = saved ? LldvFormatPreference(saved) : preferred;
-@@ -426,7 +424,7 @@
-       status.rejected != LldvFormat::Auto && status.rejected == requested ? 41298 : 41289));
+-  const auto summary = LldvUnavailableLabel(status, saved, true);
+-  const auto requested = saved ? LldvFormatPreference(saved) : preferred;
+-  addDetail(strings.Get(41288), strings.Get(summary ? summary :
+-      status.rejected != LldvFormat::Auto && status.rejected == requested ? 41298 : 41289));
    const auto& display = status.display;
++  if (display.status == LldvEdidStatus::Incomplete)
++    edid += StringUtils::Format(" ({} / {} bytes)", display.received, display.expected);
    if (display.sink.length)
 -    addDetail(strings.Get(41290), StringUtils::Format("v{} Â· {}", display.sink.version,
 +    addDetail(strings.Get(41290), StringUtils::Format("v{} / {}", display.sink.version,
          strings.Get(display.sink.status == DV_EDID_LLDV_ONLY ? 41291 :
                      dvbridge_lldv_422(display.sink) ? 41292 : 41293)));
-   if (display.status == LldvEdidStatus::Incomplete)
-@@ -434,7 +432,8 @@
+-  if (display.status == LldvEdidStatus::Incomplete)
+-    addDetail(strings.Get(41281), StringUtils::Format("{} / {} bytes", display.received, display.expected));
    if (display.peak > 0)
    {
-     addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
+-    addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:.4f} nits", display.peak, display.black));
 -    addDetail(strings.Get(41295), StringUtils::Format("R {:.4f},{:.4f}  G {:.4f},{:.4f}  B {:.4f},{:.4f}",
-+    addDetail(strings.Get(41295), StringUtils::Format(
-+        "\nR {:.4f}, {:.4f}\nG {:.4f}, {:.4f}\nB {:.4f}, {:.4f}",
++    addDetail(strings.Get(41294), StringUtils::Format("{:.0f} / {:g} nits", display.peak, display.black));
++    edid += StringUtils::Format(
++        "\n{}\nR {:.4f}, {:.4f}\nG {:.4f}, {:.4f}\nB {:.4f}, {:.4f}", strings.Get(41295),
          display.reported[0], display.reported[1], display.reported[2], display.reported[3],
-         display.reported[4], display.reported[5]));
+-        display.reported[4], display.reported[5]));
++        display.reported[4], display.reported[5]);
    }
-@@ -461,10 +460,12 @@
+-  addDetail(strings.Get(41296), strings.Get((status.driverFormats || status.forced42210) ? 41289 : 41211));
+-  addDetail(strings.Get(41299), strings.Get(status.currentTiming ? 41289 : status.availableTiming ? 41297 : 41212));
+   for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
+   {
+     const auto format = static_cast<LldvFormat>(i);
+@@ -461,10 +461,12 @@
        item.SetLabel2(strings.Get(format == LldvFormat::Y422_10 ? 41216 : 41215));
      dialog->Add(item);
    }

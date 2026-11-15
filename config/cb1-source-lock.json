@@ -9,8 +9,8 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "tests/cb1/test_stable_video_settings.py": "877293f64f651a559a44dccde3cb898563eb75bc6aae69de7f859876fe3ee2a5",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "03474bd172ffdfc55761160a6de3ee51d065a612982e3499a05dec66482723be",
+    "tests/cb1/test_stable_video_settings.py": "9a8bc5b54c1296d0ffd37baf097ee9d7d96c50723e11052ae7ddbcdaaa1efc0e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "9c08e80853f6e985e6502a44a604161a4eb43523a98ca96ad80ccbda2a86140c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "df1e0deb2d2368a1110944ae31a5dba1338c857f1fc1d5989651e00b2e3b3ad9",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzz-playback-error-detail.patch": "9c6798b6999d8711ab57d4f7d6b31a7b008a06f7f814b35b0fcadfcf395cb505",

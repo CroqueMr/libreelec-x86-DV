@@ -49,5 +49,19 @@ class StableVideoSettings(unittest.TestCase):
         skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
         self.assertIn("$INFO[Window.Property(CB1.LldvEdid)]", list(skin.getroot().itertext()))
 
+    def test_lldv_selector_uses_one_page_with_a_short_status_in_estuary(self):
+        source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
+        menu = source[source.index("void ShowLldvFormatMenu()"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
+        self.assertIn('dialog->SetUseDetails(!estuary);', menu)
+        self.assertIn("LldvUnavailableLabel(status, 0, true)", menu)
+        self.assertNotIn("strings.Get(41296)", menu)
+        skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
+        native = skin.find(".//include[@name='DefaultDialogSelectLayout']/control")
+        self.assertIn("$INFO[Container(3).ListItem.Label2]", list(native.itertext()))
+        nav = native.findall("control[@id='3']/onright")
+        self.assertTrue(any(link.text == "9001" and "CB1.LldvEdid" in link.get("condition", "")
+                            for link in nav))
+
+
 if __name__ == "__main__":
     unittest.main()
