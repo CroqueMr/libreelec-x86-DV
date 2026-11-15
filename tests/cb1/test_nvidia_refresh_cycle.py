@@ -40,7 +40,10 @@ struct CDisplaySettings {
 struct CLog {template<class... T>static void Log(T...){}};
 struct CEGLUtils {template<class... T>static void Log(T...){}};
 namespace DVBRIDGE {std::atomic<int> modeChangeResolution{-1};
+enum class NativeHDRSignal {None, HDR10, HLG, Unknown};
+std::atomic<NativeHDRSignal> modeChangeNativeHDR{NativeHDRSignal::None};
 inline thread_local std::optional<int> guiModeChangeResolution;int DiagnosticNowMs(){return 0;}}
+constexpr int SETTING_WINSYSTEM_IS_HDR_DISPLAY=0;
 bool gpuReady=false,gpuBroken=false;unsigned finishes=0;
 void glFinish(){++finishes;if(!gpuBroken)gpuReady=true;}
 struct CDRMAtomic {
@@ -73,6 +76,10 @@ struct CRenderSystemGLES {static void ResetRenderSystem(int,int){}};
 struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
  CModeChangeHold m_modeHold;CHeldModeAnnouncement m_modeAnnouncement;
  CDVBridgeState m_dvState;
+ std::optional<int> m_videoSourceSideData;
+ bool IsHDRDisplay() const {return false;}
+ struct HDRCapabilities{bool SupportsHLG()const{return false;}bool SupportsHDR10()const{return false;}};
+ HDRCapabilities GetDisplayHDRCapabilities() const {return {};}
  std::unique_ptr<Bridge> m_dvBridge=std::make_unique<Bridge>();
  std::shared_ptr<Context> m_dvContext=std::make_shared<Context>();bool m_dvShutdownFence=false;
  int m_nWidth=3840,m_nHeight=2160;bool restoreOK=true;
@@ -98,6 +105,7 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
 };
 struct Settings {
  bool m_fullScreen=true;Settings* GetAdvancedSettings(){return this;}Settings* GetSettings(){return this;}
+ bool GetBool(int) const {return false;}
 };
 struct Input {void SetMouseResolution(int,int,int,int){}};
 struct CGUIComponent {

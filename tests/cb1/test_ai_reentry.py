@@ -491,7 +491,7 @@ int main(){
 #define HAVE_DVBRIDGE
 constexpr int LOGWARNING=1,LOGERROR=2,LOGDEBUG=3;
 struct VideoPicture{bool dv=false;int color_transfer=0;};
-namespace DVBRIDGE {enum class OutputRoute{DV,HDR10};}
+namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10};}
 struct WindowBase{virtual ~WindowBase()=default;
  virtual bool SetVideoOutput(const VideoPicture*)=0;
  virtual void SetColorimetry(const VideoPicture*)=0;
@@ -500,12 +500,13 @@ struct WindowBase{virtual ~WindowBase()=default;
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext:WindowBase{
  bool output=true,restore=false,bridge=true,conversion=true;
- DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::DV;
+ DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::NativeDV;
+ int colourUpdates=0;
  static bool DVBridgeRequested(const VideoPicture* p){return p->dv;}
  bool BeginDVBridge(){return bridge;}
  bool SetVideoOutput(const VideoPicture*)override{return output;}
  bool HasPendingDVBridgeRestore(){return restore;}
- void SetColorimetry(const VideoPicture*)override{}
+ void SetColorimetry(const VideoPicture*)override{++colourUpdates;}
  struct Selection{DVBRIDGE::OutputRoute route;};
  Selection SelectedDVOutput(const VideoPicture*){return {route};}
  bool ConfigureHDR10Conversion(const VideoPicture&){return conversion;}
@@ -525,6 +526,7 @@ int main(){
  Renderer retry;window.output=false;
  assert(!retry.ConfigureVideoOutput(dv) && !retry.m_bConfigured);
  window.output=true;assert(retry.ConfigureVideoOutput(dv) && retry.m_bConfigured);
+ assert(window.colourUpdates==0);
  retry.m_bConfigured=false;assert(retry.ConfigureVideoOutput(native) && retry.m_bConfigured);
  assert(retry.m_passthroughHDR && retry.m_reloadShaders); // Rebuild the former BT.709 bootstrap shader for native BT.2020 PQ.
  retry.m_reloadShaders=false;
@@ -533,8 +535,10 @@ int main(){
  assert(!ai.ConfigureVideoOutput(dv) && !ai.m_bConfigured);
  window.bridge=true;assert(ai.ConfigureVideoOutput(dv) && ai.m_bConfigured);
  window.route=DVBRIDGE::OutputRoute::HDR10;window.conversion=false;
+ const int before=window.colourUpdates;
  assert(!retry.ConfigureVideoOutput(dv) && !retry.m_bConfigured);
  window.conversion=true;assert(retry.ConfigureVideoOutput(dv) && retry.m_bConfigured);
+ assert(window.colourUpdates==before+2);
 }
 '''.replace('BODY',source))
 

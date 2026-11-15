@@ -683,8 +683,18 @@ enum class RenderStereoMode {MONO};
 enum dvbridge_mode {DVBRIDGE_MODE_DISABLED,DVBRIDGE_MODE_SDR=7};
 namespace DVBRIDGE {enum class OutputReason {None,NoGPUProcessing};
 inline std::atomic<int> modeChangeResolution{-1};
+enum class NativeHDRSignal {None, HDR10, HLG, Unknown};
+inline std::atomic<NativeHDRSignal> modeChangeNativeHDR{NativeHDRSignal::None};
 inline thread_local std::optional<int> guiModeChangeResolution;
 template<class... T> void DiagnosticLog(T...) {}}
+constexpr int SETTING_WINSYSTEM_IS_HDR_DISPLAY=0;
+struct HDRSettings {
+ const HDRSettings* GetSettings() const {return this;}
+ bool GetBool(int) const {return false;}
+};
+struct CServiceBroker {
+ static const HDRSettings* GetSettingsComponent(){static HDRSettings settings;return &settings;}
+};
 struct Admission {bool usable=false; DVBRIDGE::OutputReason reason{};};
 struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,hdr10plus=false,processingKnown=false;
   std::array<Admission,7> processing{},hdr10Processing{};};
@@ -727,6 +737,10 @@ struct CWinSystemGbm {
 struct CRenderSystemGLES {static void ResetRenderSystem(int,int) {}};
 struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   CModeChangeHold m_modeHold; CHeldModeAnnouncement m_modeAnnouncement;
+  std::optional<int> m_videoSourceSideData;
+  bool IsHDRDisplay() const {return false;}
+  struct HDRCapabilities {bool SupportsHLG() const {return false;}bool SupportsHDR10() const {return false;}};
+  HDRCapabilities GetDisplayHDRCapabilities() const {return {};}
   bool HoldCB1Mode(RESOLUTION_INFO&) {return false;}
   bool SupportsDVOutputMode() const {return m_DRM->rate<=60;}
   int m_nWidth=3840,m_nHeight=2160,m_renderableType=EGL_OPENGL_ES3_BIT;
