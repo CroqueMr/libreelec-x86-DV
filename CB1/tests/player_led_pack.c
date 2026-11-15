@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "reference_test.h"
+#include "cb1_hdr10_expert.h"
 
 static unsigned compute_dispatches;
 void __real_glDispatchCompute(GLuint x, GLuint y, GLuint z);
@@ -191,6 +192,25 @@ int main(void)
     reference_codes(pixels, bt709, 100, 10, codes);
     assert(!compare(bytes, codes, false));
 
+    policy.mode = DVBRIDGE_MODE_PLAYER_LED;
+    policy.lldv_edid_version = 2;
+    policy.tv.peak_nits = 2484;
+    const double edid_xy[] = {.68687,.31183,.24609,.703125,.14874,.05320};
+    memcpy(policy.lldv_primaries, edid_xy, sizeof(edid_xy));
+    const struct pl_raw_primaries edid = cb1_display_primaries(&policy);
+    const pl_matrix3x3 edid_to_2020 = pl_get_color_mapping_matrix(&edid,
+        pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020), PL_INTENT_RELATIVE_COLORIMETRIC);
+    double edid_matrix[3][3];
+    for (int i=0;i<3;i++) for (int j=0;j<3;j++) edid_matrix[i][j]=edid_to_2020.m[i][j];
+    for (unsigned bits=10;bits<=12;bits+=2) {
+        assert(dvbridge_pack_player_led_422(renderer, &policy, source, carrier, bits, false));
+        read_carrier(gpu, carrier, bytes);
+        reference_codes(pixels, edid_matrix, 2484, bits, codes);
+        compare(bytes, codes, false);
+        for (int i=0;i<WIDTH;i++) assert(codes[i][1]==2048);
+    }
+    policy.mode = DVBRIDGE_MODE_HDR10_EXPERT;
+    policy.lldv_edid_version = 0;
     dvbridge_renderer_reset(renderer);
     policy.tv.gamut = DVBRIDGE_GAMUT_BT2020;
     policy.tv.peak_nits = 10000;
