@@ -60,7 +60,7 @@
     "tests/cb1/test_nvidia_mode_restore.py": "78ea2f68ce64b2282e3f25075a439d8970a289d9eb3bb864b811d86fcfc3f994",
     "tests/cb1/test_nvidia_refresh_cycle.py": "5b54bc8d6f299fe2146e59540076f7dd0e80ffc086cf29c08508009318b91720",
     "tests/cb1/test_gui_viewport.py": "a25a487cf7e0b9db346e4a1e30fc4f1b8befeca964bcf528bdeb58f10fbea7b5",
-    "tests/cb1/test_gui_composite_clip.py": "63fc7214a0e6b8a7cb515388f39cb3f25bfb3a0cd8b0d10d6e9ffa27c73ce062",
+    "tests/cb1/test_gui_composite_clip.py": "d6b87dcc778f9db5d1c5876e8cbe2399de52a66a4644855a8d258b6b3e6d5aa5",
     "tests/cb1/test_nvidia_buffer_restore.py": "29a21b2e22eefe0194f1ba169e81902db4c461c5528fb618fa2fafb01d7ec35c",
     "tests/cb1/test_sdr_output_restore.py": "9a09eb9a95d8ac5c117ae138212ec1333a8df73a4fd504e96fbd285a4938e8bb",
     "tests/cb1/test_nvidia_transitions.py": "266bf0147142144b2697fb906c37f3a0166badf30139626c59c87b286cf21089",
@@ -356,7 +356,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "371c3f3f2b75f9f7ff208077300de2a172ff59c0b3668ec24189760e4bd9a733",
+    "config/cb1-patch-index.json": "bf85a677eacd95d2ace39df761ea0b9dec707d8792c665ba4b12493a91d88cb6",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -409,7 +409,8 @@
     "tests/cb1/test_seek_video_generation.py": "4766feec6773ebbd864d785135297d2401bfed7d1fc48727b9cdf65da5b363cd",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-passthrough-dialnorm.patch": "d6924d21edd330c55e92d55f59ec00c668cfc9c297308553c6a81fd3bb4cc946",
     "tests/cb1/test_audio_passthrough_dialnorm.py": "fa49aa3d1898f0e87a4591cc662900af745e688794b019beeb243c63edd96059",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "4e60f98fe90ce802b3369b5c0d8741b0a601d6528015932bbf2617860d93a496"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "4e60f98fe90ce802b3369b5c0d8741b0a601d6528015932bbf2617860d93a496",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": "355e9255542f8b38c99dc1ef8f677e64d332f57bc988506b91a3e5f915650117"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
