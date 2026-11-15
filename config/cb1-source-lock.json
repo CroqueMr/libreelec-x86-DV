@@ -166,7 +166,7 @@
     "tests/cb1/test_ai_pool_lifetime.py": "4cb0ad0714382cbeebd56dce543d9bea352e4f31791150888790bc9097ee5199",
     "tests/cb1/test_alsa_stereo_map.py": "97bc942b28f21bdd4920f1d955f0b2e13b029c4759976c1a60e61e8dd6a1eae4",
     "tests/cb1/test_video_buffer_cancel.py": "6f2bff4666c81a807cb071ba7e066e170d0a903b9fdd5bd1dcdd5b5b1f1e80c8",
-    "tests/cb1/test_master_panel_surface.py": "34a20a991fe53dd9c8811b2655fb9c1046c9f81c6e8440074e4d8f58c3bbc451",
+    "tests/cb1/test_master_panel_surface.py": "876a17033199c1c562a915d0f6c81b3bc1af16f9b1d2ce95166bb83a707f7bc0",
     "tests/cb1/test_dtdl_stream_inventory.py": "251c6686094915987206d28729f4995b44472fd242582f5c6b687a9c276522ad",
     "tests/cb1/test_hdr10_expert_settings.py": "5866cda2cc90537f5e8822824b9bbe0b82e41314108893a56ee8c8c7e3c4ee14",
     "tests/cb1/test_display_refresh.py": "fac1188e53a15c8ad99020b1132ba88a2c4057c1615a05752d046045a9910d98",
