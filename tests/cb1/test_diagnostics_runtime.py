@@ -50,7 +50,7 @@ struct CDVBridgeGLES {
  @AUDIT@
 };
 int main(){
- using namespace DVBRIDGE;DiagnosticOpen();ObserveDiagnostic(1,1,3,17,"prepare",true,false);
+ using namespace DVBRIDGE;SetDetailedDiagnostics(true);DiagnosticOpen();ObserveDiagnostic(1,1,3,17,"prepare",true,false);
  for(unsigned i=0;i<24;++i)assert(DiagnosticLog(LOGINFO,"startup {}",i));
  CDVBridgeGLES r;r.PreparedAudit();
  assert(r.m_auditPreparedSerial==0&&CLog::lines.size()==24&&StreamTelemetry::stages==1);
@@ -159,7 +159,7 @@ namespace DVBRIDGE{struct StreamTelemetry{static void ClearOutput(){}};}
 @SOURCE@
 void full(bool reserve=false){
  using namespace DVBRIDGE;
- DiagnosticOpen();ObserveDiagnostic(7,31,11,13,"prepare",true,false);
+ SetDetailedDiagnostics(true);DiagnosticOpen();ObserveDiagnostic(7,31,11,13,"prepare",true,false);
  if(reserve)DiagnosticReserveProgress();
  for(unsigned i=0;i<(reserve?18:24);++i)assert(DiagnosticLog(LOGINFO,"menu/setup {}",i));
  if(reserve)for(unsigned i=0;i<6;++i)assert(DiagnosticProgressLog(LOGINFO,"progress {}",i));
@@ -289,7 +289,7 @@ int main(){
     def test_incomplete_profile_reports_the_values_before_output_admission(self):
         text = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         start = text.index('  if (m_dvSelection.reason == DVBRIDGE::OutputReason::TVProfileRequired)')
-        end = text.index('  if (m_dvConfiguredOutput', start)
+        end = text.index('  const bool matchedPlayerLedDepth', start)
         self.run_cpp(r'''
 #include <fmt/format.h>
 #include <cassert>
@@ -394,6 +394,7 @@ struct Preferences {
  bool L2TrimsDisabled(int)const{return false;}
 };
 int main(){
+ DVBRIDGE::SetDetailedDiagnostics(true);
  DVBRIDGE::DiagnosticOpen();
  Base base{{1920,1080,1,{{2048,1088},{1024,544},{0,0}},2},{}};
  Layer el{960,540,2,{{1024,544},{512,272},{0,0}},1};const Layer* enhancement=&el;
@@ -442,7 +443,7 @@ struct CLog {
 #include <cassert>
 int main(){
  using namespace DVBRIDGE;
- DiagnosticOpen();const auto previous=DiagnosticGeneration();DiagnosticPresented(0);
+ SetDetailedDiagnostics(true);DiagnosticOpen();const auto previous=DiagnosticGeneration();DiagnosticPresented(0);
  assert(!diagnosticSession.FirstPresented() && CLog::lines.empty());
  ObserveDiagnostic(7,1,1,1,"prepare",true,false);
  DiagnosticPresented(6);assert(!diagnosticSession.FirstPresented() && CLog::lines.empty());
@@ -493,6 +494,7 @@ struct CLog{
 #include "utils/DVBridgeDiagnosticLog.h"
 #include <cassert>
 int main(){
+ DVBRIDGE::SetDetailedDiagnostics(true);
  DVBRIDGE::DiagnosticOpen();
  for(unsigned i=0;i<100;++i) DVBRIDGE::DiagnosticLog(LOGDEBUG,"detail {}",i);
  assert(CLog::levels.size()==24);
@@ -509,7 +511,15 @@ struct CLog {
 };
 '''})
 
-    def test_logging_detail_is_in_system_logging_with_enhanced_default(self):
+    def test_stable_defaults_use_master_reference_and_native_kodi(self):
+        settings = ET.parse(TREE / "system/settings/settings.xml")
+        for name, expected in (("outputmode", "4"), ("hdr10source", "0"),
+                               ("hdr10plussource", "0"), ("hlgsource", "0")):
+            with self.subTest(setting=name):
+                setting = settings.find(f".//setting[@id='dvbridge.{name}']")
+                self.assertEqual(setting.findtext("default"), expected)
+
+    def test_logging_detail_is_in_system_logging_with_normal_default(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
         group = settings.find("./section[@id='system']/category[@id='logging']/group[@id='1']")
         self.assertIsNotNone(group)
@@ -517,7 +527,7 @@ struct CLog {
         self.assertIsNotNone(setting)
         self.assertEqual(setting.attrib["type"], "integer")
         self.assertEqual(setting.findtext("level"), "1")
-        self.assertEqual(setting.findtext("default"), "1")
+        self.assertEqual(setting.findtext("default"), "0")
         self.assertEqual(setting.findtext("requirement"), "HAVE_DVBRIDGE")
         strings = (TREE / "addons/resource.language.en_gb/resources/strings.po").read_text()
         options = {option.text: option.attrib["label"] for option in
@@ -538,7 +548,10 @@ int main()
   using namespace DVBRIDGE;
   DiagnosticOpen();
   ObserveDiagnostic(1, 1, 1, 1, "prepare", true, false);
-  assert(DiagnosticLog(LOGINFO, "startup detail"));
+  assert(!DetailedDiagnosticsEnabled());
+  assert(!DiagnosticLog(LOGINFO, "startup detail"));
+  SetDetailedDiagnostics(true);
+  assert(DiagnosticLog(LOGINFO, "enhanced detail"));
   SetDetailedDiagnostics(false);
   assert(!DiagnosticLog(LOGINFO, "texture detail"));
   assert(!DiagnosticProgressLog(LOGINFO, "analysis counters"));
@@ -793,6 +806,7 @@ using pl_log_level=int;
 ''' + backend + r'''
 int main() {
   using namespace DVBRIDGE;
+  SetDetailedDiagnostics(true);
   ObserveDiagnostic(12,1,7,9,"admission",true,false);
   for(unsigned n=0;n<100;++n) DiagnosticLog(LOGINFO,"producer={} value={}",n%8,n);
   assert(CLog::lines.size()==24);

@@ -681,7 +681,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +        <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
 +          <requirement>HAVE_DVBRIDGE</requirement>
 +          <level>0</level><visible>false</visible>
-+          <default>0</default>
++          <default>4</default>
 +          <constraints>
 +            <options>
 +              <option label="40812">0</option>
