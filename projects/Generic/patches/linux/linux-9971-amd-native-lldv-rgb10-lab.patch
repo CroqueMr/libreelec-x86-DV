@@ -47,7 +47,7 @@
  {
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
-@@ -46,6 +46,11 @@
+@@ -58,6 +58,11 @@
  	}
  }
  
@@ -59,7 +59,7 @@
  void amdgpu_dm_dv_attach(struct amdgpu_dm_connector *connector)
  {
  	struct amdgpu_device *adev = drm_to_adev(connector->base.dev);
-@@ -76,10 +81,13 @@
+@@ -89,10 +94,13 @@
  		static const struct drm_prop_enum_list formats[] = {
  			{ 0, "Off" },
  			{ 1, "YCbCr 4:2:2 10 bits forced" },
@@ -74,17 +74,17 @@
  		if (connector->lldv_format_property)
  			drm_object_attach_property(&connector->base.base,
  					connector->lldv_format_property, 0);
-@@ -214,6 +222,7 @@
+@@ -227,6 +235,7 @@
  	struct dc_info_packet avi_packet, vsp_packet;
  	u8 wire[HDMI_INFOFRAME_SIZE(DOLBY_VENDOR)];
  	const bool lldv = state->lldv_format != 0;
 +	const bool native = state->lldv_format == AMDGPU_LLDV_RGB10_LAB;
+ 	const bool rx550 = dv_rx550(stream->ctx);
  	struct drm_dvbridge_link link = {
  		.requested = amdgpu_dm_dv_transport(state),
- 		.lab_enabled = (lldv ? dv_lldv : dv_standard) && stream->ctx &&
-@@ -240,9 +249,18 @@
- 	if (!link.requested)
- 		return 0;
+@@ -256,9 +265,18 @@
+ 	if (rx550 && !dv_rx550_mode(mode))
+ 		return -EOPNOTSUPP;
  	if (state->hdr10_deep_color || (lldv && (state->dv_standard ||
 -	    state->lldv_format != 1 || state->base.hdr10plus_metadata)))
 +	    (state->lldv_format != 1 && !native) || state->base.hdr10plus_metadata)))
@@ -103,7 +103,7 @@
  	if (ret)
  		return ret;
  	if (!(lldv ? aconnector->lldv_format_property : aconnector->dv_standard_property) ||
-@@ -297,12 +315,17 @@
+@@ -313,12 +331,18 @@
  	stream->vsp_infopacket = vsp_packet;
  	stream->dv_standard = true;
  	stream->dv_low_latency = lldv;
@@ -118,12 +118,13 @@
 +	stream->output_color_space = native ? COLOR_SPACE_2020_YCBCR_LIMITED : COLOR_SPACE_SRGB;
  	stream->out_transfer_func.type = TF_TYPE_BYPASS;
  	stream->out_transfer_func.tf = TRANSFER_FUNCTION_LINEAR;
--	stream->dither_option = DITHER_OPTION_DISABLE;
-+	stream->dither_option = native ? DITHER_OPTION_TRUN10 : DITHER_OPTION_DISABLE;
+-	stream->dither_option = rx550 ? DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE;
++	stream->dither_option = native ? DITHER_OPTION_TRUN10 :
++		(rx550 ? DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE);
  	stream->qs_bit = 1;
  	return 0;
  }
-@@ -370,7 +393,7 @@
+@@ -386,7 +410,7 @@
  }
  
  static bool dv_plane_neutral(const struct drm_plane_state *p,
@@ -132,7 +133,7 @@
  {
  	const struct dm_plane_state *dm = to_dm_plane_state(p);
  	const struct dc_plane_state *dc = dm->dc_state;
-@@ -390,8 +413,10 @@
+@@ -406,8 +430,10 @@
  		return false;
  
  	return p->plane->type != DRM_PLANE_TYPE_CURSOR && p->fb &&
@@ -145,7 +146,7 @@
  		p->rotation == DRM_MODE_ROTATE_0 && p->alpha == DRM_BLEND_ALPHA_OPAQUE &&
  		/* Primary planes do not expose pixel blend mode on AMD. XRGB/XBGR
  		 * have no alpha channel: upstream disables per-pixel blending even
-@@ -437,6 +462,7 @@
+@@ -453,6 +479,7 @@
  		struct dm_crtc_state *dm = to_dm_crtc_state(cs);
  		struct dc_stream_state *stream = dm->stream;
  		unsigned int planes = 0, connectors = 0;
@@ -153,12 +154,14 @@
  
  		if (!cs->active || !stream || !stream->dv_standard)
  			continue;
-@@ -448,10 +474,10 @@
+@@ -464,11 +491,11 @@
  		    dm->freesync_config.state == VRR_STATE_ACTIVE_VARIABLE ||
  		    cs->ctm || cs->gamma_lut || cs->degamma_lut || cs->vrr_enabled ||
  		    cs->async_flip || !dv_identity_tf(dm->regamma_tf) ||
--		    stream->dither_option != DITHER_OPTION_DISABLE ||
-+		    stream->dither_option != (native ? DITHER_OPTION_TRUN10 : DITHER_OPTION_DISABLE) ||
+-		    stream->dither_option != (dv_rx550(stream->ctx) ?
+-			DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE) ||
++		    stream->dither_option != (native ? DITHER_OPTION_TRUN10 :
++			(dv_rx550(stream->ctx) ? DITHER_OPTION_TRUN8 : DITHER_OPTION_DISABLE)) ||
  		    stream->out_transfer_func.type != TF_TYPE_BYPASS ||
  		    stream->gamut_remap_matrix.enable_remap || stream->csc_color_matrix.enable_adjustment ||
 -		    stream->output_color_space != COLOR_SPACE_SRGB ||
@@ -166,7 +169,7 @@
  		    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
  		    !stream->avi_infopacket.valid || !stream->vsp_infopacket.valid ||
  		    /* Recheck the DC raster after global validation, not only the plane. */
-@@ -465,8 +491,8 @@
+@@ -483,8 +510,8 @@
  		    stream->src.width != cs->mode.hdisplay || stream->src.height != cs->mode.vdisplay ||
  		    stream->dst.x || stream->dst.y ||
  		    stream->dst.width != cs->mode.hdisplay || stream->dst.height != cs->mode.vdisplay ||
@@ -177,7 +180,7 @@
  			return -EINVAL;
  		for_each_new_connector_in_state(state, connector, con, j) {
  			const struct dc_edid *edid = dv_stream_edid(stream);
-@@ -479,14 +505,14 @@
+@@ -497,14 +524,14 @@
  			if (connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
  			    (stream->dv_low_latency ?
  			     (!lldv_sink_supported(&caps, &cs->mode) ||
@@ -194,7 +197,7 @@
  			    con->hdmi.broadcast_rgb != DRM_HDMI_BROADCAST_RGB_FULL ||
  			    to_dm_connector_state(con)->scaling != RMX_OFF ||
  			    to_dm_connector_state(con)->underscan_enable)
-@@ -496,7 +522,7 @@
+@@ -514,7 +541,7 @@
  		for_each_new_plane_in_state(state, plane, ps, j) {
  			if (ps->crtc != crtc || !ps->fb)
  				continue;
@@ -226,7 +229,7 @@
  	struct dc_crtc_timing_adjust adjust;
 --- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
 +++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
-@@ -3722,7 +3722,8 @@
+@@ -3723,7 +3723,8 @@
  
  	/* Entry and exit must reprogram HDMI packets and the color pipeline. */
  	if (cur_stream->dv_standard != new_stream->dv_standard ||
