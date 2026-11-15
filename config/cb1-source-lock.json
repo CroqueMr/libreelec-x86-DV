@@ -373,7 +373,7 @@
     "tests/cb1/test_bdj_audio_handoff.py": "d7e2a2d3a67f6742a20add0bbed68f02a5f71cc5187d613130de0019d9e48a9f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-bluray-audio-handoff.patch": "db62f335aeb7491319264a5980ad973371c1b4ff4005982c8f94025c26ec4a4a",
     "tests/cb1/test_hdr10_frame_handoff.py": "dbbb38c8280722dcbcafaea1c3fe7ab47c3c1c24512e7e9e380fde75f16b8532",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": "7aab7eccaea8f533434be5befb8e89fd5fa88d5274e4e40c3ab8512bd25a6bc8",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-amd-hdr10-frame-handoff.patch": "df1e051cf34c118bd584bbaa881da0dc904f53c7522803664172c4fdf78fc695",
     "tests/cb1/test_bdj_presentation_timing.py": "4e3f3fb8aeecfe1eb4c88d3bc38825eef13f23233b5eb059b13ef21236d6850d",
     "packages/multimedia/libbluray/patches/0007-bdj-presentation-timing.patch": "889e7701633deaf29d9f4ca5425324b7cbf3e097f0080a1204d4f6c204dbc27c",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-bdj-presentation-clock.patch": "b42e6ea31f6d7820dea917176b318de34866c26f21d8751a37d21ddcb00a6f32",
@@ -384,7 +384,7 @@
     "tests/cb1/test_hdr10_dv_handoff.py": "3828f98671e0c80ebe30da43a6043d3e89150a7f4e03145a55d412e57ecdfced",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hdr10-dv-renderer-handoff.patch": "8c1456ed17bc9d9ca3d02228da26df8bc7dc039c867fe9762af0e0e450a9cb97",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzz-master-reference-upscalers.patch": "149082ad8a45b44a9024e8722049ac0b704275a77385fdee635387e3d5e9e4f3",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-fsr1-rcas.patch": "60da22d84ede2f225095b280efd7217c424cca0cb4271e91b1c0aff960cfd639",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzz-fsr1-rcas.patch": "cc6317655ca36f45aff773715ef655bb44fabdf53c553e3b9fcab90792158410",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/PROVENANCE.txt": "8eda74d77c08cc571098b4379bc5aebf1cfdf56a6abc50c0dbad1e0e2a5dfb8f",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/FSRCNNX_x2_8-0-4-1.glsl": "133e966a9a405d6c47dc2694bea9b6eede7c92db74d2be53d9aafc6ccc2e208f",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_Upscale_CNN_x2_S.glsl": "4c53ec2e287908f7ee7bcb266b0170421626d663576468b7d7dafc62962649a4",
@@ -393,10 +393,10 @@
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_Clamp_Highlights.glsl": "0802e56d849aae9446a8df7b38f1963358641c942985f620b37adc5ca40c2889",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_AutoDownscalePre_x4.glsl": "5af62d8cd844916dc1126613e13bad3beab195787f93a71200b47c6ec78f2e41",
     "projects/Generic/filesystem/usr/share/kodi/system/shaders/cb1/Anime4K_AutoDownscalePre_x2.glsl": "8c58291740146bd766a4d73f132775a797fe80f7d07919b5d767e27a5dc85656",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "b12710316bc79512aa850460341769883cfa19deecb00d1f8ab81252b97700de",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "422a2ccc6efe21a73ddfe39b51334e85be2b916c5dbd86dfd1d394f80e2c4849",
-    "tests/cb1/test_upscaler_preferences.py": "bebfde0aa6776c425871381e5cb46b1eab23061e59cec874036b739d6336ad09",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "223a565aaaf975ab244203a7ec4bdd4e20e00e8edf71bf803d27317c049d74ab"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-sdr-shader-upscalers.patch": "ead6952eb5f2d1bc2487b8b977df1b8f2cd61390a03e06aa193609fd6e7d9e4d",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-fsr1-upscaler.patch": "1b5b4220eef1e39d66e00ff3e3793b5aa9c28faeef406f46f2c11c3b3bcac5a1",
+    "tests/cb1/test_upscaler_preferences.py": "686acf3f7f99ce480eb313e278bc8ca610ee523babbcb52a4076ffa9e851b7c3",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-video-upscaler-preferences.patch": "a59ca427770ef99446622e02e30d422306f51f141d048573b988a28ead3b7573"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
