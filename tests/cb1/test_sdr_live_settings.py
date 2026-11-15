@@ -46,7 +46,7 @@ int main(){
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text(encoding='utf-8')
         shader=body((TREE/'xbmc/rendering/gles/GuiCompositeShaderGLES.cpp').read_text(encoding='utf-8'),
                     'bool CGuiCompositeShaderGLES::CreateLUTs(')
-        start=source.index('  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring')
+        start=source.index('  const bool matchedPlayerLedDepth =')
         prepare=source[start:source.index('  if (!HasPendingDVOutputSurface() && !SetVideoOutput',start)]
         start=source.index('  if (m_dvBridge && m_dvConfiguredOutput ==')
         begin=source[start:source.index('  if (!CompleteDVBridgePage()',start)]
@@ -79,9 +79,12 @@ struct Context{int Poll(){return DVBRIDGE_DV_IDLE;}};
 struct FBO{void Cleanup(){}};
 struct Picture{};
 struct Window{
- struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::SDR;dvbridge_policy policy{};}m_dvSelection;
+ struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::SDR;dvbridge_policy policy{};bool lldvRgb10Scanout{};}m_dvSelection;
  State m_dvState;bool m_sdrConversion=true,m_hdrConversion=true,m_dvPriorHDRConversion=true,m_dvPriorSDRConversion=true,m_dvPriorGuiCompositing=true;
- bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ enum class PascalHDRMode { None, Conversion };
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None,m_priorPascalHDRMode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode mode){m_pascalHDRMode=mode;}
+ int GetOutputBitDepth()const{return 8;}
  unsigned HDR10Framebuffer()const{return 0;}
  bool m_guiCacheValid=false,m_guiCompositing=false,m_compositeShaderLimited=false,m_dvOutputRetiring=false,m_dvRejectedSurface=true,m_dvRollbackFailed=false;
  bool m_dvPQGuiMergeAttempted=false,m_dvPQGuiComposed=false,m_dvPQSubtitleRendering=false,m_dvPQSubtitleCleared=false,m_dvNativeGui=false;
@@ -152,7 +155,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}}
 HEADER
 namespace DVBRIDGE {
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 
