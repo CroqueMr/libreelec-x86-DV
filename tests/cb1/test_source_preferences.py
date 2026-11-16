@@ -143,7 +143,7 @@ int main(){
  assert(FrameOutputSettings(true).hdr10Source==HDR10SourceMode::Native);
  assert(hdr10PlusPlaybackMode.load()==HDR10SourceMode::HDR10PlusPassthrough);
  assert(FrameOutputSettings().hdr10Source==HDR10SourceMode::EnhancedDV);
- assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));
+ assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0));
  assert(stored->ints["dvbridge.outputmode"]==1 && stored->ints["dvbridge.hdr10method"]==1);
  assert(stored->ints["dvbridge.hdr10source"]==2 && stored->ints["dvbridge.hdr10plussource"]==0);
  assert(FrameOutputSettings().output==OutputMode::MasterReference);

@@ -115,7 +115,7 @@ int main() {
         self.assertIsNone(settings.find(".//setting[@id='dvbridge.adaptivefp16']"))
         menu = (tree / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         choices = re.search(r'dvChoices\[\]=\{(.*?)\};', menu, re.S).group(1)
-        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [0, 4, 5, 2, 1, 1, 1, 6, 7])
+        self.assertEqual([int(value) for value in re.findall(r'\{(\d+),', choices)], [4, 0, 5, 2, 1, 1, 1, 6, 7])
 
     def test_legacy_fast_values_cannot_change_output_policy(self):
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

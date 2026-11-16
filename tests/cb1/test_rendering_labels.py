@@ -42,7 +42,7 @@ class RenderingLabelsTests(unittest.TestCase):
         table=re.search(r'dvChoices\[\]=(.*?);',source,re.S).group(1)
         choices=re.findall(r'\{(\d+),(\d+),(\d+)\}',table)
         self.assertEqual([labels[label] for _,_,label in choices],[
-            'Dolby Vision : Reference', 'Dolby Vision : Master Reference',
+            'Dolby Vision : Master Reference', 'Dolby Vision : Reference',
             'Dolby Vision : Adaptive HDR Mapping', 'Kodi : Default',
             'HDR10 : Rendering', 'HDR10 : LLDV Reference conversion',
             'HDR10+ : Conversion', 'SDR : Conversion', 'Dolby Vision : LLDV Reference'])
