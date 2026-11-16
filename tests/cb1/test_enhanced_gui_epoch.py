@@ -6,6 +6,36 @@ import unittest
 from shipped_kodi import shipped_code
 
 class EnhancedGUIEpoch(unittest.TestCase):
+    def test_gui_refresh_retains_async_fences_on_the_same_output(self):
+        code=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp')
+        start=code.index('    asyncOverlayRefresh = sameGeometry')
+        expression=code[start:code.index(';',start)+1]
+        program=r"""
+#include <cassert>
+constexpr int DVBRIDGE_MODE_HDR10_EXPERT=3, DVBRIDGE_MODE_ENHANCED_DV=4,
+              DVBRIDGE_MODE_MASTER_REFERENCE=5, DVBRIDGE_MODE_SDR=7, DVBRIDGE_MODE_PLAYER_LED=8;
+bool refresh(int mode, bool allowPacked, bool m_committedPacked, bool sameGeometry=true)
+{
+  struct { int mode; } policy{mode};
+  bool asyncOverlayRefresh=false;
+"""+expression+r"""
+  return asyncOverlayRefresh;
+}
+int main()
+{
+  assert(refresh(DVBRIDGE_MODE_HDR10_EXPERT,true,false));
+  assert(!refresh(DVBRIDGE_MODE_HDR10_EXPERT,false,false));
+  assert(!refresh(DVBRIDGE_MODE_HDR10_EXPERT,true,false,false));
+  assert(!refresh(DVBRIDGE_MODE_PLAYER_LED,true,false));
+  assert(refresh(DVBRIDGE_MODE_MASTER_REFERENCE,true,true));
+  assert(!refresh(DVBRIDGE_MODE_MASTER_REFERENCE,true,false));
+  assert(refresh(DVBRIDGE_MODE_SDR,true,false));
+  assert(!refresh(DVBRIDGE_MODE_SDR,true,true));
+  assert(!refresh(DVBRIDGE_MODE_ENHANCED_DV,true,true));
+}
+"""
+        self.run_program(program)
+
     def test_ai_rgb_gui_invalidates_prepack_before_native_composition(self):
         code=shipped_code('xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp')
         start=code.index('  if (!rendered)\n    rendered = dvbridge_render_hdr10_ai_rgb')

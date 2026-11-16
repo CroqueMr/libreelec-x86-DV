@@ -14,7 +14,9 @@ class MasterPanelSurface(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test.cpp').write_text(program)
-            built = subprocess.run(['c++', '-std=c++20', str(root / 'test.cpp'),
+            repo = Path(__file__).resolve().parents[2]
+            built = subprocess.run(['c++', '-std=c++20', '-I' + str(repo / 'CB1/src'),
+                                    str(root / 'test.cpp'),
                                     '-o', str(root / 'test')], capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
             ran = subprocess.run([str(root / 'test')], capture_output=True, text=True)
@@ -31,7 +33,7 @@ class MasterPanelSurface(unittest.TestCase):
 #include <cassert>
 #include <cstdint>
 #include <iostream>
-enum {DVBRIDGE_MODE_DISABLED=0,DVBRIDGE_MODE_STANDARD=1,DVBRIDGE_MODE_MASTER_REFERENCE=5,DVBRIDGE_MODE_SDR=7};
+#include "dvbridge_policy.h"
 namespace DVBRIDGE { uint64_t NextRevisionAfter(uint64_t value){return value+1;} }
 struct Binding {uint64_t stream=1,picture=42,revision=7;bool operator==(const Binding&)const=default;};
 struct Layer {Binding binding;bool lease=true;int scalingMethod=0;};
@@ -92,8 +94,7 @@ int main(){
 }
 '''.replace('@@ADMISSION@@', admission).replace('m_pendingMetadata.Data()', 'm_pendingMetadata')
             .replace('dvbridge_render_dv_policy_update_overlay(m_renderer,',
-                     '[](void*,int*,bool){return true;}(m_renderer,')
-            .replace('DVBRIDGE_MODE_ENHANCED_DV', '3'))
+                     '[](void*,int*,bool){return true;}(m_renderer,'))
 
     def test_dv_configure_defers_renderer_until_import_and_eight_bit_surface(self):
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) /
