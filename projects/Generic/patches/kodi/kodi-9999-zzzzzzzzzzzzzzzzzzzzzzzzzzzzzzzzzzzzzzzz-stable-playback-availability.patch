@@ -63,6 +63,44 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
  msgctxt "#41300"
  msgid "EDID target gamut exceeds BT.2020"
  msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -7,6 +7,12 @@
+           <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+           <control type="button" format="action" />
+         </setting>
++        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
++          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
++          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
++          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
++          <control type="list" format="string" />
++        </setting>
+         <setting id="dvbridge.hdr10source" type="integer" label="40865" help="40870">
+           <requirement>HAVE_CB1_HDR10_AI</requirement><level>0</level><default>0</default>
+           <constraints><options>
+@@ -165,7 +171,7 @@
+           <requirement>HAVE_DVBRIDGE</requirement>
+           <level>0</level><default>0</default>
+           <dependencies><dependency type="visible"><or>
+-            <and><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or><or><condition setting="dvbridge.cmv40" operator="is">4</condition><and><condition setting="dvbridge.cmv40" operator="is">3</condition><condition setting="dvbridge.cmv40trigger" operator="is">0</condition></and></or></and>
++            <and><or><condition setting="dvbridge.outputmode" operator="is">0</condition><condition setting="dvbridge.outputmode" operator="is">4</condition></or><condition setting="dvbridge.cmv40" operator="is">3</condition><condition setting="dvbridge.cmv40trigger" operator="is">0</condition></and>
+             <condition setting="dvbridge.outputmode" operator="is">3</condition>
+             <condition setting="dvbridge.outputmode" operator="is">5</condition>
+             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
+@@ -209,12 +215,6 @@
+         <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
+           <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
+           <control type="toggle" />
+-        </setting>
+-        <setting id="dvbridge.masteroutput" type="integer" label="40916" help="40917">
+-          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
+-          <dependencies><dependency type="visible" setting="dvbridge.outputmode" operator="is">4</dependency></dependencies>
+-          <constraints><options><option label="40918">0</option><option label="40919">1</option></options></constraints>
+-          <control type="list" format="string" />
+         </setting>
+         <setting id="dvbridge.disablel2" type="boolean" label="40925" help="40926">
+           <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>false</default>
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
@@ -131,6 +169,15 @@ diff --git a/xbmc/cores/VideoProcessingInfo.h b/xbmc/cores/VideoProcessingInfo.h
 diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
 --- a/xbmc/dialogs/DVPlaybackModes.cpp
 +++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -41,7 +41,7 @@
+ namespace
+ {
+ struct Choice { int output,method,label; };
+-constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
++constexpr Choice dvChoices[]={{4,0,40913},{0,0,40812},
+     {5,0,40914},
+     {2,0,40814},{1,0,40822},{1,1,40823},{1,2,40922},{6,0,41130},{7,0,41221}};
+ }
 @@ -245,13 +245,17 @@
            });
      }
@@ -227,6 +274,18 @@ diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialo
      SetProperty("DV.RequestedPolicy", transaction ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.transaction.requested,
          data.transaction.hdr10AI)) :
          active ? PolicyText(CDVPlaybackInfo::RequestedPolicy(data.output.requested,data.output.hdr10AI)) : "");
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -551,7 +551,7 @@
+   // A preference can be deferred while paused; only the renderer admits a frame.
+   const bool pendingHDR10Plus=nativeHDR10Plus && !caps.sourceKnown && !data.transaction.identity.Valid();
+   const auto& processing=(hdr10Source || hlgSource) && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
+-  constexpr int menuModes[]{1,5,
++  constexpr int menuModes[]{5,1,
+       4,0,2,3,6,7,8};
+ #ifdef CB1_HAS_HDR10_AI
+   constexpr int hdr10MenuModes[]{1,4,0,7};
 diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
 --- a/xbmc/utils/DVBridgeLldv.h
 +++ b/xbmc/utils/DVBridgeLldv.h

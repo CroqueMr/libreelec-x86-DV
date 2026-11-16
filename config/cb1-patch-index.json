@@ -1949,11 +1949,13 @@
     "owner": "Complete Stable playback availability and output reporting.",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Keep the selected and confirmed playback states visible.",
+      "system/settings/settings.xml": "Organize Master Reference and CM4.0 settings.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Resolve native HDR10+ preferences in both Kodi build configurations.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Keep the selected and confirmed playback states visible.",
       "xbmc/cores/VideoProcessingInfo.h": "Keep the selected and confirmed playback states visible.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Keep the selected and confirmed playback states visible.",
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Keep the selected and confirmed playback states visible.",
+      "xbmc/settings/SettingConditions.cpp": "Keep playback availability aligned with the ordered Dolby Vision choices.",
       "xbmc/utils/DVBridgeLldv.h": "Keep the selected and confirmed playback states visible.",
       "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep the selected and confirmed playback states visible.",
       "xbmc/windowing/gbm/WinSystemGbm.h": "Keep the selected and confirmed playback states visible.",

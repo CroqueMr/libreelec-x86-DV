@@ -13,13 +13,33 @@ class StableVideoSettings(unittest.TestCase):
     def test_playback_controls_and_sdr_dependencies(self):
         group = self.video.find("group[@id='99']")
         ids = [setting.get("id") for setting in group]
-        self.assertEqual(ids[:6], [f"dvbridge.{name}" for name in
-                         ("playback", "hdr10source", "hdr10plussource", "hlgsource", "sdrpreset", "sdrgamut")])
+        self.assertEqual(ids[:7], [f"dvbridge.{name}" for name in
+                         ("playback", "masteroutput", "hdr10source", "hdr10plussource", "hlgsource",
+                          "sdrpreset", "sdrgamut")])
         for name in ("sdrpreset", "sdrgamut", "sdrpeak", "sdrgamma", "sdrblack"):
             conditions = group.findall(f"setting[@id='dvbridge.{name}']/dependencies/dependency/or/condition")
             self.assertEqual({(c.get("setting"), c.text) for c in conditions},
                              {("dvbridge.outputmode", "6"), ("dvbridge.hdr10source", "4"),
                               ("dvbridge.hdr10plussource", "4"), ("dvbridge.hlgsource", "2")})
+
+    def test_master_reference_output_is_expert_and_defaults_to_ycbcr(self):
+        master = self.video.find(".//setting[@id='dvbridge.masteroutput']")
+        self.assertEqual(master.findtext("level"), "3")
+        default = master.findtext("default")
+        option = master.find("constraints/options/option[@label='40918']")
+        self.assertEqual(default, option.text)
+        visible, = master.findall("dependencies/dependency[@type='visible']")
+        self.assertEqual(visible.get("setting"), "dvbridge.outputmode")
+        self.assertEqual(visible.text, "4")
+
+    def test_tv_peak_visibility_excludes_cm4_auto2(self):
+        visible = self.video.find(".//setting[@id='dvbridge.tvpeak']/dependencies/dependency[@type='visible']")
+        self.assertEqual([condition.text for condition in visible.findall(".//condition[@setting='dvbridge.cmv40']")],
+                         ["3"])
+        self.assertEqual(visible.findtext(".//condition[@setting='dvbridge.cmv40trigger']"), "0")
+        self.assertEqual({(condition.get("setting"), condition.text) for condition in visible.findall("or/condition")},
+                         {("dvbridge.outputmode", "3"), ("dvbridge.outputmode", "5"),
+                          ("dvbridge.hdr10source", "2")})
 
     def test_upscalers_live_with_kodi_processing(self):
         group = self.video.find("group[@id='3']")

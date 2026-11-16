@@ -25,7 +25,7 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <mutex>
 #include <vector>
 using dvbridge_mode=int;
-constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_SDR=7;
+constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_MASTER_REFERENCE=5, DVBRIDGE_MODE_SDR=7;
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct CDVPlaybackModes {
  static inline StreamHdrType nativeSource=StreamHdrType::HDR_TYPE_NONE;
@@ -62,7 +62,7 @@ struct IntegerSettingOption {std::string label="Standard",label2;int value{};
  std::vector<std::pair<std::string,bool>> properties;};
 struct CSettingConditions {static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
  std::vector<IntegerSettingOption>& list) BODY };
-bool disabled(int value=0, const char* settingId="dvbridge.playbackchoice") {
+bool disabled(int value=1, const char* settingId="dvbridge.playbackchoice") {
  std::vector<IntegerSettingOption> list(1);list[0].value=value;
  auto setting=std::make_shared<CSetting>();setting->id=settingId;
  CSettingConditions::DVOutputOptions(setting,list);
@@ -90,6 +90,12 @@ int main() {
  preferences.peak=preferences.expertPeak=0;
  assert(!disabled(2,"dvbridge.playback") && !disabled(5,"dvbridge.playback"));
  preferences.peak=preferences.expertPeak=1000;
+ window.available.processing[DVBRIDGE_MODE_MASTER_REFERENCE]={false,OutputReason::NoGPUProcessing};
+ frame.capabilities.processing=window.available.processing;
+ for (const auto* id : {"dvbridge.playback", "dvbridge.playbackchoice"})
+   assert(disabled(0,id) && !disabled(1,id));
+ window.available.processing[DVBRIDGE_MODE_MASTER_REFERENCE]={true,OutputReason::None};
+ frame.capabilities.processing=window.available.processing;
  assert(!disabled());
  // The current HDMI ceiling takes precedence over an earlier presented frame.
  window.available.hdr10MaxBpc=8;

@@ -209,13 +209,13 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   assert(persisted.HDR10Mode(true)==HDR10SourceMode::Native);
  }
  if(scenario=="settings"){
-  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,6,true));
+  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0));assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,6,true));
   assert(dialog.current==5);assert(stored->ints["dvbridge.outputmode"]==1&&stored->ints["dvbridge.hdr10method"]==2);
   assert(stored->saves==1);assert(FrameOutputSettings().output==OutputMode::MasterReference);
   SelectOutputSettings();assert(FrameOutputSettings().output==OutputMode::HDR10&&FrameOutputSettings().method==2);
  }
  if(scenario=="label"){
-  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));assert(actionValue()=="40823");
+  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0));assert(actionValue()=="40823");
   for(int method=0;method<3;++method){stored->ints["dvbridge.hdr10method"]=method;
    assert(actionValue()==std::to_string(method==0?40822:method==1?40823:40922));}
   stored->ints["dvbridge.outputmode"]=2;assert(actionValue()=="40814");
@@ -225,6 +225,19 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
  if(scenario=="legacy-toggles"){
   auto before=FrameOutputSettings();stored->ints["dvbridge.encodedactivearea"]=1;stored->ints["dvbridge.masterfallback"]=1;
   stored->ints["dvbridge.optimizedgui"]=0;auto after=FrameOutputSettings();assert(before.SameValues(after)&&before.revision==after.revision);
+ }
+ if(scenario=="master-first"){
+  const auto dv=StreamHdrType::HDR_TYPE_DOLBYVISION;
+  stored->ints["dvbridge.outputmode"]=0;
+  SelectOutputSettings();
+  assert(choose(dv,0));
+  assert(dialog.current==1 && FrameOutputSettings().output==OutputMode::MasterReference);
+  assert(stored->ints["dvbridge.outputmode"]==0);
+  assert(choose(StreamHdrType::HDR_TYPE_HDR10,0,true));
+  assert(dialog.current==1 && stored->ints["dvbridge.outputmode"]==4);
+  assert(actionValue()=="40913");
+  assert(choose(dv,1,true));
+  assert(dialog.current==0 && stored->ints["dvbridge.outputmode"]==0);
  }
  if(scenario=="player-led"){
   assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,8,true));
@@ -279,7 +292,7 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
             for flags in ([],['-DCB1_TEST_NO_AI']):
                 built=subprocess.run(['c++','-std=c++20',*flags,'-I'+str(ROOT/'CB1/src'),'-I'+str(TREE/'xbmc'),str(code),'-o',str(binary)],capture_output=True,text=True)
                 self.assertEqual(built.returncode,0,built.stderr)
-                for scenario in ('default-edits','live','hdr10plus','settings','label','legacy-toggles','strict','player-led'):
+                for scenario in ('default-edits','live','hdr10plus','settings','label','legacy-toggles','strict','master-first','player-led'):
                     with self.subTest(flags=flags,scenario=scenario):
                         ran=subprocess.run([str(binary),scenario],capture_output=True,text=True)
                         self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
