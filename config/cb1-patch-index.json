@@ -1968,5 +1968,13 @@
     "files": {
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous HDR10 Rendering LLDV scanout while reblending the same video picture."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": {
+    "owner": "Blend the SDR GUI before packing native low-latency Dolby Vision.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Compose the SDR GUI while preparing the full-raster LLDV picture.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
+    }
   }
 }

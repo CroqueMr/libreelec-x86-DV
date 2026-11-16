@@ -46,6 +46,13 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *rend
     const struct dvbridge_policy *policy,const struct pl_frame *source,
     const void *metadata,size_t bytes,double pts,double el_pts,pl_tex target,
     struct dvbridge_creative_plan *applied);
+/* As above, with a full-raster SDR GUI in Kodi framebuffer orientation.
+ * The caller retains the borrowed GUI and EOTF textures until GPU completion.
+ * The GUI is composed in display-linear RGB before HDMI packing. */
+enum cb1_master_status dvbridge_render_player_led_gui(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex target,const struct dvbridge_native_overlay *gui,
+    struct dvbridge_creative_plan *applied);
 /* The same full-raster render to a coherent RGBA32F host buffer.
  * scratch is a 4K RGBA8 render target. The caller fences before reading host. */
 enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer *renderer,

@@ -441,6 +441,51 @@ static void player_led_pixels(pl_gpu gpu,struct pl_frame source,pl_tex output)
         else
             assert(pixels[i]==0 && pixels[i+1]==0 && pixels[i+2]==0 && pixels[i+3]==1);
     }
+
+    /* A GUI swatch in the upper letterbox must survive the L5 mask,
+     * with the same orientation and alpha as the independent GUI raster. */
+    {
+        uint8_t gui_pixels[8*8*4]={0};
+        gui_pixels[(7*8+4)*4+0]=255;
+        gui_pixels[(7*8+4)*4+1]=255;
+        gui_pixels[(7*8+4)*4+2]=255;
+        gui_pixels[(7*8+4)*4+3]=255;
+        gui_pixels[(4*8+3)*4+0]=255;
+        gui_pixels[(4*8+3)*4+3]=128;
+        const uint16_t endpoints[]={0,0x3c00};
+        const pl_fmt gui_format=pl_find_named_fmt(gpu,"rgba8");
+        const pl_fmt lut_format=pl_find_named_fmt(gpu,"r16f");
+        assert(gui_format && lut_format);
+        pl_tex gui_tex=pl_tex_create(gpu,pl_tex_params(.w=8,.h=8,.format=gui_format,
+            .sampleable=true,.initial_data=gui_pixels));
+        pl_tex lut=pl_tex_create(gpu,pl_tex_params(.w=2,.h=1,.format=lut_format,
+            .sampleable=true,.initial_data=endpoints));
+        assert(gui_tex && lut);
+        const struct dvbridge_native_overlay gui={.texture=gui_tex,.degamma=lut};
+        assert(dvbridge_render_player_led_gui(renderer,&policy,&source,m,bytes,1,NAN,output,&gui,NULL)==CB1_MASTER_READY);
+        float composed[8*8*4];
+        reference_read(gpu,output,0,0,8,8,composed);
+        const pl_matrix3x3 transform=pl_get_color_mapping_matrix(
+            pl_raw_primaries_get(PL_COLOR_PRIM_BT_709),pl_raw_primaries_get(PL_COLOR_PRIM_BT_2020),
+            PL_INTENT_RELATIVE_COLORIMETRIC);
+        for(int y=0;y<8;y++)for(int x=0;x<8;x++){
+            const int i=(y*8+x)*4;
+            if(y==0 && x==4){
+                for(int c=0;c<3;c++)assert(fabsf(composed[i+c]-.203f)<1e-5f);
+            }else if(y==3 && x==3){
+                for(int c=0;c<3;c++){
+                    const float a=128.0f/255.0f;
+                    const float expected=pixels[i+c]*(1-a)+transform.m[c][0]*.203f*a;
+                    assert(fabsf(composed[i+c]-expected)<1e-5f);
+                }
+            }else{
+                assert(!memcmp(composed+i,pixels+i,4*sizeof(float)));
+            }
+        }
+        pl_tex_destroy(gpu,&gui_tex);
+        pl_tex_destroy(gpu,&lut);
+        assert(dvbridge_render_player_led(renderer,&policy,&source,m,bytes,1,NAN,output,NULL)==CB1_MASTER_READY);
+    }
     pl_fmt rgba8=pl_find_named_fmt(gpu,"rgba8");
     assert(rgba8);
     pl_tex carrier=pl_tex_create(gpu,pl_tex_params(.w=8,.h=8,.format=rgba8,.renderable=true));
