@@ -1,18 +1,57 @@
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+index b03feb3..0c106b9 100644
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -27,6 +27,7 @@
+ #include "utils/StringUtils.h"
+ #include "windowing/WinSystem.h"
+ #ifdef HAVE_DVBRIDGE
++#include "cores/DataCacheCore.h"
+ #include "dialogs/DVPlaybackModes.h"
+ #include "cores/VideoPlayer/Interface/StreamInfo.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
+@@ -535,6 +536,13 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+   caps.hdr10plus=available.hdr10plus;
+   caps.playerLed=available.playerLed;
+   caps.lldvUnavailableLabel=available.lldvUnavailableLabel;
++  if (menu && window &&
++      (caps.playerLed || caps.lldvUnavailableLabel == DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL) &&
++      !window->LldvSupportsPlaybackTiming(CServiceBroker::GetDataCacheCore().GetVideoFps(), true))
++  {
++    caps.playerLed = false;
++    caps.lldvUnavailableLabel = 41212; // No compatible HDMI timing.
++  }
+   if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
+   {
+     caps.processingKnown=available.processingKnown;
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+index fde2381..28e87bb 100644
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -255,6 +255,7 @@ struct LldvConnectorStatus
+   LldvDisplay display;
+   uint64_t edidGeneration{};
+   LldvFormat rejected{LldvFormat::Auto};
++  bool cta93FractionalOnly{};
+ };
+ 
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
-index 17b043f..1697fce 100644
+index 17b043f..a674b15 100644
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -1764,7 +1764,8 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+@@ -1764,7 +1764,9 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
      if (native12)
        status.driverFormats |= DVBRIDGE::LldvBit(DVBRIDGE::LldvFormat::Y422_12);
      status.forced42210 = forced10.has_value();
 -    const auto usable = [](const drmModeModeInfo* mode) {
-+    const bool cta93FractionalOnly = connector->GetPropertyValue("CB1_LLDV_CTA93_23976_ONLY").value_or(0);
-+    const auto usable = [cta93FractionalOnly](const drmModeModeInfo* mode) {
++    status.cta93FractionalOnly =
++        connector->GetPropertyValue("CB1_LLDV_CTA93_23976_ONLY").value_or(0);
++    const auto usable = [cta93FractionalOnly = status.cta93FractionalOnly](const drmModeModeInfo* mode) {
        return mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
                             mode->vtotal == 2250 &&
                             ((mode->htotal == 5500 && mode->hsync_start == 5116 && mode->hsync_end == 5204) ||
-@@ -1774,6 +1775,7 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+@@ -1774,6 +1776,7 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
                             mode->vsync_start == 2168 && mode->vsync_end == 2178 &&
                             mode->hskew == 0 && mode->vscan == 0 &&
                             (mode->clock == 297000 || mode->clock == 296703) &&
@@ -20,3 +59,39 @@ index 17b043f..1697fce 100644
                             (mode->flags & ~DRM_MODE_FLAG_PIC_AR_16_9) ==
                                 (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC);
      };
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index 879527d..895947a 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1851,11 +1851,18 @@ bool CWinSystemGbmGLESContext::CanRetainDVSource() const
+       (preferences.output == DVBRIDGE::OutputMode::HDR10 ? caps.hdr10 : caps.nativeDV);
+ }
+ 
++bool CWinSystemGbmGLESContext::LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode) const
++{
++  std::lock_guard lock(m_dvCapabilityMutex);
++  return !m_dvLldvStatus.cta93FractionalOnly ||
++         ((!requireCurrentMode || m_dvLldvStatus.currentTiming) && std::abs(fps - 24000.0 / 1001) < 0.01);
++}
++
+ std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double fps) const
+ {
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+   if (preferences.output != DVBRIDGE::OutputMode::PlayerLed ||
+-      !std::isfinite(fps) ||
++      !std::isfinite(fps) || !LldvSupportsPlaybackTiming(fps) ||
+       !GetDVOutputCapabilities(nullptr, preferences, true).playerLed)
+     return {};
+   constexpr std::array rates{24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0};
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+index 7288f44..7e2d5d3 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -98,6 +98,7 @@ public:
+   bool CanRetainDVSource() const;
+   bool CompleteDVModeSwitch(const VideoPicture& picture);
+   std::optional<RESOLUTION> PlayerLedResolution(double fps) const;
++  bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
+   bool DVModeSwitchDeferred()
+   {
+     return !m_dvRollbackFailed && m_dvShutdownFence && m_dvContext &&

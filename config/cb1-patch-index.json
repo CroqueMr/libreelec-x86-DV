@@ -14,7 +14,11 @@
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rx550-timing.patch": {
     "owner": "Use the connector timing restriction in the LLDV selector.",
     "files": {
-      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep exact 23.976 Hz eligibility in sync with the RX550 driver."
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep exact 23.976 Hz eligibility in sync with the RX550 driver.",
+      "xbmc/utils/DVBridgeLldv.h": "Keep the driver's fractional timing restriction with the connector snapshot.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refuse a preferred LLDV mode at an incompatible playback rate.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the playback-rate compatibility check.",
+      "xbmc/settings/SettingConditions.cpp": "Report the playback timing restriction in Quick Switch."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {

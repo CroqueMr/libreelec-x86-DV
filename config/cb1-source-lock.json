@@ -164,7 +164,7 @@
     "tests/cb1/test_bitmap_settings_loading.py": "127f1290cbbe5ea6a28863234293972e7451e12036af3c4a854f08352906988c",
     "tests/cb1/test_ai_reentry.py": "2c8754e39079215a3186502f795302e87070d9db8867f1150d9595899d357da7",
     "tests/cb1/test_ai_reference_phase.py": "cb61865cc38f7ad022216f180f6889d5a4b3f9e3a511d75939a1fe27344e4bce",
-    "tests/cb1/test_output_menu_recovery.py": "9533a697de57109aed11fb0dfd5bc0d63b82fc6d0f4dd223b83aa5b88ffd87d6",
+    "tests/cb1/test_output_menu_recovery.py": "6263218de1486c705abd7eccf18f20f5030e9e2356d7e669dca2da9b1479e848",
     "tests/cb1/test_hdr10plus_selection.py": "617fc5b4b07e1a82d42b9877dfcea4d3e69c770e91a477257e751671f9428cd9",
     "tests/cb1/test_native_video_labels.py": "0da9e068815aa549f4d2dbe2fe0708e816899777c3caed9ed0341a3714bbbe7d",
     "tests/cb1/test_ordinary_output_isolation.py": "38adacc4825e9c2b86f3c9a59c7d3ca0be243c3b6e8a78eaef3dfb5654ce6118",
@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "6a49ff7b21c6501c7bb740a872d02bf2c38cfc4a81410d96872a1ad3ef635f5c",
+    "config/cb1-patch-index.json": "99f6d9dbb4de3c9d229b7aab3c12b302fa49fe209414169194b0a9196eafb493",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -440,9 +440,10 @@
     "tests/cb1/test_amd_capability_diagnostics.py": "71cd8f9b57dbeaa39905736d528405b407213ff275a55d30cef6e11be5c464e9",
     "tests/cb1/test_vegam_transport.py": "4c80d86f2438612688fcc0c91f4a50f65f437e1a1c0370e4c1da956d1ef4ddd2",
     "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": "e507b7d0abdb5fd705377a352307b6741dc996d15dc6ec20d23e02f373deddf7",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rx550-timing.patch": "a412005ebca809f18964b6a06fc7546cc634a9b08213bf3ba47d3fce1cf47958",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rx550-timing.patch": "ee959acc9e6b87ec8b87f3d938e7bd011cbd4961d557fa328f0956f0d57e5a35",
+    "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": "bea4b2a7015841041a643a307627b314cb1e57e7d55ec7331588e1ef360f6c31",
     "tests/cb1/test_intel_dv_versions.py": "8ee78822f248fd21bbe79cef06e3b398bbbb4565c29306ba18158d71b77c5831",
-    "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": "bea4b2a7015841041a643a307627b314cb1e57e7d55ec7331588e1ef360f6c31"
+    "docs/cb1/LLDV.md": "84da49680ed14afa461ba51ca6879943bbe8009a29a1cc92be39655505d0d4bc"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
