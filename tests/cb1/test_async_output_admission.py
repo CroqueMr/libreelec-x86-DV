@@ -116,8 +116,11 @@ int main()
   State capture;
   capture.allowPacked = false;
   assert(!capture.prepare());
+  State hdr10;
+  hdr10.mode = hdr10.m_committedMode = DVBRIDGE_MODE_HDR10_EXPERT;
+  assert(hdr10.prepare() && hdr10.m_geometryRevision == 11);
   State ordinary;
-  ordinary.mode = ordinary.m_committedMode = DVBRIDGE_MODE_HDR10_EXPERT;
+  ordinary.mode = ordinary.m_committedMode = DVBRIDGE_MODE_STANDARD;
   assert(!ordinary.prepare());
   State master;
   master.mode = master.m_committedMode = DVBRIDGE_MODE_MASTER_REFERENCE;
