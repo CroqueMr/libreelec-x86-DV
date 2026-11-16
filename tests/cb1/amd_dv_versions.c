@@ -128,6 +128,44 @@ int main(void){
     mode.vic=93;
     state.lldv_format=AMDGPU_LLDV_RGB10_LAB;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    {
+        const enum dce_version native_families[] = {
+            DCN_VERSION_2_0, DCN_VERSION_2_1,
+            DCN_VERSION_3_0, DCN_VERSION_3_01, DCN_VERSION_3_02, DCN_VERSION_3_03,
+            DCN_VERSION_3_1, DCN_VERSION_3_14, DCN_VERSION_3_15, DCN_VERSION_3_16,
+            DCN_VERSION_3_2, DCN_VERSION_3_21, DCN_VERSION_3_5, DCN_VERSION_3_51, DCN_VERSION_3_6
+        };
+        c.base.display_info.color_formats = BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422);
+        c.base.display_info.max_tmds_clock = 600000;
+        for (unsigned i = 0; i < sizeof(native_families) / sizeof(native_families[0]); ++i) {
+            struct dc_context native_ctx = {.dce_version = native_families[i]};
+            struct dm_connector_state native_state = state;
+            struct dc_stream_state native_stream = s;
+            native_stream.ctx = &native_ctx;
+            native_state.base.max_requested_bpc = 10;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == 0);
+            assert(native_stream.dv_native_422 && native_stream.dv_low_latency);
+            assert(native_stream.timing.pixel_encoding == PIXEL_ENCODING_YCBCR422);
+            assert(native_stream.timing.display_color_depth == COLOR_DEPTH_101010);
+            assert(native_stream.output_color_space == COLOR_SPACE_2020_YCBCR_LIMITED);
+            assert(native_stream.dither_option == DITHER_OPTION_TRUN10);
+            assert(native_stream.out_transfer_func.type == TF_TYPE_BYPASS);
+            assert(native_stream.vsp_infopacket.sb[4] == 3 && !sum(&native_stream.vsp_infopacket));
+            assert((native_stream.avi_infopacket.sb[1] >> 5) == HDMI_COLORSPACE_YUV422);
+            native_state.base.max_requested_bpc = 8;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            native_state.base.max_requested_bpc = 12;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            native_state.base.max_requested_bpc = 10;
+            c.base.display_info.only_420 = true;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            c.base.display_info.only_420 = false;
+            native_state.base.hdr_output_metadata = &native_state;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EINVAL);
+        }
+        c.base.display_info.color_formats = 0;
+        c.base.display_info.max_tmds_clock = 0;
+    }
     state.lldv_format=0;
     struct dc_stream_state ordinary=s;
     ordinary.dv_standard=false; ordinary.dither_option=DITHER_OPTION_DISABLE;

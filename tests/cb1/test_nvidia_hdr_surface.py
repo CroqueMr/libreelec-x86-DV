@@ -21,7 +21,7 @@ class NvidiaHDRSurface(unittest.TestCase):
 #include <vector>
 #include <iterator>
 using EGLint=int;
-constexpr unsigned DRM_FORMAT_ABGR16161616F=4;
+constexpr unsigned DRM_FORMAT_ABGR16161616F=4, DRM_FORMAT_ABGR16161616=5;
 struct outputformat {unsigned drm; int bpp,alpha; bool active;};
 struct DRM {
   std::vector<outputformat> formats={{1,8,8,true},{2,10,2,true},{4,16,16,true}};
@@ -38,6 +38,8 @@ struct CWinSystemGbmEGLContext {
   DRM drm; DRM* m_DRM=&drm; EGL m_eglContext; bool nvidia=false;
   bool m_floatOutputBlocked=false;
   bool FloatOutputUsable() const {return nvidia;}
+  bool m_dvOutputSurface{};
+  bool HasLldvRgb16Scanout() const {return false;}
   bool ChooseEGLConfig(EGLint,int);
 };
 METHOD

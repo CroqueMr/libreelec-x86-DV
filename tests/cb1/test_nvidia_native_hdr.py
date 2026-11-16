@@ -102,6 +102,8 @@ int main(void){
             native = function((root/'src/nvidia-modeset/src/nvkms-hdmi.c').read_text(),
                               'SendHDRInfoFrame')
             modern = 'currentTransmitCtrl' in native
+            lldv = 'nvDoviLowLatency' in native
+            vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '') if lldv else ''
             program = r'''
 #include <assert.h>
 #include <stdint.h>
@@ -112,6 +114,7 @@ typedef int NvEvoInfoFrameTransmitFrequency;
 #define TRUE 1
 #define FALSE 0
 #define NV_TRUE 1
+#define NV_FALSE 0
 #define ct_assert(x) _Static_assert(x, #x)
 #define nvAssert(x) assert(x)
 #define nvkms_memcpy memcpy
@@ -139,13 +142,17 @@ typedef struct {struct {unsigned trad_gamma_sdr_eotf:1,trad_gamma_hdr_eotf:1,
 typedef struct {NVT_HDR_STATIC_METADATA hdr_static_metadata_info;
  int HDMI3DSupported;} NVT_EDID_INFO;
 typedef struct {struct {int Enable;}vendorSpecificCtrl;} NVDispHeadInfoFrameStateEvoRec;
-typedef struct {struct {unsigned payloadSize;}hdmiVsifMetadata;
+typedef struct {struct {unsigned payloadSize;NvU8 payload[27];}hdmiVsifMetadata;
+ int bypassComposition;
  struct {int state,eotf;struct NvKmsHDRStaticMetadata staticMetadata;}hdrInfoFrame;
 } NVDispHeadStateEvoRec;
-typedef struct {struct {void (*SendHdmiInfoFrame)();}*hal;
+typedef struct {struct {void (*SendHdmiInfoFrame)(); void (*DisableHdmiInfoFrame)();}*hal;
  struct {int supportsGenericSharedInfoFrames;}caps;} NVDevEvoRec;
 typedef struct {NVDevEvoRec *pDevEvo;NVDispHeadStateEvoRec headState[1];} NVDispEvoRec;
-static unsigned writes;static NvU8 eotf;
+static unsigned writes,clears;static NvU8 eotf;
+static void disable(const NVDispEvoRec*d,NvU32 h,void*c,int type){
+ (void)d;(void)c;assert(h==0 && type==NVT_INFOFRAME_TYPE_DYNAMIC_RANGE_MASTERING);clears++;
+}
 static void send(const NVDispEvoRec*d,NvU32 h,@@CTRLTYPE@@ c,
  const NVT_INFOFRAME_HEADER*p,NvU32 size,NvBool checksum){
  (void)d;(void)c;assert(h==0 && size==sizeof(NVT_HDR_INFOFRAME) && checksum);
@@ -157,7 +164,7 @@ static void UpdateInfoFrameFlipStatePre(NvEvoInfoFrameTransmitControl*a,
 static void UpdateInfoFrameFlipStatePost(NvEvoInfoFrameTransmitControl*a){(void)a;}
 @@NATIVE@@
 int main(void){
- typeof(*((NVDevEvoRec*)0)->hal) hal={send};NVDevEvoRec dev={.hal=&hal};
+ typeof(*((NVDevEvoRec*)0)->hal) hal={send,disable};NVDevEvoRec dev={.hal=&hal};
  NVDispEvoRec disp={.pDevEvo=&dev};NVT_EDID_INFO edid={0};
  NVDispHeadInfoFrameStateEvoRec info={0};NvEvoInfoFrameTransmitControl a=0,b=0;(void)info;
  disp.headState[0].hdrInfoFrame.state=NVKMS_HDR_INFOFRAME_STATE_ENABLED;
@@ -188,6 +195,7 @@ int main(void){
   disp.headState[0].hdrInfoFrame.state=state;writes=0;@@CALL@@
   assert(writes==1 && eotf==0);
  }
+ @@LLDV_TEST@@
 }
 '''
             call = 'SendHDRInfoFrame(&disp,0,'
@@ -196,7 +204,17 @@ int main(void){
             if modern:
                 call += '&a,&b,'
             call += '&edid);'
-            program = program.replace('@@NATIVE@@', native).replace('@@CALL@@', call)
+            program = program.replace('@@LLDV_TEST@@', r'''
+ disp.headState[0].bypassComposition=1;
+ disp.headState[0].hdmiVsifMetadata.payloadSize=27;
+ memcpy(disp.headState[0].hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);
+ for(int separate=0;separate<2;separate++){
+  dev.caps.supportsGenericSharedInfoFrames=separate;writes=clears=0;
+  @@CALL@@
+  assert(writes==0 && clears==(unsigned)separate);
+ }
+''' if lldv else '')
+            program = program.replace('@@NATIVE@@', vsif+'\n'+native).replace('@@CALL@@', call)
             program = program.replace('@@CTRLTYPE@@',
                 'const NvEvoInfoFrameTransmitControl*' if modern else 'NvEvoInfoFrameTransmitControl')
             with self.subTest(stack=str(root)):
@@ -292,3 +310,196 @@ int main(void){
 }
 '''
             self.compile_run(program.replace('@@NATIVE@@', native))
+
+    def test_native_lldv_exact_link_and_no_downgrade(self):
+        root = self.sources()[0]
+        source = (root/'src/nvidia-modeset/kapi/src/nvkms-kapi.c').read_text()
+        hw = (root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text()
+        native = function(source, 'ConfigureLldvOutput')+'\n'+function(hw, 'nvIsNativeLldvColor')
+        vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
+        self.compile_run(r"""
+#include <assert.h>
+#include <string.h>
+typedef unsigned NvU32;typedef unsigned char NvU8;typedef int NvBool;
+#define NV_TRUE 1
+#define NV_FALSE 0
+#define TRUE 1
+#define FALSE 0
+enum NvKmsOutputTf {NVKMS_OUTPUT_TF_NONE, NVKMS_OUTPUT_TF_PQ};
+enum {NVKMS_OUTPUT_COLORIMETRY_DEFAULT,NVKMS_OUTPUT_COLORIMETRY_BT2100};
+enum {NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_RGB,
+ NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_YCbCr422,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422};
+enum {NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL,NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED};
+enum {NV_KMS_DPY_ATTRIBUTE_REQUESTED_DITHERING_DISABLED,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12=12};
+struct NvKmsHdmiVsifMetadata {NvU8 payload[27];NvU32 payloadSize;};
+struct NvKmsKapiHeadModeSetConfig {
+ struct NvKmsHdmiVsifMetadata hdmiVsifMetadata;
+ unsigned colorBpc,colorimetry,numDisplays;
+ struct {int enabled;}hdrInfoFrame;
+ struct {int enabled,deepColor;}cb1Hdr;
+ struct {int state;}dithering;int postcompColorPassthrough;
+};
+struct NvKmsSetModeOneHeadRequest {int colorFormatSpecified,colorFormat,
+ colorRangeSpecified,colorRange;struct {struct {int specified;}dithering;}flip;};
+typedef struct {int format,bpc,range,colorimetry;} NVDpyAttributeColor;
+@@VSIF@@
+@@NATIVE@@
+int main(void){
+ struct NvKmsKapiHeadModeSetConfig c={.colorBpc=12,.numDisplays=1,
+  .colorimetry=NVKMS_OUTPUT_COLORIMETRY_BT2100};
+ memcpy(c.hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);c.hdmiVsifMetadata.payloadSize=27;
+ struct NvKmsSetModeOneHeadRequest h={0};
+ assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h));
+ assert(h.colorFormatSpecified && h.colorFormat==NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_YCbCr422);
+ assert(h.colorRangeSpecified && h.colorRange==NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED);
+ assert(h.flip.dithering.specified);
+ struct NvKmsKapiHeadModeSetConfig good=c;
+ for(unsigned bpc=0;bpc<=16;bpc++){
+  c=good;c.colorBpc=bpc;assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h)==(bpc==12));
+ }
+ c=good;c.colorBpc=8;c.colorimetry=NVKMS_OUTPUT_COLORIMETRY_DEFAULT;
+ assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h));
+ assert(h.colorFormat==NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_RGB &&
+        h.colorRange==NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL);
+ c.postcompColorPassthrough=1;
+ assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h)); /* existing packed path */
+ #define REJECT(field,value) c=good;c.field=value;assert(!ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h))
+ REJECT(colorimetry,0);REJECT(numDisplays,0);REJECT(numDisplays,2);
+ REJECT(hdrInfoFrame.enabled,1);REJECT(cb1Hdr.enabled,1);REJECT(cb1Hdr.deepColor,1);
+ REJECT(dithering.state,1);REJECT(postcompColorPassthrough,1);
+ c=good;assert(!ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_PQ,&h));
+ c.hdmiVsifMetadata.payloadSize=0;memset(&h,0,sizeof(h));
+ assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_PQ,&h));assert(!h.colorFormatSpecified && !h.colorRangeSpecified);
+ NVDpyAttributeColor color={NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422,12,
+  NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED,NVKMS_OUTPUT_COLORIMETRY_BT2100};
+ c=good;assert(nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
+ color.bpc=10;assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));color.bpc=12;
+ color.range=NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL;assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
+ color.range=NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED;color.format=0;
+ assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
+}
+""".replace('@@VSIF@@',vsif).replace('@@NATIVE@@',native))
+
+    def test_native_lldv_preserves_integer_pipeline_and_rejects_processing(self):
+        root = self.sources()[0]
+        hw = (root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text()
+        native = function(hw,'nvIsNativeLldvSurface')+'\n'+function(hw,'ValidateColorPassthroughFlipState')
+        vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
+        self.compile_run(r"""
+#include <assert.h>
+#include <string.h>
+typedef unsigned NvU32;typedef unsigned char NvU8;typedef int NvBool;
+#define NV_TRUE 1
+#define NV_FALSE 0
+#define TRUE 1
+#define FALSE 0
+#define NVKMS_MAIN_LAYER 0
+#define NVKMS_LEFT 0
+#define NVKMS_RIGHT 1
+#define NVKMS_INPUT_TF_LINEAR 0
+#define NVKMS_OUTPUT_TF_NONE 0
+enum {NvKmsSurfaceMemoryFormatR16G16B16A16=1,
+ NvKmsSurfaceMemoryFormatRF16GF16BF16AF16,NvKmsSurfaceMemoryFormatRF16GF16BF16XF16};
+typedef struct {int format;} NVSurfaceEvoRec;
+typedef struct {int fromOverride;void*pLutSurfaceEvo;} Lut;
+typedef struct {int enabled,matrix;} Override;
+typedef struct {
+ NVSurfaceEvoRec*pSurfaceEvo[2];int precompColorPassthrough,tf,cscMatrix;
+ Lut inputLut,tmoLut;Override fmtOverride,csc00Override,csc01Override,csc10Override,csc11Override;
+ struct {int width,height;}sizeIn,sizeOut;struct {int enabled;}hdrStaticMetadata;
+} NVFlipChannelEvoHwState;
+typedef struct {
+ NVFlipChannelEvoHwState layer[2];int postcompColorPassthrough,tf;
+ struct {NvU8 payload[27];NvU32 payloadSize;}hdmiVsifMetadata;
+ struct {int enabled;}hdrInfoFrame;Lut outputLut;struct {void*pSurfaceEvo;}cursor;
+} NVFlipEvoHwState;
+typedef struct {struct {struct {int width,height;}in,out;}viewPort;} NVHwModeTimingsEvo;
+typedef struct {struct {struct {int supportsColorPassthrough;}caps;}*hal;
+ struct {NvU32 numLayers;}head[1];}NVDevEvoRec;
+static int nvIsCscMatrixIdentity(const int*m){return *m==1;}
+@@VSIF@@
+@@NATIVE@@
+int main(void){
+ NVSurfaceEvoRec surface={NvKmsSurfaceMemoryFormatR16G16B16A16};
+ typeof(*((NVDevEvoRec*)0)->hal) hal={.caps={1}};NVDevEvoRec dev={&hal,{{2}}};
+ NVHwModeTimingsEvo timings={.viewPort={{3840,2160},{3840,2160}}};
+ NVFlipEvoHwState f={0};f.layer[0].pSurfaceEvo[0]=&surface;f.layer[0].cscMatrix=1;
+ f.layer[0].sizeIn.width=f.layer[0].sizeOut.width=3840;
+ f.layer[0].sizeIn.height=f.layer[0].sizeOut.height=2160;
+ memcpy(f.hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);f.hdmiVsifMetadata.payloadSize=27;
+ assert(nvIsNativeLldvSurface(&f));assert(ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ NVFlipEvoHwState good=f;
+ #define REJECT(field,value) f=good;f.field=value;assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f))
+ REJECT(layer[0].precompColorPassthrough,1);REJECT(postcompColorPassthrough,1);
+ REJECT(hdrInfoFrame.enabled,1);REJECT(layer[0].hdrStaticMetadata.enabled,1);
+ REJECT(layer[1].hdrStaticMetadata.enabled,1);REJECT(layer[1].pSurfaceEvo[0],&surface);
+ REJECT(layer[1].pSurfaceEvo[1],&surface);REJECT(layer[0].tf,1);REJECT(tf,1);
+ REJECT(layer[0].cscMatrix,0);REJECT(layer[0].sizeOut.width,1920);REJECT(cursor.pSurfaceEvo,&surface);
+ f=good;f.layer[0].inputLut=(Lut){1,&surface};assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ f=good;f.layer[0].tmoLut=(Lut){1,&surface};assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ f=good;f.outputLut=(Lut){1,&surface};assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ f=good;f.layer[0].csc11Override=(Override){1,0};assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ f=good;timings.viewPort.out.width=1920;assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ timings.viewPort.out.width=3840;f.hdmiVsifMetadata.payloadSize=0;
+ assert(!nvIsNativeLldvSurface(&f));f.layer[0].tf=1;
+ assert(ValidateColorPassthroughFlipState(&dev,0,&timings,&f)); /* ordinary path unchanged */
+}
+""".replace('@@VSIF@@',vsif).replace('@@NATIVE@@',native))
+
+    def test_native_lldv_active_reads_current_head_not_requested_properties(self):
+        root = self.sources()[0]
+        current = function((root/'src/nvidia-modeset/src/nvkms.c').read_text(), 'CurrentNativeLldvActive')
+        color = function((root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text(), 'nvIsNativeLldvColor')
+        vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
+        self.compile_run(r"""
+#include <assert.h>
+#include <string.h>
+typedef unsigned NvU32;typedef unsigned char NvU8;typedef int NvBool;
+#define NV_TRUE 1
+#define NV_FALSE 0
+#define TRUE 1
+#define FALSE 0
+#define NVKMS_MAX_HEADS_PER_DISP 2
+#define NV_INVALID_HEAD (~0u)
+#define NVKMS_OUTPUT_TF_NONE 0
+enum {NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422=1,
+ NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED=1,NVKMS_OUTPUT_COLORIMETRY_BT2100=1,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12=12};
+struct NvKmsHdmiVsifMetadata {NvU8 payload[27];NvU32 payloadSize;};
+typedef struct {int format,bpc,range,colorimetry;} NVDpyAttributeColor;
+typedef struct {int bypassComposition,postcompColorPassthrough,tf;
+ struct {int enabled;}hdrInfoFrameOverride;
+ struct NvKmsHdmiVsifMetadata hdmiVsifMetadata;} NVDispHeadStateEvoRec;
+typedef struct {NVDispHeadStateEvoRec headState[2];unsigned primary;int active;} NVDispEvoRec;
+typedef struct {NVDispEvoRec*pDispEvo;unsigned apiHead;int hdmi;
+ struct {NVDpyAttributeColor color;}currentAttributes;}NVDpyEvoRec;
+static int nvDpyIsHdmiEvo(const NVDpyEvoRec*d){return d->hdmi;}
+static int nvApiHeadIsActive(const NVDispEvoRec*d,unsigned h){return h<2 && d->active;}
+static unsigned nvGetPrimaryHwHead(const NVDispEvoRec*d,unsigned h){(void)h;return d->primary;}
+@@VSIF@@
+@@COLOR@@
+@@CURRENT@@
+int main(void){
+ NVDispEvoRec disp={.primary=1,.active=1};NVDpyEvoRec d={&disp,0,1,{{1,12,1,1}}};
+ NVDispHeadStateEvoRec*s=&disp.headState[1];s->bypassComposition=1;
+ s->hdmiVsifMetadata.payloadSize=27;memcpy(s->hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);
+ assert(CurrentNativeLldvActive(&d,0));assert(!CurrentNativeLldvActive(NULL,0));
+ assert(!CurrentNativeLldvActive(&d,1));assert(!CurrentNativeLldvActive(&d,2));
+ disp.primary=NV_INVALID_HEAD;assert(!CurrentNativeLldvActive(&d,0));disp.primary=1;
+ disp.active=0;assert(!CurrentNativeLldvActive(&d,0));disp.active=1;
+ d.hdmi=0;assert(!CurrentNativeLldvActive(&d,0));d.hdmi=1;
+ d.currentAttributes.color.format=0;assert(!CurrentNativeLldvActive(&d,0)); /* old RGB12, even if requested enum3 */
+ d.currentAttributes.color.format=1;d.currentAttributes.color.bpc=10;assert(!CurrentNativeLldvActive(&d,0));
+ d.currentAttributes.color.bpc=12;d.currentAttributes.color.range=0;assert(!CurrentNativeLldvActive(&d,0));
+ d.currentAttributes.color.range=1;d.currentAttributes.color.colorimetry=0;assert(!CurrentNativeLldvActive(&d,0));
+ d.currentAttributes.color.colorimetry=1;
+ s->hdmiVsifMetadata.payloadSize=0;assert(!CurrentNativeLldvActive(&d,0));s->hdmiVsifMetadata.payloadSize=27;
+ s->bypassComposition=0;assert(!CurrentNativeLldvActive(&d,0));s->bypassComposition=1;
+ s->postcompColorPassthrough=1;assert(!CurrentNativeLldvActive(&d,0));s->postcompColorPassthrough=0;
+ s->tf=1;assert(!CurrentNativeLldvActive(&d,0));s->tf=0;
+ s->hdrInfoFrameOverride.enabled=1;assert(!CurrentNativeLldvActive(&d,0));s->hdrInfoFrameOverride.enabled=0;
+ assert(CurrentNativeLldvActive(&d,0));
+}
+""".replace('@@VSIF@@',vsif).replace('@@COLOR@@',color).replace('@@CURRENT@@',current))

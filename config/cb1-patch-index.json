@@ -1,4 +1,72 @@
 {
+  "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9009-native-lldv-rgb10.patch": {
+    "owner": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
+      "src/nvidia-modeset/src/nvkms.c": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-unorm-scanout.patch": {
+    "owner": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/cores/VideoProcessingInfo.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/utils/DVBridgeLldv.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/utils/EGLUtils.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/utils/EGLUtils.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/drm/DRMUtils.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9975-amd-native-lldv-dcn.patch": {
+    "owner": "Admit native LLDV on AMD display engines that share the guarded DCN2-family output path.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Admit native LLDV on AMD display engines that share the guarded DCN2-family output path."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9976-intel-native-lldv-rgb10.patch": {
+    "owner": "Drive exact native RGB10 LLDV on Intel Display11 and later.",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Drive exact native RGB10 LLDV on Intel Display11 and later.",
+      "drivers/gpu/drm/i915/display/intel_display.c": "Drive exact native RGB10 LLDV on Intel Display11 and later.",
+      "drivers/gpu/drm/i915/display/intel_dv_lab_policy.h": "Drive exact native RGB10 LLDV on Intel Display11 and later.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Drive exact native RGB10 LLDV on Intel Display11 and later."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9009-native-lldv-rgb16.patch": {
+    "owner": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/include/nvkms-hw-flip.h": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/include/nvkms-modeset-types.h": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/src/nvkms-flip.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/src/nvkms-hw-flip.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state.",
+      "src/nvidia-modeset/src/nvkms.c": "Request exact native R615 4:2:2 12-bit and verify the accepted NVKMS state."
+    }
+  },
   "projects/Generic/patches/linux/linux-9974-lldv-format-coverage.patch": {
     "owner": "Read the Dolby 12-bit 4:2:2 EDID flag and admit the experimental Nova Lake HDMI path.",
     "files": {

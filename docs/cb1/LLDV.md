@@ -14,7 +14,13 @@ The LLDV HDMI format selector appears under Dolby Vision default playback when L
 
 The RX550 Lexa (PCI ID 1002:699f) offers experimental 4:2:2 10-bit LLDV at native HDMI UHD 23.976 Hz only. Intel Display9–12, Arc B and Nova Lake on native HDMI use the same opt-in packed transport. The driver still validates the exact display mode and scanout before the picture is sent. These added routes need hardware qualification.
 
-On NVIDIA R615, the 12-bit 4:2:2 option uses an experimental packed TMDS carrier. It requires a Dolby EDID block that advertises 12-bit 4:2:2 and an explicit selection. Auto continues to prefer supported non-experimental 10-bit routes, then supported non-experimental 12-bit routes. RGB and YCbCr 4:4:4 capabilities advertised by the display appear in Display Details. The selector offers 4:2:2 formats with implemented output paths.
+On NVIDIA R615, native 4:2:2 12-bit uses an integer RGB16 scanout and the NVKMS BT.2020 conversion. It requires an available UNORM16 GBM/EGL visual and a Dolby EDID that advertises 12-bit 4:2:2. Where the native surface is unavailable, the 12-bit option uses the experimental packed TMDS carrier with explicit selection. Native R615 HDMI output still needs receiver and capture validation.
+
+Intel Display11 and later offer native RGB 10-bit on the admitted HDMI output when the Dolby block advertises 10-bit RGB/4:4:4 and the exact RGB 10-bit link and scanout qualify. AMD DCN2.0, DCN2.1 and the supported DCN3.x families share the native 4:2:2 10-bit output path. The Intel and AMD additions still need physical validation for the newly admitted combinations.
+
+NVIDIA R580 offers native 4:2:2 10-bit when the GPU, HDMI port, EDID and RGB10 scanout qualify. Other supported R580 paths keep the explicit forced option. The NVIDIA routes confirm the accepted link state through NVKMS before reporting native LLDV playback.
+
+Auto prefers native 10-bit routes before native 12-bit routes. Display Details also shows the RGB and YCbCr 4:4:4 depths the display advertises.
 
 ## HDR10 : LLDV Reference conversion
 
