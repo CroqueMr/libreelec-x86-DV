@@ -80,21 +80,21 @@ int main() {
 struct Output { int effective{}; unsigned flags{}; bool fallback{}; };
 int main() {
   Output saved{4,CDVPlaybackInfo::HDMI,false};
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(4)) == "Dolby Vision Adaptive HDR Mapping");
-  assert(std::string(CDVPlaybackInfo::Policy(saved)) == "Dolby Vision Adaptive HDR Mapping");
-  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Adaptive HDR Mapping");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(4)) == "Dolby Vision : Adaptive HDR Mapping");
+  assert(std::string(CDVPlaybackInfo::Policy(saved)) == "Dolby Vision : Adaptive HDR Mapping");
+  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision : Adaptive HDR Mapping");
   saved.effective=6;
-  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Adaptive HDR Mapping");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(6)) == "Dolby Vision Adaptive HDR Mapping");
+  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision : Adaptive HDR Mapping");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(6)) == "Dolby Vision : Adaptive HDR Mapping");
   saved.flags=0;
   assert(CDVPlaybackInfo::Mode(saved) == "Kodi default");
   saved={3,CDVPlaybackInfo::HDR10,false};
-  assert(CDVPlaybackInfo::Mode(saved) == "HDR10 Rendering Reference");
+  assert(CDVPlaybackInfo::Mode(saved) == "HDR10 : LLDV Reference conversion");
   saved={1,CDVPlaybackInfo::HDMI,false};
-  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision Reference");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision Reference");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision Rendering");
-  assert(std::string(CDVPlaybackInfo::RequestedPolicy(4, true)) == "Dolby Vision Adaptive HDR Mapping (AI)");
+  assert(CDVPlaybackInfo::Mode(saved) == "Dolby Vision : Reference");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1)) == "Dolby Vision : Reference");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(1, true)) == "Dolby Vision : Rendering");
+  assert(std::string(CDVPlaybackInfo::RequestedPolicy(4, true)) == "Dolby Vision : Adaptive HDR Mapping");
 }
 '''
         with tempfile.TemporaryDirectory() as temporary:
@@ -207,10 +207,13 @@ struct NativeOutput @@NATIVE@@;
 std::string PolicyText(std::string text) @@POLICY_TEXT@@
 std::string label(VideoProcessingInfo data,bool transaction=true,bool active=true){return @@REQUESTED@@;}
 int main(){VideoProcessingInfo data;data.transaction.requested=1;
- assert(label(data)=="DV Reference");
- data.transaction.hdr10AI=true;assert(label(data)=="DV Rendering");
- data.transaction.requested=4;assert(label(data)=="DV Adaptive (AI)");
- data.output.requested=8;assert(label(data,false)=="SDR Rendering");
+ assert(label(data)=="DV : Reference");
+ data.transaction.hdr10AI=true;assert(label(data)=="DV : Rendering");
+ data.transaction.requested=4;assert(label(data)=="DV : Adaptive");
+ data.transaction.requested=3;assert(label(data)=="HDR10 : LLDV Reference conversion");
+ data.transaction.requested=9;assert(label(data)=="DV : LLDV Reference");
+ data.output.requested=9;assert(label(data,false)=="DV : LLDV Reference");
+ data.output.requested=8;assert(label(data,false)=="SDR : Conversion");
  assert(label(data,false,false).empty());
  assert(!CDVPlaybackInfo::IsHDR10AI(data.output));data.output.hdr10AI=true;
  assert(CDVPlaybackInfo::IsHDR10AI(data.output));}

@@ -1,5 +1,6 @@
 """Native decode/pairing startup facts must log once without changing output."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -7,6 +8,14 @@ from test_native_video_source import TREE, body
 
 
 class DecodeStartupDiagnostics(unittest.TestCase):
+    def test_disc_optimization_flag_does_not_overlap_codec_fallback(self):
+        source = (TREE/'xbmc/cores/VideoPlayer/DVDStreamInfo.h').read_text()
+        options = dict(re.findall(r'^#define (CODEC_\w+) (0x[0-9A-Fa-f]+)$', source, re.M))
+        navigation = int(options.pop('CODEC_BLURAY_NAVIGATION'), 16)
+        self.assertNotEqual(navigation, 0)
+        for name, value in options.items():
+            self.assertEqual(navigation & int(value, 16), 0, name)
+
     def test_native_events_keep_exact_pairing_and_do_not_log_every_frame(self):
         source = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
         signature = 'void CDVDVideoCodecFFmpeg::ReportDVStartup('
@@ -45,6 +54,8 @@ bool dvbridge_fel_submit(Fel* f,AVPacket*){return f->submit;}
 bool dvbridge_fel_submit_source(Fel* f,AVPacket*,const dvbridge_fel_source*){return f->submit;}
 bool dvbridge_fel_failed(Fel* f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*){return false;}
+constexpr int CODEC_BLURAY_NAVIGATION=4;
+int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
 bool dvbridge_fel_drain(Fel*){return true;}
 int dvbridge_fel_take(Fel* f,int64_t pts,AVFrame** frame){
@@ -55,11 +66,12 @@ struct VideoPicture{
  int64_t doviSourcePts=AV_NOPTS_VALUE;int pixels=123;
  std::shared_ptr<AVFrame> doviEnhancement;int doviEnhancementBinding{};
  int doviSourceBinding=17;
- struct Metadata{bool valid=true;int Binding()const{return 17;}const void* Data()const{return valid?this:nullptr;}}doviMetadata;
+ struct Metadata{bool valid=true;int Binding()const{return 17;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}}doviMetadata;
  void Reset(){*this={};}void CopyRef(const VideoPicture& p){*this=p;}
 };
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
+ struct {int codecOptions{};}m_hints;
  std::shared_ptr<Fel> m_dvFel;std::deque<std::shared_ptr<VideoPicture>>m_dvPending;
  unsigned m_dvStartupReported{};uint64_t m_dvDiagnosticGeneration=1;
  uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,drainSequence=false;

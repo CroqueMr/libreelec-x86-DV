@@ -32,11 +32,12 @@
     <value>Audio</value>
   </variable>
   <variable name="DVPanelMode">
-    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)">[COLOR FF65E18D]$INFO[Window(playerprocessinfo).Property(DV.Mode)][/COLOR]</value>
-    <value>Kodi playback</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">[COLOR FF65E18D]$INFO[Window(playerprocessinfo).Property(DV.Mode)][/COLOR]</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">$INFO[Window(playerprocessinfo).Property(DV.Mode)]</value>
+    <value>Kodi : Default</value>
   </variable>
   <variable name="DVRenderMeterColor">
-    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)">FF65E18D</value>
+    <value condition="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.Mode))">FF65E18D</value>
     <value>FFC6CED2</value>
   </variable>
   <variable name="DVModeDetail">
@@ -261,10 +262,10 @@
     </definition></include>
   <!-- Processing: what CB1 does with it. -->
   <include name="DVRenderingFields"><definition>
-      <include content="DVSection"><param name="label" value="Rendering"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default) | !String.IsEmpty(Player.Process(pixformat)) | String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target)) |[String.IsEqual(VideoPlayer.HdrType,dolbyvision) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)]]]"/></include>
-      <include content="DVInfoRow"><param name="label" value="CB1"/><param name="value" value="Not active"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.Mode),Kodi default)"/></include>
+      <include content="DVSection"><param name="label" value="Rendering"/><param name="visible" value="String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport)) | !String.IsEmpty(Player.Process(pixformat)) | String.IsEqual(Window(playerprocessinfo).Property(DV.ProcessingVisible),true) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.ReferenceWarning)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.ReferenceWarning),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.HDR10Target)) |[String.IsEqual(VideoPlayer.HdrType,dolbyvision) + [!String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A) | !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)]]]"/></include>
+      <include content="DVInfoRow"><param name="label" value="CB1"/><param name="value" value="Not active"/><param name="visible" value="String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"/></include>
       <include content="DVInfoRow"><param name="label" value="Decoded surface"/><param name="value" value="$INFO[Player.Process(pixformat)]"/><param name="visible" value="!String.IsEmpty(Player.Process(pixformat))"/></include>
-      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[41229]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.VideoUpscaler)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.VideoUpscaler))"/></include>
+      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[41305]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.VideoUpscaler)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.VideoUpscaler))"/></include>
       <include content="DVInfoRow"><param name="label" value="Deinterlacing"/><param name="value" value="$INFO[Player.Process(deintmethod)]"/><param name="visible" value="String.IsEqual(Player.Process(videoscantype),i) + !String.IsEmpty(Player.Process(deintmethod))"/></include>
       <include content="DVInfoRow"><param name="label" value="Creative trims"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CreativeTrims)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Mapping metadata"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.LocalCM4)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.LocalCM4))"/></include>
@@ -343,7 +344,8 @@
   <include name="DVOutputFields"><definition>
       <include content="DVSection"><param name="label" value="Video"/></include>
       <include content="DVInfoRow"><param name="label" value="Display output"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Display)]"/></include>
-      <include content="DVInfoRow"><param name="label" value="Signal intent"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SignalIntent)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SignalIntent))"/></include>
+      <include content="DVInfoRow"><param name="label" value="Signal"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.SignalIntent)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.SignalIntent))"/></include>
+      <include content="DVInfoRow"><param name="label" value="HDMI format"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.HdmiFormat)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.HdmiFormat))"/></include>
       <include content="DVInfoRow"><param name="label" value="Scanout container"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Transport)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"/></include>
       <include content="DVInfoRow"><param name="label" value="$VAR[DVPrecisionLabel]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Precision)]$INFO[Window(playerprocessinfo).Property(DV.MinimumLinkBits), / ]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Precision)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.Precision),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Committed source"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Committed)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Committed))"/></include>
@@ -416,61 +418,88 @@
   </include>
   <include name="CB1PlaybackModeLayout">
     <control type="group" id="9100">
-      <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
+      <right>42</right><bottom>56</bottom><width>608</width><height>500</height>
       <control type="image" id="9101">
-        <left>0</left><top>0</top><width>660</width><height>412</height>
-        <texture colordiffuse="FF1A2123">special://xbmc/media/cb1-white.png</texture>
+        <width>608</width><height>500</height>
+        <texture border="30">special://xbmc/media/cb1-switch-panel.png</texture>
       </control>
       <control type="label" id="1">
-        <left>20</left><top>12</top><width>620</width><height>40</height><font>CB1.SwitchBody</font><textcolor>FFF0F0F0</textcolor><scroll>false</scroll>
+        <left>24</left><top>19</top><width>560</width><height>32</height>
+        <font>CB1.SwitchTitle</font><textcolor>FFF2F5F6</textcolor><aligny>center</aligny>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
       </control>
       <control type="label" id="2"><visible>false</visible></control>
+      <control type="label">
+        <left>24</left><top>61</top><width>196</width><height>26</height>
+        <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><aligny>center</aligny>
+        <label>$LOCALIZE[14125]  $INFO[Window.Property(CB1.SwitchInput)]</label>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      </control>
+      <control type="label">
+        <left>224</left><top>61</top><width>344</width><height>26</height>
+        <font>CB1.SwitchHelp</font><textcolor>FFC2CCCF</textcolor><align>right</align><aligny>center</aligny>
+        <label>$LOCALIZE[40879]  $INFO[Window.Property(CB1.SwitchOutput)]</label>
+        <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      </control>
+      <control type="image">
+        <left>24</left><top>94</top><width>560</width><height>1</height>
+        <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
+      </control>
       <control type="list" id="3">
-        <left>20</left><top>64</top><width>620</width><height>300</height>
-        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <left>24</left><top>104</top><width>560</width><height>342</height>
+        <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
       <control type="list" id="6">
-        <left>20</left><top>64</top><width>620</width><height>300</height>
-        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <left>24</left><top>104</top><width>560</width><height>342</height>
+        <orientation>vertical</orientation><scrolltime>0</scrolltime>
         <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
         <include>CB1PlaybackModeRows</include>
       </control>
-      <control type="label" id="9102">
-        <left>20</left><top>370</top><width>620</width><height>30</height>
-        <font>CB1.SwitchHelp</font><textcolor>FFA0A0A0</textcolor>
-        <label>$INFO[Container(6).ListItem.Label2]</label>
-        <aligny>center</aligny><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+      <control type="group" id="9103">
+        <left>24</left><top>456</top><width>560</width><height>32</height>
+        <visible>!String.IsEmpty(Container(6).ListItem.Label2)</visible>
+        <control type="image"><width>560</width><height>1</height>
+          <texture colordiffuse="FF3A4448">special://xbmc/media/cb1-white.png</texture>
+        </control>
+        <control type="label" id="9102">
+          <left>32</left><top>8</top><width>514</width><height>24</height>
+          <font>CB1.SwitchHelp</font><textcolor>FFE0E6E8</textcolor><aligny>center</aligny>
+          <label>$INFO[Container(6).ListItem.Label2]</label>
+          <wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+        </control>
       </control>
     </control>
   </include>
+  <include name="CB1PlaybackModeRowContents">
+    <control type="image">
+      <left>9</left><top>10</top><width>18</width><height>18</height>
+      <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
+    </control>
+    <control type="label">
+      <left>32</left><top>0</top><width>400</width><height>38</height>
+      <font>CB1.SwitchBody</font><aligny>center</aligny>
+      <label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
+      <textcolor>FFF2F5F6</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+    </control>
+    <control type="label">
+      <left>436</left><top>0</top><width>108</width><height>38</height>
+      <font>CB1.SwitchHelp</font><align>right</align><aligny>center</aligny>
+      <label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Property(CB1.SwitchStatus)][/COLOR]</label>
+      <textcolor>FFC2CCCF</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
+    </control>
+  </include>
   <include name="CB1PlaybackModeRows">
-    <itemlayout width="620" height="50">
-      <control type="image">
-        <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
-      </control>
-      <control type="label">
-        <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
-      </control>
+    <itemlayout width="560" height="38">
+      <include>CB1PlaybackModeRowContents</include>
     </itemlayout>
-    <focusedlayout width="620" height="50">
+    <focusedlayout width="560" height="38">
       <control type="image">
-        <left>0</left><top>1</top><width>620</width><height>48</height>
-        <texture colordiffuse="FF12A0C7">special://xbmc/media/cb1-white.png</texture>
+        <left>0</left><top>1</top><width>560</width><height>36</height>
+        <texture border="8" colordiffuse="FF435157">special://xbmc/media/cb1-chip.png</texture>
       </control>
-      <control type="image">
-        <left>10</left><top>14</top><width>22</width><height>22</height>
-        <texture>special://xbmc/media/cb1-tick.png</texture><visible>ListItem.IsSelected</visible>
-      </control>
-      <control type="label">
-        <left>42</left><top>5</top><width>566</width><height>40</height>
-        <font>CB1.SwitchBody</font><label>[COLOR $INFO[ListItem.Property(CB1.TextColor)]]$INFO[ListItem.Label][/COLOR]</label>
-        <textcolor>FFF0F0F0</textcolor><wrapmultiline>false</wrapmultiline><scroll>false</scroll>
-      </control>
+      <include>CB1PlaybackModeRowContents</include>
     </focusedlayout>
   </include>
 </includes>

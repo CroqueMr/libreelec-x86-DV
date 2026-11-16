@@ -17,7 +17,7 @@ class SourcePreferencesTests(unittest.TestCase):
         plus = settings.find(".//setting[@id='dvbridge.hdr10plussource']")
         self.assertIsNotNone(plus, 'HDR10+ requires its own saved preference')
         self.assertEqual([x.text for x in plain.findall('constraints/options/option')], ['1','2','0','4'])
-        self.assertEqual([x.text for x in plus.findall('constraints/options/option')], ['3','0','4'])
+        self.assertEqual([x.text for x in plus.findall('constraints/options/option')], ['3','5','0','4'])
         self.assertEqual(plain.findtext('default'), '0')
         self.assertEqual(plus.findtext('default'), '0')
 
@@ -62,7 +62,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t id=1;return ++id;}}
 HEADER
 namespace DVBRIDGE {
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 struct StreamTelemetry {struct Snapshot {struct {OutputCapabilities capabilities;} transaction;};
  static Snapshot Read(){return {};}};
@@ -107,10 +107,16 @@ int main(){
  assert(SelectOutput(initial,caps).reason==OutputReason::SourceIneligible);
  assert(FrameOutputSettings(true).hdr10Source==HDR10SourceMode::HDR10PlusDV);
  caps.isHDR10Plus=true;assert(SelectOutput(FrameOutputSettings(),caps).route==OutputRoute::NativeDV);
- stored->ints["dvbridge.hdr10plussource"]=0;
+ stored->ints["dvbridge.hdr10plussource"]=5;
  auto nativePlus=FrameOutputSettings();
  assert(nativePlus.hdr10Source==HDR10SourceMode::ReferenceDV);
+ assert(nativePlus.hdr10PlusSource==HDR10SourceMode::HDR10PlusPassthrough);
+ assert(nativePlus.HDR10Mode(true)==HDR10SourceMode::Native);
  assert(SelectOutput(nativePlus,caps).route==OutputRoute::Vanilla);
+ auto passthrough=FrameOutputSettings(true);
+ assert(passthrough.hdr10Source==HDR10SourceMode::Native && passthrough.revision==nativePlus.revision);
+ assert(hdr10PlusPlaybackMode.load()==HDR10SourceMode::HDR10PlusPassthrough);
+ stored->ints["dvbridge.hdr10plussource"]=0;
  caps.hdr10PlusSource=caps.isHDR10Plus=false;
  assert(SelectOutput(nativePlus,caps).route==OutputRoute::NativeDV);
  stored->ints["dvbridge.hdr10source"]=2;
@@ -135,6 +141,7 @@ int main(){
  assert(FrameOutputSettings(true).hdr10Source==HDR10SourceMode::HDR10PlusDV);
  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,1));
  assert(FrameOutputSettings(true).hdr10Source==HDR10SourceMode::Native);
+ assert(hdr10PlusPlaybackMode.load()==HDR10SourceMode::HDR10PlusPassthrough);
  assert(FrameOutputSettings().hdr10Source==HDR10SourceMode::EnhancedDV);
  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,1));
  assert(stored->ints["dvbridge.outputmode"]==1 && stored->ints["dvbridge.hdr10method"]==1);
@@ -148,7 +155,7 @@ int main(){
  assert(FrameOutputSettings().output==OutputMode::MasterReference);
  SelectOutputSettings();
  assert(FrameOutputSettings().output==OutputMode::HDR10 && FrameOutputSettings().method==2);
- // Kodi default bypasses CB1 independently for all three input families.
+ // Each family can use the ordinary renderer, with HDR10+ HDMI metadata selected separately.
  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,3));
  caps.isDV=true;caps.isHDR10=false;
  assert(SelectOutput(FrameOutputSettings(),caps).route==OutputRoute::Vanilla);
@@ -158,6 +165,10 @@ int main(){
  assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,1));
  caps.hdr10PlusSource=caps.isHDR10Plus=true;
  assert(SelectOutput(FrameOutputSettings(true),caps).route==OutputRoute::Vanilla);
+ assert(hdr10PlusPlaybackMode.load()==HDR10SourceMode::HDR10PlusPassthrough);
+ assert(choose(StreamHdrType::HDR_TYPE_HDR10PLUS,2));
+ assert(SelectOutput(FrameOutputSettings(true),caps).route==OutputRoute::Vanilla);
+ assert(hdr10PlusPlaybackMode.load()==HDR10SourceMode::Native);
 }
 '''.replace('HEADER', header).replace('SELECTOR', selector).replace('CHOICES', choices).replace('WRITES', writes)
         root_repo = Path(__file__).resolve().parents[2]
@@ -197,7 +208,7 @@ struct CSettings:CSettingsBase {
  bool Load(const TiXmlElement* root,bool& updated) IMPLEMENTATION
 };
 int main(){
- for(int old:{0,1,2,3})for(int explicitPlus:{-1,0,3})for(bool plusFirst:{false,true}){
+ for(int old:{0,1,2,3})for(int explicitPlus:{-1,0,3,4,5})for(bool plusFirst:{false,true}){
   const auto plain="<setting id='dvbridge.hdr10source' default='true'>"+std::to_string(old)+"</setting>";
   const auto plus=explicitPlus<0 ? std::string{} :
    "<setting id='dvbridge.hdr10plussource'>"+std::to_string(explicitPlus)+"</setting>";

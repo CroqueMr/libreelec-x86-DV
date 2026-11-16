@@ -16,12 +16,16 @@ class QuickSwitchResources(unittest.TestCase):
     def test_footer_is_a_single_line_with_bottom_padding(self):
         definitions = ET.parse(MEDIA / 'cb1/IncludesDVProcessInfo.xml')
         group = definitions.find("./include[@name='CB1PlaybackModeLayout']/control")
-        footer = group.find("control[@id='9102']")
+        footer_group = group.find("control[@id='9103']")
+        divider = footer_group.find("control[@type='image']")
+        self.assertEqual(divider.findtext('height'), '1')
+        footer = footer_group.find("control[@id='9102']")
         self.assertEqual(footer.get('type'), 'label')
         self.assertEqual(footer.findtext('label'), '$INFO[Container(6).ListItem.Label2]')
         self.assertEqual(footer.findtext('wrapmultiline'), 'false')
         self.assertEqual(footer.findtext('scroll'), 'false')
-        bottom = int(footer.findtext('top')) + int(footer.findtext('height'))
+        bottom = (int(footer_group.findtext('top')) + int(footer.findtext('top'))
+                  + int(footer.findtext('height')))
         self.assertGreaterEqual(int(group.findtext('height')) - bottom, 12)
 
     def test_app_window_has_a_closed_include_and_asset_graph(self):
@@ -133,31 +137,47 @@ int main(){
         source = (Path(os.environ['KODI_NATIVE_SOURCE_TREE']) / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text()
         owner = body(body(source, 'bool CDVPlaybackModes::ShowMenu('), 'for(const auto& option : options)')
         code = r'''
+#include <algorithm>
 #include <cassert>
 #include <map>
 #include <string>
 #include <vector>
 constexpr int LOGINFO=1;
-namespace DVBRIDGE {template<class... T>void DiagnosticLog(T...) {}}
-struct Value {bool flag=false;std::string text;bool asBoolean()const{return flag;}};
+namespace DVBRIDGE {
+enum class OutputMode{PlayerLed};
+template<class... T>void DiagnosticLog(T...) {}
+}
+struct Value {
+ Value(bool enabled=false):flag(enabled){}
+ bool flag;std::string text;bool asBoolean()const{return flag;}
+};
 struct CFileItem {
  explicit CFileItem(const std::string&){}
  std::map<std::string,Value> properties;
  void SetLabel2(const std::string&){}
  void SetProperty(const std::string& n,bool v){properties[n].flag=v;}
+ void SetProperty(const std::string& n,const Value& v){properties[n]=v;}
  void SetProperty(const std::string& n,const char* v){properties[n].text=v;}
+ void SetProperty(const std::string& n,const std::string& v){properties[n].text=v;}
  Value GetProperty(const std::string& n)const{auto i=properties.find(n);return i==properties.end()?Value{}:i->second;}
 };
-struct Option {int value;std::string label,label2;std::vector<std::pair<std::string,bool>> properties;};
+struct Option {int value;std::string label,label2;std::vector<std::pair<std::string,Value>> properties;};
 struct Dialog {std::vector<CFileItem> items;void Add(const CFileItem& i){items.push_back(i);}};
 int main(){
  Dialog d;auto* dialog=&d;
+ const bool settingsMenu=false, cb1Active=true, recommendMaster=false;
+ const int current=2;
+ struct {int label,output;} choices[]{{10,0},{11,0},{12,0}};
+ struct Strings {std::string Get(int id){return std::to_string(id);}} strings;
  std::vector<Option> options{{0,"A","",{}},{1,"B","",{{"disabled",true}}},{2,"C","",{{"disabled",false}}}};
  for(const auto& option:options) OWNER
  assert(d.items.size()==3);
- assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF0F0F0");
- assert(d.items[1].GetProperty("CB1.TextColor").text=="FFA0A0A0");
- assert(d.items[2].GetProperty("CB1.TextColor").text=="FFF0F0F0");
+ assert(d.items[0].GetProperty("CB1.TextColor").text=="FFF2F5F6");
+ assert(d.items[1].GetProperty("CB1.TextColor").text=="FFBEC7CB");
+ assert(d.items[2].GetProperty("CB1.TextColor").text=="FF65E18D");
+ assert(d.items[0].GetProperty("CB1.SwitchStatus").text.empty());
+ assert(d.items[1].GetProperty("CB1.SwitchStatus").text=="40851");
+ assert(d.items[2].GetProperty("CB1.SwitchStatus").text=="40878");
  assert(d.items[1].GetProperty("disabled").asBoolean());
 }
 '''.replace('OWNER', owner)

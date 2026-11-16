@@ -31,7 +31,7 @@ Subject: [PATCH] Expose CB1 log detail in Kodi System logging
 +        <setting id="debug.cb1logdetail" type="integer" label="41225" help="41228">
 +          <requirement>HAVE_DVBRIDGE</requirement>
 +          <level>1</level>
-+          <default>1</default>
++          <default>0</default>
 +          <constraints>
 +            <options>
 +              <option label="41226">0</option>
@@ -226,7 +226,7 @@ Subject: [PATCH] Expose CB1 log detail in Kodi System logging
    return enabled;
 +}
 +
-+inline std::atomic<bool> detailedDiagnostics{true};
++inline std::atomic<bool> detailedDiagnostics{false};
 +
 +inline void SetDetailedDiagnostics(bool enabled)
 +{

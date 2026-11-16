@@ -71,7 +71,7 @@ int waited=0,syncError=0;
 int vaSyncSurface(void* display,unsigned surface){assert(display==(void*)123 && surface==17);++waited;return syncError;}
 struct AVFrame{Buffer* hw_frames_ctx=&frameBuffer;uint8_t* data[4]={nullptr,nullptr,nullptr,(uint8_t*)17};};
 void av_frame_free(AVFrame** f){delete *f;*f=nullptr;}
-struct Metadata{bool valid=true;int Binding()const{return 1;}const void* Data()const{return valid?this:nullptr;}};
+struct Metadata{bool valid=true;int Binding()const{return 1;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}};
 struct VideoPicture{int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
  int doviSourceBinding=1;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
@@ -81,12 +81,15 @@ struct Fel{bool failed=false,exhausted=false;int result=0;};
 bool dvbridge_fel_failed(Fel*f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*f){return f->exhausted;}
 int dvbridge_fel_take(Fel*f,int64_t,AVFrame**out){if(f->result==1)*out=new AVFrame;return f->result;}
+constexpr int CODEC_BLURAY_NAVIGATION=4;
+int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
 bool dvbridge_fel_drain(Fel*){return true;}
 enum{LOGWARNING,LOGERROR};
 struct CLog{template<class... T>static void Log(T...){}};
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
+ struct {int codecOptions{};}m_hints;
  std::shared_ptr<Fel>m_dvFel=std::make_shared<Fel>();bool m_dvFailed=false,m_dvNativeOutput=false;
  uint64_t m_dvLayerEpoch=0;
  std::deque<std::shared_ptr<VideoPicture>>m_dvPending;Context context;Context*m_pCodecContext=&context;

@@ -26,6 +26,7 @@ class SDRRestoreTests(unittest.TestCase):
 #include <map>
 #include <vector>
 constexpr int DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3,AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16;
+constexpr int DVBRIDGE_MODE_PLAYER_LED=8;
 namespace DVBRIDGE {
  enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR,PlayerLed};
  enum class OutputReason{None,ProcessingPending,RestoreFailed,ActivationFailed};
@@ -59,9 +60,12 @@ struct CDVBridgeState{enum class Backend{KERNEL,NVIDIA};bool captured=true;
  Backend CapturedBackend(){return Backend::KERNEL;}void Restored(){captured=false;}};
 struct Context{bool fence=true;int status=DVBRIDGE_DV_IDLE;
  bool FenceLastUse(){return fence;}int Poll(){return status;}};
-struct Bridge{void Cancel(){}void Reset(){}bool RebindOutputSurface(bool,bool,unsigned){return true;}};
+struct Bridge{void Cancel(){}void Reset(){}bool PlayerLed()const{return false;}
+ bool RebindOutputSurface(bool,bool,unsigned){return true;}};
+struct gbm_bo;
 struct Surface{Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
  void* LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
+ gbm_bo* AdoptTransactionalBuffer(gbm_bo*,std::shared_ptr<void>){assert(false);return nullptr;}
  void EndTransactionalMode(){}};
 struct Picture{int color_transfer=16;struct{unsigned informationGeneration=1;}doviSourceInfo;};
 struct Window{
@@ -71,7 +75,13 @@ struct Window{
  bool m_sdrBT2020Rejected=false;
  bool m_dvPriorHDRConversion=false,m_dvPriorSDRConversion=false,m_dvPriorGuiCompositing=false;
  bool m_hdrConversion=false,m_sdrConversion=false,m_dvFatalConsumed=false,m_dvFallbackActive=false;
- bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ enum class PascalHDRMode {None,Conversion,Native};
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None,m_priorPascalHDRMode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode mode){m_pascalHDRMode=mode;}
+ struct PascalHDRScanout{void Presented(){assert(false);}}* m_pascalHDRScanout=nullptr;
+ std::shared_ptr<gbm_bo> BlitNativePascalHDRFrame(){assert(m_pascalHDRMode!=PascalHDRMode::Native);return {};}
+ bool StageNativePascalHDR10(){assert(false);return false;}
+ void StageNativeHDR10Plus(){assert(false);}
  unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvNativeFailed=false,m_dvHDR10Failed=false,m_dvSDRFailed=false,m_dvPlayerLedFailed=false;
  bool pending=true,complete=true,bind=true,restore=false;unsigned restores=0;
@@ -240,9 +250,11 @@ struct CDVBridgeState{enum class Backend{KERNEL,NVIDIA};
  unsigned stages=0;bool captured=true;Backend CapturedBackend(){return Backend::KERNEL;}
  bool Captured(){return captured;}bool Stage(CDRMAtomic& drm,bool){++stages;return drm.stageOK;}
  void Restored(){captured=false;}};
+struct gbm_bo;
 struct Surface{
  Surface& GetDevice(){return *this;}Surface& GetSurface(){return *this;}
  void* LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
+ gbm_bo* AdoptTransactionalBuffer(gbm_bo*,std::shared_ptr<void>){assert(false);return nullptr;}
  void EndTransactionalMode(){}
 };
 struct CWinSystemGbmEGLContext{
@@ -265,7 +277,14 @@ struct CWinSystemGbmGLESContext:CWinSystemGbmEGLContext{
  std::optional<int> m_hdr10Session,m_hdr10BasicSignal,m_hdr10Signal;
  unsigned m_hdr10SessionStream=1;int m_videoSourceSideData=0;
  struct Bridge{void Reset(){}};std::unique_ptr<Bridge> m_dvBridge;
- std::unique_ptr<int> m_pascalHDRScanout;
+ enum class PascalHDRMode {None,Conversion,Native};
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode mode){m_pascalHDRMode=mode;}
+ struct PascalHDRScanout{void Presented(){assert(false);}};
+ std::unique_ptr<PascalHDRScanout> m_pascalHDRScanout;
+ std::shared_ptr<gbm_bo> BlitNativePascalHDRFrame(){assert(m_pascalHDRMode!=PascalHDRMode::Native);return {};}
+ bool StageNativePascalHDR10(){assert(false);return false;}
+ void StageNativeHDR10Plus(){assert(false);}
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  bool surfacePending=false,surfaceOK=true,endOK=true,retireOK=true;
  unsigned outputRefused=0;
@@ -513,6 +532,20 @@ METHODS
 int main(int argc,char** argv){
  assert(argc==2);int scenario=std::stoi(argv[1]);
  CDRMAtomic drm;
+ if(scenario>=10){
+  // The previous Kodi process exited without restoring the kernel transport.
+  const char* transport=scenario==10 ? "DVBRIDGE_DV_STANDARD_LAB" : "CB1_LLDV_FORMAT";
+  drm.mode.clock=594000;
+  drm.connector.cache[transport]=signal[transport]=1;
+  rejectTest=true;
+  assert(!drm.DrmAtomicCommit(42,DRM_MODE_ATOMIC_ALLOW_MODESET,true,false));
+  assert(realCommits==0 && signal[transport]==1);
+  rejectTest=false;
+  assert(drm.DrmAtomicCommit(42,DRM_MODE_ATOMIC_ALLOW_MODESET,true,false));
+  assert(realCommits==1 && signal[transport]==0 && drm.connector.cache[transport]==0);
+  assert(drm.m_committedMode.clock==594000 && !drm.m_sdrRestorePending);
+  return 0;
+ }
  // An accepted HDR movie is the independent physical starting state.
  drm.AddProperty(drm.m_connector,"HDR_OUTPUT_METADATA",17);
  drm.AddProperty(drm.m_connector,"Colorspace",9);
@@ -602,7 +635,7 @@ int main(int argc,char** argv){
                                     '-fsanitize=address,undefined', str(code), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(10):
+            for scenario in range(12):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(binary), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stdout + run.stderr)

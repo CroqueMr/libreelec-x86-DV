@@ -106,7 +106,7 @@ bool CDVBridgeGLES::Context::AsyncPreparation(uint64_t){return true;}
 @CONTEXT@
 void CDVBridgeGLES::Context::SetSpatialMethod(ESCALINGMETHOD,bool){}
 int CDVBridgeGLES::Context::Upscaler() const { return -1; }
-int KODI::VIDEO::UPSCALER::Get(bool, int kodi) { return kodi; }
+int KODI::VIDEO::UPSCALER::Get(unsigned int, unsigned int, int kodi) { return kodi; }
 struct CDVBridgeGLES::PlayerLedCpu {
   DVBRIDGE::SourceBinding source;
   uint64_t generation{}, revision{};
@@ -181,7 +181,7 @@ static void setup(CDVBridgeGLES& r){
 }
 @PROVENANCE@
 static void audit_cases(){
- using namespace DVBRIDGE;testEnabled=true;
+ using namespace DVBRIDGE;testEnabled=true;SetDetailedDiagnostics(true);
  // A startup GUI exclusion must not consume the only useful observation.
  // Advance only picture/time; source/settings and the audit epoch stay fixed.
  for(bool eligible:{false,true})for(int admission=0;admission<3;++admission){
@@ -191,12 +191,12 @@ static void audit_cases(){
   assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,false,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
   const auto epoch=r.m_auditSerial;assert(queryCalls==queries&&r.m_auditPreparedSerial!=epoch&&auditLines.size()==logs);
   r.Cancel();++base.binding.picture;testNow+=650;
-  auditAdmit=admission!=1;testEnabled=admission!=2;
+  auditAdmit=admission!=1;SetDetailedDiagnostics(admission!=2);
   assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
   assert(queryCalls==queries+1&&r.m_auditSerial==epoch);
   if(admission){
    assert(r.m_auditPreparedSerial!=epoch&&auditLines.size()==logs);
-   r.Cancel();++base.binding.picture;auditAdmit=testEnabled=true;testNow+=admission==1?30001:650;
+   r.Cancel();++base.binding.picture;auditAdmit=true;SetDetailedDiagnostics(true);testNow+=admission==1?30001:650;
    assert(r.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
    assert(queryCalls==queries+2&&r.m_auditSerial==epoch);
   }
@@ -257,18 +257,18 @@ static void audit_cases(){
  frame.planes[0].texture=&targetTexture;
  detail=SDRPreparationAudit(frame,&el,realMetadata,fractional,&targetTexture,8,true,NAN,2,{1,1,1,1,0,0,-1});
  assert(detail.find(" a=1,0")!=std::string::npos&&detail.find(" v=0,1,0")!=std::string::npos);
- queryOK=true;testEnabled=false;
+ queryOK=true;SetDetailedDiagnostics(false);
  CDVBridgeGLES off;setup(off);CDVBridgeGLES::Layer base{};base.binding={99,1,1};base.pts=1;base.lease=std::make_shared<int>(1);
  OutputPreferences prefs;prefs.output=OutputMode::SDR;prefs.revision=110;auto policy=prefs.Policy();CDVMetadataBuffer none;
  auto logs=auditLines.size();auto queries=queryCalls;assert(off.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
  assert(queryCalls==queries+1&&auditLines.size()==logs&&off.m_auditPreparedSerial==0);
- testEnabled=true;auditAdmit=false;CDVBridgeGLES blocked;setup(blocked);
+ SetDetailedDiagnostics(true);auditAdmit=false;CDVBridgeGLES blocked;setup(blocked);
  assert(blocked.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
  assert(blocked.m_auditPreparedSerial==0&&auditLines.size()==logs);
  auditAdmit=true;testNow+=30001;blocked.Cancel();++base.binding.picture;
  assert(blocked.PrepareFrame(base,nullptr,none,{8,8,0,0,8,8,8,8},prefs,true,&policy,false)==CDVBridgeGLES::FrameStatus::Ready);
  assert(blocked.m_auditPreparedSerial==blocked.m_auditSerial&&auditLines.size()==logs+1);
- testEnabled=false;std::cout<<"COMPLETE actual SDR audit decisions and query counts\n";
+ SetDetailedDiagnostics(false);testEnabled=false;std::cout<<"COMPLETE actual SDR audit decisions and query counts\n";
 }
 int main(){
  setenv("DVBRIDGE_DIAGNOSTICS","0",1);

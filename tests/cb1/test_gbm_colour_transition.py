@@ -60,8 +60,10 @@ struct State{
  enum class Backend{KERNEL,NVIDIA};Backend CapturedBackend(){return Backend::KERNEL;}
 };
 using CDVBridgeState=State;
+struct gbm_bo;
 struct Surface{Surface&GetDevice(){return *this;}Surface&GetSurface(){return *this;}
- void*LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}};
+ void*LockTransactionalBuffer(){return this;}void CompleteTransactionalBuffer(bool){}
+ gbm_bo* AdoptTransactionalBuffer(gbm_bo*,std::shared_ptr<void>){assert(false);return nullptr;}};
 struct CWinSystemGbmGLESContext:CWinSystemGbm{
  State m_cb1ConnectorState,m_dvState;
  bool m_cb1RestoringPreferences=false,m_dvOrdinaryFrame=false,m_dvStopPending=false;
@@ -73,6 +75,12 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm{
  unsigned hdrPreparations=0;bool guiLimited=false;
  std::shared_ptr<Surface>m_GBM=std::make_shared<Surface>();
  struct EGL{bool TrySwapBuffers(){return true;}}m_eglContext;
+ enum class PascalHDRMode {None,Conversion,Native};
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None;
+ struct PascalHDRScanout{void Presented(){assert(false);}}* m_pascalHDRScanout=nullptr;
+ std::shared_ptr<gbm_bo> BlitNativePascalHDRFrame(){assert(m_pascalHDRMode!=PascalHDRMode::Native);return {};}
+ bool StageNativePascalHDR10(){assert(false);return false;}
+ void StageNativeHDR10Plus(){assert(false);}
  bool HasPendingDVBridgeRestore()const{return m_cb1ConnectorState.Captured();}
  bool HasPendingDVOutputSurface()const{return true;}
  bool SetHDR(const VideoPicture*){++hdrPreparations;m_queuedHdrMetadata=99;return true;}

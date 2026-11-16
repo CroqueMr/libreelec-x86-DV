@@ -1,4 +1,4 @@
-Recognize and diagnose explicitly declared dual-track Dolby Vision.
+Recognize and seek explicitly declared dual-track Dolby Vision.
 
 --- a/libavformat/mov.c
 +++ b/libavformat/mov.c
@@ -95,3 +95,36 @@ Recognize and diagnose explicitly declared dual-track Dolby Vision.
              if (s->error_recognition & AV_EF_EXPLODE)
                  return AVERROR_INVALIDDATA;
              continue;
+@@ -12074,6 +12103,11 @@
+     if (mc->seek_individually) {
+         /* adjust seek timestamp to found sample timestamp */
+         int64_t seek_timestamp = sti->index_entries[sample].timestamp;
++        const MOVStreamContext *sc = st->priv_data;
++        int64_t seek_pts = seek_timestamp;
++        if (sc->ctts_count && sc->tts_index < sc->tts_count)
++            seek_pts = av_sat_add64(seek_timestamp,
++                av_sat_add64(sc->dts_shift, sc->tts_data[sc->tts_index].offset));
+         sti->skip_samples = mov_get_skip_samples(st, sample);
+ 
+         for (i = 0; i < s->nb_streams; i++) {
+@@ -12084,7 +12118,19 @@
+             if (stream_index == i)
+                 continue;
+ 
+-            timestamp = av_rescale_q(seek_timestamp, s->streams[stream_index]->time_base, st->time_base);
++            /* Dolby layers share presentation time, but may use different decode clocks. */
++            timestamp = seek_timestamp;
++            for (unsigned j = 0; seek_pts != seek_timestamp && j < s->nb_stream_groups; j++) {
++                const AVStreamGroup *group = s->stream_groups[j];
++                if (group->type == AV_STREAM_GROUP_PARAMS_DOLBY_VISION &&
++                    group->nb_streams == 2 &&
++                    ((group->streams[0] == s->streams[stream_index] && group->streams[1] == st) ||
++                     (group->streams[1] == s->streams[stream_index] && group->streams[0] == st))) {
++                    timestamp = seek_pts;
++                    break;
++                }
++            }
++            timestamp = av_rescale_q(timestamp, s->streams[stream_index]->time_base, st->time_base);
+             sample = mov_seek_stream(s, st, timestamp, flags);
+             if (sample >= 0)
+                 sti->skip_samples = mov_get_skip_samples(st, sample);

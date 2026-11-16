@@ -128,13 +128,14 @@ int main(void) {
     def test_deep_output_is_independent_of_dv_on_vegam(self):
         source = self.source('amdgpu_dm/amdgpu_dm_dv.c')
         name = 'dv_display_supported' if 'dv_display_supported(' in source else 'dv_dcn_supported'
-        policy = function(source, name)
-        policy = function(source, 'dv_rx550') + '\n' + policy
+        policy = '\n'.join(function(source, helper) for helper in (
+            'dv_rx550', name, 'dv_lldv_native_supported'))
         symbols = sorted(set(re.findall(r'\b(?:DCN|DCE)_VERSION_\w+', policy)))
         code = '#include <assert.h>\n#include <stdbool.h>\n#include <string.h>\n'
         code += 'enum dce_version {' + ','.join(symbols) + '};\n'
         code += r'''
 enum { DRM_MODE_CONNECTOR_HDMIA=1, SIGNAL_TYPE_HDMI_TYPE_A=2, DRM_MODE_PROP_ATOMIC=4 };
+enum { AMDGPU_LLDV_RGB10_LAB=3 };
 struct dc_context { enum dce_version dce_version; struct {unsigned chip_id;}asic_id; };
 struct dc { struct dc_context *ctx; };
 struct amdgpu_device { struct { struct dc *dc; } dm; };
@@ -146,7 +147,7 @@ struct amdgpu_dm_connector {
 struct drm_prop_enum_list { unsigned value; const char *name; };
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
 static bool dv_standard,dv_lldv;
-static int dv_properties,hdr_properties;
+static int dv_properties,hdr_properties,lldv_properties;
 #define drm_info(...) ((void)0)
 #define drm_to_adev(p) ((struct amdgpu_device *)(p))
 static void *drm_property_create_bool(void *dev,int flags,const char *name)
@@ -155,7 +156,13 @@ static void *drm_property_create_bool(void *dev,int flags,const char *name)
  return &dv_properties; }
 static void *drm_property_create_enum(void *dev,int flags,const char *name,
  const struct drm_prop_enum_list *formats,size_t count)
-{ (void)formats;(void)count;return drm_property_create_bool(dev,flags,name); }
+{
+ (void)dev;(void)flags;
+ assert(!strcmp(name,"CB1_LLDV_FORMAT"));
+ assert(count==2 && formats[0].value==0 && formats[1].value==1);
+ ++lldv_properties;
+ return &lldv_properties;
+}
 static void drm_object_attach_property(void *base,void *property,int value)
 { (void)base;(void)property;(void)value; }
 '''
@@ -167,14 +174,17 @@ int main(void) {
  struct link link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector con={.base={&dev,DRM_MODE_CONNECTOR_HDMIA,{0}},.dc_link=&link};
  dv_standard=true; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==1 && hdr_properties==1);
+ assert(dv_properties==1 && hdr_properties==1 && lldv_properties==0);
  dv_properties=hdr_properties=0; dv_standard=false; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==0 && hdr_properties==1);
- dv_properties=hdr_properties=0;
+ assert(dv_properties==0 && hdr_properties==1 && lldv_properties==0);
+ hdr_properties=0; dv_lldv=true; amdgpu_dm_dv_attach(&con);
+ assert(dv_properties==0 && hdr_properties==1 && lldv_properties==1);
+ dv_properties=hdr_properties=lldv_properties=0;
  ctx.dce_version=DCN_VERSION_1_0; dv_standard=true; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==1 && hdr_properties==1);
- dv_properties=hdr_properties=0; link.connector_signal=0; amdgpu_dm_dv_attach(&con);
- assert(dv_properties==0 && hdr_properties==0);
+ assert(dv_properties==1 && hdr_properties==1 && lldv_properties==1);
+ dv_properties=hdr_properties=lldv_properties=0;
+ link.connector_signal=0; amdgpu_dm_dv_attach(&con);
+ assert(dv_properties==0 && hdr_properties==0 && lldv_properties==0);
  return 0;
 }
 '''

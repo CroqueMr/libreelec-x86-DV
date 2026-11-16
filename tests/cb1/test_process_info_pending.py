@@ -29,7 +29,7 @@ struct Transaction { Identity identity; int requested{},effective{},enhancement{
   bool hdr10AI{}; };
 struct Output { unsigned flags{},stream{},revision{}; int requested{},effective{},enhancement{};
   DVBRIDGE::OutputReason reason{DVBRIDGE::OutputReason::None}; bool hdr10AI{}; };
-struct Data { Transaction transaction; Output output; };
+struct Data { Transaction transaction; Output output; int nativeHDR10PlusFallbackLabel{}; };
 struct CDVPlaybackInfo { static const char* RequestedPolicy(int,bool=false) {return "policy";} };
 struct StringUtils { template<class... T> static std::string Format(const char*,T...) {return "error";} };
 POLICY_TEXT

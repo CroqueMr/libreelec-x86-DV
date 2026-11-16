@@ -8,13 +8,13 @@ from pathlib import Path
 class HDR10PlusSourceTests(unittest.TestCase):
     def test_only_selected_pq_frame_is_staged_and_stale_metadata_is_cleared(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        signature='void CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)'
-        implementation=body(source,signature) if signature in source else '{}'
+        implementation=body(source,'int CWinSystemGbmGLESContext::StageNativeHDR10Plus()')
         serializer=Path(__file__).resolve().parents[2]/'CB1/src/cb1_hdr10plus.c'
         SnapshotChecks().compile_run(r'''
 #include "cores/VideoSourceSideData.h"
 #include <cassert>
 #include <array>
+#include <atomic>
 #include <optional>
 #include <string>
 #include <vector>
@@ -33,10 +33,31 @@ struct CDRMAtomic:DRM {
 };
 struct Display {int version=1; int HDR10PlusVersion() const {return version;}};
 struct Cache {uint64_t generation=7; uint64_t GetVideoProcessingGeneration(){return generation;}};
-struct CServiceBroker {static inline Cache cache;static Cache& GetDataCacheCore(){return cache;}};
+struct CApplicationPlayer {
+ bool overlay{};
+ bool HasVisibleOverlay() const {return overlay;}
+};
+struct AppComponents {
+ CApplicationPlayer player;
+ template<class T>T* GetComponent(){return &player;}
+};
+struct GUI {
+ GUI& GetWindowManager(){return *this;}
+ bool HasVisibleControls() const {return false;}
+};
+struct CServiceBroker {
+ static inline Cache cache;
+ static inline AppComponents components;
+ static inline GUI gui;
+ static Cache& GetDataCacheCore(){return cache;}
+ static AppComponents& GetAppComponents(){return components;}
+ static GUI* GetGUI(){return &gui;}
+};
 enum {LOGINFO=1};
 struct CLog {template<class... A>static void Log(A...) {}};
 namespace DVBRIDGE {
+enum class HDR10SourceMode { Native=0, ReferenceDV=1, EnhancedDV=2, HDR10PlusDV=3, SDR=4, HDR10PlusPassthrough=5 };
+inline std::atomic<HDR10SourceMode> hdr10PlusPlaybackMode{HDR10SourceMode::Native};
 inline std::vector<std::string> messages;
 template<class... A>bool DiagnosticLog(int,fmt::format_string<A...> f,A&&...args){
  messages.push_back(fmt::format(f,std::forward<A>(args)...));return true;
@@ -50,9 +71,11 @@ struct CWinSystemGbmGLESContext {
  int depth=10;int GetOutputBitDepth()const{return depth;}
  const Display* GetDisplayInfo() const {return &display;}
  auto GetEotf() const {return eotf;}
- void StageNativeHDR10Plus(bool overlay) BODY
+ int StageNativeHDR10Plus() BODY
 };
 int main() {
+ using DVBRIDGE::HDR10SourceMode;
+ using DVBRIDGE::hdr10PlusPlaybackMode;
  CWinSystemGbmGLESContext w;auto drm=std::dynamic_pointer_cast<CDRMAtomic>(w.m_DRM);
  AVFrame* frame=av_frame_alloc();auto* hdr=av_dynamic_hdr_plus_create_side_data(frame);
  hdr->itu_t_t35_country_code=0xb5;hdr->application_version=1;hdr->num_windows=1;
@@ -61,23 +84,32 @@ int main() {
  const int perc[]={1,5,10,25,50,75,90,95,99};p.num_distribution_maxrgb_percentiles=9;
  for(int i=0;i<9;++i)p.distribution_maxrgb[i]={(uint8_t)perc[i],{i==1?0:i==2?255:5000,100000}};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,1,AV_CODEC_ID_HEVC,frame,nullptr);
- w.StageNativeHDR10Plus(false);assert(drm->packet && drm->generation==7);
+ w.StageNativeHDR10Plus();assert(!drm->packet);
+ for(auto mode:{HDR10SourceMode::Native,HDR10SourceMode::ReferenceDV,HDR10SourceMode::EnhancedDV,
+                HDR10SourceMode::HDR10PlusDV,HDR10SourceMode::SDR}) {
+  hdr10PlusPlaybackMode=HDR10SourceMode::HDR10PlusPassthrough;
+  w.StageNativeHDR10Plus();assert(drm->packet);
+  hdr10PlusPlaybackMode=mode;
+  w.StageNativeHDR10Plus();assert(!drm->packet);
+ }
+ hdr10PlusPlaybackMode=HDR10SourceMode::HDR10PlusPassthrough;
+ w.StageNativeHDR10Plus();assert(drm->packet && drm->generation==7);
  assert((*drm->packet)[30]==0x40 && (*drm->packet)[8]==10);
  auto first=*drm->packet;
  assert(!DVBRIDGE::messages.empty());
  assert(DVBRIDGE::messages.back().find("app_version=1")!=std::string::npos);
  const auto logs=DVBRIDGE::messages.size();
- w.StageNativeHDR10Plus(false);assert(*drm->packet==first);
+ w.StageNativeHDR10Plus();assert(*drm->packet==first);
  assert(DVBRIDGE::messages.size()==logs); // Repeated status does not log per frame.
  // Modern decoded V1 Y99 / Y100nit values retain their distinct wire units.
  p.distribution_maxrgb[1].percentile={2940,100000};
  p.distribution_maxrgb[2].percentile={98,100000};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,2,AV_CODEC_ID_HEVC,frame,nullptr);
- w.StageNativeHDR10Plus(false);
+ w.StageNativeHDR10Plus();
  assert(drm->packet && (*drm->packet)[10]==18 && (*drm->packet)[11]==98);
  p.distribution_maxrgb[2].percentile={101,100000};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,3,AV_CODEC_ID_HEVC,frame,nullptr);
- w.StageNativeHDR10Plus(false);
+ w.StageNativeHDR10Plus();
  assert(!drm->packet && w.m_hdr10plusReason=="unrepresentable-metadata");
  assert(DVBRIDGE::messages.size()==logs+3);
  const auto& rejectedSummary=DVBRIDGE::messages[logs];
@@ -87,15 +119,17 @@ int main() {
  p.distribution_maxrgb[1].percentile={0,100000};
  p.distribution_maxrgb[2].percentile={255,100000};
  w.m_videoSourceSideData=VideoSourceSideData::Capture(7,4,AV_CODEC_ID_HEVC,frame,nullptr);
- w.StageNativeHDR10Plus(true);assert((*drm->packet)[30]==0xc0);
- w.depth=8;w.StageNativeHDR10Plus(false);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
- w.depth=10;w.StageNativeHDR10Plus(false);assert(drm->packet);
- w.depth=16;w.StageNativeHDR10Plus(false);assert(drm->packet);
- w.eotf=KODI::UTILS::Eotf::TRADITIONAL_SDR;w.StageNativeHDR10Plus(false);assert(!drm->packet);
- w.eotf=KODI::UTILS::Eotf::PQ;w.display.version=0;w.StageNativeHDR10Plus(false);assert(!drm->packet);
- w.display.version=1;drm->connector.supported=false;w.StageNativeHDR10Plus(false);assert(!drm->packet);
- drm->connector.supported=true;CServiceBroker::cache.generation=8;w.StageNativeHDR10Plus(false);assert(!drm->packet);
- w.m_videoSourceSideData.reset();w.StageNativeHDR10Plus(false);assert(!drm->packet);
+ CServiceBroker::components.player.overlay=true;
+ w.StageNativeHDR10Plus();assert((*drm->packet)[30]==0xc0);
+ CServiceBroker::components.player.overlay=false;
+ w.depth=8;assert(w.StageNativeHDR10Plus()==41334);assert(!drm->packet && w.m_hdr10plusReason=="output-buffer-below-10-bit");
+ w.depth=10;w.StageNativeHDR10Plus();assert(drm->packet);
+ w.depth=16;w.StageNativeHDR10Plus();assert(drm->packet);
+ w.eotf=KODI::UTILS::Eotf::TRADITIONAL_SDR;w.StageNativeHDR10Plus();assert(!drm->packet);
+ w.eotf=KODI::UTILS::Eotf::PQ;w.display.version=0;assert(w.StageNativeHDR10Plus()==41336);assert(!drm->packet);
+ w.display.version=1;drm->connector.supported=false;assert(w.StageNativeHDR10Plus()==41335);assert(!drm->packet);
+ drm->connector.supported=true;CServiceBroker::cache.generation=8;w.StageNativeHDR10Plus();assert(!drm->packet);
+ w.m_videoSourceSideData.reset();w.StageNativeHDR10Plus();assert(!drm->packet);
  av_frame_free(&frame);
 }
 '''.replace('SERIALIZER',str(serializer)).replace('BODY',implementation))

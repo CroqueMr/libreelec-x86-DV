@@ -52,10 +52,10 @@ int main() {
  assert(info.transmittedBlocks[1] && info.transmittedBlocks[5]);
  assert(info.output.aiL1L3[1]==2000 && !info.output.engine.empty());
  assert(info.output.aiModel=="CB1-L1L3 0.1" && info.output.aiBaseline[1]==1900);
- assert(info.output.circuit=="CB1-HDR10DVR.0.1.3" && info.output.engine=="CB1 0.5");
+ assert(info.output.circuit=="CB1-HDR10DVR.1.0" && info.output.engine=="CB1 1.0");
  s.output.hdr10PlusDV=true;s.output.guidedSourceFields=2;s.output.guidedEstimatedFields=5;
  info=DVBRIDGE::NativeProcessingInfo(s);
- assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.0.2");
+ assert(!info.metadata && info.output.circuit=="CB1-HDR10PDVR.1.0");
  assert(info.output.guidedSourceFields==2 && info.output.guidedEstimatedFields==5);
  s.output.flags=CDVPlaybackInfo::SDR;s.output.effective=8;s.output.sdrHDRInputUsed=24;s.output.sdrHDRInputValues={2000,2000,3000,500};
  info=DVBRIDGE::NativeProcessingInfo(s);

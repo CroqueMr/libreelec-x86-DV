@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
 class PlaybackLayoutOwnership(unittest.TestCase):
-    def test_beta4_selector_keeps_its_layout_and_native_lists_unmodified(self):
+    def test_compact_selector_stays_in_bounds_with_and_without_footer(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         from test_native_video_source import body
         source = (tree/'xbmc/dialogs/GUIDialogSelect.cpp').read_text()
@@ -21,29 +21,49 @@ class PlaybackLayoutOwnership(unittest.TestCase):
         program = r'''
 #include <algorithm>
 #include <cassert>
+#include <string>
+#include <utility>
+#include <vector>
 struct Control {
- float x=1220,y=2,h=9;
+ float x=1270,y=2,h=9;
  float GetXPosition()const{return x;} float GetYPosition()const{return y;}
  void SetPosition(float a,float b){x=a;y=b;} void SetHeight(float v){h=v;}
 };
 struct Property {bool value;bool asBoolean()const{return value;}};
-struct List {int count;int Size()const{return count;}};
+struct Item {
+ std::string label;
+ const std::string& GetLabel2()const{return label;}
+};
+struct List : std::vector<const Item*> {
+ List(int count,bool footer) {
+  static const Item plain{}, withHelp{"LLDV guidance"};
+  assign(count,&plain);
+  if(footer) back()=&withHelp;
+ }
+ int Size()const{return size();}
+};
 constexpr int CONTROL_SIMPLE_LIST=3,CONTROL_DETAILED_LIST=6;
 struct Dialog {
- bool playback;List rows;List* m_vecList=&rows;Control group,image,list,help;
+ bool playback;List rows;List* m_vecList=&rows;Control group,image,list,footer;
  Property GetProperty(const char*)const{return {playback};}
- Control* GetControl(int id){return id==9100?&group:id==9101?&image:id==9102?&help:&list;}
+ Control* GetControl(int id){return id==9100?&group:id==9101?&image:id==9103?&footer:&list;}
  struct Resolution{int iHeight=1080;};Resolution GetCoordsRes()const{return {};}
  void apply(){GEOMETRY}
 };
 int main(){
- for(auto [count,expected]:{std::pair{0,50}, {1,50}, {3,150}, {6,300}, {7,350}, {20,850}}){
-  Dialog native{false,{count}};native.apply();assert(native.group.h==9 && native.list.h==9);
-  Dialog d{true,{count}};d.apply();
-  assert(d.list.h==expected && d.group.x==1220 && d.group.y+d.group.h==1040);
-  assert(d.group.y>=40);
-  assert(d.image.h==d.group.h && d.help.y==70+expected);
-  assert(d.help.y+38<=d.group.h-4);
+ for(int count:{0,1,3,6,7,30})for(bool hasFooter:{false,true}){
+  if(count==0 && hasFooter)continue;
+  Dialog native{false,{count,hasFooter}};native.apply();
+  assert(native.group.h==9 && native.list.h==9 && native.footer.y==2);
+  Dialog d{true,{count,hasFooter}};d.apply();
+  const int displayed=std::clamp(count,1,hasFooter?21:22);
+  assert(d.list.h==38*displayed && d.group.x==1270);
+  assert(d.group.y>=40 && d.group.y+d.group.h==(hasFooter?1024:1040));
+  assert(d.image.h==d.group.h);
+  if(hasFooter)
+   assert(d.footer.y==114+d.list.h && d.footer.y+32+12==d.group.h);
+  else
+   assert(d.group.h==104+d.list.h+24);
  }
 }
 '''.replace('GEOMETRY', geometry)
@@ -57,15 +77,18 @@ int main(){
         layout=ET.parse(repo/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
         group=layout.find(".//include[@name='CB1PlaybackModeLayout']//control[@id='9100']")
         self.assertIsNotNone(group)
-        self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('40','40','660'))
+        self.assertEqual((group.findtext('right'),group.findtext('bottom'),group.findtext('width')),('42','56','608'))
         for ident in ('3', '6'):
             node=group.find("control[@id='"+ident+"']")
-            self.assertEqual(tuple(node.findtext(tag) for tag in ('left','top','width')), ('20','64','620'))
+            self.assertEqual(tuple(node.findtext(tag) for tag in ('left','top','width')), ('24','104','560'))
         rows=layout.find(".//include[@name='CB1PlaybackModeRows']")
         for kind in ('itemlayout','focusedlayout'):
-            self.assertEqual(rows.find(kind).attrib, {'width':'620','height':'50'})
+            self.assertEqual(rows.find(kind).attrib, {'width':'560','height':'38'})
+        footer=group.find("control[@id='9103']/control[@id='9102']")
+        self.assertEqual(footer.findtext('scroll'), 'false')
+        self.assertEqual(footer.findtext('wrapmultiline'), 'false')
 
-    def test_native_skin_selection_layout_is_not_replaced(self):
+    def test_native_skin_selection_layout_is_unchanged_without_lldv_status(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         archive = Path(os.environ['KODI_UPSTREAM_ARCHIVE'])
         names = ('DialogSelect.xml', 'Includes_DialogSelect.xml', 'Variables.xml')
@@ -75,8 +98,54 @@ int main(){
                 member = next(item for item in source.getmembers()
                               if item.name.endswith('/' + relative))
                 with self.subTest(name=name):
-                    self.assertEqual((tree / relative).read_bytes(),
-                                     source.extractfile(member).read())
+                    actual = (tree / relative).read_bytes()
+                    original = source.extractfile(member).read()
+                    if name != 'Includes_DialogSelect.xml':
+                        self.assertEqual(actual, original)
+                        continue
+                    layout = ET.fromstring(actual)
+                    lldv = '!String.IsEmpty(Window.Property(CB1.LldvStatus))'
+                    colors = layout.find("variable[@name='CB1SelectFontColor']")
+                    self.assertIsNotNone(colors)
+                    self.assertEqual([(v.get('condition'), v.text) for v in colors],
+                                     [(lldv, 'white'), (None, 'grey')])
+                    layout.remove(colors)
+                    simple = ET.parse(tree/'addons/skin.estuary/xml/Includes.xml').find(
+                        ".//include[@name='DefaultSimpleListLayout']")
+                    self.assertEqual(simple.findtext("param[@name='fontcolor']"), 'grey')
+                    self.assertEqual(simple.findtext("param[@name='notes']"), 'false')
+                    # Resolve only the LLDV additions for an ordinary selection dialog.
+                    # Compare every remaining node, including navigation and geometry.
+                    for parent in list(layout.iter()):
+                        for child in list(parent):
+                            if (child.get('condition') == lldv or
+                                    child.findtext('visible') == lldv or
+                                    child.find("param[@name='visible'][@value='"+lldv+"']") is not None):
+                                parent.remove(child)
+                            elif child.tag == 'visible' and child.text == lldv[1:]:
+                                parent.remove(child)
+                            elif child.tag == 'param' and child.get('name') in ('fontcolor', 'notes'):
+                                self.assertEqual(child.get('value'),
+                                    '$VAR[CB1SelectFontColor]' if child.get('name') == 'fontcolor' else lldv)
+                                parent.remove(child)
+                    buttons = layout.find(".//include[@name='DefaultDialogSelectLayout']//control[@id='9001']")
+                    coords = buttons.find('usecontrolcoords')
+                    self.assertEqual(coords.text, 'true')
+                    # The ordinary buttons have zero local offsets, so preserving
+                    # their coordinates only affects the removed LLDV status box.
+                    button = ET.parse(tree/'addons/skin.estuary/xml/Includes_Buttons.xml').find(
+                        ".//include[@name='DefaultDialogButton']")
+                    self.assertEqual(button.findtext("param[@name='left']"), '0')
+                    self.assertIsNone(button.find('definition/control/top'))
+                    for include in buttons.findall('include'):
+                        self.assertEqual(include.get('content'), 'DefaultDialogButton')
+                        self.assertIsNone(include.find("param[@name='left']"))
+                        self.assertIsNone(include.find("param[@name='top']"))
+                    buttons.remove(coords)
+                    def structure(node):
+                        return (node.tag, node.attrib, (node.text or '').strip(),
+                                [structure(child) for child in node])
+                    self.assertEqual(structure(layout), structure(ET.fromstring(original)))
 
     def test_master_settings_are_fixed_and_intrinsic_fast_has_no_saved_control(self):
         tree = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])

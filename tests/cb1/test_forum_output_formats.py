@@ -32,6 +32,7 @@ struct StreamTelemetry {static int Read(){return 0;}};
 VideoProcessingInfo NativeProcessingInfo(int){VideoProcessingInfo info;return info;}
 }
 struct Drm {bool plus=false;bool HDR10PlusActive(){return plus;}};
+int nativeHDR10PlusFallback{};
 void accepted(Drm* drm) BODY
 int main(){
  Drm drm;
@@ -41,7 +42,10 @@ int main(){
  }
  eotf=Eotf::PQ;drm.plus=true;++cache.generation;accepted(&drm);
  assert(cache.info.outputType==VideoOutputType::HDR10Plus);
+ nativeHDR10PlusFallback=41337;
  drm.plus=false;accepted(&drm);assert(cache.info.outputType==VideoOutputType::HDR10);
+ assert(cache.info.nativeHDR10PlusFallbackLabel==41337);
+ drm.plus=true;accepted(&drm);assert(cache.info.nativeHDR10PlusFallbackLabel==0);
  assert(!cache.info.output.flags);
 }
 '''.replace('BODY', code)

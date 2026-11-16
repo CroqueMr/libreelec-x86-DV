@@ -1,4 +1,22 @@
-# R1.0.0 RC3 build
+# R1.0.0 build
+
+## Stable image
+
+From the Stable source commit, stage the bundled sources and use LibreELEC's
+version overrides for the Generic image.
+
+```sh
+python3 CB1/tools/verify.py
+python3 scripts/cb1-stage.py
+CB1_HDR10_AI=yes PROJECT=Generic ARCH=x86_64 OFFICIAL=no \
+  CUSTOM_VERSION=DV-R.1.0.0-Stable BUILDER_VERSION=DV-R.1.0.0-Stable make image
+```
+
+Review `/etc/release` and `/etc/os-release` in the assembled SYSTEM. The version
+and builder version both identify Stable. Keep qualification media, profiles
+and diagnostic service overrides in the test environment.
+
+## RC3 build
 
 Requires a Linux x86-64 host, LibreELEC build dependencies and the complete source tree.
 

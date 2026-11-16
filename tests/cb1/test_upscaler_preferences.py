@@ -25,6 +25,9 @@ int main()
   assert(Select(-1, 8) == 8);
   assert(Select(1, 0) == 1);
   assert(Select(8, 0) == 8);
+  assert(IsAtLeast1080p(1920,1080));
+  assert(IsAtLeast1080p(1920,800));
+  assert(!IsAtLeast1080p(1280,720));
   assert(Enlarges(1920,1080,3840,2160));
   assert(!Enlarges(3840,2160,3840,2160));
   assert(!Enlarges(3840,2160,1920,1080));
@@ -35,8 +38,8 @@ int main()
 
     def test_fsr1_is_opt_in_and_uses_kodi_multipass(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for output in ("sdr", "hdr"):
-            preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+        for setting in ("upscaler1080pandabove", "upscalerbelow1080p"):
+            preset = settings.find(f".//setting[@id='videoplayer.{setting}']"
                                    "/constraints/options/option[@label='41306']")
             self.assertIsNotNone(preset)
         renderer = TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp"
@@ -46,9 +49,9 @@ int main()
 
     def test_cnn_presets_are_offered_for_both_output_preferences(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for output in ("sdr", "hdr"):
+        for setting in ("upscaler1080pandabove", "upscalerbelow1080p"):
             for label in ("41307", "41308"):
-                preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+                preset = settings.find(f".//setting[@id='videoplayer.{setting}']"
                                        f"/constraints/options/option[@label='{label}']")
                 self.assertIsNotNone(preset)
         renderer = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp").read_text()
@@ -56,8 +59,8 @@ int main()
 
     def test_rcas_is_a_separate_preset(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for output in ("sdr", "hdr"):
-            preset = settings.find(f".//setting[@id='videoplayer.{output}upscaler']"
+        for setting in ("upscaler1080pandabove", "upscalerbelow1080p"):
+            preset = settings.find(f".//setting[@id='videoplayer.{setting}']"
                                    "/constraints/options/option[@label='41309']")
             self.assertIsNotNone(preset)
         shader = TREE / "system/shaders/GLES/2.0/gles_fsr1_rcas.frag"
@@ -76,12 +79,15 @@ enum ESCALINGMETHOD
   VS_SCALINGMETHOD_FSRCNNX, VS_SCALINGMETHOD_ANIME4K, VS_SCALINGMETHOD_FSR1_RCAS
 };
 enum dvbridge_mode { DVBRIDGE_MODE_SDR, DVBRIDGE_MODE_MASTER_REFERENCE };
-struct dvbridge_geometry { float crop[4]; float placement[4]; };
+struct dvbridge_geometry { unsigned source_width,source_height; float crop[4]; float placement[4]; };
 struct CDVBridgeGLES { struct Layer { ESCALINGMETHOD scalingMethod, autoScalingMethod; }; };
 namespace KODI::VIDEO::UPSCALER
 {
 int selected;
-int Get(bool hdr, ESCALINGMETHOD) { return hdr ? selected : VS_SCALINGMETHOD_FSR1_RCAS; }
+int Get(unsigned width, unsigned height, ESCALINGMETHOD)
+{
+  return width >= 1920 || height >= 1080 ? selected : VS_SCALINGMETHOD_FSR1_RCAS;
+}
 bool Enlarges(float fromW, float fromH, float toW, float toH)
 {
   return toW > fromW || toH > fromH;
@@ -96,8 +102,8 @@ int main()
 {
   using KODI::VIDEO::UPSCALER::selected;
   CDVBridgeGLES::Layer layer{VS_SCALINGMETHOD_LINEAR, VS_SCALINGMETHOD_LANCZOS3};
-  dvbridge_geometry scaled{{0,0,1920,1080}, {0,0,3840,2160}};
-  dvbridge_geometry unscaled{{0,0,3840,2160}, {0,0,3840,2160}};
+  dvbridge_geometry scaled{1920,1080,{0,0,1920,1080}, {0,0,3840,2160}};
+  dvbridge_geometry unscaled{3840,2160,{0,0,3840,2160}, {0,0,3840,2160}};
   const ESCALINGMETHOD presets[] = {
     VS_SCALINGMETHOD_FSRCNNX, VS_SCALINGMETHOD_ANIME4K, VS_SCALINGMETHOD_FSR1_RCAS
   };
@@ -109,6 +115,8 @@ int main()
            VS_SCALINGMETHOD_LINEAR);
     assert(OutputScalingMethod(layer, scaled, DVBRIDGE_MODE_SDR) == VS_SCALINGMETHOD_LINEAR);
   }
+  dvbridge_geometry below{1280,720,{0,0,1280,720}, {0,0,3840,2160}};
+  assert(OutputScalingMethod(layer, below, DVBRIDGE_MODE_MASTER_REFERENCE) == VS_SCALINGMETHOD_FSR1_RCAS);
   selected = VS_SCALINGMETHOD_AUTO;
   assert(OutputScalingMethod(layer, scaled, DVBRIDGE_MODE_MASTER_REFERENCE) ==
          VS_SCALINGMETHOD_LANCZOS3);
@@ -117,7 +125,7 @@ int main()
 
     def test_settings_and_conditional_information_row(self):
         settings = ET.parse(TREE / "system/settings/settings.xml")
-        for setting in ("videoplayer.sdrupscaler", "videoplayer.hdrupscaler"):
+        for setting in ("videoplayer.upscaler1080pandabove", "videoplayer.upscalerbelow1080p"):
             self.assertEqual(settings.find(f".//setting[@id='{setting}']/default").text, "-1")
         panel = ET.parse(REPO / "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml")
         row = next(node for node in panel.iter("include")
@@ -125,3 +133,7 @@ int main()
                           for value in item.attrib.values()))
         self.assertEqual(row.find("param[@name='visible']").get("value"),
                          "!String.IsEmpty(Window(playerprocessinfo).Property(DV.VideoUpscaler))")
+        label = row.find("param[@name='label']").get("value")
+        strings = (TREE / "addons/resource.language.en_gb/resources/strings.po").read_text(encoding="utf-8")
+        label_id = label.removeprefix("$LOCALIZE[").removesuffix("]")
+        self.assertIn(f'msgctxt "#{label_id}"\nmsgid "Upscaler"', strings)

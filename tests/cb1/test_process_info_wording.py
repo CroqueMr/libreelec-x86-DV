@@ -36,14 +36,21 @@ class ProcessInfoWordingTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
     def test_rendering_names_and_committed_ai_details(self):
         import json
+        from test_native_video_source import body
         tree=Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         repo=Path(__file__).resolve().parents[2]
         strings=(tree/'addons/resource.language.en_gb/resources/strings.po').read_text()
-        for number,label in {40867:'Dolby Vision rendering (AI)',40970:'Dolby Vision Rendering'}.items():
+        for number,label in {40866:'Kodi : Default',40867:'Dolby Vision : Rendering',
+                             40970:'Dolby Vision : Rendering',41014:'HDR10+ : Native',
+                             41310:'HDR10 : Native',41311:'HLG : Native'}.items():
             entry=re.search(r'msgctxt "#'+str(number)+r'"\nmsgid "([^"\n]*)"',strings)
             self.assertIsNotNone(entry,number)
             self.assertEqual(entry.group(1),label)
         dialog=(tree/'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
+        mode=body((tree/'xbmc/guilib/guiinfo/VideoProcessingInfoGUI.h').read_text(),
+                  'static std::string Mode(')
+        mode_start=dialog.index('    const auto actualMode =')
+        mode_properties=dialog[mode_start:dialog.index('    const int upscaler =',mode_start)]
         start=dialog.index('    SetProperty("DV.Reconstruction", "");')
         end=dialog.index('    const auto& localizer=',start)
         # The first localizer belongs inside the generation block.
@@ -58,12 +65,20 @@ class ProcessInfoWordingTests(unittest.TestCase):
 struct StringUtils {template<class... A> static std::string Format(const char* s,A... a){return fmt::format(fmt::runtime(s),a...);}};
 struct Localizer {std::string Get(int id)const{return std::to_string(id);}};
 struct Resources {Localizer GetLocalizeStrings()const{return {};}};
-struct CServiceBroker {static Resources GetResourcesComponent(){return {};}};
+struct SourceCache {bool hdr10Plus=false; bool HasVideoHDR10PlusSource() const{return hdr10Plus;}};
+struct CServiceBroker {
+ static Resources GetResourcesComponent(){return {};}
+ static SourceCache& GetDataCacheCore(){static SourceCache cache; return cache;}
+};
+struct VideoProcessingInfoGUI {
+ static std::string Mode(const VideoProcessingInfo& info, bool hdr10PlusSource) @MODE@
+};
 int main(){
  VideoProcessingInfo data;auto& output=data.output;
  std::map<std::string,std::string> p;
  auto SetProperty=[&](const char* key,const std::string& value){p[key]=value;};
- auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false; CODE };
+ auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false;
+ @MODE_PROPERTIES@ CODE };
  output.flags=1;output.hdr10AI=true;output.effective=1;
  output.aiModel="CB1-L1L3 0.1";output.aiBaseline={12,3079,1000};
  output.aiL1L3={15,3100,1100,2048,2050,2049};
@@ -83,8 +98,17 @@ int main(){
  assert(p["DV.AIL1"]=="15 | 3100 | 1100");
  output={};refresh();
  for(const auto* key:{"DV.AIModel","DV.BeforeAI","DV.AIL1","DV.AIL3","DV.OutputL1","DV.Reconstruction"})assert(p[key].empty());
+ assert(p["DV.Mode"]=="Kodi : Default" && p["DV.ActivePolicy"]==p["DV.Mode"]);
+ data.outputType=VideoOutputType::HDR10;refresh();
+ assert(p["DV.Mode"]=="41310" && p["DV.ActivePolicy"]==p["DV.Mode"]);
+ CServiceBroker::GetDataCacheCore().hdr10Plus=true;refresh();
+ assert(p["DV.Mode"]=="40866" && p["DV.ActivePolicy"]==p["DV.Mode"]);
+ data.outputType=VideoOutputType::HDR10Plus;refresh();
+ assert(p["DV.Mode"]=="41014" && p["DV.ActivePolicy"]==p["DV.Mode"]);
+ data.outputType=VideoOutputType::HLG;refresh();
+ assert(p["DV.Mode"]=="41311" && p["DV.ActivePolicy"]==p["DV.Mode"]);
 }
-'''.replace('CODE',code)
+'''.replace('@MODE@',mode).replace('@MODE_PROPERTIES@',mode_properties).replace('CODE',code)
         with tempfile.TemporaryDirectory(prefix='cb1-ai-info-') as temp:
             root=Path(temp);(root/'test.cpp').write_text(program)
             build=subprocess.run(['c++','-std=c++20','-I'+str(tree/'xbmc'),str(root/'test.cpp'),
@@ -194,7 +218,7 @@ int main() {
  assert(properties["DV.DisplayBlack"].empty());
  output.effective=CDVPlaybackInfo::PlayerLedMode;output.lldv.emplace();output.lldv->edidVersion=2;output.gamut=2;
  output.target=800;output.displayBlack=0.002;refresh();
- assert(properties["DV.TVProfile"]=="EDID v2 · 800 nits");
+ assert(properties["DV.TVProfile"]=="EDID v2 / 800 nits");
  assert(properties["DV.DisplayBlack"]=="0.002 nits" && properties["DV.HDR10Target"].empty());
  output.lldv.reset();
  output.flags=CDVPlaybackInfo::SDR;output.effective=8;output.target=100;output.sdrGamma=2.4;
@@ -281,7 +305,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),76)
+        self.assertEqual(len(rows),77)
         self.assertEqual(sum('Property(DV.DisplayBlack)' in r.find('./param[@name="value"]').get('value')
                              for r in rows), 1)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))

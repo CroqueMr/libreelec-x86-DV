@@ -63,7 +63,7 @@ namespace DVBRIDGE {
 struct Capabilities {bool isDV=false,isHDR10=false,isHLG=false,stereoSource=false,processingKnown=true,sourceKnown=false,nativeDV=true;};
 struct Selection {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
  DVBRIDGE::Policy policy;DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::None;
- uint64_t lldvEdidGeneration{};};
+ uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout=false;};
 struct CDVBridgeGLES {
  bool PlayerLed()const{return false;}
  struct Context {
@@ -83,6 +83,7 @@ struct State {bool captured=false; bool Captured()const{return captured;}
 struct DRM {virtual ~DRM()=default;};
 struct CDRMAtomic : DRM {
  unsigned DVActivationFailures(){return 0;}
+ void AllowModeset(){}
  void SetDVActivationPending(bool){} void* GetConnector(){return this;}
  bool AddProperty(void*,const char*,unsigned){return true;}
 };
@@ -105,7 +106,10 @@ struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool m_sdrBT2020Rejected{};
  bool requested=false,m_dvStopPending=false,m_dvOrdinaryFrame=false;
  bool m_dvActivating=false,m_dvOutputRetiring=false,m_hdrConversion=false,m_sdrConversion=false,m_dvPriorSDRConversion=false;
- bool m_pascalHDRActive=false,m_priorPascalHDRActive=false;
+ enum class PascalHDRMode {None,Conversion,Native};
+ PascalHDRMode m_pascalHDRMode=PascalHDRMode::None,m_priorPascalHDRMode=PascalHDRMode::None;
+ void SelectPascalHDRMode(PascalHDRMode mode){m_pascalHDRMode=mode;}
+ int GetOutputBitDepth()const{return m_pascalHDRMode==PascalHDRMode::None?depth:10;}
  unsigned HDR10Framebuffer()const{return 0;}
  bool m_dvPriorHDRConversion=false,m_dvPriorGuiCompositing=false,m_guiCompositing=false;
  float m_guiSDRGamma=2.4f,m_dvPriorGuiSDRGamma=2.4f;
