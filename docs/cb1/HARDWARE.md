@@ -4,15 +4,11 @@
 
 | Family | Dolby Vision support |
 | --- | --- |
-| Intel Core 8th generation and newer | Supported |
-| Intel Core 7th generation, Kaby Lake | Supported, [HDMI qualification](INTEL-KABY-LAKE.md) |
-| Intel Core Ultra Series 1 / 2, including 200V | Supported |
-| Intel N-series, including N100 / N150 | Supported |
-| AMD Ryzen 2000G / 3000G and corresponding mobile APUs | Supported |
-| AMD Ryzen 4000 / 5000 APUs, 6000, 7030 / 7035, 7040 / 8040, 8000G, AI 300 | Supported |
-
-AMD entries refer to processors with integrated graphics, not every desktop CPU
-sharing the same Ryzen generation number.
+| Intel mobile processors with integrated graphics: Core 8th generation and newer, Core Ultra Series 1 / 2 including 200V, and N-series including N100 / N150 | Supported on native HDMI |
+| Intel desktop processors with integrated graphics: Core 8th generation and newer, and Core Ultra 200S | Supported on the motherboard’s native HDMI output |
+| Intel Core 7th generation, Kaby Lake | Supported on selected paths. [HDMI qualification](INTEL-KABY-LAKE.md) |
+| AMD Ryzen mobile APUs with Radeon graphics: 2000, 3000, 4000, 5000, 6000, 7030, 7035, 7040, 8040 and Ryzen AI 300 | Supported on native HDMI |
+| AMD Ryzen desktop APUs with Radeon graphics: 2000G, 3000G, 4000G, 5000G and 8000G | Supported on the motherboard’s native HDMI output |
 
 ## Dedicated graphics
 
@@ -24,6 +20,7 @@ sharing the same Ryzen generation number.
 | AMD Radeon RX 9000, RDNA 4 | RX 9070 / 9070 XT | DCN4 transport implemented; physical qualification pending |
 | AMD Radeon RX Vega M, DCE 11.22 | Vega M GL / GH | Supported, [transport](VEGA-M.md) |
 | Intel Arc A / B | A750, A770, B570, B580 | Supported, [firmware and HDMI](INTEL-ARC.md) |
+| Intel Iris Xe MAX, DG1 | Iris Xe MAX | Supported on an admitted native HDMI path. [Driver and HDMI](INTEL-ARC.md) |
 | NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Supported; matched [R580 driver](PASCAL.md), same image |
 | NVIDIA GeForce GTX 16, Turing | GTX 1650, 1660 | Supported |
 | NVIDIA GeForce RTX 20, Turing | RTX 2060, 2070, 2080 | Supported |
@@ -34,8 +31,7 @@ sharing the same Ryzen generation number.
 The AMD Dolby Vision driver admits selected DCN1.x,2.x,3.x and DCN4.01/4.2/4.2B
 display engines. DCN4's native color blocks and atomic admission are software
 tested; RX9000 HDMI byte preservation is not physically qualified here.
-Polaris RX400/500 and discrete Vega remain outside this allowlist. Vega-based
-Ryzen APUs listed above use a different display path.
+Polaris RX400/500 and discrete Vega remain outside the general allowlist. The experimental RX 550 path applies to device 1002:699f at UHD 23.976 Hz in standard TV-led Dolby Vision. Vega-based Ryzen APUs use a different display path.
 
 NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
 and a VAAPI-to-NVDEC bridge. The default open-module stack requires Turing or

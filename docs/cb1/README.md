@@ -1,9 +1,6 @@
-# R1.0.0 RC3 documentation
+# R1.0.0 documentation
 
-Current release: **R1.0.0 RC3**, **CB1 0.5**.
-
-Preview branch: [RC4 Update 3](RELEASE-RC4-PREVIEW-UPDATE3.md), adding SDR targets,
-HLG Dolby Vision Reference and the Input / Processing / Output information panel.
+See the [project README](../../README.md) for rendering circuits by source, HDMI compatibility and hardware recommendations.
 
 ## Playback
 
@@ -11,11 +8,14 @@ HLG Dolby Vision Reference and the Input / Processing / Output information panel
 | --- | --- |
 | [Features and downloads](../../README.md) | Profiles, rendering modes, captures and installation |
 | [Hardware](HARDWARE.md) | Supported Intel, AMD and NVIDIA GPU families |
-| [Performance benchmarks](BENCHMARKS.md) | RC3 on Intel N100 and AMD Ryzen 5 7430U, without the playback GUI |
+| [Image quality and performance](PERFORMANCE-GUIDE.md) | Reference vs Master Reference, video upscalers and recommended hardware |
+| [Historical RC3 benchmark](BENCHMARKS.md) | Standalone published RC3 results on Intel N100 and AMD Ryzen 5 7430U |
 | [Driver/output matrix](DRIVER-COVERAGE.md) | Dolby Vision V1/V2, HDR10/HLG and HDR10+ by driver |
 | [AMD HDMI 3D](3D.md) | MVC, frame packing, SBS/TAB and native Kodi setup |
 | [Playback settings](PLAYBACK.md) | TV profile, Master recovery, FEL upscaling, async and O controls |
 | [Processing](PROCESSING.md) | Mode behavior, metadata use and output limits |
+| [LLDV](LLDV.md) | EDID target, HDMI format selection and HDR10 output |
+| [Native playback](NATIVE-PLAYBACK.md) | Native Kodi paths and HDR10+ fallback |
 | [Audio information](AUDIO-INFORMATION.md) | Source codec/Atmos details and actual PCM, passthrough or transcoded output |
 | [CM2.9 to CM4 controls](../../CB1/docs/CM4-APPEND.md) | Optional metadata conversion, Auto/Auto 2 and independent L2 removal |
 | [Diagnostics](DIAGNOSTICS.md) | Issue reports and bounded playback logs |

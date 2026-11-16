@@ -12,12 +12,16 @@ metadata-guided HDR10+-to-Dolby Vision conversion.
 
 Intel, AMD and NVIDIA use their supported native-HDMI driver routes, an accepted
 dynamic-metadata transaction and at least 10-bit output. Native and converted
-HDR10+ share the output contract. HDR10+ stays native by default, including with
-a saved general HDR10 AI preference. Dolby Vision conversion requires explicit
-selection of the metadata-guided mode and an admitted Dolby Vision output.
+HDR10+ share the output contract. For HDR10+ sources, Kodi default uses ordinary
+HDR playback. Select HDR10+ Native to transmit the source dynamic metadata.
+The choice stays visible and is disabled unless both the HDMI driver and
+display advertise support. Dolby Vision conversion requires explicit selection of the
+metadata-guided mode and an admitted Dolby Vision output.
 [Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
 
 ## Metadata conversion
+
+**Purpose.** Convert Dolby Vision to HDR10+ by reconstructing the original image and generating dynamic HDR10+ metadata for each picture.
 
 This section describes **Dolby Vision to HDR10+**. The reverse direction is
 described [below](#hdr10-to-dolby-vision).
@@ -32,7 +36,7 @@ described [below](#hdr10-to-dolby-vision).
 - Do not tone-map pixels before sending the curve. The receiver applies it once.
 
 The curve reference is 992 nits, the largest nonzero value represented by the
-selected HDMI field. Packets that carry only statistics send a target of zero.
+selected HDMI field. It does not clip pixels or describe the TV's brightness.
 The top transmitted percentile supplies the receiver's normalization because
 this payload does not transmit MaxSCL.
 
@@ -51,6 +55,8 @@ is transmitted without luminance quantization; values 101..254 remain rejected.
 Changing receiver version cancels pending conversion metadata before reuse.
 
 ## HDR10+ to Dolby Vision
+
+**Purpose.** Play HDR10+ on a Dolby Vision display using its source scene statistics to generate Dolby Vision metadata. The decoded picture retains its grade.
 
 - Use validated single-window MaxSCL for the source peak, not the HDR10+ target display peak.
 - Estimate mean PQ from weighted PQ-percentile trapezoids, adapted from [AVDVPlus HistogramPlus](https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp). Linear AverageMaxRGB validates consistency; PQ(mean linear light) is not treated as mean PQ.

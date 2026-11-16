@@ -205,8 +205,7 @@ their matching presented picture. Invalid or missing metadata after activation
 keeps native fallback until a source or mode reset, avoiding repeated switching.
 
 HDR10+ target curves, saturation operations and multiple spatial windows are not
-universally translated to Dolby Vision. Native HDR10+ playback remains Kodi's
-default path and does not activate this conversion.
+universally translated to Dolby Vision. The explicit HDR10+ Native choice keeps authored metadata. Kodi default uses ordinary HDR10 playback.
 
 ## Performance controls and output
 
@@ -234,7 +233,7 @@ SDR policy mode 7 is reported as telemetry policy 8 because telemetry 7 already
 identifies HDR10+ Rendering. Committed SDR carries flag 32 and reports `sdr`;
 processing metadata stays distinct from transmitted metadata, which is empty.
 
-Original HLG is admitted only to the Reference AI circuit or native playback.
+Original HLG offers native playback, Dolby Vision Rendering and SDR conversion. [HLG engine contracts](../../CB1/docs/SDR-HLG.md)
 The source preference is independent of HDR10/HDR10+ and Dolby Vision. Source
 classification gives Dolby Vision configuration/RPU priority over HLG transfer,
 so P8.4/P10.4 cannot enter plain-HLG analysis. Layer imports retain original HLG

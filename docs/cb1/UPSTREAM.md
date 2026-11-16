@@ -4,9 +4,9 @@ LibreELEC is a 'Just enough OS' Linux distribution for the award-winning [Kodi](
 
 **Documentation**
 
-- [CONTRIBUTING.md](../../CONTRIBUTING.md): how to report issues and submit pull requests
-- [STANDARDS.md](../../STANDARDS.md): coding standards for build scripts and package files
-- [packages/README.md](../../packages/README.md): detailed guide to `package.mk` structure and variables
+- [CONTRIBUTING.md](../../.github/CONTRIBUTING.md): how to report issues and submit pull requests
+- [STANDARDS.md](../STANDARDS.md): coding standards for build scripts and package files
+- [packages/README.md](https://github.com/CroqueMr/libreelec-x86-DV/blob/91052933890da72d211373183aa1d1e398df75d9/packages/README.md): detailed guide to `package.mk` structure and variables
 
 **Issues & Support**
 

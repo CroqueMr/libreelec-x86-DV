@@ -1,9 +1,10 @@
 # Dolby Vision Master Reference
 
-Circuit: `CB1-DVDVMR.0.6`. Engine: `CB1 0.5`.
+Circuit version **1.0** · Engine **CB1 1.0**
+
+**Purpose.** Preserve the highest reconstruction precision when sending Dolby Vision to a TV-led display. Use exact integer reconstruction and dedicated FEL filters on supported sources.
 
 Opt-in integer reconstruction for source-domain Dolby Vision output.
-Reference playback and the existing conversion circuits are unchanged.
 
 ## Admitted output
 

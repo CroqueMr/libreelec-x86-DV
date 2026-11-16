@@ -4,6 +4,8 @@ The existing renderer, import, spatial fit and policy presentation owner remain 
 
 ## SDR values and presentation
 
+**Purpose.** Convert Dolby Vision, HDR10 or HDR10+ to the selected SDR display target. For Dolby Vision, reconstruct the source and applicable FEL before mapping.
+
 `dvbridge_policy.sdr` is independent of `tv` and the Expert HDR calibration. `DVBRIDGE_SDR_REFERENCE` resolves to 100 nits, gamma 2.4 and zero black. `DVBRIDGE_SDR_BRIGHT` resolves to 200 nits, gamma 2.2 and zero black. `DVBRIDGE_SDR_CUSTOM` accepts finite peak 20–500 nits, gamma 1.8–2.8 and black 0–5 nits strictly below peak. These are rendering references, not brightness measurements. `dvbridge_sdr_target(profile, &peak, &gamma, &black)` resolves and validates values without changing the profile.
 
 ```c
@@ -23,9 +25,19 @@ DV reconstruction retains RPU source luminance bounds and L1 maximum/average lum
 
 ## Plain HLG to DV Reference
 
+**Purpose.** Play plain HLG on a Dolby Vision display. Normalize the HLG image to a BT.2100 reference before generating scene metadata.
+
 The existing `cb1_hdr10_ai_submit` and `dvbridge_render_hdr10_ai_rgb` / packed / overlay calls accept original HLG BT.2020 pictures. Rendering accepts HLG only in Standard/Reference mode. Actual DV carrying RPU, including an HLG base, remains on its DV reconstruction route and is rejected by plain-HLG ingress.
 
 `cb1_hlg_reference_color` pins a BT.2100 reference display at 1000 nits, zero black and system gamma 1.2. libplacebo performs inverse HLG OETF and the luminance-dependent BT.2020 OOTF, then encodes PQ. Model analysis normalizes the complete source before shared extrema/statistics/quantiles and progressive preview downsampling. Source-plane PQ-only shortcuts are disabled for HLG. Movie rendering independently performs the same reference conversion from the original HLG source. HLG values are never merely relabeled as PQ. Model prefix, asynchronous identity, temporal tracking and retirement remain shared. Generated metadata contains no authored L2/L8 trims.
+
+## Plain HLG to SDR
+
+**Purpose.** Convert plain HLG to the chosen SDR display target while using its original HLG transfer for input processing.
+
+The SDR output policy accepts original HLG BT.2020. It retains the HLG transfer on import, resolves the source to the selected SDR target and presents it with SDR signaling. Dolby Vision with an HLG base and RPU remains on the Dolby Vision reconstruction path. The default SDR output gamut is BT.709. BT.2020 SDR is an optional output on compatible RGB links.
+
+[HLG SDR playback integration](https://github.com/CroqueMr/libreelec-x86-DV/blob/91052933890da72d211373183aa1d1e398df75d9/projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-hlg-sdr-playback.patch) · [SDR target setup](../../docs/cb1/PLAYBACK.md#sdr-rendering-target)
 
 ## Qualification
 
