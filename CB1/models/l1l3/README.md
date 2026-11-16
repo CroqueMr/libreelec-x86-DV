@@ -17,8 +17,8 @@ without AI inference. Native HDR10+ playback does not use this model.
 | Native integrity contract | `contract/cb1_l1l3_bundle.h` |
 
 The bundle is the exact runtime artifact. File hashes are pinned in
-[the model dependency lock](../../config/hdr10-ai-dependencies.json) and checked by
-[`verify.py`](../../tools/verify.py).
+[the model dependency lock](https://github.com/CroqueMr/libreelec-x86-DV/blob/91052933890da72d211373183aa1d1e398df75d9/CB1/config/hdr10-ai-dependencies.json) and checked by
+[`verify.py`](https://github.com/CroqueMr/libreelec-x86-DV/blob/91052933890da72d211373183aa1d1e398df75d9/CB1/tools/verify.py).
 No training clips, extracted frames or training dataset are included.
 
 Model assets are distributed under [GPL-2.0-or-later](LICENSE.md).

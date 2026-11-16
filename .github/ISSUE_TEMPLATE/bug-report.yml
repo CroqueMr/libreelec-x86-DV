@@ -1,28 +1,29 @@
-name: Playback or hardware report
-description: Report an issue with this LibreELEC community build.
+name: Bug report
+description: Report a playback, HDMI, hardware, or installation problem.
+title: "[Bug] "
 body:
   - type: input
-    id: release
+    id: build
     attributes:
-      label: Release version
+      label: Build version
     validations:
       required: true
   - type: textarea
     id: hardware
     attributes:
-      label: Hardware and HDMI route
-      description: CPU, GPU, TV, receiver and any adapters.
+      label: Hardware and HDMI chain
+      description: Include the exact GPU and your TV or projector, receiver and any adapters.
     validations:
       required: true
   - type: textarea
-    id: playback
+    id: reproduction
     attributes:
-      label: Playback mode and behavior
-      description: Source profile, codec, resolution, frame rate, selected mode and reproduction steps.
+      label: Steps to reproduce
+      description: Include the source format, selected rendering circuit, expected result and what actually happened.
     validations:
       required: true
-  - type: textarea
+  - type: input
     id: log
     attributes:
-      label: Kodi log
-      description: Attach kodi.log. Remove personal data and credentials. Do not upload movies or SDKs.
+      label: Debug log short URL
+      description: Enable debug logging, reproduce the problem, then upload the latest log from Settings → LibreELEC → System → Submit Log.

@@ -1,7 +1,26 @@
 # Interface screenshots
 
+## Player Information and Quick Switch
+
+Player Information was captured on the AMD Ryzen 5 7430U with 4K Dolby Vision
+Profile 7 FEL at 23.976 fps. Quick Switch uses an Intel capture from *1917*.
+The availability labels were removed from the Quick Switch image for documentation.
+
+| Image | Panel |
+| --- | --- |
+| [Player Information](player-information-amd-1917-bright.png) | Master Reference active with Full FEL and TV-led output. The image was brightened slightly, the seek bar was removed, and the Drop / Skip counter was retouched to show 0 / 0 for illustration. [Original capture](player-information-amd-1917.png) |
+| [Quick Switch](quick-switch-intel-1917.png) | The Master Reference row is active and highlighted. |
+
+## Earlier captures
+
+| Image | Source |
+| --- | --- |
+| [Playback settings](playback-settings-4modes-r2.png) | Intel N100 running 4Modes-r2. |
+| [Compact Quick Switch](quick-switch-compact-pr165.png) | Compact layout from [PR #165](https://github.com/CroqueMr/libreelec-x86-DV/pull/165). |
+| [Blu-ray BD-J menu](bluray-bdj-menu.jpg) | Back to the Future menu from the Blu-ray ISO test campaign. |
+
 Native captures illustrate the interface, not HDR/Dolby Vision image fidelity or
-sustained performance. Current pages use the two **RC3 sRGB previews** below,
+sustained performance. The two **RC3 sRGB previews** below were
 captured on an Intel N100 running the published RC3 image. Their BT.2020/PQ
 captures are converted for SDR browsers without replacing labels or changing
 playback processing.

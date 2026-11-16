@@ -1,23 +1,24 @@
 # Engine and circuits
 
-Published RC3 engine: **CB1 0.5**. Each end-to-end rendering circuit has its own version.
+**CB1 1.0** is the engine version for R1.0.0. The table lists the identifiers reported by Player Information.
 
 | Circuit | Version |
 | --- | --- |
-| Dolby Vision to Dolby Vision Reference | `CB1-DVDVR.0.6` |
-| Dolby Vision Master Reference | `CB1-DVDVMR.0.6` |
-| Dolby Vision Master Reference, IPT-PQc2 output | `CB1-DVDVMRI.0.2` |
-| Dolby Vision to HDR10 Rendering | `CB1-DVHDR10B.0.4` |
-| LLDV Reference – HDR10 Output | `CB1-DVHDR10X.0.12` |
-| LLDV Reference – Native | `CB1-DVLLDV.0.1` |
-| Dolby Vision to HDR10+ | `CB1-DVHDR10P.0.1` |
-| Dolby Vision to Dolby Vision Adaptive HDR Mapping | `CB1-DVDVA.0.11` |
-| HDR10 to Dolby Vision Rendering, AI-assisted | `CB1-HDR10DVR.0.1.3` |
-| HDR10 to Dolby Vision Adaptive HDR Mapping, AI-assisted | `CB1-HDR10DVA.0.8` |
-| HDR10+ to Dolby Vision Rendering, metadata-guided | `CB1-HDR10PDVR.0.2` |
-| Dolby Vision to SDR Rendering | `CB1-DVSDR.0.1` |
-| HDR10/HDR10+ to SDR Rendering | `CB1-HDR10SDR.0.1` |
-| Plain HLG to Dolby Vision Rendering | `CB1-HLGDVR.0.1` |
+| Dolby Vision to Dolby Vision Reference | `CB1-DVDVR.1.0` |
+| Dolby Vision Master Reference | `CB1-DVDVMR.1.0` |
+| Dolby Vision Master Reference, IPT-PQc2 output | `CB1-DVDVMRI.1.0` |
+| Dolby Vision to HDR10 Rendering | `CB1-DVHDR10B.1.0` |
+| LLDV Reference – HDR10 Output | `CB1-DVHDR10X.1.0` |
+| LLDV Reference – Native | `CB1-DVLLDV.1.0` |
+| Dolby Vision to HDR10+ | `CB1-DVHDR10P.1.0` |
+| Dolby Vision to Dolby Vision Adaptive HDR Mapping | `CB1-DVDVA.1.0` |
+| HDR10 to Dolby Vision Rendering, AI-assisted | `CB1-HDR10DVR.1.0` |
+| HDR10 to Dolby Vision Adaptive HDR Mapping, AI-assisted | `CB1-HDR10DVA.1.0` |
+| HDR10+ to Dolby Vision Rendering, metadata-guided | `CB1-HDR10PDVR.1.0` |
+| Dolby Vision to SDR Rendering | `CB1-DVSDR.1.0` |
+| HDR10/HDR10+ to SDR Rendering | `CB1-HDR10SDR.1.0` |
+| Plain HLG to SDR | `CB1-HLGSDR.1.0` |
+| Plain HLG to Dolby Vision Rendering | `CB1-HLGDVR.1.0` |
 
 Identifiers are defined in `src/cb1_circuit.c`. A circuit revision changes when
 its processing contract or rendered result changes. Player UI and driver-only

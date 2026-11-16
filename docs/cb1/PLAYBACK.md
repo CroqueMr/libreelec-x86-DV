@@ -6,28 +6,24 @@ modes appear during playback. Unavailable modes show their blocking reason.
 
 | Source | Available processing |
 | --- | --- |
-| Dolby Vision | Dolby Vision : Reference, Dolby Vision : Master Reference, Dolby Vision : Adaptive HDR Mapping, Kodi : Default, HDR10 : Rendering, HDR10 : LLDV Reference conversion, HDR10+ : Conversion, SDR : Conversion, Dolby Vision : LLDV Reference |
-| HDR10 | Dolby Vision : Rendering, Dolby Vision : Adaptive HDR Mapping, HDR10 : Native, SDR : Conversion |
-| HDR10+ | Dolby Vision : Rendering, HDR10+ : Native, Kodi : Default, SDR : Conversion |
-| HLG | Dolby Vision : Rendering, HLG : Native, SDR : Conversion |
-| SDR / 3D | Kodi : Default |
+| Dolby Vision | Reference, Master Reference, Adaptive HDR Mapping, HDR10 Rendering, HDR10 : LLDV Reference conversion, Dolby Vision : LLDV Reference, HDR10+ Rendering, SDR Rendering or Kodi default |
+| HDR10 | Dolby Vision Rendering, Dolby Vision : Adaptive HDR Mapping, SDR Rendering or Kodi default |
+| HDR10+ | HDR10+ Native, Kodi default for ordinary HDR10, Dolby Vision Rendering or SDR Conversion |
+| HLG | HLG Native, Dolby Vision Rendering or SDR Conversion |
+| SDR / 3D | Native Kodi playback |
 
 The **Dolby Vision default playback**, **HDR10 default playback**, **HDR10+ default playback**
 and **HLG default playback** selectors store independent defaults. Their right-hand
 values show the saved choices, including the Dolby Vision conversion method.
 Opening or reopening a file, restarting playback or advancing the playlist uses
-that source's default. A fresh profile starts with **Dolby Vision : Master Reference**,
-**HDR10 : Native**, **Kodi : Default** for HDR10+ and **HLG : Native**.
-HLG-based Dolby Vision with RPU uses the Dolby Vision default.
+that source's default. HLG-based Dolby Vision with RPU uses the Dolby Vision default.
 
 Quick rendering selection through **O** or the video-settings button changes only
 the current playback session. Pause, seek, decoder reopening and display recreation
 retain that choice. These live choices never save over a default. Editing a default
 during playback affects the next file; calibration and other tuning still apply live.
-**Kodi : Default** uses Kodi's ordinary playback path. For HDR10+ sources it
-sends HDR10. **HDR10+ : Native** sends authored dynamic metadata on a compatible
-HDMI chain. An unavailable requested circuit shows its reason and cannot silently
-switch to another circuit. Preparation can remain pending.
+**Kodi default** uses native Kodi playback. An unavailable requested circuit shows
+its reason and cannot silently switch to another circuit; preparation can remain pending.
 
 ## TV profile
 
@@ -74,9 +70,8 @@ At Expert level:
 
 - **FEL upscaling**: VAAPI, Bilinear (GPU) or Reference (GPU). VAAPI falls back to
   GPU bilinear when unavailable. The enhancement layer is not discarded.
-- **Asynchronous frame preparation**: enabled by default. Eligible CB1 modes
-  prepare at most one next image while the current image is displayed. Changes
-  apply to the next video. Native Kodi and fallback scheduling are unchanged.
+Eligible CB1 modes prepare the next frame asynchronously when needed. Native
+Kodi retains its own scheduling.
 
 Master Reference uses its own reference FEL filters, independently of the saved
 FEL preference.
@@ -170,11 +165,7 @@ still apply; no automatic aspect-ratio correction is inferred.
 **Original size** keeps source-sized placement within the selected HDMI mode;
 it does not request a matching HDMI resolution by itself. **Auto** avoids
 unnecessary near-native UHD enlargement while retaining normal scaling for
-smaller sources. **Dolby Vision active area** fits each picture's L5 active area
-instead of the encoded frame when this enlarges the picture. For example, the
-windowboxed 2.39:1 scenes of a 1.43:1 IMAX master fill the width, and the IMAX
-scenes stay unchanged. Without L5, it behaves as Normal. Manual zoom remains
-available.
+smaller sources. Manual zoom remains available.
 
 ## Bitmap subtitles and Blu-ray menus
 
@@ -221,7 +212,24 @@ The independent SDR target offers Reference (100 nits, gamma 2.4), Bright room
 gamma 1.8–2.8 and black floor 0–5 nits below the peak. These are rendering
 targets, not measurements of the screen. HDR calibration is preserved separately.
 
-HLG has only Dolby Vision Rendering and native Kodi. The reference
+Plain HLG offers native playback, Dolby Vision Rendering and SDR Conversion. The reference
 path normalizes original HLG with the BT.2100 1000-nit / gamma 1.2 reference
 before analysis; it does not invent authored L2/L8 trims. HLG-base Dolby Vision
 P8.4/P10.4 with RPU remains Dolby Vision and retains full reconstruction.
+
+
+### Dolby Vision LLDV format selection
+
+Open **Dolby Vision default playback** and select **Dolby Vision : LLDV Reference**.
+The format selector lists HDMI formats and a reason for unavailable choices.
+Automatic keeps the driver and TV compatibility checks. Player Information
+reports the format actually committed, including the experimental indicator
+for forced 4:2:2. The TV characteristics group shows the target peak and black
+level read from the Dolby Vision EDID.
+
+On supported AMD native-HDMI hardware, LLDV requires the `amdgpu.dv_lldv=1`
+boot option. Kodi shows the driver refusal when that option is off. The native
+4:2:2 path on the Ryzen 5 7430U was qualified at UHD 23.976/24 Hz with 10 useful
+bits. Where Kodi and the driver can use only forced 4:2:2, the selector labels
+that format experimental. For the qualified AMD paths, the HDMI carrier has
+12 bits and carries 10 bits of precision.
