@@ -102,8 +102,8 @@ Use a native HDMI port wired to the GPU. DisplayPort and USB-C to HDMI converter
 
 ## Recommended hardware
 
-- **Recommended minimum for native playback up to 4K60 and conversions below 30 fps** — AMD Ryzen 5 **3500U**, Intel **N100**, or better. Includes full FEL in TV-led Dolby Vision Master Reference.
-- **LLDV Reference and demanding conversions above 30 fps** — AMD Ryzen 3 **7330U**, Intel Core **i3-1315U**, or faster graphics.
+- **Recommended minimum for native playback up to 4K60 and conversions below 30 fps** — AMD Ryzen 5 **3500U**, Intel **N100**, or better. Includes full FEL in TV-led Dolby Vision Master Reference
+- **LLDV Reference, demanding conversions circuit above 30 fps** — AMD Ryzen 3 **7330U**, Intel Core **i3-1315U**, or faster graphics.
 
 Both tiers require native HDMI. [Performance details](docs/cb1/PERFORMANCE-GUIDE.md#hardware-reference-points)
 
