@@ -1864,6 +1864,7 @@ struct player_led_render {
     float area[4];
     pl_shader_obj *state;
     unsigned depth;
+    const struct dvbridge_native_overlay *gui;
     bool masked, rendered;
 };
 
@@ -1880,9 +1881,57 @@ static bool player_led_convert(pl_shader shader,const struct pl_raw_primaries *f
         .body="color.rgb=player_led_basis*color.rgb;\n",.description="LLDV linear RGB basis"});
 }
 
+static bool player_led_gui(pl_shader shader, const struct player_led_render *r)
+{
+    const struct dvbridge_policy *policy = &r->plan.creative.policy;
+    const struct pl_raw_primaries gamut = cb1_display_primaries(policy);
+    const pl_matrix3x3 matrix = pl_get_color_mapping_matrix(
+        pl_raw_primaries_get(PL_COLOR_PRIM_BT_709), &gamut, PL_INTENT_RELATIVE_COLORIMETRIC);
+    float columns[3][3];
+    for (int row=0; row<3; row++)
+        for (int column=0; column<3; column++)
+            columns[column][row] = matrix.m[row][column];
+    const float scale = 203.0f / policy->tv.peak_nits;
+    const struct pl_shader_var vars[] = {
+        {.var=pl_var_mat3("ll_gui_matrix"), .data=columns, .dynamic=true},
+        {.var=pl_var_float("ll_gui_scale"), .data=&scale, .dynamic=true},
+    };
+    const struct pl_shader_desc desc[] = {
+        {.desc={.name="ll_gui_input",.type=PL_DESC_SAMPLED_TEX},
+         .binding={.object=r->gui->texture,.sample_mode=PL_TEX_SAMPLE_NEAREST}},
+        {.desc={.name="ll_gui_degamma",.type=PL_DESC_SAMPLED_TEX},
+         .binding={.object=r->gui->degamma,.sample_mode=PL_TEX_SAMPLE_LINEAR}},
+    };
+    return pl_shader_custom(shader,&(struct pl_custom_shader){
+        .input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .variables=vars,.num_variables=2,.descriptors=desc,.num_descriptors=2,
+        .description="Blend Kodi GUI in display-linear RGB",
+        .header="vec4 ll_gui_blend(vec4 video,ivec2 pix){\n"
+                "  pix.y=textureSize(ll_gui_input,0).y-1-pix.y;\n"
+                "  vec4 ui=texelFetch(ll_gui_input,pix,0);\n"
+                "  if(ui.a==0.0)return video;\n"
+                "  float red=textureLod(ll_gui_degamma,vec2(ui.r,.5),0.0).r;\n"
+                "  vec3 rgb=vec3(red);\n"
+                "  if(ui.r!=ui.g || ui.r!=ui.b){\n"
+                "    rgb.g=textureLod(ll_gui_degamma,vec2(ui.g,.5),0.0).r;\n"
+                "    rgb.b=textureLod(ll_gui_degamma,vec2(ui.b,.5),0.0).r;\n"
+                "  }\n"
+                "  rgb=clamp(ll_gui_matrix*rgb*ll_gui_scale,0.0,1.0);\n"
+                "  return vec4(mix(clamp(video.rgb,0.0,1.0),rgb,ui.a),video.a);\n"
+                "}\n"
+                "#define CB1_LLDV_FINISH(color) ll_gui_blend((color),ivec2(gl_FragCoord.xy))\n",
+    });
+}
+
 static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params *p)
 {
     struct player_led_render *render=priv;
+    const struct pl_custom_shader without_gui = {
+        .input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
+        .prelude="#define CB1_LLDV_FINISH(color) (color)\n",
+    };
+    if (!(render->gui ? player_led_gui(p->sh,render) : pl_shader_custom(p->sh,&without_gui)))
+        return (struct pl_hook_res){.failed=true};
     if(render->masked){
         const struct pl_shader_var area={.var=pl_var_vec4("player_led_area"),
             .data=render->area,.dynamic=true};
@@ -1890,7 +1939,8 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
             .variables=&area,.num_variables=1,
             .body="vec2 pos=gl_FragCoord.xy;\n"
                   "if(any(lessThan(pos,player_led_area.xy)) || "
-                  "any(greaterThanEqual(pos,player_led_area.zw)))return vec4(0.0,0.0,0.0,1.0);\n",
+                  "any(greaterThanEqual(pos,player_led_area.zw)))"
+                  "return CB1_LLDV_FINISH(vec4(0.0,0.0,0.0,1.0));\n",
             .description="Blank outside the Dolby Vision active picture"};
         if(!pl_shader_custom(p->sh,&mask))return (struct pl_hook_res){.failed=true};
     }
@@ -1919,7 +1969,8 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
     const struct pl_custom_shader capture={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .header=lift_black?"bool player_led_black;\n":NULL,
         .body=lift_black?"player_led_black=all(lessThanEqual(color.rgb,vec3(0.0)));\n":
-            "if(all(lessThanEqual(color.rgb,vec3(0.0))))return vec4(0.0,0.0,0.0,1.0);\n",
+            "if(all(lessThanEqual(color.rgb,vec3(0.0))))"
+            "return CB1_LLDV_FINISH(vec4(0.0,0.0,0.0,1.0));\n",
         .description="Preserve exact signal black"};
     if(preserve_black && !pl_shader_custom(p->sh,&capture))return (struct pl_hook_res){.failed=true};
     struct pl_color_map_params mapper=pl_color_map_default_params;
@@ -1951,7 +2002,8 @@ static struct pl_hook_res player_led_map(void *priv,const struct pl_hook_params 
     struct pl_shader_var output_scale={.var=pl_var_float("player_led_relative"),.data=&relative,.dynamic=true};
     const struct pl_custom_shader output={.input=PL_SHADER_SIG_COLOR,.output=PL_SHADER_SIG_COLOR,
         .variables=&output_scale,.num_variables=1,
-        .body="color.rgb*=player_led_relative;\n",
+        .body="color.rgb*=player_led_relative;\n"
+              "color=CB1_LLDV_FINISH(color);\n",
         .description="Store linear RGB relative to target peak"};
     render->rendered=cb1_hdr10_expert_trim(p->sh,&plan->creative,plan->target.primaries) &&
         pl_shader_custom(p->sh,&output);
@@ -1998,10 +2050,13 @@ static bool player_led_options(struct player_led_render *render,struct dvbridge_
 static enum cb1_master_status render_player_led(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
     size_t bytes,double pts,double el_pts,pl_tex target,pl_buf host,struct dvbridge_creative_plan *applied,
-    unsigned rendered_rows[2])
+    unsigned rendered_rows[2],const struct dvbridge_native_overlay *gui)
 {
     if(!r || !source || !target)return CB1_MASTER_INVALID;
-    struct player_led_render render={.state=&r->creative_state};
+    if(gui && (!gui->texture || !gui->degamma || gui->input_pq ||
+        gui->texture->params.w != target->params.w || gui->texture->params.h != target->params.h))
+        return CB1_MASTER_UNSUPPORTED;
+    struct player_led_render render={.state=&r->creative_state,.gui=gui};
     const bool paired=source->enhancement_layer && pts==el_pts;
     const int w=target->params.w,h=target->params.h;
     const struct dvbridge_geometry geometry={w,h,0,0,w,h,w,h};
@@ -2013,10 +2068,11 @@ static enum cb1_master_status render_player_led(struct dvbridge_renderer *r,
     render.masked=area[0]!=0 || area[1]!=0 || area[2]!=w || area[3]!=h;
     render.depth=av_dovi_get_header(metadata)->vdr_bit_depth;
     const struct pl_hook hook={.stages=PL_HOOK_OUTPUT,.input=PL_HOOK_SIG_COLOR,
-        .priv=&render,.hook=player_led_map,.signature=player_led_hook_signature};
+        .priv=&render,.hook=player_led_map,
+        .signature=player_led_hook_signature+(gui?2:0)};
     const int active_rows[]={area[1],area[3]};
     enum cb1_master_status status=cb1_master_reconstruct(r->renderer,source,metadata,bytes,
-        pts,el_pts,target,&hook,active_rows,host);
+        pts,el_pts,target,&hook,gui?NULL:active_rows,host);
     if(status!=CB1_MASTER_READY)return status;
     if(!render.rendered)return CB1_MASTER_FAILED;
     if(applied)*applied=render.plan.creative;
@@ -2031,7 +2087,15 @@ enum cb1_master_status dvbridge_render_player_led(struct dvbridge_renderer *r,
     const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
     size_t bytes,double pts,double el_pts,pl_tex target,struct dvbridge_creative_plan *applied)
 {
-    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,target,NULL,applied,NULL);
+    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,target,NULL,applied,NULL,NULL);
+}
+
+enum cb1_master_status dvbridge_render_player_led_gui(struct dvbridge_renderer *r,
+    const struct dvbridge_policy *policy,const struct pl_frame *source,const void *metadata,
+    size_t bytes,double pts,double el_pts,pl_tex target,const struct dvbridge_native_overlay *gui,
+    struct dvbridge_creative_plan *applied)
+{
+    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,target,NULL,applied,NULL,gui);
 }
 
 enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer *r,
@@ -2040,7 +2104,7 @@ enum cb1_master_status dvbridge_render_player_led_host(struct dvbridge_renderer 
     unsigned active_rows[2])
 {
     if(!host)return CB1_MASTER_INVALID;
-    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,scratch,host,applied,active_rows);
+    return render_player_led(r,policy,source,metadata,bytes,pts,el_pts,scratch,host,applied,active_rows,NULL);
 }
 
 pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *r, pl_tex source,

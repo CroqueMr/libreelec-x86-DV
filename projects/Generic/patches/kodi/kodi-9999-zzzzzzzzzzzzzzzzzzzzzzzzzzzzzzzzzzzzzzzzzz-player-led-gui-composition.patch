@@ -1,0 +1,67 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -2924,11 +2924,23 @@
+   params.h = geometry.source_height;
+   params.format = format;
+   params.sampleable = params.renderable = true;
+-  if (m_playerLed && format && pl_tex_recreate(gpu, &m_playerLedSource, &params) &&
+-      dvbridge_render_player_led(m_renderer, &policy, &source, metadata.Data(), metadata.Size(),
+-          pts, elPts, m_playerLedSource, &m_playerLedPlan) == CB1_MASTER_READY)
+-    m_playerLedPicture = dvbridge_fit_player_led(m_renderer, m_playerLedSource,
+-                                                 &m_playerLedFitted, geometry);
++  if (m_playerLed && format && pl_tex_recreate(gpu, &m_playerLedSource, &params))
++  {
++    const bool fullRaster = geometry.target_width == geometry.source_width &&
++        geometry.target_height == geometry.source_height &&
++        dvbridge_geometry_source(geometry,crop) && dvbridge_geometry_destination(geometry,dest) &&
++        !crop[0] && !crop[1] && crop[2] == params.w && crop[3] == params.h &&
++        !dest[0] && !dest[1] && dest[2] == params.w && dest[3] == params.h;
++    if (fullRaster && m_nativeOverlayEnabled)
++    {
++      m_guiComposed = dvbridge_render_player_led_gui(m_renderer, &policy, &source, metadata.Data(),
++          metadata.Size(),pts,elPts,m_playerLedSource,&m_nativeOverlay,&m_playerLedPlan) == CB1_MASTER_READY;
++    }
++    if (m_guiComposed ||
++        dvbridge_render_player_led(m_renderer, &policy, &source, metadata.Data(), metadata.Size(),
++          pts, elPts,m_playerLedSource,&m_playerLedPlan) == CB1_MASTER_READY)
++      m_playerLedPicture = dvbridge_fit_player_led(m_renderer,m_playerLedSource,&m_playerLedFitted,geometry);
++  }
+   return m_playerLedPicture != nullptr;
+ }
+ 
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -200,7 +200,10 @@
+   bool Advanced() const { return m_advanced; }
+   bool SetNativeOverlay(unsigned texture, unsigned degamma, unsigned pq,
+                         const CRect& bounds, uint64_t content, bool inputPQ, bool optimized = false);
+-  bool NativeOverlayComposed() const { return m_direct && m_nativeOverlayEnabled; }
++  bool NativeOverlayComposed() const
++  {
++    return (m_playerLed && m_guiComposed) || (m_direct && m_nativeOverlayEnabled);
++  }
+   bool NativeOverlayPrimed() const { return m_nativeOverlayPrimed; }
+   // GUI or subtitles will cover the next picture: send a full-raster L5.
+   void SetOverlayVisible(bool visible);
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -3357,8 +3357,14 @@
+   // The TV masks L5 margins. Keep controls/subtitles in letterbox bars visible.
+   m_dvBridge->SetOverlayVisible((guiAvailable && GetGUIElementCount()) || m_dvOverlays);
+   // Prime the subtitle shader once; empty frames retain the lean native shader.
+-  const bool nativeOverlay = !m_hdrConversion && !m_dvBridge->PlayerLed() &&
+-      (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed())) &&
++  // Captures and PQ subtitles still use the separate composition pass.
++  const bool playerLedGui = m_dvBridge->PlayerLed() && !capturing && fullGUI &&
++      !m_dvOverlays && !m_dvPQSubtitleDraws && GetOutputBitDepth() == 8 &&
++      GetGfxContext().GetStereoMode() == RenderStereoMode::OFF &&
++      (!capture || capture->TakeActive(KODI::RENDERING::CAPTURE::CaptureContent::VIDEO).empty());
++  const bool nativeOverlay = !m_hdrConversion &&
++      (m_dvBridge->PlayerLed() ? playerLedGui :
++       (fullGUI || subtitlesOnly || (overlayFree && !m_dvBridge->NativeOverlayPrimed()))) &&
+       m_guiFbo.IsValid() && m_guiFboWidth == m_nWidth && m_guiFboHeight == m_nHeight && m_compositeShader;
+   const bool nativeSubtitles = m_dvBridge->SetNativeOverlay(
+       nativeOverlay ? (pqSubtitles ? m_dvPQSubtitleFbo.Texture() : m_guiFbo.Texture()) : 0,
