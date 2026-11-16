@@ -62,6 +62,9 @@ pl_tex dvbridge_fit_player_led(struct dvbridge_renderer *renderer, pl_tex source
  * surfaces are GLES 2D textures on the renderer's current context. GLES
  * 3.1 with an immutable carrier allows paired compute packing. No RPU,
  * presentation state or HDMI signalling is generated. Use only on success. */
+bool dvbridge_resolve_player_led_rgb10(struct dvbridge_renderer *renderer,
+    const struct dvbridge_policy *policy, pl_tex linear, pl_tex rgb10, bool flip_y);
+
 bool dvbridge_pack_player_led_422(struct dvbridge_renderer *renderer,
     const struct dvbridge_policy *policy, pl_tex linear, pl_tex carrier,
     unsigned bits, bool flip_y);

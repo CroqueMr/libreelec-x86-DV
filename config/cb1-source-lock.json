@@ -110,7 +110,7 @@
     "tests/cb1/test_playback_stall_diagnostics.py": "9b6fa8af493e42e6e879637fd93e1e09899624344f4c01f411cad1c1e9d3d968",
     "tests/cb1/test_dcn4_transport.py": "d7f7869c68da653efcb7e187bae3a0b0154687fa82e15c6e517121255ff05e4f",
     "tests/cb1/dcn4_transport.c": "63284b5b2cef0bb2f4be1eced5a9b52358e834a1afc8d4d1b8eeeac91e15ab2a",
-    "tests/cb1/amd_dv_atomic.c": "ef3b31ba160d418bd35ef4cb2d7915c259e397d156335d68ff2a57dcb794fd4c",
+    "tests/cb1/amd_dv_atomic.c": "287b1f5d4597a4ee8f79867cbe191d325bb1a3c3e2f9a4220283ac3a2527a8da",
     "tests/cb1/test_bluray_pairing.py": "4f14cfce8f8f320ebd38f65a4507228c01f74f55946c36f8c9369ae4808aedca",
     "tests/cb1/test_bluray_el_preroll.py": "f3f849acae74763fb5416e9f8e95223fff66b426a0cbcdb293ccf683f929f430",
     "tests/cb1/test_dual_carriage.py": "4c8798ebc2b590d7f3dd6cf9d695d9a5427a91b5ff004045d40e1413a9c1dafd",
@@ -292,7 +292,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": "ff99995772ecaecbf910b93dfd62a8a2e572a97c12111d8ba76849bede4adad6",
     "docs/superpowers/specs/2026-11-09-sdr-hlg-player-info.md": "34ceb3f5f59f8ec89a733278055417f76cbb53694b1fb23331bcef3218d67d9f",
     "docs/cb1/KODI-INFORMATION.md": "a2293e08036e8b1e69c4c825ac360043c1f26c0097577e83f82bca7b71ff72d9",
-    "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": "5a5e9fb0476ba8fa40c143734defdf3f89d21047ee8483af05c855ddfc911fa1",
+    "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": "e83caf602463c8e410d9e966e228592efc04e028888ca0ab29b616d881f9d19f",
     "tests/cb1/test_sdr_final_gui.py": "7b4c60ee3aeeca091b6d4001b9bcc46df34f08dd585a806085cfe1ea29e5fd40",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ai.c": "89b8ff230c5e3f7112cc8777350af923d0572a4f68b8248c8133ec9c22dd55ba",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.c": "1858268a2e6ce2f76c827a871a88b6c82ea4c5099f2e0c18e4c9c9302f6f7a97",
@@ -302,10 +302,10 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "560dbfb112f687461ef9f394d867188724dbbd74135329876325fde4cc793392",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "cb704114ed95ebc2d6c50aa410f71ec1eb1a74f6c94bfd18d66c09b0e1331032",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "372986bc8bacd0cb68ca4af440a0b255e2954b1f357cfe84a3fbb9199b8b561d",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "f13ab74c1a21547d0ff81c9dee8d94ced67ee2bf0e85bc7c724eb5c1e5ab6f4a",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "eea158be6360e4d9246afcdb77db34590e5115d3fe217985a194693dd5d28528",
     "tests/cb1/test_diagnostics_runtime.py": "54945174fcad0318a097e9b5447ab5c6e277128433f7e181b945c92430bbe4af",
     "tests/cb1/test_fel_facts.py": "39717d8a179e5f2f71798f5a9382a6476aba23dfaf0047e7513387aaebc5461c",
-    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "ec0d67ddc059e859d51acd34260b0c8966445912c6283a08ff74541882235da5",
+    "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "dc7fb62b80d85327f0a87c32f4972567b06d8063752ec105214de2180d5caeb3",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "0257bdfe0ae6c0963b3dd91b0548e518e24e1ec46dba446222dff87cca113045",
     "README.md": "c9142345089e9eb7a81f63542547032ba87cb82e997bf809b76cd45cff4d13de",
     "docs/cb1/README.md": "c9449ccf4729d7fb282c52e1f94cbf2cdf39a56b9708909fcab00d868b907fb5",
@@ -340,7 +340,7 @@
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
     "tests/cb1/test_master_fallback.py": "b491d2ca9a92fbf9e4f5afe454b0f674d0741dc503574021956e7f67bc9b407e",
     "tests/cb1/test_master_reference.py": "6f451f60c9765cc6b1fcd7dd0cc614399e6e4846a7dc1ac3924d41d9f3aba449",
-    "tests/cb1/test_playback_defaults.py": "b033e4314b27e8ffcc8a4be52e9fd306070cb30c42655e88e71480bc0b7e32af",
+    "tests/cb1/test_playback_defaults.py": "2fa5fb9812f95157cb981c8f986d981f301977978b93b1f1f0493f721f4533ec",
     "tests/cb1/test_playback_layout_ownership.py": "389eee2096470a51cff466768f68d5b4a579183dbb9f0b70dd7192d1d2f23923",
     "tests/cb1/test_strict_playback_admission.py": "9c55bc203411d2bb357c58ffb806768dc6d67d3acb590a66c71cedd12171834e",
     "tests/cb1/test_cb1_presentation_sync.py": "dc6b814a12a90bf276f55e5bdbe8f55c88d7991756a60480c9c1bba49d0e554e",
@@ -356,7 +356,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "3777bef45e9a419d9979b6d0cbfd274a97a6295390ce0e3d7af47539e885eea6",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "371c3f3f2b75f9f7ff208077300de2a172ff59c0b3668ec24189760e4bd9a733",
+    "config/cb1-patch-index.json": "4b258de3194232825a8adf772c653e00e4f87c480ae1decd0dcc018c18d6356e",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -409,7 +409,9 @@
     "tests/cb1/test_seek_video_generation.py": "4766feec6773ebbd864d785135297d2401bfed7d1fc48727b9cdf65da5b363cd",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-passthrough-dialnorm.patch": "d6924d21edd330c55e92d55f59ec00c668cfc9c297308553c6a81fd3bb4cc946",
     "tests/cb1/test_audio_passthrough_dialnorm.py": "fa49aa3d1898f0e87a4591cc662900af745e688794b019beeb243c63edd96059",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "4e60f98fe90ce802b3369b5c0d8741b0a601d6528015932bbf2617860d93a496"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-lldv-edid-target.patch": "4e60f98fe90ce802b3369b5c0d8741b0a601d6528015932bbf2617860d93a496",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-amd-rgb10-lab.patch": "c51837d18357c433c064fc9c47b0035079827e23342d1fe092ebfff31448da52",
+    "projects/Generic/patches/linux/linux-9971-amd-native-lldv-rgb10-lab.patch": "069547b0a6dd4d437d1a10a85723de734f75373468e720e14ef724772667b4a9"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
@@ -614,11 +616,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": {
       "source": "src/dvbridge_render.c",
-      "sha256": "ec0d67ddc059e859d51acd34260b0c8966445912c6283a08ff74541882235da5"
+      "sha256": "dc7fb62b80d85327f0a87c32f4972567b06d8063752ec105214de2180d5caeb3"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.h": {
       "source": "src/dvbridge_render.h",
-      "sha256": "5a5e9fb0476ba8fa40c143734defdf3f89d21047ee8483af05c855ddfc911fa1"
+      "sha256": "e83caf602463c8e410d9e966e228592efc04e028888ca0ab29b616d881f9d19f"
     },
     "packages/mediacenter/kodi/cb1/src/mpv_dvbridge_cm4.h": {
       "source": "src/mpv_dvbridge_cm4.h",
@@ -650,7 +652,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "f13ab74c1a21547d0ff81c9dee8d94ced67ee2bf0e85bc7c724eb5c1e5ab6f4a"
+      "sha256": "eea158be6360e4d9246afcdb77db34590e5115d3fe217985a194693dd5d28528"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

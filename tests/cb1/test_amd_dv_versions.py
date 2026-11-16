@@ -24,7 +24,7 @@ class AMDVersions(unittest.TestCase):
                "hdmi_dolby_vendor_infoframe_check", "hdmi_dolby_vendor_infoframe_pack")
         helpers=["dv_display_supported" if "dv_display_supported(" in amd else "dv_dcn_supported",
                  "dv_copy_packet", "dv_stream_edid"]
-        helpers.extend(("dv_rx550", "dv_rx550_mode", "dv_sink_supported", "lldv_sink_supported"))
+        helpers.extend(("dv_rx550", "dv_rx550_mode", "dv_lldv_native_supported", "dv_sink_supported", "lldv_sink_supported"))
         amdh=(kernel/"drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h").read_text()
         families=sorted(set(re.findall(r"\b(?:DCN|DCE)_VERSION_\w+", "\n".join(function(amd,n) for n in helpers))) |
                         {"DCN_VERSION_4_01", "DCN_VERSION_4_2", "DCN_VERSION_4_2B"})

@@ -1805,5 +1805,19 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-amd-rgb10-lab.patch": {
+    "owner": "Present AMD RGB10 LLDV through the native GBM lifecycle.",
+    "files": {
+      "xbmc/utils/DVBridgeLldv.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/drm/DVBridgeState.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Carry the native RGB10 transport through selection, presentation or restoration.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Carry the native RGB10 transport through selection, presentation or restoration."
+    }
   }
 }
