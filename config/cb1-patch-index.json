@@ -1,4 +1,10 @@
 {
+  "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": {
+    "owner": "Reuse the experimental packed LLDV path on additional Intel HDMI engines.",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit Display9–12 and Battlemage under the existing link guards, with bounded connector diagnostics."
+    }
+  },
   "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": {
     "owner": "Expose RX550 4:2:2 LLDV using the experimental packed carrier.",
     "files": {
