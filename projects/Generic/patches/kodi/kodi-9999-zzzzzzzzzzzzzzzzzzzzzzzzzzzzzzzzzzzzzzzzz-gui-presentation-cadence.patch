@@ -1,22 +1,18 @@
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
-@@ -2063,11 +2063,13 @@
+@@ -2063,10 +2063,11 @@
        revision == m_committedRevision && (!allowPacked || !m_committedPacked ||
            m_nativeOverlayRevision != m_committedOverlayRevision))
    {
 -    // The SDR GUI is blended into the resolved film target. Rebuilding that
 -    // target for the same picture needs a new identity, but keeps the scanout.
--    asyncOverlayRefresh = sameGeometry && allowPacked &&
--        ((policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && m_committedPacked) ||
--         (policy.mode == DVBRIDGE_MODE_SDR && !m_committedPacked));
 +    // Reblending GUI over the same picture needs a new render identity.
 +    // The transport and its presentation lead do not change with it.
-+    asyncOverlayRefresh = sameGeometry &&
-+        (policy.mode == DVBRIDGE_MODE_PLAYER_LED ||
-+         (allowPacked && (policy.mode == DVBRIDGE_MODE_HDR10_EXPERT ||
-+          (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && m_committedPacked) ||
-+          (policy.mode == DVBRIDGE_MODE_SDR && !m_committedPacked))));
+     asyncOverlayRefresh = sameGeometry && allowPacked &&
+-        ((policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && m_committedPacked) ||
++        (policy.mode == DVBRIDGE_MODE_HDR10_EXPERT ||
++         (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && m_committedPacked) ||
+          (policy.mode == DVBRIDGE_MODE_SDR && !m_committedPacked));
      // Explicit refresh of an equal-PTS source is a new processing transaction.
      revision = m_geometryRevision = DVBRIDGE::NextRevisionAfter(revision);
-     if (!revision) return FrameStatus::Failed;

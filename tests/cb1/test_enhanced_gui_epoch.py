@@ -25,8 +25,8 @@ int main()
 {
   assert(refresh(DVBRIDGE_MODE_HDR10_EXPERT,true,false));
   assert(!refresh(DVBRIDGE_MODE_HDR10_EXPERT,false,false));
-  assert(refresh(DVBRIDGE_MODE_PLAYER_LED,false,false));
-  assert(!refresh(DVBRIDGE_MODE_PLAYER_LED,false,false,false));
+  assert(!refresh(DVBRIDGE_MODE_HDR10_EXPERT,true,false,false));
+  assert(!refresh(DVBRIDGE_MODE_PLAYER_LED,true,false));
   assert(refresh(DVBRIDGE_MODE_MASTER_REFERENCE,true,true));
   assert(!refresh(DVBRIDGE_MODE_MASTER_REFERENCE,true,false));
   assert(refresh(DVBRIDGE_MODE_SDR,true,false));
