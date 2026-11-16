@@ -1962,5 +1962,11 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Keep the selected and confirmed playback states visible.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep the selected and confirmed playback states visible."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": {
+    "owner": "Keep scanout cadence while refreshing the GUI on a committed video picture.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous scanout for an equal-picture GUI refresh on the same transport."
+    }
   }
 }
