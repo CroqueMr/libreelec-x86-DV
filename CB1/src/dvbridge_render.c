@@ -1910,11 +1910,14 @@ static bool player_led_gui(pl_shader shader, const struct player_led_render *r)
                 "  pix.y=textureSize(ll_gui_input,0).y-1-pix.y;\n"
                 "  vec4 ui=texelFetch(ll_gui_input,pix,0);\n"
                 "  if(ui.a==0.0)return video;\n"
-                "  vec3 rgb=vec3(textureLod(ll_gui_degamma,vec2(ui.r,.5),0.0).r,\n"
-                "                textureLod(ll_gui_degamma,vec2(ui.g,.5),0.0).r,\n"
-                "                textureLod(ll_gui_degamma,vec2(ui.b,.5),0.0).r);\n"
+                "  float red=textureLod(ll_gui_degamma,vec2(ui.r,.5),0.0).r;\n"
+                "  vec3 rgb=vec3(red);\n"
+                "  if(ui.r!=ui.g || ui.r!=ui.b){\n"
+                "    rgb.g=textureLod(ll_gui_degamma,vec2(ui.g,.5),0.0).r;\n"
+                "    rgb.b=textureLod(ll_gui_degamma,vec2(ui.b,.5),0.0).r;\n"
+                "  }\n"
                 "  rgb=clamp(ll_gui_matrix*rgb*ll_gui_scale,0.0,1.0);\n"
-                "  return vec4(mix(video.rgb,rgb,ui.a),video.a);\n"
+                "  return vec4(mix(clamp(video.rgb,0.0,1.0),rgb,ui.a),video.a);\n"
                 "}\n"
                 "#define CB1_LLDV_FINISH(color) ll_gui_blend((color),ivec2(gl_FragCoord.xy))\n",
     });
