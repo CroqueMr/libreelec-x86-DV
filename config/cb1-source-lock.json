@@ -165,7 +165,7 @@
     "tests/cb1/test_ai_reentry.py": "a662c6a2b0566c23802312dc1aa83b6fc250b6b4381e94660464f7f6ca7327f4",
     "tests/cb1/test_ai_reference_phase.py": "cb61865cc38f7ad022216f180f6889d5a4b3f9e3a511d75939a1fe27344e4bce",
     "tests/cb1/test_output_menu_recovery.py": "4adfd2066630bdc6014c360cabea1feddbec5e5efcf36e54db240aad586669db",
-    "tests/cb1/test_hdr10plus_selection.py": "617fc5b4b07e1a82d42b9877dfcea4d3e69c770e91a477257e751671f9428cd9",
+    "tests/cb1/test_hdr10plus_selection.py": "e0f6e54a039a2ba9fbcb227f58602836e491c5b8f5471026f1dd789742dc1786",
     "tests/cb1/test_native_video_labels.py": "0da9e068815aa549f4d2dbe2fe0708e816899777c3caed9ed0341a3714bbbe7d",
     "tests/cb1/test_ordinary_output_isolation.py": "9a0394c458560c32c64c53891feb1c2fad1eec71c4cad2526519ff35fa98e552",
     "tests/cb1/test_source_preferences.py": "6f8b9653d6d44b076229de8c36b6c40ee9dfcd3865068679084bb071a41e421a",
