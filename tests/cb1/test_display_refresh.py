@@ -7,6 +7,14 @@ from test_native_video_source import TREE, body
 
 
 class DisplayRefreshTests(unittest.TestCase):
+    def test_playback_refreshes_the_sink_before_starting_the_input_worker(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
+        opening = body(source, 'bool CVideoPlayer::OpenFile(')
+        input_stream = body(source, 'bool CVideoPlayer::OpenInputStream(')
+        self.assertIn('RefreshDisplayInfoForVideo()', opening)
+        self.assertLess(opening.index('RefreshDisplayInfoForVideo()'), opening.index('IsRunning()'))
+        self.assertNotIn('RefreshDisplayInfoForVideo()', input_stream)
+
     def test_live_edid_lookup_does_not_force_another_hardware_probe(self):
         source=(TREE/'xbmc/windowing/gbm/drm/DRMConnector.cpp').read_text()
         method=body(source,'std::vector<uint8_t> CDRMConnector::GetEDID(')

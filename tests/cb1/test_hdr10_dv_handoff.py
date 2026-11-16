@@ -7,6 +7,13 @@ from test_native_video_source import TREE, body
 
 
 class HDR10DVHandoffTests(unittest.TestCase):
+    def test_slow_configure_uses_the_published_render_state(self):
+        source = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp").read_text()
+        configure = body(source, "bool CRenderManager::Configure(const VideoPicture&")
+        result = configure[configure.index("m_stateEvent.Wait(1000ms)"):]
+        self.assertLess(result.index("m_renderState != STATE_CONFIGURED"),
+                        result.index("return false;"))
+
     def test_bluray_reopen_dispatches_probe_flush_before_first_packet(self):
         source = (TREE / "xbmc/cores/VideoPlayer/VideoPlayer.cpp").read_text()
         process = body(source, "void CVideoPlayer::Process()")
