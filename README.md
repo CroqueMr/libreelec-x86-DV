@@ -95,7 +95,7 @@ Use a native HDMI port wired to the GPU. DisplayPort and USB-C to HDMI converter
 
 - **Intel** — Integrated graphics on mobile and desktop Core 8th Gen or newer, selected 7th Gen Kaby Lake systems, Core Ultra Series 1/2, and N-series including N100/N150. Dedicated GPUs include Arc A/B and Iris Xe MAX.
 - **AMD** — Ryzen APUs with Radeon graphics: mobile 2000–6000, 7030/7035/7040/8040 and Ryzen AI 300, plus desktop 2000G/3000G/4000G/5000G/8000G. Dedicated GPUs include Radeon RX 5000/6000/7000 and Vega M. RX 550 support is experimental. RX 9000 awaits physical HDMI validation.
-- **NVIDIA** — Dedicated GeForce GTX 10/16 and RTX 20/30/40/50. The Generic image automatically selects the matching driver.
+- **NVIDIA** (Not recommanded, drivers not perfectly handle) — Dedicated GeForce GTX 10/16 and RTX 20/30/40/50. The Generic image automatically selects the matching driver. (Nvidia is not
 - **Raspberry Pi 5** — TV-led Dolby Vision with output matching CB1 Master Reference at the same settings. [dangerouslaser's dedicated build](https://github.com/dangerouslaser/libreelec-rpi-dv)
 
 [Full hardware list](docs/cb1/HARDWARE.md) · [HDMI output support by format](docs/cb1/DRIVER-COVERAGE.md)
@@ -127,7 +127,7 @@ Both tiers require native HDMI. [Performance details](docs/cb1/PERFORMANCE-GUIDE
 ## What's next?
 
 - **BD-J menus** — Improve performance and rework how Blu-ray menus are handled.
-- **Playback performance** — Optimize decoding and rendering across formats, including Dolby Vision FEL and 60 fps content.
+- **Playback performance** — Optimize decoding and rendering across formats, including Dolby Vision FEL and 60 fps content, and Nvidia drivers
 - **Bug fixes** — Investigate and fix previously unknown bugs reported through [GitHub Issues](https://github.com/CroqueMr/libreelec-x86-DV/issues).
 - **New features** — Add features based on user suggestions.
 
