@@ -106,10 +106,13 @@ struct Connector
   bool cta93FractionalOnly=false;
   bool r615=false;
   bool r615Native16=false;
+  std::optional<uint64_t> nativeFormats;
+  uint64_t acceptedNativeFormat=0;
   bool nativeLldvActive=true;
   bool r580=false;
   bool r580Native10=false;
   bool intelNativeRgb10=false;
+  bool amdNative444=false;
   const Mode* advertised{};
   int GetModesCount() const { return advertised ? 1 : 0; }
   const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
@@ -118,7 +121,8 @@ struct Connector
   std::string_view GetType() const { return "HDMI-A"; }
   bool SupportsProperty(std::string_view key) const
   {
-    return key=="CB1_LLDV_FORMAT" ||
+    return key=="CB1_LLDV_FORMAT" || (nativeFormats && key=="CB1_NATIVE_LLDV_FORMATS") ||
+        (r615 && key=="CB1_NATIVE_LLDV_ACTIVE") ||
         (r580 && (key=="CB1_NATIVE_LLDV_422" || key=="CB1_NATIVE_LLDV_ACTIVE"));
   }
   std::optional<uint64_t> GetPropertyValue(std::string_view key) const
@@ -134,11 +138,26 @@ struct Connector
       if (name=="YCbCr 4:2:2 10 bits forced") return 1;
       if (name=="YCbCr 4:2:2 12 bits packed") return 2;
       if (name=="YCbCr 4:2:2 12 bits RGB16" && r615Native16) return 3;
+      if (nativeFormats)
+      {
+        if (name=="RGB 12 bits RGB16") return 4;
+        if (name=="YCbCr 4:4:4 10 bits RGB10") return 5;
+        if (name=="YCbCr 4:4:4 12 bits RGB16") return 6;
+        if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 7;
+        if (name=="RGB 10 bits RGB10") return 8;
+      }
       return {};
     }
     if (r580)
     {
       if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 2;
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      return {};
+    }
+    if (amdNative444)
+    {
+      if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 3;
+      if (name=="YCbCr 4:4:4 10 bits RGB10") return 4;
       if (name=="YCbCr 4:2:2 10 bits forced") return 1;
       return {};
     }
@@ -155,7 +174,9 @@ struct Connector
   }
   std::optional<uint64_t> ReadPropertyValue(std::string_view key) const
   {
-    if (key=="CB1_NATIVE_LLDV_ACTIVE") return nativeLldvActive ? 1 : 0;
+    if (key=="CB1_NATIVE_LLDV_FORMATS") return nativeFormats;
+    if (key=="CB1_NATIVE_LLDV_ACTIVE")
+      return nativeFormats ? acceptedNativeFormat : nativeLldvActive ? 1 : 0;
     if (key=="CB1_NATIVE_LLDV_422") return r580Native10 ? 1 : 0;
     assert(SupportsProperty(key));
     return active;
@@ -305,6 +326,30 @@ int main()
   drm.connector.nativeLldvActive=false;
   assert(window.Read().active==LldvFormat::Auto);
 
+  drm.connector.nativeFormats=(1ULL<<4) | (1ULL<<5) | (1ULL<<6);
+  window.m_lldvDisplay.sink.lldv_444_bits=12;
+  readback=window.Read();
+  assert(readback.packed42212 && !readback.rgb16Scanout);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Rgb12);
+  assert(SelectLldvTransport(readback, 0).rgbScanoutBits==16);
+  assert(SelectLldvTransport(readback, int(LldvFormat::Y444_12)).rgbScanoutBits==16);
+  assert(!SelectLldvTransport(readback, int(LldvFormat::Y444_10)).connectorId);
+  drm.connector.active=4;
+  drm.connector.acceptedNativeFormat=6;
+  assert(window.Read().active==LldvFormat::Auto);
+  drm.connector.acceptedNativeFormat=4;
+  assert(window.Read().active==LldvFormat::Rgb12);
+  window.usableRgb16=false;
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Rgb12), false)==41211);
+  window.m_lldvDisplay.sink.lldv_444_bits=10;
+  assert(SelectLldvTransport(window.Read(), 0).format==LldvFormat::Y444_10);
+  assert(SelectLldvTransport(window.Read(), 0).rgbScanoutBits==10);
+  assert(SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  *drm.connector.nativeFormats|=1ULL<<7;
+  assert(SelectLldvTransport(window.Read(), 0).format==LldvFormat::Y422_10);
+  assert(!SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  drm.connector.nativeFormats.reset();
+
   drm.connector.r615=false;
   drm.connector.intelNativeRgb10=true;
   window.m_lldvDisplay.sink.lldv_444_bits=10;
@@ -328,6 +373,18 @@ int main()
   assert(window.Read().active==LldvFormat::Auto);
   drm.connector.nativeLldvActive=true;
   assert(window.Read().active==LldvFormat::Y422_10 && window.Read().activeRgbScanoutBits==10);
+
+  drm.connector.r580=false;
+  drm.connector.amdNative444=true;
+  drm.connector.nativeFormats=(1ULL<<3) | (1ULL<<4);
+  window.m_lldvDisplay.sink.lldv_444_bits=10;
+  drm.connector.active=4;
+  readback=window.Read();
+  assert(readback.active==LldvFormat::Y444_10 && readback.activeRgbScanoutBits==10);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Y422_10);
+  assert(SelectLldvTransport(readback, int(LldvFormat::Y444_10)).format==LldvFormat::Y444_10);
+  *drm.connector.nativeFormats&=~(1ULL<<4);
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y444_10), false)==41211);
 
   drm.connector.active.reset();
   assert(window.Read().active==LldvFormat::Auto);
@@ -355,8 +412,8 @@ int main()
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         menu = body((kodi / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text(),
                     'bool ShowLldvFormatMenu(bool forCircuit)\n')
-        self.assertIn('i <= static_cast<int>(LldvFormat::Rgb10)', menu)
-        self.assertIn('selected <= LldvFormat::Rgb10', menu)
+        self.assertIn('i <= static_cast<int>(LldvFormat::Y444_12)', menu)
+        self.assertIn('selected <= LldvFormat::Y444_12', menu)
         self.assertIn('dvbridge_lldv_444_bits(display.sink)', menu)
         self.assertIn('LldvAutomaticFormats(status)', menu)
         start = menu.index('  const int choice = dialog->GetSelectedItem();')

@@ -315,7 +315,8 @@ int main(void){
         root = self.sources()[0]
         source = (root/'src/nvidia-modeset/kapi/src/nvkms-kapi.c').read_text()
         hw = (root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text()
-        native = function(source, 'ConfigureLldvOutput')+'\n'+function(hw, 'nvIsNativeLldvColor')
+        native = (root/'src/common/inc/nvkms-lldv-formats.h').read_text()+'\n'
+        native += function(source, 'ConfigureLldvOutput')+'\n'+function(hw, 'nvNativeLldvFormat')+'\n'+function(hw, 'nvIsNativeLldvColor')
         vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
         self.compile_run(r"""
 #include <assert.h>
@@ -329,14 +330,18 @@ enum NvKmsOutputTf {NVKMS_OUTPUT_TF_NONE, NVKMS_OUTPUT_TF_PQ};
 enum {NVKMS_OUTPUT_COLORIMETRY_DEFAULT,NVKMS_OUTPUT_COLORIMETRY_BT2100};
 enum {NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_RGB,
  NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_YCbCr422,
- NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422};
+ NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_YCbCr444,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr444,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_RGB};
 enum {NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL,NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED};
 enum {NV_KMS_DPY_ATTRIBUTE_REQUESTED_DITHERING_DISABLED,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_10=10,
  NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12=12};
 struct NvKmsHdmiVsifMetadata {NvU8 payload[27];NvU32 payloadSize;};
 struct NvKmsKapiHeadModeSetConfig {
  struct NvKmsHdmiVsifMetadata hdmiVsifMetadata;
- unsigned colorBpc,colorimetry,numDisplays;
+ unsigned colorBpc,colorimetry,numDisplays,lldvFormat;
  struct {int enabled;}hdrInfoFrame;
  struct {int enabled,deepColor;}cb1Hdr;
  struct {int state;}dithering;int postcompColorPassthrough;
@@ -348,7 +353,7 @@ typedef struct {int format,bpc,range,colorimetry;} NVDpyAttributeColor;
 @@NATIVE@@
 int main(void){
  struct NvKmsKapiHeadModeSetConfig c={.colorBpc=12,.numDisplays=1,
-  .colorimetry=NVKMS_OUTPUT_COLORIMETRY_BT2100};
+  .colorimetry=NVKMS_OUTPUT_COLORIMETRY_BT2100,.lldvFormat=NV_LLDV_422_12};
  memcpy(c.hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);c.hdmiVsifMetadata.payloadSize=27;
  struct NvKmsSetModeOneHeadRequest h={0};
  assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h));
@@ -359,7 +364,7 @@ int main(void){
  for(unsigned bpc=0;bpc<=16;bpc++){
   c=good;c.colorBpc=bpc;assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h)==(bpc==12));
  }
- c=good;c.colorBpc=8;c.colorimetry=NVKMS_OUTPUT_COLORIMETRY_DEFAULT;
+ c=good;c.lldvFormat=1;c.colorBpc=8;c.colorimetry=NVKMS_OUTPUT_COLORIMETRY_DEFAULT;
  assert(ConfigureLldvOutput(&c,NVKMS_OUTPUT_TF_NONE,&h));
  assert(h.colorFormat==NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_FORMAT_RGB &&
         h.colorRange==NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL);
@@ -375,7 +380,7 @@ int main(void){
  NVDpyAttributeColor color={NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422,12,
   NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED,NVKMS_OUTPUT_COLORIMETRY_BT2100};
  c=good;assert(nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
- color.bpc=10;assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));color.bpc=12;
+ color.bpc=10;assert(nvNativeLldvFormat(&c.hdmiVsifMetadata,&color)==NV_LLDV_422_10);color.bpc=12;
  color.range=NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL;assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
  color.range=NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED;color.format=0;
  assert(!nvIsNativeLldvColor(&c.hdmiVsifMetadata,&color));
@@ -385,7 +390,7 @@ int main(void){
     def test_native_lldv_preserves_integer_pipeline_and_rejects_processing(self):
         root = self.sources()[0]
         hw = (root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text()
-        native = function(hw,'nvIsNativeLldvSurface')+'\n'+function(hw,'ValidateColorPassthroughFlipState')
+        native = function(hw,'nvNativeLldvSurfaceBits')+'\n'+function(hw,'nvIsNativeLldvSurface')+'\n'+function(hw,'ValidateColorPassthroughFlipState')
         vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
         self.compile_run(r"""
 #include <assert.h>
@@ -401,7 +406,8 @@ typedef unsigned NvU32;typedef unsigned char NvU8;typedef int NvBool;
 #define NVKMS_INPUT_TF_LINEAR 0
 #define NVKMS_OUTPUT_TF_NONE 0
 enum {NvKmsSurfaceMemoryFormatR16G16B16A16=1,
- NvKmsSurfaceMemoryFormatRF16GF16BF16AF16,NvKmsSurfaceMemoryFormatRF16GF16BF16XF16};
+ NvKmsSurfaceMemoryFormatRF16GF16BF16AF16,NvKmsSurfaceMemoryFormatRF16GF16BF16XF16,
+ NvKmsSurfaceMemoryFormatA2B10G10R10,NvKmsSurfaceMemoryFormatX2B10G10R10};
 typedef struct {int format;} NVSurfaceEvoRec;
 typedef struct {int fromOverride;void*pLutSurfaceEvo;} Lut;
 typedef struct {int enabled,matrix;} Override;
@@ -430,6 +436,13 @@ int main(void){
  f.layer[0].sizeIn.height=f.layer[0].sizeOut.height=2160;
  memcpy(f.hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);f.hdmiVsifMetadata.payloadSize=27;
  assert(nvIsNativeLldvSurface(&f));assert(ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ assert(nvNativeLldvSurfaceBits(&f)==16);
+ surface.format=NvKmsSurfaceMemoryFormatX2B10G10R10;
+ assert(nvNativeLldvSurfaceBits(&f)==10);assert(ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ surface.format=NvKmsSurfaceMemoryFormatA2B10G10R10;
+ assert(nvNativeLldvSurfaceBits(&f)==10);assert(ValidateColorPassthroughFlipState(&dev,0,&timings,&f));
+ surface.format=NvKmsSurfaceMemoryFormatRF16GF16BF16AF16;assert(!nvNativeLldvSurfaceBits(&f));
+ surface.format=NvKmsSurfaceMemoryFormatR16G16B16A16;
  NVFlipEvoHwState good=f;
  #define REJECT(field,value) f=good;f.field=value;assert(!ValidateColorPassthroughFlipState(&dev,0,&timings,&f))
  REJECT(layer[0].precompColorPassthrough,1);REJECT(postcompColorPassthrough,1);
@@ -451,7 +464,8 @@ int main(void){
     def test_native_lldv_active_reads_current_head_not_requested_properties(self):
         root = self.sources()[0]
         current = function((root/'src/nvidia-modeset/src/nvkms.c').read_text(), 'CurrentNativeLldvActive')
-        color = function((root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text(), 'nvIsNativeLldvColor')
+        color = (root/'src/common/inc/nvkms-lldv-formats.h').read_text()+'\n'
+        color += function((root/'src/nvidia-modeset/src/nvkms-hw-flip.c').read_text(), 'nvNativeLldvFormat')
         vsif = (root/'src/common/inc/nvkms-dv-vsif.h').read_text().replace('#include "nvtypes.h"', '')
         self.compile_run(r"""
 #include <assert.h>
@@ -465,11 +479,17 @@ typedef unsigned NvU32;typedef unsigned char NvU8;typedef int NvBool;
 #define NV_INVALID_HEAD (~0u)
 #define NVKMS_OUTPUT_TF_NONE 0
 enum {NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr422=1,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_RGB=2,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_FORMAT_YCbCr444=3,
+ NVKMS_PROTOCOL_SOR_SINGLE_TMDS_A=1,NVKMS_PROTOCOL_SOR_SINGLE_TMDS_B=2,
+ NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL=0,
  NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_LIMITED=1,NVKMS_OUTPUT_COLORIMETRY_BT2100=1,
+ NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_10=10,
  NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12=12};
 struct NvKmsHdmiVsifMetadata {NvU8 payload[27];NvU32 payloadSize;};
 typedef struct {int format,bpc,range,colorimetry;} NVDpyAttributeColor;
 typedef struct {int bypassComposition,postcompColorPassthrough,tf;
+ struct {int protocol;}timings;
  struct {int enabled;}hdrInfoFrameOverride;
  struct NvKmsHdmiVsifMetadata hdmiVsifMetadata;} NVDispHeadStateEvoRec;
 typedef struct {NVDispHeadStateEvoRec headState[2];unsigned primary;int active;} NVDispEvoRec;
@@ -483,18 +503,24 @@ static unsigned nvGetPrimaryHwHead(const NVDispEvoRec*d,unsigned h){(void)h;retu
 @@CURRENT@@
 int main(void){
  NVDispEvoRec disp={.primary=1,.active=1};NVDpyEvoRec d={&disp,0,1,{{1,12,1,1}}};
- NVDispHeadStateEvoRec*s=&disp.headState[1];s->bypassComposition=1;
+ NVDispHeadStateEvoRec*s=&disp.headState[1];s->bypassComposition=1;s->timings.protocol=1;
  s->hdmiVsifMetadata.payloadSize=27;memcpy(s->hdmiVsifMetadata.payload,nvDoviLowLatencyPayload,27);
- assert(CurrentNativeLldvActive(&d,0));assert(!CurrentNativeLldvActive(NULL,0));
+ assert(CurrentNativeLldvActive(&d,0)==NV_LLDV_422_12);assert(!CurrentNativeLldvActive(NULL,0));
  assert(!CurrentNativeLldvActive(&d,1));assert(!CurrentNativeLldvActive(&d,2));
  disp.primary=NV_INVALID_HEAD;assert(!CurrentNativeLldvActive(&d,0));disp.primary=1;
  disp.active=0;assert(!CurrentNativeLldvActive(&d,0));disp.active=1;
  d.hdmi=0;assert(!CurrentNativeLldvActive(&d,0));d.hdmi=1;
  d.currentAttributes.color.format=0;assert(!CurrentNativeLldvActive(&d,0)); /* old RGB12, even if requested enum3 */
- d.currentAttributes.color.format=1;d.currentAttributes.color.bpc=10;assert(!CurrentNativeLldvActive(&d,0));
+ d.currentAttributes.color.format=1;d.currentAttributes.color.bpc=10;assert(CurrentNativeLldvActive(&d,0)==NV_LLDV_422_10);
  d.currentAttributes.color.bpc=12;d.currentAttributes.color.range=0;assert(!CurrentNativeLldvActive(&d,0));
  d.currentAttributes.color.range=1;d.currentAttributes.color.colorimetry=0;assert(!CurrentNativeLldvActive(&d,0));
  d.currentAttributes.color.colorimetry=1;
+ d.currentAttributes.color.format=3;assert(CurrentNativeLldvActive(&d,0)==NV_LLDV_444_12);
+ d.currentAttributes.color.format=2;d.currentAttributes.color.range=0;
+ assert(CurrentNativeLldvActive(&d,0)==NV_LLDV_RGB_12); /* distinguish a stale accepted 12-bit format */
+ d.currentAttributes.color.bpc=10;assert(CurrentNativeLldvActive(&d,0)==NV_LLDV_RGB_10);
+ d.currentAttributes.color=(NVDpyAttributeColor){1,12,1,1};
+ s->timings.protocol=3;assert(!CurrentNativeLldvActive(&d,0));s->timings.protocol=1;
  s->hdmiVsifMetadata.payloadSize=0;assert(!CurrentNativeLldvActive(&d,0));s->hdmiVsifMetadata.payloadSize=27;
  s->bypassComposition=0;assert(!CurrentNativeLldvActive(&d,0));s->bypassComposition=1;
  s->postcompColorPassthrough=1;assert(!CurrentNativeLldvActive(&d,0));s->postcompColorPassthrough=0;

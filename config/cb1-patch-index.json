@@ -1,4 +1,57 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-y444-scanout.patch": {
+    "owner": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+      "xbmc/cores/VideoProcessingInfo.h": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+      "xbmc/utils/DVBridgeLldv.h": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Expose deep RGB and YCbCr 4:4:4 LLDV and report the accepted HDMI format."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9977-amd-native-lldv-remaining.patch": {
+    "owner": "Extend native AMD LLDV 4:2:2 10-bit to the remaining admitted display engines.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Extend native AMD LLDV 4:2:2 10-bit to the remaining admitted display engines.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Extend native AMD LLDV 4:2:2 10-bit to the remaining admitted display engines.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Extend native AMD LLDV 4:2:2 10-bit to the remaining admitted display engines.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c": "Extend native AMD LLDV 4:2:2 10-bit to the remaining admitted display engines."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9978-amd-native-lldv-y444.patch": {
+    "owner": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/dc/dc_stream.h": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/dc/core/dc_resource.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dcn20/dcn20_hwseq.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout.",
+      "drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c": "Validate native AMD LLDV 4:4:4 10-bit EDID, bandwidth and scanout."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9010-native-lldv-formats.patch": {
+    "owner": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "kernel-open/nvidia-drm/nvidia-drm-priv.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/common/inc/nvkms-lldv-formats.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/include/nvkms-hdmi.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/include/nvkms-hw-flip.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/kapi/include/nvkms-kapi-cb1.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/kapi/interface/nvkms-kapi.h": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/kapi/src/nvkms-kapi.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/src/nvkms-flip.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/src/nvkms-hdmi.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/src/nvkms-hw-flip.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/src/nvkms-modeset.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format.",
+      "src/nvidia-modeset/src/nvkms.c": "Negotiate exact RGB and YCbCr LLDV formats on R615 and read the accepted NVKMS format."
+    }
+  },
   "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9009-native-lldv-rgb10.patch": {
     "owner": "Negotiate exact native R580 4:2:2 10-bit when the live connector supports it and confirm accepted output.",
     "files": {

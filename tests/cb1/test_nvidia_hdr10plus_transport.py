@@ -41,6 +41,8 @@ struct NvKmsSetModeOneDispReply {struct {int status;}head[1];};
 #define nvOverrideScalingUsageBounds(...) ((void)0)
 #define nvValidateFlipEvoHwState(...) NV_TRUE
 #define nvIsNativeLldvSurface(...) NV_FALSE
+#define nvNativeLldvSurfaceBits(...) 0
+#define NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12 12
 /* The packet/depth contract is tested separately; isolate native slot handoff. */
 #define nvCb1HdrValidate(d,c,t,i,f,h,p,s) (*(s)=0,NV_TRUE)
 static NVDpyEvoRec testDpy={1};

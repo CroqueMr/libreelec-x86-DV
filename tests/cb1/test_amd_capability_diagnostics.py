@@ -30,21 +30,26 @@ struct amdgpu_device {struct {struct dc* dc;}dm;}device;
 struct amdgpu_dm_connector {
  struct {void* dev;struct {unsigned id;}base;int connector_type;}base;
  struct {int connector_signal;}*dc_link;
- void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property;
+ void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property,*lldv_native_formats_property;
 };
 #define DRM_MODE_PROP_IMMUTABLE 4
 struct drm_prop_enum_list { unsigned value; const char *name; };
-enum {AMDGPU_LLDV_RGB10_LAB=3};
+enum {AMDGPU_LLDV_RGB10_LAB=3,AMDGPU_LLDV_444_10=4};
+#define BIT(n) (1U<<(n))
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
-static bool dv_standard=true, nativeExpected=true;static int properties;
+static bool dv_standard=true;static int properties;
 static char message[1024];
 static struct amdgpu_device* drm_to_adev(void* ignored){(void)ignored;return &device;}
 static void* drm_property_create_bool(void* dev,int flags,const char* name){
  (void)dev;(void)flags;(void)name;++properties;return &properties;}
+static void* drm_property_create_range(void* dev,int flags,const char* name,unsigned min,unsigned max){
+ assert(!flags && !min && max==24 && !strcmp(name,"CB1_NATIVE_LLDV_FORMATS"));
+ return drm_property_create_bool(dev,flags,name);
+}
 static void* drm_property_create_enum(void* dev,int flags,const char* name,
  const struct drm_prop_enum_list *formats,size_t count){
- assert(count==(nativeExpected ? 3 : 2) && formats[0].value==0 && formats[1].value==1);
- if (nativeExpected) assert(formats[2].value==AMDGPU_LLDV_RGB10_LAB);
+ assert(count==4 && formats[0].value==0 && formats[1].value==1);
+ assert(formats[2].value==AMDGPU_LLDV_RGB10_LAB && formats[3].value==AMDGPU_LLDV_444_10);
  return drm_property_create_bool(dev,flags,name);
 }
 #define drm_object_attach_property(...) ((void)0)
@@ -57,13 +62,12 @@ int main(){
  struct dc dc={.ctx=(void*)&ctx};device.dm.dc=&dc;
  struct {int connector_signal;}link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector c={.base={.base={.id=409},.connector_type=DRM_MODE_CONNECTOR_HDMIA},.dc_link=(void*)&link};
- amdgpu_dm_dv_attach(&c);assert(properties==3 && c.lldv_format_property);
+ amdgpu_dm_dv_attach(&c);assert(properties==4 && c.lldv_format_property);
  assert(strstr(message,"connector=409") && strstr(message,"family_supported=1") && strstr(message,"native_hdmi=1"));
- nativeExpected=false;
  const enum dce_version supported[]={DCN_VERSION_4_01,DCN_VERSION_4_2,DCN_VERSION_4_2B};
  for(unsigned i=0;i<sizeof(supported)/sizeof(supported[0]);++i){
   ctx.dce_version=supported[i];properties=0;message[0]=0;
-  amdgpu_dm_dv_attach(&c);assert(properties==3 && strstr(message,"family_supported=1"));
+  amdgpu_dm_dv_attach(&c);assert(properties==4 && strstr(message,"family_supported=1"));
  }
  {
   int version=DCN_VERSION_4_02;
@@ -73,10 +77,10 @@ int main(){
  properties=0;ctx.dce_version=DCN_VERSION_3_2;link.connector_signal=99;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"native_hdmi=0"));
  link.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A;dv_standard=false;message[0]=0;
- nativeExpected=true;
  amdgpu_dm_dv_attach(&c);
- assert(properties==2 && c.lldv_format_property && strstr(message,"dv_parameter=0"));
+ assert(properties==3 && c.lldv_format_property && strstr(message,"dv_parameter=0"));
  const enum dce_version nativeFamilies[]={
+  DCE_VERSION_11_22,DCN_VERSION_1_0,DCN_VERSION_1_01,DCN_VERSION_2_01,
   DCN_VERSION_2_0,DCN_VERSION_2_1,
   DCN_VERSION_3_0,DCN_VERSION_3_01,DCN_VERSION_3_02,DCN_VERSION_3_03,
   DCN_VERSION_3_1,DCN_VERSION_3_14,DCN_VERSION_3_15,DCN_VERSION_3_16,
@@ -84,15 +88,14 @@ int main(){
  };
  for(unsigned i=0;i<ARRAY_SIZE(nativeFamilies);++i){
   ctx.dce_version=nativeFamilies[i];properties=0;message[0]=0;
-  amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
+  amdgpu_dm_dv_attach(&c);assert(properties==3 && c.lldv_format_property);
  }
- nativeExpected=false;
  ctx.dce_version=DCN_VERSION_2_01;properties=0;
- amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
+ amdgpu_dm_dv_attach(&c);assert(properties==3 && c.lldv_format_property);
  ctx.dce_version=DCE_VERSION_11_2; ctx.asic_id.chip_id=0x699f; dv_standard=true; properties=0;
  c.lldv_format_property=NULL;
  amdgpu_dm_dv_attach(&c);
- assert(properties==4 && c.lldv_format_property && strstr(message,"family_supported=1"));
+ assert(properties==5 && c.lldv_format_property && strstr(message,"family_supported=1"));
  ctx.asic_id.chip_id=0x67df;properties=0;
  amdgpu_dm_dv_attach(&c);assert(properties==0 && strstr(message,"family_supported=0"));
  device.dm.dc=NULL;properties=0;message[0]=0;
