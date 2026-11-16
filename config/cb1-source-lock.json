@@ -15,7 +15,7 @@
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-availability.patch": "56bb00d5abb37254bc3d5b741af07b3e50d60c62ea1d079f36af0c7b02c849d6",
     "projects/Generic/kodi/guisettings.xml": "2704fef2639d7751689d8cd8a5f8ec2a0e87212b261a4c0fc9be72a690ee67a1",
-    "tests/cb1/test_stable_video_settings.py": "5bc8b51fe4c9acea613c027bf3903fb68ac7db75dbb26602684e40b929dd151f",
+    "tests/cb1/test_stable_video_settings.py": "4ca3277450e914ff901f72cc5fd7345030addc4f92767122a0b8f1070b543f8f",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-video-settings.patch": "9fcd4ce8c99255b0bdb121602717f88c6d252c73f8e740295e1344d7c5bfefb7",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzz-playerinfo-diagnostics.patch": "5db62ef711fa0a4e8c80f8667b3dca94a96fd4a5a5e472dfc56aa064e8aa4a0d",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-cb1-logging-detail.patch": "df1e0deb2d2368a1110944ae31a5dba1338c857f1fc1d5989651e00b2e3b3ad9",

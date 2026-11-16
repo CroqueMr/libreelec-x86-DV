@@ -73,7 +73,7 @@ class StableVideoSettings(unittest.TestCase):
         source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
         menu = source[source.index("bool ShowLldvFormatMenu(bool forCircuit)\n"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
         self.assertIn('dialog->SetUseDetails(!estuary);', menu)
-        self.assertIn("LldvUnavailableLabel(status, 0, true)", menu)
+        self.assertIn("summary && LldvCanChooseFormat(status)", menu)
         self.assertNotIn("strings.Get(41296)", menu)
         skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
         native = skin.find(".//include[@name='DefaultDialogSelectLayout']/control")
