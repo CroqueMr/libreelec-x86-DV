@@ -35,7 +35,11 @@ struct cb1_hdr10plus_analysis;
 static inline bool cb1_hdr10plus_analysis_supported(pl_gpu gpu)
 {
     pl_opengl gl=gpu?pl_opengl_get(gpu):NULL;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || !dvbridge_gl_glsl_es(gl,310))return false;
+#else
     if(!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1))return false;
+#endif
     GLint size,threads,shared,groups,bindings;GLint64 storage;
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE,0,&size);
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT,0,&groups);

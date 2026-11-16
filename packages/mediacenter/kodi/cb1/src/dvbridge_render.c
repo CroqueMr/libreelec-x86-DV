@@ -3096,10 +3096,15 @@ bool dvbridge_retirement_owner_destroy(struct dvbridge_retirement_owner **owner)
 static bool dv_gpu_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || gl->major<3 || (gl->major==3 && gl->minor<2) ||
+       !pl_opengl_has_ext(gl,"GL_ARB_buffer_storage"))return false;
+#else
     const char *version=(const char *)glGetString(GL_VERSION);
     if(!gl || !version || strncmp(version,"OpenGL ES ",10) ||
        gl->major<3 || (gl->major==3 && gl->minor<1) ||
        !pl_opengl_has_ext(gl,"GL_EXT_buffer_storage"))return false;
+#endif
     GLint precision,range[2],size,groups,invocations,bindings;GLint64 storage;
     for(unsigned i=0;i<2;i++){
         glGetShaderPrecisionFormat(i?GL_FRAGMENT_SHADER:GL_VERTEX_SHADER,GL_HIGH_FLOAT,range,&precision);
@@ -3119,8 +3124,12 @@ static bool dv_gpu_requirements(pl_gpu gpu)
 static bool dv_transport_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || gl->major<3 || (gl->major==3 && gl->minor<2))return false;
+#else
     const char *version=(const char *)glGetString(GL_VERSION);
     if(!gl || !version || strncmp(version,"OpenGL ES ",10) || gl->major<3)return false;
+#endif
     GLint precision,range[2];
     glGetShaderPrecisionFormat(GL_FRAGMENT_SHADER,GL_HIGH_FLOAT,range,&precision);
     return precision>=23 && range[0]>=127 && range[1]>=127 && glGetError()==GL_NO_ERROR &&
@@ -3148,7 +3157,11 @@ bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *r,enum dvbridge_m
 static bool hdr10_ai_gpu_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || !dvbridge_gl_glsl_es(gl,310))return false;
+#else
     if(!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1))return false;
+#endif
     if(!pl_find_fmt(gpu,PL_FMT_UNORM,4,16,16,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE) ||
        !pl_find_fmt(gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_HOST_READABLE) ||
        !pl_find_fmt(gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_SAMPLEABLE))return false;

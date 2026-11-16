@@ -284,7 +284,11 @@ static bool reduce(struct cb1_hdr10_extrema *ctx, pl_tex input, unsigned count, 
 struct cb1_hdr10_extrema *cb1_hdr10_extrema_create(pl_gpu gpu)
 {
     pl_opengl gl = gpu ? pl_opengl_get(gpu) : NULL;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if (!gl || !dvbridge_gl_glsl_es(gl, 300) || glGetError() != GL_NO_ERROR) return NULL;
+#else
     if (!gl || !gpu->glsl.gles || gpu->glsl.version < 300 || glGetError() != GL_NO_ERROR) return NULL;
+#endif
     pl_fmt format = pl_find_fmt(gpu, PL_FMT_FLOAT, 4, 32, 32,
         PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_HOST_READABLE);
     if (!format) return NULL;

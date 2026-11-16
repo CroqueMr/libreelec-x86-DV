@@ -67,8 +67,13 @@ static GLuint program_create(pl_opengl gl)
 {
     GLuint shader=glCreateShader(GL_COMPUTE_SHADER);
     if(!shader)return 0;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    const char *version=dvbridge_gl_glsl_es(gl,320) ? "#version 320 es\n" :
+        "#version 310 es\n#extension GL_EXT_gpu_shader5 : require\n";
+#else
     const char *version=gl->major>3 || gl->minor>=2 ? "#version 320 es\n" :
         "#version 310 es\n#extension GL_EXT_gpu_shader5 : require\n";
+#endif
     const char *sources[]={version,"precision highp float;precision highp int;\n",
         "layout(local_size_x=128)in;layout(binding=0)uniform highp sampler2D small_image;\n",
         shader_header,bulk_header};
@@ -111,7 +116,11 @@ static bool submit_bulk(struct cb1_hdr10_spatial *ctx,pl_tex texture,bool calibr
 struct cb1_hdr10_spatial *cb1_hdr10_spatial_create(pl_gpu gpu)
 {
     pl_opengl gl=gpu?pl_opengl_get(gpu):NULL;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || !dvbridge_gl_glsl_es(gl,310))return NULL;
+#else
     if(!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1))return NULL;
+#endif
     struct cb1_hdr10_spatial *ctx=calloc(1,sizeof(*ctx));if(!ctx)return NULL;
     ctx->gpu=gpu;
     ctx->program=program_create(gl);

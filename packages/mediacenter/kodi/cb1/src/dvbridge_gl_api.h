@@ -7,6 +7,7 @@
 #endif
 #include <GL/gl.h>
 #include <GL/glext.h>
+#include <libplacebo/opengl.h>
 
 #ifndef GL_MAP_PERSISTENT_BIT_EXT
 #define GL_MAP_PERSISTENT_BIT_EXT GL_MAP_PERSISTENT_BIT
@@ -18,6 +19,16 @@
 #define GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT_EXT GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT
 #endif
 typedef PFNGLBUFFERSTORAGEPROC PFNGLBUFFERSTORAGEEXTPROC;
+
+/* Desktop GL compiles GLSL ES 3.x through GL_ARB_ES3_compatibility (300 es),
+ * GL_ARB_ES3_1_compatibility (310 es) and GL_ARB_ES3_2_compatibility (320 es). */
+static inline bool dvbridge_gl_glsl_es(pl_opengl gl, int version)
+{
+    if (version >= 310 && (gl->major < 4 || (gl->major == 4 && gl->minor < 3)))
+        return false;
+    return pl_opengl_has_ext(gl, version >= 320 ? "GL_ARB_ES3_2_compatibility" :
+        version >= 310 ? "GL_ARB_ES3_1_compatibility" : "GL_ARB_ES3_compatibility");
+}
 
 /* Core profiles dropped GL_RED_BITS and friends and call the default colour buffer
  * GL_BACK_LEFT, so read the sizes and the encoding from the bound colour attachment. */

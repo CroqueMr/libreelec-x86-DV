@@ -5,6 +5,9 @@
 #include <libplacebo/dispatch.h>
 #include <libplacebo/shaders/custom.h>
 #include <libplacebo/shaders/sampling.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#endif
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +25,12 @@ struct cb1_hdr10_ingress {
 
 struct cb1_hdr10_ingress *cb1_hdr10_ingress_create(pl_gpu gpu)
 {
+#if defined(DVBRIDGE_DESKTOP_GL)
+    pl_opengl gl=gpu?pl_opengl_get(gpu):NULL;
+    if (!gl || !dvbridge_gl_glsl_es(gl,300)) return NULL;
+#else
     if (!gpu || !gpu->glsl.gles || gpu->glsl.version<300) return NULL;
+#endif
     pl_fmt format=pl_find_fmt(gpu,PL_FMT_UNORM,4,16,16,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE);
     if (!format) return NULL;
     struct cb1_hdr10_ingress *ctx=calloc(1,sizeof(*ctx));if (!ctx)return NULL;
