@@ -1,0 +1,431 @@
+Subject: [PATCH] Blu-ray: let disc menus be brightened and saturated over HDR
+
+Over HDR video a disc menu goes through the GUI composite: an 8-bit sRGB
+GUI framebuffer that one PQ curve maps to 203 nit reference white. Next
+to a bright film that menu can look dim and washed out, and nothing in
+the composite can lift it - the GUI framebuffer already tops out at its
+reference white.
+
+Add "Disc menu brightness (HDR)" and "Disc menu saturation (HDR)" to the
+Blu-ray disc settings. While either is off 100%, and only while Kodi's
+own HDR composite is the PQ destination, HDMV and BD-J menu bitmaps take
+the existing PQ bitmap route (RenderHDROverlays, straight into the PQ
+back buffer) instead of the GUI composite. CB1's Dolby Vision and
+rendering circuits are left alone: they compose PQ bitmaps into their
+own picture, and a BD-J plane present for the whole title would change
+how every frame is prepared there. The noblend shader then converts each
+menu texel once: IEC 61966-2-1 decode and BT.709 -> BT.2020 exactly as
+the GUI composite does, luminance-preserving saturation, reference white
+times the brightness gain, ST 2084 encode, and the same limited-range
+encode PQ bitmaps get. Settings are read when the menu is drawn, so a
+menu on screen follows them on the next frame.
+
+At 100% / 100% nothing is rerouted, so menus keep the GUI composite byte
+for byte. Subtitles, the Kodi interface, SDR output (including CB1's SDR
+compositor) and movie pixels are unchanged.
+
+The idea comes from fandangos/Kodi-HDR-Edition's Android disc menu HDR
+slider (GPL-2.0-or-later), re-done for the GBM GUI composite.
+
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 5cb5f61..9851c1c 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26326,6 +26326,18 @@ msgctxt "#40962"
+ msgid "Adjust only bitmap subtitles in their authoring domain before composition. 100% preserves original colours. Changes apply while paused too. Text subtitles, disc menus and movie pixels are unchanged."
+ msgstr ""
+ 
++msgctxt "#41360"
++msgid "Disc menu brightness (HDR)"
++msgstr ""
++
++msgctxt "#41361"
++msgid "Disc menu saturation (HDR)"
++msgstr ""
++
++msgctxt "#41362"
++msgid "Adjust Blu-ray menu graphics (HDMV and BD-J) shown over HDR video through Kodi's HDR output (HDR10 : Native, HLG : Native or Kodi : Default). 100% brightness keeps menu white at the 203 nit reference white of the Kodi interface; raise it when a menu looks dim or washed out next to the film. 100% saturation keeps the menu's own colours. Applies on the next frame, including while a menu is on screen. Dolby Vision and conversion circuits, subtitles, the Kodi interface, SDR output and movie pixels are unchanged."
++msgstr ""
++
+ msgctxt "#40980"
+ msgid "Add CM4.0 metadata"
+ msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+index c4505a8..f3e591c 100755
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -777,6 +777,34 @@
+           </constraints>
+           <control type="list" format="string" />
+         </setting>
++        <setting id="disc.menuhdrbrightness" type="integer" label="41360" help="41362">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <dependencies>
++            <dependency type="visible" on="property" name="ishdrdisplay" />
++          </dependencies>
++          <level>1</level>
++          <default>100</default>
++          <constraints>
++            <minimum>50</minimum>
++            <step>5</step>
++            <maximum>500</maximum>
++          </constraints>
++          <control type="slider" format="percentage" />
++        </setting>
++        <setting id="disc.menuhdrsaturation" type="integer" label="41361" help="41362">
++          <requirement>HAVE_DVBRIDGE</requirement>
++          <dependencies>
++            <dependency type="visible" on="property" name="ishdrdisplay" />
++          </dependencies>
++          <level>1</level>
++          <default>100</default>
++          <constraints>
++            <minimum>0</minimum>
++            <step>5</step>
++            <maximum>200</maximum>
++          </constraints>
++          <control type="slider" format="percentage" />
++        </setting>
+       </group>
+       <group id="3" label="620">
+         <setting id="audiocds.autoaction" type="integer" label="14097" help="36441">
+diff --git a/system/shaders/GLES/2.0/gles_shader_texture_noblend.frag b/system/shaders/GLES/2.0/gles_shader_texture_noblend.frag
+index f893992..74bab04 100644
+--- a/system/shaders/GLES/2.0/gles_shader_texture_noblend.frag
++++ b/system/shaders/GLES/2.0/gles_shader_texture_noblend.frag
+@@ -25,6 +25,9 @@ uniform sampler2D m_samp0;
+ varying vec4 m_cord0;
+ uniform float m_sdrPeak;
+ uniform float m_pma;
++// Disc menu drawn straight into a PQ destination: x is the linear gain over the 203 nit GUI
++// reference white (0 leaves the texel alone), y the saturation, z selects limited range.
++uniform highp vec4 m_menuPQ;
+ 
+ void main ()
+ {
+@@ -32,6 +35,27 @@ void main ()
+ 
+   rgb = texture2D(m_samp0, m_cord0.xy);
+ 
++  if (m_menuPQ.x > 0.0)
++  {
++    highp float alpha = rgb.a;
++    highp vec3 c = rgb.rgb;
++    if (m_pma > 0.5)
++      c = alpha > 0.0 ? c / alpha : vec3(0.0);
++    c = clamp(c, 0.0, 1.0);
++    // IEC 61966-2-1 and BT.709 -> BT.2020, as gles_gui_composite.frag decodes the interface.
++    c = mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
++    highp float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
++    c = max(vec3(luma) + (c - vec3(luma)) * m_menuPQ.y, 0.0);
++    c = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0114, 0.8956) * c;
++    c = min(c * (0.0203 * m_menuPQ.x), 1.0);
++    highp vec3 p = pow(c, vec3(0.1593017578125));
++    c = pow((0.8359375 + 18.8515625 * p) / (1.0 + 18.6875 * p), vec3(78.84375));
++    if (m_menuPQ.z > 0.5)
++      c = c * (219.0 / 255.0) + 16.0 / 255.0;
++    gl_FragColor = vec4(m_pma > 0.5 ? c * alpha : c, alpha);
++    return;
++  }
++
+ #if defined(KODI_LIMITED_RANGE)
+   rgb.rgb *= (235.0 - 16.0) / 255.0;
+   rgb.rgb += mix(1.0, rgb.a, m_pma) * 16.0 / 255.0;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
+index 5183876..de56143 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp
+@@ -150,6 +150,17 @@ void CRenderer::ReleaseUnused()
+   }
+ }
+ 
++namespace
++{
++//! Drawn into the PQ destination instead of the sRGB GUI composite: bitmaps that are PQ
++//! already, and disc menu graphics while an HDR menu adjustment is active.
++bool DrawsAsPQ(const COverlay& overlay, bool menuPQ)
++{
++  return overlay.m_isHDROverlay ||
++         (menuPQ && overlay.m_isBitmap && overlay.m_source == DVDOverlaySource::MENU);
++}
++} // namespace
++
+ void CRenderer::Render(int idx, float depth)
+ {
+   std::unique_lock lock(m_section);
+@@ -159,6 +170,7 @@ void CRenderer::Render(int idx, float depth)
+   // RenderHDROverlays instead
+   const bool hdrComposite = CServiceBroker::GetWinSystem()->IsHdrComposite() &&
+       !ShouldConvertPQPaletteToSRGB(true);
++  const auto menuPQ = GetMenuPQAdjustment();
+   const RenderStereoView stereoView =
+       CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
+ 
+@@ -175,7 +187,7 @@ void CRenderer::Render(int idx, float depth)
+                                                              stereoView, m_stereomode))
+         continue;
+ 
+-      if (!(hdrComposite && o->m_isHDROverlay))
++      if (!(hdrComposite && DrawsAsPQ(*o, menuPQ.has_value())))
+         Render(o.get());
+ #ifdef HAVE_DVBRIDGE
+       else if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+@@ -189,6 +201,7 @@ void CRenderer::Render(int idx, float depth)
+   }
+ 
+   m_lastDrawnPlaneOffset = m_subtitlePlaneOffset;
++  m_lastDrawnMenuPQ = menuPQ;
+ 
+   ReleaseUnused();
+ }
+@@ -211,6 +224,7 @@ void CRenderer::RenderHDROverlays(int idx)
+ 
+   const RenderStereoView stereoView =
+       CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
++  const bool menuPQ = GetMenuPQAdjustment().has_value();
+ 
+   std::vector<SElement>& list = m_buffers[idx];
+   for (std::vector<SElement>::iterator it = list.begin(); it != list.end(); ++it)
+@@ -218,7 +232,7 @@ void CRenderer::RenderHDROverlays(int idx)
+     if (it->overlay_dvd)
+     {
+       std::shared_ptr<COverlay> o = Convert(*it);
+-      if (!o || !o->m_isHDROverlay)
++      if (!o || !DrawsAsPQ(*o, menuPQ))
+         continue;
+ 
+       if (!KODI::VIDEO::SUBTITLES::ShouldRenderStereoOverlay(it->overlay_dvd->m_stereoView,
+@@ -595,6 +609,7 @@ void CRenderer::PrepareOverlays(int idx)
+   bool doMarkDirty = false;
+   bool hasImageSpu = false;
+   bool hasVisible = false;
++  bool hasMenuBitmap = false;
+   for (auto& e : m_buffers[idx])
+   {
+     // Clear last frame's cached output; libass may have invalidated the
+@@ -616,6 +631,8 @@ void CRenderer::PrepareOverlays(int idx)
+     {
+       hasImageSpu = true;
+       hasVisible = true;
++      if (o.IsOverlayType(DVDOVERLAY_TYPE_IMAGE) && o.GetSource() == DVDOverlaySource::MENU)
++        hasMenuBitmap = true;
+       if (o.m_textureid == 0)
+         doMarkDirty = true;
+       continue;
+@@ -770,6 +787,11 @@ void CRenderer::PrepareOverlays(int idx)
+   if (hasVisible && m_subtitlePlaneOffset != m_lastDrawnPlaneOffset)
+     doMarkDirty = true;
+ 
++  // The disc menu settings are read when the menu is drawn, so a menu already on screen
++  // follows them on the next frame once the GUI walks again.
++  if (hasMenuBitmap && GetMenuPQAdjustment() != m_lastDrawnMenuPQ)
++    doMarkDirty = true;
++
+   if (doMarkDirty)
+     MarkDirty();
+ }
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h
+index ae1a804..6dc26f5 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h
+@@ -10,6 +10,7 @@
+ #pragma once
+ 
+ #include "BaseRenderer.h"
++#include "OverlayRendererUtil.h"
+ #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlay.h"
+ #include "cores/VideoPlayer/DVDSubtitles/SubtitlesStyle.h"
+ #include "settings/SubtitlesSettings.h"
+@@ -255,6 +256,9 @@ namespace OVERLAY {
+     //! The offset the overlays on screen were last actually drawn with. Compared against
+     //! m_subtitlePlaneOffset to notice a depth change a redraw has yet to show.
+     std::optional<int> m_lastDrawnPlaneOffset;
++    //! Disc menu HDR adjustment the last GUI walk drew with; a change moves the menu between
++    //! the GUI composite and the PQ destination, which only a redraw shows.
++    std::optional<MenuPQAdjustment> m_lastDrawnMenuPQ;
+     // Current subtitle position
+     int m_subtitlePosition{0};
+     // Current subtitle position from resolution info,
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
+index e80f81c..a7f7add 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
+@@ -551,6 +551,15 @@ void COverlayTextureGLES::Render(SRenderState& state)
+   if (m_pma)
+     glUniform1f(renderSystem->GUIShaderGetPma(), 1.0f);
+ 
++  // A disc menu adjusted for HDR is routed past the GUI composite (CRenderer::Render), so it
++  // is converted to PQ here, per texel, with the settings of this frame.
++  if (m_isBitmap && m_source == DVDOverlaySource::MENU)
++  {
++    if (const auto menuPQ = OVERLAY::GetMenuPQAdjustment())
++      glUniform4f(renderSystem->GUIShaderGetMenuPQ(), menuPQ->gain, menuPQ->saturation,
++                  (OVERLAY::BitmapPaletteOutputState() & 2u) ? 1.0f : 0.0f, 0.0f);
++  }
++
+   GLfloat ver[4][2];
+   GLfloat tex[4][2];
+   GLubyte idx[4] = {0, 1, 3, 2}; //determines order of triangle strip
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+index 3a7c558..fa947d4 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+@@ -315,6 +315,37 @@ unsigned BitmapPaletteOutputState()
+          (window->IsHdrComposite() && window->UseLimitedColor() && !cb1PQ ? 2u : 0u);
+ }
+ 
++std::optional<MenuPQAdjustment> GetMenuPQAdjustment()
++{
++#if defined(HAS_GLES) && defined(HAVE_DVBRIDGE)
++  const auto component = CServiceBroker::GetSettingsComponent();
++  const auto settings = component ? component->GetSettings() : nullptr;
++  if (!settings || !settings->GetSetting(CSettings::SETTING_DISC_MENUHDRBRIGHTNESS) ||
++      !settings->GetSetting(CSettings::SETTING_DISC_MENUHDRSATURATION))
++    return std::nullopt;
++  const int brightness = settings->GetInt(CSettings::SETTING_DISC_MENUHDRBRIGHTNESS);
++  const int saturation = settings->GetInt(CSettings::SETTING_DISC_MENUHDRSATURATION);
++  if (brightness == 100 && saturation == 100)
++    return std::nullopt;
++
++  // The same PQ destination test that moves PQ bitmaps out of the GUI composite: the HDR
++  // composite with no SDR compositor behind it.
++  const CWinSystemBase* winSystem = CServiceBroker::GetWinSystem();
++  if (!winSystem || !winSystem->IsHdrComposite() || ShouldConvertPQPaletteToSRGB(true))
++    return std::nullopt;
++  // CB1's Dolby Vision and rendering circuits compose PQ bitmaps into their own picture. A BD-J
++  // plane is present for the whole title, so moving it there changes how every frame is
++  // prepared; keep their menus on the GUI composite.
++  if (const auto* gbm = dynamic_cast<const KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(winSystem);
++      gbm && gbm->HasDVBridgeScreenshot())
++    return std::nullopt;
++  return MenuPQAdjustment{std::clamp(brightness, 50, 500) / 100.0f,
++                          std::clamp(saturation, 0, 200) / 100.0f};
++#else
++  return std::nullopt;
++#endif
++}
++
+ namespace
+ {
+ constexpr float ST2084_m1 = 2610.0f / (4096.0f * 4.0f);
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
+index d4fbd12..ce569cc 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
+@@ -8,6 +8,7 @@
+ 
+ #pragma once
+ 
++#include <optional>
+ #include <stdint.h>
+ #include <stdlib.h>
+ #include <vector>
+@@ -43,6 +44,21 @@ bool ShouldConvertPQPaletteToSRGB(bool isHDROverlay);
+ //! Texture-upload conversions baked into a PQ bitmap: bit 0 sRGB, bit 1 limited range.
+ unsigned BitmapPaletteOutputState();
+ 
++//! How a disc menu graphic (HDMV IG or BD-J plane) is converted when it is drawn straight into
++//! a PQ destination instead of through the GUI composite.
++struct MenuPQAdjustment
++{
++  float gain{1.0f}; //!< linear-light gain over the 203 nit GUI reference white
++  float saturation{1.0f}; //!< BT.709 luminance-preserving saturation
++  bool operator==(const MenuPQAdjustment&) const = default;
++};
++
++//! The disc menu HDR adjustment for the current output, or nothing. Nothing when both settings
++//! are neutral, the destination is not PQ or a CB1 circuit composes the picture, so a menu keeps
++//! the ordinary sRGB GUI composite byte for byte. Only the GLES overlay renderer can draw a menu
++//! as PQ.
++std::optional<MenuPQAdjustment> GetMenuPQAdjustment();
++
+ //! Converts a PGS palette (CDVDOverlayImage::palette - PIXEL_A/R/G/BSHIFT-
+ //! packed, see PlatformDefs.h) in place from BT.2020 ST.2084 (PQ) to
+ //! BT.709/sRGB, with reference white (203 nits, ITU-R BT.2408) mapped to
+diff --git a/xbmc/rendering/gles/GLESShader.cpp b/xbmc/rendering/gles/GLESShader.cpp
+index 08ff1fa..a9041ac 100644
+--- a/xbmc/rendering/gles/GLESShader.cpp
++++ b/xbmc/rendering/gles/GLESShader.cpp
+@@ -60,6 +60,7 @@ void CGLESShader::OnCompiledAndLinked()
+   m_hCoordStep = glGetUniformLocation(ProgramHandle(), "m_cordStep");
+   m_hDepth = glGetUniformLocation(ProgramHandle(), "m_depth");
+   m_hPma = glGetUniformLocation(ProgramHandle(), "m_pma");
++  m_hMenuPQ = glGetUniformLocation(ProgramHandle(), "m_menuPQ");
+ 
+   // Vertex attributes
+   m_hPos    = glGetAttribLocation(ProgramHandle(),  "m_attrpos");
+@@ -179,6 +180,10 @@ bool CGLESShader::OnEnabled()
+   // before drawing so the limited-range conversion offset scales by alpha.
+   glUniform1f(m_hPma, 0.0f);
+ 
++  // Disc menu PQ conversion is off unless COverlayTextureGLES asks for it for one draw.
++  if (m_hMenuPQ >= 0)
++    glUniform4f(m_hMenuPQ, 0.0f, 1.0f, 0.0f, 0.0f);
++
+   const float sdrPeak = CServiceBroker::GetWinSystem()->GetGuiSdrPeakLuminance();
+   glUniform1f(m_sdrPeak, sdrPeak);
+ 
+diff --git a/xbmc/rendering/gles/GLESShader.h b/xbmc/rendering/gles/GLESShader.h
+index 0320f05..b14fc68 100644
+--- a/xbmc/rendering/gles/GLESShader.h
++++ b/xbmc/rendering/gles/GLESShader.h
+@@ -27,6 +27,7 @@ public:
+   GLint GetCord1Loc() { return m_hCord1; }
+   GLint GetDepthLoc() { return m_hDepth; }
+   GLint GetPmaLoc() { return m_hPma; }
++  GLint GetMenuPQLoc() { return m_hMenuPQ; }
+   GLint GetUniColLoc() { return m_hUniCol; }
+   GLint GetCoord0MatrixLoc() { return m_hCoord0Matrix; }
+   GLint GetFieldLoc() { return m_hField; }
+@@ -63,6 +64,7 @@ protected:
+   GLint m_hBrightness = 0;
+   GLint m_hDepth = 0;
+   GLint m_hPma = 0;
++  GLint m_hMenuPQ = -1;
+ 
+   const GLfloat *m_proj;
+   const GLfloat *m_model;
+diff --git a/xbmc/rendering/gles/RenderSystemGLES.cpp b/xbmc/rendering/gles/RenderSystemGLES.cpp
+index 6036c22..c7a1718 100644
+--- a/xbmc/rendering/gles/RenderSystemGLES.cpp
++++ b/xbmc/rendering/gles/RenderSystemGLES.cpp
+@@ -762,6 +762,14 @@ GLint CRenderSystemGLES::GUIShaderGetPma()
+   return -1;
+ }
+ 
++GLint CRenderSystemGLES::GUIShaderGetMenuPQ()
++{
++  if (m_pShader[m_method])
++    return m_pShader[m_method]->GetMenuPQLoc();
++
++  return -1;
++}
++
+ GLint CRenderSystemGLES::GUIShaderGetUniCol()
+ {
+   if (m_pShader[m_method])
+diff --git a/xbmc/rendering/gles/RenderSystemGLES.h b/xbmc/rendering/gles/RenderSystemGLES.h
+index cff1855..1cf4d78 100644
+--- a/xbmc/rendering/gles/RenderSystemGLES.h
++++ b/xbmc/rendering/gles/RenderSystemGLES.h
+@@ -146,6 +146,7 @@ public:
+   GLint GUIShaderGetCoordStep();
+   GLint GUIShaderGetDepth();
+   GLint GUIShaderGetPma();
++  GLint GUIShaderGetMenuPQ();
+ 
+ protected:
+   virtual void SetVSyncImpl(bool enable) = 0;
+diff --git a/xbmc/settings/Settings.h b/xbmc/settings/Settings.h
+index 4bad5eb..340fcf5 100644
+--- a/xbmc/settings/Settings.h
++++ b/xbmc/settings/Settings.h
+@@ -193,6 +193,8 @@ public:
+   static constexpr auto SETTING_DVDS_PLAYERREGION = "dvds.playerregion";
+   static constexpr auto SETTING_DVDS_AUTOMENU = "dvds.automenu";
+   static constexpr auto SETTING_DISC_PLAYBACK = "disc.playback";
++  static constexpr auto SETTING_DISC_MENUHDRBRIGHTNESS = "disc.menuhdrbrightness";
++  static constexpr auto SETTING_DISC_MENUHDRSATURATION = "disc.menuhdrsaturation";
+   static constexpr auto SETTING_BLURAY_PLAYERREGION = "bluray.playerregion";
+   static constexpr auto SETTING_ACCESSIBILITY_AUDIOVISUAL = "accessibility.audiovisual";
+   static constexpr auto SETTING_ACCESSIBILITY_AUDIOHEARING = "accessibility.audiohearing";

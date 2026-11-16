@@ -177,6 +177,16 @@ Disc-menu graphics and text subtitles are excluded.
 Video-relative placement follows Kodi's video rectangle; encoded black bars
 are not removed through a separate L5 interpretation.
 
+With Kodi's HDR output (**HDR10 : Native**, **HLG : Native** or **Kodi : Default**),
+**Player > Discs > Disc menu brightness (HDR)** and **Disc menu saturation (HDR)**
+adjust HDMV and BD-J menu graphics. 100% brightness keeps menu white at the
+203-nit reference white of the Kodi interface; 500% reaches about 1,000 nits.
+At 100%/100%, the defaults, menus use the Kodi GUI composite unchanged. Otherwise
+each menu texel is converted once to BT.2020 PQ and drawn with the PQ bitmaps,
+bypassing the composite's 203-nit limit. Changes apply on the next frame,
+including while a menu is shown. Dolby Vision and conversion circuits, SDR
+output, subtitles and the Kodi interface are unaffected.
+
 Blu-ray navigation uses Kodi/libbluray. RC3 bundles the Java runtime and BD-J
 JAR pair matching native libbluray 1.5.0; no separate Java add-on is required.
 Disc-specific Java applications and repeated-disc memory behaviour are not

@@ -1976,5 +1976,24 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-hdr.patch": {
+    "summary": "Let Blu-ray menus be brightened and saturated over Kodi's HDR output, converting them straight to PQ only when adjusted",
+    "component": "kodi",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Name and explain the disc menu HDR brightness and saturation settings.",
+      "system/settings/settings.xml": "Offer disc menu HDR brightness and saturation in the Blu-ray disc settings, neutral by default.",
+      "system/shaders/GLES/2.0/gles_shader_texture_noblend.frag": "Convert a disc menu texel to brightened, saturated BT.2020 PQ when asked for one draw.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.cpp": "Route adjusted disc menu bitmaps with the PQ bitmaps and redraw a visible menu when its adjustment changes.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRenderer.h": "Remember the menu adjustment the last GUI walk drew with.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp": "Request the PQ menu conversion for an adjusted disc menu draw.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Read the menu adjustment, which applies only off neutral and to Kodi's own HDR composite.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h": "Declare the disc menu HDR adjustment.",
+      "xbmc/rendering/gles/GLESShader.cpp": "Look up the menu conversion uniform and switch it off for every other draw.",
+      "xbmc/rendering/gles/GLESShader.h": "Expose the menu conversion uniform.",
+      "xbmc/rendering/gles/RenderSystemGLES.cpp": "Return the active shader's menu conversion uniform.",
+      "xbmc/rendering/gles/RenderSystemGLES.h": "Declare the menu conversion uniform accessor.",
+      "xbmc/settings/Settings.h": "Name the disc menu HDR settings."
+    }
   }
 }
