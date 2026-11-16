@@ -1,4 +1,14 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-startup-hdr10-recovery.patch": {
+    "owner": "Recover a Dolby Vision startup without a compatible Dolby Vision transport.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Admit the existing HDR10 conversion only on an eligible link and source.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Scope the startup fallback to the playback session.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Snapshot transport availability before opening the stream.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Clear startup fallback on explicit circuit changes.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Preserve RPU and required enhancement data and report the fallback."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
     "owner": "Restore clipping before drawing the Kodi GUI.",
     "files": {
