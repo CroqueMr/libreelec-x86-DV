@@ -1805,5 +1805,20 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-mel-reference-history.patch": {
+    "owner": "Blu-ray minimum enhancement layer decoding",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Declare a codec option for Blu-ray navigation.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Enable metadata-only MEL handling for Blu-ray navigation.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Preserve matched metadata and attach an enhancement surface only when one was decoded."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-skip-keepalive-silence-drain.patch": {
+    "owner": "ActiveAE sink shutdown",
+    "files": {
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAESink.h": "Track whether audio was submitted since opening or draining the sink.",
+      "xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAESink.cpp": "Close a sink that only received generated keepalive samples promptly."
+    }
   }
 }

@@ -7,6 +7,43 @@ import test_audio_information_wiring as wiring
 
 class AudioSinkLifecycle(unittest.TestCase):
     run_cpp = wiring.AudioInformationWiring.run_cpp
+    def test_keepalive_can_close_without_draining_but_program_audio_is_preserved(self):
+        source = (TREE/'xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAESink.cpp').read_text()
+        output = body(source, 'unsigned int CActiveAESink::OutputSamples(')
+        self.assertIn('m_hasSubmittedAudio |= samples != &m_sampleOfSilence;', output)
+        code = r'''
+#include <cassert>
+#include <memory>
+struct Sink {
+  int& drained;
+  int& closed;
+  void Drain() { ++drained; }
+  void Deinitialize() { ++closed; }
+};
+struct Audio {
+  std::unique_ptr<Sink> m_sink;
+  bool m_hasSubmittedAudio = false;
+  void CloseSink(bool drain = true) CLOSE
+};
+int main() {
+  int drained = 0, closed = 0;
+  Audio audio;
+  const auto open = [&] { audio.m_sink = std::make_unique<Sink>(Sink{drained, closed}); };
+  open();
+  audio.CloseSink();
+  assert(drained == 0 && closed == 1 && !audio.m_sink);
+  open();
+  audio.m_hasSubmittedAudio = true;
+  audio.CloseSink();
+  assert(drained == 1 && closed == 2 && !audio.m_hasSubmittedAudio);
+  open();
+  audio.m_hasSubmittedAudio = true;
+  audio.CloseSink(false);
+  assert(drained == 1 && closed == 3 && !audio.m_hasSubmittedAudio);
+}
+'''
+        self.run_cpp(code.replace('CLOSE', body(source, 'void CActiveAESink::CloseSink(')))
+
     def test_disconnect_and_failed_configuration_hide_the_previous_output(self):
         native = (TREE/'xbmc/cores/AudioEngine/Engines/ActiveAE/ActiveAE.cpp').read_text()
         try:
