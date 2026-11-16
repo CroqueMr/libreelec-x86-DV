@@ -11,7 +11,7 @@ extends CB1's existing Vega M path and keeps the other DCE routes unchanged.
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
 @@ -25,6 +25,18 @@
  module_param_named(dv_lldv, dv_lldv, bool, 0444);
- MODULE_PARM_DESC(dv_lldv, "Expose experimental player-led 4:2:2 on native AMD HDMI");
+ MODULE_PARM_DESC(dv_lldv, "Legacy CB1 parameter; LLDV is selected per HDMI connector");
  
 +static bool dv_rx550(const struct dc_context *ctx)
 +{
@@ -45,7 +45,7 @@ extends CB1's existing Vega M path and keeps the other DCE routes unchanged.
  					connector->dv_standard_property, 0);
  	}
 -	if (dv_lldv) {
-+	if (dv_lldv && !rx550) {
++	if (!rx550) {
  		static const struct drm_prop_enum_list formats[] = {
  			{ 0, "Off" },
  			{ 1, "YCbCr 4:2:2 10 bits forced" },
@@ -56,7 +56,8 @@ extends CB1's existing Vega M path and keeps the other DCE routes unchanged.
 +	const bool rx550 = dv_rx550(stream->ctx);
  	struct drm_dvbridge_link link = {
  		.requested = amdgpu_dm_dv_transport(state),
- 		.lab_enabled = (lldv ? dv_lldv : dv_standard) && stream->ctx &&
+-		.lab_enabled = (lldv ? dv_lldv : dv_standard) && stream->ctx &&
++		.lab_enabled = (lldv || dv_standard) && stream->ctx &&
 -			dv_display_supported(stream->ctx->dce_version),
 +			(rx550 ? !lldv : dv_display_supported(stream->ctx->dce_version)),
  		.sink_standard = lldv ? lldv_sink_supported(&caps, mode) :

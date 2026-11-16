@@ -227,9 +227,8 @@ reports the format actually committed, including the experimental indicator
 for forced 4:2:2. The TV characteristics group shows the target peak and black
 level read from the Dolby Vision EDID.
 
-On supported AMD native-HDMI hardware, LLDV requires the `amdgpu.dv_lldv=1`
-boot option. Kodi shows the driver refusal when that option is off. The native
-4:2:2 path on the Ryzen 5 7430U was qualified at UHD 23.976/24 Hz with 10 useful
-bits. Where Kodi and the driver can use only forced 4:2:2, the selector labels
-that format experimental. For the qualified AMD paths, the HDMI carrier has
-12 bits and carries 10 bits of precision.
+On supported HDMI paths, choose **4:2:2 10-bit** explicitly when the selector
+labels it forced and experimental. Automatic prefers native 10-bit, then
+a compatible 12-bit transport. The driver checks the display and timing for each LLDV
+commit. The Ryzen 5 7430U path at UHD 23.976/24 Hz carries 10 useful bits in a
+12-bit HDMI carrier.

@@ -120,6 +120,7 @@ struct CSettingConditions {
 };
 struct StringUtils {template<class... T>static std::string Format(std::string text,T...){return text;}};
 CHOICES
+bool ShowLldvFormatMenu(bool){return false;}
 struct CDVPlaybackModes {
  static inline StreamHdrType source=StreamHdrType::HDR_TYPE_DOLBYVISION;
  static bool MenuEnabled(){return true;}static StreamHdrType SourceType(){return source;}

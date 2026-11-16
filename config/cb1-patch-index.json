@@ -1,4 +1,17 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
+    "owner": "Opt in to experimental 4:2:2 10-bit LLDV in Kodi.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Explain when a compatible HDMI format must be chosen.",
+      "system/settings/settings.xml": "Persist explicit consent independently of the HDMI format enum.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Choose and reconfirm a format in the existing selector.",
+      "xbmc/settings/SettingConditions.cpp": "Expose format selection for eligible LLDV circuits.",
+      "xbmc/utils/DVBridgeLldv.h": "Keep automatic selection native and require explicit consent for forcing.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read driver support from the active connector properties.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Remove the obsolete module-parameter cache.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Report the transport resolved for the selected format."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
     "owner": "Restore clipping before drawing the Kodi GUI.",
     "files": {
