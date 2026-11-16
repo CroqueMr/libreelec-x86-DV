@@ -103,6 +103,7 @@ struct Connector
   uint32_t id=17;
   std::optional<uint64_t> active=0;
   bool connected=true;
+  bool cta93FractionalOnly=false;
   const Mode* advertised{};
   int GetModesCount() const { return advertised ? 1 : 0; }
   const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
@@ -110,6 +111,11 @@ struct Connector
   bool IsConnected() const { return connected; }
   std::string_view GetType() const { return "HDMI-A"; }
   bool SupportsProperty(std::string_view key) const { return key=="CB1_LLDV_FORMAT"; }
+  std::optional<uint64_t> GetPropertyValue(std::string_view key) const
+  {
+    assert(key=="CB1_LLDV_CTA93_23976_ONLY");
+    return cta93FractionalOnly ? std::optional<uint64_t>(1) : std::nullopt;
+  }
   std::optional<uint64_t> GetPropertyEnumValue(std::string_view key, std::string_view name) const
   {
     assert(SupportsProperty(key));
@@ -195,6 +201,16 @@ int main()
   assert(supported(&widescreen));
   assert(!supported(&wrongAspect));
   assert(!supported(nullptr));
+  drm.connector.cta93FractionalOnly=true;
+  assert(supported(&fractional));
+  assert(!supported(&integer));
+  assert(!supported(&integer25));
+  assert(!supported(&fractional30));
+  drm.connector.advertised=&integer;
+  assert(!window.Read().availableTiming);
+  drm.connector.advertised=&fractional;
+  assert(window.Read().availableTiming);
+  drm.connector.cta93FractionalOnly=false;
   drm.connector.advertised=&fractional;
   assert(!supported(&integer60) && window.Read().availableTiming);
   assert(!SelectLldvTransport(window.Read(), 0).connectorId);

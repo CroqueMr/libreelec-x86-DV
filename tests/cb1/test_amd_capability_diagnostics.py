@@ -32,6 +32,7 @@ struct amdgpu_dm_connector {
  struct {int connector_signal;}*dc_link;
  void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property;
 };
+#define DRM_MODE_PROP_IMMUTABLE 4
 struct drm_prop_enum_list { unsigned value; const char *name; };
 enum {AMDGPU_LLDV_RGB10_LAB=3};
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
@@ -77,7 +78,9 @@ int main(){
  ctx.dce_version=DCN_VERSION_2_1;properties=0;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
  ctx.dce_version=DCE_VERSION_11_2; ctx.asic_id.chip_id=0x699f; dv_standard=true; properties=0;
- amdgpu_dm_dv_attach(&c);assert(properties==2 && strstr(message,"family_supported=1"));
+ c.lldv_format_property=NULL;
+ amdgpu_dm_dv_attach(&c);
+ assert(properties==4 && c.lldv_format_property && strstr(message,"family_supported=1"));
  ctx.asic_id.chip_id=0x67df;properties=0;
  amdgpu_dm_dv_attach(&c);assert(properties==0 && strstr(message,"family_supported=0"));
  device.dm.dc=NULL;properties=0;message[0]=0;

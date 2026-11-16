@@ -144,6 +144,7 @@ struct amdgpu_dm_connector {
  struct { void *dev; int connector_type;struct {unsigned id;}base; } base;
  struct link *dc_link; void *dv_standard_property,*hdr10_deep_color_property,*lldv_format_property;
 };
+#define DRM_MODE_PROP_IMMUTABLE 4
 struct drm_prop_enum_list { unsigned value; const char *name; };
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
 static bool dv_standard;

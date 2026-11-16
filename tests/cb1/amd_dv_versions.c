@@ -111,9 +111,24 @@ int main(void){
     mode.clock=296703; mode.vic=93; mode.refresh=24; s.timing.pix_clk_100hz=2967030;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
     assert(s.dv_standard && !s.dv_low_latency && s.dither_option==DITHER_OPTION_TRUN8);
-    state.lldv_format=1; state.dv_standard=false; dv_lldv=true;
+    c.lldv_format_property=true;
+    state.lldv_format=1;
+    state.dv_standard=false;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+    assert(s.dv_low_latency && !s.dv_native_422 && s.dither_option==DITHER_OPTION_TRUN8);
+    assert(s.vsp_infopacket.sb[4]==3 && !sum(&s.vsp_infopacket));
+    assert((s.avi_infopacket.sb[1] >> 5)==HDMI_COLORSPACE_YUV422);
+    assert(s.timing.pixel_encoding==PIXEL_ENCODING_RGB &&
+           s.timing.display_color_depth==COLOR_DEPTH_888);
+    mode.clock=297000;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
-    state.lldv_format=0; dv_lldv=false;
+    mode.clock=296703;
+    mode.vic=95;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    mode.vic=93;
+    state.lldv_format=AMDGPU_LLDV_RGB10_LAB;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    state.lldv_format=0;
     struct dc_stream_state ordinary=s;
     ordinary.dv_standard=false; ordinary.dither_option=DITHER_OPTION_DISABLE;
     ordinary.vsp_infopacket.valid=false;

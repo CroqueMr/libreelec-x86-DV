@@ -1,4 +1,16 @@
 {
+  "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": {
+    "owner": "Expose RX550 4:2:2 LLDV using the experimental packed carrier.",
+    "files": {
+      "drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c": "Publish the forced route with the existing CTA 93 fractional timing limit."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rx550-timing.patch": {
+    "owner": "Use the connector timing restriction in the LLDV selector.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Keep exact 23.976 Hz eligibility in sync with the RX550 driver."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
     "owner": "Opt in to experimental 4:2:2 10-bit LLDV in Kodi.",
     "files": {
