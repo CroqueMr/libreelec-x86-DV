@@ -1805,5 +1805,26 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Read, apply or report the active LLDV EDID target.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Read, apply or report the active LLDV EDID target."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzz-native-renderer-configure-result.patch": {
+    "owner": "RenderManager configuration result",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Read the configured renderer state after waiting on its readiness event."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-join-native-hdr-at-start.patch": {
+    "owner": "Native HDR timing at playback start",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h": "Identify streams whose first decoded picture can supply static HDR data.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Carry that intent with the requested video cadence.",
+      "xbmc/windowing/gbm/ModeChangeHold.h": "Allow a held video mode to start with native HDR signalling.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Submit the held mode with the first HDR picture."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzz-resync-before-more-video.patch": {
+    "owner": "Video worker startup synchronisation",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Wait for the startup clock message before polling for more decoded pictures."
+    }
   }
 }

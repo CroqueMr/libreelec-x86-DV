@@ -4,7 +4,7 @@ Based on SamuriHL/coreelec-xbmc at 54b2c4bec6ff7d93b183cc7423361fa91f8f6690.
 
 --- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
-@@ -1670,6 +1670,55 @@
+@@ -1670,6 +1670,65 @@
    SetCaching(CACHESTATE_FLUSH);
  }
  
@@ -15,6 +15,16 @@ Based on SamuriHL/coreelec-xbmc at 54b2c4bec6ff7d93b183cc7423361fa91f8f6690.
 +    return;
 +  auto& bluray = static_cast<CDVDInputStreamBluray&>(*m_pInputStream);
 +  const double pts = m_VideoPlayerVideo->GetCurrentPts();
++#if defined(BD_BDJ_PLAYBACK_CLOCK)
++  if (pts != DVD_NOPTS_VALUE && m_CurrentVideo.dts != DVD_NOPTS_VALUE &&
++      m_CurrentVideo.dispTime > 0)
++  {
++    // The demux position and DTS describe the same packet. Use them to put
++    // the rendered PTS on the playlist timeline, even when the reader is ahead.
++    const double time = DVD_MSEC_TO_TIME(m_CurrentVideo.dispTime) + pts - m_CurrentVideo.dts;
++    bluray.SetBdjPlaybackTime(static_cast<uint64_t>(std::max(0.0, time) * 90000.0 / DVD_TIME_BASE));
++  }
++#endif
 +  while (!m_bdjPresentationEvents.empty())
 +  {
 +    const auto event = m_bdjPresentationEvents.front();
@@ -354,12 +364,19 @@ Based on SamuriHL/coreelec-xbmc at 54b2c4bec6ff7d93b183cc7423361fa91f8f6690.
  
  #define HDMV_PID_VIDEO            0x1011
  #define HDMV_PID_VIDEO_SS         0x1012
-@@ -139,6 +140,15 @@
+@@ -139,6 +140,22 @@
  
    void GetStreamInfo(int pid, std::string &language);
    bool GetVideoPresentationWindow(bool& required, int64_t& first, int64_t& last) const;
 +#if defined(BD_BDJ_PRESENTATION_TIMING)
 +  void PollBdjEvents();
++#if defined(BD_BDJ_PLAYBACK_CLOCK)
++  void SetBdjPlaybackTime(uint64_t time)
++  {
++    if (IsBdjTitle() && m_titleInfo)
++      bd_bdj_set_playback_time(m_bd, std::min(time, m_titleInfo->duration));
++  }
++#endif
 +  void ReleaseBdjEvents(uint32_t seq);
 +  void ReleaseBdjEnd();
 +  void ResetBdjPresentation();

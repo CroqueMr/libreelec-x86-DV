@@ -6549,7 +6549,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  #include <errno.h>
  #include <string.h>
  #include <thread>
-@@ -24,18 +32,235 @@
+@@ -24,18 +32,246 @@
  #include <drm_fourcc.h>
  #include <drm_mode.h>
  #include <fcntl.h>
@@ -6731,16 +6731,27 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
 +
 +bool CDRMAtomic::PrepareSDRRestore(int& flags)
 +{
-+  if (!m_sdrRestorePending) return true;
-+  if (!m_connector) return false;
-+  if (!m_connector->SupportsProperty("HDR_OUTPUT_METADATA"))
++  if (!m_connector) return !m_sdrRestorePending;
++  // The connector can retain CB1 transport after its userspace owner exits.
++  // Take it over in the first real SDR modeset, with the GUI framebuffer.
++  const auto inheritedStandard = !m_committedMode.clock &&
++      m_connector->GetPropertyValue("DVBRIDGE_DV_STANDARD_LAB").value_or(0);
++  const auto inheritedPlayerLed = !m_committedMode.clock &&
++      m_connector->GetPropertyValue("CB1_LLDV_FORMAT").value_or(0);
++  const bool inheritedTransport = inheritedStandard || inheritedPlayerLed;
++  if (!m_sdrRestorePending && !inheritedTransport) return true;
++  const bool hasHDRMetadata = m_connector->SupportsProperty("HDR_OUTPUT_METADATA");
++  if (!hasHDRMetadata && !inheritedTransport)
 +  {
 +    SetSDRRestorePending(false);
 +    return true;
 +  }
++  if (inheritedTransport) SetSDRRestorePending(true);
 +  m_req->sdrRestore = true;
 +  flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
-+  if (!AddProperty(m_connector, "HDR_OUTPUT_METADATA", 0)) return false;
++  if ((inheritedStandard && !AddProperty(m_connector, "DVBRIDGE_DV_STANDARD_LAB", 0)) ||
++      (inheritedPlayerLed && !AddProperty(m_connector, "CB1_LLDV_FORMAT", 0)) ||
++      (hasHDRMetadata && !AddProperty(m_connector, "HDR_OUTPUT_METADATA", 0))) return false;
 +  if (m_connector->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR") &&
 +      !AddProperty(m_connector, "DVBRIDGE_HDR10_DEEP_COLOR", 0)) return false;
 +  if (m_connector->SupportsProperty("Colorspace"))
@@ -6786,7 +6797,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    if (m_old_crtc != nullptr)
    {
      if (m_old_crtc->GetId() != m_crtc->GetId())
-@@ -72,20 +297,28 @@
+@@ -72,20 +308,28 @@
      m_old_crtc = nullptr;
    }
  
@@ -6820,7 +6831,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    }
  
    // In Direct-To-Plane (dual plane) mode m_gui_plane is the output
-@@ -102,10 +335,16 @@
+@@ -102,10 +346,16 @@
      AddProperty(outputPlane, "SRC_Y", 0);
      AddProperty(outputPlane, "SRC_W", m_width << 16);
      AddProperty(outputPlane, "SRC_H", m_height << 16);
@@ -6838,7 +6849,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      if (m_inFenceFd != -1)
      {
-@@ -133,13 +372,27 @@
+@@ -133,13 +383,27 @@
    if (CServiceBroker::GetLogging().CanLogComponent(LOGWINDOWING))
      m_req->LogAtomicRequest();
  
@@ -6868,7 +6879,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
      auto oldRequest = m_atomicRequestQueue.front().get();
      CDRMAtomicRequest::LogAtomicDiff(m_req, oldRequest);
-@@ -150,13 +403,39 @@
+@@ -150,13 +414,39 @@
        AddProperty(outputPlane, "FB_ID", fb_id);
    }
  
@@ -6911,7 +6922,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    {
      // Sync the property cache with values the kernel accepted.
      // This must happen after a successful commit so that
-@@ -164,10 +443,23 @@
+@@ -164,10 +454,23 @@
      // after Disable()). Without this, stale cached values cause
      // incorrect plane cleanup on subsequent video playback.
      m_req->CacheProperties();
@@ -6935,7 +6946,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  
    if (m_inFenceFd != -1)
    {
-@@ -177,10 +469,198 @@
+@@ -177,10 +480,198 @@
  
    m_atomicRequestQueue.emplace_back(std::make_unique<CDRMAtomicRequest>());
    m_req = m_atomicRequestQueue.back().get();
@@ -7134,7 +7145,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    struct drm_fb* drm_fb = nullptr;
    uint32_t flags = 0;
  
-@@ -189,6 +669,7 @@
+@@ -189,6 +680,7 @@
      drm_fb = CDRMUtils::DrmFbGetFromBo(bo);
      if (!drm_fb)
      {
@@ -7142,7 +7153,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
        CLog::LogF(LOGERROR, "Failed to get a new FBO");
        return;
      }
-@@ -200,11 +681,12 @@
+@@ -200,11 +692,12 @@
    if (m_need_modeset)
    {
      flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
@@ -7157,7 +7168,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  }
  
  bool CDRMAtomic::InitDrm()
-@@ -255,6 +737,14 @@
+@@ -255,6 +748,14 @@
  
  void CDRMAtomic::DestroyDrm()
  {
@@ -7172,7 +7183,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    CDRMUtils::DestroyDrm();
  }
  
-@@ -295,6 +785,7 @@
+@@ -295,6 +796,7 @@
  
  bool CDRMAtomic::SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo)
  {
@@ -7180,7 +7191,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_need_modeset = true;
  
    return true;
-@@ -302,6 +793,7 @@
+@@ -302,6 +804,7 @@
  
  bool CDRMAtomic::SetActive(bool active)
  {
@@ -7188,7 +7199,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    m_need_modeset = true;
    m_active = active;
  
-@@ -310,11 +802,61 @@
+@@ -310,11 +813,61 @@
  
  bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t value)
  {
@@ -7253,7 +7264,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
  CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())
  {
  }
-@@ -332,6 +874,7 @@
+@@ -332,6 +885,7 @@
      return false;
  
    m_atomicRequestItems[object][propertyId] = value;
@@ -7261,7 +7272,7 @@ See config/cb1-patch-index.json for per-file provenance and responsibilities.
    return true;
  }
  
-@@ -381,6 +924,30 @@
+@@ -381,6 +935,30 @@
    LogAtomicRequest(LOGDEBUG, m_atomicRequestItems);
  }
  
