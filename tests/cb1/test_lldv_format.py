@@ -104,6 +104,7 @@ struct Connector
   std::optional<uint64_t> active=0;
   bool connected=true;
   bool cta93FractionalOnly=false;
+  bool r615=false;
   const Mode* advertised{};
   int GetModesCount() const { return advertised ? 1 : 0; }
   const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
@@ -119,6 +120,12 @@ struct Connector
   std::optional<uint64_t> GetPropertyEnumValue(std::string_view key, std::string_view name) const
   {
     assert(SupportsProperty(key));
+    if (r615)
+    {
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      if (name=="YCbCr 4:2:2 12 bits packed") return 2;
+      return {};
+    }
     if (name=="YCbCr 4:2:2 10 useful bits") return 1;
     if (name=="YCbCr 4:2:2 12 bits") return 2;
     if (name=="YCbCr 4:2:2 10 bits forced") return 3;
@@ -240,6 +247,20 @@ int main()
   assert(SelectLldvTransport(readback, 0).format==LldvFormat::Y422_12);
   const auto chosen=SelectLldvTransport(readback, LLDV_FORCE_422_10);
   assert(chosen.connectorId==17 && chosen.format==LldvFormat::Y422_10 && chosen.forced);
+  drm.connector.r615=true;
+  drm.connector.active=2;
+  readback=window.Read();
+  assert(readback.packed42212 && readback.forced42210);
+  assert(readback.active==LldvFormat::Y422_12 && !readback.activeForced);
+  assert(readback.driverFormats==LldvBit(LldvFormat::Y422_12));
+  assert(!SelectLldvTransport(readback, 0).connectorId);
+  assert(LldvUnavailableLabel(readback, int(LldvFormat::Y422_12), false)==41210);
+  window.m_lldvDisplay.sink.lldv_422_12=true;
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y422_12), false)==LLDV_CHOOSE_FORMAT_LABEL);
+  assert(SelectLldvTransport(window.Read(), LLDV_PACKED_422_12).format==LldvFormat::Y422_12);
+  drm.connector.active=1;
+  assert(window.Read().active==LldvFormat::Y422_10 && window.Read().activeForced);
+
   drm.connector.active.reset();
   assert(window.Read().active==LldvFormat::Auto);
   drm.active=false;
@@ -266,6 +287,10 @@ int main()
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         menu = body((kodi / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text(),
                     'bool ShowLldvFormatMenu(bool forCircuit)\n')
+        self.assertIn('i <= static_cast<int>(LldvFormat::Y422_12)', menu)
+        self.assertIn('selected <= LldvFormat::Y422_12', menu)
+        self.assertIn('dvbridge_lldv_444_bits(display.sink)', menu)
+        self.assertIn('LldvAutomaticFormats(status)', menu)
         start = menu.index('  const int choice = dialog->GetSelectedItem();')
         finish = menu.index('  return true;', start) + len('  return true;')
         program = r'''
@@ -292,9 +317,7 @@ struct Settings
 bool Confirm(const Dialog* dialog, Settings* settings, bool forCircuit,
              const LldvConnectorStatus& status, const LldvConnectorStatus& current)
 {
-  const auto requiresForcing = [&status](LldvFormat format) {
-    return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
-  };
+  PREFERENCES
   CONFIRM
 }
 
@@ -331,7 +354,8 @@ int main()
   assert(Confirm(&dialog, &settings, false, {}, {}));
   assert(settings.stored == 0);
 }
-'''.replace('CONFIRM', menu[start:finish])
+'''.replace('CONFIRM', menu[start:finish]).replace('PREFERENCES',
+    menu[menu.index('  const auto requiresForcing'):menu.index('  const auto saved')])
         run(self, {'test.cpp': program})
 
     def test_edid_and_selection(self):
@@ -362,6 +386,10 @@ int main()
   const auto caps = [&] { checksum(cta); return dvbridge_parse_edid(edid, sizeof(edid)); };
   auto sink = caps();
   assert(sink.status == DV_EDID_STANDARD && dvbridge_lldv_422(sink));
+  assert(!dvbridge_lldv_422_12(sink));
+  cta[9] |= 1;
+  assert(dvbridge_lldv_422_12(caps()));
+  cta[9] &= ~1;
   assert(dvbridge_lldv_444_bits(sink) == 0);
   assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true) == LldvReason::Driver);
   assert(LldvFormatReason(sink, LldvFormat::Rgb10, LLDV_422, true) == LldvReason::Display);
@@ -389,6 +417,21 @@ int main()
   auto native12 = forcedOnly;
   native12.driverFormats = LldvBit(LldvFormat::Y422_12);
   assert(SelectLldvTransport(native12, 0).format == LldvFormat::Y422_12);
+  auto packed12 = native12;
+  packed12.packed42212 = true;
+  assert(LldvUnavailableLabel(packed12, int(LldvFormat::Y422_12), false) == 41210);
+  assert(!SelectLldvTransport(packed12, 0).connectorId);
+  assert(SelectLldvTransport(packed12, LLDV_FORCE_422_10).forced);
+  cta[9] |= 1;
+  packed12.sink = caps();
+  assert(!SelectLldvTransport(packed12, 0).connectorId);
+  assert(!SelectLldvTransport(packed12, int(LldvFormat::Y422_12)).connectorId);
+  assert(LldvCanChooseFormat(packed12));
+  selected = SelectLldvTransport(packed12, LLDV_PACKED_422_12);
+  assert(selected.connectorId && selected.format == LldvFormat::Y422_12 && !selected.forced);
+  packed12.driverFormats = LLDV_422;
+  assert(SelectLldvTransport(packed12, 0).format == LldvFormat::Y422_10);
+  cta[9] &= ~1;
   auto native10 = forcedOnly;
   native10.driverFormats = LLDV_422;
   selected = SelectLldvTransport(native10, LLDV_FORCE_422_10);

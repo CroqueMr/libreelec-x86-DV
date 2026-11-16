@@ -361,12 +361,12 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9007-player-led-lab.patch": "a9ccc0f168cce398277c0f9f3652527b525b96da6e6a1d0d39aeb9567fab97d5",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "30ac4d651d33e3db112681a1c2d936db9f3b21c1d6bf2a380ad09f262f2eca28",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "b44fb2b3c825ee0ae4757c3e3df92d0ef2e9836b0813c5591e0bcc1b5fb38dc9",
-    "tests/cb1/test_lldv_format.py": "459da78033095b625b7ccc529f1613df587d4cff3c2715289947a717fb9566ca",
+    "tests/cb1/test_lldv_format.py": "9c17355b6faa0b564c7dc094457c9901a95fc7abf254c5cd3afecbd99abc88a5",
     "tests/cb1/test_lldv_player_info.py": "90a47d4611ec22d5864556c3bb7c964c9a7ce898afd50b6aa61e5b9cd2eecaed",
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "99f6d9dbb4de3c9d229b7aab3c12b302fa49fe209414169194b0a9196eafb493",
+    "config/cb1-patch-index.json": "df074a7a7d1c5294e50b214d210a7b8362e8f6d2acd18518f01e9b65526c8684",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -442,8 +442,11 @@
     "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": "e507b7d0abdb5fd705377a352307b6741dc996d15dc6ec20d23e02f373deddf7",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rx550-timing.patch": "ee959acc9e6b87ec8b87f3d938e7bd011cbd4961d557fa328f0956f0d57e5a35",
     "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": "bea4b2a7015841041a643a307627b314cb1e57e7d55ec7331588e1ef360f6c31",
-    "tests/cb1/test_intel_dv_versions.py": "8ee78822f248fd21bbe79cef06e3b398bbbb4565c29306ba18158d71b77c5831",
-    "docs/cb1/LLDV.md": "84da49680ed14afa461ba51ca6879943bbe8009a29a1cc92be39655505d0d4bc"
+    "tests/cb1/test_intel_dv_versions.py": "b1a78909f969d422589ddc2357f09ca78c55545b06af0f70b80b43ec73c1073e",
+    "docs/cb1/LLDV.md": "0922aeff026f1adc85bec37f61c5cead62dfa4204bb033516b0c83a38d1f9c99",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-signal-formats.patch": "be05a930c480783b741c088746a46af0f73803fafe81f6c223702bfd0fb975a8",
+    "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9008-player-led-422-12.patch": "22c75371f85d8d6ea3cf9f09668720d1b3cba80ef1d25eb4861ee4421f3bc6f4",
+    "projects/Generic/patches/linux/linux-9974-lldv-format-coverage.patch": "ff741256ec53fec02a4da99fd90c316f6348e1069d7aaf6911d140d0ed32d60e"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

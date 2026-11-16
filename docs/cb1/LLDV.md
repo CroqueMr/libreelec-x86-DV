@@ -12,7 +12,9 @@ The circuit requires valid target data and a compatible output. RPU reconstructi
 
 The LLDV HDMI format selector appears under Dolby Vision default playback when LLDV is selected. It reports the display data and explains why unavailable formats cannot be selected. An accepted format depends on both the display’s advertised capabilities and the driver’s output checks at the selected timing. On the qualified AMD path, 4:2:2 has 10 useful bits in a 12-bit carrier. The selector labels forced formats experimental. See the [AMD and Intel format notes](PLAYBACK.md#dolby-vision-lldv-format-selection). [Native HDMI support](DRIVER-COVERAGE.md#circuit-mapping)
 
-The RX550 Lexa (PCI ID 1002:699f) offers experimental 4:2:2 10-bit LLDV at native HDMI UHD 23.976 Hz only. Intel Display9–12 and Arc B on native HDMI use the same opt-in packed transport. The driver still validates the exact display mode and scanout before the picture is sent. These added routes need hardware qualification.
+The RX550 Lexa (PCI ID 1002:699f) offers experimental 4:2:2 10-bit LLDV at native HDMI UHD 23.976 Hz only. Intel Display9–12, Arc B and Nova Lake on native HDMI use the same opt-in packed transport. The driver still validates the exact display mode and scanout before the picture is sent. These added routes need hardware qualification.
+
+On NVIDIA R615, the 12-bit 4:2:2 option uses an experimental packed TMDS carrier. It requires a Dolby EDID block that advertises 12-bit 4:2:2 and an explicit selection. Auto continues to prefer supported non-experimental 10-bit routes, then supported non-experimental 12-bit routes. RGB and YCbCr 4:4:4 capabilities advertised by the display appear in Display Details. The selector offers 4:2:2 formats with implemented output paths.
 
 ## HDR10 : LLDV Reference conversion
 

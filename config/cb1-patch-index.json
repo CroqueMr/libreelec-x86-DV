@@ -1,4 +1,30 @@
 {
+  "projects/Generic/patches/linux/linux-9974-lldv-format-coverage.patch": {
+    "owner": "Read the Dolby 12-bit 4:2:2 EDID flag and admit the experimental Nova Lake HDMI path.",
+    "files": {
+      "include/drm/drm_dvbridge_edid.h": "Decode the 12-bit flag in the shared Dolby VSVDB parser.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Use the existing forced 10-bit path on Nova Lake under the same native-HDMI guards."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-signal-formats.patch": {
+    "owner": "Offer implemented LLDV formats and keep experimental R615 12-bit explicit.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Label the experimental packed format and display-advertised 4:4:4.",
+      "system/settings/settings.xml": "Persist experimental 12-bit opt-in independently of an existing 12-bit preference.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Keep only implemented transports in the selectable list.",
+      "xbmc/utils/DVBridgeEdid.h": "Keep the parser identical to the kernel driver parser.",
+      "xbmc/utils/DVBridgeLldv.h": "Require explicit selection and receiver 12-bit advertisement for the experimental format.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Resolve the packed DRM enum for the matched connector and stage it transactionally.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Offer the format picker when an experimental transport can be selected."
+    }
+  },
+  "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9008-player-led-422-12.patch": {
+    "owner": "Admit experimental packed 12-bit LLDV on R615.",
+    "files": {
+      "kernel-open/nvidia-drm/nvidia-drm-connector.c": "Validate the 12-bit advertisement under the existing packed transport guards.",
+      "kernel-open/nvidia-drm/nvidia-drm-drv.c": "Publish a distinct DRM enum for the experimental 12-bit carrier."
+    }
+  },
   "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": {
     "owner": "Reuse the experimental packed LLDV path on additional Intel HDMI engines.",
     "files": {

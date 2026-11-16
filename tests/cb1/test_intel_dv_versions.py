@@ -60,7 +60,7 @@ static int drm_hdmi_vendor_infoframe_from_display_mode(struct hdmi_vendor_infofr
 @@OWNER@@
 struct intel_display {
  unsigned display_ver;
- struct {bool alderlake_p,dg2,meteorlake,lunarlake,pantherlake,battlemage;} platform;
+ struct {bool alderlake_p,dg2,meteorlake,lunarlake,pantherlake,battlemage,novalake;} platform;
 };
 #define IS_DISPLAY_VER(display, first, last) \
  ((display)->display_ver >= (first) && (display)->display_ver <= (last))
@@ -82,6 +82,8 @@ int main(void){
  display.platform.battlemage=false;
  display.display_ver=35;
  assert(!intel_lldv_lab_enabled(&display));
+ display.platform.novalake=true;
+ assert(intel_lldv_lab_enabled(&display));
  u8 raw[256],wire[31],golden[31]={0x81,1,27,0x4b,0x46,0xd0,0,2};
  struct drm_property_blob blob={raw,sizeof(raw)};
  struct intel_connector con={.base={{true},&blob}};
