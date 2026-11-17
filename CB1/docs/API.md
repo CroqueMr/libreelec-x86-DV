@@ -123,6 +123,8 @@ resolve then uses the latest descriptors with the ordinary composition path.
 core context) tells CB1 that GUI or subtitles will be composed over the next
 prepared picture. While set, the transmitted L5 reports the full raster, so the
 display does not mask or crop controls and subtitles drawn in letterbox bars.
+An RPU without L5 transmits none, with or without overlays: CB1 never invents
+an active area, and only describes borders added by the player's placement.
 Only the outgoing DV metadata copy changes: the active-area video mask, which
 runs before overlay composition, `dvbridge_active_area`, policy snapshots and
 the caller's RPU keep the source margins. A change from the presented state

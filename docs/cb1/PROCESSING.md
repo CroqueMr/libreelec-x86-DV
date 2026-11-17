@@ -46,6 +46,8 @@ shared direct IPT path in both Master variants.
 
 Visible menus and subtitles use full-raster output L5 signaling so the TV does
 not hide them in the black bars. This does not expand the source picture.
+Dolby Vision metadata without L5 is sent without L5, as the TV's own player
+receives it; only borders added by the player's own placement are signaled.
 
 ## Units
 

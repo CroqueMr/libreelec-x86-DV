@@ -1,4 +1,11 @@
 {
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": {
+    "summary": "Prefer connected HDMI over the internal panel for the default GBM monitor choice",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Keep the explicit monitor choice and select HDMI-A over eDP or LVDS when both have an encoder."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
     "owner": "Restore clipping before drawing the Kodi GUI.",
     "files": {
