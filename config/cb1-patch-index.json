@@ -1368,8 +1368,10 @@
     "summary": "Allow explicitly requested background playback without blocking the GUI",
     "component": "kodi",
     "files": {
-      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for backgroundplayback items.",
-      "xbmc/application/ApplicationPlay.cpp": "Skip foreground directory probing for resolved background HTTP streams."
+      "xbmc/FileItem.h": "Declare the opt-in direct HTTP media check.",
+      "xbmc/FileItem.cpp": "Recognize explicitly requested background HTTP streams with a known MIME type.",
+      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for a resolved background HTTP stream.",
+      "xbmc/application/ApplicationPlay.cpp": "Skip directory probing for the same resolved background HTTP stream."
     }
   },
   "projects/Generic/patches/kodi/kodi-9998-bitmap-subtitle-shift.patch": {
