@@ -1,0 +1,100 @@
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -190,12 +190,28 @@
+   std::unique_lock lock(m_statelock);
+   if (m_renderState != STATE_CONFIGURED)
+   {
++    if (!finished)
++      CancelPendingConfigure();
+     CLog::Log(LOGWARNING, "CRenderManager::Configure - {}",
+               finished ? "failed to configure" : "timeout waiting for configure");
+     return false;
+   }
+ 
+   return true;
++}
++
++// The caller holds m_statelock. A late GUI tick must not configure a cancelled picture.
++void CRenderManager::CancelPendingConfigure()
++{
++  if (m_renderState != STATE_CONFIGURING)
++    return;
++
++  std::unique_lock lock(m_presentlock);
++  m_pConfigPicture.reset();
++  m_renderState = STATE_UNCONFIGURED;
++  m_presentstep = PRESENT_IDLE;
++  m_presentevent.notifyAll();
++  m_stateEvent.Set();
+ }
+ 
+ bool CRenderManager::Configure()
+@@ -204,6 +220,8 @@
+   std::unique_lock lock(m_statelock);
+   std::unique_lock lock2(m_presentlock);
+   std::unique_lock lock3(m_datalock);
++  if (m_renderState != STATE_CONFIGURING)
++    return false;
+ 
+ #if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
+   auto* vaapi = dynamic_cast<CRendererVAAPIGLES*>(m_pRenderer);
+@@ -219,6 +237,14 @@
+ #endif
+     DeleteRenderer();
+   }
++
++#if defined(HAVE_DVBRIDGE) && defined(HAVE_GBM) && defined(HAS_GLES)
++  // The old renderer can request an asynchronous restore in its destructor.
++  // Leave this picture queued until the GUI presents the restored output.
++  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++          CServiceBroker::GetWinSystem()); window && window->DeferRendererForOutputRestore())
++    return false;
++#endif
+ 
+   CreateRenderer();
+   if (m_pRenderer)
+@@ -773,6 +799,7 @@
+   }
+ 
+   std::unique_lock lock(m_statelock);
++  CancelPendingConfigure();
+ 
+   m_overlays.UnInit();
+   m_debugRenderer.Dispose();
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+@@ -195,6 +195,7 @@
+   bool IsGuiLayer();
+ 
+   bool Configure();
++  void CancelPendingConfigure();
+   void CreateRenderer();
+   void DeleteRenderer();
+ 
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -3782,6 +3782,14 @@
+   m_cb1FramePending = m_dvFrame = m_dvNativeGui = false;
+ }
+ 
++bool CWinSystemGbmGLESContext::DeferRendererForOutputRestore()
++{
++  if (!m_dvStopPending || m_dvRollbackFailed)
++    return false;
++  CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
++  return true;
++}
++
+ bool CWinSystemGbmGLESContext::StopDVBridgePlayback()
+ {
+   if (!m_dvStopPending && HoldCB1Stop())
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -179,6 +179,7 @@
+   bool EndDVBridge();
+   void DiscardDVBridgeFrame();
+   bool StopDVBridgePlayback();
++  bool DeferRendererForOutputRestore();
+   bool SetVideoOutput(const VideoPicture* picture) override;
+   bool DestroyWindowSystem() override;
+   bool DestroyWindow() override;

@@ -1976,5 +1976,14 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-renderer-restore-handoff.patch": {
+    "owner": "Wait for the previous display output to finish restoring before configuring the next Kodi renderer.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Keep the pending video picture across GUI frames and cancel it on timeout or teardown.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Declare cancellation of a pending configuration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Request a GUI redraw while the previous output is stopping.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose a pending output stop to the renderer."
+    }
   }
 }

@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "4dc943d8a8f9fda4f7bf3e2c4da6ca7da4273aefdb94d41f72efd7611a578d9b",
+    "config/cb1-patch-index.json": "aba15e02a93000f01dc38fa78dc42d445780a8f6795c4a6fb26499384c56343a",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -434,7 +434,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": "5fd1d1ae63bc065b86c053eb40859c7daba55a19122aee35741ecc973e982b26",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": "5ed0d20d581ca3fe5454d1869ed5d563ad0d8e54b4dbc0d9924c3263aad6c776",
     "tests/cb1/test_pascal_native_hdr.py": "13b6fa77868d50567456ff682dec15b03899cfa610822e9bb562cc7a1eb0710d",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": "5ff2bf28fff7bd9b7ba5e304204f5d15ede5a7f27f55f184504f4ccc4d5e634b"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": "5ff2bf28fff7bd9b7ba5e304204f5d15ede5a7f27f55f184504f4ccc4d5e634b",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-renderer-restore-handoff.patch": "a9b1f4f66a109c58a6da845c28b4bf64e477fac16226a3626e2f6cc02749ee5e",
+    "tests/cb1/test_renderer_output_restore.py": "740208db1b338bc91f92f13d276eacc2a339a1f3b93a5cb709e0dabfb04f3a59"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
