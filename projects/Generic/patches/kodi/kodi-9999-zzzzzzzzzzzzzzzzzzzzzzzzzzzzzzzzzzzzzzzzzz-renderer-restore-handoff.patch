@@ -73,7 +73,7 @@
  
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -3782,6 +3782,14 @@
+@@ -3782,6 +3782,17 @@
    m_cb1FramePending = m_dvFrame = m_dvNativeGui = false;
  }
  
@@ -81,6 +81,9 @@
 +{
 +  if (!m_dvStopPending || m_dvRollbackFailed)
 +    return false;
++  // A successor no longer needs to wait for the idle GUI's refresh rate change.
++  if (m_modeHold.Holding() == CModeChangeHold::Kind::STOP)
++    m_modeHold.Cancel();
 +  CServiceBroker::GetGUI()->GetWindowManager().MarkDirty();
 +  return true;
 +}

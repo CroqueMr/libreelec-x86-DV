@@ -24,6 +24,7 @@ class RendererOutputRestore(unittest.TestCase):
         teardown = teardown[teardown.index('std::unique_lock lock(m_statelock);'):
                             teardown.index('  m_overlays.UnInit();')]
         program = r'''
+#include "windowing/gbm/ModeChangeHold.h"
 #include <cassert>
 #include <chrono>
 #include <memory>
@@ -38,6 +39,7 @@ struct Window { virtual ~Window() = default; };
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext : Window {
   bool m_dvStopPending = false, m_dvRollbackFailed = false;
+  CModeChangeHold m_modeHold;
   bool DeferRendererForOutputRestore();
 };
 }
@@ -81,7 +83,14 @@ struct Manager {
 };
 int main() {
   Manager m;
+  auto& hold = CServiceBroker::win.m_modeHold;
+  KODI::WINDOWING::GBM::CModeChangeHold idle;
+  idle.Stop(0);
+  assert(!idle.Commits(1000)); // The idle hold outlasts the decoder watchdog.
+  hold.Stop(0);
   assert(!m.GuiConfigure() && m.deleted == 1 && m.created == 0);
+  assert(hold.Commits(16)); // A successor cancels only the idle mode wait.
+
   assert(!m.GuiConfigure() && !m.m_stateEvent.set && m.m_pConfigPicture);
   assert(CServiceBroker::gui.dirty == 2 && m.deleted == 1);
   CServiceBroker::win.m_dvStopPending = false;
@@ -103,7 +112,9 @@ int main() {
   Manager fresh;
   fresh.m_pRenderer = false;
   CServiceBroker::win.m_dvStopPending = false;
+  hold.Start(100);
   assert(fresh.GuiConfigure() && fresh.deleted == 0 && fresh.created == 1);
+  assert(hold.Holding() == KODI::WINDOWING::GBM::CModeChangeHold::Kind::START);
 
   Manager failedRestore;
   CServiceBroker::win.m_dvRollbackFailed = true;
@@ -117,6 +128,6 @@ int main() {
             source = root / 'test.cpp'
             source.write_text(program)
             binary = root / 'test'
-            subprocess.run(['c++', '-std=c++17', '-DHAVE_DVBRIDGE', '-DHAVE_GBM', '-DHAS_GLES',
+            subprocess.run(['c++', '-std=c++17', '-I' + str(TREE / 'xbmc'), '-DHAVE_DVBRIDGE', '-DHAVE_GBM', '-DHAS_GLES',
                             str(source), '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
