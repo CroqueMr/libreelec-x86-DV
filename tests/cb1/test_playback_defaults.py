@@ -90,7 +90,8 @@ struct AppMessenger {void PostMsg(int,int){assert(false);}} appMessenger;
 enum class VideoOutputType {DolbyVision,HDR10,HDR10Plus,HLG,SDR};
 struct DataCacheCore {
  struct VideoInfo {std::optional<VideoOutputType> outputType;struct {unsigned flags;bool lldv;} output;};
- VideoInfo GetVideoProcessingInfo(){return {};}
+ static inline VideoInfo recording{};
+ VideoInfo GetVideoProcessingInfo(){return recording;}
 };
 struct CServiceBroker {static auto& GetAppComponents(){return appComponents;}
  static DataCacheCore& GetDataCacheCore(){static DataCacheCore core;return core;}
@@ -149,6 +150,20 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   assert(current.output==initial.output&&current.method==initial.method&&current.hdr10Source==initial.hdr10Source);
   SelectOutputSettings();current=FrameOutputSettings();assert(current.output==OutputMode::MasterReference&&current.method==2);
   assert(current.hdr10Source==HDR10SourceMode::EnhancedDV&&current.hdr10PlusSource==HDR10SourceMode::Native&&current.hlgSource==HLGSourceMode::Native);
+ }
+ if(scenario=="fallback-menu"){
+  stored->ints["dvbridge.outputmode"]=int(OutputMode::PlayerLed);
+  SelectOutputSettings(false,false);
+  assert(FrameOutputSettings().hdr10TransportFallback);
+  dialog.confirmed=false;
+  choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0);
+  assert(dialog.current==8); // Before a frame is committed, the requested row remains selected.
+  DataCacheCore::recording={VideoOutputType::HDR10,{1,false}};
+  choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0);
+  assert(dialog.current==4); // Active circuit is HDR10 Rendering.
+  choose(StreamHdrType::HDR_TYPE_DOLBYVISION,0,true);
+  assert(dialog.current==8);
+  assert(FrameOutputSettings().output==OutputMode::PlayerLed && stored->writes==0);
  }
  if(scenario=="live"){
   for(int method=0;method<3;++method){assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,4+method));
@@ -293,14 +308,16 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
             for flags in ([],['-DCB1_TEST_NO_AI']):
                 built=subprocess.run(['c++','-std=c++20',*flags,'-I'+str(ROOT/'CB1/src'),'-I'+str(TREE/'xbmc'),str(code),'-o',str(binary)],capture_output=True,text=True)
                 self.assertEqual(built.returncode,0,built.stderr)
-                for scenario in ('default-edits','live','hdr10plus','settings','label','legacy-toggles','strict','master-first','player-led'):
+                for scenario in ('fallback-menu', 'default-edits','live','hdr10plus','settings','label','legacy-toggles','strict','master-first','player-led'):
                     with self.subTest(flags=flags,scenario=scenario):
                         ran=subprocess.run([str(binary),scenario],capture_output=True,text=True)
                         self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
 
     def test_native_prepare_is_the_only_selector_capture_boundary(self):
         video=(TREE/'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
-        self.assertIn('DVBRIDGE::SelectOutputSettings();',body(video,'void CVideoPlayer::Prepare()'))
+        prepare = body(video, 'void CVideoPlayer::Prepare()')
+        self.assertLess(prepare.index('DVBRIDGE::SelectOutputSettings('), prepare.index('OpenInputStream()'))
+        self.assertIn('caps.hdr10 && !caps.HDR10DepthLimited()', prepare)
         hits=[]
         for source in (TREE/'xbmc').rglob('*.cpp'):
             if 'SelectOutputSettings(' in source.read_text(errors='replace'): hits.append(source.relative_to(TREE).as_posix())

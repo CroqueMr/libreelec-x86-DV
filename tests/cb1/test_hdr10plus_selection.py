@@ -59,7 +59,7 @@ struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReaso
 struct OutputPreferences {
  HLGSourceMode hlgSource=HLGSourceMode::Native;
  OutputMode output=OutputMode::HDR10;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
- bool allowMasterFallback=true;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;
+ bool allowMasterFallback=true,hdr10TransportFallback=false;int method=2;dvbridge_mode mode=DVBRIDGE_MODE_HDR10PLUS;
  double peak=1000;int panel=0,gamut=2,lldvFormat=0;
  bool ProfileValid(int=0)const PROFILE
  dvbridge_policy Policy()const{return {.revision=1,.mode=mode};}
