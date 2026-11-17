@@ -2078,8 +2078,9 @@
       "xbmc/cores/VideoSourceSideData.cpp": "Require a decoded RPU and validated frame HDR10+ for the initial decision.",
       "xbmc/cores/DataCacheCore.h": "Expose the accepted effective input type to playback controls.",
       "xbmc/cores/DataCacheCore.cpp": "Keep the published input type tied to the accepted frame and stream generation.",
-      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Resolve the playback family on the first eligible decoded picture before rendering.",
-      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the effective source type in playback and Quick Switch without changing authored stream facts."
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Choose a verified compatible base from a presentable picture and retire Profile 7 enhancement pairing for HDR10+ playback.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the effective source type in playback and Quick Switch without changing authored stream facts.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Keep a confirmed HDR10+ base-only route on codec reopen."
     }
   }
 }

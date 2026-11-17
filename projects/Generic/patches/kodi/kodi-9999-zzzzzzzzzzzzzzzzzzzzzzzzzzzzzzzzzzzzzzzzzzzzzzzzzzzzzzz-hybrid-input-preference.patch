@@ -11,7 +11,7 @@ diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resour
 +msgstr ""
 +
 +msgctxt "#41501"
-+msgid "Choose the default input format for HEVC Dolby Vision Profile 8.1 videos with verified HDR10+ metadata. The setting applies when opening a video."
++msgid "Choose the default input format for HEVC Dolby Vision Profile 7 and 8.1 videos with verified HDR10+ metadata. The setting applies when opening a video."
 +msgstr ""
 +
 +msgctxt "#41502"
@@ -58,21 +58,23 @@ diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.h b/xbmc/cores/VideoPlayer/DVD
 diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
 --- a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp
-@@ -44,6 +44,13 @@
+@@ -44,6 +44,15 @@
  }
-
+ 
  CDVDStreamInfo::~CDVDStreamInfo() = default;
 +
 +bool CDVDStreamInfo::HasHDR10PlusCompatibleDolbyVisionBase() const
 +{
-+  return codec == AV_CODEC_ID_HEVC && dovi.dv_profile == 8 &&
-+         dovi.dv_bl_signal_compatibility_id == 1 && dovi.bl_present_flag &&
-+         dovi.rpu_present_flag && !dovi.el_present_flag;
++  if (codec != AV_CODEC_ID_HEVC || !dovi.bl_present_flag || !dovi.rpu_present_flag)
++    return false;
++
++  return (dovi.dv_profile == 8 && dovi.dv_bl_signal_compatibility_id == 1 && !dovi.el_present_flag) ||
++         (dovi.dv_profile == 7 && dovi.dv_bl_signal_compatibility_id == 6 && dovi.el_present_flag);
 +}
-
+ 
  void CDVDStreamInfo::Clear()
  {
-@@ -76,6 +83,7 @@
+@@ -76,6 +85,7 @@
    forced_aspect = false;
    bitsperpixel = 0;
    hdrType = StreamHdrType::HDR_TYPE_NONE;
@@ -80,7 +82,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp b/xbmc/cores/VideoPlayer/D
    colorSpace = AVCOL_SPC_UNSPECIFIED;
    colorRange = AVCOL_RANGE_UNSPECIFIED;
    colorPrimaries = AVCOL_PRI_UNSPECIFIED;
-@@ -213,6 +221,7 @@
+@@ -213,6 +223,7 @@
  // ASSIGNMENT
  void CDVDStreamInfo::Assign(const CDVDStreamInfo& right, bool withextradata)
  {
@@ -88,13 +90,13 @@ diff --git a/xbmc/cores/VideoPlayer/DVDStreamInfo.cpp b/xbmc/cores/VideoPlayer/D
    codec = right.codec;
    type = right.type;
    uniqueId = right.uniqueId;
-@@ -279,6 +288,7 @@
-
+@@ -279,6 +290,7 @@
+ 
  void CDVDStreamInfo::Assign(const CDemuxStream& right, bool withextradata)
  {
 +  preferHybridHDR10Plus = false;
    Clear();
-
+ 
    codec = right.codec;
 diff --git a/xbmc/cores/VideoSourceSideData.h b/xbmc/cores/VideoSourceSideData.h
 --- a/xbmc/cores/VideoSourceSideData.h
@@ -189,10 +191,188 @@ diff --git a/xbmc/cores/DataCacheCore.cpp b/xbmc/cores/DataCacheCore.cpp
 diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
 --- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
 +++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
-@@ -1313,6 +1313,13 @@
+@@ -558,7 +558,7 @@
+   {
+     AVCodecParameters* parameters = avcodec_parameters_alloc();
+     if (!parameters)
+-      return false;
++      return m_hints.preferHybridHDR10Plus;
+     int result = avcodec_parameters_from_context(parameters, m_pCodecContext);
+     if (result >= 0 && hints.doviELConfig)
+     {
+@@ -572,7 +572,7 @@
+     if (result >= 0)
+       m_dvFel = {dvbridge_fel_create(parameters, AVRational{1, AV_TIME_BASE}), dvbridge_fel_destroy};
+     avcodec_parameters_free(&parameters);
+-    if (!m_dvFel)
++    if (!m_dvFel && !m_hints.preferHybridHDR10Plus)
+       return false;
+   }
+ #endif
+@@ -699,7 +699,9 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+   const auto& layer = packet.doviLayerTimes;
+-  if (m_dvFel && layer.valid && m_dvLayerEpoch && layer.epoch != m_dvLayerEpoch)
++  const bool hybridLayer = m_hints.dovi.dv_profile == 7 &&
++                           (m_hints.preferHybridHDR10Plus || m_hints.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS);
++  if ((m_dvFel || hybridLayer) && layer.valid && m_dvLayerEpoch && layer.epoch != m_dvLayerEpoch)
+   {
+     if (layer.epoch < m_dvLayerEpoch)
+     {
+@@ -708,6 +710,10 @@
+     }
+     Reset(); // Both native decoders and pending pictures share this boundary.
+   }
++  const bool terminalEnhancement = layer.valid && layer.basePts == AV_NOPTS_VALUE &&
++                                   layer.enhancementPts != AV_NOPTS_VALUE;
++  if (!m_dvFel && terminalEnhancement)
++    return true; // A terminal enhancement unit has no base picture to decode.
+ #endif
+   if (m_eof)
+   {
+@@ -733,15 +739,14 @@
+ 
+   avpkt->data = packet.pData;
+   avpkt->size = packet.iSize;
+-#ifdef HAVE_DVBRIDGE
+-  if (m_dvFel)
+-  {
+-    if (packet.videoWindowed)
+-      avpkt->opaque = packet.videoDecodeOnly ? &decodeOnlyDVPacket : &presentableDVPacket;
+-  }
+-  else
+-#endif
+-  if (packet.videoDecodeOnly)
++  bool discard = packet.videoDecodeOnly;
++#ifdef HAVE_DVBRIDGE
++  const bool decodeOnly = discard || (hybridLayer && layer.valid && !layer.presentable);
++  if ((m_dvFel && packet.videoWindowed) || (hybridLayer && (packet.videoWindowed || decodeOnly)))
++    avpkt->opaque = decodeOnly ? &decodeOnlyDVPacket : &presentableDVPacket;
++  discard = !m_dvFel && decodeOnly;
++#endif
++  if (discard)
+     avpkt->flags |= AV_PKT_FLAG_DISCARD;
+   avpkt->dts = (packet.dts == DVD_NOPTS_VALUE)
+                    ? AV_NOPTS_VALUE
+@@ -760,14 +765,14 @@
+ #endif
+     ret = avcodec_send_packet(m_pCodecContext, avpkt);
+ #ifdef HAVE_DVBRIDGE
++  if (ret == 0 && layer.valid && (m_dvFel || hybridLayer))
++  {
++    m_dvLayerEpoch = layer.epoch;
++    m_dvVideoWindow = packet.videoWindowed;
++  }
+   // Submit once, only after BL accepted the packet (Kodi retries EAGAIN).
+   if (ret == 0 && m_dvFel)
+   {
+-    if (packet.doviLayerTimes.valid)
+-    {
+-      m_dvLayerEpoch = packet.doviLayerTimes.epoch;
+-      m_dvVideoWindow = packet.videoWindowed;
+-    }
+     const auto& timing = packet.doviLayerTimes;
+     const dvbridge_fel_source source{timing.basePts, timing.enhancementPts,
+         {timing.clockNum, timing.clockDen}, timing.epoch, timing.presentable};
+@@ -896,6 +901,11 @@
+             // The pairing owner consumed the exact EL from this stream/reset epoch.
+             base->doviEnhancementBinding = base->doviMetadata.Binding();
+           }
++          if (m_hints.preferHybridHDR10Plus)
++          {
++            m_dvPending.pop_front(); // Still probing: this was preroll or an invalid base.
++            continue;
++          }
+           pVideoPicture->CopyRef(*base);
+           m_dvPending.pop_front();
+           ReportDVStartup(8, result == 3 ? "mel-metadata-only" : "fel-paired");
+@@ -904,22 +914,36 @@
+         return VC_NONE;
+       };
+       VCReturn paired = emit();
++      if (paired == VC_FATAL)
++        break;
+       if (paired != VC_NONE)
+         return paired;
+       if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
+-        return VC_FATAL;
++        break;
+       if (m_codecControlFlags & DVD_CODEC_CTRL_POLL)
+         return VC_BUFFER;
+       if (m_dvPending.size() >= DVEnhancementPendingPictures)
+-        return VC_FATAL;
++        break;
+       auto base = std::make_shared<VideoPicture>();
+       base->Reset();
+       VCReturn result = GetBasePicture(base.get());
++      if (result == VC_PICTURE && base->hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS &&
++          base->sourceSideData && base->sourceSideData->HDR10PlusIsPrimary())
++      {
++        // The first presentable BL selected authored HDR10+. Any older unpaired
++        // pictures preceded that decision (preroll or invalid input).
++        m_dvPending.clear();
++        m_dvFel.reset();
++        pVideoPicture->CopyRef(*base);
++        return VC_PICTURE;
++      }
++      if (result == VC_FATAL && m_hints.preferHybridHDR10Plus)
++        return result; // Failure decoding the base itself.
+       if (m_pCodecContext->hw_frames_ctx)
+       {
+         auto* frames = reinterpret_cast<AVHWFramesContext*>(m_pCodecContext->hw_frames_ctx->data);
+         if (!dvbridge_fel_device(m_dvFel.get(), frames->device_ref))
+-          return VC_FATAL;
++          break;
+       }
+       if (result == VC_PICTURE)
+       {
+@@ -928,20 +952,35 @@
+       }
+       if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+         if (!dvbridge_fel_drain(m_dvFel.get()))
+-          return VC_FATAL;
++          break;
+       paired = emit();
++      if (paired == VC_FATAL)
++        break;
+       if (paired != VC_NONE)
+         return paired;
+       if (result == VC_EOF && !m_dvPending.empty())
+-        return VC_FATAL;
++        break;
+       if (result == VC_PICTURE && (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+         continue; // Retire internal preroll until a real picture or native EOF.
+       return result == VC_PICTURE ? VC_BUFFER : result;
+     }
+-  }
+-#endif
+-  const auto result = GetBasePicture(pVideoPicture);
+-#ifdef HAVE_DVBRIDGE
++    if (!m_hints.preferHybridHDR10Plus)
++      return VC_FATAL;
++    // The optional enhancement failed before a presentable BL proved the source.
++    // Its absence still makes a later Dolby Vision decision fail, including after a seek.
++    m_dvFel.reset();
++    m_dvPending.clear();
++  }
++#endif
++  auto result = GetBasePicture(pVideoPicture);
++  while (result == VC_PICTURE && m_hints.preferHybridHDR10Plus)
++  {
++    pVideoPicture->Reset();
++    result = GetBasePicture(pVideoPicture); // Discard unreadable/preroll input until a presentable BL.
++  }
++#ifdef HAVE_DVBRIDGE
++  if (result == VC_PICTURE && NeedsDVEnhancement())
++    return VC_FATAL; // A verified Dolby Vision selection requires the missing enhancement.
+   if (result == VC_PICTURE && m_dvNativeOutput)
+     ReportDVStartup(1, "base-decoded");
+ #endif
+@@ -1313,6 +1352,13 @@
    return VC_REOPEN;
  }
-
+ 
 +static bool HybridProbePicture(const AVFrame* frame, int codecFlags)
 +{
 +  return frame && frame->best_effort_timestamp != AV_NOPTS_VALUE && !frame->decode_error_flags &&
@@ -203,14 +383,18 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  void CDVDVideoCodecFFmpeg::CaptureSourceSideData(VideoPicture* pVideoPicture)
  {
    // Capture original native source facts before any bridge/AI/output mutation.
-@@ -1331,11 +1338,44 @@
+@@ -1331,11 +1377,48 @@
      else
        m_sourceLightMetadata.reset();
    }
 +  using Hybrid = VideoSourceSideData::Hybrid;
 +  const bool wasDV = m_hints.dovi.dv_profile != 0;
-+  const bool presentable = m_hints.preferHybridHDR10Plus &&
-+      HybridProbePicture(m_pFrame, m_codecControlFlags);
++  bool presentable = m_hints.preferHybridHDR10Plus && HybridProbePicture(m_pFrame, m_codecControlFlags);
++#ifdef HAVE_DVBRIDGE
++  if (presentable && (m_pFrame->opaque == &decodeOnlyDVPacket ||
++                      (m_dvVideoWindow && m_pFrame->opaque != &presentableDVPacket)))
++    presentable = false;
++#endif
 +  auto hybrid = wasDV && m_hints.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS ?
 +      Hybrid::HDR10Plus : Hybrid::DolbyVision;
 +  if (presentable)
@@ -247,9 +431,9 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
 +              m_hints.hdrType == StreamHdrType::HDR_TYPE_HDR10PLUS ? "HDR10+" : "Dolby Vision");
 +  }
  }
-
+ 
  bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
-@@ -1553,11 +1593,18 @@
+@@ -1553,11 +1636,18 @@
    if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
      pVideoPicture->doviSourceBinding = m_dvSourceOwner.NextPicture();
  #endif
@@ -272,7 +456,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        pVideoPicture->hasLightMetadata,
        0.0,0.0,
        pVideoPicture->hasLightMetadata ? pVideoPicture->lightMetadata.MaxCLL : 0u,
-@@ -1565,7 +1612,7 @@
+@@ -1565,7 +1655,7 @@
    const auto& sourceMastering = pVideoPicture->displayMetadata;
    auto& sourceInfo = pVideoPicture->doviSourceInfo;
    sourceInfo.informationGeneration = m_videoProcessingGeneration;
@@ -281,8 +465,18 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    sourceInfo.mastering = pVideoPicture->hasDisplayMetadata && sourceMastering.has_luminance &&
        sourceMastering.max_luminance.den > 0 && sourceMastering.min_luminance.den > 0;
    if (sourceInfo.mastering)
-@@ -1958,12 +2005,15 @@
-
+@@ -1626,7 +1716,8 @@
+   {
+     // COPY_OPAQUE follows the AU through native reordering and VAAPI references.
+     // The ordinary paired path still validates/synchronizes EL before Kodi drops it.
+-    if (m_dvVideoWindow && m_pFrame->opaque == &decodeOnlyDVPacket)
++    if ((m_dvVideoWindow || m_hints.preferHybridHDR10Plus || hybridHDR10Plus) &&
++        m_pFrame->opaque == &decodeOnlyDVPacket)
+       pVideoPicture->iFlags |= DVP_FLAG_DROPPED;
+     const auto* raw = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_RPU_BUFFER);
+     if ((m_dvVideoWindow && m_pFrame->opaque != &presentableDVPacket &&
+@@ -1958,12 +2049,15 @@
+ 
  unsigned CDVDVideoCodecFFmpeg::GetHDR10AIBufferCount() const
  {
 -  const auto mode = m_hints.hdrType == StreamHdrType::HDR_TYPE_HLG ? DVBRIDGE::hlgPlaybackMode.load() :
@@ -347,3 +541,16 @@ diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/Vid
    }
    info.fpsRate = s.fpsRate;
    info.fpsScale = s.fpsScale;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h
+@@ -61,7 +61,8 @@
+   static constexpr unsigned DVEnhancementPendingPictures = 16;
+   bool NeedsDVEnhancement() const
+   {
+-    return m_dvNativeOutput && m_hints.dovi.dv_profile == 7 && m_hints.dovi.el_present_flag;
++    return m_dvNativeOutput && m_hints.dovi.dv_profile == 7 && m_hints.dovi.el_present_flag &&
++           m_hints.hdrType != StreamHdrType::HDR_TYPE_HDR10PLUS;
+   }
+ #endif
+ 
