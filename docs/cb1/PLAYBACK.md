@@ -177,6 +177,15 @@ Disc-menu graphics and text subtitles are excluded.
 Video-relative placement follows Kodi's video rectangle; encoded black bars
 are not removed through a separate L5 interpretation.
 
+A UHD disc authors its menu graphics in the dynamic range of the video they
+accompany. While the play item carries HDR10 or Dolby Vision video, BD-J and
+HDMV menu graphics are read as BT.2020 PQ, as the disc authored them, and drawn
+with the PQ bitmaps: straight into Kodi's HDR output, into the PQ subtitle layer
+of the Dolby Vision circuits, or converted to sRGB for SDR output. Their
+brightness and colour are therefore the disc's own, for example about 283 nits
+for The Call of the Wild's menu text and about 409 nits for Avatar: Fire and
+Ash's. Menus over SDR video are unchanged.
+
 Blu-ray navigation uses Kodi/libbluray. RC3 bundles the Java runtime and BD-J
 JAR pair matching native libbluray 1.5.0; no separate Java add-on is required.
 Disc-specific Java applications and repeated-disc memory behaviour are not

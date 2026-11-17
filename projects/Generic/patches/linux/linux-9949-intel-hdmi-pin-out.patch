@@ -1,0 +1,33 @@
+diff --git a/sound/hda/codecs/hdmi/intelhdmi.c b/sound/hda/codecs/hdmi/intelhdmi.c
+--- a/sound/hda/codecs/hdmi/intelhdmi.c
++++ b/sound/hda/codecs/hdmi/intelhdmi.c
+@@ -481,9 +481,26 @@
+ 			       hda_nid_t cvt_nid)
+ {
+ 	if (per_pin) {
+-		haswell_verify_D0(codec, per_pin->cvt_nid, per_pin->pin_nid);
+-		snd_hda_set_dev_select(codec, per_pin->pin_nid,
+-			       per_pin->dev_id);
++		struct hdmi_spec *spec = codec->spec;
++		hda_nid_t pin = per_pin->pin_nid;
++		int err;
++
++		haswell_verify_D0(codec, per_pin->cvt_nid, pin);
++		err = snd_hda_set_dev_select(codec, pin, per_pin->dev_id);
++
++		/* Alder Lake-P can lose output enable when the HDMI link changes. */
++		if (codec->core.vendor_id == 0x8086281c && !err &&
++		    per_pin->sink_eld.eld_valid && per_pin->pcm_idx >= 0 &&
++		    test_bit(per_pin->pcm_idx, &spec->pcm_in_use) &&
++		    snd_hda_get_dev_select(codec, pin) == per_pin->dev_id) {
++			int ctl = snd_hda_codec_read(codec, pin, 0,
++							     AC_VERB_GET_PIN_WIDGET_CONTROL, 0);
++
++			if (ctl >= 0 && !(ctl & PIN_OUT))
++				snd_hda_codec_write(codec, pin, 0, AC_VERB_SET_PIN_WIDGET_CONTROL,
++							    ctl | PIN_OUT);
++		}
++
+ 		intel_verify_pin_cvt_connect(codec, per_pin);
+ 		intel_not_share_assigned_cvt(codec, per_pin->pin_nid,
+ 				     per_pin->dev_id, per_pin->mux_idx);

@@ -1,15 +1,9 @@
 {
-  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
-    "owner": "Opt in to experimental 4:2:2 10-bit LLDV in Kodi.",
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": {
+    "summary": "Prefer connected HDMI over the internal panel for the default GBM monitor choice",
+    "component": "kodi",
     "files": {
-      "addons/resource.language.en_gb/resources/strings.po": "Explain when a compatible HDMI format must be chosen.",
-      "system/settings/settings.xml": "Persist explicit consent independently of the HDMI format enum.",
-      "xbmc/dialogs/DVPlaybackModes.cpp": "Choose and reconfirm a format in the existing selector.",
-      "xbmc/settings/SettingConditions.cpp": "Expose format selection for eligible LLDV circuits.",
-      "xbmc/utils/DVBridgeLldv.h": "Keep automatic selection native and require explicit consent for forcing.",
-      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read driver support from the active connector properties.",
-      "xbmc/windowing/gbm/WinSystemGbm.h": "Remove the obsolete module-parameter cache.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Report the transport resolved for the selected format."
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Keep the explicit monitor choice and select HDMI-A over eDP or LVDS when both have an encoder."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzz-restore-gui-clip.patch": {
@@ -1377,16 +1371,6 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Keep accepted scanout buffers locked across refused colour changes."
     }
   },
-  "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": {
-    "summary": "Allow explicitly requested background playback without blocking the GUI",
-    "component": "kodi",
-    "files": {
-      "xbmc/FileItem.h": "Declare the opt-in direct HTTP media check.",
-      "xbmc/FileItem.cpp": "Recognize explicitly requested background HTTP streams with a known MIME type.",
-      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for a resolved background HTTP stream.",
-      "xbmc/application/ApplicationPlay.cpp": "Skip directory probing for the same resolved background HTTP stream."
-    }
-  },
   "projects/Generic/patches/kodi/kodi-9998-bitmap-subtitle-shift.patch": {
     "summary": "Shift bitmap subtitles with subtitleshiftup and subtitleshiftdown under Manual offset placement",
     "component": "kodi",
@@ -2007,11 +1991,46 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
   },
-  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": {
-    "summary": "Prefer connected HDMI over the internal panel for the default GBM monitor choice",
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-hdr.patch": {
+    "summary": "Draw UHD disc menus as the BT.2020 PQ graphics they are authored as while the play item carries HDR video",
     "component": "kodi",
     "files": {
-      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Keep the explicit monitor choice and select HDMI-A over eDP or LVDS when both have an encoder."
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Flag BD-J and HDMV graphics as PQ while the play item carries HDR video, decode HDR palettes with BT.2020, and send a shown BD-J page again when the play item's range changes.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Track the play item's graphics dynamic range and declare its helpers.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp": "Convert a PQ BD-J page for its destination as a PQ palette is converted.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Apply the PQ palette's sRGB and limited-range conversions to straight-alpha PQ pixels, once per colour.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h": "Declare the PQ pixel conversion."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-retained-palettes.patch": {
+    "owner": "Keep retained Blu-ray graphics consistent with the current play item when the disc does not redraw them.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h": "Keep both Blu-ray palette decodes across image crops.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Select the authored palette matrix for recognised HDR play items and preserve previously submitted menu pages.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Serialize the BD-J overlay callbacks with play-item dynamic range changes."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
+    "owner": "Opt in to experimental 4:2:2 10-bit LLDV in Kodi.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Explain when a compatible HDMI format must be chosen.",
+      "system/settings/settings.xml": "Persist explicit consent independently of the HDMI format enum.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Choose and reconfirm a format in the existing selector.",
+      "xbmc/settings/SettingConditions.cpp": "Expose format selection for eligible LLDV circuits.",
+      "xbmc/utils/DVBridgeLldv.h": "Keep automatic selection native and require explicit consent for forcing.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read driver support from the active connector properties.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Remove the obsolete module-parameter cache.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Report the transport resolved for the selected format."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": {
+    "summary": "Allow explicitly requested background playback without blocking the GUI",
+    "component": "kodi",
+    "files": {
+      "xbmc/FileItem.h": "Declare the opt-in direct HTTP media check.",
+      "xbmc/FileItem.cpp": "Recognize explicitly requested background HTTP streams with a known MIME type.",
+      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for a resolved background HTTP stream.",
+      "xbmc/application/ApplicationPlay.cpp": "Skip directory probing for the same resolved background HTTP stream."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-startup-hdr10-recovery.patch": {
@@ -2100,6 +2119,12 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the rejection check for the planned playback resolution.",
       "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Distinguish a confirmed TEST_ONLY refusal from other atomic failures.",
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Return the confirmation from the same atomic transaction."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {
+    "owner": "Restore the enabled output bit on an active Alder Lake-P HDMI audio route.",
+    "files": {
+      "sound/hda/codecs/hdmi/intelhdmi.c": "Check the selected pin's control register during Intel route fixup and preserve its audio mode."
     }
   }
 }

@@ -84,7 +84,7 @@ class BlurayMenuSource(unittest.TestCase):
   input.OverlayCallback(&ov);
   assert(input.m_planes[1].o.size()==1 && "palette-only DRAW must not wipe the image rectangle");
   auto faded=input.m_planes[1].o.front();
-  assert(faded!=original && faded->palette[1]==build_rgba(palette[1]));
+  assert(faded!=original && faded->palette[1]==build_rgba(palette[1], false));
   assert(faded->pixels==pixels && faded->m_textureid==0);
   assert(faded->x==original->x && faded->y==original->y && faded->width==2 && faded->height==2);
   assert(faded->source_width==1920 && faded->source_height==1080);
@@ -108,7 +108,7 @@ class BlurayMenuSource(unittest.TestCase):
   input.OverlayCallback(&ov);
   assert(input.m_planes[1].o.back()==rgba && rgba->palette.empty());
   auto opaque=input.m_planes[1].o.front();
-  assert(opaque!=faded && faded->palette[1]==build_rgba(BD_PG_PALETTE_ENTRY{81,240,90,0}));
+  assert(opaque!=faded && faded->palette[1]==build_rgba(BD_PG_PALETTE_ENTRY{81,240,90,0}, false));
   assert(!input.IsInMenu());
   ov.cmd=BD_OVERLAY_FLUSH;input.OverlayCallback(&ov);
   assert(input.IsInMenu());
@@ -126,7 +126,7 @@ class BlurayMenuSource(unittest.TestCase):
   input.OverlayCallback(&ov);
   auto recoloredPg=input.m_planes[0].o.front();
   assert(recoloredPg!=pg && recoloredPg->pixels==pg->pixels);
-  assert(recoloredPg->palette[1]==build_rgba(palette[1]) && pg->palette==originalPalette);
+  assert(recoloredPg->palette[1]==build_rgba(palette[1], false) && pg->palette==originalPalette);
   assert(input.player.group==displayed && input.IsInMenu());
   ov.cmd=BD_OVERLAY_FLUSH;input.OverlayCallback(&ov);
   assert(input.player.group->m_overlays.front()==recoloredPg && input.IsInMenu());
@@ -157,7 +157,7 @@ class BlurayMenuSource(unittest.TestCase):
   assert(input.player.history.size()==2 && input.player.group->iPTSStartTime==180000);
   assert(input.player.group->m_overlays.size()==1);
   auto next=input.m_planes[0].committed.front();
-  assert(next!=old && next->pixels==old->pixels && next->palette[1]==build_rgba(palette.entry[1]));
+  assert(next!=old && next->pixels==old->pixels && next->palette[1]==build_rgba(palette.entry[1], false));
   assert(old->palette[1]!=next->palette[1] && first->m_overlays.front()==old);
   // An empty PG composition is the producer's later disappearance event.
   pcs.num_composition_objects=0;pcs.pts=270000;set.complete=1;
@@ -184,7 +184,7 @@ class BlurayMenuSource(unittest.TestCase):
   _render_composition_object(&gc,180000,BD_OVERLAY_PG,&cobj,&object,&palette,1);
   assert(input.m_planes[0].o.size()==1 && "palette flag with producer img must reconstruct wiped staging");
   auto next=input.m_planes[0].o.front();
-  assert(next->pixels==old->pixels && next->palette[1]==build_rgba(palette.entry[1]));
+  assert(next->pixels==old->pixels && next->palette[1]==build_rgba(palette.entry[1], false));
   assert(next->x==8 && next->y==16 && next->source_width==1920);
   _flush_osd(&gc,BD_OVERLAY_PG,180000);
   assert(input.player.group->m_overlays.size()==1 && old->palette[1]!=next->palette[1]);
@@ -226,6 +226,105 @@ class BlurayMenuSource(unittest.TestCase):
   assert(input.player.history.size()==5 && "HIDE must not insert extra zero-PTS pages between dialog start/end");
 ''', producers=True)
 
+    def test_retained_hdmv_palette_matches_a_new_draw_on_each_range_change(self):
+        self.run_callback_probe(r'''
+  Input input;
+  BD_OVERLAY ov{};
+  ov.plane=1; ov.cmd=BD_OVERLAY_INIT; ov.w=16; ov.h=16;
+  input.OverlayCallback(&ov);
+  std::array<BD_PG_PALETTE_ENTRY, 256> palette{};
+  palette[1]={110,175,72,195};
+  BD_PG_RLE_ELEM run{4,1};
+  ov.cmd=BD_OVERLAY_DRAW; ov.w=2; ov.h=2; ov.img=&run; ov.palette=palette.data();
+  input.OverlayCallback(&ov);
+  ov.cmd=BD_OVERLAY_FLUSH; input.OverlayCallback(&ov);
+  auto sdr=input.m_planes[1].committed.front();
+  auto sdrPage=input.player.group;
+  BLURAY_STREAM_INFO video{};
+  BLURAY_CLIP_INFO clip{}; clip.video_stream_count=1; clip.video_streams=&video;
+  input.m_clip=&clip;
+  auto changeRange=[&](unsigned range) {
+    video.dynamic_range_type=range;
+    input.UpdateGraphicsDynamicRange();
+    return input.m_planes[1].committed.front();
+  };
+  // A cached page changes colour when the play item does, without another DRAW.
+  auto pq=changeRange(BLURAY_DYNAMIC_RANGE_HDR10);
+  auto pqPage=input.player.group;
+  assert(pq!=sdr && pq->m_isHDROverlay && !sdr->m_isHDROverlay);
+  assert(sdrPage->m_overlays.front()==sdr && pqPage->m_overlays.front()==pq);
+  assert(pq->pixels==sdr->pixels && pq->palette[1]!=sdr->palette[1]);
+  assert(pq->palette[1]==build_rgba(palette[1],true));
+  assert(sdr->palette[1]==build_rgba(palette[1],false));
+  // The same range is a no-op. A fresh draw at another position must match the retained one.
+  assert(changeRange(BLURAY_DYNAMIC_RANGE_DOLBY_VISION)==pq && input.player.group==pqPage);
+  ov.cmd=BD_OVERLAY_DRAW; ov.x=4; input.OverlayCallback(&ov);
+  assert(pq->palette==input.m_planes[1].o.back()->palette);
+  // Keep a staged crop with a new palette separate from the currently visible page.
+  input.OverlayClear(input.m_planes[1],0,0,1,2);
+  palette[1]={97,145,115,73};
+  ov.img=nullptr; ov.palette_update_flag=1; input.OverlayCallback(&ov);
+  auto cropped=input.m_planes[1].o.front();
+  assert(cropped->palette[1]==build_rgba(palette[1],true));
+  auto back=changeRange(BLURAY_DYNAMIC_RANGE_SDR);
+  assert(back->palette==sdr->palette && back->pixels==sdr->pixels && !back->m_isHDROverlay);
+  assert(cropped->palette[1]==build_rgba(palette[1],true) && cropped->m_isHDROverlay);
+  for (const auto& image : input.m_planes[1].o)
+    assert(!image->m_isHDROverlay && image->palette[1]==build_rgba(palette[1],false));
+  assert(pqPage->m_overlays.front()==pq && pq->m_isHDROverlay);
+  assert(!IsHdrGraphicsClip(BLURAY_CLIP_INFO{}));
+  video.dynamic_range_type=0xff;
+  assert(!IsHdrGraphicsClip(clip));
+''')
+
+    def test_play_item_serializes_bd_j_publication_and_close(self):
+        self.run_callback_probe(r'''
+  Input input;
+  BD_ARGB_OVERLAY page{};
+  page.plane=1;page.w=1;page.h=1;page.stride=1;page.cmd=BD_ARGB_OVERLAY_INIT;
+  input.OverlayCallbackARGB(&page);
+  uint32_t pixel=0xff343434;
+  page.argb=&pixel;page.cmd=BD_ARGB_OVERLAY_DRAW;
+  input.OverlayCallbackARGB(&page);
+
+  BLURAY_STREAM_INFO video{};
+  video.dynamic_range_type=BLURAY_DYNAMIC_RANGE_HDR10;
+  BLURAY_CLIP_INFO clip{};
+  clip.video_stream_count=1;clip.video_streams=&video;
+  input.m_clip=&clip;
+  std::latch publishing{1}, resume{1}, retagging{1}, finishRetag{1}, closing{1};
+  input.player.beforePublish=[&](size_t published) {
+    if (published==0) { publishing.count_down(); resume.wait(); }
+    if (published==1) { retagging.count_down(); finishRetag.wait(); }
+  };
+  const auto assertPublicationLocked = [&] {
+    const bool unlocked=input.m_overlayMutex.try_lock();
+    if (unlocked) input.m_overlayMutex.unlock();
+    assert(!unlocked && "all producers must use the same publication lock");
+  };
+  page.cmd=BD_ARGB_OVERLAY_FLUSH;
+  std::jthread java([&] {input.OverlayCallbackARGB(&page);});
+  publishing.wait();
+  assertPublicationLocked();
+  std::jthread demux([&] {input.UpdateGraphicsDynamicRange();});
+  resume.count_down();
+
+  retagging.wait();
+  assertPublicationLocked();
+  std::jthread close([&] {closing.count_down();input.OverlayCallbackARGB(nullptr);});
+  closing.wait();
+  finishRetag.count_down();
+  java.join();
+  demux.join();
+  close.join();
+  const auto& pages=input.player.history;
+  assert(pages.size()==3 && pages.back()->m_overlays.empty());
+  const auto oldImage=std::static_pointer_cast<CDVDOverlayImage>(pages[0]->m_overlays.front());
+  const auto newImage=std::static_pointer_cast<CDVDOverlayImage>(pages[1]->m_overlays.front());
+  assert(!oldImage->m_isHDROverlay && newImage->m_isHDROverlay && oldImage!=newImage);
+  assert(oldImage->pixels==newImage->pixels);
+''')
+
     def run_callback_probe(self, checks='', producers=False):
         include = os.environ.get('LIBBLURAY_TEST_INCLUDE')
         if not include:
@@ -233,6 +332,9 @@ class BlurayMenuSource(unittest.TestCase):
         bluray = (TREE / 'xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp').read_text()
         video = (TREE / 'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
         methods = {
+            'void MatchGraphicsDynamicRange(SOverlays& overlays) const': 'void CDVDInputStreamBluray::MatchGraphicsDynamicRange(',
+            'void SendMenuOverlays(int64_t pts)': 'void CDVDInputStreamBluray::SendMenuOverlays(',
+            'void UpdateGraphicsDynamicRange()': 'void CDVDInputStreamBluray::UpdateGraphicsDynamicRange(',
             'void OverlayClose()': 'void CDVDInputStreamBluray::OverlayClose()',
             'void OverlayInit(SPlane& plane, int w, int h)': 'void CDVDInputStreamBluray::OverlayInit(',
             'void OverlayClear(SPlane& plane, int x, int y, int w, int h)': 'void CDVDInputStreamBluray::OverlayClear(',
@@ -250,10 +352,14 @@ class BlurayMenuSource(unittest.TestCase):
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <latch>
 #include <list>
 #include <mutex>
+#include <thread>
 #include "utils/Geometry.h"
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h"
+#include <libbluray/bluray.h>
 #include <libbluray/decoders/overlay.h>
 #define PIXEL_ASHIFT 24
 #define PIXEL_RSHIFT 16
@@ -262,21 +368,22 @@ class BlurayMenuSource(unittest.TestCase):
 #define LOGWARNING 1
 #define LOGDEBUG 2
 #define BD_EVENT_MENU_OVERLAY 1
-#define BD_EVENT_MENU 2
 struct CLog { template<class... T> static void Log(T...) {} };
-struct Title { bool bdj; };
-struct DiscInfo { const Title* top_menu{}; };
-using BLURAY_DISC_INFO = DiscInfo;
-static DiscInfo disc_info;
-static const DiscInfo* bd_get_disc_info(void*) {return &disc_info;}
+using Title = BLURAY_TITLE;
+static BLURAY_DISC_INFO disc_info{};
+static const BLURAY_DISC_INFO* bd_get_disc_info(void*) {return &disc_info;}
 uint8_t clamp(double v) CLAMP
-uint32_t build_rgba(const BD_PG_PALETTE_ENTRY& e) RGBA
+uint32_t build_rgba(const BD_PG_PALETTE_ENTRY& e, bool bt2020) RGBA
+static std::vector<uint32_t> DecodeMenuPalette(const BD_PG_PALETTE_ENTRY* entries, bool hdr) DECODE_MENU_PALETTE
+static bool IsHdrGraphicsClip(const BLURAY_CLIP_INFO& clip) HDR_CLIP
 struct Player {
   std::shared_ptr<CDVDOverlayGroup> group;
   std::vector<std::shared_ptr<CDVDOverlayGroup>> history;
   unsigned menu_event = 99;
+  std::function<void(size_t)> beforePublish;
   void OnDiscNavResult(void* pointer, int event) {
     if(event==BD_EVENT_MENU){menu_event=*static_cast<unsigned*>(pointer);return;}
+    if (beforePublish) beforePublish(history.size());
     group = *static_cast<std::shared_ptr<CDVDOverlayGroup>*>(pointer);
     history.push_back(group);
   }
@@ -286,11 +393,14 @@ struct Input {
   using SOverlays = std::list<SOverlay>;
   struct SPlane { int w{}, h{}; SOverlays o, committed; };
   std::array<SPlane, 2> m_planes;
+  std::mutex m_overlayMutex;
   Player player;
   Player* m_player = &player;
   std::atomic_bool m_menuShows{};
   std::atomic_bool m_menu{};
   bool m_isInMainMenu{};
+  bool m_hdrGraphics{};
+  BLURAY_CLIP_INFO* m_clip{};
   using Title = ::Title;
   const Title* m_title{};
   struct {unsigned param;} m_event;
@@ -490,7 +600,7 @@ int main() {
   transparent.m_navmode=false;assert(!transparent.IsInMenu());
   transparent.m_navmode=true;transparent.m_bd=nullptr;assert(!transparent.IsInMenu());
   Input java;
-  Input::Title java_title{true};java.m_title=&java_title;
+  Input::Title java_title{};java_title.bdj=true;java.m_title=&java_title;
   argb.plane=1;argb.x=argb.y=0;argb.w=argb.h=2;argb.stride=2;
   argb.cmd=BD_ARGB_OVERLAY_INIT;java.OverlayCallbackARGB(&argb);
   java.MenuEvent(1); // Native BD-J plane INIT queues MENU=1 even if transparent.
@@ -507,7 +617,7 @@ int main() {
   java.MenuEvent(1);assert(java.IsInMenu() && java.m_isInMainMenu && "same TOP_MENU title must reopen after close without another TITLE event");
   java.MenuEvent(0);disc_info.top_menu=nullptr;java.MenuEvent(1);
   assert(!java.IsInMenu() && "ordinary BD-J plane init remains synthetic");
-  Input::Title hdmv_title{false};java.m_title=&hdmv_title;java.MenuEvent(1);
+  Input::Title hdmv_title{};java.m_title=&hdmv_title;java.MenuEvent(1);
   assert(java.IsInMenu() && "genuine HDMV MENU remains authoritative");
   java.MenuEvent(0);java.m_title=nullptr;java.MenuEvent(1);
   assert(java.IsInMenu() && "unknown title retains explicit navigation events");
@@ -562,6 +672,8 @@ static void native_overlay(void* handle, const BD_OVERLAY* ov) {
                 producer_code += signature + body(producer, signature.split('(')[0] + '(') + '\n'
         program = program.replace('PRODUCERS', producer_code)
         program = program.replace('int main() {', 'int main() {\n{\n' + checks + '\n}\n')
+        program = program.replace('DECODE_MENU_PALETTE', body(bluray, 'static std::vector<uint32_t> DecodeMenuPalette('))
+        program = program.replace('HDR_CLIP', body(bluray, 'static bool IsHdrGraphicsClip('))
         program = program.replace('CLAMP', body(bluray, 'static uint8_t  clamp('))
         program = program.replace('RGBA', body(bluray, 'static uint32_t build_rgba('))
         program = program.replace('METHODS', '\n'.join(
@@ -573,12 +685,12 @@ static void native_overlay(void* handle, const BD_OVERLAY* ov) {
             # DVDOverlayImage's platform header is not used by these methods.
             (root / 'PlatformDefs.h').write_text('')
             (root / 'probe.cpp').write_text(program)
-            built = subprocess.run(['c++', '-std=c++20', '-fsanitize=address,undefined',
+            built = subprocess.run(['c++', '-std=c++20', '-pthread', '-fsanitize=address,undefined',
                                     '-I' + str(root), '-I' + str(TREE / 'xbmc'), '-I' + include,
                                     str(root / 'probe.cpp'), '-o', str(root / 'probe')],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            run = subprocess.run([str(root / 'probe')], capture_output=True, text=True)
+            run = subprocess.run([str(root / 'probe')], capture_output=True, text=True, timeout=30)
             self.assertEqual(run.returncode, 0, run.stderr)
 
 
