@@ -36,7 +36,10 @@ Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double pe
  struct {double peak;int gamut;double expertPeak;int expertGamut;} preferences{peak,gamut,peak,gamut};
  struct Localizer {std::string Get(int id) {return std::to_string(id);}} localizer;
  Option option;int mode=guided?1:requestedMode;
- struct {int lldvUnavailableLabel=41300;} caps;
+ DVBRIDGE::OutputCapabilities caps;
+ caps.lldvUnavailableLabel=41300;
+ const auto& processing=caps.processing;
+ constexpr int DVBRIDGE_MODE_PLAYER_LED=8;
  int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
  SECTION
  return option;

@@ -71,7 +71,9 @@ namespace KODI::UTILS {
 enum class Colorimetry {DEFAULT,SMPTE_170M_YCC,BT709_YCC,XVYCC_601,XVYCC_709,SYCC_601,OPYCC_601,OPRGB,BT2020_CYCC,BT2020_RGB,BT2020_YCC,DCI_P3_RGB_D65,DCI_P3_RGB_THEATER,BT601_YCC,ST2113_RGB,ICTCP,RGB_WIDE_FIXED,RGB_WIDE_FLOAT};
 const char* ColorimetryToString(Colorimetry) {return "colorimetry";}
 }
-struct VideoPicture {int colorBits=10;KODI::UTILS::Colorimetry color=KODI::UTILS::Colorimetry::BT2020_YCC;};
+enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_HDR10};
+constexpr int AVCOL_TRC_SMPTE2084=16, AVCOL_TRC_ARIB_STD_B67=18;
+struct VideoPicture {int colorBits=10;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_NONE;int color_transfer=1;KODI::UTILS::Colorimetry color=KODI::UTILS::Colorimetry::BT2020_YCC;};
 namespace KODI::UTILS {Colorimetry GetColorimetry(const VideoPicture& picture){return picture.color;}}
 template<class K,class V> std::map<K,V> make_map(std::initializer_list<std::pair<const K,V>> values) {return {values};}
 // NATIVE_CONSTANTS
@@ -80,7 +82,7 @@ struct CWinSystemGbm {
  std::shared_ptr<CDRMUtils> m_DRM=std::make_shared<CDRMAtomic>();Blob m_hdrBlob;
  bool ConnectorPreferencesAllowed() const {return allowed;}
 
- void DeferConnectorPreferences();bool UseLimitedColor();void ApplyColorspace();void SetColorimetry(const VideoPicture*);
+ void DeferConnectorPreferences();bool UseLimitedColor();void ApplyColorspace();void SetColorimetry(const VideoPicture*, bool sdrToBT709=false);
  std::optional<uint64_t> m_queuedColorspace;
  KODI::UTILS::Colorimetry m_colorimetry=KODI::UTILS::Colorimetry::DEFAULT;
  std::optional<bool> activeRange;
@@ -103,6 +105,24 @@ int main() {
  drm->connector.enums["Colorspace"]={{"Default",0},{"BT2020_RGB",1},{"BT2020_YCC",2},{"BT709_YCC",3}};
  VideoPicture picture;
  w.m_colorFormat=3;w.ApplyConnectorProperties();w.SetColorimetry(&picture);assert(drm->pending.at("Colorspace")==2);
+ // The Kodi SDR shader converts wide-gamut pixels to 709. Exercise both wire encodings.
+ w.SetColorimetry(&picture, true);
+ assert(drm->pending.at("Colorspace")==3 && "BT.709 pixels need BT.709 YCbCr signalling");
+ w.m_colorFormat=1;w.ApplyConnectorProperties();w.SetColorimetry(&picture, true);
+ assert(drm->pending.at("Colorspace")==0 && "BT.709 RGB must not carry a BT.2020 tag");
+ assert(w.m_contentBits==10);
+ for (const int transfer : {AVCOL_TRC_SMPTE2084, AVCOL_TRC_ARIB_STD_B67})
+ {
+   picture.color_transfer=transfer;
+   w.SetColorimetry(&picture, true);
+   assert(drm->pending.at("Colorspace")==1);
+ }
+ picture.color_transfer=1;
+ picture.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ w.SetColorimetry(&picture, true);
+ assert(drm->pending.at("Colorspace")==1);
+ picture.hdrType=StreamHdrType::HDR_TYPE_NONE;
+ w.m_colorFormat=3;w.ApplyConnectorProperties();w.SetColorimetry(&picture);
  w.allowed=false;w.restoreProperties["color format"]=3;
  w.SetColorimetry(&picture);assert(drm->pending.at("Colorspace")==2);
  w.restoreProperties.clear();w.SetColorimetry(&picture);assert(drm->pending.at("Colorspace")==1);

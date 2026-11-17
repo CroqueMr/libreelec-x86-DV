@@ -1,0 +1,87 @@
+Subject: [PATCH] playback: keep explicit background opens non-blocking
+
+An add-on can provide a resolved HTTP(S) media URL and MIME type and set
+the backgroundplayback item property to keep its preview non-modal.
+Use the same item check for the directory probe and the AV-start wait.
+
+diff --git a/xbmc/FileItem.h b/xbmc/FileItem.h
+--- a/xbmc/FileItem.h
++++ b/xbmc/FileItem.h
+@@ -466,6 +466,9 @@
+   */
+   bool ContentLookup() const { return m_doContentLookup; }
+ 
++  //! An explicitly requested background open of a resolved HTTP(S) media stream.
++  bool IsBackgroundHttpPlayback() const;
++
+   /*!
+    \brief (Re)set the mime-type for internet files if allowed (m_doContentLookup)
+    Some sources do not support HTTP HEAD request to determine i.e. mime type
+diff --git a/xbmc/FileItem.cpp b/xbmc/FileItem.cpp
+--- a/xbmc/FileItem.cpp
++++ b/xbmc/FileItem.cpp
+@@ -1229,6 +1229,27 @@
+   FillInMimeType(lookup);
+ }
+ 
++bool CFileItem::IsBackgroundHttpPlayback() const
++{
++  if (!GetProperty("backgroundplayback").asBoolean() || IsFolder() || GetMimeType().empty())
++    return false;
++
++  const auto& url = GetDynURL();
++  const auto& protocol = url.GetProtocol();
++  if ((protocol != "http" && protocol != "https") || url.IsDiscImage() ||
++      url.IsOpticalMediaFile() || URIUtils::IsArchive(GetDynPath()))
++    return false;
++
++  std::string mime = GetMimeType().substr(0, GetMimeType().find(';'));
++  StringUtils::Trim(mime);
++  StringUtils::ToLower(mime);
++  return (mime.size() > 6 && (mime.starts_with("audio/") || mime.starts_with("video/"))) ||
++         mime == "application/mp4" || mime == "application/ogg" || mime == "application/mxf" ||
++         mime == "application/vnd.apple.mpegurl" || mime == "vnd.apple.mpegurl" ||
++         mime == "application/x-mpegurl" || mime == "application/dash+xml" ||
++         mime == "application/vnd.ms-sstr+xml";
++}
++
+ void CFileItem::SetMimeTypeForInternetFile()
+ {
+   if (m_doContentLookup && NETWORK::IsInternetStream(*this))
+diff --git a/xbmc/application/ApplicationMessageHandling.cpp b/xbmc/application/ApplicationMessageHandling.cpp
+--- a/xbmc/application/ApplicationMessageHandling.cpp
++++ b/xbmc/application/ApplicationMessageHandling.cpp
+@@ -508,6 +508,8 @@
+ #endif
+       m_app.SetCurrentFileItem(
+           std::make_shared<CFileItem>(*std::static_pointer_cast<CFileItem>(message.GetItem())));
++      // A queued playlist entry can replace the resolved event item below.
++      const bool backgroundHttpPlayback = m_app.CurrentFileItem().IsBackgroundHttpPlayback();
+       m_app.ResetPlayerEvent();
+ 
+       CServiceBroker::GetPVRManager().OnPlaybackStarted(m_app.CurrentFileItem());
+@@ -554,8 +556,9 @@
+ 
+       // we don't want a busy dialog when switching channels
+       const auto appPlayer = m_app.GetComponent<CApplicationPlayer>();
+-      if (!m_app.CurrentFileItem().IsLiveTV() ||
+-          (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio()))
++      if (!backgroundHttpPlayback &&
++          (!m_app.CurrentFileItem().IsLiveTV() ||
++           (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio())))
+         CGUIDialogBusy::WaitOnEvent(m_app.m_playerEvent);
+ 
+       return true;
+diff --git a/xbmc/application/ApplicationPlay.cpp b/xbmc/application/ApplicationPlay.cpp
+--- a/xbmc/application/ApplicationPlay.cpp
++++ b/xbmc/application/ApplicationPlay.cpp
+@@ -46,6 +46,9 @@
+   if (m_item.HasVideoInfoTag() && m_item.GetVideoInfoTag()->GetPath().starts_with("bluray://"))
+     m_item.SetDynPath(m_item.GetVideoInfoTag()->m_strFileNameAndPath);
+ 
++  if (m_item.IsBackgroundHttpPlayback())
++    return true;
++
+   // Translate/Resolve the url if needed - recursively, but only limited times.
+   std::string lastDynPath{m_item.GetDynPath()};
+   size_t itemResolveAttempt{0};

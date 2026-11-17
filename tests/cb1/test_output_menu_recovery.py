@@ -25,7 +25,7 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <mutex>
 #include <vector>
 using dvbridge_mode=int;
-constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_MASTER_REFERENCE=5, DVBRIDGE_MODE_SDR=7;
+constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_MASTER_REFERENCE=5, DVBRIDGE_MODE_SDR=7, DVBRIDGE_MODE_PLAYER_LED=8;
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct CDVPlaybackModes {
  static inline StreamHdrType nativeSource=StreamHdrType::HDR_TYPE_NONE;
@@ -62,11 +62,16 @@ struct IntegerSettingOption {std::string label="Standard",label2;int value{};
  std::vector<std::pair<std::string,bool>> properties;};
 struct CSettingConditions {static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
  std::vector<IntegerSettingOption>& list) BODY };
-bool disabled(int value=1, const char* settingId="dvbridge.playbackchoice") {
+bool modeProperty(int value, const char* settingId, const char* name) {
  std::vector<IntegerSettingOption> list(1);list[0].value=value;
  auto setting=std::make_shared<CSetting>();setting->id=settingId;
  CSettingConditions::DVOutputOptions(setting,list);
- return list[0].properties.back().second;
+ return std::ranges::any_of(list[0].properties, [name](const auto& p) {
+   return p.first==name && p.second;
+ });
+}
+bool disabled(int value=1, const char* settingId="dvbridge.playbackchoice") {
+ return modeProperty(value,settingId,"disabled");
 }
 int main() {
  using namespace DVBRIDGE;
@@ -76,6 +81,16 @@ int main() {
  auto& frame=StreamTelemetry::value.transaction;
  frame.identity.valid=true;frame.capabilities=window.available;
  frame.capabilities.sourceKnown=true;frame.capabilities.isDV=true;
+ const char* quickSwitch="dvbridge.playbackchoice";
+ assert(disabled(8,quickSwitch));
+ window.available.lldvUnavailableLabel=LLDV_CHOOSE_FORMAT_LABEL;
+ assert(!disabled(8,quickSwitch) && modeProperty(8,quickSwitch,"cb1ChooseLldv"));
+ frame.capabilities.processing[DVBRIDGE_MODE_PLAYER_LED]={false,OutputReason::SourceIneligible};
+ assert(disabled(8,quickSwitch) && !modeProperty(8,quickSwitch,"cb1ChooseLldv"));
+ frame.capabilities.processing=window.available.processing;
+ window.available.lldvUnavailableLabel=41281;
+ assert(disabled(8,quickSwitch));
+ window.available.lldvUnavailableLabel=0;
  std::vector<IntegerSettingOption> choices;
  for(int value:{0,4,5,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
  CSettingConditions::DVOutputOptions(std::make_shared<CSetting>(),choices);

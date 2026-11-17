@@ -140,7 +140,6 @@ struct Window
   std::shared_ptr<CDRMAtomic> m_DRM=std::make_shared<CDRMAtomic>();
   mutable std::mutex m_lldvEdidMutex;
   LldvDisplay m_lldvDisplay;
-  bool m_lldvAmdDriverDisabled{};
   uint32_t m_lldvEdidConnector=17;
   uint64_t m_lldvEdidGeneration=2;
   LldvTransport m_lldvRejected;
@@ -222,7 +221,8 @@ int main()
   readback=window.Read();
   assert(readback.active==LldvFormat::Y422_10 && readback.activeForced);
   readback.driverFormats &= ~LldvBit(LldvFormat::Y422_10);
-  const auto chosen=SelectLldvTransport(readback, 0);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Y422_12);
+  const auto chosen=SelectLldvTransport(readback, LLDV_FORCE_422_10);
   assert(chosen.connectorId==17 && chosen.format==LldvFormat::Y422_10 && chosen.forced);
   drm.connector.active.reset();
   assert(window.Read().active==LldvFormat::Auto);
@@ -242,6 +242,81 @@ int main()
                             '-I', str(kodi / 'xbmc'), *libdrm, str(source), '-o', str(binary)],
                            check=True)
             subprocess.run([binary], check=True)
+
+    def test_menu_keeps_live_forced_format_when_auto_is_unavailable(self):
+        from test_process_info_metadata import run
+        from test_native_video_source import body
+
+        kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        menu = body((kodi / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text(),
+                    'bool ShowLldvFormatMenu(bool forCircuit)\n')
+        start = menu.index('  const int choice = dialog->GetSelectedItem();')
+        finish = menu.index('  return true;', start) + len('  return true;')
+        program = r'''
+#include "utils/DVBridgeLldv.h"
+#include <cassert>
+
+using namespace DVBRIDGE;
+
+struct Dialog
+{
+  int choice{};
+  bool confirmed{true};
+  int GetSelectedItem() const { return choice; }
+  bool IsConfirmed() const { return confirmed; }
+};
+
+struct Settings
+{
+  int stored{LLDV_FORCE_422_10};
+  bool SetInt(const char*, int value) { stored = value; return true; }
+  void Save() {}
+};
+
+bool Confirm(const Dialog* dialog, Settings* settings, bool forCircuit,
+             const LldvConnectorStatus& status, const LldvConnectorStatus& current)
+{
+  const auto requiresForcing = [&status](LldvFormat format) {
+    return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+  };
+  CONFIRM
+}
+
+int main()
+{
+  LldvConnectorStatus current{};
+  current.connectorId = 17;
+  current.edidGeneration = 2;
+  current.display.status = LldvEdidStatus::Ready;
+  current.sink.status = DV_EDID_LLDV_ONLY;
+  current.sink.lldv_422 = true;
+  current.currentTiming = true;
+  current.forced42210 = true;
+  current.active = LldvFormat::Y422_10;
+  Dialog dialog;
+  Settings settings;
+  assert(!Confirm(&dialog, &settings, false, current, current));
+  assert(settings.stored == LLDV_FORCE_422_10);
+  current.active = LldvFormat::Auto;
+  assert(!Confirm(&dialog, &settings, true, current, current));
+  assert(Confirm(&dialog, &settings, false, current, current));
+  assert(settings.stored == 0);
+  dialog.choice = static_cast<int>(LldvFormat::Y422_10);
+  dialog.confirmed = false;
+  assert(!Confirm(&dialog, &settings, true, current, current));
+  dialog.confirmed = true;
+  auto changed = current;
+  ++changed.edidGeneration;
+  assert(!Confirm(&dialog, &settings, true, current, changed));
+  assert(settings.stored == 0);
+  assert(Confirm(&dialog, &settings, true, current, current));
+  assert(settings.stored == LLDV_FORCE_422_10);
+  dialog.choice = 0;
+  assert(Confirm(&dialog, &settings, false, {}, {}));
+  assert(settings.stored == 0);
+}
+'''.replace('CONFIRM', menu[start:finish])
+        run(self, {'test.cpp': program})
 
     def test_edid_and_selection(self):
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
@@ -280,11 +355,35 @@ int main()
   assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true, true) == LldvReason::Ready);
   assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, false, true) == LldvReason::Timing);
   assert(LldvFormatReason(sink, LldvFormat::Y422_12, 0, true, true) == LldvReason::Driver);
-  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), true, true) == LldvFormat::Y422_10);
-  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), false, true) == LldvFormat::Auto);
+  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), true) == LldvFormat::Y422_12);
+  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y422_12), false) == LldvFormat::Auto);
   assert(LldvRequiresForcing(LldvFormat::Y422_10, 0, true));
   assert(!LldvRequiresForcing(LldvFormat::Y422_10, LLDV_422, true));
-  assert(ChooseLldvFormat(sink, LLDV_422, true, true) == LldvFormat::Y422_10);
+  assert(ChooseLldvFormat(sink, LLDV_422, true) == LldvFormat::Y422_10);
+  LldvConnectorStatus forcedOnly{};
+  forcedOnly.connectorId = 1;
+  forcedOnly.sink = sink;
+  forcedOnly.currentTiming = true;
+  forcedOnly.display.status = LldvEdidStatus::Ready;
+  forcedOnly.forced42210 = true;
+  assert(!SelectLldvTransport(forcedOnly, 0).connectorId);
+  assert(!SelectLldvTransport(forcedOnly, int(LldvFormat::Y422_10)).connectorId);
+  auto selected = SelectLldvTransport(forcedOnly, LLDV_FORCE_422_10);
+  assert(selected.connectorId && selected.format == LldvFormat::Y422_10 && selected.forced);
+  auto native12 = forcedOnly;
+  native12.driverFormats = LldvBit(LldvFormat::Y422_12);
+  assert(SelectLldvTransport(native12, 0).format == LldvFormat::Y422_12);
+  auto native10 = forcedOnly;
+  native10.driverFormats = LLDV_422;
+  selected = SelectLldvTransport(native10, LLDV_FORCE_422_10);
+  assert(selected.connectorId && !selected.forced);
+  forcedOnly.currentTiming = false;
+  assert(!SelectLldvTransport(forcedOnly, LLDV_FORCE_422_10, true).connectorId);
+  forcedOnly.availableTiming = true;
+  assert(SelectLldvTransport(forcedOnly, LLDV_FORCE_422_10, true).forced);
+  forcedOnly.display.status = LldvEdidStatus::Incomplete;
+  assert(!SelectLldvTransport(forcedOnly, LLDV_FORCE_422_10, true).connectorId);
+
 
   cta[11] = 0xb5; // Low Latency only, with the extra HDMI interface.
   cta[13] |= 1;  // 10-bit 4:4:4.
@@ -292,7 +391,6 @@ int main()
   assert(sink.status == DV_EDID_LLDV_ONLY && dvbridge_lldv_422(sink));
   assert(dvbridge_lldv_444_bits(sink) == 10);
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb10), true) == LldvFormat::Rgb10);
-  assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb10), true, true) == LldvFormat::Rgb10);
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Rgb12), true) == LldvFormat::Auto);
   cta[13] &= ~1;
   cta[12] |= 1; // 12-bit 4:4:4.
@@ -304,7 +402,7 @@ int main()
   sink = caps();
   assert(!dvbridge_lldv_422(sink));
   assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true, true) == LldvReason::Display);
-  assert(ChooseLldvFormat(sink, 0, true, true) == LldvFormat::Auto);
+  assert(ChooseLldvFormat(sink, 0, true) == LldvFormat::Auto);
   cta[12] |= 1;
   assert(dvbridge_lldv_422(caps()));
 
