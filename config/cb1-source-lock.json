@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-startup-hdr10-recovery.patch": "0302c953967115bba133107767df0c2491826302e54c6143b6fe4b03e1fa51c3",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-startup-hdr10-recovery.patch": "889b588e26154c945ecb5e389b3a17b390e9aafee29f5750d8ffc501eb7a3928",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": "853b8fb11746f7949c1e93b91fc096140c3114655594c5a734d169c8605d2be2",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": "41071577c5512c7e04e2b9707c45831574b98522ac1125527821fec3ebc8cb3f",
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
@@ -350,7 +350,7 @@
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
     "tests/cb1/test_master_fallback.py": "b491d2ca9a92fbf9e4f5afe454b0f674d0741dc503574021956e7f67bc9b407e",
     "tests/cb1/test_master_reference.py": "faee4d550cf30521222e1a568fc697bfc36345c465f0f225feaec70c4c67092f",
-    "tests/cb1/test_playback_defaults.py": "98dc0cef06b1eaacbe2ea11318fd7e4866ab6a16b71cecebdfcf7ce6bba289b8",
+    "tests/cb1/test_playback_defaults.py": "8a4e3ee931480caccabd4aea1b104801aae9f8167306cf34c01f0ad68d69f8b8",
     "tests/cb1/test_playback_layout_ownership.py": "9698464123bf11208b12d0fca93c51ed2b2725481f346efd91ecb4614e8bd54c",
     "tests/cb1/test_strict_playback_admission.py": "48f286fd2f87747f86cc90704015592c37c9c839a6f04676a2c7c0f4866a1858",
     "tests/cb1/test_cb1_presentation_sync.py": "dc6b814a12a90bf276f55e5bdbe8f55c88d7991756a60480c9c1bba49d0e554e",
