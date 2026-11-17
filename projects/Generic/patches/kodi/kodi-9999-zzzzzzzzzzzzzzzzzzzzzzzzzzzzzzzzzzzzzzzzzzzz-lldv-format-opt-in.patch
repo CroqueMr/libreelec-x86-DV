@@ -1,0 +1,360 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 5cb5f61..3f9ccd4 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26766,10 +26766,6 @@ msgctxt "#41332"
+ msgid "Not advertised by TV"
+ msgstr ""
+ 
+-msgctxt "#41333"
+-msgid "LLDV disabled by AMD driver"
+-msgstr ""
+-
+ msgctxt "#41334"
+ msgid "HDR10+ needs 10-bit output"
+ msgstr ""
+@@ -26794,6 +26790,10 @@ msgctxt "#41339"
+ msgid "4:2:2 · Forced, experimental"
+ msgstr ""
+ 
++msgctxt "#41340"
++msgid "Choose a compatible HDMI format"
++msgstr ""
++
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
+ msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+index c4505a8..2611f4d 100644
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -113,7 +113,7 @@
+         </setting>
+         <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
+           <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
+-          <default>0</default><constraints><minimum>0</minimum><maximum>6</maximum></constraints>
++          <default>0</default><constraints><minimum>0</minimum><maximum>7</maximum></constraints>
+           <control type="list" format="integer" />
+         </setting>
+         <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+index b6a0ca0..92b9c1e 100644
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -37,9 +37,11 @@
+ #include "threads/IRunnable.h"
+ #include <algorithm>
+ #include <cstdio>
++#include <string_view>
+ 
+ namespace
+ {
++bool ShowLldvFormatMenu(bool forCircuit = false);
+ struct Choice { int output,method,label; };
+ constexpr Choice dvChoices[]={{4,0,40913},{0,0,40812},
+     {5,0,40914},
+@@ -283,9 +285,24 @@ bool CDVPlaybackModes::ShowMenu(bool settingsMenu)
+     if (selected<0 || selected>=count) return true;
+     // Admission may change during the dialog's nested event loop.
+     if (!settingsMenu && SourceType()!=nativeSource) return true;
+-    CSettingConditions::DVOutputOptions(choiceSetting,options);
+-    for(const auto& [name,value] : options[selected].properties)
+-      if (name=="disabled" && value.asBoolean()) return true;
++    auto& selectedOption = options[selected];
++    const auto refreshChoice = [&] {
++      selectedOption.properties.clear();
++      CSettingConditions::DVOutputOptions(choiceSetting, options);
++    };
++    const auto has = [&](std::string_view name) {
++      return std::ranges::any_of(selectedOption.properties, [name](const auto& property) {
++        return property.first == name && property.second.asBoolean();
++      });
++    };
++    refreshChoice();
++    if (has("disabled")) return true;
++    if (has("cb1ChooseLldv"))
++    {
++      if (!ShowLldvFormatMenu(true) || (!settingsMenu && SourceType()!=nativeSource)) return true;
++      refreshChoice();
++      if (has("disabled") || has("cb1ChooseLldv")) return true;
++    }
+     const auto& choice=choices[selected];
+     bool reprime = false;
+     {
+@@ -396,7 +413,7 @@ void ShowSDRGamutMenu()
+     settings->Save();
+ }
+ 
+-void ShowLldvFormatMenu()
++bool ShowLldvFormatMenu(bool forCircuit)
+ {
+   using namespace DVBRIDGE;
+   const auto status = ReadLldvConnector();
+@@ -404,11 +421,10 @@ void ShowLldvFormatMenu()
+   const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+   auto* dialog = CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogSelect>(WINDOW_DIALOG_SELECT);
+   if (!dialog)
+-    return;
++    return false;
+ 
+   const bool usableTiming = status.currentTiming || status.availableTiming;
+-  const auto preferred =
+-      ChooseLldvFormat(status.sink, status.driverFormats, usableTiming, status.forced42210);
++  const auto preferred = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, usableTiming);
+   const auto requiresForcing = [&status](LldvFormat format) {
+     return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+   };
+@@ -420,10 +436,12 @@ void ShowLldvFormatMenu()
+   dialog->SetUseDetails(!estuary);
+   dialog->EnableButton(!estuary, 41320);
+ 
+-  const int summary = LldvUnavailableLabel(status, 0, true);
++  const int summary = LldvUnavailableLabel(status, saved, true);
++  const bool chooseFormat = summary && (!LldvUnavailableLabel(status, 0, true) ||
++      !LldvUnavailableLabel(status, LLDV_FORCE_422_10, true));
+   std::string summaryText = strings.Get(summary ? 41322 : 41321);
+   if (summary)
+-    summaryText += '\n' + strings.Get(summary);
++    summaryText += '\n' + strings.Get(chooseFormat ? LLDV_CHOOSE_FORMAT_LABEL : summary);
+   dialog->SetProperty("CB1.LldvStatus", summaryText);
+ 
+   std::string details, labels, values;
+@@ -464,9 +482,10 @@ void ShowLldvFormatMenu()
+   for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
+   {
+     const auto format = static_cast<LldvFormat>(i);
+-    const int reason = LldvUnavailableLabel(status, i, true);
+-    const bool disabled = format != LldvFormat::Auto && reason != 0;
+     const bool forced = requiresForcing(format);
++    const int reason = LldvUnavailableLabel(status, forced ? LLDV_FORCE_422_10 : i, true);
++    const bool disabled = reason != 0 &&
++        (format != LldvFormat::Auto || forCircuit || status.active != LldvFormat::Auto);
+     const auto label = strings.Get(LldvFormatLabel(format, !estuary && forced));
+     CFileItem item(disabled ? "[COLOR grey]" + label + "[/COLOR]" : label);
+     item.SetProperty("disabled", disabled);
+@@ -492,19 +511,24 @@ void ShowLldvFormatMenu()
+     }
+     dialog->Add(item);
+   }
+-  dialog->SetSelected(saved);
++  dialog->SetSelected(static_cast<int>(LldvFormatPreference(saved)));
+   dialog->Open();
+   for (const char* key : {"CB1.LldvStatus", "CB1.LldvDetails", "CB1.LldvDetailLabels",
+                           "CB1.LldvDetailValues"})
+     dialog->SetProperty(key, CVariant{});
+   const auto current = ReadLldvConnector();
+   const int choice = dialog->GetSelectedItem();
+-  if (dialog->IsConfirmed() && choice >= 0 && choice <= static_cast<int>(LldvFormat::Y444_12) &&
+-      (choice == static_cast<int>(LldvFormat::Auto) ||
+-       (current.connectorId == status.connectorId && current.edidGeneration == status.edidGeneration &&
+-        !LldvUnavailableLabel(current, choice, true))) &&
+-      settings->SetInt("dvbridge.lldvformatvalue", choice))
+-    settings->Save();
++  if (!dialog->IsConfirmed() || choice < 0 || choice > static_cast<int>(LldvFormat::Y444_12))
++    return false;
++  const auto format = static_cast<LldvFormat>(choice);
++  const int preference = requiresForcing(format) ? LLDV_FORCE_422_10 : choice;
++  if ((current.connectorId != status.connectorId || current.edidGeneration != status.edidGeneration) ||
++      ((format != LldvFormat::Auto || forCircuit || current.active != LldvFormat::Auto) &&
++       LldvUnavailableLabel(current, preference, current.active == LldvFormat::Auto)) ||
++      !settings->SetInt("dvbridge.lldvformatvalue", preference))
++    return false;
++  settings->Save();
++  return true;
+ }
+ } // namespace
+ 
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+index 1498e14..b03feb3 100644
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -533,11 +533,8 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+   caps.hdr10=available.hdr10;
+   caps.hdr10MaxBpc=available.hdr10MaxBpc;
+   caps.hdr10plus=available.hdr10plus;
+-  if (!menu || !caps.sourceKnown || available.lldvUnavailableLabel)
+-  {
+-    caps.playerLed=available.playerLed;
+-    caps.lldvUnavailableLabel=available.lldvUnavailableLabel;
+-  }
++  caps.playerLed=available.playerLed;
++  caps.lldvUnavailableLabel=available.lldvUnavailableLabel;
+   if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
+   {
+     caps.processingKnown=available.processingKnown;
+@@ -614,13 +611,17 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>&
+           gamut<1 || gamut>3 ? 40912 : 40845;
+     }
+     const bool profile=reason==DVBRIDGE::OutputReason::TVProfileRequired || reason==DVBRIDGE::OutputReason::SDRTargetInvalid;
+-    if (reasonId && !profile && reason!=DVBRIDGE::OutputReason::ProcessingPending)
++    const bool chooseLldv = reasonId == DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL &&
++        (!caps.sourceKnown || caps.isDV) && processing[DVBRIDGE_MODE_PLAYER_LED].usable;
++    if (reasonId && !profile && !chooseLldv && reason!=DVBRIDGE::OutputReason::ProcessingPending)
+       option.label+=" / "+localizer.Get(40851);
+     option.label2=reasonId ? localizer.Get(reasonId) :
+         guided ? localizer.Get(40971) : mode==3 ? localizer.Get(40864) : "";
+     // Settings must allow selection before the required profile controls appear.
+     const bool configure=profile && !menu && !hdr10Menu && !hdr10PlusMenu && !hlgMenu;
+-    option.properties.emplace_back("disabled",reasonId!=0 && !configure);
++    option.properties.emplace_back("disabled",reasonId!=0 && !configure && !chooseLldv);
++    if (chooseLldv)
++      option.properties.emplace_back("cb1ChooseLldv", true);
+   }
+ }
+ #endif
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+index c2e7072..fde2381 100644
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -171,8 +171,13 @@ inline LldvDisplay ReadLldvDisplay(const uint8_t* edid, size_t size)
+ enum class LldvFormat { Auto, Y422_10, Y422_12, Rgb10, Rgb12, Y444_10, Y444_12 };
+ enum class LldvReason { Ready, Edid, Display, Driver, Timing };
+ 
++constexpr int LLDV_FORCE_422_10 = 7; // Saved choice, not an HDMI format or DRM enum.
++constexpr int LLDV_CHOOSE_FORMAT_LABEL = 41340;
++
+ constexpr LldvFormat LldvFormatPreference(int value)
+ {
++  if (value == LLDV_FORCE_422_10)
++    return LldvFormat::Y422_10;
+   return value >= 0 && value <= static_cast<int>(LldvFormat::Y444_12)
+              ? static_cast<LldvFormat>(value) : LldvFormat::Auto;
+ }
+@@ -216,15 +221,12 @@ inline LldvReason LldvFormatReason(dvbridge_sink_caps sink, LldvFormat format,
+ }
+ 
+ inline LldvFormat ChooseLldvFormat(dvbridge_sink_caps sink, unsigned driverFormats,
+-                                  bool currentTiming, bool forced42210 = false)
++                                  bool currentTiming)
+ {
+-  const bool readyForced = LldvRequiresForcing(LldvFormat::Y422_10, driverFormats, forced42210) &&
+-      LldvFormatReason(sink, LldvFormat::Y422_10, driverFormats, currentTiming, true) ==
+-          LldvReason::Ready;
+   for (const auto format : LLDV_PREFERRED)
+     if (LldvFormatReason(sink, format, driverFormats, currentTiming) == LldvReason::Ready)
+-      return readyForced && !LldvUses10Bits(format) ? LldvFormat::Y422_10 : format;
+-  return readyForced ? LldvFormat::Y422_10 : LldvFormat::Auto;
++      return format;
++  return LldvFormat::Auto;
+ }
+ 
+ // The connector and transport used to pack a particular framebuffer.
+@@ -253,7 +255,6 @@ struct LldvConnectorStatus
+   LldvDisplay display;
+   uint64_t edidGeneration{};
+   LldvFormat rejected{LldvFormat::Auto};
+-  bool amdDriverDisabled{};
+ };
+ 
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
+@@ -262,14 +263,13 @@ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preferenc
+   if (status.display.status != LldvEdidStatus::Ready)
+     return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41300 :
+         41280 + static_cast<int>(status.display.status);
+-  if (status.amdDriverDisabled) return 41333;
+   if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, true, status.forced42210);
++    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, true);
+   if (format == LldvFormat::Auto) return 41213;
+   const auto reason = LldvFormatReason(status.sink, format, status.driverFormats, true,
+-                                        status.forced42210);
++      preference == LLDV_FORCE_422_10 && status.forced42210);
+   if (reason != LldvReason::Ready) return 41208 + static_cast<int>(reason);
+   if (!(LldvBit(format) & LLDV_422)) return 41211;
+   if (!(status.currentTiming || (allowModeSwitch && status.availableTiming))) return 41212;
+@@ -282,7 +282,7 @@ inline LldvTransport SelectLldvTransport(const LldvConnectorStatus& status, int
+   const bool timing = status.currentTiming || (allowModeSwitch && status.availableTiming);
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, timing, status.forced42210);
++    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, timing);
+   if (LldvUnavailableLabel(status, preference, allowModeSwitch) || !(LldvBit(format) & LLDV_422))
+     return {};
+   return {status.connectorId, format,
+@@ -299,7 +299,6 @@ inline const char* LldvCompatibilityReason(const LldvConnectorStatus& status, in
+     case 41210: return "format-not-advertised-by-tv";
+     case 41211: return "format-not-supported-by-driver-or-port";
+     case 41212: return "hdmi-timing-unavailable";
+-    case 41333: return "ll-dv-disabled-by-amdgpu";
+     default: return "no-common-format";
+   }
+ }
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+index 68f21a1..17b043f 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -13,7 +13,6 @@
+ #include "ServiceBroker.h"
+ #include "VideoSyncGbm.h"
+ 
+-#include <fstream>
+ #include "cores/VideoPlayer/VideoReferenceClock.h"
+ #include "drm/DRMAtomic.h"
+ #ifdef HAVE_DVBRIDGE
+@@ -213,15 +212,6 @@ bool CWinSystemGbm::InitWindowSystem()
+     std::vector<uint8_t> edid = connector->GetEDID();
+ #ifdef HAVE_DVBRIDGE
+     std::lock_guard lock(m_lldvEdidMutex);
+-    m_lldvAmdDriverDisabled = false;
+-    if (auto* version = drmGetVersion(m_DRM->GetFileDescriptor()))
+-    {
+-      char enabled{};
+-      if (version->name && std::string_view(version->name) == "amdgpu" &&
+-          (std::ifstream("/sys/module/amdgpu/parameters/dv_lldv") >> enabled))
+-        m_lldvAmdDriverDisabled = enabled == 'N';
+-      drmFreeVersion(version);
+-    }
+     m_lldvEdid = edid;
+     m_lldvDisplay = DVBRIDGE::ReadLldvDisplay(edid.data(), edid.size());
+     m_lldvEdidConnector = *connector->GetConnectorId();
+@@ -1758,8 +1748,6 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+         status.edidGeneration == m_lldvRejected.edidGeneration)
+       status.rejected = m_lldvRejected.format;
+     status.sink = status.display.sink;
+-    status.amdDriverDisabled = m_lldvAmdDriverDisabled && connector->GetType() == "HDMI-A" &&
+-                               !connector->SupportsProperty("CB1_LLDV_FORMAT");
+   }
+   if (status.connectorId && connector->SupportsProperty("CB1_LLDV_FORMAT"))
+   {
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+index 8e946c5..370ad52 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -268,7 +268,6 @@ private:
+   mutable std::mutex m_lldvEdidMutex;
+   std::vector<uint8_t> m_lldvEdid;
+   DVBRIDGE::LldvDisplay m_lldvDisplay;
+-  bool m_lldvAmdDriverDisabled{};
+   uint32_t m_lldvEdidConnector{};
+   uint64_t m_lldvEdidGeneration{};
+   DVBRIDGE::LldvTransport m_lldvRejected;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index ab6b874..879527d 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1927,16 +1927,19 @@ DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(
+   std::lock_guard lock(m_dvCapabilityMutex);
+   auto caps = m_dvCapabilities;
+   caps.hdr10MaxBpc = m_hdr10MaxBpc.load();
+-  caps.playerLed = DVBRIDGE::SelectLldvTransport(m_dvLldvStatus,
+-      preferences.lldvFormat, allowModeSwitch).connectorId != 0;
++  const auto lldvTransport = DVBRIDGE::SelectLldvTransport(m_dvLldvStatus,
++      preferences.lldvFormat, allowModeSwitch);
++  caps.playerLed = lldvTransport.connectorId != 0;
+   caps.lldvDisplay = m_dvLldvStatus.display;
+   caps.lldvEdidGeneration = m_dvLldvStatus.edidGeneration;
+-  caps.lldvRgb10Scanout = DVBRIDGE::LldvFormatPreference(preferences.lldvFormat) !=
+-      DVBRIDGE::LldvFormat::Y422_12 && m_dvLldvStatus.rgb10Scanout;
++  caps.lldvRgb10Scanout = lldvTransport.rgb10Scanout;
+   caps.lldvUnavailableLabel = DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus,
+       preferences.lldvFormat, allowModeSwitch);
+   if (allowModeSwitch)
+   {
++    if (!caps.playerLed && (!DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, 0, true) ||
++        !DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, DVBRIDGE::LLDV_FORCE_422_10, true)))
++      caps.lldvUnavailableLabel = DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL;
+     caps.nativeDV = m_dvAvailableNativeDV;
+     caps.hdr10 = m_dvAvailableHDR10;
+   }
