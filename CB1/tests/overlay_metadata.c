@@ -151,18 +151,28 @@ static void missing_and_zero(void)
     size = present(context, plain, m, bytes, .08, full, false, p, ref);
     check(p, ref, size, false, true);
     assert(!ref[1]);
-    /* Missing L5 on a full raster still yields the canonical zero-area L5. */
+    /* Missing L5 states no active area and none is invented: neither output
+     * carries L5 on a full raster, and the overlay edge only refreshes. */
     m->num_ext_blocks = 2;
     size = present(context, plain, m, bytes, .12, full, true, p, ref);
-    check(p, ref, size, true, true);
-    assert(!memcmp(ref + find_l5(ref, size), zero, 8));
-    /* Missing L5 with player letterboxing: the synthesized margins are cleared too. */
+    assert(!find_l5(p, size) && !find_l5(ref, size));
+    assert(p[1] == 1 && !memcmp(p + 2, ref + 2, size - 2));
+    /* Missing L5 with player letterboxing: the player's own borders are described,
+     * and an overlay clears them as it clears an authored L5. */
     struct dvbridge_geometry letterbox = {3840, 1600, 0, 280, 3840, 1600};
     dvbridge_reset(context);
     dvbridge_reset(plain);
-    size = present(context, plain, m, bytes, 3., letterbox, true, p, ref);
-    assert(memcmp(ref + find_l5(ref, size), zero, 8));
-    check(p, ref, size, true, true);
+    dvbridge_set_overlay_visible(context, true);
+    struct dvbridge_candidate *a = dvbridge_prepare(context, m, bytes, 3., letterbox, false);
+    struct dvbridge_candidate *b = dvbridge_prepare(plain, m, bytes, 3., letterbox, false);
+    assert(a && b);
+    unsigned with = payload(a, p), without = payload(b, ref), l5 = find_l5(ref, without);
+    static const uint8_t borders[8] = {0, 0, 0, 0, 0x01, 0x18, 0x01, 0x18}; /* top and bottom 280 */
+    assert(!find_l5(p, with) && l5 == with + 5 && without == with + 13);
+    assert(!memcmp(ref + l5, borders, 8) && p[70] + 1 == ref[70]);
+    assert(!memcmp(p + 2, ref + 2, 68) && !memcmp(p + 71, ref + 71, with - 71));
+    dvbridge_candidate_destroy(a);
+    dvbridge_candidate_destroy(b);
     av_free(m);
     dvbridge_destroy(context);
     dvbridge_destroy(plain);

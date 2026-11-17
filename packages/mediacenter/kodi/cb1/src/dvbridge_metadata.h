@@ -275,7 +275,11 @@ static inline bool dvbridge_dv_metadata_output(struct dvbridge_dv *state,const A
         if(!cb1_wire_append(state,data->level,bytes,words*2))return false;
     }
     if(l1_count!=1)return false;
-    if(!l5_count){
+    /* An RPU without L5 states no active area, and none is invented for it: a
+     * full-raster L5 it never carried makes a display apply positive L2 lift to
+     * the whole frame, letterbox bars included. Borders added by the player's
+     * own placement are still described. */
+    if(!l5_count && (margins[0] || margins[1] || margins[2] || margins[3])){
         uint8_t bytes[8];for(unsigned i=0;i<4;i++)AV_WB16(bytes+i*2,margins[i]);
         if(!cb1_wire_append(state,5,bytes,sizeof(bytes)))return false;
     }
