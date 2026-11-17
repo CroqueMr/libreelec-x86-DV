@@ -32,7 +32,7 @@ class GbmColourTransition(unittest.TestCase):
                           'std::optional<bool> TransportLimitedColor()',
                           'std::optional<uint64_t> RestoredConnectorProperty('):
             program = program.replace(signature, 'virtual ' + signature)
-        program = program.replace('struct VideoPicture {', 'struct VideoPicture {int color_transfer=16;')
+        program = program.replace('int color_transfer=1;', 'int color_transfer=16;')
         program = program.replace(' bool rangeTransition=false;', r'''
  std::vector<std::map<std::string,uint64_t>> attempts;bool accept=false;
  bool HasPendingCB1Page()const{return false;}
@@ -240,7 +240,17 @@ int main(){VideoPicture configured,buffered;assert(configured.IsSameParams(buffe
             addition = method(renderer, f"CLinuxRenderer{backend}::AddVideoPicture")
             check = method(renderer, f"CLinuxRenderer{backend}::CheckVideoParameters")
             self.assertIn("buf.m_srcBits = picture.colorBits;", addition)
+            if backend == "GL":
+                self.assertIn("SetBufferColorimetry(buf, toneMap)", check)
+                check = method(renderer, "CLinuxRendererGL::SetBufferColorimetry")
             self.assertIn("tmp.colorBits = buf.m_srcBits;", check)
+            self.assertIn("tmp.color_transfer = buf.m_srcColTransfer;", check)
+            shader_request = "!m_cmsOn" if backend == "GL" else "true"
+            self.assertIn(f"SetColorimetry(&tmp, {shader_request})", check)
+            configure = method(renderer, f"CLinuxRenderer{backend}::" +
+                               ("Configure" if backend == "GL" else "ConfigureVideoOutput"))
+            output = "!m_ColorManager->IsEnabled()" if backend == "GL" else "true"
+            self.assertIn(f"SetColorimetry(&picture, {output})", configure)
 
     def test_range_changing_rejection_keeps_the_previous_pixels(self):
         source = (self.root / "xbmc/windowing/gbm/drm/DRMAtomic.cpp").read_text()

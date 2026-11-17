@@ -92,7 +92,7 @@ struct CWinSystemGbmGLESContext:Window {
  static bool DVBridgeRequested(const ::VideoPicture* p){return DVBRIDGE::WantsNativeOutput(p);}
  bool HasPendingDVBridgeRestore(){return false;}
  bool SetVideoOutput(const ::VideoPicture*){return true;}
- void SetColorimetry(const ::VideoPicture*){}
+ void SetColorimetry(const ::VideoPicture*, bool=false){}
  bool SetHDR(const ::VideoPicture*){++hdrSignals;return true;}
  bool SetGuiCompositing(int){return true;}
  bool ConfigureHDR10Conversion(const ::VideoPicture&){return true;}

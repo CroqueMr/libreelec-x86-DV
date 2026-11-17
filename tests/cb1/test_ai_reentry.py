@@ -494,7 +494,7 @@ struct VideoPicture{bool dv=false;int color_transfer=0;};
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10};}
 struct WindowBase{virtual ~WindowBase()=default;
  virtual bool SetVideoOutput(const VideoPicture*)=0;
- virtual void SetColorimetry(const VideoPicture*)=0;
+ virtual void SetColorimetry(const VideoPicture*, bool=false)=0;
  virtual bool SetHDR(const VideoPicture*)=0;
  virtual bool SetGuiCompositing(int)=0;};
 namespace KODI::WINDOWING::GBM {
@@ -506,7 +506,7 @@ struct CWinSystemGbmGLESContext:WindowBase{
  bool BeginDVBridge(){return bridge;}
  bool SetVideoOutput(const VideoPicture*)override{return output;}
  bool HasPendingDVBridgeRestore(){return restore;}
- void SetColorimetry(const VideoPicture*)override{++colourUpdates;}
+ void SetColorimetry(const VideoPicture*, bool)override{++colourUpdates;}
  struct Selection{DVBRIDGE::OutputRoute route;};
  Selection SelectedDVOutput(const VideoPicture*){return {route};}
  bool ConfigureHDR10Conversion(const VideoPicture&){return conversion;}

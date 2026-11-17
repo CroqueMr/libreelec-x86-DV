@@ -1,0 +1,156 @@
+Subject: [PATCH] GBM: signal the SDR gamut rendered by the Kodi video shader
+
+--- a/xbmc/windowing/WinSystem.h
++++ b/xbmc/windowing/WinSystem.h
+@@ -237,10 +237,11 @@
+ 
+   /*!
+    * \brief Set colorimetry (BT.709, BT.2020, etc). Passing nullptr as the
+-   * parameter resets to "Default" (display then decides based on rez)
+-   *
+-   */
+-  virtual void SetColorimetry(const VideoPicture* videoPicture) {}
++   * parameter resets to "Default" (display then decides based on rez). Native
++   * YUV shaders set sdrToBT709 when they render SDR into the BT.709 gamut.
++   *
++   */
++  virtual void SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709 = false) {}
+ 
+   /*!
+    * \brief Set the HDR metadata. Passing nullptr as the parameter should
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -104,7 +104,7 @@
+ 
+   bool SetVideoOutput(const VideoPicture* videoPicture) override;
+ 
+-  void SetColorimetry(const VideoPicture* videoPicture) override;
++  void SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709 = false) override;
+   KODI::UTILS::Colorimetry GetColorimetry() const override { return m_colorimetry; }
+   KODI::UTILS::Eotf GetEotf() const override { return m_eotf; }
+   bool SetHDR(const VideoPicture* videoPicture) override;
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1304,7 +1304,7 @@
+                       : m_DRM->FindGuiPlane(current->GetFormat(), current->GetModifier());
+ }
+ 
+-void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture)
++void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709)
+ {
+   m_queuedColorspace.reset();
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+@@ -1323,7 +1323,13 @@
+   KODI::UTILS::Colorimetry colorimetry = KODI::UTILS::Colorimetry::DEFAULT;
+ 
+   if (videoPicture)
++  {
+     colorimetry = KODI::UTILS::GetColorimetry(*videoPicture);
++    if (sdrToBT709 && videoPicture->hdrType == StreamHdrType::HDR_TYPE_NONE &&
++        videoPicture->color_transfer != AVCOL_TRC_SMPTE2084 &&
++        videoPicture->color_transfer != AVCOL_TRC_ARIB_STD_B67)
++      colorimetry = KODI::UTILS::Colorimetry::BT709_YCC;
++  }
+ 
+   m_colorimetry = colorimetry;
+ 
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
+@@ -258,7 +258,7 @@
+   if (!CServiceBroker::GetWinSystem()->SetVideoOutput(&picture))
+     CLog::Log(LOGWARNING, "LinuxRendererGL::Configure: SetVideoOutput failed");
+ 
+-  CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
++  CServiceBroker::GetWinSystem()->SetColorimetry(&picture, !m_ColorManager->IsEnabled());
+ 
+   m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
+   CLog::Log(LOGDEBUG, "LinuxRendererGL::Configure: HDR passthrough: {}",
+@@ -816,6 +816,7 @@
+ 
+   if (cmsChanged)
+   {
++    const bool hadCms = m_cmsOn;
+     if (m_ColorManager->IsEnabled())
+     {
+       if (!m_ColorManager->CheckConfiguration(m_cmsToken, m_srcPrimaries))
+@@ -829,6 +830,9 @@
+     {
+       m_cmsOn = false;
+     }
++    const auto& buf = m_buffers[m_iYUVRenderBuffer];
++    if (m_cmsOn != hadCms && buf.videoBuffer)
++      SetBufferColorimetry(buf, m_toneMap);
+   }
+ 
+   const ESCALINGMETHOD previousMethod = m_scalingMethod;
+@@ -2786,6 +2790,17 @@
+   }
+ }
+ 
++void CLinuxRendererGL::SetBufferColorimetry(const CPictureBuffer& buf, bool toneMap)
++{
++  VideoPicture tmp{};
++  tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
++  tmp.color_transfer = buf.m_srcColTransfer;
++  tmp.iWidth = m_sourceWidth;
++  tmp.iHeight = m_sourceHeight;
++  tmp.colorBits = buf.m_srcBits;
++  CServiceBroker::GetWinSystem()->SetColorimetry(&tmp, !m_cmsOn);
++}
++
+ void CLinuxRendererGL::CheckVideoParameters(int index)
+ {
+   const CPictureBuffer& buf = m_buffers[index];
+@@ -2812,15 +2827,7 @@
+ 
+     //! @todo HACK for #28468; clean up properly in Piers beta 2
+     if (toneMap != m_toneMap)
+-    {
+-      VideoPicture tmp{};
+-      tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
+-      tmp.iWidth = m_sourceWidth;
+-      tmp.iHeight = m_sourceHeight;
+-      // Keep Adaptive on the format already selected for this source depth.
+-      tmp.colorBits = buf.m_srcBits;
+-      CServiceBroker::GetWinSystem()->SetColorimetry(&tmp);
+-    }
++      SetBufferColorimetry(buf, toneMap);
+ 
+     m_toneMap = toneMap;
+     m_toneMapMethod = toneMapMethod;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -411,7 +411,7 @@
+   }
+ #endif
+ 
+-  CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
++  CServiceBroker::GetWinSystem()->SetColorimetry(&picture, true);
+   m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
+   CLog::Log(LOGDEBUG, "LinuxRendererGLES::Configure: HDR passthrough: {}",
+             m_passthroughHDR ? "on" : "off");
+@@ -3147,11 +3147,12 @@
+     {
+       VideoPicture tmp{};
+       tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
++      tmp.color_transfer = buf.m_srcColTransfer;
+       tmp.iWidth = m_sourceWidth;
+       tmp.iHeight = m_sourceHeight;
+       // Keep Adaptive on the format already selected for this source depth.
+       tmp.colorBits = buf.m_srcBits;
+-      CServiceBroker::GetWinSystem()->SetColorimetry(&tmp);
++      CServiceBroker::GetWinSystem()->SetColorimetry(&tmp, true);
+     }
+ 
+     m_toneMap = toneMap;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
+@@ -126,6 +126,8 @@
+ 
+   struct CYuvPlane;
+   struct CPictureBuffer;
++
++  void SetBufferColorimetry(const CPictureBuffer& buf, bool toneMap);
+ 
+   void BindPbo(CPictureBuffer& buff);
+   void UnBindPbo(CPictureBuffer& buff);
