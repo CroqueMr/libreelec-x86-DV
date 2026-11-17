@@ -55,6 +55,8 @@ int main(void) {
             self.assertEqual(executed.returncode,0,executed.stdout+executed.stderr)
 
 
+    @unittest.skipUnless(os.environ.get('FFMPEG_MATCHED_SOURCE') and os.environ.get('FFMPEG_TEST_PREFIX'),
+                         'Matched FFmpeg source and libraries required')
     def test_aligned_rpu_padding_keeps_metadata_and_crc_checks(self):
         source = Path(os.environ['FFMPEG_MATCHED_SOURCE'])
         prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
