@@ -1993,5 +1993,11 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": {
+    "owner": "Include cached font blur in dirty drawing bounds.",
+    "files": {
+      "xbmc/guilib/GUILabelControl.cpp": "Expand the label render region without modifying the layout."
+    }
   }
 }

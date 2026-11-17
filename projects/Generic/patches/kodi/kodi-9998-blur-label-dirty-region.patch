@@ -1,0 +1,22 @@
+diff --git a/xbmc/guilib/GUILabelControl.cpp b/xbmc/guilib/GUILabelControl.cpp
+--- a/xbmc/guilib/GUILabelControl.cpp
++++ b/xbmc/guilib/GUILabelControl.cpp
+@@ -136,7 +136,17 @@
+
+ CRect CGUILabelControl::CalcRenderRegion() const
+ {
+-  return m_label.GetRenderRect();
++  CRect region = m_label.GetRenderRect();
++  const auto* font = m_label.GetLabelInfo().font;
++  if (!font || region.IsEmpty())
++    return region;
++
++  const CPoint padding = font->GetRenderPadding();
++  region.x1 -= padding.x;
++  region.y1 -= padding.y;
++  region.x2 += padding.x;
++  region.y2 += padding.y;
++  return region;
+ }
+
+ void CGUILabelControl::Render()
