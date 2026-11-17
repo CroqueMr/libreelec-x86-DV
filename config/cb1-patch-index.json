@@ -128,6 +128,13 @@
       "src/nvidia-modeset/Makefile": "Compile the rebuilt core with the external return-thunk contract."
     }
   },
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-09-dovi-aligned-padding.patch": {
+    "summary": "Accept aligned Dolby Vision RPUs with an extra zero byte before the CRC",
+    "component": "ffmpeg",
+    "files": {
+      "libavcodec/dovi_rpudec.c": "Backport upstream 5e95a3d to accept aligned padding while retaining terminator and CRC validation."
+    }
+  },
   "projects/Generic/patches/ffmpeg/ffmpeg-9900-07-mov-dovi-hevc-entry.patch": {
     "summary": "Recognize and seek explicitly associated Dolby Vision layers in HEVC MOV sample entries",
     "component": "ffmpeg",
