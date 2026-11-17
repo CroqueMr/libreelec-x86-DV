@@ -277,6 +277,54 @@ class BlurayMenuSource(unittest.TestCase):
   assert(!IsHdrGraphicsClip(clip));
 ''')
 
+    def test_play_item_serializes_bd_j_publication_and_close(self):
+        self.run_callback_probe(r'''
+  Input input;
+  BD_ARGB_OVERLAY page{};
+  page.plane=1;page.w=1;page.h=1;page.stride=1;page.cmd=BD_ARGB_OVERLAY_INIT;
+  input.OverlayCallbackARGB(&page);
+  uint32_t pixel=0xff343434;
+  page.argb=&pixel;page.cmd=BD_ARGB_OVERLAY_DRAW;
+  input.OverlayCallbackARGB(&page);
+
+  BLURAY_STREAM_INFO video{};
+  video.dynamic_range_type=BLURAY_DYNAMIC_RANGE_HDR10;
+  BLURAY_CLIP_INFO clip{};
+  clip.video_stream_count=1;clip.video_streams=&video;
+  input.m_clip=&clip;
+  std::latch publishing{1}, resume{1}, retagging{1}, finishRetag{1}, closing{1};
+  input.player.beforePublish=[&](size_t published) {
+    if (published==0) { publishing.count_down(); resume.wait(); }
+    if (published==1) { retagging.count_down(); finishRetag.wait(); }
+  };
+  const auto assertPublicationLocked = [&] {
+    const bool unlocked=input.m_overlayMutex.try_lock();
+    if (unlocked) input.m_overlayMutex.unlock();
+    assert(!unlocked && "all producers must use the same publication lock");
+  };
+  page.cmd=BD_ARGB_OVERLAY_FLUSH;
+  std::jthread java([&] {input.OverlayCallbackARGB(&page);});
+  publishing.wait();
+  assertPublicationLocked();
+  std::jthread demux([&] {input.UpdateGraphicsDynamicRange();});
+  resume.count_down();
+
+  retagging.wait();
+  assertPublicationLocked();
+  std::jthread close([&] {closing.count_down();input.OverlayCallbackARGB(nullptr);});
+  closing.wait();
+  finishRetag.count_down();
+  java.join();
+  demux.join();
+  close.join();
+  const auto& pages=input.player.history;
+  assert(pages.size()==3 && pages.back()->m_overlays.empty());
+  const auto oldImage=std::static_pointer_cast<CDVDOverlayImage>(pages[0]->m_overlays.front());
+  const auto newImage=std::static_pointer_cast<CDVDOverlayImage>(pages[1]->m_overlays.front());
+  assert(!oldImage->m_isHDROverlay && newImage->m_isHDROverlay && oldImage!=newImage);
+  assert(oldImage->pixels==newImage->pixels);
+''')
+
     def run_callback_probe(self, checks='', producers=False):
         include = os.environ.get('LIBBLURAY_TEST_INCLUDE')
         if not include:
@@ -304,8 +352,11 @@ class BlurayMenuSource(unittest.TestCase):
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <latch>
 #include <list>
 #include <mutex>
+#include <thread>
 #include "utils/Geometry.h"
 #include "cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h"
 #include <libbluray/bluray.h>
@@ -329,8 +380,10 @@ struct Player {
   std::shared_ptr<CDVDOverlayGroup> group;
   std::vector<std::shared_ptr<CDVDOverlayGroup>> history;
   unsigned menu_event = 99;
+  std::function<void(size_t)> beforePublish;
   void OnDiscNavResult(void* pointer, int event) {
     if(event==BD_EVENT_MENU){menu_event=*static_cast<unsigned*>(pointer);return;}
+    if (beforePublish) beforePublish(history.size());
     group = *static_cast<std::shared_ptr<CDVDOverlayGroup>*>(pointer);
     history.push_back(group);
   }
@@ -340,6 +393,7 @@ struct Input {
   using SOverlays = std::list<SOverlay>;
   struct SPlane { int w{}, h{}; SOverlays o, committed; };
   std::array<SPlane, 2> m_planes;
+  std::mutex m_overlayMutex;
   Player player;
   Player* m_player = &player;
   std::atomic_bool m_menuShows{};
@@ -631,12 +685,12 @@ static void native_overlay(void* handle, const BD_OVERLAY* ov) {
             # DVDOverlayImage's platform header is not used by these methods.
             (root / 'PlatformDefs.h').write_text('')
             (root / 'probe.cpp').write_text(program)
-            built = subprocess.run(['c++', '-std=c++20', '-fsanitize=address,undefined',
+            built = subprocess.run(['c++', '-std=c++20', '-pthread', '-fsanitize=address,undefined',
                                     '-I' + str(root), '-I' + str(TREE / 'xbmc'), '-I' + include,
                                     str(root / 'probe.cpp'), '-o', str(root / 'probe')],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            run = subprocess.run([str(root / 'probe')], capture_output=True, text=True)
+            run = subprocess.run([str(root / 'probe')], capture_output=True, text=True, timeout=30)
             self.assertEqual(run.returncode, 0, run.stderr)
 
 

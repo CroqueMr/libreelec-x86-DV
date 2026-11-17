@@ -9,12 +9,12 @@
      else
      {
 @@ -76,6 +77,8 @@
- 
+
    std::vector<uint8_t> pixels;
    std::vector<uint32_t> palette;
 +  // A retained Blu-ray menu can outlive the play item that selected its colour matrix.
 +  std::vector<uint32_t> alternatePalette;
- 
+
    // pixels are already HDR, matching video's colorimetry
    bool m_isHDROverlay{false};
 --- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
@@ -22,7 +22,7 @@
 @@ -1026,6 +1026,14 @@
         | static_cast<uint32_t>(clamp(b)) << PIXEL_BSHIFT;
  }
- 
+
 +static std::vector<uint32_t> DecodeMenuPalette(const BD_PG_PALETTE_ENTRY* entries, bool hdr)
 +{
 +  std::vector<uint32_t> palette(256);
@@ -45,7 +45,7 @@
 +  const auto range = clip.video_streams[0].dynamic_range_type;
 +  return range == BLURAY_DYNAMIC_RANGE_HDR10 || range == BLURAY_DYNAMIC_RANGE_DOLBY_VISION;
  }
- 
+
  void CDVDInputStreamBluray::MatchGraphicsDynamicRange(SOverlays& overlays) const
  {
  #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
@@ -65,7 +65,15 @@
      copy->m_isHDROverlay = m_hdrGraphics;
      overlay = copy;
    }
-@@ -1174,8 +1186,12 @@
+@@ -1165,6 +1177,7 @@
+ void CDVDInputStreamBluray::UpdateGraphicsDynamicRange()
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  std::lock_guard lock(m_overlayMutex);
+   if (!m_clip || IsHdrGraphicsClip(*m_clip) == m_hdrGraphics)
+     return;
+   m_hdrGraphics = !m_hdrGraphics;
+@@ -1174,8 +1187,12 @@
    bool shown = false;
    for (SPlane& plane : m_planes)
    {
@@ -79,7 +87,15 @@
      shown = shown || !plane.committed.empty();
    }
    // libbluray will not draw a still BD-J page again, so send it as what it now is.
-@@ -1248,9 +1264,8 @@
+@@ -1211,6 +1228,7 @@
+ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  std::lock_guard lock(m_overlayMutex);
+   if (ov == nullptr)
+   {
+     OverlayClose();
+@@ -1248,9 +1266,8 @@
    {
      if (ov->palette)
      {
@@ -91,7 +107,7 @@
        for (SOverlay& overlay : plane.o)
        {
          if (overlay->palette.empty())
-@@ -1259,6 +1274,7 @@
+@@ -1259,6 +1276,7 @@
          auto copy = std::make_shared<CDVDOverlayImage>(
              *overlay, overlay->x, overlay->y, overlay->width, overlay->height);
          copy->palette = palette;
@@ -99,8 +115,8 @@
          copy->m_isHDROverlay = m_hdrGraphics;
          overlay = copy;
        }
-@@ -1278,13 +1294,9 @@
- 
+@@ -1278,13 +1296,9 @@
+
      if (ov->palette)
      {
 -      overlay->palette.resize(256);
@@ -113,6 +129,33 @@
 +      overlay->palette = DecodeMenuPalette(ov->palette, m_hdrGraphics);
 +      overlay->alternatePalette = DecodeMenuPalette(ov->palette, !m_hdrGraphics);
 +    }
- 
+
      const BD_PG_RLE_ELEM *rlep = ov->img;
      size_t bytes = ov->w * ov->h;
+@@ -1311,6 +1325,7 @@
+ #ifdef HAVE_LIBBLURAY_BDJ
+ void CDVDInputStreamBluray::OverlayCallbackARGB(const struct bd_argb_overlay_s * const ov)
+ {
++  std::lock_guard lock(m_overlayMutex);
+   if (ov == nullptr)
+   {
+     OverlayClose();
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+@@ -22,6 +22,7 @@
+ #include <list>
+ #include <map>
+ #include <memory>
++#include <mutex>
+ #include <optional>
+ #include <string>
+
+@@ -300,6 +301,8 @@
+     int h = 0;
+   };
+
++  // BD-J can publish from its Java thread while the demuxer changes play item.
++  std::mutex m_overlayMutex;
+   SPlane m_planes[2];
+   void MatchGraphicsDynamicRange(SOverlays& overlays) const;
+

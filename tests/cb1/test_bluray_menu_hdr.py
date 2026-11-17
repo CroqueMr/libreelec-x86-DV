@@ -98,6 +98,7 @@ DYNAMIC_RANGE_PROGRAM = r'''
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <vector>
 #define BD_OVERLAY_INTERFACE_VERSION 2
 enum { LOGDEBUG };
@@ -120,6 +121,7 @@ struct CDVDInputStreamBluray
   typedef std::shared_ptr<CDVDOverlayImage> SOverlay;
   typedef std::list<SOverlay> SOverlays;
   struct SPlane { SOverlays o, committed; };
+  std::mutex m_overlayMutex;
   SPlane m_planes[2];
   bool m_hdrGraphics = false;
   BLURAY_CLIP_INFO* m_clip = nullptr;

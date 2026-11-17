@@ -2006,7 +2006,8 @@
     "owner": "Keep retained Blu-ray graphics consistent with the current play item when the disc does not redraw them.",
     "files": {
       "xbmc/cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h": "Keep both Blu-ray palette decodes across image crops.",
-      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Select the authored palette matrix for recognised HDR play items and preserve previously submitted menu pages."
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Select the authored palette matrix for recognised HDR play items and preserve previously submitted menu pages.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Serialize the BD-J overlay callbacks with play-item dynamic range changes."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
