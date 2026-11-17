@@ -2033,5 +2033,28 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Use the gamut produced by the native SDR video shader.",
       "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Use the gamut produced by the native SDR video shader."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": {
+    "summary": "Add a blur font style for text that must not be read yet",
+    "component": "kodi",
+    "files": {
+      "xbmc/GUIInfoManager.cpp": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style.",
+      "xbmc/guilib/GUIFont.cpp": "Include blur padding in scaled font clip bounds.",
+      "xbmc/guilib/GUIFont.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontManager.cpp": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontManager.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontTTF.cpp": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontTTF.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUITextBox.cpp": "Include blur padding in clip and dirty-region bounds without changing layout.",
+      "xbmc/guilib/GUITextBox.h": "Declare the text box render-bounds override.",
+      "xbmc/guilib/guiinfo/GUIInfoLabels.h": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style.",
+      "xbmc/guilib/guiinfo/SystemGUIInfo.cpp": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": {
+    "owner": "Include cached font blur in dirty drawing bounds.",
+    "files": {
+      "xbmc/guilib/GUILabelControl.cpp": "Expand the label render region without modifying the layout."
+    }
   }
 }
