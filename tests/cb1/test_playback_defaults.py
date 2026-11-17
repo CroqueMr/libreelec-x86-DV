@@ -114,14 +114,14 @@ struct CSettingConditions {
 #else
  static constexpr int nativeHDR10PlusIndex=0;
 #endif
- static void DVOutputOptions(const std::shared_ptr<CSettingInt>& setting,std::vector<IntegerSettingOption>& options) {
+ static void DVOutputOptions(const std::shared_ptr<CSettingInt>& setting,std::vector<IntegerSettingOption>& options,bool) {
   if (!hdr10PlusSink && setting->GetId()=="dvbridge.hdr10plusplaybackchoice")
     options.at(nativeHDR10PlusIndex).properties.emplace_back("disabled",true);
  }
 };
 struct StringUtils {template<class... T>static std::string Format(std::string text,T...){return text;}};
 CHOICES
-bool ShowLldvFormatMenu(bool){return false;}
+bool ShowLldvFormatMenu(bool,bool){return false;}
 struct CDVPlaybackModes {
  static inline StreamHdrType source=StreamHdrType::HDR_TYPE_DOLBYVISION;
  static bool MenuEnabled(){return true;}static StreamHdrType SourceType(){return source;}
@@ -271,6 +271,13 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
   assert(SelectOutput(preferences,caps).route==OutputRoute::Vanilla);
   caps.playerLed=true;
   assert(SelectOutput(preferences,caps).route==OutputRoute::PlayerLed);
+  UsePlayerLedStartupFallback();
+  assert(FrameOutputSettings().hdr10TransportFallback);
+  assert(SelectOutput(FrameOutputSettings(),caps).route==OutputRoute::HDR10);
+  SelectOutputSettings();
+  assert(choose(StreamHdrType::HDR_TYPE_DOLBYVISION,8,false));
+  UsePlayerLedStartupFallback();
+  assert(!FrameOutputSettings().hdr10TransportFallback);
   caps.isDV=false;
   assert(SelectOutput(preferences,caps).route==OutputRoute::Vanilla);
  }

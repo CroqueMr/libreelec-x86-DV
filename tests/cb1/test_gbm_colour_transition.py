@@ -259,6 +259,7 @@ int main(){VideoPicture configured,buffered;assert(configured.IsSameParams(buffe
         fragment = source[start:end]
         compile_run(self, r'''
 #include <cassert>
+#include <cerrno>
 constexpr unsigned DRM_MODE_FLAG_3D_MASK=16;
 struct Request{bool sdrRestore=false;};struct Mode{unsigned flags=0;};
 struct Window {
@@ -266,7 +267,7 @@ struct Window {
  Request request;Request* m_req=&request;Mode mode;Mode* m_mode=&mode;
  int testError=22,framebuffer=11,tuple=1,fallbacks=0;
  bool reject(const char*,int){return false;}
- bool Submit(bool rejected){if(rejected){FRAGMENT ++fallbacks;framebuffer=22;return true;}
+ bool Submit(bool rejected, bool* lldvTestRejected=nullptr){if(rejected){FRAGMENT ++fallbacks;framebuffer=22;return true;}
   framebuffer=22;tuple=2;return true;}
 };
 int main(){Window changed;changed.m_colorRangeTransition=true;

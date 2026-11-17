@@ -479,18 +479,21 @@ struct Request {
  std::map<Object*,std::map<std::string,uint64_t>> values;
  std::optional<drmModeModeInfo> signalMode;std::optional<bool> hdr10plus;
  std::optional<uint64_t> requestedDV;bool sdrRestore=false;
+ static inline bool rejectFramebuffer=false;
  Request* Get(){return this;}
  bool AddProperty(Object* object,const char* name,uint64_t value){
   if(rejectProperty && std::string(name)=="HDR_OUTPUT_METADATA")return false;
+  if(rejectFramebuffer && std::string(name)=="FB_ID")return false;
   values[object][name]=value;return true;
  }
  void CacheProperties(){for(auto& [object,props]:values)for(auto& [key,value]:props)object->cache[key]=value;}
  void LogAtomicRequest(){} static void LogAtomicDiff(Request*,Request*){}
 };
 bool rejectTest=false,rejectCommit=false;unsigned realCommits=0;
+int atomicErrno=EBUSY;
 std::map<std::string,uint64_t> signal;
 int drmModeAtomicCommit(int,Request* request,int flags,void*){
- if((flags&DRM_MODE_ATOMIC_TEST_ONLY)?rejectTest:rejectCommit){errno=EBUSY;return -1;}
+ if((flags&DRM_MODE_ATOMIC_TEST_ONLY)?rejectTest:rejectCommit){errno=atomicErrno;return -1;}
  if(!(flags&DRM_MODE_ATOMIC_TEST_ONLY)){
   ++realCommits;
   for(auto& [object,props]:request->values)for(auto& [key,value]:props)signal[key]=value;
@@ -525,13 +528,29 @@ struct CDRMAtomic {
  void AcceptHDR10Plus(bool){assert(false);}
  void SetSDRRestorePending(bool pending) PENDING
  bool PrepareSDRRestore(int& flags) PREPARE
- bool DrmAtomicCommit(int,int,bool,bool,bool=false);
+ bool DrmAtomicCommit(int,int,bool,bool,bool=false,bool* = nullptr);
  int TestAtomicFrame(int&,bool);void FinishRequest(bool);
 };
 METHODS
 int main(int argc,char** argv){
  assert(argc==2);int scenario=std::stoi(argv[1]);
  CDRMAtomic drm;
+ if(scenario>=12){
+  constexpr int modeFlags=DRM_MODE_ATOMIC_ALLOW_MODESET;
+  bool formatRejected=false;
+  rejectTest=scenario!=15 && scenario!=16;
+  rejectCommit=scenario==15;
+  atomicErrno=scenario==12 || scenario==15 || scenario==16 || scenario==17 ? EINVAL :
+      scenario==13 ? EOPNOTSUPP : EBUSY;
+  if(scenario==16)Request::rejectFramebuffer=true;
+  if(scenario==17){
+   drm.connector.cache["CB1_LLDV_FORMAT"]=signal["CB1_LLDV_FORMAT"]=1;
+  }
+  assert(!drm.DrmAtomicCommit(42,modeFlags,true,false,true,&formatRejected));
+  assert(formatRejected==(scenario==12 || scenario==13));
+  assert(realCommits==0);
+  return 0;
+ }
  if(scenario>=10){
   // The previous Kodi process exited without restoring the kernel transport.
   const char* transport=scenario==10 ? "DVBRIDGE_DV_STANDARD_LAB" : "CB1_LLDV_FORMAT";
@@ -635,7 +654,7 @@ int main(int argc,char** argv){
                                     '-fsanitize=address,undefined', str(code), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(12):
+            for scenario in range(18):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(binary), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
