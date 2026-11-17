@@ -9,6 +9,8 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": "970e8bfde5894ac72bbaf01f57700210b646c04a61bf2a3bc1c3320bcab361d6",
+    "tests/cb1/test_drm_monitor_selection.py": "79256c3a73ec04612617e53f110c111c563778a3526d0d6dc58206ad20737109",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": "853b8fb11746f7949c1e93b91fc096140c3114655594c5a734d169c8605d2be2",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": "41071577c5512c7e04e2b9707c45831574b98522ac1125527821fec3ebc8cb3f",
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
@@ -365,7 +367,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "4dc943d8a8f9fda4f7bf3e2c4da6ca7da4273aefdb94d41f72efd7611a578d9b",
+    "config/cb1-patch-index.json": "ab47c06595755926e4f3477bdf3dcf3613f0996d1614264965797d2a9a5c0cd8",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
