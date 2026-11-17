@@ -166,6 +166,43 @@ int main(){
  OutputCapabilities caps{};caps.sourceKnown=caps.isDV=caps.nativeDV=caps.processingKnown=caps.hdr10=true;
  for(auto& mode:caps.processing)mode={true,OutputReason::None};
  auto out=SelectOutput(p,caps);assert(out.route==OutputRoute::NativeDV && out.policy.mode==5);
+ {
+  auto unavailable=caps;
+  unavailable.nativeDV=false;
+  unavailable.playerLed=false;
+  for (const auto mode : {OutputMode::MasterReference, OutputMode::PlayerLed})
+  {
+   stored->ints["dvbridge.outputmode"]=int(mode);
+   SelectOutputSettings(unavailable.nativeDV, unavailable.playerLed);
+   const auto opening=FrameOutputSettings();
+   auto selection=SelectOutput(opening,unavailable);
+   assert(selection.route==OutputRoute::HDR10 && selection.policy.mode==DVBRIDGE_MODE_HDR10_BASIC);
+   assert(selection.reason==(mode==OutputMode::PlayerLed ? OutputReason::NoPlayerLedTransport :
+                                                         OutputReason::NoDVTransport));
+   assert(opening.output==mode && stored->ints["dvbridge.outputmode"]==int(mode));
+   auto noDepth=unavailable;
+   noDepth.hdr10MaxBpc=8;
+   assert(SelectOutput(opening,noDepth).reason==OutputReason::HDR10LinkDepthTooLow);
+   auto badSource=unavailable;
+   badSource.processing[DVBRIDGE_MODE_HDR10_BASIC]={false,OutputReason::SourceIneligible};
+   assert(SelectOutput(opening,badSource).reason==OutputReason::SourceIneligible);
+   auto awaitingImport=unavailable;
+   awaitingImport.processingKnown=false;
+   assert(SelectOutput(opening,awaitingImport).reason==OutputReason::ProcessingPending);
+   auto quickSwitch=opening;
+   quickSwitch.hdr10TransportFallback=false;
+   assert(SelectOutput(quickSwitch,unavailable).route==OutputRoute::Vanilla);
+   auto restoredTransport=caps;
+   restoredTransport.playerLed=true;
+   assert(SelectOutput(opening,restoredTransport).route==OutputRoute::HDR10);
+   restoredTransport.hdr10=false;
+   assert(SelectOutput(opening,restoredTransport).reason==OutputReason::NoHDR10Transport);
+  }
+  stored->ints["dvbridge.outputmode"]=int(OutputMode::MasterReference);
+  SelectOutputSettings();
+  p=FrameOutputSettings();
+  assert(!p.hdr10TransportFallback && SelectOutput(p,caps).route==OutputRoute::NativeDV);
+ }
  const auto revision=p.revision;
  for(int legacy:{0,1,2}){
   stored->ints["dvbridge.fastchroma"]=legacy;p=FrameOutputSettings();

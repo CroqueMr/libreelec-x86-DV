@@ -184,8 +184,7 @@ int main(void){
     c.lldv_format_property=true;
     sink.dc_edid.raw_edid[139]=1;
     checksum(sink.dc_edid.raw_edid+128);
-    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
-    dv_lldv=true;
+    assert(!dv_lldv);
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
     assert(s.dv_low_latency && s.dv_standard && s.vsp_infopacket.sb[4]==3);
     assert(s.timing.pixel_encoding==PIXEL_ENCODING_RGB && s.timing.display_color_depth==COLOR_DEPTH_888);

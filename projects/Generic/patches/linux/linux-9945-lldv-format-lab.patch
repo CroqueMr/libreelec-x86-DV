@@ -167,10 +167,10 @@ index 5c57693..cb9de52 100644
  
 +static bool intel_lldv_lab_enabled(const struct intel_display *display)
 +{
-+	return display->params.enable_lldv_lab &&
-+		(display->platform.alderlake_p || display->platform.dg2 ||
-+		 display->platform.meteorlake || display->platform.lunarlake ||
-+		 display->platform.pantherlake);
++	/* Publish capabilities without activating the connector. */
++	return display->platform.alderlake_p || display->platform.dg2 ||
++		display->platform.meteorlake || display->platform.lunarlake ||
++		display->platform.pantherlake;
 +}
 +
  int intel_hdmi_compute_config(struct intel_encoder *encoder,
@@ -295,7 +295,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_display_params.c b/drivers/gpu/d
  	"Use /dev/null to disable DMC and runtime PM.");
  
 +intel_display_param_named_unsafe(enable_lldv_lab, bool, 0400,
-+		"Enable the CB1 native HDMI LLDV format lab on Alder Lake-N (default: false)");
++		"Legacy CB1 parameter; LLDV is selected per HDMI connector");
  intel_display_param_named_unsafe(enable_dv_lab, bool, 0400,
  	"Experimental Standard-DV RGB8 tunnel, display9+ native HDMI (default: on). "
  	"Requires independently validated packed pixels and HDMI frame metadata.");

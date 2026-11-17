@@ -303,7 +303,8 @@ enum class HDR10SourceMode{Native,ReferenceDV};
 }
 struct Window {
  struct Preferences{DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;
-  bool allowMasterFallback=false;DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
+  bool allowMasterFallback=false,hdr10TransportFallback=false;
+  DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
  struct Caps{bool sourceKnown=true,isDV=false,isHDR10=true,isHLG=false,stereoSource=false,processingKnown=true;}capabilities;
  struct Picture{struct{int profile=0,compatibility=1;bool el=false;}doviSourceInfo;
   bool doviEnhancement=false;}picture;
@@ -494,7 +495,7 @@ struct VideoPicture{bool dv=false;int color_transfer=0;};
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10};}
 struct WindowBase{virtual ~WindowBase()=default;
  virtual bool SetVideoOutput(const VideoPicture*)=0;
- virtual void SetColorimetry(const VideoPicture*)=0;
+ virtual void SetColorimetry(const VideoPicture*, bool=false)=0;
  virtual bool SetHDR(const VideoPicture*)=0;
  virtual bool SetGuiCompositing(int)=0;};
 namespace KODI::WINDOWING::GBM {
@@ -506,7 +507,7 @@ struct CWinSystemGbmGLESContext:WindowBase{
  bool BeginDVBridge(){return bridge;}
  bool SetVideoOutput(const VideoPicture*)override{return output;}
  bool HasPendingDVBridgeRestore(){return restore;}
- void SetColorimetry(const VideoPicture*)override{++colourUpdates;}
+ void SetColorimetry(const VideoPicture*, bool)override{++colourUpdates;}
  struct Selection{DVBRIDGE::OutputRoute route;};
  Selection SelectedDVOutput(const VideoPicture*){return {route};}
  bool ConfigureHDR10Conversion(const VideoPicture&){return conversion;}

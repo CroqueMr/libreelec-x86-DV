@@ -35,7 +35,7 @@ struct amdgpu_dm_connector {
 struct drm_prop_enum_list { unsigned value; const char *name; };
 enum {AMDGPU_LLDV_RGB10_LAB=3};
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
-static bool dv_standard=true,dv_lldv;static int properties;
+static bool dv_standard=true;static int properties;
 static char message[1024];
 static struct amdgpu_device* drm_to_adev(void* ignored){(void)ignored;return &device;}
 static void* drm_property_create_bool(void* dev,int flags,const char* name){
@@ -57,12 +57,12 @@ int main(){
  struct dc dc={.ctx=(void*)&ctx};device.dm.dc=&dc;
  struct {int connector_signal;}link={SIGNAL_TYPE_HDMI_TYPE_A};
  struct amdgpu_dm_connector c={.base={.base={.id=409},.connector_type=DRM_MODE_CONNECTOR_HDMIA},.dc_link=(void*)&link};
- amdgpu_dm_dv_attach(&c);assert(properties==2);
+ amdgpu_dm_dv_attach(&c);assert(properties==3 && c.lldv_format_property);
  assert(strstr(message,"connector=409") && strstr(message,"family_supported=1") && strstr(message,"native_hdmi=1"));
  const enum dce_version supported[]={DCN_VERSION_4_01,DCN_VERSION_4_2,DCN_VERSION_4_2B};
  for(unsigned i=0;i<sizeof(supported)/sizeof(supported[0]);++i){
   ctx.dce_version=supported[i];properties=0;message[0]=0;
-  amdgpu_dm_dv_attach(&c);assert(properties==2 && strstr(message,"family_supported=1"));
+  amdgpu_dm_dv_attach(&c);assert(properties==3 && strstr(message,"family_supported=1"));
  }
  {
   int version=DCN_VERSION_4_02;
@@ -72,9 +72,8 @@ int main(){
  properties=0;ctx.dce_version=DCN_VERSION_3_2;link.connector_signal=99;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(!properties && strstr(message,"native_hdmi=0"));
  link.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A;dv_standard=false;message[0]=0;
- amdgpu_dm_dv_attach(&c);assert(properties==1 && strstr(message,"dv_parameter=0"));
- dv_lldv=true;properties=0;message[0]=0;
- amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
+ amdgpu_dm_dv_attach(&c);
+ assert(properties==2 && c.lldv_format_property && strstr(message,"dv_parameter=0"));
  ctx.dce_version=DCN_VERSION_2_1;properties=0;message[0]=0;
  amdgpu_dm_dv_attach(&c);assert(properties==2 && c.lldv_format_property);
  ctx.dce_version=DCE_VERSION_11_2; ctx.asic_id.chip_id=0x699f; dv_standard=true; properties=0;

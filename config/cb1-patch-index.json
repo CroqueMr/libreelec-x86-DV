@@ -1982,5 +1982,95 @@
     "files": {
       "sound/hda/codecs/hdmi/intelhdmi.c": "Check the selected pin's control register during Intel route fixup and preserve its audio mode."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": {
+    "owner": "Opt in to experimental 4:2:2 10-bit LLDV in Kodi.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Explain when a compatible HDMI format must be chosen.",
+      "system/settings/settings.xml": "Persist explicit consent independently of the HDMI format enum.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Choose and reconfirm a format in the existing selector.",
+      "xbmc/settings/SettingConditions.cpp": "Expose format selection for eligible LLDV circuits.",
+      "xbmc/utils/DVBridgeLldv.h": "Keep automatic selection native and require explicit consent for forcing.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Read driver support from the active connector properties.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Remove the obsolete module-parameter cache.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Report the transport resolved for the selected format."
+    }
+  },
+  "projects/Generic/patches/ffmpeg/ffmpeg-9900-09-dovi-aligned-padding.patch": {
+    "summary": "Accept aligned Dolby Vision RPUs with an extra zero byte before the CRC",
+    "component": "ffmpeg",
+    "files": {
+      "libavcodec/dovi_rpudec.c": "Backport upstream 5e95a3d to accept aligned padding while retaining terminator and CRC validation."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": {
+    "summary": "Allow explicitly requested background playback without blocking the GUI",
+    "component": "kodi",
+    "files": {
+      "xbmc/FileItem.h": "Declare the opt-in direct HTTP media check.",
+      "xbmc/FileItem.cpp": "Recognize explicitly requested background HTTP streams with a known MIME type.",
+      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for a resolved background HTTP stream.",
+      "xbmc/application/ApplicationPlay.cpp": "Skip directory probing for the same resolved background HTTP stream."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": {
+    "summary": "Prefer connected HDMI over the internal panel for the default GBM monitor choice",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Keep the explicit monitor choice and select HDMI-A over eDP or LVDS when both have an encoder."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-startup-hdr10-recovery.patch": {
+    "owner": "Recover a Dolby Vision startup without a compatible Dolby Vision transport.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h": "Admit the existing HDR10 conversion only on an eligible link and source.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Scope the startup fallback to the playback session.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Snapshot transport availability before opening the stream.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Clear startup fallback on explicit circuit changes.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Preserve RPU and required enhancement data and report the fallback."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-renderer-restore-handoff.patch": {
+    "owner": "Wait for the previous display output to finish restoring before configuring the next Kodi renderer.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Keep the pending video picture across GUI frames and cancel it on timeout or teardown.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Declare cancellation of a pending configuration.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Request a GUI redraw while the previous output is stopping.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose a pending output stop to the renderer."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": {
+    "owner": "Signal the output gamut of native SDR Kodi shaders on GBM.",
+    "files": {
+      "xbmc/windowing/WinSystem.h": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Use the gamut produced by the native SDR video shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Use the gamut produced by the native SDR video shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Use the gamut produced by the native SDR video shader."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": {
+    "summary": "Add a blur font style for text that must not be read yet",
+    "component": "kodi",
+    "files": {
+      "xbmc/GUIInfoManager.cpp": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style.",
+      "xbmc/guilib/GUIFont.cpp": "Include blur padding in scaled font clip bounds.",
+      "xbmc/guilib/GUIFont.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontManager.cpp": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontManager.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontTTF.cpp": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUIFontTTF.h": "Add a blur font style: glyphs cached blurred in a margin, the text keeping the sharp font's layout.",
+      "xbmc/guilib/GUITextBox.cpp": "Include blur padding in clip and dirty-region bounds without changing layout.",
+      "xbmc/guilib/GUITextBox.h": "Declare the text box render-bounds override.",
+      "xbmc/guilib/guiinfo/GUIInfoLabels.h": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style.",
+      "xbmc/guilib/guiinfo/SystemGUIInfo.cpp": "Add System.SupportsBlurFont so a skin can fall back where fonts have no blur style."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": {
+    "owner": "Include cached font blur in dirty drawing bounds.",
+    "files": {
+      "xbmc/guilib/GUILabelControl.cpp": "Expand the label render region without modifying the layout."
+    }
   }
 }

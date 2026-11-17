@@ -102,7 +102,7 @@ index 6b58616..4166c1c 100644
  
 +static bool dv_lldv;
 +module_param_named(dv_lldv, dv_lldv, bool, 0444);
-+MODULE_PARM_DESC(dv_lldv, "Expose experimental player-led 4:2:2 on native AMD HDMI");
++MODULE_PARM_DESC(dv_lldv, "Legacy CB1 parameter; LLDV is selected per HDMI connector");
 +
  static bool dv_display_supported(enum dce_version version)
  {

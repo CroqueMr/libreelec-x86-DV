@@ -127,7 +127,7 @@ pl_tex pl_opengl_wrap(int,const pl_opengl_wrap_params*){return &texture;}
 void pl_tex_destroy(int,pl_tex*p){*p=nullptr;}bool pl_opengl_has_ext(pl_opengl,const char*){return true;}
 void*dvbridge_gl_packer_create(const char*,const char*){return &packer;}
 constexpr char DVBRIDGE_VERTEX[]="",DVBRIDGE_FRAGMENT[]="";
-struct CLog{template<class...T>static void LogF(T...){}};
+struct CLog{template<class...T>static void LogF(T...){} template<class...T>static void Log(T...){}};
 struct gbm_bo{unsigned format=24;};unsigned gbm_bo_get_format(gbm_bo*b){return b->format;}
 struct Plane{unsigned format=24;uint64_t modifier=0;unsigned GetFormat(){return format;}uint64_t GetModifier(){return modifier;}void SetFormat(unsigned x){format=x;}void SetModifier(uint64_t x){modifier=x;}};
 struct CEGLContextUtils{
