@@ -177,7 +177,7 @@
     "tests/cb1/test_master_panel_surface.py": "2360401e024e05308cb239bc44a584360df319683e124724414cae88178b7896",
     "tests/cb1/test_dtdl_stream_inventory.py": "251c6686094915987206d28729f4995b44472fd242582f5c6b687a9c276522ad",
     "tests/cb1/test_hdr10_expert_settings.py": "5866cda2cc90537f5e8822824b9bbe0b82e41314108893a56ee8c8c7e3c4ee14",
-    "tests/cb1/test_display_refresh.py": "3c827d5eac90ada69d1f2aa32a8baee1f793d0ac541f55a824191c650438df69",
+    "tests/cb1/test_display_refresh.py": "eadcaf91f75c31016c1959ba5307494edcf4883875b8968a051f4280012038cb",
     "tests/cb1/test_atomic_modeset_retry.py": "0c32e47e72ffe511e23ee2794dc8e39717e7b24c32b39c19898e6fee3f40c078",
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
