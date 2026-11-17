@@ -205,11 +205,12 @@ class PassthroughDialnorm(unittest.TestCase):
         putbits(expected, 45, 5, 31)
         putbits(expected, 51, 5, 31)
         expected = seal_eac3(expected)
-        self.assertTrue(self.parse((plain + dependent) * 3, 'd').startswith(expected + dependent))
+        self.assertTrue(self.parse(plain * 3, 'd').startswith(expected))
         self.assertTrue(self.parse(plain * 3, 'l').startswith(plain + expected))
         for chunk_size in (19, 67, 256):
             with self.subTest(chunk_size=chunk_size):
                 for data, option in ((joc * 3, 'd'), (plain * 3, 'dp'),
+                                     ((plain + dependent) * 3, 'd'),
                                      ((joc + dependent) * 3, 'd')):
                     passthrough = self.parse(data, chunk=chunk_size)
                     self.assertTrue(passthrough)

@@ -305,9 +305,9 @@ diff --git a/xbmc/cores/AudioEngine/Utils/AEStreamInfo.cpp b/xbmc/cores/AudioEng
 +      return;
 +    primarySize = Ac3FrameSize(rateCode, sizeCode);
 +  }
-+  if (primarySize < 12 || primarySize > size)
-+    return;
-+  size = primarySize;
++  if (primarySize < 12 || primarySize != size)
++    return; // A dependent substream can carry Atmos metadata.
++
 +
 +  const unsigned int mode = enhanced ? (frame[4] >> 1) & 7 : frame[6] >> 5;
 +  unsigned int first = 45;
