@@ -95,6 +95,7 @@ int main(){
                       'video-start display refresh is missing')
         method = body(source, 'bool CWinSystemGbm::RefreshDisplayInfoForVideo()')
         program = r'''
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <memory>
@@ -130,6 +131,7 @@ struct CWinSystemGbm {
  DVBRIDGE::LldvDisplay m_lldvDisplay;
  uint32_t m_lldvEdidConnector{};
  uint64_t m_lldvEdidGeneration{};
+ std::array<unsigned,10> m_lldvRejectedTimings{};
  bool RefreshDisplayInfoForVideo() METHOD
 };
 int main() {
@@ -141,15 +143,19 @@ int main() {
  assert(!window.RefreshDisplayInfoForVideo());
  window.m_DRM->connector.next={1};
  assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==1);
- assert(!window.RefreshDisplayInfoForVideo());
+ window.m_lldvRejectedTimings[1]=1;
+ assert(!window.RefreshDisplayInfoForVideo() && window.m_lldvRejectedTimings[1]==1);
  window.m_DRM->connector.next={255};
  assert(window.RefreshDisplayInfoForVideo() && !window.m_info && window.m_displayEdid.empty());
+ assert(window.m_lldvRejectedTimings[1]==0);
  window.m_DRM->connector.next={2};
  assert(window.RefreshDisplayInfoForVideo() && window.m_info->value==2);
  assert(window.m_displayEdid==std::vector<uint8_t>{2});
+ window.m_lldvRejectedTimings[0]=1;
  window.m_DRM.reset();
  assert(window.RefreshDisplayInfoForVideo() && !window.m_info && window.m_displayEdid.empty());
  assert(window.m_lldvEdid.empty() && window.m_lldvEdidGeneration==6);
+ assert(window.m_lldvRejectedTimings[0]==0);
 }
 '''.replace('METHOD', method)
         with tempfile.TemporaryDirectory() as temporary:

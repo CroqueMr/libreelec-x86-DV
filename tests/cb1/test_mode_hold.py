@@ -216,7 +216,7 @@ struct Port {int changes=0;void VideoParamsChange(){++changes;}};
 struct Manager {
  bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;float m_fps=24;Picture m_picture;
  Renderer renderer,*m_pRenderer=&renderer;Port port,*m_playerPort=&port;
- int ChoosePlaybackResolution(const Picture& picture,float fps,bool)const{return CResolutionUtils::ChooseBestResolution(fps,picture.iWidth,picture.iHeight,!picture.stereoMode.empty());}
+ int ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool)const{return CResolutionUtils::ChooseBestResolution(fps,width,height,stereo);}
  void UpdateLatencyTweak(){}
  void update() METHOD
 };

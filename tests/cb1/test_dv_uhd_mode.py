@@ -13,7 +13,7 @@ class DVUHDModeTests(unittest.TestCase):
         resolution = re.sub(r'^#include[^\n]*', '', resolution, flags=re.M)
         manager_source = (TREE/'xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
         manager = body(manager_source, 'RESOLUTION CRenderManager::GetResolution()')
-        choice = body(manager_source, 'RESOLUTION ChoosePlaybackResolution(')
+        choice = body(manager_source, 'RESOLUTION CRenderManager::ChoosePlaybackResolution(')
         gbm = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         eligible = body(gbm, 'bool NativeDVEligible(')
         wants = body(gbm, 'bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream)')
@@ -108,10 +108,11 @@ bool NativeDVEligible(bool source,bool software,bool interlaced,bool stereo) ELI
 bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream) WANTS_CODE
 RESOLUTION_CODE
 struct Picture {int iWidth=3840,iHeight=2160;std::string stereoMode;};
-RESOLUTION ChoosePlaybackResolution(const Picture& picture,double fps,bool nativeDV) CHOICE_CODE
 struct CRenderManager {
  std::mutex m_statelock;int m_renderState=1;bool m_nativeDVRate=false;float m_fps=24000.f/1001;
  Picture m_picture;
+ static RESOLUTION ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool nativeDV,
+                                            bool atStartup=false) CHOICE_CODE
  RESOLUTION GetResolution() MANAGER_CODE
 };
 int main() {

@@ -10,6 +10,8 @@ constexpr uint32_t DRM_FORMAT_XRGB8888=1, DRM_FORMAT_ARGB8888=2;
 constexpr uint32_t DRM_FORMAT_XRGB2101010=3, DRM_FORMAT_ARGB2101010=4;
 constexpr uint32_t DRM_FORMAT_XBGR2101010=5, DRM_FORMAT_ABGR2101010=6;
 constexpr int LOGDEBUG=0, LOGWARNING=1;
+struct Mode{int clock=296703,htotal=5500;};
+int LldvTimingIndex(const Mode* mode){return mode ? 1 : -1;}
 struct CLog {template<class... T>static void Log(T...) {}};
 struct gbm_bo {bool locked=false;};
 unsigned gbm_bo_get_width(gbm_bo*) {return 3840;}
@@ -76,12 +78,16 @@ struct CDRMAtomic:DRM {
   bool IsSDRRestorePending() const {return false;}
   void AllowModeset() {modeset=true;}
   void StageHDR10Plus(std::nullopt_t,uint64_t) {clearHDR10Plus=true;}
-  bool FlipPageTransactional(gbm_bo* bo,bool restore=false,bool async=false)
+  bool testReject=false;
+  Mode mode;
+  const Mode* GetSelectedMode() const{return &mode;}
+  bool FlipPageTransactional(gbm_bo* bo,bool restore=false,bool async=false,bool* formatRejected=nullptr)
   {
     assert(!restore);
     ++calls;
     const bool cleared=std::exchange(clearHDR10Plus,false);
     if(bo) assert(cleared);
+    if(formatRejected)*formatRejected=testReject;
     if(!bo || !accept) {requested=active;return false;}
     assert(bo->locked);
     if(async)
@@ -122,7 +128,9 @@ struct CServiceBroker {static Manager* GetGUI(){static Manager value;return &val
 struct Bridge{void Disable(){assert(false);}};
 struct Window {
   std::mutex m_lldvEdidMutex;
-  DVBRIDGE::LldvTransport m_lldvRejected{};
+  std::array<unsigned,10> m_lldvRejectedTimings{};
+  uint32_t m_lldvEdidConnector=17;
+  uint64_t m_lldvEdidGeneration=0;
   std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
   std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
   std::shared_ptr<Bridge> m_videoLayerBridge;
@@ -143,6 +151,7 @@ struct Window {
     status.sink.status=DV_EDID_LLDV_ONLY;status.sink.lldv_422=true;
     status.display.status=LldvEdidStatus::Ready;
     status.driverFormats=LLDV_422;
+    status.currentRejected=m_lldvRejectedTimings[1];
     status.active=static_cast<LldvFormat>(drm.active);
     return status;
   }
@@ -210,6 +219,15 @@ int main(){
   drm->accept=false;
   assert(!window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false},true,refusedBO,std::move(refused)));
   assert(refusedLease.expired() && !displayedLease.expired() && displayed==cpuBO);
+  assert(!window.GetLldvConnectorStatus().currentRejected);
+  drm->testReject=true;
+  assert(!window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_10,false}));
+  const auto denied = window.GetLldvConnectorStatus();
+  assert(LldvUnavailableLabel(denied,int(LldvFormat::Y422_10),false)==LLDV_DRIVER_REJECTED_LABEL);
+  assert(SelectLldvTransport(denied,0).format==LldvFormat::Y422_12);
+  drm->testReject=false;
+  assert(!window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_10,false}));
+  assert(displayed==cpuBO);
   drm->accept=true;
   assert(window.FlipPlayerLedPage(state,{17,LldvFormat::Y422_12,false}));
   assert(displayedLease.expired() && displayed!=cpuBO);

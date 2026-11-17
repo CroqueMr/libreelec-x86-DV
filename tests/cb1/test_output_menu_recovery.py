@@ -48,8 +48,9 @@ struct StreamTelemetry { static inline Snapshot value; static Snapshot Read() {r
 struct Window {virtual ~Window()=default;};
 namespace KODI::WINDOWING::GBM {
 struct CWinSystemGbmGLESContext : Window {
- DVBRIDGE::OutputCapabilities available;
- DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(std::nullptr_t,bool) {return available;}
+ DVBRIDGE::OutputCapabilities available, current;
+ DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(std::nullptr_t,bool allowModeSwitch)
+ {return allowModeSwitch ? available : current;}
 };
 }
 KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
@@ -61,11 +62,11 @@ struct CSetting {std::string id="dvbridge.outputmode"; const std::string& GetId(
 struct IntegerSettingOption {std::string label="Standard",label2;int value{};
  std::vector<std::pair<std::string,bool>> properties;};
 struct CSettingConditions {static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
- std::vector<IntegerSettingOption>& list) BODY };
-bool modeProperty(int value, const char* settingId, const char* name) {
+ std::vector<IntegerSettingOption>& list, bool inPlayback=false) BODY };
+bool modeProperty(int value, const char* settingId, const char* name, bool inPlayback=false) {
  std::vector<IntegerSettingOption> list(1);list[0].value=value;
  auto setting=std::make_shared<CSetting>();setting->id=settingId;
- CSettingConditions::DVOutputOptions(setting,list);
+ CSettingConditions::DVOutputOptions(setting,list,inPlayback);
  return std::ranges::any_of(list[0].properties, [name](const auto& p) {
    return p.first==name && p.second;
  });
@@ -91,6 +92,15 @@ int main() {
  window.available.lldvUnavailableLabel=41281;
  assert(disabled(8,quickSwitch));
  window.available.lldvUnavailableLabel=0;
+ // 24 Hz remains usable globally, while the current 23.976 Hz mode refused LLDV.
+ window.available.playerLed=true;
+ window.current.lldvUnavailableLabel=41298;
+ assert(!disabled(8,quickSwitch));
+ assert(modeProperty(8,quickSwitch,"disabled",true));
+ window.current.lldvUnavailableLabel=LLDV_CHOOSE_FORMAT_LABEL;
+ assert(!modeProperty(8,quickSwitch,"disabled",true));
+ assert(modeProperty(8,quickSwitch,"cb1ChooseLldv",true));
+ window.available.playerLed=false;
  std::vector<IntegerSettingOption> choices;
  for(int value:{0,4,5,2,1}) {IntegerSettingOption option;option.value=value;choices.push_back(option);}
  CSettingConditions::DVOutputOptions(std::make_shared<CSetting>(),choices);

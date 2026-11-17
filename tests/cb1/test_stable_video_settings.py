@@ -62,7 +62,7 @@ class StableVideoSettings(unittest.TestCase):
         self.assertNotIn("reportedPrimaries[j]", info)
         self.assertIn('SetProperty("DV.HdmiFormat"', info)
         source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
-        menu = source[source.index("bool ShowLldvFormatMenu(bool forCircuit)\n"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
+        menu = source[source.index("bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)\n"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
         self.assertNotIn("firstFormat", menu)
         self.assertIn("CB1.LldvStatus", menu)
         self.assertEqual(menu.count("dialog->Add(item)"), 1)
@@ -71,9 +71,9 @@ class StableVideoSettings(unittest.TestCase):
 
     def test_lldv_selector_uses_one_page_with_a_short_status_in_estuary(self):
         source = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
-        menu = source[source.index("bool ShowLldvFormatMenu(bool forCircuit)\n"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
+        menu = source[source.index("bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)\n"):source.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
         self.assertIn('dialog->SetUseDetails(!estuary);', menu)
-        self.assertIn("LldvUnavailableLabel(status, 0, true)", menu)
+        self.assertIn("LldvUnavailableLabel(status, 0, allowModeSwitch)", menu)
         self.assertNotIn("strings.Get(41296)", menu)
         skin = ET.parse(TREE / "addons/skin.estuary/xml/Includes_DialogSelect.xml")
         native = skin.find(".//include[@name='DefaultDialogSelectLayout']/control")
@@ -105,7 +105,7 @@ class StableVideoSettings(unittest.TestCase):
 
     def test_lldv_display_details_use_a_nested_native_viewer(self):
         menu = (TREE / "xbmc/dialogs/DVPlaybackModes.cpp").read_text(encoding="utf-8")
-        menu = menu[menu.index("bool ShowLldvFormatMenu(bool forCircuit)\n"):
+        menu = menu[menu.index("bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)\n"):
                     menu.index("std::string CDVPlaybackModes::LldvPreferenceLabel()")]
         self.assertNotIn("41297", menu)
         self.assertIn('dialog->EnableButton(!estuary, 41320);', menu)
