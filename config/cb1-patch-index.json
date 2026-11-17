@@ -2082,5 +2082,24 @@
       "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the effective source type in playback and Quick Switch without changing authored stream facts.",
       "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Keep a confirmed HDR10+ base-only route on codec reopen."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": {
+    "owner": "Disqualify a confirmed LLDV format only for the affected display and timing.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h": "Record startup-only ownership of the existing HDR10 fallback.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Resolve the initial mode before opening the Dolby Vision stream.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Share exact playback resolution selection with stream startup.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Expose the shared playback resolution choice.",
+      "xbmc/dialogs/DVPlaybackModes.cpp": "Show confirmed format refusal and keep in-play format selection on the current timing.",
+      "xbmc/settings/SettingConditions.cpp": "Use current-mode LLDV capabilities when presenting and confirming the Quick Switch.",
+      "xbmc/settings/SettingConditions.h": "Pass Quick Switch context to the existing route availability check.",
+      "xbmc/utils/DVBridgeLldv.h": "Use one transport decision for admission, format selection, and user feedback.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Remember confirmed format refusal on the exact connector timing until the display changes.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Keep format rejection state with the existing EDID snapshot.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish confirmed refusals and allow Auto to reprepare the available carrier.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the rejection check for the planned playback resolution.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.cpp": "Distinguish a confirmed TEST_ONLY refusal from other atomic failures.",
+      "xbmc/windowing/gbm/drm/DRMAtomic.h": "Return the confirmation from the same atomic transaction."
+    }
   }
 }

@@ -79,7 +79,8 @@ int main()
 
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         source = (kodi / 'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
-        owner = body(source, 'CWinSystemGbm::GetLldvConnectorStatus() const')
+        owner = body(source, 'CWinSystemGbm::GetLldvConnectorStatus(bool snapshot) const')
+        timing = body(source, 'int LldvTimingIndex(')
         code = r'''
 #include <cassert>
 #include <drm_mode.h>
@@ -98,14 +99,16 @@ struct Mode
   unsigned flags;
 };
 using drmModeModeInfo = Mode;
+int LldvTimingIndex(const drmModeModeInfo* mode) TIMING
 struct Connector
 {
   uint32_t id=17;
   std::optional<uint64_t> active=0;
   bool connected=true;
   const Mode* advertised{};
-  int GetModesCount() const { return advertised ? 1 : 0; }
-  const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : nullptr; }
+  const Mode* alternate{};
+  int GetModesCount() const { return alternate ? 2 : advertised ? 1 : 0; }
+  const Mode* GetModeForIndex(int index) const { return index == 0 ? advertised : alternate; }
   uint32_t* GetConnectorId() { return &id; }
   bool IsConnected() const { return connected; }
   std::string_view GetType() const { return "HDMI-A"; }
@@ -142,8 +145,8 @@ struct Window
   LldvDisplay m_lldvDisplay;
   uint32_t m_lldvEdidConnector=17;
   uint64_t m_lldvEdidGeneration=2;
-  LldvTransport m_lldvRejected;
-  LldvConnectorStatus Read() const OWNER
+  std::array<unsigned, 10> m_lldvRejectedTimings{};
+  LldvConnectorStatus Read(bool snapshot = false) const OWNER
 };
 
 int main()
@@ -211,6 +214,48 @@ int main()
   assert(readback.timingCommitted && readback.active==LldvFormat::Y422_12);
   assert(readback.connectorId==17 && !readback.activeForced);
   assert(SelectLldvTransport(readback, 0).edidGeneration==2);
+
+  // One wire format at 23.976 cannot invalidate 24, 25, or either 30 Hz timing.
+  const auto native10 = SelectLldvTransport(readback, 0);
+  const auto native12 = SelectLldvTransport(readback, int(LldvFormat::Y422_12));
+  window.m_lldvRejectedTimings[LldvTimingIndex(&fractional)] = LldvTransportBit(native10);
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y422_10), false) ==
+         LLDV_DRIVER_REJECTED_LABEL);
+  assert(SelectLldvTransport(window.Read(), 0).format == LldvFormat::Y422_12);
+  window.m_lldvRejectedTimings[LldvTimingIndex(&fractional)] |= LldvTransportBit(native12);
+  assert(LldvUnavailableLabel(window.Read(), 0, true) == LLDV_DRIVER_REJECTED_LABEL);
+  assert(!SelectLldvTransport(window.Read(), 0).connectorId);
+  const std::array<const Mode*, 5> unaffected{
+      &integer, &integer25, &integer30, &fractional30, &widescreen};
+  for (const auto* other : unaffected)
+  {
+    drm.mode = other;
+    assert(SelectLldvTransport(window.Read(), 0).format == LldvFormat::Y422_10);
+  }
+  drm.mode = &integer60;
+  drm.connector.alternate = &integer;
+  assert(SelectLldvTransport(window.Read(), 0, true).format == LldvFormat::Y422_10);
+  const auto snapshot = window.Read(true);
+  assert(snapshot.modeRejections.size() == 2 && snapshot.modeRejections[0].first == 0);
+  assert(snapshot.modeRejections[0].second == (LldvTransportBit(native10) | LldvTransportBit(native12)));
+  assert(snapshot.modeRejections[1].first == 1 && snapshot.modeRejections[1].second == 0);
+  drm.mode = &fractional;
+  auto withAlternateCarrier = window.Read();
+  withAlternateCarrier.rgb10Scanout = true;
+  assert(SelectLldvTransport(withAlternateCarrier, 0).rgb10Scanout);
+  withAlternateCarrier.currentRejected |= LldvTransportBit(SelectLldvTransport(withAlternateCarrier, 0));
+  assert(!SelectLldvTransport(withAlternateCarrier, 0).connectorId);
+  assert(SelectLldvTransport(withAlternateCarrier, LLDV_FORCE_422_10).forced);
+  auto withForcedCarrier = window.Read();
+  withForcedCarrier.driverFormats = 0;
+  assert(!SelectLldvTransport(withForcedCarrier, 0).connectorId);
+  assert(SelectLldvTransport(withForcedCarrier, LLDV_FORCE_422_10).forced);
+  ++drm.connector.id;
+  assert(!SelectLldvTransport(window.Read(), 0).connectorId);
+  window.m_lldvEdidConnector = drm.connector.id;
+  window.m_lldvRejectedTimings = {};
+  assert(SelectLldvTransport(window.Read(), 0).format == LldvFormat::Y422_10);
+  drm.connector.id = window.m_lldvEdidConnector = 17;
   window.m_lldvDisplay.status=LldvEdidStatus::Incomplete;
   assert(LldvUnavailableLabel(window.Read(), 0, true)==41281);
   assert(!SelectLldvTransport(window.Read(), 0).connectorId);
@@ -232,7 +277,7 @@ int main()
   drm.connector.connected=false;
   assert(!window.Read().timingCommitted && window.Read().connectorId==0);
 }
-'''.replace('OWNER', owner)
+'''.replace('OWNER', owner).replace('TIMING', timing)
         with tempfile.TemporaryDirectory() as work:
             source = Path(work) / 'timing.cpp'
             binary = Path(work) / 'timing'
@@ -243,13 +288,105 @@ int main()
                            check=True)
             subprocess.run([binary], check=True)
 
+    def test_resolution_prefers_an_unrefused_exact_kodi_mode(self):
+        from test_native_video_source import body
+        from test_process_info_metadata import run
+
+        kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
+        source = (kodi / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        choose = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolution(')
+        reason = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolutionReason(')
+        program = r'''
+#include "utils/DVBridgeLldv.h"
+#include <algorithm>
+#include <cassert>
+#include <charconv>
+#include <mutex>
+#include <optional>
+#include <string>
+using RESOLUTION = int;
+constexpr RESOLUTION RES_INVALID=-1, RES_DESKTOP=0;
+constexpr unsigned D3DPRESENTFLAG_MODEMASK=1;
+struct Mode
+{
+  std::string strId;
+  double fRefreshRate{};
+  int iWidth=3840, iHeight=2160, iScreenWidth=3840, iScreenHeight=2160;
+  unsigned dwFlags{};
+};
+struct CDisplaySettings
+{
+  std::vector<Mode> modes;
+  static CDisplaySettings& GetInstance(){static CDisplaySettings settings;return settings;}
+  size_t ResolutionInfoSize() const{return modes.size();}
+  const Mode& GetResolutionInfo(RESOLUTION index) const{return modes.at(index);}
+};
+namespace DVBRIDGE
+{
+enum class OutputMode{PlayerLed};
+struct Preferences
+{
+  OutputMode output=OutputMode::PlayerLed;
+  bool hdr10TransportFallback{};
+  int lldvFormat{};
+} preferences;
+Preferences FrameOutputSettings(){return preferences;}
+}
+struct Window
+{
+  DVBRIDGE::LldvConnectorStatus m_dvLldvStatus;
+  mutable std::mutex m_dvCapabilityMutex;
+  struct Caps{bool playerLed=true;};
+  Caps GetDVOutputCapabilities(void*,const DVBRIDGE::Preferences&,bool) const{return {};}
+  std::optional<RESOLUTION> Choose(double fps,bool atStartup=false) const CHOOSE_BODY
+  int PlayerLedResolutionReason(RESOLUTION resolution,int preference) const REASON_BODY
+};
+
+int main()
+{
+  using namespace DVBRIDGE;
+  constexpr double film=24000.0/1001;
+  CDisplaySettings::GetInstance().modes={{"0",60},{"",film},{"4",film},{"5",film},{"6",24}};
+  Window window;
+  auto& status=window.m_dvLldvStatus;
+  status.display.status=LldvEdidStatus::Ready;
+  status.sink.status=DV_EDID_LLDV_ONLY;
+  status.sink.lldv_422=true;
+  status.connectorId=403;
+  status.driverFormats=LLDV_422;
+  status.currentTiming=false;
+  status.availableTiming=true;
+  const auto ten=LldvTransportBit({403,LldvFormat::Y422_10});
+  const auto twelve=LldvTransportBit({403,LldvFormat::Y422_12});
+  status.modeRejections={{4,ten|twelve},{6,0}};
+  assert(!window.Choose(film));
+  assert(window.Choose(film,true)==2);
+  assert(window.Choose(24)==4);
+  assert(window.PlayerLedResolutionReason(2,0)==LLDV_DRIVER_REJECTED_LABEL);
+  assert(window.PlayerLedResolutionReason(4,0)==0);
+  assert(window.PlayerLedResolutionReason(1,0)!=LLDV_DRIVER_REJECTED_LABEL);
+  status.modeRejections.emplace_back(5,0);
+  assert(window.Choose(film,true)==3);
+  status.modeRejections.front().second=ten;
+  assert(window.Choose(film)==2);
+  preferences.lldvFormat=static_cast<int>(LldvFormat::Y422_10);
+  assert(window.Choose(film)==3);
+  status.currentTiming=true;
+  status.currentRejected=ten;
+  assert(window.PlayerLedResolutionReason(RES_INVALID,preferences.lldvFormat)==LLDV_DRIVER_REJECTED_LABEL);
+  preferences.hdr10TransportFallback=true;
+  assert(!window.Choose(film,true));
+}
+'''.replace('CHOOSE_BODY', choose).replace('REASON_BODY', reason)
+        run(self, {'test.cpp': program})
+
     def test_menu_keeps_live_forced_format_when_auto_is_unavailable(self):
         from test_process_info_metadata import run
         from test_native_video_source import body
 
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         menu = body((kodi / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text(),
-                    'bool ShowLldvFormatMenu(bool forCircuit)\n')
+                    'bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)\n')
         start = menu.index('  const int choice = dialog->GetSelectedItem();')
         finish = menu.index('  return true;', start) + len('  return true;')
         program = r'''
@@ -274,7 +411,8 @@ struct Settings
 };
 
 bool Confirm(const Dialog* dialog, Settings* settings, bool forCircuit,
-             const LldvConnectorStatus& status, const LldvConnectorStatus& current)
+             const LldvConnectorStatus& status, const LldvConnectorStatus& current,
+             bool inPlayback = false)
 {
   const auto requiresForcing = [&status](LldvFormat format) {
     return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
@@ -311,6 +449,10 @@ int main()
   assert(settings.stored == 0);
   assert(Confirm(&dialog, &settings, true, current, current));
   assert(settings.stored == LLDV_FORCE_422_10);
+  current.currentRejected = LldvTransportBit(SelectLldvTransport(current, LLDV_FORCE_422_10));
+  current.availableTiming = true;
+  assert(!Confirm(&dialog, &settings, true, current, current, true));
+  assert(Confirm(&dialog, &settings, true, current, current));
   dialog.choice = 0;
   assert(Confirm(&dialog, &settings, false, {}, {}));
   assert(settings.stored == 0);
