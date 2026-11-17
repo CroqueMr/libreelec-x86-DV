@@ -43,7 +43,7 @@ int main()
   connector.display.status=LldvEdidStatus::Ready;
   connector.display.primaries={.68,.32,.25,.70,.15,.05};
   connector.edidGeneration=2;
-  connector.driverFormats=LLDV_422; connector.currentTiming=true;
+  connector.driverFormats=LLDV_422; connector.currentTiming=true; connector.output42212=true;
   connector.connectorId=17; connector.timingCommitted=true;
   LldvTransport packed{17,LldvFormat::Y422_10,false,2};
   dvbridge_creative_plan plan{};
@@ -101,6 +101,7 @@ int main()
   connector.activeForced=false;
   packed.forced=false;
   connector.driverFormats=LLDV_422;
+  connector.output42212=true;
   connector.sink.lldv_422=false;
   assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.sink.lldv_422=true;

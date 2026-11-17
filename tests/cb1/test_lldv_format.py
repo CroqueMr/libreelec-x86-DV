@@ -358,7 +358,7 @@ int main()
   assert(window.Read().packed42212);
   window.usableRgb16=true;
   readback=window.Read();
-  assert(!readback.packed42212 && readback.rgb16Scanout);
+  assert(readback.packed42212 && readback.rgb16Scanout);
   assert(SelectLldvTransport(readback, 0).rgbScanoutBits==16);
   assert(SelectLldvTransport(readback, LLDV_FORCE_422_10).forced);
   window.m_lldvDisplay.sink.lldv_422_12=false;
@@ -517,6 +517,7 @@ int main()
   status.sink.lldv_422=true;
   status.connectorId=403;
   status.driverFormats=LLDV_422;
+  status.output42212=true;
   status.currentTiming=false;
   status.availableTiming=true;
   const auto ten=LldvTransportBit({403,LldvFormat::Y422_10});
@@ -685,8 +686,10 @@ int main()
   assert(selected.connectorId && selected.format == LldvFormat::Y422_10 && selected.forced);
   auto native12 = forcedOnly;
   native12.driverFormats = LldvBit(LldvFormat::Y422_12);
+  native12.output42212 = true;
   assert(SelectLldvTransport(native12, 0).format == LldvFormat::Y422_12);
   auto packed12 = native12;
+  packed12.output42212 = false;
   packed12.packed42212 = true;
   assert(LldvUnavailableLabel(packed12, int(LldvFormat::Y422_12), false) == 41210);
   assert(!SelectLldvTransport(packed12, 0).connectorId);
@@ -697,7 +700,17 @@ int main()
   assert(!SelectLldvTransport(packed12, int(LldvFormat::Y422_12)).connectorId);
   assert(LldvCanChooseFormat(packed12, false));
   selected = SelectLldvTransport(packed12, LLDV_PACKED_422_12);
-  assert(selected.connectorId && selected.format == LldvFormat::Y422_12 && !selected.forced);
+  assert(selected.connectorId && selected.format == LldvFormat::Y422_12 &&
+         selected.experimentalPacked12 && !selected.forced);
+  auto r615 = packed12;
+  r615.rgb16Scanout = true;
+  const auto preferred = SelectLldvTransport(r615, 0);
+  assert(preferred.rgbScanoutBits == 16 && !preferred.experimentalPacked12);
+  r615.currentRejected = LldvTransportBit(preferred);
+  assert(!SelectLldvTransport(r615, 0).connectorId);
+  assert(SelectLldvTransport(r615, LLDV_PACKED_422_12).experimentalPacked12);
+  r615.currentRejected |= LldvTransportBit(selected);
+  assert(!SelectLldvTransport(r615, LLDV_PACKED_422_12).connectorId);
   packed12.driverFormats = LLDV_422;
   assert(SelectLldvTransport(packed12, 0).format == LldvFormat::Y422_10);
   cta[9] &= ~1;

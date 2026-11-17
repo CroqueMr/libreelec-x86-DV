@@ -152,6 +152,7 @@ struct Window {
     status.sink.status=DV_EDID_LLDV_ONLY;status.sink.lldv_422=true;
     status.display.status=LldvEdidStatus::Ready;
     status.driverFormats=LLDV_422;
+    status.output42212=true;
     status.currentRejected=m_lldvRejectedTimings[1];
     status.active=static_cast<LldvFormat>(drm.active);
     return status;
