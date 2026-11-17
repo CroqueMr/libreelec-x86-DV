@@ -1976,5 +1976,16 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-hdr.patch": {
+    "summary": "Draw UHD disc menus as the BT.2020 PQ graphics they are authored as while the play item carries HDR video",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Flag BD-J and HDMV graphics as PQ while the play item carries HDR video, decode HDR palettes with BT.2020, and send a shown BD-J page again when the play item's range changes.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h": "Track the play item's graphics dynamic range and declare its helpers.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp": "Convert a PQ BD-J page for its destination as a PQ palette is converted.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Apply the PQ palette's sRGB and limited-range conversions to straight-alpha PQ pixels, once per colour.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h": "Declare the PQ pixel conversion."
+    }
   }
 }
