@@ -642,7 +642,7 @@
 +			if (!conn->crtc || !(hdr10plus_primary_mask & drm_crtc_mask(conn->crtc)) ||
 +			    drm_connector_check_hdr10plus(conn) || !stream ||
 +			    !crtc_state->active || !hdr10plus_has_frame_update(state, conn->crtc) ||
-+			    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
++			    !dc_is_hdmi_signal(stream->signal) ||
 +			    stream->timing.hdmi_vic ||
 +			    convert_dc_color_depth_into_bpc(stream->timing.display_color_depth) < 10 ||
 +			    crtc_state->async_flip ||
@@ -790,8 +790,8 @@
 +		stream = cs ? to_dm_crtc_state(cs)->stream : NULL;
 +		if (!cs || !cs->active || !stream || stream->dv_standard ||
 +		    connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
-+		    stream->signal != SIGNAL_TYPE_HDMI_TYPE_A ||
-+		    !stream->link || stream->link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A ||
++		    !dc_is_hdmi_signal(stream->signal) ||
++		    !stream->link || !dc_is_hdmi_signal(stream->link->connector_signal) ||
 +		    hdr10_depth(stream->timing.display_color_depth) < 10)
 +			return -EINVAL;
 +	}
