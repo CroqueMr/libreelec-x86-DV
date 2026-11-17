@@ -10,7 +10,7 @@ class BlurayVideoDisposition(unittest.TestCase):
     def test_window_markers_do_not_change_unrestricted_sources_and_missing_markers_fail_closed(self):
         source=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
         add=body(source,'bool CDVDVideoCodecFFmpeg::AddData(')
-        start=add.index('\n#ifdef HAVE_DVBRIDGE',add.index('  avpkt->size = packet.iSize;'))
+        start=add.index('  bool discard = packet.videoDecodeOnly;', add.index('  avpkt->size = packet.iSize;'))
         end=add.index('    avpkt->flags |= AV_PKT_FLAG_DISCARD;',start)+len('    avpkt->flags |= AV_PKT_FLAG_DISCARD;')
         tag=add[start:end]
         common=body(source,'bool CDVDVideoCodecFFmpeg::GetPictureCommon(')
@@ -24,7 +24,7 @@ constexpr int AV_PKT_FLAG_DISCARD=4,AV_FRAME_FLAG_CORRUPT=1,DVP_FLAG_DROPPED=8;
 constexpr int64_t AV_NOPTS_VALUE=INT64_MIN;
 constexpr int AV_FRAME_DATA_DOVI_RPU_BUFFER=1;
 char presentableDVPacket,decodeOnlyDVPacket;
-struct Packet {bool videoDecodeOnly=false,videoWindowed=false;};
+struct Packet {bool videoDecodeOnly=false,videoWindowed=false; struct {bool valid{},presentable{true};} doviLayerTimes;};
 struct AVPacket {int flags=0;void* opaque=nullptr;};
 struct AVFrame {int64_t pts=200;int decode_error_flags=0,flags=0;void* opaque=nullptr;};
 struct Raw {uint8_t bytes[5]={25,8,1,2,3};uint8_t* data=bytes;int size=5;}raw;
@@ -32,7 +32,15 @@ const Raw* av_frame_get_side_data(AVFrame*,int){return &raw;}
 struct Picture {int iFlags=0;struct {bool valid=true;void Reset(){valid=false;}}doviMetadata;};
 struct Codec {
  bool m_dvFel=false,m_dvVideoWindow=false;uint64_t m_dvLayerEpoch=1;AVFrame frame;AVFrame* m_pFrame=&frame;
- AVPacket Tag(const Packet& packet){AVPacket out;AVPacket* avpkt=&out;TAG;return out;}
+ struct {bool preferHybridHDR10Plus{};} m_hints;
+ bool hybridHDR10Plus{};
+ AVPacket Tag(const Packet& packet){
+  AVPacket out;AVPacket* avpkt=&out;
+  const auto& layer=packet.doviLayerTimes;
+  const bool hybridLayer=m_hints.preferHybridHDR10Plus || hybridHDR10Plus;
+  TAG
+  return out;
+ }
  Picture Validate(){Picture out;Picture* pVideoPicture=&out;LATE;return out;}
 };
 int main(){
@@ -46,6 +54,14 @@ int main(){
   auto picture=c.Validate();
   assert(picture.doviMetadata.valid);
   if(paired&&windowed)assert(bool(picture.iFlags&DVP_FLAG_DROPPED)==hidden);
+ }
+ {
+  Codec c;c.m_dvFel=false;c.m_hints.preferHybridHDR10Plus=true;
+  Packet p;p.doviLayerTimes={true,false};
+  const auto packet=c.Tag(p);
+  assert(packet.opaque==&decodeOnlyDVPacket && (packet.flags&AV_PKT_FLAG_DISCARD));
+  c.frame.opaque=packet.opaque;
+  assert(c.Validate().iFlags&DVP_FLAG_DROPPED);
  }
  for(bool windowed:{false,true}){
   Codec c;c.m_dvFel=true;c.m_dvVideoWindow=windowed;

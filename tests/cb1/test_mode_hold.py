@@ -10,7 +10,7 @@ class ModeHoldTests(unittest.TestCase):
     def test_disc_stream_changes_delegate_resolution_to_the_render_thread(self):
         source = (TREE / 'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
         opening = body(source, 'bool CVideoPlayer::OpenVideoStream(')
-        resolve = opening.index('const bool nativeDV = WantsNativePresentation(hint);')
+        resolve = opening.index('const bool nativeDV =')
         trigger = opening.index('m_renderManager.TriggerUpdateResolution', resolve)
         mode = opening[resolve:trigger]
         synchronous = body(mode, 'if (!pMenus)')

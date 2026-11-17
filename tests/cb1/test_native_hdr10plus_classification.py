@@ -15,6 +15,7 @@ class NativeHDR10PlusClassification(unittest.TestCase):
         cache = (tree / 'cores/DataCacheCore.cpp').read_text()
         signature = 'bool CDataCacheCore::HasVideoHDR10PlusSource()'
         getter = body(cache, signature) if signature in cache else '{return false;}'
+        primary_getter = body(cache, 'bool CDataCacheCore::HasVideoHDR10PlusPrimary()')
         reset = body(cache, 'uint64_t CDataCacheCore::ResetVideoProcessingInfo()')
         player = (tree / 'cores/VideoPlayer/VideoPlayer.cpp').read_text()
         method = body(player, 'void CVideoPlayer::GetVideoStreamInfo(')
@@ -28,9 +29,10 @@ class NativeHDR10PlusClassification(unittest.TestCase):
 #include <mutex>
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct VideoSourceSideData {
- uint64_t generation;bool plus;
+ uint64_t generation;bool plus,primary{};
  uint64_t Generation()const{return generation;}
  const void* HDR10Plus()const{return plus?this:nullptr;}
+ bool HDR10PlusIsPrimary()const{return primary;}
 };
 struct CDataCacheCore {
  std::mutex m_videoPlayerSection;uint64_t m_videoProcessingGeneration=7;
@@ -38,6 +40,7 @@ struct CDataCacheCore {
  struct {uint64_t informationGeneration{};} m_videoProcessingInfo;
  std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
  bool HasVideoHDR10PlusSource() GETTER
+ bool HasVideoHDR10PlusPrimary() PRIMARY_GETTER
  uint64_t ResetVideoProcessingInfo() RESET
 };
 CDataCacheCore cache;
@@ -58,7 +61,11 @@ int main(){
  assert(p.expose(1,H::HDR_TYPE_HDR10)==H::HDR_TYPE_HDR10);
  for(auto type:{H::HDR_TYPE_NONE,H::HDR_TYPE_HLG,H::HDR_TYPE_DOLBYVISION})
   assert(p.expose(0,type)==type);
- cache.m_videoSourceSideData=std::make_shared<VideoSourceSideData>(6,true);
+ cache.m_videoSourceSideData=std::make_shared<VideoSourceSideData>(7,true,true);
+ assert(p.expose(0,H::HDR_TYPE_DOLBYVISION)==H::HDR_TYPE_HDR10PLUS);
+ assert(p.expose(1,H::HDR_TYPE_DOLBYVISION)==H::HDR_TYPE_DOLBYVISION);
+ cache.m_videoSourceSideData=std::make_shared<VideoSourceSideData>(6,true,true);
+ assert(p.expose(0,H::HDR_TYPE_DOLBYVISION)==H::HDR_TYPE_DOLBYVISION);
  assert(!cache.HasVideoHDR10PlusSource());assert(p.expose(0,H::HDR_TYPE_HDR10)==H::HDR_TYPE_HDR10);
  cache.m_videoSourceSideData=std::make_shared<VideoSourceSideData>(7,false);
  assert(!cache.HasVideoHDR10PlusSource());
@@ -66,7 +73,7 @@ int main(){
  cache.ResetVideoProcessingInfo();assert(!cache.HasVideoHDR10PlusSource());
  assert(p.expose(0,H::HDR_TYPE_HDR10)==H::HDR_TYPE_HDR10);
 }
-'''.replace('GETTER', getter).replace('RESET', reset).replace('EXPOSE', expose)
+'''.replace('PRIMARY_GETTER', primary_getter).replace('GETTER', getter).replace('RESET', reset).replace('EXPOSE', expose)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
             (path / 'test.cpp').write_text(code)

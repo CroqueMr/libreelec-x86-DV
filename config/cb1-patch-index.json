@@ -2084,5 +2084,21 @@
     "files": {
       "xbmc/guilib/GUILabelControl.cpp": "Expand the label render region without modifying the layout."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hybrid-input-preference.patch": {
+    "owner": "Choose the primary input family for authored Dolby Vision and HDR10+ hybrid video.",
+    "files": {
+      "addons/resource.language.en_gb/resources/strings.po": "Localize the hybrid input format selector.",
+      "system/settings/settings.xml": "Offer a compact native selector with Dolby Vision as the default.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.h": "Carry the chosen preference to the decoder for the opened stream.",
+      "xbmc/cores/VideoPlayer/DVDStreamInfo.cpp": "Limit deferred source selection to a verified HDR10-compatible Dolby Vision base.",
+      "xbmc/cores/VideoSourceSideData.h": "Keep immutable authored metadata alongside the selected input format.",
+      "xbmc/cores/VideoSourceSideData.cpp": "Require a decoded RPU and validated frame HDR10+ for the initial decision.",
+      "xbmc/cores/DataCacheCore.h": "Expose the accepted effective input type to playback controls.",
+      "xbmc/cores/DataCacheCore.cpp": "Keep the published input type tied to the accepted frame and stream generation.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Choose a verified compatible base from a presentable picture and retire Profile 7 enhancement pairing for HDR10+ playback.",
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the effective source type in playback and Quick Switch without changing authored stream facts.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.h": "Keep a confirmed HDR10+ base-only route on codec reopen."
+    }
   }
 }

@@ -62,7 +62,12 @@ int dvbridge_fel_take(Fel* f,int64_t pts,AVFrame** frame){
  if(pts<=f->discardUntil)return 2;
  if(!f->ready)return 0;assert(pts>=1);++f->takes;*frame=new AVFrame;return 1;
 }
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
+struct SourceSideData {bool HDR10PlusIsPrimary()const{return false;}};
 struct VideoPicture{
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ std::shared_ptr<SourceSideData> sourceSideData;
+
  int64_t doviSourcePts=AV_NOPTS_VALUE;int pixels=123;
  std::shared_ptr<AVFrame> doviEnhancement;int doviEnhancementBinding{};
  int doviSourceBinding=17;
@@ -71,7 +76,8 @@ struct VideoPicture{
 };
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
- struct {int codecOptions{};}m_hints;
+ struct {int codecOptions{};bool preferHybridHDR10Plus{};}m_hints;
+ bool NeedsDVEnhancement() const {return false;}
  std::shared_ptr<Fel> m_dvFel;std::deque<std::shared_ptr<VideoPicture>>m_dvPending;
  unsigned m_dvStartupReported{};uint64_t m_dvDiagnosticGeneration=1;
  uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,drainSequence=false;

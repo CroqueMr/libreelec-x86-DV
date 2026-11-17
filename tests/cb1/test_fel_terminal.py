@@ -72,7 +72,12 @@ int vaSyncSurface(void* display,unsigned surface){assert(display==(void*)123 && 
 struct AVFrame{Buffer* hw_frames_ctx=&frameBuffer;uint8_t* data[4]={nullptr,nullptr,nullptr,(uint8_t*)17};};
 void av_frame_free(AVFrame** f){delete *f;*f=nullptr;}
 struct Metadata{bool valid=true;int Binding()const{return 1;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}};
-struct VideoPicture{int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
+struct SourceSideData {bool HDR10PlusIsPrimary()const{return false;}};
+struct VideoPicture{
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ std::shared_ptr<SourceSideData> sourceSideData;
+int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
  int doviSourceBinding=1;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
  void Reset(){}void CopyRef(const VideoPicture&v){*this=v;}};
@@ -89,7 +94,8 @@ enum{LOGWARNING,LOGERROR};
 struct CLog{template<class... T>static void Log(T...){}};
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
- struct {int codecOptions{};}m_hints;
+ struct {int codecOptions{};bool preferHybridHDR10Plus{};}m_hints;
+ bool NeedsDVEnhancement() const {return false;}
  std::shared_ptr<Fel>m_dvFel=std::make_shared<Fel>();bool m_dvFailed=false,m_dvNativeOutput=false;
  uint64_t m_dvLayerEpoch=0;
  std::deque<std::shared_ptr<VideoPicture>>m_dvPending;Context context;Context*m_pCodecContext=&context;
