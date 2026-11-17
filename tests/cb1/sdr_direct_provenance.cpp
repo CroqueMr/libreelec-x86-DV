@@ -34,7 +34,7 @@ static AVDOVIDecoderConfigurationRecord copied(AVStream*pStream){
  return hints.dovi;
 }
 static void decoded(Picture*pVideoPicture,AVFrame*m_pFrame,AVDOVIDecoderConfigurationRecord decodedConfig,unsigned generation,bool joined=true){
- struct {AVDOVIDecoderConfigurationRecord dovi;StreamHdrType hdrType;}m_hints{decodedConfig,pVideoPicture->hdrType};
+ struct {AVDOVIDecoderConfigurationRecord dovi;StreamHdrType hdrType;bool preferHybridHDR10Plus{};}m_hints{decodedConfig,pVideoPicture->hdrType};
  DVBRIDGE::SourceOwner m_dvSourceOwner;m_dvSourceOwner.BeginStream();
  unsigned m_videoProcessingGeneration=generation;bool m_dvLayerEpoch=joined,m_dvVideoWindow=true;
  static int presentableDVPacket,decodeOnlyDVPacket;

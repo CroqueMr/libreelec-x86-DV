@@ -340,7 +340,7 @@
     "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078",
     "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce",
     "tests/cb1/test_hlg_startup.py": "daf3d8c10e4ae1a12a1cdb9788d433cab300f1e553b4fe5bc0a0aadda8041496",
-    "tests/cb1/sdr_direct_provenance.cpp": "700f285c549bc2db7b4a6a58c6f3cb7009048e5f6b26dfac47bac1f3dc13e5d1",
+    "tests/cb1/sdr_direct_provenance.cpp": "3fd74e5d704a5596d6216545596bd8a0fe5afd23f1cd62961fe450b05c2071f5",
     "tests/cb1/test_sdr_direct_integration.py": "e4845b25655a02e42d0199e90878b4a1a7fab57d8b49594139bd80c9858d2bc1",
     "tests/cb1/test_sdr_render.py": "6c5cbdd57b424333a5e51ad87a82272e296318bfc5d4bcbc5171ef21d99bf258",
     "tests/cb1/sdr_direct_owners.cpp": "20f892bba6e379292998d3c031bc07552cda4dabc9aa793b781a7578b406a679",
