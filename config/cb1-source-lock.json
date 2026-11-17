@@ -105,7 +105,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9002-native-static-hdr-depth.patch": "3e98c0aa6d9871a1b870502b6336bc491c5304ab038e9e6373c797c4d3a24e2d",
     "projects/Generic/patches/linux/linux-9900-08-drivers__video__hdmi.c.patch": "6446b66d254ac934ce0dddd3b3fcd47c41b3af5c8f522579832294b753114a38",
     "scripts/image": "9e3a399d7423e163a5dca09a75e9887062d7686ca29e9752e61ffde8c04a742e",
-    "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "d7e0386f45fa3dfe8b42d34571896a87a19f16eaa98c1b1abeffc3c97084fc4e",
+    "projects/Generic/patches/linux/linux-9920-amd-dcn-native-dv.patch": "53f3f7e692a2dfc05e6064a0d89d195ed2b7e316934bdcf5ccec1356d55a32b2",
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-08-pgs-authoring.patch": "f6c9a7501706d01b45daa6ab5bbf2fecdccdfc3f06c4915b370a3c26c20931bb",
     "tests/cb1/test_bitmap_subtitles.py": "becfe6330ab20a4775d409535e5e026da6f238cd360400b95a0d7a2013fbc47a",
     "tests/cb1/test_bluray_menu_source.py": "9f75bc6a99eb7f2d879d1ed3b49fddf7f447e654cc3544f6261060c81fb52932",
@@ -195,7 +195,7 @@
     "tests/cb1/test_intel_spd_sdi.py": "c57a8e4fe1b9bfe36d8cd683012a7b089d7d247aedd2ee315c473a2da511ba5f",
     "projects/Generic/patches/kodi/kodi-9990-cb1-video.patch": "29e77684f141de7fc18e84747f5316861f93c2548b4694caeb94e281b1e27e00",
     "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": "423fc14eb55a457bf59913a393d05cd99cc36bbc599c7b155fe84d3dcec8914e",
-    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "82248411653bc8493fb7ff1c3c3538ecacf3be8a56e4c54845c84fcca6e7e368",
+    "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "6ed7c72146cfeaa86b34a0a065e8c72bf1b832d9ac323f66c039ea7dd8bdc5d8",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "f93453fb69b707e0bb132248d5c72752b492f6cb119d5bd156a04dd85de61dcb",
     "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "2675086aa08f050fbe8916f9f312a8d5cbadfba6fb994a67eeab550339498a64",
     "tests/cb1/test_dual_clock_lifecycle.py": "09951c514afcf41190e01649e53fe49c4218df551da08f835ca22e96b6902080",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "7e510e42fa02a351be3d2de68706f177a771a73ce44ab4708fe346aac1ac5a15",
+    "config/cb1-patch-index.json": "3e070f27c5843d1c15eb52a3f25486a6e1de6a42d37c78b6e060f7dd04bfde62",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "3f1b539b124b9728524d550669a214de4479fcc657deeb23433d3bc820083203",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -434,7 +434,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10.patch": "5fd1d1ae63bc065b86c053eb40859c7daba55a19122aee35741ecc973e982b26",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz-pascal-native-hdr10plus.patch": "5ed0d20d581ca3fe5454d1869ed5d563ad0d8e54b4dbc0d9924c3263aad6c776",
     "tests/cb1/test_pascal_native_hdr.py": "13b6fa77868d50567456ff682dec15b03899cfa610822e9bb562cc7a1eb0710d",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": "5ff2bf28fff7bd9b7ba5e304204f5d15ede5a7f27f55f184504f4ccc4d5e634b"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": "5ff2bf28fff7bd9b7ba5e304204f5d15ede5a7f27f55f184504f4ccc4d5e634b",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": "970e8bfde5894ac72bbaf01f57700210b646c04a61bf2a3bc1c3320bcab361d6",
+    "tests/cb1/test_drm_monitor_selection.py": "79256c3a73ec04612617e53f110c111c563778a3526d0d6dc58206ad20737109"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
