@@ -31,24 +31,58 @@ class NvidiaFramebuffer(unittest.TestCase):
 #include <cerrno>
 constexpr unsigned DRM_FORMAT_XRGB8888=1,DRM_FORMAT_XRGB2101010=2,DRM_FORMAT_ARGB8888=3,
  DRM_FORMAT_ARGB2101010=4,DRM_FORMAT_XBGR2101010=5,DRM_FORMAT_ABGR2101010=6,DRM_FORMAT_ABGR16161616F=7;
-constexpr uint64_t DRM_FORMAT_MOD_LINEAR=0,DRM_FORMAT_MOD_INVALID=~0ull;
+#define HAS_GBM_MODIFIERS
+constexpr uint64_t DRM_FORMAT_MOD_LINEAR=0,DRM_FORMAT_MOD_INVALID=0x00ffffffffffffffull;
+constexpr uint64_t EXPLICIT_MODIFIER=0x0200000000000001ull;
 constexpr int DRM_MODE_FB_MODIFIERS=1,LOGERROR=1;
 struct CLog {template<class... T>static void LogF(T...) {}};
 struct Handle {unsigned u32=1;};
-struct gbm_bo {};
-Handle gbm_bo_get_handle(gbm_bo*) {return {};}
-unsigned gbm_bo_get_stride(gbm_bo*) {return 32;}
+struct gbm_bo {uint64_t modifier=DRM_FORMAT_MOD_LINEAR;};
+int gbm_bo_get_plane_count(gbm_bo*) {return 1;}
+Handle gbm_bo_get_handle_for_plane(gbm_bo*, int) {return {};}
+unsigned gbm_bo_get_stride_for_plane(gbm_bo*, int) {return 32;}
+unsigned gbm_bo_get_offset(gbm_bo*, int) {return 0;}
+uint64_t gbm_bo_get_modifier(gbm_bo* bo) {return bo->modifier;}
 unsigned gbm_bo_get_width(gbm_bo*) {return 4;}
 unsigned gbm_bo_get_height(gbm_bo*) {return 4;}
 unsigned alias=0;
-int drmModeAddFB2WithModifiers(int,unsigned,unsigned,unsigned format,uint32_t*,uint32_t*,uint32_t*,uint64_t*,uint32_t* id,unsigned){alias=format;*id=23;return 0;}
+unsigned calls=0;
+bool rejectExplicit=false;
+int drmModeAddFB2WithModifiers(int,unsigned,unsigned,unsigned format,uint32_t*,uint32_t*,
+                             uint32_t*,uint64_t* modifiers,uint32_t* id,unsigned flags)
+{
+ ++calls;
+ const uint64_t modifier=modifiers ? modifiers[0] : 0;
+ if (!flags && modifier)
+  return -EINVAL;
+ if (flags)
+ {
+  assert(flags==DRM_MODE_FB_MODIFIERS && modifier==EXPLICIT_MODIFIER);
+  if (rejectExplicit)
+   return -EINVAL;
+ }
+ alias=format;
+ *id=23;
+ return 0;
+}
 struct FB {unsigned format=0,fb_id=12,opaque_fb_id=0;};
 struct CDRMUtils {int m_fd=0;FB fb; FB* DrmFbGetFromBo(gbm_bo*){return &fb;}
  uint32_t DrmOpaqueFbGetFromBo(gbm_bo*);};
 METHOD
 int main(){CDRMUtils drm;gbm_bo bo;
  drm.fb.format=DRM_FORMAT_XBGR2101010;assert(drm.DrmOpaqueFbGetFromBo(&bo)==12);
- drm.fb.format=DRM_FORMAT_ABGR2101010;assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && alias==DRM_FORMAT_XBGR2101010);
+ drm.fb.format=DRM_FORMAT_ABGR2101010;
+ assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && alias==DRM_FORMAT_XBGR2101010 && calls==1);
+ drm.fb={DRM_FORMAT_ARGB8888};
+ bo.modifier=DRM_FORMAT_MOD_INVALID;
+ assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && alias==DRM_FORMAT_XRGB8888 && calls==2);
+ assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && calls==2);
+ drm.fb={DRM_FORMAT_ARGB8888};
+ bo.modifier=EXPLICIT_MODIFIER;
+ rejectExplicit=true;
+ assert(drm.DrmOpaqueFbGetFromBo(&bo)==0 && calls==3);
+ rejectExplicit=false;
+ assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && calls==4);
  drm.fb.format=DRM_FORMAT_ABGR16161616F;assert(drm.DrmOpaqueFbGetFromBo(&bo)==12);
  drm.fb.format=99;assert(drm.DrmOpaqueFbGetFromBo(&bo)==0);
 }
