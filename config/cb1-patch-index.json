@@ -1976,5 +1976,11 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Report a completed native GUI composition.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Supply the Kodi GUI to the native renderer on the eligible path."
     }
+  },
+  "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {
+    "owner": "Restore the enabled output bit on an active Alder Lake-P HDMI audio route.",
+    "files": {
+      "sound/hda/codecs/hdmi/intelhdmi.c": "Check the selected pin's control register during Intel route fixup and preserve its audio mode."
+    }
   }
 }
