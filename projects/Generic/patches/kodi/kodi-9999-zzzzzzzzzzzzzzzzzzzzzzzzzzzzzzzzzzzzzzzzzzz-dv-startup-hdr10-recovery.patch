@@ -1,0 +1,203 @@
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+index de09f2b..b37ace9 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+@@ -57,6 +57,25 @@ inline OutputSelection SelectOutput(const OutputPreferences& preferences,
+     return result;
+   auto policy = preferences.Policy();
+   result.policy=policy;
++  if (preferences.hdr10TransportFallback)
++  {
++    if (caps.HDR10DepthLimited())
++      return {OutputRoute::Vanilla, policy, OutputReason::HDR10LinkDepthTooLow};
++    if (!caps.hdr10)
++      return {OutputRoute::Vanilla, policy, OutputReason::NoHDR10Transport};
++    auto hdr10 = preferences;
++    hdr10.output = OutputMode::HDR10;
++    hdr10.method = 0;
++    policy = hdr10.Policy();
++    if (!caps.processingKnown)
++      return {OutputRoute::Vanilla, policy, OutputReason::ProcessingPending};
++    const auto& admission = caps.processing[policy.mode];
++    if (!admission.usable)
++      return {OutputRoute::Vanilla, policy, admission.reason != OutputReason::None ?
++          admission.reason : OutputReason::NoGPUProcessing};
++    return {OutputRoute::HDR10, policy, preferences.output == OutputMode::PlayerLed ?
++        OutputReason::NoPlayerLedTransport : OutputReason::NoDVTransport};
++  }
+   if (policy.mode == DVBRIDGE_MODE_PLAYER_LED)
+   {
+     if (!caps.playerLed) result.reason = OutputReason::NoPlayerLedTransport;
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+index 07568fc..e417144 100644
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -56,6 +56,7 @@ struct OutputPreferences
+   double expertPeak{}, expertBlack{};
+   int expertGamut{};
+   int lldvFormat{};
++  bool hdr10TransportFallback{};
+   bool optimizedDV{true};
+   bool masterIPT{false};
+   bool disableL2Trims{false};
+@@ -98,7 +99,8 @@ struct OutputPreferences
+ 
+   bool SameValues(const OutputPreferences& other) const
+   {
+-    return output == other.output && hdr10Source == other.hdr10Source &&
++    return output == other.output && hdr10TransportFallback == other.hdr10TransportFallback &&
++        hdr10Source == other.hdr10Source &&
+         hdr10PlusSource == other.hdr10PlusSource && hlgSource == other.hlgSource &&
+         sdrPreset == other.sdrPreset && sdrBT2020 == other.sdrBT2020 &&
+         std::bit_cast<uint64_t>(sdrPeak) == std::bit_cast<uint64_t>(other.sdrPeak) &&
+@@ -213,9 +215,11 @@ struct OutputSelectors
+   HDR10SourceMode hdr10Source{HDR10SourceMode::Native}, hdr10PlusSource{HDR10SourceMode::Native};
+   HLGSourceMode hlgSource{HLGSourceMode::Native};
+   int method{};
++  bool hdr10TransportFallback{};
+   void Apply(OutputPreferences& preferences) const
+   {
+     preferences.output=output;
++    preferences.hdr10TransportFallback=hdr10TransportFallback;
+     preferences.method=method;
+     preferences.hdr10Source=hdr10Source;
+     preferences.hdr10PlusSource=hdr10PlusSource;
+@@ -313,11 +317,27 @@ inline OutputPreferences FrameOutputSettings(bool hdr10Plus = false, bool hlg =
+   return next;
+ }
+ 
+-inline void SelectOutputSettings()
++inline void SelectOutputSettings(bool nativeDV = true, bool playerLed = true)
+ {
+   {
+     std::lock_guard lock(OutputSettingsMutex());
+-    activeOutputSelectors=ReadDefaultOutputSelectors();
++    auto defaults = ReadDefaultOutputSelectors();
++    // Snapshot transport availability for the file before opening the decoder.
++    switch (defaults.output)
++    {
++      case OutputMode::PlayerLed:
++        defaults.hdr10TransportFallback = !playerLed;
++        break;
++      case OutputMode::Standard:
++      case OutputMode::EnhancedDV:
++      case OutputMode::MasterReference:
++      case OutputMode::AdaptiveB:
++        defaults.hdr10TransportFallback = !nativeDV;
++        break;
++      default:
++        break;
++    }
++    activeOutputSelectors = defaults;
+   }
+   FrameOutputSettings();
+ }
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+index 5277630..ec74b66 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -1495,7 +1495,12 @@ void CVideoPlayer::Prepare()
+ {
+   m_errorDetail = 0;
+ #ifdef HAVE_DVBRIDGE
+-  DVBRIDGE::SelectOutputSettings();
++  const auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++      CServiceBroker::GetWinSystem());
++  const auto caps = window ? window->GetDVOutputCapabilities(nullptr, true) :
++                             DVBRIDGE::OutputCapabilities{};
++  const bool canFallback = caps.hdr10 && !caps.HDR10DepthLimited();
++  DVBRIDGE::SelectOutputSettings(!canFallback || caps.nativeDV, !canFallback || caps.playerLed);
+ #endif
+   CFFmpegLog::SetLogLevel(1);
+   SetPlaySpeed(DVD_PLAYSPEED_NORMAL);
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+index b6a0ca0..e445809 100644
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -318,7 +318,12 @@ bool CDVPlaybackModes::ShowMenu(bool settingsMenu)
+         }
+         else if (hdr10PlusSource) active.hdr10PlusSource=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
+         else if (hdr10Source) active.hdr10Source=static_cast<DVBRIDGE::HDR10SourceMode>(choice.output);
+-        else {active.output=static_cast<DVBRIDGE::OutputMode>(choice.output);active.method=choice.method;}
++        else
++        {
++          active.output = static_cast<DVBRIDGE::OutputMode>(choice.output);
++          active.method = choice.method;
++          active.hdr10TransportFallback = false;
++        }
+       }
+ #ifdef CB1_HAS_HDR10_AI
+       if (!settingsMenu && (hdr10Source || hlgSource) && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index ab6b874..112f1fc 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1840,6 +1840,9 @@ bool CWinSystemGbmGLESContext::CanRetainDVSource() const
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+   if (preferences.output == DVBRIDGE::OutputMode::Disabled) return false;
+   const auto caps = GetDVOutputCapabilities(nullptr, true);
++  if (preferences.hdr10TransportFallback)
++    return caps.hdr10 && !caps.HDR10DepthLimited() &&
++        (!caps.processingKnown || caps.processing[DVBRIDGE_MODE_HDR10_BASIC].usable);
+   if (preferences.output == DVBRIDGE::OutputMode::SDR)
+     return SupportsSDRConversion() && (!caps.processingKnown || caps.processing[DVBRIDGE_MODE_SDR].usable);
+   if (preferences.output == DVBRIDGE::OutputMode::PlayerLed)
+@@ -1855,7 +1858,7 @@ std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double f
+ {
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+   if (preferences.output != DVBRIDGE::OutputMode::PlayerLed ||
+-      !std::isfinite(fps) ||
++      preferences.hdr10TransportFallback || !std::isfinite(fps) ||
+       !GetDVOutputCapabilities(nullptr, preferences, true).playerLed)
+     return {};
+   constexpr std::array rates{24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0};
+@@ -2592,6 +2595,10 @@ bool CWinSystemGbmGLESContext::ConfigureHDR10Conversion(const VideoPicture& pict
+   m_hdr10Signal = {metadata.max_luminance, metadata.min_luminance,
+       metadata.max_cll, metadata.max_fall, ~0u};
+   m_failedHDR10SetupRestore = false;
++  if (m_dvSelection.reason == DVBRIDGE::OutputReason::NoDVTransport ||
++      m_dvSelection.reason == DVBRIDGE::OutputReason::NoPlayerLedTransport)
++    CLog::Log(LOGINFO, "CB1 fallback: selected HDR10 Rendering ({})",
++              CDVPlaybackInfo::Reason(m_dvSelection.reason));
+   if (DVBRIDGE::DiagnosticsEnabled())
+   {
+     if (m_dvSelection.policy.mode == DVBRIDGE_MODE_HDR10PLUS)
+@@ -2983,12 +2990,18 @@ bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)
+        preferences.hdr10Source==DVBRIDGE::HDR10SourceMode::SDR) &&
+       m_dvContext && !m_dvContext->StopHDR10AI()) return deferred("output-await-ai-retirement");
+ #endif
+-  if (capabilities.isDV && preferences.output != DVBRIDGE::OutputMode::Disabled)
++  auto selectionCapabilities = capabilities;
++  auto selection = SelectedDVOutput(&picture, preferences, selectionCapabilities);
++  const bool awaitingFEL = picture.strDVELType == "FEL" && !picture.doviEnhancement;
++  const bool prepareDV = capabilities.isDV && preferences.output != DVBRIDGE::OutputMode::Disabled &&
++      (!preferences.hdr10TransportFallback || selection.route == DVBRIDGE::OutputRoute::HDR10 ||
++       selection.reason == DVBRIDGE::OutputReason::ProcessingPending ||
++       (awaitingFEL && selection.reason == DVBRIDGE::OutputReason::SourceIneligible));
++  if (prepareDV)
+   {
+     if (!capabilities.processingKnown) return deferred("output-await-source-import");
+-    if (picture.strDVELType == "FEL" && !picture.doviEnhancement) return deferred("output-await-fel");
++    if (awaitingFEL) return deferred("output-await-fel");
+   }
+-  auto selectionCapabilities = capabilities;
+   {
+     const auto masterBinding=picture.doviSourceBinding.Valid() ?
+         picture.doviSourceBinding : picture.doviMetadata.Binding();
+@@ -2996,7 +3009,6 @@ bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)
+     m_masterSafety.Begin(masterBinding.stream,preferences.revision,masterBinding.revision,picture.pts,
+         capabilities.isDV && preferences.output==DVBRIDGE::OutputMode::MasterReference);
+   }
+-  auto selection = SelectedDVOutput(&picture, preferences, selectionCapabilities);
+   if (selection.route == DVBRIDGE::OutputRoute::SDR &&
+       selection.policy.sdr.gamut == DVBRIDGE_GAMUT_BT2020 &&
+       (m_sdrBT2020Rejected || GetSDRBT2020Support() != SDRBT2020Support::Available))
+@@ -3043,7 +3055,7 @@ bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)
+       m_dvSelection.route==DVBRIDGE::OutputRoute::Vanilla &&
+       m_dvSelection.reason!=DVBRIDGE::OutputReason::None &&
+       m_dvSelection.reason!=DVBRIDGE::OutputReason::ProcessingPending &&
+-      !(source.el && !picture.doviEnhancement))
++      (preferences.hdr10TransportFallback || !(source.el && !picture.doviEnhancement)))
+   {
+     std::lock_guard lock(m_dvCapabilityMutex);
+     if (!m_dvFatalConsumed) m_dvFatalReason=m_dvSelection.reason;

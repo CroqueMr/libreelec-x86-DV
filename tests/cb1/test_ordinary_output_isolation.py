@@ -41,7 +41,7 @@ namespace DVBRIDGE {
  enum class OutputReason {None,RestoreFailed,SourceIneligible,TVProfileRequired,ProcessingPending};
  enum class HDR10SourceMode {Native,ReferenceDV};
  struct Policy {int mode=0;struct {int gamut=0;}sdr;};
- struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true;
+ struct Preferences {OutputMode output=OutputMode::Standard; unsigned revision=1;bool allowMasterFallback=true,hdr10TransportFallback=false;
    double peak=1000;int panel=0,gamut=2;HDR10SourceMode hdr10Source=HDR10SourceMode::Native;
    ::DVBRIDGE::Policy Policy()const{return {};}};
  Preferences FrameOutputSettings(bool=false,bool=false){return {};}

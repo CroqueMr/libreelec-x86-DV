@@ -303,7 +303,8 @@ enum class HDR10SourceMode{Native,ReferenceDV};
 }
 struct Window {
  struct Preferences{DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::MasterReference;
-  bool allowMasterFallback=false;DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
+  bool allowMasterFallback=false,hdr10TransportFallback=false;
+  DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::Native;}preferences;
  struct Caps{bool sourceKnown=true,isDV=false,isHDR10=true,isHLG=false,stereoSource=false,processingKnown=true;}capabilities;
  struct Picture{struct{int profile=0,compatibility=1;bool el=false;}doviSourceInfo;
   bool doviEnhancement=false;}picture;

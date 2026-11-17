@@ -215,22 +215,33 @@ int main(){Window w;VideoPicture picture;DVBRIDGE::OutputPreferences preferences
                     'bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(')
         start=source.index('  const auto& source = picture.doviSourceInfo;')
         error=source[start:source.index('  if (!PollRejectedDVSurface())',start)]
+        wait_start = source.index('  const bool awaitingFEL')
+        wait = source[wait_start:source.index('  {\n    const auto masterBinding', wait_start)]
         execute(r'''
 #include <cassert>
 #include <mutex>
+#include <string>
 namespace DVBRIDGE {
 enum class OutputMode{Disabled,Standard,MasterReference};enum class HDR10SourceMode{Native,ReferenceDV,SDR};
-enum class OutputRoute{Vanilla,DV};enum class OutputReason{None,SourceIneligible,ProcessingPending,ActivationFailed};
+enum class OutputRoute{Vanilla,DV,HDR10};
+enum class OutputReason{None,SourceIneligible,ProcessingPending,ActivationFailed,NoHDR10Transport};
 }
 struct Window{
  struct{DVBRIDGE::OutputMode output=DVBRIDGE::OutputMode::Standard;bool allowMasterFallback=false;
+ bool hdr10TransportFallback=false;
  DVBRIDGE::HDR10SourceMode hdr10Source=DVBRIDGE::HDR10SourceMode::ReferenceDV;}preferences;
  struct{bool sourceKnown=true,isDV=true,isHDR10=false,isHLG=false,processingKnown=true,stereoSource=false;}capabilities;
- struct{struct{int profile=7,compatibility=1;bool el=false;}doviSourceInfo;bool doviEnhancement=false;}picture;
+ struct{struct{int profile=7,compatibility=1;bool el=false;}doviSourceInfo;bool doviEnhancement=false;std::string strDVELType;}picture;
  struct{DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::Vanilla;
  DVBRIDGE::OutputReason reason=DVBRIDGE::OutputReason::ActivationFailed;}m_dvSelection;
  std::mutex m_dvCapabilityMutex;bool m_dvFatalConsumed=false;DVBRIDGE::OutputReason m_dvFatalReason{};
- bool Prepare(){ERROR return true;}
+ std::string deferredReason;
+ bool Prepare(){
+  const auto& selection = m_dvSelection;
+  const auto deferred = [&](const char* reason){deferredReason=reason;return true;};
+  WAIT
+  ERROR return true;
+ }
 };
 int main(){using namespace DVBRIDGE;
  for(int family=0;family<3;++family){Window w;w.capabilities.isDV=family==0;w.capabilities.isHDR10=family==1;w.capabilities.isHLG=family==2;
@@ -243,7 +254,20 @@ int main(){using namespace DVBRIDGE;
  Window unknown;unknown.capabilities.sourceKnown=false;assert(unknown.Prepare());
  Window stereo;stereo.capabilities.stereoSource=true;stereo.m_dvSelection.reason=OutputReason::SourceIneligible;
  assert(stereo.Prepare()&&stereo.m_dvFatalReason==OutputReason::None);
+ Window fel;
+ fel.preferences.hdr10TransportFallback=true;
+ fel.picture.strDVELType="FEL";
+ fel.picture.doviSourceInfo.el=true;
+ fel.m_dvSelection.reason=OutputReason::SourceIneligible;
+ assert(fel.Prepare() && fel.deferredReason=="output-await-fel");
+ fel.picture.doviEnhancement=true;
+ fel.deferredReason.clear();
+ fel.m_dvSelection={OutputRoute::HDR10,OutputReason::None};
+ assert(fel.Prepare() && fel.deferredReason.empty());
+ fel.picture.doviEnhancement=false;
+ fel.m_dvSelection={OutputRoute::Vanilla,OutputReason::NoHDR10Transport};
+ assert(!fel.Prepare() && fel.m_dvFatalReason==OutputReason::NoHDR10Transport);
 }
-'''.replace('ERROR',error))
+'''.replace('ERROR',error).replace('WAIT',wait))
 
 if __name__=='__main__':unittest.main()
