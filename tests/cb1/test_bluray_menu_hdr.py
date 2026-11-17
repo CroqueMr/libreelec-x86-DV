@@ -110,7 +110,7 @@ struct CDVDOverlayImage
 {
   CDVDOverlayImage() = default;
   CDVDOverlayImage(const CDVDOverlayImage& src, int, int, int, int) : CDVDOverlayImage(src) {}
-  std::vector<uint32_t> palette;
+  std::vector<uint32_t> palette, alternatePalette;
   bool m_isHDROverlay = false;
   int x = 0, y = 0, width = 4, height = 4;
 };
@@ -136,12 +136,15 @@ int main()
   BLURAY_CLIP_INFO sdrClip{1, &sdr}, hdr10Clip{1, &hdr10}, dvClip{1, &dv}, noVideo{0, nullptr};
   assert(!IsHdrGraphicsClip(sdrClip) && IsHdrGraphicsClip(hdr10Clip) && IsHdrGraphicsClip(dvClip));
   assert(!IsHdrGraphicsClip(noVideo));
+  BLURAY_STREAM_INFO reserved{0xff};
+  assert(!IsHdrGraphicsClip({1, &reserved}));
 
   CDVDInputStreamBluray stream;
   // A BD-J page drawn before any play item, already sent, and an HDMV page with its palette.
   auto page = std::make_shared<CDVDOverlayImage>();
   auto hdmv = std::make_shared<CDVDOverlayImage>();
-  hdmv->palette.resize(256);
+  hdmv->palette = {0xff102040u};
+  hdmv->alternatePalette = {0xff12213du};
   stream.m_planes[1].o = stream.m_planes[1].committed = {page, hdmv};
 
   // No play item: nothing is known, nothing changes.
@@ -155,7 +158,8 @@ int main()
   for (const auto* list : {&stream.m_planes[1].o, &stream.m_planes[1].committed})
   {
     assert(list->front() != page && list->front()->m_isHDROverlay);
-    assert(list->back() == hdmv && !hdmv->m_isHDROverlay); // its palette was decoded for its clip
+    assert(list->back() != hdmv && list->back()->m_isHDROverlay && !hdmv->m_isHDROverlay);
+    assert(list->back()->palette == hdmv->alternatePalette);
   }
 
   // The same dynamic range again: no resend.
@@ -276,12 +280,8 @@ class BlurayMenuHDR(unittest.TestCase):
 
     def test_disc_graphics_carry_the_flag_into_the_pq_bitmap_route(self):
         source = (TREE / BLURAY).read_text()
-        hdmv = body(source, 'void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)')
         bdj = body(source, 'void CDVDInputStreamBluray::OverlayCallbackARGB(')
         flush = body(source, 'void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)')
-        # HDMV pages and their palette updates, and BD-J pages, all carry the play item's range.
-        self.assertEqual(hdmv.count('build_rgba(ov->palette[i], m_hdrGraphics)'), 2)
-        self.assertEqual(hdmv.count('m_isHDROverlay = m_hdrGraphics;'), 2)
         self.assertIn('overlay->m_isHDROverlay = m_hdrGraphics;', bdj)
         self.assertLess(flush.index('MatchGraphicsDynamicRange(updated.o);'),
                         flush.index('updated.committed = updated.o;'))

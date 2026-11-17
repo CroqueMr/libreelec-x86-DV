@@ -1987,5 +1987,12 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Apply the PQ palette's sRGB and limited-range conversions to straight-alpha PQ pixels, once per colour.",
       "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h": "Declare the PQ pixel conversion."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-retained-palettes.patch": {
+    "owner": "Keep retained Blu-ray graphics consistent with the current play item when the disc does not redraw them.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Overlay/DVDOverlayImage.h": "Keep both Blu-ray palette decodes across image crops.",
+      "xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp": "Select the authored palette matrix for recognised HDR play items and preserve previously submitted menu pages."
+    }
   }
 }
