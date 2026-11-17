@@ -1,0 +1,36 @@
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+index 3820d62..07ac9dd 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+@@ -434,7 +434,7 @@ static int nv_drm_connector_atomic_set_property(
+     
+ 
+     if (property == nv_dev->cb1_lldv_format_property) {
+-        if (val > 1) return -EINVAL;
++        if (val > 2) return -EINVAL;
+         nv_connector_state->lldv_format = val;
+         return 0;
+     }
+@@ -728,7 +728,8 @@ static bool nv_drm_lldv_supported(struct drm_connector *connector,
+         return false;
+ 
+     caps = dvbridge_parse_edid((const u8 *)drm_edid_raw(edid), drm_edid_size(edid));
+-    return dvbridge_lldv_422(caps) && !caps.legacy_vsif;
++    return dvbridge_lldv_422(caps) && !caps.legacy_vsif &&
++        (to_nv_drm_connector_state_const(conn)->lldv_format != 2 || dvbridge_lldv_422_12(caps));
+ }
+ 
+ static int
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+index ae254e4..f37da7f 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+@@ -717,7 +717,7 @@ static int nv_drm_create_properties(struct nv_drm_device *nv_dev)
+ 
+     {
+         static const struct drm_prop_enum_list formats[] = {
+-            {0, "Off"}, {1, "YCbCr 4:2:2 10 bits forced"}
++            {0, "Off"}, {1, "YCbCr 4:2:2 10 bits forced"}, {2, "YCbCr 4:2:2 12 bits packed"}
+         };
+         nv_dev->cb1_lldv_format_property = drm_property_create_enum(nv_dev->dev,
+             DRM_MODE_PROP_ATOMIC, "CB1_LLDV_FORMAT", formats, ARRAY_SIZE(formats));

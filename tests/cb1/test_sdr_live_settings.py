@@ -79,7 +79,7 @@ struct Context{int Poll(){return DVBRIDGE_DV_IDLE;}};
 struct FBO{void Cleanup(){}};
 struct Picture{};
 struct Window{
- struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::SDR;dvbridge_policy policy{};bool lldvRgb10Scanout{};}m_dvSelection;
+ struct {DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::SDR;dvbridge_policy policy{};unsigned lldvRgbScanoutBits{8};}m_dvSelection;
  State m_dvState;bool m_sdrConversion=true,m_hdrConversion=true,m_dvPriorHDRConversion=true,m_dvPriorSDRConversion=true,m_dvPriorGuiCompositing=true;
  enum class PascalHDRMode { None, Conversion };
  PascalHDRMode m_pascalHDRMode=PascalHDRMode::None,m_priorPascalHDRMode=PascalHDRMode::None;
@@ -155,7 +155,7 @@ namespace DVBRIDGE {uint64_t NextRevision(){static uint64_t n=1;return ++n;}}
 HEADER
 namespace DVBRIDGE {
 enum class OutputRoute {Vanilla,NativeDV,HDR10,SDR, PlayerLed};
-struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};bool lldvRgb10Scanout{};};
+struct OutputSelection {OutputRoute route{};dvbridge_policy policy{};OutputReason reason{};int lldvFormat{};uint64_t lldvEdidGeneration{};unsigned lldvRgbScanoutBits{8};};
 OutputSelection SelectOutput(const OutputPreferences& preferences,const OutputCapabilities& caps) SELECTOR
 }
 

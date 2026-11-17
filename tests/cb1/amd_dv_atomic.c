@@ -9,6 +9,7 @@
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
+typedef uint64_t u64;
 #define BIT(n) (1u<<(n))
 #include "drm_dvbridge.h"
 enum amdgpu_transfer_function {AMDGPU_TRANSFER_FUNCTION_DEFAULT,AMDGPU_TRANSFER_FUNCTION_IDENTITY,AMDGPU_TRANSFER_FUNCTION_PQ};
@@ -19,7 +20,9 @@ enum {DRM_PLANE_TYPE_PRIMARY=1,DRM_PLANE_TYPE_CURSOR,DRM_FORMAT_XRGB8888,DRM_FOR
       COLOR_DEPTH_888,DRM_MODE_CONNECTOR_HDMIA,DRM_HDMI_BROADCAST_RGB_FULL,RMX_OFF,
       DRM_FORMAT_XRGB2101010,DRM_FORMAT_XBGR2101010,DITHER_OPTION_TRUN8,DITHER_OPTION_TRUN10,
       COLOR_SPACE_2020_YCBCR_LIMITED,PIXEL_ENCODING_YCBCR422,COLOR_DEPTH_101010};
-enum {DCE_VERSION_11_2=1,AMDGPU_LLDV_RGB10_LAB=3};
+enum {DCE_VERSION_11_2=1,AMDGPU_LLDV_RGB10_LAB=3,AMDGPU_LLDV_444_10=4};
+enum {DRM_OUTPUT_COLOR_FORMAT_YCBCR422=2,DRM_OUTPUT_COLOR_FORMAT_YCBCR444=1,
+      DRM_EDID_HDMI_DC_30=16,PIXEL_ENCODING_YCBCR444=88};
 enum {SHARPNESS_HW_OFF,SHARPNESS_ZERO,SHARPNESS_CUSTOM};
 enum {VISUAL_CONFIRM_DISABLE,VISUAL_CONFIRM_SURFACE};
 enum {DC_CM2_TRANSFER_FUNC_SOURCE_SYSMEM,DC_CM2_TRANSFER_FUNC_SOURCE_VIDMEM};
@@ -43,14 +46,14 @@ struct dc_stream_state {
  const struct dc_transfer_func *func_shaper;
  const struct dc_3dlut *lut3d_func;
  struct {struct dc_edid dc_edid;}*sink;
- bool dv_standard,dv_low_latency,dv_native_422;int dither_option,output_color_space,signal;
+ bool dv_standard,dv_low_latency,dv_native_lldv;int dither_option,output_color_space,signal;
  struct {int type;}out_transfer_func;
  struct {bool enable_remap;}gamut_remap_matrix;
  struct {bool enable_adjustment;}csc_color_matrix;
  struct {bool valid;}avi_infopacket,vsp_infopacket;
  struct {struct {bool INTERLACE,DSC;}flags;int timing_3d_format;
   int h_border_left,h_border_right,v_border_top,v_border_bottom;
-  int h_addressable,v_addressable,pixel_encoding,display_color_depth;}timing;
+  int h_addressable,v_addressable,pixel_encoding,display_color_depth,pix_clk_100hz;}timing;
  struct {int x,y,width,height;}src,dst;
 };
 struct dc_plane_state {
@@ -77,7 +80,12 @@ struct drm_crtc_state {
 };
 struct dm_crtc_state {struct drm_crtc_state base;struct dc_stream_state *stream;
  struct {int state;}freesync_config;enum amdgpu_transfer_function regamma_tf;};
-struct drm_connector {int connector_type;};
+struct drm_display_info {bool is_hdmi,has_hdmi_infoframe,only_420;unsigned color_formats;
+ int max_tmds_clock;unsigned edid_hdmi_ycbcr444_dc_modes;
+ struct {struct {bool supported;struct{bool supported;}scrambling;}scdc;}hdmi;};
+static bool drm_mode_is_420_only(const struct drm_display_info *i,const struct drm_display_mode *m)
+{(void)m;return i->only_420;}
+struct drm_connector {int connector_type;struct drm_display_info display_info;};
 struct drm_connector_state {struct drm_crtc *crtc;void *hdr_output_metadata,*hdr10plus_metadata;
  unsigned colorspace,max_requested_bpc;struct {int broadcast_rgb;}hdmi;};
 struct dm_connector_state {struct drm_connector_state base;bool dv_standard,hdr10_deep_color,underscan_enable;unsigned lldv_format;int scaling;};
@@ -104,7 +112,9 @@ static int hweight32(unsigned n){return __builtin_popcount(n);}
 static void checksum(u8*p){u8 n=0;p[127]=0;for(unsigned i=0;i<127;i++)n+=p[i];p[127]=-n;}
 static void check_transport(bool low_latency){
  struct dc display={0};struct dc_context ctx={.dc=&display};
- struct drm_crtc crtc={0};struct drm_connector connector={DRM_MODE_CONNECTOR_HDMIA};
+ struct drm_crtc crtc={0};struct drm_connector connector={DRM_MODE_CONNECTOR_HDMIA,
+  {.is_hdmi=true,.has_hdmi_infoframe=true,.color_formats=BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422),
+   .max_tmds_clock=600000}};
  struct drm_plane plane={DRM_PLANE_TYPE_PRIMARY};
  typeof(*((struct drm_framebuffer*)0)->format)format={DRM_FORMAT_XRGB8888};
  struct drm_framebuffer fb={&format,3840,2160};
@@ -180,6 +190,49 @@ static void check_transport(bool low_latency){
  display.debug.disable_spl=false;display.debug.force_sharpness=SHARPNESS_HW_OFF;
  assert(!amdgpu_dm_dv_atomic_check(&atomic));
  display.config.use_spl=false;dp.adaptive_sharpness_en=false;
+ if (low_latency) {
+  stream.dv_native_lldv=true;
+  stream.timing.pix_clk_100hz=cs.base.mode.clock*10;
+  stream.dither_option=DITHER_OPTION_TRUN10;
+  stream.output_color_space=COLOR_SPACE_2020_YCBCR_LIMITED;
+  stream.timing.pixel_encoding=PIXEL_ENCODING_YCBCR422;
+  stream.timing.display_color_depth=COLOR_DEPTH_101010;
+  format.format=DRM_FORMAT_XRGB2101010;
+  con.base.max_requested_bpc=10;
+  con.lldv_format=AMDGPU_LLDV_RGB10_LAB;
+  assert(dv_plane_neutral(&ps.base,&cs.base.mode,true));
+  assert(!amdgpu_dm_dv_atomic_check(&atomic));
+  REJECT(format.format,DRM_FORMAT_XRGB8888);
+  REJECT(stream.dither_option,DITHER_OPTION_TRUN8);
+  REJECT(stream.output_color_space,COLOR_SPACE_SRGB);
+  REJECT(stream.timing.pixel_encoding,PIXEL_ENCODING_RGB);
+  REJECT(stream.timing.display_color_depth,COLOR_DEPTH_888);
+  REJECT(con.base.max_requested_bpc,8);
+  REJECT(con.lldv_format,1);
+  ctx.dce_version=DCE_VERSION_11_2;ctx.asic_id.chip_id=0x699f;
+  assert(amdgpu_dm_dv_atomic_check(&atomic)==-EINVAL);
+  cs.base.mode=(struct drm_display_mode){3840,2160,24,296703,93};
+  stream.timing.pix_clk_100hz=cs.base.mode.clock*10;
+  assert(!amdgpu_dm_dv_atomic_check(&atomic));
+  REJECT(cs.base.mode.clock,297000);
+  con.lldv_format=AMDGPU_LLDV_444_10;
+  stream.timing.pixel_encoding=PIXEL_ENCODING_YCBCR444;
+  connector.display_info.color_formats|=BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR444);
+  connector.display_info.edid_hdmi_ycbcr444_dc_modes=DRM_EDID_HDMI_DC_30;
+  connector.display_info.hdmi.scdc.supported=true;
+  connector.display_info.hdmi.scdc.scrambling.supported=true;
+  b[11]|=1;b[13]=1;checksum(b);
+  assert(!amdgpu_dm_dv_atomic_check(&atomic));
+  REJECT(stream.timing.pixel_encoding,PIXEL_ENCODING_YCBCR422);
+  REJECT(stream.timing.pix_clk_100hz,2970000);
+  REJECT(con.lldv_format,AMDGPU_LLDV_RGB10_LAB);
+  REJECT(connector.display_info.edid_hdmi_ycbcr444_dc_modes,0);
+  REJECT(connector.display_info.max_tmds_clock,370878);
+  REJECT(connector.display_info.hdmi.scdc.supported,false);
+  REJECT(connector.display_info.hdmi.scdc.scrambling.supported,false);
+  b[12]=1;b[13]=0;checksum(b);
+  assert(amdgpu_dm_dv_atomic_check(&atomic)==-EINVAL);
+ }
  assert(!missed);
  /* A stop/ordinary commit is not constrained by the DV byte-preserving contract. */
  stream.dv_standard=false;stream.dv_low_latency=false;

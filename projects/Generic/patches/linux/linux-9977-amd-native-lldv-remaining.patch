@@ -1,0 +1,98 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -60,21 +60,8 @@
+ 
+ static bool dv_lldv_native_supported(enum dce_version version)
+ {
+-	/* These families share dcn20_program_pipe(), including its native
+-	 * 4:2:2 truncation and expansion controls. DCN2.01 uses dcn10_program_pipe().
+-	 */
+-	switch (version) {
+-	case DCN_VERSION_2_0: case DCN_VERSION_2_1:
+-	case DCN_VERSION_3_0: case DCN_VERSION_3_01:
+-	case DCN_VERSION_3_02: case DCN_VERSION_3_03:
+-	case DCN_VERSION_3_1: case DCN_VERSION_3_14:
+-	case DCN_VERSION_3_15: case DCN_VERSION_3_16:
+-	case DCN_VERSION_3_2: case DCN_VERSION_3_21:
+-	case DCN_VERSION_3_5: case DCN_VERSION_3_51: case DCN_VERSION_3_6:
+-		return true;
+-	default:
+-		return false;
+-	}
++	/* DCE11.2 admission remains restricted to RX550 by dv_rx550(). */
++	return dv_display_supported(version) || version == DCE_VERSION_11_2;
+ }
+ 
+ void amdgpu_dm_dv_attach(struct amdgpu_dm_connector *connector)
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+@@ -299,7 +299,7 @@
+ 	tf = &plane_state->in_transfer_func;
+ 
+ 	dce110_prescale_params(&prescale_params, plane_state);
+-	if (pipe_ctx->stream->dv_standard)
++	if (pipe_ctx->stream->dv_standard && !pipe_ctx->stream->dv_native_422)
+ 		prescale_params.mode = IPP_PRESCALE_MODE_BYPASS_LUT;
+ 	ipp->funcs->ipp_program_prescale(ipp, &prescale_params);
+ 
+@@ -1635,12 +1635,13 @@
+ static void dce110_program_stream_expansion(struct output_pixel_processor *opp,
+ 					   const struct dc_stream_state *stream)
+ {
+-	/* Undefined depth clears FMT expansion without re-enabling it. Only
+-	 * the packed Polaris byte stream needs this override on DCE.
++	/* Native 4:2:2 keeps its low bits clear, and Polaris tunnel bytes
++	 * must not be expanded. Undefined depth disables FMT expansion.
+ 	 */
+ 	enum dc_color_depth depth = stream->timing.display_color_depth;
+ 
+-	if (stream->dv_standard && stream->ctx->dce_version == DCE_VERSION_11_2)
++	if (stream->dv_native_422 ||
++	    (stream->dv_standard && stream->ctx->dce_version == DCE_VERSION_11_2))
+ 		depth = COLOR_DEPTH_UNDEFINED;
+ 	opp->funcs->opp_set_dyn_expansion(opp, COLOR_SPACE_YCBCR601, depth,
+ 					  stream->signal);
+@@ -2772,6 +2773,7 @@
+ 
+ 	/* Select the native sRGB bypass instead of its programmable identity. */
+ 	default_adjust.force_hw_default = pipe_ctx->stream->dv_standard &&
++		!pipe_ctx->stream->dv_native_422 &&
+ 		pipe_ctx->stream->ctx->dce_version == DCE_VERSION_11_2;
+ 	default_adjust.in_color_space = pipe_ctx->plane_state->color_space;
+ 	default_adjust.out_color_space = pipe_ctx->stream->output_color_space;
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+@@ -1521,8 +1521,9 @@
+ 		const struct dc_stream_state *stream)
+ {
+ 	/* RGB8 tunnel bytes must not pass through DCE's 10-bit normalization. */
+-	if (stream->dv_standard && (plane_state->ctx->dce_version == DCE_VERSION_11_22 ||
+-				    plane_state->ctx->dce_version == DCE_VERSION_11_2))
++	if (stream->dv_standard && !stream->dv_native_422 &&
++	    (plane_state->ctx->dce_version == DCE_VERSION_11_22 ||
++	     plane_state->ctx->dce_version == DCE_VERSION_11_2))
+ 		return LB_PIXEL_DEPTH_24BPP;
+ 	return plane_state->ctx->dce_version > DCE_VERSION_MAX ?
+ 		LB_PIXEL_DEPTH_36BPP : LB_PIXEL_DEPTH_30BPP;
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
+@@ -2311,6 +2311,7 @@
+ 		pipe_ctx->stream_res.opp->funcs->opp_set_dyn_expansion(
+ 			pipe_ctx->stream_res.opp,
+ 			COLOR_SPACE_YCBCR601,
++			pipe_ctx->stream->dv_native_422 ? COLOR_DEPTH_UNDEFINED :
+ 			pipe_ctx->stream->timing.display_color_depth,
+ 			pipe_ctx->stream->signal);
+ 
+@@ -2468,6 +2469,7 @@
+ 		|| pipe_ctx->update_flags.bits.opp_changed) {
+ 
+ 		hwss_add_opp_set_dyn_expansion(seq_state, pipe_ctx->stream_res.opp, COLOR_SPACE_YCBCR601,
++			pipe_ctx->stream->dv_native_422 ? COLOR_DEPTH_UNDEFINED :
+ 			pipe_ctx->stream->timing.display_color_depth, pipe_ctx->stream->signal);
+ 
+ 		hwss_add_opp_program_fmt(seq_state, pipe_ctx->stream_res.opp,

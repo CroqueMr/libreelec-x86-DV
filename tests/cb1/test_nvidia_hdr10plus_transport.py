@@ -32,7 +32,7 @@ typedef struct {struct Dev*pDevEvo;struct {unsigned activeRmId;struct NvKmsCb1Hd
 typedef struct Dev {unsigned numApiHeads;NVDispEvoRec*pDispEvo[1];struct {int supportsGenericSharedInfoFrames;}caps;} NVDevEvoRec;
 typedef struct {int hdmi;} NVDpyEvoRec;
 typedef struct {int changed,dpyIdList;unsigned hwHeadsMask;struct {NVDpyAttributeColor color;}attributes;
- NVDispHeadInfoFrameStateEvoRec infoFrame;struct NvKmsCb1Hdr cb1Hdr;int cb1Primary;unsigned cb1Slot;} NVProposedModeSetStateOneApiHead;
+ NVDispHeadInfoFrameStateEvoRec infoFrame;struct NvKmsCb1Hdr cb1Hdr;int cb1Primary;unsigned cb1Slot;NvBool nativeLldv;} NVProposedModeSetStateOneApiHead;
 typedef struct {NVProposedModeSetStateOneApiHead apiHead[1];struct {NVHwModeTimingsEvo timings;void*pConnectorEvo;}head[1];} NVProposedModeSetHwStateOneDisp;
 typedef struct {struct {NVFlipEvoHwState flip;}head[1];} NVProposedModeSetHwStateOneSubDev;
 struct NvKmsSetModeOneDispReply {struct {int status;}head[1];};
@@ -40,6 +40,9 @@ struct NvKmsSetModeOneDispReply {struct {int status;}head[1];};
 #define nvDpyIdListIsEmpty(x) (!(x))
 #define nvOverrideScalingUsageBounds(...) ((void)0)
 #define nvValidateFlipEvoHwState(...) NV_TRUE
+#define nvIsNativeLldvSurface(...) NV_FALSE
+#define nvNativeLldvSurfaceBits(...) 0
+#define NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_12 12
 /* The packet/depth contract is tested separately; isolate native slot handoff. */
 #define nvCb1HdrValidate(d,c,t,i,f,h,p,s) (*(s)=0,NV_TRUE)
 static NVDpyEvoRec testDpy={1};

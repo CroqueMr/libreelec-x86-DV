@@ -68,6 +68,7 @@ typedef struct {int unused;} NVDpyAttributeColor;
 struct NvKmsCb1Vsif {NvU8 payload[27];NvU32 payloadSize;};
 struct NvKmsHDRStaticMetadata {NvU16 data[12];};
 typedef struct {struct NvKmsCb1Vsif hdmiVsifMetadata;
+ NvBool bypassComposition;
  struct {int state,eotf;struct NvKmsHDRStaticMetadata staticMetadata;}hdrInfoFrame;} NVDispHeadStateEvoRec;
 typedef struct NVDispEvoRec NVDispEvoRec;
 typedef struct {struct {

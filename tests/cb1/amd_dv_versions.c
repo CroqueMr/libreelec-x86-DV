@@ -10,6 +10,7 @@
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
+typedef uint64_t u64;
 #define BIT(n) (1u<<(n))
 struct device;
 #include "hdmi-test.h"
@@ -21,7 +22,9 @@ enum {DRM_MODE_CONNECTOR_HDMIA=1, SIGNAL_TYPE_HDMI_TYPE_A=2,
       RMX_OFF=6, COLOR_SPACE_SRGB=7, TF_TYPE_BYPASS=8,
       TRANSFER_FUNCTION_LINEAR=9, DITHER_OPTION_DISABLE=10, DITHER_OPTION_TRUN8=11,
       DITHER_OPTION_TRUN10,PIXEL_ENCODING_YCBCR422,COLOR_DEPTH_101010,COLOR_SPACE_2020_YCBCR_LIMITED};
-enum {AMDGPU_LLDV_RGB10_LAB=3,DRM_OUTPUT_COLOR_FORMAT_YCBCR422=2};
+enum {AMDGPU_LLDV_RGB10_LAB=3,AMDGPU_LLDV_444_10=4};
+enum {DRM_OUTPUT_COLOR_FORMAT_YCBCR422=2,DRM_OUTPUT_COLOR_FORMAT_YCBCR444=1,
+      DRM_EDID_HDMI_DC_30=16,PIXEL_ENCODING_YCBCR444=88};
 enum {DRM_MODE_FLAG_INTERLACE=1, DRM_MODE_FLAG_DBLSCAN=2,
       DRM_MODE_FLAG_DBLCLK=4, DRM_MODE_FLAG_3D_MASK=8};
 struct dc_edid {unsigned length; u8 raw_edid[256];};
@@ -29,6 +32,8 @@ struct drm_display_info {
     bool is_hdmi,has_hdmi_infoframe,only_420;
     unsigned color_formats;
     int max_tmds_clock;
+    unsigned edid_hdmi_ycbcr444_dc_modes;
+    struct {struct {bool supported;struct{bool supported;}scrambling;}scdc;}hdmi;
 };
 struct drm_connector {
     int connector_type;
@@ -50,7 +55,7 @@ struct dc_stream_state {
     struct {struct dc_edid dc_edid;}*sink;
     struct dc_context *ctx;
     struct {int connector_signal;}*link;
-    bool dv_standard,dv_low_latency,dv_native_422;
+    bool dv_standard,dv_low_latency,dv_native_lldv;
     int signal,output_color_space,dither_option,qs_bit;
     struct {int type,tf;}out_transfer_func;
     struct {int pixel_encoding,display_color_depth,h_addressable,v_addressable;
@@ -111,9 +116,112 @@ int main(void){
     mode.clock=296703; mode.vic=93; mode.refresh=24; s.timing.pix_clk_100hz=2967030;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
     assert(s.dv_standard && !s.dv_low_latency && s.dither_option==DITHER_OPTION_TRUN8);
-    state.lldv_format=1; state.dv_standard=false; dv_lldv=true;
+    c.lldv_format_property=true;
+    state.lldv_format=1;
+    state.dv_standard=false;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==0);
+    assert(s.dv_low_latency && !s.dv_native_lldv && s.dither_option==DITHER_OPTION_TRUN8);
+    assert(s.vsp_infopacket.sb[4]==3 && !sum(&s.vsp_infopacket));
+    assert((s.avi_infopacket.sb[1] >> 5)==HDMI_COLORSPACE_YUV422);
+    assert(s.timing.pixel_encoding==PIXEL_ENCODING_RGB &&
+           s.timing.display_color_depth==COLOR_DEPTH_888);
+    mode.clock=297000;
     assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
-    state.lldv_format=0; dv_lldv=false;
+    mode.clock=296703;
+    mode.vic=95;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    mode.vic=93;
+    state.lldv_format=AMDGPU_LLDV_RGB10_LAB;
+    assert(amdgpu_dm_dv_configure_stream(&s,&state,&mode)==-EOPNOTSUPP);
+    {
+        const enum dce_version native_families[] = {
+            DCE_VERSION_11_2, DCE_VERSION_11_22,
+            DCN_VERSION_1_0, DCN_VERSION_1_01, DCN_VERSION_2_01,
+            DCN_VERSION_4_01, DCN_VERSION_4_2, DCN_VERSION_4_2B,
+            DCN_VERSION_2_0, DCN_VERSION_2_1,
+            DCN_VERSION_3_0, DCN_VERSION_3_01, DCN_VERSION_3_02, DCN_VERSION_3_03,
+            DCN_VERSION_3_1, DCN_VERSION_3_14, DCN_VERSION_3_15, DCN_VERSION_3_16,
+            DCN_VERSION_3_2, DCN_VERSION_3_21, DCN_VERSION_3_5, DCN_VERSION_3_51, DCN_VERSION_3_6
+        };
+        c.base.display_info.color_formats = BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422);
+        c.base.display_info.max_tmds_clock = 600000;
+        for (unsigned i = 0; i < sizeof(native_families) / sizeof(native_families[0]); ++i) {
+            struct dc_context native_ctx = {.dce_version = native_families[i], .asic_id.chip_id = 0x699f};
+            struct dm_connector_state native_state = state;
+            struct dc_stream_state native_stream = s;
+            native_stream.ctx = &native_ctx;
+            native_state.base.max_requested_bpc = 10;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == 0);
+            assert(native_stream.dv_native_lldv && native_stream.dv_low_latency);
+            assert(native_stream.timing.pixel_encoding == PIXEL_ENCODING_YCBCR422);
+            assert(native_stream.timing.display_color_depth == COLOR_DEPTH_101010);
+            assert(native_stream.output_color_space == COLOR_SPACE_2020_YCBCR_LIMITED);
+            assert(native_stream.dither_option == DITHER_OPTION_TRUN10);
+            assert(native_stream.out_transfer_func.type == TF_TYPE_BYPASS);
+            assert(native_stream.vsp_infopacket.sb[4] == 3 && !sum(&native_stream.vsp_infopacket));
+            assert((native_stream.avi_infopacket.sb[1] >> 5) == HDMI_COLORSPACE_YUV422);
+            if (native_families[i] == DCE_VERSION_11_2) {
+                native_ctx.asic_id.chip_id = 0x67df;
+                assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+                native_ctx.asic_id.chip_id = 0x699f;
+                mode.clock = 297000;
+                assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+                mode.clock = 296703;
+            }
+            {
+                struct dc_stream_state y444 = s;
+                struct dm_connector_state selected = native_state;
+                y444.ctx = &native_ctx;
+                selected.lldv_format = AMDGPU_LLDV_444_10;
+                c.base.display_info.color_formats |= BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR444);
+                c.base.display_info.edid_hdmi_ycbcr444_dc_modes = DRM_EDID_HDMI_DC_30;
+                c.base.display_info.hdmi.scdc.supported = true;
+                c.base.display_info.hdmi.scdc.scrambling.supported = true;
+                sink.dc_edid.raw_edid[139] |= 1;
+                sink.dc_edid.raw_edid[141] = 1;
+                checksum(sink.dc_edid.raw_edid+128);
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == 0);
+                assert(y444.dv_native_lldv && y444.timing.pixel_encoding == PIXEL_ENCODING_YCBCR444);
+                assert(y444.timing.display_color_depth == COLOR_DEPTH_101010);
+                assert(y444.output_color_space == COLOR_SPACE_2020_YCBCR_LIMITED);
+                assert(y444.dither_option == DITHER_OPTION_TRUN10);
+                assert((y444.avi_infopacket.sb[1] >> 5) == HDMI_COLORSPACE_YUV444);
+                assert(!sum(&y444.avi_infopacket) && !sum(&y444.vsp_infopacket));
+                y444 = s; y444.ctx = &native_ctx;
+                c.base.display_info.max_tmds_clock = 370878;
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == -EOPNOTSUPP);
+                c.base.display_info.max_tmds_clock = 370879;
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == 0);
+                y444 = s; y444.ctx = &native_ctx;
+                c.base.display_info.hdmi.scdc.supported = false;
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == -EOPNOTSUPP);
+                c.base.display_info.hdmi.scdc.supported = true;
+                c.base.display_info.hdmi.scdc.scrambling.supported = false;
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == -EOPNOTSUPP);
+                c.base.display_info.hdmi.scdc.scrambling.supported = true;
+                c.base.display_info.edid_hdmi_ycbcr444_dc_modes = 0;
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == -EOPNOTSUPP);
+                c.base.display_info.edid_hdmi_ycbcr444_dc_modes = DRM_EDID_HDMI_DC_30;
+                sink.dc_edid.raw_edid[141] = 0;
+                checksum(sink.dc_edid.raw_edid+128);
+                assert(amdgpu_dm_dv_configure_stream(&y444, &selected, &mode) == -EOPNOTSUPP);
+                c.base.display_info.max_tmds_clock = 600000;
+            }
+            native_state.base.max_requested_bpc = 8;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            native_state.base.max_requested_bpc = 12;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            native_state.base.max_requested_bpc = 10;
+            c.base.display_info.only_420 = true;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EOPNOTSUPP);
+            c.base.display_info.only_420 = false;
+            native_state.base.hdr_output_metadata = &native_state;
+            assert(amdgpu_dm_dv_configure_stream(&native_stream, &native_state, &mode) == -EINVAL);
+        }
+        c.base.display_info.color_formats = 0;
+        c.base.display_info.max_tmds_clock = 0;
+    }
+    state.lldv_format=0;
     struct dc_stream_state ordinary=s;
     ordinary.dv_standard=false; ordinary.dither_option=DITHER_OPTION_DISABLE;
     ordinary.vsp_infopacket.valid=false;

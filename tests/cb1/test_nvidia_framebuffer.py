@@ -30,7 +30,7 @@ class NvidiaFramebuffer(unittest.TestCase):
 #include <cstring>
 #include <cerrno>
 constexpr unsigned DRM_FORMAT_XRGB8888=1,DRM_FORMAT_XRGB2101010=2,DRM_FORMAT_ARGB8888=3,
- DRM_FORMAT_ARGB2101010=4,DRM_FORMAT_XBGR2101010=5,DRM_FORMAT_ABGR2101010=6,DRM_FORMAT_ABGR16161616F=7;
+ DRM_FORMAT_ARGB2101010=4,DRM_FORMAT_XBGR2101010=5,DRM_FORMAT_ABGR2101010=6,DRM_FORMAT_ABGR16161616F=7,DRM_FORMAT_ABGR16161616=8;
 #define HAS_GBM_MODIFIERS
 constexpr uint64_t DRM_FORMAT_MOD_LINEAR=0,DRM_FORMAT_MOD_INVALID=0x00ffffffffffffffull;
 constexpr uint64_t EXPLICIT_MODIFIER=0x0200000000000001ull;
@@ -84,6 +84,7 @@ int main(){CDRMUtils drm;gbm_bo bo;
  rejectExplicit=false;
  assert(drm.DrmOpaqueFbGetFromBo(&bo)==23 && calls==4);
  drm.fb.format=DRM_FORMAT_ABGR16161616F;assert(drm.DrmOpaqueFbGetFromBo(&bo)==12);
+ drm.fb.format=DRM_FORMAT_ABGR16161616;assert(drm.DrmOpaqueFbGetFromBo(&bo)==12);
  drm.fb.format=99;assert(drm.DrmOpaqueFbGetFromBo(&bo)==0);
 }
 '''.replace('METHOD',method))

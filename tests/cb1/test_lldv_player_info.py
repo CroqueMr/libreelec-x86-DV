@@ -148,6 +148,19 @@ int main()
     assert(info.TransmittedBlocks().none());
   }
 
+  using Encoding = VideoProcessingInfo::PlayerLed::Encoding;
+  for (const auto format : {LldvFormat::Rgb12, LldvFormat::Y444_10, LldvFormat::Y444_12})
+  {
+    const unsigned bits = LldvUses10Bits(format) ? 10 : 12;
+    connector.sink.lldv_444_bits=bits;
+    connector.active=packed.format=format;
+    connector.driverFormats=LldvBit(format);
+    connector.activeRgbScanoutBits=packed.rgbScanoutBits=bits == 10 ? 10 : 16;
+    output=outputFor(CB1_MASTER_READY,id,id,false);
+    assert(output && output->bits==bits && output->minimumLinkBits==bits);
+    assert(output->lldv->encoding==(format == LldvFormat::Rgb12 ? Encoding::RGB : Encoding::YCbCr444));
+  }
+
   // A pending/failed frame has no accepted summary. TV-led and native SDR replace it.
   assert(!outputFor(CB1_MASTER_FAILED,{8,1,10},{8,1,10},false));
   assert(source.output.lldv && source.output.stream==id.stream);

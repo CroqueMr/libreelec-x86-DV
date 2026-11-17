@@ -18,7 +18,11 @@ class IntelScanoutColor(unittest.TestCase):
 #include <stdint.h>
 #include <stddef.h>
 #define EINVAL 22
+typedef uint32_t u32;
 #define DRM_FORMAT_XRGB8888 1
+#define DRM_FORMAT_XRGB2101010 2
+#define DRM_FORMAT_XBGR2101010 3
+#define HDMI_DOLBY_IEEE_OUI 0x00d046
 #define DRM_MODE_ROTATE_0 1
 #define ICL_CSC_ENABLE (1U<<31)
 #define ICL_OUTPUT_CSC_ENABLE (1U<<30)
@@ -38,6 +42,8 @@ struct intel_crtc{struct drm_crtc base;};
 struct intel_crtc_state{struct{bool active;struct{unsigned hdisplay,vdisplay;}adjusted_mode;
  void*ctm,*degamma_lut,*gamma_lut;}hw;void*pre_csc_lut,*post_csc_lut;
  bool gamma_enable,csc_enable,dither,dv;unsigned gamma_mode,csc_mode;
+ unsigned pipe_bpp;
+ struct {struct {struct {struct {unsigned oui;} any;struct {bool low_latency;} dolby;} vendor;} hdmi;} infoframes;
  struct{bool enable;}vrr;struct{bool compression_enable;}dsc;struct{int scaler_users;}scaler_state;
  struct{unsigned plane_mask;}uapi;};
 struct intel_atomic_state{int base;struct intel_crtc_state*s;};
@@ -73,6 +79,17 @@ int main(void){
   if(scenario==9){s.dv=false;p.uapi.color_pipeline=&p;s.csc_mode=ICL_CSC_ENABLE;}
   assert(intel_dv_lab_scanout_check(&a,&crtc)==want);s=before;
  }
+ p.uapi.color_pipeline=NULL;
+ s.pipe_bpp=30;
+ s.infoframes.hdmi.vendor.any.oui=HDMI_DOLBY_IEEE_OUI;
+ s.infoframes.hdmi.vendor.dolby.low_latency=true;
+ assert(intel_dv_lab_scanout_check(&a,&crtc)==-EINVAL);
+ format.format=DRM_FORMAT_XRGB2101010;
+ assert(intel_dv_lab_scanout_check(&a,&crtc)==0);
+ format.format=DRM_FORMAT_XBGR2101010;
+ assert(intel_dv_lab_scanout_check(&a,&crtc)==0);
+ s.infoframes.hdmi.vendor.dolby.low_latency=false;
+ assert(intel_dv_lab_scanout_check(&a,&crtc)==-EINVAL);
 }
 '''.replace('@@OWNER@@',function(source,'intel_dv_lab_scanout_check'))
         with tempfile.TemporaryDirectory() as tmp:
