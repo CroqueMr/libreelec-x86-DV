@@ -136,7 +136,9 @@ enum { DRM_MODE_CONNECTOR_HDMIA=1, DRM_MODE_CONNECTOR_DisplayPort=2 };
 enum { DRM_MODE_COLORIMETRY_BT2020_RGB=1, DRM_MODE_COLORIMETRY_BT2020_YCC=2 };
 enum { HDMI_EOTF_SMPTE_ST2084=2, DRM_OUTPUT_COLOR_FORMAT_YCBCR422=3 };
 enum { DRM_EDID_YCBCR420_DC_30=1, DRM_EDID_YCBCR420_DC_36=2, DRM_EDID_YCBCR420_DC_48=4 };
-enum signal_type { SIGNAL_TYPE_HDMI_TYPE_A, SIGNAL_TYPE_DISPLAY_PORT };
+enum signal_type { SIGNAL_TYPE_HDMI_TYPE_A, SIGNAL_TYPE_DISPLAY_PORT, SIGNAL_TYPE_HDMI_FRL };
+static __attribute__((unused)) bool dc_is_hdmi_signal(enum signal_type signal)
+{ return signal==SIGNAL_TYPE_HDMI_TYPE_A || signal==SIGNAL_TYPE_HDMI_FRL; }
 enum dc_color_depth { COLOR_DEPTH_UNDEFINED, COLOR_DEPTH_666, COLOR_DEPTH_888,
  COLOR_DEPTH_101010, COLOR_DEPTH_121212, COLOR_DEPTH_141414, COLOR_DEPTH_161616,
  COLOR_DEPTH_999, COLOR_DEPTH_111111 };
@@ -252,6 +254,15 @@ int main(void) {
  struct drm_crtc_state cs={true,&final};
  struct drm_atomic_commit commit={&state.base,&cs};
  assert(amdgpu_dm_hdr10_atomic_check(&commit)==0);
+ final.signal=SIGNAL_TYPE_HDMI_FRL;
+ final.timing.pixel_encoding=PIXEL_ENCODING_RGB;
+ final.timing.display_color_depth=COLOR_DEPTH_121212;
+ assert(amdgpu_dm_hdr10_atomic_check(&commit)==0);
+ final.timing.display_color_depth=COLOR_DEPTH_101010;
+ assert(amdgpu_dm_hdr10_atomic_check(&commit)==0);
+ link.connector_signal=SIGNAL_TYPE_DISPLAY_PORT;
+ assert(amdgpu_dm_hdr10_atomic_check(&commit)==-EINVAL);
+ link.connector_signal=SIGNAL_TYPE_HDMI_TYPE_A;
  final.timing.display_color_depth=COLOR_DEPTH_888;
  assert(amdgpu_dm_hdr10_atomic_check(&commit)==-EINVAL);
  final.timing.display_color_depth=COLOR_DEPTH_999;
