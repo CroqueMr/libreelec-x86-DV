@@ -109,7 +109,7 @@ struct CLog {template<class...T>static void Log(T...) {}};
 namespace DVBRIDGE {enum class OutputRoute {NativeDV,HDR10,Vanilla};}
 struct WindowBase {virtual ~WindowBase()=default;
  virtual bool SetVideoOutput(const VideoPicture*)=0;
- virtual void SetColorimetry(const VideoPicture*)=0;
+ virtual void SetColorimetry(const VideoPicture*, bool=false)=0;
  virtual bool SetHDR(const VideoPicture*)=0;
  virtual bool SetGuiCompositing(int)=0;
 };
@@ -119,7 +119,7 @@ struct CWinSystemGbmGLESContext:WindowBase {
  DVBRIDGE::OutputRoute route=DVBRIDGE::OutputRoute::NativeDV;
  static bool DVBridgeRequested(const VideoPicture*);
  bool SetVideoOutput(const VideoPicture*)override {return true;}
- void SetColorimetry(const VideoPicture*)override {}
+ void SetColorimetry(const VideoPicture*, bool)override {}
  bool SetHDR(const VideoPicture*)override {return true;}
  bool SetGuiCompositing(int)override {return true;}
  bool HasPendingDVBridgeRestore(){return false;}

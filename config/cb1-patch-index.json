@@ -2022,5 +2022,16 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Request a GUI redraw while the previous output is stopping.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose a pending output stop to the renderer."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": {
+    "owner": "Signal the output gamut of native SDR Kodi shaders on GBM.",
+    "files": {
+      "xbmc/windowing/WinSystem.h": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Carry the rendered SDR gamut to the connector.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Use the gamut produced by the native SDR video shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Use the gamut produced by the native SDR video shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Use the gamut produced by the native SDR video shader."
+    }
   }
 }
