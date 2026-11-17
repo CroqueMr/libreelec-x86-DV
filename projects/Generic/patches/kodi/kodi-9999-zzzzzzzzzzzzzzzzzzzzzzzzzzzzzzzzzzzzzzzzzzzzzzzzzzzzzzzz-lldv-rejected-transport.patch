@@ -831,7 +831,13 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
  {
    CDRMCrtc* oldCrtc = m_old_crtc;
    const auto reject = [&](const char* stage, int error) {
-@@ -403,6 +404,8 @@
+@@ -399,10 +400,13 @@
+   auto ret = TestAtomicFrame(flags, frameMetadata);
+   if (ret < 0)
+   {
+-    const int testError = errno;
++    // libdrm returns a negative errno from the ioctl and -1 for some local failures.
++    const int testError = ret == -1 ? errno : -ret;
      if (strict || m_req->sdrRestore || frameMetadata || m_colorRangeTransition ||
          (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
      {
@@ -840,7 +846,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
        return reject("atomic-test", testError);
      }
      CLog::LogF(LOGERROR,
-@@ -614,8 +617,11 @@
+@@ -614,8 +618,11 @@
    return true;
  }
 
@@ -854,7 +860,7 @@ diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAt
    if (m_cb1Pending) return false;
    // The window owns the bounded retry decision after coherent restoration.
    m_dvRestoring = restore;
-@@ -645,7 +651,7 @@
+@@ -645,7 +652,7 @@
    const int flags = (m_need_modeset || m_dvActivating || restore)
                          ? DRM_MODE_ATOMIC_ALLOW_MODESET :
                              asynchronous ? DRM_MODE_ATOMIC_NONBLOCK : 0;

@@ -490,10 +490,14 @@ struct Request {
  void LogAtomicRequest(){} static void LogAtomicDiff(Request*,Request*){}
 };
 bool rejectTest=false,rejectCommit=false;unsigned realCommits=0;
-int atomicErrno=EBUSY;
+int atomicErrno=EBUSY, signedTestError=0;
 std::map<std::string,uint64_t> signal;
 int drmModeAtomicCommit(int,Request* request,int flags,void*){
- if((flags&DRM_MODE_ATOMIC_TEST_ONLY)?rejectTest:rejectCommit){errno=atomicErrno;return -1;}
+ const bool test=flags&DRM_MODE_ATOMIC_TEST_ONLY;
+ if(test?rejectTest:rejectCommit){
+  errno=atomicErrno;
+  return test && signedTestError ? signedTestError : -1;
+ }
  if(!(flags&DRM_MODE_ATOMIC_TEST_ONLY)){
   ++realCommits;
   for(auto& [object,props]:request->values)for(auto& [key,value]:props)signal[key]=value;
@@ -543,11 +547,13 @@ int main(int argc,char** argv){
   atomicErrno=scenario==12 || scenario==15 || scenario==16 || scenario==17 ? EINVAL :
       scenario==13 ? EOPNOTSUPP : EBUSY;
   if(scenario==16)Request::rejectFramebuffer=true;
+  if(scenario==18)signedTestError=-EOPNOTSUPP; // errno remains EBUSY
+  if(scenario==19){signedTestError=-ENOMEM;atomicErrno=EINVAL;}
   if(scenario==17){
    drm.connector.cache["CB1_LLDV_FORMAT"]=signal["CB1_LLDV_FORMAT"]=1;
   }
   assert(!drm.DrmAtomicCommit(42,modeFlags,true,false,true,&formatRejected));
-  assert(formatRejected==(scenario==12 || scenario==13));
+  assert(formatRejected==(scenario==12 || scenario==13 || scenario==18));
   assert(realCommits==0);
   return 0;
  }
@@ -654,7 +660,7 @@ int main(int argc,char** argv){
                                     '-fsanitize=address,undefined', str(code), '-o', str(binary)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            for scenario in range(18):
+            for scenario in range(20):
                 with self.subTest(scenario=scenario):
                     run = subprocess.run([str(binary), str(scenario)], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stdout + run.stderr)

@@ -70,7 +70,7 @@
     "tests/cb1/test_gui_viewport.py": "a25a487cf7e0b9db346e4a1e30fc4f1b8befeca964bcf528bdeb58f10fbea7b5",
     "tests/cb1/test_gui_composite_clip.py": "d6b87dcc778f9db5d1c5876e8cbe2399de52a66a4644855a8d258b6b3e6d5aa5",
     "tests/cb1/test_nvidia_buffer_restore.py": "c18f49eae0fc90ead1b21a7d10baefc2978bfc53ac0c182156493009d72b94dd",
-    "tests/cb1/test_sdr_output_restore.py": "ca75e7ae1985329df4a10c539fdb0c528d0da44a23050be2bb0f81724c82c920",
+    "tests/cb1/test_sdr_output_restore.py": "1a4a615a1534cc368317ef6b3a52be3396ee4afeb99c0b4ab5ce2fc5e4ce974b",
     "tests/cb1/test_nvidia_transitions.py": "266bf0147142144b2697fb906c37f3a0166badf30139626c59c87b286cf21089",
     "projects/Generic/patches/linux/0101-drm-edid-add-half-sbs-1080p-stereo-modes.patch": "e15386346771ced1a127e1c0979ba38388d43cd40c363ed38d310835df821516",
     "projects/Generic/patches/linux/0102-wifi-mt76-mt7921-keep-join-roc-until-authorized.patch": "9ff214adc2fb0f219eb64fad4948b4fb1d5fbca344ae96f4722c2d2f20f9e7dc",
@@ -313,7 +313,7 @@
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "cb704114ed95ebc2d6c50aa410f71ec1eb1a74f6c94bfd18d66c09b0e1331032",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "372986bc8bacd0cb68ca4af440a0b255e2954b1f357cfe84a3fbb9199b8b561d",
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": "13ac6679cdab12ad76654db35cef6f8d7326fcb16da7cbbcc7553681020d8bfa",
-    "tests/cb1/test_diagnostics_runtime.py": "b1b08cfecf9055461fd40a294cf8846f093edba22d2082c0414ea8acefa3b981",
+    "tests/cb1/test_diagnostics_runtime.py": "95ce20fb327621ec2676b28a137b641d1728b06b3edfe08998edcb43991d93e7",
     "tests/cb1/test_fel_facts.py": "39717d8a179e5f2f71798f5a9382a6476aba23dfaf0047e7513387aaebc5461c",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "c08a48036ce3ea5c082f54036a7def395cf44af859053a9998ea64bfe30bb4dc",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "0257bdfe0ae6c0963b3dd91b0548e518e24e1ec46dba446222dff87cca113045",
@@ -449,7 +449,7 @@
     "tests/cb1/test_hybrid_source_preference.py": "029283d430070226f4ca4adedf18d1b9e5fc18d56c7a4e36a9c9b61d8b90f954",
     "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": "a3399f38cee9cbecd97d97f635f145b942807cca0979f959e7c46017a1b4ffd6",
     "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": "a8c40d82c2fd2b2426feb79b1c9bf64f9a8477e5868f94c64964cae046e8fb23",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": "ad8caded869d4738273b41cbbee6eacb90993e8a5951a7bcff13edd75792d2d8"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": "d920785942875877da8e5136c2ce98d77eb9fdbd05c06fbc87b3d8e47d4a573c"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

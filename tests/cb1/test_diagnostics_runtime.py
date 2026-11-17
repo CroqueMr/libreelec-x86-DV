@@ -764,7 +764,7 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
-  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const {return m_dvLldvStatus;}
+  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus(bool = false) const {return m_dvLldvStatus;}
   bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
   bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
   bool SupportsNativeDVOutput(bool current=true) const {return !current || m_DRM->rate<=60;}
