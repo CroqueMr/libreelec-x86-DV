@@ -28,7 +28,7 @@ int main(int argc, char** argv)
   assert(chunk > 0);
   CAEStreamParser parser;
   const auto enabled = [&](char c) { return options.find(c) != std::string::npos; };
-  parser.SetDialnorm(enabled('d'), enabled('j'), enabled('p'), enabled('t'), enabled('s'));
+  parser.SetDialnorm(enabled('d'), enabled('p'), enabled('t'), enabled('s'));
   parser.SetCoreOnly(enabled('c'));
   uint8_t* packet = nullptr;
   unsigned int packetSize = 0;
@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     assert(consumed || packetSize);
     pos += consumed;
     if (packetSize && enabled('l'))
-      parser.SetDialnorm(true, false, false, false, false);
+      parser.SetDialnorm(true, false, false, false);
   }
   delete[] packet;
   assert(data == original);
@@ -197,7 +197,7 @@ class PassthroughDialnorm(unittest.TestCase):
                                              '-f', 'null', '-'], capture_output=True)
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
 
-    def test_joc_opt_in_dual_mono_and_dependent_substream(self):
+    def test_preserve_joc_passthrough_and_keep_dual_mono_and_dependent_substreams(self):
         plain = eac3_header(dual=True)
         joc = eac3_header(joc=True)
         dependent = eac3_header(stream_type=1)
@@ -207,11 +207,13 @@ class PassthroughDialnorm(unittest.TestCase):
         expected = seal_eac3(expected)
         self.assertTrue(self.parse((plain + dependent) * 3, 'd').startswith(expected + dependent))
         self.assertTrue(self.parse(plain * 3, 'l').startswith(plain + expected))
-        self.assertTrue(self.parse(joc * 3, 'd').startswith(joc))
-        self.assertTrue(self.parse(plain * 3, 'dp').startswith(plain))
-        rewritten = bytearray(joc)
-        putbits(rewritten, 45, 5, 31)
-        self.assertTrue(self.parse(joc * 3, 'dj').startswith(seal_eac3(rewritten)))
+        for chunk_size in (19, 67, 256):
+            with self.subTest(chunk_size=chunk_size):
+                for data, option in ((joc * 3, 'd'), (plain * 3, 'dp'),
+                                     ((joc + dependent) * 3, 'd')):
+                    passthrough = self.parse(data, chunk=chunk_size)
+                    self.assertTrue(passthrough)
+                    self.assertEqual(self.parse(data, option, chunk=chunk_size), passthrough)
         corrupt = bytearray(plain)
         corrupt[-1] ^= 1
         self.assertTrue(self.parse(bytes(corrupt) * 3, 'd').startswith(corrupt))
