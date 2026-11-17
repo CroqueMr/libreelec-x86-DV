@@ -20,13 +20,21 @@ class SideDataTests(unittest.TestCase):
         self.assertTrue('void CDVDVideoCodecFFmpeg::CaptureSourceSideData(' in decoder,
                         'native source static metadata owner is missing')
         capture=body(decoder,'void CDVDVideoCodecFFmpeg::CaptureSourceSideData(')
+        probe=body(decoder,'bool HybridProbePicture(')
         self.compile_run(r'''
 #include "cores/VideoSourceSideData.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
 #include <cassert>
 #include <optional>
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavutil/pixdesc.h>
+}
 constexpr double DVD_NOPTS_VALUE=-1;
-enum class StreamHdrType {HDR_TYPE_NONE};
+constexpr int DVD_CODEC_CTRL_DROP=1, LOGINFO=1;
+enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS};
+struct CLog {template<class... Args> static void Log(Args...) {}};
+static bool HybridProbePicture(const AVFrame* frame,int codecFlags) @@PROBE@@
 struct CVideoBuffer {int refs=1; void Release(){--refs;} void Acquire(){++refs;}};
 @@PICTURE@@
 @@METHODS@@
@@ -34,12 +42,18 @@ struct Decoder {
  uint64_t m_videoProcessingGeneration=123,m_videoSourceSerial=0;
  std::optional<AVMasteringDisplayMetadata> m_sourceMasteringMetadata;
  std::optional<AVContentLightMetadata> m_sourceLightMetadata;
+ int m_codecControlFlags{};
  struct {AVDOVIDecoderConfigurationRecord dovi{};
+   bool preferHybridHDR10Plus{};
+   StreamHdrType hdrType=StreamHdrType::HDR_TYPE_NONE;
+   AVColorTransferCharacteristic colorTransferCharacteristic=AVCOL_TRC_UNSPECIFIED;
+   AVColorPrimaries colorPrimaries=AVCOL_PRI_UNSPECIFIED;
    std::unique_ptr<AVMasteringDisplayMetadata> masteringMetadata;
    std::unique_ptr<AVContentLightMetadata> contentLightMetadata;
  } m_hints;
- struct {AVCodecID codec_id=AV_CODEC_ID_HEVC;} context;
- decltype(context)* m_pCodecContext=&context;
+ AVCodecContext context{};
+ AVCodecContext* m_pCodecContext=&context;
+ Decoder(){context.codec_id=AV_CODEC_ID_HEVC;}
  AVFrame* m_pFrame=av_frame_alloc();
  ~Decoder(){av_frame_free(&m_pFrame);}
  void Capture(VideoPicture* pVideoPicture) @@CAPTURE@@
@@ -59,7 +73,7 @@ int main(){
  decoder.m_sourceLightMetadata.reset(); decoder.Capture(&first);
  assert(first.sourceSideData->Serial()==3 && first.sourceSideData->JSON()=="{}");
 }
-'''.replace('@@PICTURE@@',picture).replace('@@METHODS@@',methods).replace('@@CAPTURE@@',capture))
+'''.replace('@@PICTURE@@',picture).replace('@@METHODS@@',methods).replace('@@CAPTURE@@',capture).replace('@@PROBE@@',probe))
 
     def test_native_label_is_registered_and_reads_accepted_cache(self):
         manager=(TREE/'xbmc/GUIInfoManager.cpp').read_text()
