@@ -18,15 +18,47 @@ class BackgroundHttpPlayback(unittest.TestCase):
                               file_item, re.S | re.M)
         resolve = play.split("bool CApplicationPlay::ResolvePath()\n{\n", 1)[1]
         resolve = resolve.split("  // Translate/Resolve the url", 1)[0]
+        event = messages.split("case GUI_MSG_PLAYBACK_STARTED:", 1)[1].split(
+            "// we don't want a busy dialog when switching channels", 1)[0]
+        updates = re.findall(r"m_app\.SetCurrentFileItem\(.*?\);|"
+                             r"const bool backgroundHttpPlayback\s*=.*?;", event, re.S)
+        self.assertEqual(sum(x.startswith("m_app.SetCurrentFileItem") for x in updates), 2)
+        dispatch = []
+        for statement in updates:
+            if "message.GetItem()" in statement:
+                dispatch.append("App m_app{item};")
+            elif statement.startswith("m_app.SetCurrentFileItem"):
+                dispatch.append("if (playlistItem) m_app.item = *playlistItem;")
+            else:
+                dispatch.append(statement)
         wait = messages.split("// we don't want a busy dialog when switching channels", 1)[1]
         wait = wait[wait.index("if ("):wait.index("CGUIDialogBusy::WaitOnEvent(")]
 
         harness = r'''
 #include <cstdio>
+#include <algorithm>
+#include <cctype>
 #include <string>
 
 struct Property { bool value; bool asBoolean() const { return value; } };
-struct Url { std::string protocol; const std::string& GetProtocol() const { return protocol; } };
+struct Url {
+  std::string protocol, path;
+  const std::string& GetProtocol() const { return protocol; }
+  bool IsDiscImage() const { return path.ends_with(".iso"); }
+  bool IsOpticalMediaFile() const { return path.ends_with("index.bdmv"); }
+};
+namespace URIUtils {
+bool IsArchive(const std::string& path) { return path.ends_with(".zip"); }
+}
+namespace StringUtils {
+void Trim(std::string& s) {
+  const auto first = s.find_first_not_of(" \t");
+  s = first == s.npos ? "" : s.substr(first, s.find_last_not_of(" \t") - first + 1);
+}
+void ToLower(std::string& s) {
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+}
+}
 struct Tag { std::string path, m_strFileNameAndPath; const auto& GetPath() const { return path; } };
 struct CFileItem {
   std::string path, mime;
@@ -39,7 +71,7 @@ struct CFileItem {
   const auto& GetMimeType() const { return mime; }
   bool IsFolder() const { return folder; }
   bool IsLiveTV() const { return liveTV; }
-  const Url& GetDynURL() const { url.protocol = path.substr(0, path.find("://")); return url; }
+  const Url& GetDynURL() const { url = {path.substr(0, path.find("://")), path}; return url; }
   bool HasVideoInfoTag() const { return !tag.path.empty(); }
   const Tag* GetVideoInfoTag() const { return &tag; }
   void SetDynPath(const std::string& value) { path = value; }
@@ -47,7 +79,7 @@ struct CFileItem {
 };
 PREDICATE
 struct App {
-  const CFileItem& item;
+  CFileItem item;
   const CFileItem& CurrentFileItem() const { return item; }
 };
 struct Player {
@@ -59,8 +91,8 @@ bool skipsProbe(CFileItem m_item) {
 RESOLVE
   return false;
 }
-bool skipsWait(const CFileItem& item, bool playing = true) {
-  App m_app{item};
+bool skipsWait(const CFileItem& item, bool playing = true, const CFileItem* playlistItem = nullptr) {
+  DISPATCH
   Player player{playing};
   auto* appPlayer = &player;
   WAIT
@@ -79,9 +111,23 @@ int main() {
   int errors = 0;
   errors += check({"https://v/movie.m3u8", "application/vnd.apple.mpegurl", true}, true);
   errors += check({"http://v/live.ts", "video/mp2t", true}, true);
+  errors += check({"https://v/live", " Application/Vnd.Apple.MPEGURL ; codecs=avc1", true}, true);
+  errors += check({"https://v/video", "video/mp2t; charset=binary", true}, true);
+  errors += check({"https://v/manifest", "application/dash+xml", true}, true);
   errors += check({"http://v/file", "video/mp4", false}, false);
   errors += check({"https://v/unknown", "", true}, false);
   errors += check({"http://v/library/", "x-directory/normal", true, true}, false);
+  errors += check({"https://v/archive.zip", "application/zip", true}, false);
+  errors += check({"https://v/archive", "application/zip; version=2", true}, false);
+  errors += check({"https://v/disc.iso", "application/octet-stream", true}, false);
+  errors += check({"https://v/disc.iso", "video/mp2t", true}, false);
+  errors += check({"https://v/index.bdmv", "video/mp2t", true}, false);
+  CFileItem preview{"https://v/preview", "video/mp4", true};
+  CFileItem row{"plugin://original", "", false};
+  if (!skipsWait(preview, true, &row) || skipsWait(row, true, &preview)) {
+    std::fprintf(stderr, "Queued playlist replaced the decision for the resolved event item\n");
+    ++errors;
+  }
   for (auto path : {"/videos/movie.mkv", "plugin://a/play", "stack://http://v/a , http://v/b",
                     "zip://http%3a%2f%2fv%2fa.zip/movie", "special://profile/movie"})
     errors += check({path, "video/mp4", true}, false);
@@ -94,16 +140,9 @@ int main() {
   return errors != 0;
 }
 '''
-        # The original URI helper also accepts protocols wrapped around an HTTP URL.
-        if "URIUtils::IsHTTP(" in resolve:
-            harness = harness.replace("bool skipsProbe", """namespace URIUtils {
-bool IsHTTP(const std::string& url) {
-  return url.starts_with("https://") || url.starts_with("http://") ||
-         url.starts_with("stack://http://") || url.starts_with("zip://http%3a");
-}
-}
-bool skipsProbe""")
-        program = harness.replace("PREDICATE", predicate[0] if predicate else "")
+        self.assertIsNotNone(predicate)
+        program = harness.replace("PREDICATE", predicate[0])
+        program = program.replace("DISPATCH", "\n".join(dispatch))
         program = program.replace("RESOLVE", resolve).replace("WAIT", wait)
         with tempfile.TemporaryDirectory() as temp:
             executable = Path(temp) / "background"

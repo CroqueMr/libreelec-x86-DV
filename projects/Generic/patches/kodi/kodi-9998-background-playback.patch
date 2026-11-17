@@ -20,7 +20,7 @@ diff --git a/xbmc/FileItem.h b/xbmc/FileItem.h
 diff --git a/xbmc/FileItem.cpp b/xbmc/FileItem.cpp
 --- a/xbmc/FileItem.cpp
 +++ b/xbmc/FileItem.cpp
-@@ -1229,6 +1229,15 @@
+@@ -1229,6 +1229,27 @@
    FillInMimeType(lookup);
  }
  
@@ -29,8 +29,20 @@ diff --git a/xbmc/FileItem.cpp b/xbmc/FileItem.cpp
 +  if (!GetProperty("backgroundplayback").asBoolean() || IsFolder() || GetMimeType().empty())
 +    return false;
 +
-+  const auto& protocol = GetDynURL().GetProtocol();
-+  return protocol == "http" || protocol == "https";
++  const auto& url = GetDynURL();
++  const auto& protocol = url.GetProtocol();
++  if ((protocol != "http" && protocol != "https") || url.IsDiscImage() ||
++      url.IsOpticalMediaFile() || URIUtils::IsArchive(GetDynPath()))
++    return false;
++
++  std::string mime = GetMimeType().substr(0, GetMimeType().find(';'));
++  StringUtils::Trim(mime);
++  StringUtils::ToLower(mime);
++  return (mime.size() > 6 && (mime.starts_with("audio/") || mime.starts_with("video/"))) ||
++         mime == "application/mp4" || mime == "application/ogg" || mime == "application/mxf" ||
++         mime == "application/vnd.apple.mpegurl" || mime == "vnd.apple.mpegurl" ||
++         mime == "application/x-mpegurl" || mime == "application/dash+xml" ||
++         mime == "application/vnd.ms-sstr+xml";
 +}
 +
  void CFileItem::SetMimeTypeForInternetFile()
@@ -39,13 +51,22 @@ diff --git a/xbmc/FileItem.cpp b/xbmc/FileItem.cpp
 diff --git a/xbmc/application/ApplicationMessageHandling.cpp b/xbmc/application/ApplicationMessageHandling.cpp
 --- a/xbmc/application/ApplicationMessageHandling.cpp
 +++ b/xbmc/application/ApplicationMessageHandling.cpp
-@@ -554,8 +554,9 @@
+@@ -508,6 +508,8 @@
+ #endif
+       m_app.SetCurrentFileItem(
+           std::make_shared<CFileItem>(*std::static_pointer_cast<CFileItem>(message.GetItem())));
++      // A queued playlist entry can replace the resolved event item below.
++      const bool backgroundHttpPlayback = m_app.CurrentFileItem().IsBackgroundHttpPlayback();
+       m_app.ResetPlayerEvent();
+ 
+       CServiceBroker::GetPVRManager().OnPlaybackStarted(m_app.CurrentFileItem());
+@@ -554,8 +556,9 @@
  
        // we don't want a busy dialog when switching channels
        const auto appPlayer = m_app.GetComponent<CApplicationPlayer>();
 -      if (!m_app.CurrentFileItem().IsLiveTV() ||
 -          (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio()))
-+      if (!m_app.CurrentFileItem().IsBackgroundHttpPlayback() &&
++      if (!backgroundHttpPlayback &&
 +          (!m_app.CurrentFileItem().IsLiveTV() ||
 +           (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio())))
          CGUIDialogBusy::WaitOnEvent(m_app.m_playerEvent);
