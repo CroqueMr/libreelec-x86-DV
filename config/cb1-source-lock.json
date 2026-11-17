@@ -444,7 +444,9 @@
     "tests/cb1/test_renderer_output_restore.py": "367869d38ba817003741bc72536600553ea74b5782a3df5315c0d198e3575546",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": "415a293a2615900f7e32a3d72d6b43d7b4aa604020912e2c2d28ed3076332f2d",
     "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": "ce5919154dec4d314318ea15ebfb59c5dbdabfad5484c96eebed25d1ab2fe5dc",
-    "tests/cb1/test_blurred_label_region.py": "2f80f19b5b8e543e32f732c2cd607aed82e728c636687b4b0fca81baaf0a77bf"
+    "tests/cb1/test_blurred_label_region.py": "2f80f19b5b8e543e32f732c2cd607aed82e728c636687b4b0fca81baaf0a77bf",
+    "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": "a3399f38cee9cbecd97d97f635f145b942807cca0979f959e7c46017a1b4ffd6",
+    "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": "a8c40d82c2fd2b2426feb79b1c9bf64f9a8477e5868f94c64964cae046e8fb23"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
