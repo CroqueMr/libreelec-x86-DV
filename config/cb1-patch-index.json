@@ -1357,6 +1357,14 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Keep accepted scanout buffers locked across refused colour changes."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": {
+    "summary": "Allow explicitly requested background playback without blocking the GUI",
+    "component": "kodi",
+    "files": {
+      "xbmc/application/ApplicationMessageHandling.cpp": "Skip the modal AV-start wait for backgroundplayback items.",
+      "xbmc/application/ApplicationPlay.cpp": "Skip foreground directory probing for resolved background HTTP streams."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9998-bitmap-subtitle-shift.patch": {
     "summary": "Shift bitmap subtitles with subtitleshiftup and subtitleshiftdown under Manual offset placement",
     "component": "kodi",

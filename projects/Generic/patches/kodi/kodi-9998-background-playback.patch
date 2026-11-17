@@ -1,0 +1,38 @@
+Subject: [PATCH] playback: keep explicit background opens non-blocking
+
+A background preview must leave the GUI available while its streams open.
+The backgroundplayback file-item property skips directory probing for an
+already-resolved HTTP stream and the modal AV-start wait. Normal playback
+keeps its existing checks and wait.
+
+diff --git a/xbmc/application/ApplicationMessageHandling.cpp b/xbmc/application/ApplicationMessageHandling.cpp
+--- a/xbmc/application/ApplicationMessageHandling.cpp
++++ b/xbmc/application/ApplicationMessageHandling.cpp
+@@ -555,8 +555,9 @@
+       // we don't want a busy dialog when switching channels
+       const auto appPlayer = m_app.GetComponent<CApplicationPlayer>();
+-      if (!m_app.CurrentFileItem().IsLiveTV() ||
+-          (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio()))
++      if (!m_app.CurrentFileItem().GetProperty("backgroundplayback").asBoolean() &&
++          (!m_app.CurrentFileItem().IsLiveTV() ||
++           (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio())))
+         CGUIDialogBusy::WaitOnEvent(m_app.m_playerEvent);
+ 
+       return true;
+     }
+
+diff --git a/xbmc/application/ApplicationPlay.cpp b/xbmc/application/ApplicationPlay.cpp
+--- a/xbmc/application/ApplicationPlay.cpp
++++ b/xbmc/application/ApplicationPlay.cpp
+@@ -40,6 +40,11 @@
+ 
+ bool CApplicationPlay::ResolvePath()
+ {
++  // Background callers already provide a resolved media stream.
++  if (m_item.GetProperty("backgroundplayback").asBoolean() &&
++      URIUtils::IsHTTP(m_item.GetDynPath()))
++    return true;
++
+   // Get bluray:// path for resolution if present
+   if (m_item.HasVideoInfoTag() && m_item.GetVideoInfoTag()->GetPath().starts_with("bluray://"))
+     m_item.SetDynPath(m_item.GetVideoInfoTag()->m_strFileNameAndPath);
