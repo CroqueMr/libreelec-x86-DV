@@ -13,8 +13,8 @@ class StableVideoSettings(unittest.TestCase):
     def test_playback_controls_and_sdr_dependencies(self):
         group = self.video.find("group[@id='99']")
         ids = [setting.get("id") for setting in group]
-        self.assertEqual(ids[:7], [f"dvbridge.{name}" for name in
-                         ("playback", "masteroutput", "hdr10source", "hdr10plussource", "hlgsource",
+        self.assertEqual(ids[:8], [f"dvbridge.{name}" for name in
+                         ("playback", "masteroutput", "hdr10source", "hdr10plussource", "hybridsource", "hlgsource",
                           "sdrpreset", "sdrgamut")])
         for name in ("sdrpreset", "sdrgamut", "sdrpeak", "sdrgamma", "sdrblack"):
             conditions = group.findall(f"setting[@id='dvbridge.{name}']/dependencies/dependency/or/condition")

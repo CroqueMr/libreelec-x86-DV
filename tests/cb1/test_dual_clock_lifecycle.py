@@ -25,7 +25,8 @@ constexpr int DVP_FLAG_DROPPED=8;
 char presentableDVPacket,decodeOnlyDVPacket;
 struct VideoPicture{CDVMetadataBuffer doviMetadata;int iFlags=0;};
 void check(AVFrame* m_pFrame,VideoPicture* pVideoPicture,uint64_t m_dvLayerEpoch){
- bool m_dvVideoWindow=false;
+ bool m_dvVideoWindow=false,hybridHDR10Plus=false;
+ struct {bool preferHybridHDR10Plus{};} m_hints;
  if(m_dvLayerEpoch) GUARD
 }
 int main(){
@@ -83,7 +84,13 @@ extern "C" int __wrap_avcodec_send_packet(AVCodecContext*,const AVPacket*) {
 extern "C" bool dvbridge_fel_submit_source(dvbridge_fel*,const AVPacket*,const dvbridge_fel_source*){++submits;return true;}
 extern "C" bool dvbridge_fel_submit(dvbridge_fel*,const AVPacket*){++submits;return true;}
 struct Hardware{int Check(AVCodecContext*){return 0;}};
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
 struct CDVDVideoCodecFFmpeg {
+ struct {
+  struct {unsigned dv_profile{7};} dovi;
+  bool preferHybridHDR10Plus{};
+  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ } m_hints;
  AVCodecContext context{};AVCodecContext* m_pCodecContext=&context;
  std::shared_ptr<dvbridge_fel> m_dvFel=std::make_shared<dvbridge_fel>();
  uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,m_dvFailed=false,m_eof=false,m_started=false,m_startedInput=false;
