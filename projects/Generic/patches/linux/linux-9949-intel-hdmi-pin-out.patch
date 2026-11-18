@@ -1,33 +1,51 @@
-diff --git a/sound/hda/codecs/hdmi/intelhdmi.c b/sound/hda/codecs/hdmi/intelhdmi.c
---- a/sound/hda/codecs/hdmi/intelhdmi.c
-+++ b/sound/hda/codecs/hdmi/intelhdmi.c
-@@ -481,9 +481,26 @@
- 			       hda_nid_t cvt_nid)
- {
- 	if (per_pin) {
--		haswell_verify_D0(codec, per_pin->cvt_nid, per_pin->pin_nid);
--		snd_hda_set_dev_select(codec, per_pin->pin_nid,
--			       per_pin->dev_id);
-+		struct hdmi_spec *spec = codec->spec;
-+		hda_nid_t pin = per_pin->pin_nid;
-+		int err;
+diff --git a/sound/hda/codecs/hdmi/hdmi.c b/sound/hda/codecs/hdmi/hdmi.c
+--- a/sound/hda/codecs/hdmi/hdmi.c
++++ b/sound/hda/codecs/hdmi/hdmi.c
+@@ -525,6 +525,30 @@
+ 	}
+ }
+ 
++/* A link change can reset an active Alder Lake-P HDMI audio pin. */
++static void adlp_restore_pin_out(struct hda_codec *codec,
++				 struct hdmi_spec_per_pin *per_pin)
++{
++	struct hdmi_spec *spec = codec->spec;
++	hda_nid_t pin = per_pin->pin_nid;
++	int ctl;
 +
-+		haswell_verify_D0(codec, per_pin->cvt_nid, pin);
-+		err = snd_hda_set_dev_select(codec, pin, per_pin->dev_id);
++	if (!per_pin->setup || !per_pin->sink_eld.eld_valid || per_pin->pcm_idx < 0 ||
++	    !test_bit(per_pin->pcm_idx, &spec->pcm_in_use))
++		return;
 +
-+		/* Alder Lake-P can lose output enable when the HDMI link changes. */
-+		if (codec->core.vendor_id == 0x8086281c && !err &&
-+		    per_pin->sink_eld.eld_valid && per_pin->pcm_idx >= 0 &&
-+		    test_bit(per_pin->pcm_idx, &spec->pcm_in_use) &&
-+		    snd_hda_get_dev_select(codec, pin) == per_pin->dev_id) {
-+			int ctl = snd_hda_codec_read(codec, pin, 0,
-+							     AC_VERB_GET_PIN_WIDGET_CONTROL, 0);
++	/* A single-entry HDMI pin has no device selector to read back. */
++	if (snd_hda_get_dev_select(codec, pin) != per_pin->dev_id &&
++	    (per_pin->dev_id || per_pin->sink_eld.info.conn_type != 0 ||
++	     snd_hdac_read_parm_uncached(&codec->core, pin, AC_PAR_DEVLIST_LEN) != 0))
++		return;
 +
-+			if (ctl >= 0 && !(ctl & PIN_OUT))
-+				snd_hda_codec_write(codec, pin, 0, AC_VERB_SET_PIN_WIDGET_CONTROL,
-+							    ctl | PIN_OUT);
-+		}
++	ctl = snd_hda_codec_read(codec, pin, 0, AC_VERB_GET_PIN_WIDGET_CONTROL, 0);
++	if (ctl >= 0 && !(ctl & PIN_OUT))
++		snd_hda_codec_write(codec, pin, 0, AC_VERB_SET_PIN_WIDGET_CONTROL,
++				    ctl | PIN_OUT);
++}
 +
- 		intel_verify_pin_cvt_connect(codec, per_pin);
- 		intel_not_share_assigned_cvt(codec, per_pin->pin_nid,
- 				     per_pin->dev_id, per_pin->mux_idx);
+ void snd_hda_hdmi_setup_audio_infoframe(struct hda_codec *codec,
+ 					struct hdmi_spec_per_pin *per_pin,
+ 					bool non_pcm)
+@@ -536,12 +560,14 @@
+ 	int channels = per_pin->channels;
+ 	int active_channels;
+ 	struct hdmi_eld *eld;
+-	int ca;
++	int ca, err;
+ 
+ 	if (!channels)
+ 		return;
+ 
+-	snd_hda_set_dev_select(codec, pin_nid, dev_id);
++	err = snd_hda_set_dev_select(codec, pin_nid, dev_id);
++	if (!err && codec->core.vendor_id == 0x8086281c)
++		adlp_restore_pin_out(codec, per_pin);
+ 
+ 	/* some HW (e.g. HSW+) needs reprogramming the amp at each time */
+ 	if (get_wcaps(codec, pin_nid) & AC_WCAP_OUT_AMP)

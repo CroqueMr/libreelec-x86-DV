@@ -2124,7 +2124,7 @@
   "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {
     "owner": "Restore the enabled output bit on an active Alder Lake-P HDMI audio route.",
     "files": {
-      "sound/hda/codecs/hdmi/intelhdmi.c": "Check the selected pin's control register during Intel route fixup and preserve its audio mode."
+      "sound/hda/codecs/hdmi/hdmi.c": "Restore the active Alder Lake-P pin during PCM setup and HDMI link refresh, preserving the audio mode."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-y444-scanout.patch": {
