@@ -728,7 +728,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "d94042f06975d01ea7fceb439814f524c8d2dfd4ae81a6a480f245352c8250bf"
+      "sha256": "d4cec89fe7beebdb28620a1e1a126e0c6511ff6bc74470b4f38852f2a8d3e9e9"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",
