@@ -191,6 +191,13 @@
       "drivers/net/wireless/mediatek/mt76/mt792x.h": "Track the held join ROC per interface."
     }
   },
+  "projects/Generic/patches/linux/0103-wifi-mt76-mt7925-keep-join-roc-until-authorized.patch": {
+    "summary": "Keep the MT7925 join ROC until the station is authorized (mainline ac22c8c723c6)",
+    "component": "linux",
+    "files": {
+      "drivers/net/wireless/mediatek/mt76/mt7925/main.c": "Keep the join ROC after a successful non-MLO association and release it on authorization, disassociation or station removal."
+    }
+  },
   "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": {
     "summary": "Expose the validated Dolby Vision connector control",
     "component": "linux",
