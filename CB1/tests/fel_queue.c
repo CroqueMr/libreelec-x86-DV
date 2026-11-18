@@ -208,7 +208,9 @@ int main(void)
             assert(dvbridge_fel_take(f, p->pts, &exact) == 1 && exact->pts == p->pts);
             av_frame_free(&exact);
         } else {
-            assert(!dvbridge_fel_drain(f) && dvbridge_fel_failed(f));
+            const char *reason = NULL;
+            assert(!dvbridge_fel_drain(f, &reason) && dvbridge_fel_failed(f));
+            assert(reason && !strcmp(reason, "no enhancement video received before drain"));
         }
     }
     /* Missing EL cannot turn an unbounded input into endless preroll. */
@@ -225,7 +227,7 @@ int main(void)
     assert(dvbridge_fel_submit(f, p));
     assert(dvbridge_fel_take(f, 0, &frame) == 1);
     av_frame_free(&frame);
-    assert(dvbridge_fel_drain(f));
+    assert(dvbridge_fel_drain(f, NULL));
     assert(dvbridge_fel_take(f, 1, &frame) == -1 && !frame);
     assert(!dvbridge_fel_submit(f, p));
     dvbridge_fel_reset(f);
@@ -235,7 +237,7 @@ int main(void)
         assert(dvbridge_fel_submit(f, p));
     }
     assert(submissions == queued);
-    assert(dvbridge_fel_drain(f)); /* EOF must submit and retain all deferred pictures. */
+    assert(dvbridge_fel_drain(f, NULL)); /* EOF must submit and retain all deferred pictures. */
     for (int i = 0; i < 3; ++i) {
         assert(dvbridge_fel_take(f, i * 41708, &frame) == 1 && frame->pts == i * 41708);
         av_frame_free(&frame);

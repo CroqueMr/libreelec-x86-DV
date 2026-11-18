@@ -181,7 +181,7 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "d14043335f7f5afed169bf9029742e8469d89c2c6e8da77315fb8b1bf9b40577",
+    "tests/cb1/test_fel_terminal.py": "5f33a562a0dd470006e87b0805d37db2b53d73d8179465afd7c18a80f35b690c",
     "tests/cb1/test_mel_reference_history.py": "af43b5024f201579b3fd238eb0154556358151ce201dfe2c2175ca2b72f13643",
     "tests/cb1/test_optional_gui.py": "cd34349c3b323eb87c51c024bd71ca7e98757e1f501c70340c21bca26554800a",
     "tests/cb1/test_software_dv_import.py": "539cc08623dd1f54c98e117525eff4e4fe99ca7a18f79550ef3ff3784d4e2e90",
@@ -214,7 +214,7 @@
     "tests/cb1/test_bluray_navigation_drain.py": "1ffd4050d99c38b51d5d61b209ad9b4370a7c7af04c85844ca8c9fb8ba2ce1b8",
     "tests/cb1/test_bluray_video_window.py": "db8b191acece4e078689ad0c40c9bf3f8b4ade70a01b75250de3f2f740dac036",
     "tests/cb1/test_bluray_video_disposition.py": "5cc2b24a37319347270afdacc92f86534917725cff2e830b2b256153af614602",
-    "tests/cb1/test_decode_startup_diagnostics.py": "cbb5ac8150755df8a1e85f66b015a0a69ceb66bc5a32b7fb4a70c1c3bc169a4f",
+    "tests/cb1/test_decode_startup_diagnostics.py": "d76d2020744acd99577ddc72263f4777e2a89c6beaf2613faa5c5f6c3f3d6ba2",
     "tests/cb1/test_bluray_image_root.py": "f0a6a37b799d386cd28304a7b65adcc163f757ec7a44b4a6db5e3225af7e0dcb",
     "tests/cb1/test_bluray_display_capabilities.py": "70805149f89fd3ab6b5640236fa31270954b0cf4052f1a6134bf845819901957",
     "tests/cb1/test_bluray_bdj_capability.py": "c03f4d3b59e2f6d5ac0e76a356b468aca28475763f7427545790f12cf92d450e",
@@ -311,7 +311,7 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "560dbfb112f687461ef9f394d867188724dbbd74135329876325fde4cc793392",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "cb704114ed95ebc2d6c50aa410f71ec1eb1a74f6c94bfd18d66c09b0e1331032",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "372986bc8bacd0cb68ca4af440a0b255e2954b1f357cfe84a3fbb9199b8b561d",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "1ca58b647f7a636d0cf26621644213bba324d5b8302aece01f68737f28db2bce",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "ec15e68169ab1cdcfe3671c814e1b6aef941b9e1889d7224a86eb1e9efdbf44e",
     "tests/cb1/test_diagnostics_runtime.py": "95ce20fb327621ec2676b28a137b641d1728b06b3edfe08998edcb43991d93e7",
     "tests/cb1/test_fel_facts.py": "39717d8a179e5f2f71798f5a9382a6476aba23dfaf0047e7513387aaebc5461c",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "c08a48036ce3ea5c082f54036a7def395cf44af859053a9998ea64bfe30bb4dc",
@@ -448,8 +448,8 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": "415a293a2615900f7e32a3d72d6b43d7b4aa604020912e2c2d28ed3076332f2d",
     "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": "ce5919154dec4d314318ea15ebfb59c5dbdabfad5484c96eebed25d1ab2fe5dc",
     "tests/cb1/test_blurred_label_region.py": "2f80f19b5b8e543e32f732c2cd607aed82e728c636687b4b0fca81baaf0a77bf",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hybrid-input-preference.patch": "513b41ff820c3dac3c59e74366e182cdd56d43e06976ce112b0cbf9ec25c3805",
-    "tests/cb1/test_hybrid_source_preference.py": "029283d430070226f4ca4adedf18d1b9e5fc18d56c7a4e36a9c9b61d8b90f954",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hybrid-input-preference.patch": "20e56e02e1852a5a4f82b61ac475bb37c156b3aded2bf101a8e33e787d518a9f",
+    "tests/cb1/test_hybrid_source_preference.py": "f83f973c48a16869f0cc7d719cc7bd768068b289db8ef8b3f441182d44d92c76",
     "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": "a3399f38cee9cbecd97d97f635f145b942807cca0979f959e7c46017a1b4ffd6",
     "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": "a8c40d82c2fd2b2426feb79b1c9bf64f9a8477e5868f94c64964cae046e8fb23",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": "7a0a7f1d79d73108fd6ed814480ac0dc3cf2428d460a392eb7ee70ebf71e55f6",
@@ -618,11 +618,11 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.c": {
       "source": "src/dvbridge_fel.c",
-      "sha256": "75c1b044d10ab6b869e280c70c3a5dd638fc86c7860e969c1ad238a6e212b5fd"
+      "sha256": "580a94586d50a1e3cd0e2f07f0de60c4be5b215ab0e229fe6abcdb175240b1ea"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.h": {
       "source": "src/dvbridge_fel.h",
-      "sha256": "2986af5b358c4692a9e804e6fccd13c05dfed88722b401e3f061b516f9cce517"
+      "sha256": "fa744fa8e4b8f4a0ee1eb364351dfc56cde0b975074fd0e3f57635793b5b424f"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel_seek.h": {
       "source": "src/dvbridge_fel_seek.h",
@@ -718,7 +718,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "1ca58b647f7a636d0cf26621644213bba324d5b8302aece01f68737f28db2bce"
+      "sha256": "ec15e68169ab1cdcfe3671c814e1b6aef941b9e1889d7224a86eb1e9efdbf44e"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

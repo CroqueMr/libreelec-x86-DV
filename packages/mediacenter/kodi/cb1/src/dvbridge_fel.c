@@ -703,14 +703,15 @@ bool dvbridge_fel_submit_source(struct dvbridge_fel *f, const AVPacket *packet,
     return source && submit(f, packet, source);
 }
 
-bool dvbridge_fel_drain(struct dvbridge_fel *f)
+bool dvbridge_fel_drain(struct dvbridge_fel *f, const char **reason)
 {
+    if (reason)
+        *reason = NULL;
     if (!f)
         return false;
     if (f->synchronizing) {
-        if (!f->failed && f->base_order.seen && !f->enhancement_order.seen)
-            av_log(f->decoder, AV_LOG_WARNING, "FEL: no enhancement video received before drain; "
-                   "choose Kodi Default to play the Profile 7 HDR10 base\n");
+        if (reason && !f->failed && f->base_order.seen && !f->enhancement_order.seen)
+            *reason = "no enhancement video received before drain";
         f->failed = true;
         return false; /* EOF cannot supply the missing random-access picture. */
     }
