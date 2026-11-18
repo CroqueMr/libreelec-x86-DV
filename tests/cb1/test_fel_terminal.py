@@ -53,6 +53,7 @@ int main(){CVideoPlayerVideo p;assert(!p.HasData());
         program=r'''
 #include <cassert>
 #include <deque>
+#include <string>
 #include <memory>
 #include <cstdint>
 #define HAVE_DVBRIDGE 1
@@ -82,16 +83,23 @@ int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
  void Reset(){}void CopyRef(const VideoPicture&v){*this=v;}};
 struct Context{Buffer* hw_frames_ctx=nullptr;};
-struct Fel{bool failed=false,exhausted=false;int result=0;};
+struct Fel{bool failed=false,exhausted=false;int result=0;bool missingEnhancement=false;};
 bool dvbridge_fel_failed(Fel*f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*f){return f->exhausted;}
 int dvbridge_fel_take(Fel*f,int64_t,AVFrame**out){if(f->result==1)*out=new AVFrame;return f->result;}
 constexpr int CODEC_BLURAY_NAVIGATION=4;
 int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
-bool dvbridge_fel_drain(Fel*){return true;}
+bool dvbridge_fel_drain(Fel*f,const char** reason=nullptr){
+ if(reason)*reason=f->missingEnhancement?"no enhancement video received before drain":nullptr;
+ return !f->missingEnhancement;
+}
 enum{LOGWARNING,LOGERROR};
-struct CLog{template<class... T>static void Log(T...){}};
+int missingEnhancementLogs=0;
+struct CLog{
+ template<class... T>static void Log(T...){}
+ static void Log(decltype(LOGERROR),const char* format,const char*){if(std::string(format).find("Kodi Default")!=std::string::npos)++missingEnhancementLogs;}
+};
 struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  struct {int codecOptions{};bool preferHybridHDR10Plus{};}m_hints;
@@ -123,6 +131,19 @@ int main(){
  assert(incomplete.GetPicture(&out)==CDVDVideoCodec::VC_FATAL);
  CDVDVideoCodecFFmpeg cleanEnd;cleanEnd.baseResult=CDVDVideoCodec::VC_EOF;
  assert(cleanEnd.GetPicture(&out)==CDVDVideoCodec::VC_EOF);
+ CDVDVideoCodecFFmpeg missing;missing.m_dvFel->missingEnhancement=true;missing.baseResult=CDVDVideoCodec::VC_EOF;
+ assert(missing.GetPicture(&out)==CDVDVideoCodec::VC_FATAL && missingEnhancementLogs==1);
+ CDVDVideoCodecFFmpeg optional;optional.m_hints.preferHybridHDR10Plus=true;
+ optional.m_dvFel->missingEnhancement=true;optional.baseResult=CDVDVideoCodec::VC_EOF;
+ assert(optional.GetPicture(&out)==CDVDVideoCodec::VC_EOF && missingEnhancementLogs==1);
+ CDVDVideoCodecFFmpeg leading;leading.m_dvFel->result=2;
+ leading.baseResult=CDVDVideoCodec::VC_PICTURE;
+ for (int i=0;i<74;++i) {
+   assert(leading.GetPicture(&out)==CDVDVideoCodec::VC_BUFFER);
+   assert(leading.m_dvPending.empty());
+ }
+ leading.m_dvFel->result=1;
+ assert(leading.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE && out.doviEnhancement);
  CDVDVideoCodecFFmpeg readyThenFailed;readyThenFailed.m_dvFailed=true;
  readyThenFailed.m_dvFel->failed=true;readyThenFailed.m_dvFel->result=1;
  readyThenFailed.m_dvPending.push_back(std::make_shared<VideoPicture>());

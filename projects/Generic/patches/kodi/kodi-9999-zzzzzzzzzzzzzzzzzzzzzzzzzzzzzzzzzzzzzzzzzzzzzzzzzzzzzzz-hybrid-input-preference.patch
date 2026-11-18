@@ -327,12 +327,20 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        }
        if (result == VC_PICTURE)
        {
-@@ -928,20 +952,35 @@
+@@ -928,20 +952,42 @@
        }
        if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
-         if (!dvbridge_fel_drain(m_dvFel.get()))
+-        if (!dvbridge_fel_drain(m_dvFel.get()))
 -          return VC_FATAL;
++      {
++        const char* reason = nullptr;
++        if (!dvbridge_fel_drain(m_dvFel.get(), &reason))
++        {
++          if (reason && !m_hints.preferHybridHDR10Plus)
++            CLog::Log(LOGERROR, "DV FEL: {}; choose Kodi Default to play the Profile 7 HDR10 base", reason);
 +          break;
++        }
++      }
        paired = emit();
 +      if (paired == VC_FATAL)
 +        break;
@@ -369,7 +377,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    if (result == VC_PICTURE && m_dvNativeOutput)
      ReportDVStartup(1, "base-decoded");
  #endif
-@@ -1313,6 +1352,13 @@
+@@ -1313,6 +1359,13 @@
    return VC_REOPEN;
  }
  
@@ -383,7 +391,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  void CDVDVideoCodecFFmpeg::CaptureSourceSideData(VideoPicture* pVideoPicture)
  {
    // Capture original native source facts before any bridge/AI/output mutation.
-@@ -1331,11 +1377,48 @@
+@@ -1331,11 +1384,48 @@
      else
        m_sourceLightMetadata.reset();
    }
@@ -433,7 +441,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
  }
  
  bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
-@@ -1553,11 +1636,18 @@
+@@ -1553,11 +1643,18 @@
    if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)
      pVideoPicture->doviSourceBinding = m_dvSourceOwner.NextPicture();
  #endif
@@ -456,7 +464,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        pVideoPicture->hasLightMetadata,
        0.0,0.0,
        pVideoPicture->hasLightMetadata ? pVideoPicture->lightMetadata.MaxCLL : 0u,
-@@ -1565,7 +1655,7 @@
+@@ -1565,7 +1662,7 @@
    const auto& sourceMastering = pVideoPicture->displayMetadata;
    auto& sourceInfo = pVideoPicture->doviSourceInfo;
    sourceInfo.informationGeneration = m_videoProcessingGeneration;
@@ -465,7 +473,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
    sourceInfo.mastering = pVideoPicture->hasDisplayMetadata && sourceMastering.has_luminance &&
        sourceMastering.max_luminance.den > 0 && sourceMastering.min_luminance.den > 0;
    if (sourceInfo.mastering)
-@@ -1626,7 +1716,8 @@
+@@ -1626,7 +1723,8 @@
    {
      // COPY_OPAQUE follows the AU through native reordering and VAAPI references.
      // The ordinary paired path still validates/synchronizes EL before Kodi drops it.
@@ -475,7 +483,7 @@ diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp b/xb
        pVideoPicture->iFlags |= DVP_FLAG_DROPPED;
      const auto* raw = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_RPU_BUFFER);
      if ((m_dvVideoWindow && m_pFrame->opaque != &presentableDVPacket &&
-@@ -1958,12 +2049,15 @@
+@@ -1958,12 +2056,15 @@
  
  unsigned CDVDVideoCodecFFmpeg::GetHDR10AIBufferCount() const
  {

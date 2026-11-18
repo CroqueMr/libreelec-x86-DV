@@ -22,7 +22,8 @@ struct dvbridge_fel_source {
 };
 bool dvbridge_fel_submit_source(struct dvbridge_fel *fel, const AVPacket *packet,
                                const struct dvbridge_fel_source *source);
-bool dvbridge_fel_drain(struct dvbridge_fel *fel);
+/* Optional reason is set only when the final drain identifies a specific fault. */
+bool dvbridge_fel_drain(struct dvbridge_fel *fel, const char **reason);
 /* 1: exact pair, 0: need input, 2: discard preroll, -1: missing pair / failure. */
 int dvbridge_fel_take(struct dvbridge_fel *fel, int64_t pts, AVFrame **frame);
 /* Disc playback may return 3 for a matched, validated RPU that needs no residual.

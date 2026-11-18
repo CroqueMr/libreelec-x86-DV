@@ -104,7 +104,7 @@ int main(void)
         assert(submit_source(f,packet,&tail));
         assert(dvbridge_fel_take(f,5000,&frame)==1&&frame&&frame->pts==5000);
         av_frame_free(&frame);
-        assert(dvbridge_fel_drain(f));
+        assert(dvbridge_fel_drain(f, NULL));
         dvbridge_fel_reset(f);
         // A genuinely decoded leading picture is exact despite a later RAP PTS.
         f->source_timed=true;f->anchor_pts=100;f->num_times=1;

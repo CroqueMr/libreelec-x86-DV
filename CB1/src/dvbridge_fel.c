@@ -593,7 +593,15 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
             if (result == AVERROR(EAGAIN)) {
                 if (source && !received_enhancement && source->enhancement_pts != AV_NOPTS_VALUE)
                     goto fail;
-                if (!source && !received_enhancement)f->epoch_uncertain = true;
+                if (!source && !received_enhancement)
+                    f->epoch_uncertain = true;
+                if (!source && f->synchronizing) {
+                    /* All EL from this AU has been examined. Before the
+                     * first accepted anchor these BL identities are preroll. */
+                    f->num_times = 0;
+                    if (++f->preroll_packets > 1024)
+                        goto fail;
+                }
                 return true; /* Submit EL when a decoded BL requests its matching picture. */
             }
             goto fail;
@@ -670,9 +678,6 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
              * time. Never use this shortcut for a BL with reordered pictures. */
             if (!common_key && !el_idr) {
                 av_packet_free(&copy);
-                f->num_times = 0;
-                if (++f->preroll_packets > 1024)
-                    goto fail;
                 continue;
             }
             f->anchor_pts = packet->pts;
@@ -698,11 +703,15 @@ bool dvbridge_fel_submit_source(struct dvbridge_fel *f, const AVPacket *packet,
     return source && submit(f, packet, source);
 }
 
-bool dvbridge_fel_drain(struct dvbridge_fel *f)
+bool dvbridge_fel_drain(struct dvbridge_fel *f, const char **reason)
 {
+    if (reason)
+        *reason = NULL;
     if (!f)
         return false;
     if (f->synchronizing) {
+        if (reason && !f->failed && f->base_order.seen && !f->enhancement_order.seen)
+            *reason = "no enhancement video received before drain";
         f->failed = true;
         return false; /* EOF cannot supply the missing random-access picture. */
     }
