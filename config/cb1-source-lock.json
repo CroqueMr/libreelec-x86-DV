@@ -466,7 +466,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-signal-formats.patch": "be05a930c480783b741c088746a46af0f73803fafe81f6c223702bfd0fb975a8",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9008-player-led-422-12.patch": "22c75371f85d8d6ea3cf9f09668720d1b3cba80ef1d25eb4861ee4421f3bc6f4",
     "projects/Generic/patches/linux/linux-9974-lldv-format-coverage.patch": "ff741256ec53fec02a4da99fd90c316f6348e1069d7aaf6911d140d0ed32d60e",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-unorm-scanout.patch": "23e049cd9cea3fad418b8a723cecdfb076ab933af80b55ed2fd9587f24c70cb9",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-unorm-scanout.patch": "3152a8327a5c398716ab6cc7299630a3dfb056eb86323d1779920f878593970b",
     "projects/Generic/patches/linux/linux-9975-amd-native-lldv-dcn.patch": "dc81a093850f3d6d85627ea7ba70d225a959b1b99c8780e941fd3ae42a62b454",
     "projects/Generic/patches/linux/linux-9976-intel-native-lldv-rgb10.patch": "a7d9f343dba332c74a4970ad68e7b9bfe0038a23b1b989713243c101df959dd1",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9009-native-lldv-rgb16.patch": "ea33770fb4bed9e33b11714465adee068ae068d634b82ff47c8d02849e87cb48",
