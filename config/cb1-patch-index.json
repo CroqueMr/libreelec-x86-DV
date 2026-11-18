@@ -2359,5 +2359,14 @@
       "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Select the SDR compositor for native BT.2020.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Reuse SDR gamut conversion for native GUI and subtitle composition."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-reuse-gbm-front-buffer.patch": {
+    "summary": "Probe the already locked GBM buffer during output setup",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Return the latest retained front buffer without acquiring it again.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Expose a non-owning accessor for the retained front buffer.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Reuse the buffer when validating float output."
+    }
   }
 }

@@ -330,7 +330,7 @@
     "tests/cb1/test_native_video_telemetry.py": "c10e8392d2a917064aa75cc84e2344209c1529779ab111a1cd32585aaee40128",
     "tests/cb1/test_sdr_live_settings.py": "b3b869704061203c77b874f343dd5e978fbfdd98f2d66c7adc1801263af2e7e4",
     "tests/cb1/test_sdr_applied_metadata.py": "828d531ee9d0c6418f7d600b4947691b51ce487b6265c1b3c2b7e67eacd5cf85",
-    "tests/cb1/test_output_supersession.py": "82f522f5366babde399c232dcbf4b8281d5b3e027ee9824b7183ddd7232a82c8",
+    "tests/cb1/test_output_supersession.py": "9828a78d552cb5defe8f629c2cef048f7b98c5887c78f40be5cb7f1b2d05bc31",
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
     "tests/cb1/test_hdmi_scdc_diagnostics.py": "b82425e1906205f8e6d6685a634f3fa8b3c83def89660c13a7bb691f04612bd2",
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "e73a5a3c32a8a83781dcf693bf6f096921526b910ab7373a17ddde8b62bb425b",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "bbe3447d1d5113f7e47436b13d771608f9d614896f5bbd57a6783e47e2a264b9",
+    "config/cb1-patch-index.json": "cb094be6362408c4e43cf43008243d383f5cda48cff872dc90a4dab03ec5322c",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -483,7 +483,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-preserve-native-sdr-bt2020.patch": "951d25bc723b9322ee5881edb0cc570241dfd799e9a9fb9a56457a4dfe1ad165",
     "CB1/tests/gui_final_hdr10.cpp": "1b53eb00e24ae9810b838f8fbbfebbda9d49c93d1538eece6176a9a975cc6020",
     "projects/Generic/patches/kodi/kodi-9998-hdmi-dts-capability.patch": "c7aec078b96ce9dcf8b8418990ee2c552147c28b4a988a0ee267c8dc4eb13492",
-    "tests/cb1/test_alsa_hdmi_dts.py": "1ce66212dc04b075ed74c3e089acd38c176320c6991ea1cf53bb216f4cd5340e"
+    "tests/cb1/test_alsa_hdmi_dts.py": "1ce66212dc04b075ed74c3e089acd38c176320c6991ea1cf53bb216f4cd5340e",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-reuse-gbm-front-buffer.patch": "fb6816dc55ed91ad35747f4c7a7ffd76d20d16427ce7e2dbf3101e4cf14b172a",
+    "tests/cb1/test_gbm_front_buffer.py": "45e7e92170798d801dac03e0decd2bf47b860d75b115bc9063c43f5d4b191f52"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
