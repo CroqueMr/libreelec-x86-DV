@@ -17,13 +17,17 @@ class IntelHDMIPinOut(unittest.TestCase):
         update = function(source, 'update_eld')
         self.assertLess(update.index('hdmi_pcm_setup_pin('), update.index('if (eld_changed)'))
         self.assertIn('snd_hda_hdmi_setup_audio_infoframe(', function(source, 'hdmi_pcm_setup_pin'))
-        self.assertIn('snd_hda_hdmi_setup_audio_infoframe(',
-                      function(source, 'snd_hda_hdmi_generic_pcm_prepare'))
+        prepare = function(source, 'snd_hda_hdmi_generic_pcm_prepare')
+        self.assertLess(prepare.index('scoped_guard(mutex, &per_pin->lock)'),
+                        prepare.index('adlp_restore_pin_out('))
+        self.assertLess(prepare.index('snd_hda_hdmi_setup_audio_infoframe('),
+                        prepare.index('adlp_restore_pin_out('))
         reconcile = function(source, 'adlp_restore_pin_out')
         driver = r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #define PIN_OUT 0x40
 #define AC_VERB_GET_PIN_WIDGET_CONTROL 0xf07
 #define AC_VERB_SET_PIN_WIDGET_CONTROL 0x707
@@ -34,10 +38,16 @@ class IntelHDMIPinOut(unittest.TestCase):
 typedef unsigned short hda_nid_t;
 struct hda_codec;
 struct hdac { unsigned vendor_id; };
-struct hdmi_eld { bool eld_valid; struct { int spk_alloc, conn_type; } info; };
+struct hdmi_eld {
+    bool eld_valid, monitor_present;
+    int eld_size;
+    unsigned char eld_buffer[2];
+    struct { int spk_alloc, conn_type, sad_count; } info;
+};
 struct hdac_chmap { struct { void (*set_channel_count)(struct hdac*, int, int); } ops; };
 struct hdmi_spec {
     unsigned long pcm_in_use;
+    bool static_pcm_mapping;
     struct hdac_chmap chmap;
     struct { void (*pin_setup_infoframe)(struct hda_codec*, int, int, int, int, int); } ops;
 };
@@ -83,6 +93,24 @@ static inline int snd_hda_codec_write(struct hda_codec *c, hda_nid_t pin,
     writes++; regs[entries == 0 ? 0 : selected] = value; return 0;
 }
 '''
+        eld_calls = r'''
+struct snd_jack {};
+#define snd_parse_eld(...) 0
+#define snd_show_eld(...) ((void)0)
+#define schedule_delayed_work(...) ((void)0)
+#define hdmi_attach_hda_pcm(...) ((void)0)
+#define hdmi_detach_hda_pcm(...) ((void)0)
+#define hdmi_pcm_reset_pin(...) ((void)0)
+#define pin_cvt_fixup(...) ((void)0)
+#define snd_jack_report(...) ((void)0)
+#define snd_ctl_notify(...) ((void)0)
+#define pin_idx_to_pcm_jack(...) NULL
+static struct hda_codec *active_codec;
+static void hdmi_pcm_setup_pin(struct hdmi_spec *spec, struct hdmi_spec_per_pin *pin) {
+    (void)spec;
+    snd_hda_hdmi_setup_audio_infoframe(active_codec, pin, false);
+}
+'''
         cases = r'''
 int main(void) {
     struct scenario {
@@ -116,10 +144,10 @@ int main(void) {
         entries = s.entries; selected = 1 - s.dev; regs[selected] = 2; regs[s.dev] = s.reg;
         reads = writes = 0; select_status = s.status; latch = s.latch;
         /* A synthetic silent stream can have channels without a prepared route. */
-        snd_hda_hdmi_setup_audio_infoframe(&codec, &pin, false);
+        adlp_restore_pin_out(&codec, &pin);
         assert(!reads && !writes);
         pin.setup = true;
-        snd_hda_hdmi_setup_audio_infoframe(&codec, &pin, s.reg == 3);
+        adlp_restore_pin_out(&codec, &pin);
         if (reads != s.reads || writes != s.writes || regs[1 - s.dev] != 2 ||
             regs[s.dev] != (s.writes ? s.reg | PIN_OUT : s.reg)) {
             fprintf(stderr, "%s: reads=%d writes=%d reg=%d\n", s.name, reads, writes, regs[s.dev]);
@@ -127,18 +155,41 @@ int main(void) {
         }
         if (s.writes) {
             /* Repeating the same ELD refresh must only write if a modeset reset the pin. */
-            snd_hda_hdmi_setup_audio_infoframe(&codec, &pin, s.reg == 3);
+            adlp_restore_pin_out(&codec, &pin);
             assert(writes == 1);
             regs[s.dev] = s.reg;
-            snd_hda_hdmi_setup_audio_infoframe(&codec, &pin, s.reg == 3);
+            adlp_restore_pin_out(&codec, &pin);
             assert(writes == 2 && regs[s.dev] == (s.reg | PIN_OUT));
         }
     }
+    /* ELD refresh first configures the PCM, then replaces the cached ELD.
+     * An HDMI-to-DP change cannot reuse HDMI's single-entry exception. */
+    struct hdmi_spec spec = { .pcm_in_use = 1, .chmap.ops.set_channel_count = set_channels,
+                             .ops.pin_setup_infoframe = infoframe };
+    struct hda_codec codec = { .core.vendor_id = 0x8086281c, .spec = &spec };
+    struct hdmi_spec_per_pin pin = { .pin_nid = 7, .dev_id = 0, .pcm_idx = 0, .channels = 2,
+        .setup = true, .sink_eld = { .eld_valid = true, .eld_size = 1,
+                                     .info = { .conn_type = 0, .sad_count = 1 } } };
+    struct hdmi_eld next = pin.sink_eld;
+    active_codec = &codec;
+    entries = select_status = reads = writes = regs[0] = 0;
+    latch = false;
+    next.info.conn_type = 1;
+    next.eld_buffer[0] = 1;
+    update_eld(&codec, &pin, &next, 0);
+    assert(pin.sink_eld.info.conn_type == 1 && !writes && !reads);
+    next.info.conn_type = 0;
+    next.eld_buffer[0] = 2;
+    update_eld(&codec, &pin, &next, 0);
+    assert(pin.sink_eld.info.conn_type == 0 && writes == 1 && regs[0] == PIN_OUT);
+    regs[0] = 3;
+    update_eld(&codec, &pin, &next, 0);
+    assert(writes == 2 && regs[0] == (3 | PIN_OUT));
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:
             source, binary = Path(tmp) / 'pin.c', Path(tmp) / 'pin'
-            source.write_text('\n'.join((driver, reconcile, refresh, cases)))
+            source.write_text('\n'.join((driver, reconcile, refresh, eld_calls, update, cases)))
             subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', str(source),
                             '-o', str(binary)], check=True)
             result = subprocess.run([str(binary)], text=True, capture_output=True)

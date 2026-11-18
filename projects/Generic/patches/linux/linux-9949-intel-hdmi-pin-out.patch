@@ -1,8 +1,8 @@
 diff --git a/sound/hda/codecs/hdmi/hdmi.c b/sound/hda/codecs/hdmi/hdmi.c
 --- a/sound/hda/codecs/hdmi/hdmi.c
 +++ b/sound/hda/codecs/hdmi/hdmi.c
-@@ -525,6 +525,30 @@
- 	}
+@@ -1130,6 +1130,34 @@
+ 		return NULL;
  }
  
 +/* A link change can reset an active Alder Lake-P HDMI audio pin. */
@@ -13,8 +13,12 @@ diff --git a/sound/hda/codecs/hdmi/hdmi.c b/sound/hda/codecs/hdmi/hdmi.c
 +	hda_nid_t pin = per_pin->pin_nid;
 +	int ctl;
 +
-+	if (!per_pin->setup || !per_pin->sink_eld.eld_valid || per_pin->pcm_idx < 0 ||
++	if (codec->core.vendor_id != 0x8086281c || !per_pin->setup || !per_pin->channels ||
++	    !per_pin->sink_eld.eld_valid || per_pin->pcm_idx < 0 ||
 +	    !test_bit(per_pin->pcm_idx, &spec->pcm_in_use))
++		return;
++
++	if (snd_hda_set_dev_select(codec, pin, per_pin->dev_id))
 +		return;
 +
 +	/* A single-entry HDMI pin has no device selector to read back. */
@@ -29,23 +33,23 @@ diff --git a/sound/hda/codecs/hdmi/hdmi.c b/sound/hda/codecs/hdmi/hdmi.c
 +				    ctl | PIN_OUT);
 +}
 +
- void snd_hda_hdmi_setup_audio_infoframe(struct hda_codec *codec,
- 					struct hdmi_spec_per_pin *per_pin,
- 					bool non_pcm)
-@@ -536,12 +560,14 @@
- 	int channels = per_pin->channels;
- 	int active_channels;
- 	struct hdmi_eld *eld;
--	int ca;
-+	int ca, err;
+ /* update per_pin ELD from the given new ELD;
+  * setup info frame and notification accordingly
+  * also notify ELD kctl and report jack status changes
+@@ -1222,6 +1250,8 @@
+ 		pin_cvt_fixup(codec, per_pin, 0);
+ 		snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, per_pin->non_pcm);
+ 	}
++
++	adlp_restore_pin_out(codec, per_pin);
  
- 	if (!channels)
- 		return;
+ 	if (eld_changed && pcm_idx >= 0)
+ 		snd_ctl_notify(codec->card,
+@@ -1700,6 +1730,7 @@
+ 		}
  
--	snd_hda_set_dev_select(codec, pin_nid, dev_id);
-+	err = snd_hda_set_dev_select(codec, pin_nid, dev_id);
-+	if (!err && codec->core.vendor_id == 0x8086281c)
+ 		snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, non_pcm);
 +		adlp_restore_pin_out(codec, per_pin);
- 
- 	/* some HW (e.g. HSW+) needs reprogramming the amp at each time */
- 	if (get_wcaps(codec, pin_nid) & AC_WCAP_OUT_AMP)
+ 	}
+ 	if (spec->dyn_pin_out) {
+ 		snd_hda_set_dev_select(codec, per_pin->pin_nid,
