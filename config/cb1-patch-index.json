@@ -2121,6 +2121,16 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Return the confirmation from the same atomic transaction."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hdr10-fallback-mode.patch": {
+    "owner": "Keep the selected cadence on a usable display mode when Dolby Vision startup falls back to HDR10.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the shared playback mode choice before opening the decoder.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Replace an unusable default mode for automatic HDR10 recovery with a usable mode at the same refresh rate.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Carry decoded source identity into the shared choice.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Validate candidate modes against the connector and existing transport limits.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose validation of a specific display timing."
+    }
+  },
   "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {
     "owner": "Restore the enabled output bit on an active Alder Lake-P HDMI audio route.",
     "files": {

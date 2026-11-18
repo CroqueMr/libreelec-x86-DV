@@ -1,0 +1,244 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+index 0b1c250..e5b4225 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4817,8 +4817,8 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+       if (!pMenus)
+       {
+         const RESOLUTION res = playerLedStartupResolution ? *playerLedStartupResolution :
+-            CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width,
+-                                                   hint.height, !hint.stereo_mode.empty());
++            CRenderManager::ChoosePlaybackResolution(framerate, hint.width, hint.height,
++                                                    !hint.stereo_mode.empty(), nativeDV);
+ #ifdef HAVE_DVBRIDGE
+         using HDRSignal = DVBRIDGE::NativeHDRSignal;
+         auto hdrSignal = HDRSignal::None;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+index 4b23854..aa01578 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -28,11 +28,11 @@
+ #include "windowing/GraphicContext.h"
+ #include "windowing/WinSystem.h"
+ 
++#include <cmath>
+ #include <memory>
+ #include <mutex>
+ #include <optional>
+ #ifdef CB1_HAS_HDR10_AI
+-#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIWindowManager.h"
+ #include "guilib/WindowIDs.h"
+@@ -41,7 +41,9 @@
+ #endif
+ #endif
+ #ifdef HAVE_DVBRIDGE
++#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
+ #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
++#include "settings/DisplaySettings.h"
+ #endif
+ #if defined(HAVE_GBM) && defined(HAS_GLES)
+ #include "windowing/gbm/WinSystemGbmGLESContext.h"
+@@ -1006,22 +1008,65 @@ void CRenderManager::SetViewMode(int iViewMode)
+   m_playerPort->VideoParamsChange();
+ }
+ 
+-RESOLUTION CRenderManager::ChoosePlaybackResolution(double fps, int width, int height, bool stereo,
+-                                                    bool nativeDV, bool atStartup)
++RESOLUTION CRenderManager::ChoosePlaybackResolution(double fps,
++                                                    int width,
++                                                    int height,
++                                                    bool stereo,
++                                                    bool nativeDV,
++                                                    bool atStartup,
++                                                    const VideoPicture* picture)
+ {
+ #ifdef HAVE_DVBRIDGE
++  const KODI::WINDOWING::GBM::CWinSystemGbmGLESContext* window = nullptr;
+   const auto advanced = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings();
+   if (nativeDV && !stereo && !CResolutionUtils::HasWhitelist() &&
+       advanced->m_videoAdjustRefreshOverrides.empty())
+-    if (const auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+-            CServiceBroker::GetWinSystem()))
+-      if (const auto resolution = window->PlayerLedResolution(fps, atStartup))
+-        return *resolution;
++    window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++        CServiceBroker::GetWinSystem());
++  if (window)
++    if (const auto resolution = window->PlayerLedResolution(fps, atStartup))
++      return *resolution;
+ #else
+   (void)nativeDV;
+   (void)atStartup;
++  (void)picture;
++#endif
++  const RESOLUTION chosen = CResolutionUtils::ChooseBestResolution(fps, width, height, stereo);
++#ifdef HAVE_DVBRIDGE
++  // When the startup fallback is active, the empty whitelist's desktop size floor
++  // can hide usable HDR10 modes on an 8K display. Keep the refresh Kodi selected.
++  if (window && (!picture || picture->doviSourceInfo.profile ||
++                 picture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION) &&
++      DVBRIDGE::FrameOutputSettings().hdr10TransportFallback &&
++      !window->SupportsDVOutputTiming(chosen))
++  {
++    const auto& display = CDisplaySettings::GetInstance();
++    const float refresh = display.GetResolutionInfo(chosen).fRefreshRate;
++    std::vector<RESOLUTION> candidates;
++    window->GetGfxContext().GetAllowedResolutions(candidates);
++    RESOLUTION best = chosen;
++    int bestArea = 0;
++    for (const RESOLUTION candidate : candidates)
++    {
++      const auto& mode = display.GetResolutionInfo(candidate);
++      if (std::abs(mode.fRefreshRate - refresh) < 0.01f &&
++          window->SupportsDVOutputTiming(candidate))
++      {
++        const int area = mode.iScreenWidth * mode.iScreenHeight;
++        if (area > bestArea)
++        {
++          best = candidate;
++          bestArea = area;
++        }
++      }
++    }
++    if (best != chosen)
++      CLog::Log(LOGDEBUG, "CB1 HDR10 fallback: selected {} (original mode {})",
++                display.GetResolutionInfo(best).strMode, display.GetResolutionInfo(chosen).strMode);
++    return best;
++  }
+ #endif
+-  return CResolutionUtils::ChooseBestResolution(fps, width, height, stereo);
++  return chosen;
+ }
+ 
+ RESOLUTION CRenderManager::GetResolution()
+@@ -1035,7 +1080,7 @@ RESOLUTION CRenderManager::GetResolution()
+   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+   {
+     res = ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
+-                                      !m_picture.stereoMode.empty(), m_nativeDVRate);
++                                   !m_picture.stereoMode.empty(), m_nativeDVRate, false, &m_picture);
+   }
+ 
+   return res;
+@@ -1304,8 +1349,9 @@ void CRenderManager::UpdateResolution()
+     {
+       if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
+       {
+-        const RESOLUTION res = ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
+-                                      !m_picture.stereoMode.empty(), m_nativeDVRate);
++        const RESOLUTION res =
++            ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
++                                     !m_picture.stereoMode.empty(), m_nativeDVRate, false, &m_picture);
+ #ifdef HAVE_DVBRIDGE
+         // Carry the stream's intent when this later request performs the modeset.
+         const auto previous = DVBRIDGE::guiModeChangeResolution;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+index 7f36a0e..e6cc20f 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+@@ -94,7 +94,8 @@ public:
+ 
+   RESOLUTION GetResolution();
+   static RESOLUTION ChoosePlaybackResolution(double fps, int width, int height, bool stereo,
+-                                             bool nativeDV, bool atStartup = false);
++                                             bool nativeDV, bool atStartup = false,
++                                             const VideoPicture* picture = nullptr);
+   void UpdateResolution();
+   void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
+                                bool nativeDV = false);
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+index 5b4835d..25b24c2 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -39,6 +39,7 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <charconv>
+ #include <vector>
+ #include <mutex>
+ #include <cmath>
+@@ -999,27 +1000,58 @@ bool CWinSystemGbm::RefreshDisplayInfoForVideo()
+   return true;
+ }
+ 
++namespace
++{
++bool UsableDVOutputTiming(const drmModeModeInfo* mode, const RESOLUTION_INFO* expected = nullptr)
++{
++  if (!mode || !mode->hdisplay || (mode->hdisplay & 1) || !mode->vdisplay ||
++      mode->hdisplay > 3840 || mode->vdisplay > 2160 ||
++      uint64_t(mode->hdisplay) * mode->vdisplay < 5 * 3072u ||
++      (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN)))
++    return false;
++  const double rate = mode->htotal && mode->vtotal
++                          ? mode->clock * 1000.0 / mode->htotal / mode->vtotal
++                          : 0.0;
++  return CResolutionUtils::IsCB1RefreshRate(rate) &&
++         (!expected || (!(mode->flags & DRM_MODE_FLAG_3D_MASK) &&
++                        !(expected->dwFlags & D3DPRESENTFLAG_MODEMASK) &&
++                        mode->hdisplay == expected->iScreenWidth &&
++                        mode->vdisplay == expected->iScreenHeight &&
++                        std::abs(rate - expected->fRefreshRate) < 0.01));
++}
++} // namespace
++
+ bool CWinSystemGbm::SupportsDVOutputMode(bool requireCurrentMode) const
+ {
+   if (!m_DRM) return false;
+-  const auto usable = [](const drmModeModeInfo* mode) {
+-    if (!mode || !mode->hdisplay || (mode->hdisplay & 1) || !mode->vdisplay ||
+-        mode->hdisplay > 3840 || mode->vdisplay > 2160 ||
+-        uint64_t(mode->hdisplay) * mode->vdisplay < 5 * 3072u ||
+-        (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN))) return false;
+-    const double rate = mode->htotal && mode->vtotal ?
+-        mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
+-    return CResolutionUtils::IsCB1RefreshRate(rate);
+-  };
+-  if (usable(m_DRM->GetSelectedMode())) return true;
++  if (UsableDVOutputTiming(m_DRM->GetSelectedMode())) return true;
+   if (requireCurrentMode) return false;
+   auto* connector = m_DRM->GetConnector();
+   if (!connector || !connector->IsConnected()) return false;
+   for (int i = 0; i < connector->GetModesCount(); ++i)
+-    if (usable(connector->GetModeForIndex(i))) return true;
++    if (UsableDVOutputTiming(connector->GetModeForIndex(i))) return true;
+   return false;
+ }
+ 
++bool CWinSystemGbm::SupportsDVOutputTiming(RESOLUTION resolution) const
++{
++  const auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector || !connector->IsConnected() || resolution < RES_DESKTOP)
++    return false;
++
++  const auto& display = CDisplaySettings::GetInstance();
++  const auto& info = display.GetResolutionInfo(resolution);
++  const auto* end = info.strId.data() + info.strId.size();
++  int index = -1;
++  const auto parsed = std::from_chars(info.strId.data(), end, index);
++  if (parsed.ec != std::errc{} || parsed.ptr != end || index < 0 ||
++      index >= connector->GetModesCount())
++    return false;
++
++  // The connector mode list can change before Kodi rebuilds its resolution catalogue.
++  return UsableDVOutputTiming(connector->GetModeForIndex(index), &info);
++}
++
+ bool CWinSystemGbm::SupportsNativeDVOutput(bool requireCurrentMode) const
+ {
+   if (!m_info || !m_info->SupportsStandardDolbyVision() ||
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+index b0c60dd..4dad84e 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -85,6 +85,7 @@ public:
+   bool CompleteDVBridgePage(int timeoutMs = 0);
+   bool SupportsNativeDVOutput(bool requireCurrentMode = true) const;
+   bool SupportsDVOutputMode(bool requireCurrentMode = true) const;
++  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
+   bool RefreshDisplayInfoForVideo();
+ #endif
+ 

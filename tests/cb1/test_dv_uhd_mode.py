@@ -15,13 +15,18 @@ class DVUHDModeTests(unittest.TestCase):
         manager = body(manager_source, 'RESOLUTION CRenderManager::GetResolution()')
         choice = body(manager_source, 'RESOLUTION CRenderManager::ChoosePlaybackResolution(')
         gbm = (TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        gbm_window = (TREE/'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
         eligible = body(gbm, 'bool NativeDVEligible(')
         wants = body(gbm, 'bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream)')
+        timing = body(gbm_window, 'bool UsableDVOutputTiming(')
+        support = body(gbm_window, 'bool CWinSystemGbm::SupportsDVOutputTiming(')
         program = r'''
+#define HAVE_DVBRIDGE
 #include "windowing/Resolution.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
 #include <algorithm>
 #include <cassert>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -29,6 +34,7 @@ class DVUHDModeTests(unittest.TestCase):
 #include <string>
 #include <utility>
 #include <vector>
+#include <xf86drmMode.h>
 constexpr uint32_t D3DPRESENTFLAG_INTERLACED=1, D3DPRESENTFLAG_MODE3DSBS=2,
  D3DPRESENTFLAG_MODE3DTB=4, D3DPRESENTFLAG_MODEMASK=7;
 constexpr int LOGDEBUG=0, LOGINFO=1, STEREOSCOPIC_PLAYBACK_MODE_PREFERRED=1,
@@ -82,11 +88,26 @@ struct CGraphicContext {
  RenderStereoMode GetNextStereoMode()const{return RenderStereoMode::OFF;}
  bool IsFullScreenRoot()const{return true;}
 };
+struct Connector {
+ std::vector<drmModeModeInfo> modes;
+ bool IsConnected() const {return true;}
+ int GetModesCount() const {return modes.size();}
+ const drmModeModeInfo* GetModeForIndex(int i) const {return &modes.at(i);}
+};
+struct DRM {
+ Connector connector;
+ const Connector* GetConnector() const {return &connector;}
+} drm;
 struct Window {
  CGraphicContext gfx;CGraphicContext& GetGfxContext(){return gfx;}
+ const CGraphicContext& GetGfxContext() const {return gfx;}
+ const DRM* m_DRM=&drm;
  bool available=true;bool CanRetainDVSource()const{return available;}
+ bool SupportsDVOutputTiming(RESOLUTION resolution) const;
+ std::optional<RESOLUTION> PlayerLedResolution(double, bool) const {return {};}
 };
-using CWinSystemGbmGLESContext=Window;
+namespace KODI::WINDOWING::GBM {using CWinSystemGbmGLESContext=Window;}
+using namespace KODI::WINDOWING::GBM;
 struct Stereo {bool IsStereoModeSettled()const{return true;}};
 struct GUI {Stereo stereo;Stereo& GetStereoscopicsManager(){return stereo;}};
 struct CServiceBroker {
@@ -103,16 +124,26 @@ public:
 namespace DVBRIDGE {
  enum class OutputMode {Standard,Disabled};
  std::atomic<OutputMode> playbackMode{OutputMode::Standard};
+ struct Preferences { bool hdr10TransportFallback{}; } preferences;
+ Preferences FrameOutputSettings() {return preferences;}
 }
 bool NativeDVEligible(bool source,bool software,bool interlaced,bool stereo) ELIGIBLE_CODE
 bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream) WANTS_CODE
 RESOLUTION_CODE
-struct Picture {int iWidth=3840,iHeight=2160;std::string stereoMode;};
+bool UsableDVOutputTiming(const drmModeModeInfo* mode, const RESOLUTION_INFO* expected = nullptr) TIMING_CODE
+bool Window::SupportsDVOutputTiming(RESOLUTION resolution) const SUPPORT_CODE
+enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10};
+struct VideoPicture {
+ int iWidth=3840,iHeight=2160;
+ std::string stereoMode;
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ struct {int profile=0;} doviSourceInfo;
+};
 struct CRenderManager {
  std::mutex m_statelock;int m_renderState=1;bool m_nativeDVRate=false;float m_fps=24000.f/1001;
- Picture m_picture;
+ VideoPicture m_picture;
  static RESOLUTION ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool nativeDV,
-                                            bool atStartup=false) CHOICE_CODE
+                                            bool atStartup=false, const VideoPicture* picture=nullptr) CHOICE_CODE
  RESOLUTION GetResolution() MANAGER_CODE
 };
 int main() {
@@ -227,13 +258,60 @@ int main() {
  component.settings.adjust=ADJUST_REFRESHRATE_OFF;
  manager.m_picture.iWidth=3832;manager.m_picture.iHeight=1600;
  assert(manager.GetResolution()==RES_DESKTOP);
+
+ // An 8K desktop makes Kodi's empty whitelist select 8K at the film cadence.
+ const auto desktop8k=add(7680,4320,60);
+ const auto film8k=add(7680,4320,film);
+ auto advertise=[&](RESOLUTION res, int clock, int flags=0) {
+  auto& info=modes[res];
+  info.strId=std::to_string(drm.connector.modes.size());
+  drmModeModeInfo mode{};
+  mode.hdisplay=info.iScreenWidth;mode.vdisplay=info.iScreenHeight;
+  mode.htotal=4400;mode.vtotal=2250;mode.clock=clock;mode.flags=flags;
+  drm.connector.modes.push_back(mode);
+ };
+ advertise(desktop8k,594000);
+ advertise(film8k,237363);
+ advertise(interlaced,237363,DRM_MODE_FLAG_INTERLACE);
+ advertise(sbs,237363,DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF);
+ advertise(fhd,237363);
+ advertise(uhd,237600); // The ID points to 24.000, despite Kodi advertising 23.976.
+ modes[RES_DESKTOP]=modes[desktop8k];
+ component.settings.whitelist.clear();
+ component.settings.adjust=1;
+ manager.m_picture.iWidth=3840;manager.m_picture.iHeight=2160;
+ assert(manager.GetResolution()==film8k && "ordinary playback must keep the 8K desktop floor");
+ DVBRIDGE::preferences.hdr10TransportFallback=true;
+ assert(choose(3840,2160)==film8k);
+ assert(manager.GetResolution()==fhd && "automatic recovery must skip an unusable 8K mode");
+ drm.connector.modes.back().clock=237363;
+ assert(manager.GetResolution()==uhd && "prefer the largest usable mode at the same cadence");
+ assert(CRenderManager::ChoosePlaybackResolution(film,3840,2160,false,true)==uhd);
+ manager.m_picture.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ assert(manager.GetResolution()==film8k && "ordinary HDR10 processing must keep the 8K mode");
+ manager.m_picture.hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
+ list({film8k,uhd});
+ assert(manager.GetResolution()==uhd);
+ list({film8k});
+ assert(manager.GetResolution()==film8k && "explicit whitelist allows the 8K mode");
+ component.settings.whitelist.clear();
+ component.advanced.m_videoAdjustRefreshOverrides.push_back({false,23,24,23.97f,23.98f});
+ assert(manager.GetResolution()==film8k && "explicit refresh override allows the 8K mode");
+ component.advanced.m_videoAdjustRefreshOverrides.clear();
+ component.settings.adjust=ADJUST_REFRESHRATE_OFF;
+ assert(manager.GetResolution()==RES_DESKTOP);
+ component.settings.adjust=1;
+ drm.connector.modes.back().flags=DRM_MODE_FLAG_DBLSCAN;
+ drm.connector.modes[4].clock=237600;
+ assert(manager.GetResolution()==film8k && "keep Kodi's choice if the cadence has no usable mode");
 }
 '''.replace('RESOLUTION_CODE', resolution).replace('CHOICE_CODE',choice).replace('MANAGER_CODE', manager).replace(
+            'TIMING_CODE', timing).replace('SUPPORT_CODE', support).replace(
             'ELIGIBLE_CODE', eligible).replace('WANTS_CODE', wants)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
             (root/'test.cpp').write_text(program)
-            built=subprocess.run(['c++','-std=c++20','-I'+str(TREE/'xbmc'),
+            built=subprocess.run(['c++','-std=c++20','-I/usr/include/libdrm','-I'+str(TREE/'xbmc'),
                 str(root/'test.cpp'),'-o',str(root/'test')],capture_output=True,text=True)
             self.assertEqual(built.returncode,0,built.stderr)
             ran=subprocess.run([str(root/'test')],capture_output=True,text=True)
