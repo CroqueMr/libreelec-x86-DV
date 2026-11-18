@@ -18,8 +18,9 @@ class DVUHDModeTests(unittest.TestCase):
         gbm_window = (TREE/'xbmc/windowing/gbm/WinSystemGbm.cpp').read_text()
         eligible = body(gbm, 'bool NativeDVEligible(')
         wants = body(gbm, 'bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream)')
-        timing = body(gbm_window, 'bool UsableDVOutputTiming(')
-        support = body(gbm_window, 'bool CWinSystemGbm::SupportsDVOutputTiming(')
+        timing = body(gbm_window, 'double DVOutputTimingRate(')
+        snapshot = body(gbm_window, 'CWinSystemGbm::GetDVOutputTimings()')
+        support = body(gbm, 'bool CWinSystemGbmGLESContext::SupportsDVOutputTiming(')
         program = r'''
 #define HAVE_DVBRIDGE
 #include "windowing/Resolution.h"
@@ -73,6 +74,7 @@ struct CDisplaySettings {
  std::vector<RESOLUTION_INFO> modes=std::vector<RESOLUTION_INFO>(RES_DESKTOP);
  static CDisplaySettings& GetInstance(){static CDisplaySettings d;return d;}
  const RESOLUTION_INFO& GetResolutionInfo(RESOLUTION r)const{return modes.at(r);}
+ RESOLUTION_INFO GetResolutionInfoCopy(RESOLUTION r)const{return modes.at(r);}
  RESOLUTION GetCurrentResolution()const{return RES_DESKTOP;}
  RESOLUTION GetResFromString(const std::string& s)const{return static_cast<RESOLUTION>(std::stoi(s));}
  std::string GetStringFromRes(RESOLUTION r)const{return std::to_string(r);}
@@ -90,18 +92,23 @@ struct CGraphicContext {
 };
 struct Connector {
  std::vector<drmModeModeInfo> modes;
- bool IsConnected() const {return true;}
+ bool connected=true;
+ bool IsConnected() {return connected;}
  int GetModesCount() const {return modes.size();}
  const drmModeModeInfo* GetModeForIndex(int i) const {return &modes.at(i);}
 };
 struct DRM {
  Connector connector;
- const Connector* GetConnector() const {return &connector;}
+ Connector* GetConnector() {return &connector;}
 } drm;
 struct Window {
+ struct DVOutputTiming {int index,width,height;double refresh;};
  CGraphicContext gfx;CGraphicContext& GetGfxContext(){return gfx;}
  const CGraphicContext& GetGfxContext() const {return gfx;}
- const DRM* m_DRM=&drm;
+ DRM* m_DRM=&drm;
+ mutable std::mutex m_dvCapabilityMutex;
+ std::vector<DVOutputTiming> m_dvOutputTimings;
+ std::vector<DVOutputTiming> GetDVOutputTimings() const;
  bool available=true;bool CanRetainDVSource()const{return available;}
  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
  std::optional<RESOLUTION> PlayerLedResolution(double, bool) const {return {};}
@@ -130,7 +137,8 @@ namespace DVBRIDGE {
 bool NativeDVEligible(bool source,bool software,bool interlaced,bool stereo) ELIGIBLE_CODE
 bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream) WANTS_CODE
 RESOLUTION_CODE
-bool UsableDVOutputTiming(const drmModeModeInfo* mode, const RESOLUTION_INFO* expected = nullptr) TIMING_CODE
+double DVOutputTimingRate(const drmModeModeInfo* mode) TIMING_CODE
+std::vector<Window::DVOutputTiming> Window::GetDVOutputTimings() const SNAPSHOT_CODE
 bool Window::SupportsDVOutputTiming(RESOLUTION resolution) const SUPPORT_CODE
 enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10};
 struct VideoPicture {
@@ -276,6 +284,13 @@ int main() {
  advertise(sbs,237363,DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF);
  advertise(fhd,237363);
  advertise(uhd,237600); // The ID points to 24.000, despite Kodi advertising 23.976.
+ auto* window=CServiceBroker::GetWinSystem();
+ auto publish=[&] {
+  window->m_DRM=&drm;
+  window->m_dvOutputTimings=window->GetDVOutputTimings();
+  window->m_DRM=nullptr; // Mode selection uses the snapshot even during DRM teardown.
+ };
+ publish();
  modes[RES_DESKTOP]=modes[desktop8k];
  component.settings.whitelist.clear();
  component.settings.adjust=1;
@@ -285,6 +300,7 @@ int main() {
  assert(choose(3840,2160)==film8k);
  assert(manager.GetResolution()==fhd && "automatic recovery must skip an unusable 8K mode");
  drm.connector.modes.back().clock=237363;
+ publish();
  assert(manager.GetResolution()==uhd && "prefer the largest usable mode at the same cadence");
  assert(CRenderManager::ChoosePlaybackResolution(film,3840,2160,false,true)==uhd);
  manager.m_picture.hdrType=StreamHdrType::HDR_TYPE_HDR10;
@@ -303,10 +319,15 @@ int main() {
  component.settings.adjust=1;
  drm.connector.modes.back().flags=DRM_MODE_FLAG_DBLSCAN;
  drm.connector.modes[4].clock=237600;
+ publish();
  assert(manager.GetResolution()==film8k && "keep Kodi's choice if the cadence has no usable mode");
+ drm.connector.modes.back().flags=0;
+ drm.connector.connected=false;
+ publish();
+ assert(manager.GetResolution()==film8k && "a disconnected display has no eligible candidate");
 }
 '''.replace('RESOLUTION_CODE', resolution).replace('CHOICE_CODE',choice).replace('MANAGER_CODE', manager).replace(
-            'TIMING_CODE', timing).replace('SUPPORT_CODE', support).replace(
+            'TIMING_CODE', timing).replace('SNAPSHOT_CODE', snapshot).replace('SUPPORT_CODE', support).replace(
             'ELIGIBLE_CODE', eligible).replace('WANTS_CODE', wants)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)

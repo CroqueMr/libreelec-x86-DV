@@ -2127,8 +2127,12 @@
       "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the shared playback mode choice before opening the decoder.",
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Replace an unusable default mode for automatic HDR10 recovery with a usable mode at the same refresh rate.",
       "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Carry decoded source identity into the shared choice.",
-      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Validate candidate modes against the connector and existing transport limits.",
-      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose validation of a specific display timing."
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Collect eligible physical timings on the display owner.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose eligible timing values to the display owner.",
+      "xbmc/settings/DisplaySettings.cpp": "Copy mode identity and update the desktop resolution under the catalogue lock.",
+      "xbmc/settings/DisplaySettings.h": "Expose locked resolution catalogue access.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish and invalidate eligible timings with the display capabilities, and match the requested mode to that snapshot.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep the timing snapshot with the existing capability state."
     }
   },
   "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {

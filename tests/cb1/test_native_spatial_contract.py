@@ -162,18 +162,15 @@ int main(){assert(admit(1920,1080) && admit(2560,1440) && admit(3840,2160));
 
     def test_dv_mode_admission_accepts_native_targets_not_stale_uhd_only(self):
         text = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
-        predicate = body(text, "bool UsableDVOutputTiming(")
+        predicate = body(text, "double DVOutputTimingRate(")
         self.run_program(r'''
 #include <cassert>
-#include <cmath>
 #include <cstdint>
 #include <initializer_list>
-constexpr int DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2,DRM_MODE_FLAG_3D_MASK=4;
-constexpr int D3DPRESENTFLAG_MODEMASK=7;
+constexpr int DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
 struct drmModeModeInfo {int hdisplay,vdisplay,clock=148500,htotal=2200,vtotal=1125,flags=0;};
-struct RESOLUTION_INFO {int iScreenWidth,iScreenHeight;float fRefreshRate;uint32_t dwFlags;};
 struct CResolutionUtils {static bool IsCB1RefreshRate(double value){return value>=10 && value<=60;}};
-bool usable(const drmModeModeInfo* mode,const RESOLUTION_INFO* expected=nullptr) PREDICATE
+double usable(const drmModeModeInfo* mode) PREDICATE
 int main(){
  assert(!usable(nullptr));
  for(int width: {1280,1920,2560,3840}){drmModeModeInfo mode{width,width*9/16};assert(usable(&mode));}

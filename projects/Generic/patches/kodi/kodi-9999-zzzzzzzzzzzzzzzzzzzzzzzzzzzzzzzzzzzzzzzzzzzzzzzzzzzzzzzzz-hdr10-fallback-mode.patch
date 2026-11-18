@@ -14,7 +14,7 @@ index 0b1c250..e5b4225 100644
          using HDRSignal = DVBRIDGE::NativeHDRSignal;
          auto hdrSignal = HDRSignal::None;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
-index 4b23854..aa01578 100644
+index 4b23854..6ed6c2e 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 @@ -28,11 +28,11 @@
@@ -83,15 +83,15 @@ index 4b23854..aa01578 100644
 +      !window->SupportsDVOutputTiming(chosen))
 +  {
 +    const auto& display = CDisplaySettings::GetInstance();
-+    const float refresh = display.GetResolutionInfo(chosen).fRefreshRate;
++    const auto original = display.GetResolutionInfoCopy(chosen);
 +    std::vector<RESOLUTION> candidates;
 +    window->GetGfxContext().GetAllowedResolutions(candidates);
 +    RESOLUTION best = chosen;
 +    int bestArea = 0;
 +    for (const RESOLUTION candidate : candidates)
 +    {
-+      const auto& mode = display.GetResolutionInfo(candidate);
-+      if (std::abs(mode.fRefreshRate - refresh) < 0.01f &&
++      const auto mode = display.GetResolutionInfoCopy(candidate);
++      if (std::abs(mode.fRefreshRate - original.fRefreshRate) < 0.01f &&
 +          window->SupportsDVOutputTiming(candidate))
 +      {
 +        const int area = mode.iScreenWidth * mode.iScreenHeight;
@@ -104,7 +104,7 @@ index 4b23854..aa01578 100644
 +    }
 +    if (best != chosen)
 +      CLog::Log(LOGDEBUG, "CB1 HDR10 fallback: selected {} (original mode {})",
-+                display.GetResolutionInfo(best).strMode, display.GetResolutionInfo(chosen).strMode);
++                display.GetResolutionInfoCopy(best).strMode, original.strMode);
 +    return best;
 +  }
  #endif
@@ -148,40 +148,92 @@ index 7f36a0e..e6cc20f 100644
    void UpdateResolution();
    void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
                                 bool nativeDV = false);
+diff --git a/xbmc/settings/DisplaySettings.cpp b/xbmc/settings/DisplaySettings.cpp
+index 50d5efc..04260c7 100644
+--- a/xbmc/settings/DisplaySettings.cpp
++++ b/xbmc/settings/DisplaySettings.cpp
+@@ -515,6 +515,27 @@ RESOLUTION_INFO& CDisplaySettings::GetResolutionInfo(RESOLUTION resolution)
+   return GetResolutionInfo((size_t)resolution);
+ }
+ 
++RESOLUTION_INFO CDisplaySettings::GetResolutionInfoCopy(RESOLUTION resolution) const
++{
++  std::unique_lock lock(m_critical);
++  if (resolution <= RES_INVALID || static_cast<size_t>(resolution) >= m_resolutions.size())
++    return EmptyResolution;
++
++  return m_resolutions[resolution];
++}
++
++void CDisplaySettings::SetDesktopResolutionInfo(const RESOLUTION_INFO& resolution)
++{
++  std::unique_lock lock(m_critical);
++  m_resolutions[RES_DESKTOP] = resolution;
++}
++
++size_t CDisplaySettings::ResolutionInfoSize() const
++{
++  std::unique_lock lock(m_critical);
++  return m_resolutions.size();
++}
++
+ void CDisplaySettings::AddResolutionInfo(const RESOLUTION_INFO &resolution)
+ {
+   std::unique_lock lock(m_critical);
+diff --git a/xbmc/settings/DisplaySettings.h b/xbmc/settings/DisplaySettings.h
+index b983b3f..c359848 100644
+--- a/xbmc/settings/DisplaySettings.h
++++ b/xbmc/settings/DisplaySettings.h
+@@ -66,7 +66,9 @@ public:
+   const RESOLUTION_INFO& GetResolutionInfo(RESOLUTION resolution) const;
+   RESOLUTION_INFO& GetResolutionInfo(size_t index);
+   RESOLUTION_INFO& GetResolutionInfo(RESOLUTION resolution);
+-  size_t ResolutionInfoSize() const { return m_resolutions.size(); }
++  RESOLUTION_INFO GetResolutionInfoCopy(RESOLUTION resolution) const;
++  void SetDesktopResolutionInfo(const RESOLUTION_INFO& resolution);
++  size_t ResolutionInfoSize() const;
+   void AddResolutionInfo(const RESOLUTION_INFO &resolution);
+ 
+   const RESOLUTION_INFO& GetCurrentResolutionInfo() const { return GetResolutionInfo(m_currentResolution); }
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
-index 5b4835d..25b24c2 100644
+index 5b4835d..282c336 100644
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -39,6 +39,7 @@
+@@ -351,7 +351,7 @@ void CWinSystemGbm::UpdateResolutions()
  
- #include <algorithm>
- #include <array>
-+#include <charconv>
- #include <vector>
- #include <mutex>
- #include <cmath>
-@@ -999,27 +1000,58 @@ bool CWinSystemGbm::RefreshDisplayInfoForVideo()
+     CServiceBroker::GetWinSystem()->GetGfxContext().ResetOverscan(current);
+     CDisplaySettings::GetInstance().AddResolutionInfo(current);
+-    CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP) = current;
++    CDisplaySettings::GetInstance().SetDesktopResolutionInfo(current);
+ 
+     CLog::Log(LOGINFO, "Found resolution {}x{} with {}x{}{} @ {:f} Hz{}", current.iWidth,
+               current.iHeight, current.iScreenWidth, current.iScreenHeight,
+@@ -371,7 +371,7 @@ void CWinSystemGbm::UpdateResolutions()
+           current.iWidth == res.iWidth && current.iHeight == res.iHeight &&
+           current.fRefreshRate == res.fRefreshRate && current.dwFlags == res.dwFlags)
+       {
+-        CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP) = res;
++        CDisplaySettings::GetInstance().SetDesktopResolutionInfo(res);
+       }
+ 
+       // The layout matters as much as the geometry here: without it a half 3D mode prints
+@@ -999,27 +999,51 @@ bool CWinSystemGbm::RefreshDisplayInfoForVideo()
    return true;
  }
  
 +namespace
 +{
-+bool UsableDVOutputTiming(const drmModeModeInfo* mode, const RESOLUTION_INFO* expected = nullptr)
++double DVOutputTimingRate(const drmModeModeInfo* mode)
 +{
 +  if (!mode || !mode->hdisplay || (mode->hdisplay & 1) || !mode->vdisplay ||
 +      mode->hdisplay > 3840 || mode->vdisplay > 2160 ||
 +      uint64_t(mode->hdisplay) * mode->vdisplay < 5 * 3072u ||
 +      (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN)))
-+    return false;
++    return 0.0;
 +  const double rate = mode->htotal && mode->vtotal
 +                          ? mode->clock * 1000.0 / mode->htotal / mode->vtotal
 +                          : 0.0;
-+  return CResolutionUtils::IsCB1RefreshRate(rate) &&
-+         (!expected || (!(mode->flags & DRM_MODE_FLAG_3D_MASK) &&
-+                        !(expected->dwFlags & D3DPRESENTFLAG_MODEMASK) &&
-+                        mode->hdisplay == expected->iScreenWidth &&
-+                        mode->vdisplay == expected->iScreenHeight &&
-+                        std::abs(rate - expected->fRefreshRate) < 0.01));
++  return CResolutionUtils::IsCB1RefreshRate(rate) ? rate : 0.0;
 +}
 +} // namespace
 +
@@ -198,47 +250,163 @@ index 5b4835d..25b24c2 100644
 -    return CResolutionUtils::IsCB1RefreshRate(rate);
 -  };
 -  if (usable(m_DRM->GetSelectedMode())) return true;
-+  if (UsableDVOutputTiming(m_DRM->GetSelectedMode())) return true;
++  if (DVOutputTimingRate(m_DRM->GetSelectedMode())) return true;
    if (requireCurrentMode) return false;
    auto* connector = m_DRM->GetConnector();
    if (!connector || !connector->IsConnected()) return false;
    for (int i = 0; i < connector->GetModesCount(); ++i)
 -    if (usable(connector->GetModeForIndex(i))) return true;
-+    if (UsableDVOutputTiming(connector->GetModeForIndex(i))) return true;
++    if (DVOutputTimingRate(connector->GetModeForIndex(i))) return true;
    return false;
  }
  
-+bool CWinSystemGbm::SupportsDVOutputTiming(RESOLUTION resolution) const
++std::vector<CWinSystemGbm::DVOutputTiming> CWinSystemGbm::GetDVOutputTimings() const
 +{
-+  const auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
-+  if (!connector || !connector->IsConnected() || resolution < RES_DESKTOP)
-+    return false;
++  std::vector<DVOutputTiming> timings;
++  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
++  if (!connector || !connector->IsConnected())
++    return timings;
 +
-+  const auto& display = CDisplaySettings::GetInstance();
-+  const auto& info = display.GetResolutionInfo(resolution);
-+  const auto* end = info.strId.data() + info.strId.size();
-+  int index = -1;
-+  const auto parsed = std::from_chars(info.strId.data(), end, index);
-+  if (parsed.ec != std::errc{} || parsed.ptr != end || index < 0 ||
-+      index >= connector->GetModesCount())
-+    return false;
-+
-+  // The connector mode list can change before Kodi rebuilds its resolution catalogue.
-+  return UsableDVOutputTiming(connector->GetModeForIndex(index), &info);
++  for (int index = 0; index < connector->GetModesCount(); ++index)
++  {
++    const auto* mode = connector->GetModeForIndex(index);
++    const double refresh = DVOutputTimingRate(mode);
++    if (refresh > 0.0 && !(mode->flags & DRM_MODE_FLAG_3D_MASK) && mode->vscan <= 1)
++      timings.push_back({index, mode->hdisplay, mode->vdisplay, refresh});
++  }
++  return timings;
 +}
 +
  bool CWinSystemGbm::SupportsNativeDVOutput(bool requireCurrentMode) const
  {
    if (!m_info || !m_info->SupportsStandardDolbyVision() ||
 diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
-index b0c60dd..4dad84e 100644
+index b0c60dd..09cc0ae 100644
 --- a/xbmc/windowing/gbm/WinSystemGbm.h
 +++ b/xbmc/windowing/gbm/WinSystemGbm.h
-@@ -85,6 +85,7 @@ public:
-   bool CompleteDVBridgePage(int timeoutMs = 0);
-   bool SupportsNativeDVOutput(bool requireCurrentMode = true) const;
-   bool SupportsDVOutputMode(bool requireCurrentMode = true) const;
-+  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
-   bool RefreshDisplayInfoForVideo();
- #endif
+@@ -28,6 +28,7 @@
+ #include <optional>
+ #include <string_view>
+ #include <utility>
++#include <vector>
  
+ #include <gbm.h>
+ 
+@@ -132,6 +133,16 @@ public:
+   std::vector<std::string> GetConnectedOutputs() override;
+ 
+ protected:
++#ifdef HAVE_DVBRIDGE
++  struct DVOutputTiming
++  {
++    int index;
++    int width;
++    int height;
++    double refresh;
++  };
++  std::vector<DVOutputTiming> GetDVOutputTimings() const;
++#endif
+   virtual bool ConnectorPreferencesAllowed() const { return true; }
+   void DeferConnectorPreferences();
+   void ApplyColorspace();
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index 123cbc9..77c6401 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1751,6 +1751,9 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+   const auto previous = [&] {
+     std::lock_guard lock(m_dvCapabilityMutex);
+     auto prior = m_dvLldvStatus;
++    if (lldvStatus.connectorId != prior.connectorId ||
++        lldvStatus.edidGeneration != prior.edidGeneration)
++      m_dvOutputTimings.clear();
+     m_dvLldvStatus = lldvStatus;
+     return prior;
+   }();
+@@ -1809,6 +1812,7 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+   }
+   const bool availableNativeDV = SupportsNativeDVOutput(false);
+   const bool availableHDR10 = SupportsHDR10Conversion(false);
++  auto timings = GetDVOutputTimings();
+   std::lock_guard lock(m_dvCapabilityMutex);
+   if (lldvStatus.edidGeneration != previous.edidGeneration ||
+       lldvStatus.connectorId != previous.connectorId ||
+@@ -1833,6 +1837,7 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+   m_dvCapabilities = caps;
+   m_dvAvailableNativeDV = availableNativeDV;
+   m_dvAvailableHDR10 = availableHDR10;
++  m_dvOutputTimings = std::move(timings);
+   if (DVBRIDGE::DiagnosticsEnabled())
+   {
+     try
+@@ -1853,6 +1858,29 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+   }
+ }
+ 
++bool CWinSystemGbmGLESContext::SupportsDVOutputTiming(RESOLUTION resolution) const
++{
++  if (resolution < RES_DESKTOP)
++    return false;
++
++  const auto mode = CDisplaySettings::GetInstance().GetResolutionInfoCopy(resolution);
++  if (mode.dwFlags & D3DPRESENTFLAG_MODEMASK)
++    return false;
++
++  const auto* end = mode.strId.data() + mode.strId.size();
++  int index = -1;
++  const auto parsed = std::from_chars(mode.strId.data(), end, index);
++  if (parsed.ec != std::errc{} || parsed.ptr != end || index < 0)
++    return false;
++
++  // The connector's mode indices can change before Kodi rebuilds its resolution catalogue.
++  std::lock_guard lock(m_dvCapabilityMutex);
++  return std::ranges::any_of(m_dvOutputTimings, [&](const DVOutputTiming& timing) {
++    return timing.index == index && timing.width == mode.iScreenWidth &&
++           timing.height == mode.iScreenHeight && std::abs(timing.refresh - mode.fRefreshRate) < 0.01;
++  });
++}
++
+ bool CWinSystemGbmGLESContext::CanRetainDVSource() const
+ {
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+@@ -4001,6 +4029,10 @@ bool CWinSystemGbmGLESContext::DestroyWindowSystem()
+   if (!RetireDVContext()) return false;
+   SelectPascalHDRMode(PascalHDRMode::None);
+   m_pascalHDRScanout.reset();
++  {
++    std::lock_guard lock(m_dvCapabilityMutex);
++    m_dvOutputTimings.clear();
++  }
+   if (!CWinSystemGbmEGLContext::DestroyWindowSystem()) return false;
+   std::lock_guard lock(m_dvCapabilityMutex);
+   const auto generation = m_dvCapabilities.generation + 1;
+@@ -4063,7 +4095,8 @@ bool CWinSystemGbmGLESContext::CreateContext()
+     const auto generation = m_dvCapabilities.generation + 1;
+     m_dvCapabilities = {};
+     m_dvAvailableNativeDV = m_dvAvailableHDR10 = false;
+-  m_dvLldvStatus = {};
++    m_dvOutputTimings.clear();
++    m_dvLldvStatus = {};
+     m_dvCapabilities.generation = generation;
+     m_dvImportBinding = {};
+     m_dvImportUsable = false;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+index 29a1cbc..b17ecec 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -96,6 +96,7 @@ public:
+   DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
+       bool allowModeSwitch = false) const;
+   bool CanRetainDVSource() const;
++  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
+   bool CompleteDVModeSwitch(const VideoPicture& picture);
+   std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
+   int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
+@@ -301,6 +302,7 @@ private:
+ #endif
+   DVBRIDGE::OutputCapabilities m_dvCapabilities;
+   bool m_dvAvailableNativeDV{}, m_dvAvailableHDR10{};
++  std::vector<DVOutputTiming> m_dvOutputTimings;
+   std::atomic<uint64_t> m_hdr10MaxBpc{0};
+   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
+   XbmcThreads::EndTime<> m_lldvEdidRefresh;
