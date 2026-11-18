@@ -1,0 +1,249 @@
+diff --git a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
+index 486a42a..bb58c10 100644
+--- a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
++++ b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp
+@@ -1385,6 +1385,7 @@ void CAESinkALSA::EnumerateDevice(AEDeviceInfoList &list, const std::string &dev
+   CAEDeviceInfo info;
+   info.m_deviceName = device;
+   info.m_deviceType = AEDeviceTypeFromName(device);
++  AEELDDtsCapabilities dts{true, true};
+ 
+   if (cardNr >= 0)
+   {
+@@ -1444,7 +1445,7 @@ void CAESinkALSA::EnumerateDevice(AEDeviceInfoList &list, const std::string &dev
+             controlMonitor->Add(strHwName, SND_CTL_ELEM_IFACE_PCM, dev, "ELD");
+ #endif
+ 
+-            if (!GetELD(hctl, dev, info, badHDMI))
++            if (!GetELD(hctl, dev, info, badHDMI, dts))
+               CLog::Log(LOGDEBUG,
+                         "CAESinkALSA - Unable to obtain ELD information for device \"{}\" (not "
+                         "supported by device, or kernel older than 3.2)",
+@@ -1601,14 +1602,20 @@ void CAESinkALSA::EnumerateDevice(AEDeviceInfoList &list, const std::string &dev
+ 
+   if (info.m_deviceType == AE_DEVTYPE_HDMI)
+   {
+-    // we don't trust ELD information and push back our supported formats explicitly
++    // Use complete HDMI ELD for DTS and keep the legacy list for other codecs.
+     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_AC3);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_MA);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
+-    info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_512);
++    if (dts.hd)
++    {
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_MA);
++    }
++    if (dts.core)
++    {
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
++      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_512);
++    }
+     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_EAC3);
+     info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_TRUEHD);
+ 
+@@ -1621,7 +1628,11 @@ void CAESinkALSA::EnumerateDevice(AEDeviceInfoList &list, const std::string &dev
+   list.push_back(info);
+ }
+ 
+-bool CAESinkALSA::GetELD(snd_hctl_t *hctl, int device, CAEDeviceInfo& info, bool& badHDMI)
++bool CAESinkALSA::GetELD(snd_hctl_t* hctl,
++                        int device,
++                        CAEDeviceInfo& info,
++                        bool& badHDMI,
++                        AEELDDtsCapabilities& dts)
+ {
+   badHDMI = false;
+ 
+@@ -1664,11 +1675,8 @@ bool CAESinkALSA::GetELD(snd_hctl_t *hctl, int device, CAEDeviceInfo& info, bool
+   if (!dataLength)
+     badHDMI = true;
+   else
+-    CAEELDParser::Parse(
+-      (const uint8_t*)snd_ctl_elem_value_get_bytes(control),
+-      dataLength,
+-      info
+-    );
++    dts = CAEELDParser::Parse(static_cast<const uint8_t*>(snd_ctl_elem_value_get_bytes(control)),
++                             dataLength, info).value_or(dts);
+ 
+   info.m_deviceType = AE_DEVTYPE_HDMI;
+   return true;
+diff --git a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.h b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.h
+index 90c5321..2952ebe 100644
+--- a/xbmc/cores/AudioEngine/Sinks/AESinkALSA.h
++++ b/xbmc/cores/AudioEngine/Sinks/AESinkALSA.h
+@@ -16,6 +16,8 @@
+ 
+ #include <alsa/asoundlib.h>
+ 
++struct AEELDDtsCapabilities;
++
+ #define AE_MIN_PERIODSIZE 256
+ 
+ class CAESinkALSA : public IAESink
+@@ -93,7 +95,11 @@ private:
+   static std::string GetParamFromName(const std::string &name, const std::string &param);
+   static void EnumerateDevice(AEDeviceInfoList &list, const std::string &device, const std::string &description, snd_config_t *config);
+   static bool SoundDeviceExists(const std::string& device);
+-  static bool GetELD(snd_hctl_t *hctl, int device, CAEDeviceInfo& info, bool& badHDMI);
++  static bool GetELD(snd_hctl_t* hctl,
++                     int device,
++                     CAEDeviceInfo& info,
++                     bool& badHDMI,
++                     AEELDDtsCapabilities& dts);
+ 
+   static void sndLibErrorHandler(const char *file, int line, const char *function, int err, const char *fmt, ...);
+ };
+diff --git a/xbmc/cores/AudioEngine/Utils/AEELDParser.cpp b/xbmc/cores/AudioEngine/Utils/AEELDParser.cpp
+index 345c4f1..e0d67c8 100644
+--- a/xbmc/cores/AudioEngine/Utils/AEELDParser.cpp
++++ b/xbmc/cores/AudioEngine/Utils/AEELDParser.cpp
+@@ -12,6 +12,7 @@
+ #include "utils/EndianSwap.h"
+ 
+ #include <algorithm>
++#include <cctype>
+ #include <functional>
+ #include <stdio.h>
+ #include <string.h>
+@@ -21,7 +22,7 @@
+ typedef struct
+ {
+   uint8_t     eld_ver;
+-  uint8_t     baseline_eid_len;
++  uint8_t     baseline_eld_len;
+   uint8_t     cea_edid_ver;
+   uint8_t     monitor_name_length;
+   uint8_t     sad_count;
+@@ -42,7 +43,7 @@ typedef struct
+   std::string monitor_name;
+ } ELDHeader;
+ 
+-#define ELD_VER_CEA_816D         2
++#define ELD_VER_CEA_861D         2
+ #define ELD_VER_PARTIAL          31
+ 
+ #define ELD_EDID_VER_NONE        0
+@@ -72,14 +73,20 @@ typedef struct
+ #define CEA_861_FORMAT_WMAPRO    14
+ #define CEA_861_FORMAT_RESERVED2 15
+ 
+-void CAEELDParser::Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info)
++std::optional<AEELDDtsCapabilities> CAEELDParser::Parse(const uint8_t* data,
++                                                       size_t length,
++                                                       CAEDeviceInfo& info)
+ {
++  constexpr size_t ELD_FIXED_BYTES = 20;
++  if (length < ELD_FIXED_BYTES)
++    return std::nullopt;
++
+   ELDHeader header;
+   header.eld_ver = (data[0 ] & 0xF8) >> 3;
+-  if (header.eld_ver != ELD_VER_CEA_816D && header.eld_ver != ELD_VER_PARTIAL)
+-    return;
++  if (header.eld_ver != ELD_VER_CEA_861D && header.eld_ver != ELD_VER_PARTIAL)
++    return std::nullopt;
+ 
+-  header.baseline_eid_len    =  data[2 ];
++  header.baseline_eld_len    =  data[2 ];
+   header.cea_edid_ver        = (data[4 ] & 0xE0) >> 5;
+   header.monitor_name_length =  data[4 ] & 0x1F;
+   header.sad_count           = (data[5 ] & 0xF0) >> 4;
+@@ -101,6 +108,10 @@ void CAEELDParser::Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info
+   header.mfg_name[3]         = '\0';
+   header.product_code        = Endian_SwapLE16(*((const uint16_t*)(data + 18)));
+ 
++  const size_t sadStart = ELD_FIXED_BYTES + header.monitor_name_length;
++  if (sadStart > length)
++    return std::nullopt;
++
+   switch (header.conn_type)
+   {
+     case ELD_CONN_TYPE_HDMI: info.m_deviceType = AE_DEVTYPE_HDMI; break;
+@@ -110,9 +121,9 @@ void CAEELDParser::Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info
+   info.m_displayNameExtra = header.mfg_name;
+   if (header.monitor_name_length <= 16)
+   {
+-    header.monitor_name.assign((const char *)(data + 20), header.monitor_name_length);
++    header.monitor_name.assign((const char*)(data + ELD_FIXED_BYTES), header.monitor_name_length);
+     header.monitor_name.erase(std::find_if(header.monitor_name.rbegin(), header.monitor_name.rend(),
+-                                           [](char c) { return !std::isspace(c); })
++                                           [](unsigned char c) { return !std::isspace(c); })
+                                   .base(),
+                               header.monitor_name.end());
+     if (!header.monitor_name.empty())
+@@ -170,13 +181,26 @@ void CAEELDParser::Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info
+       info.m_channels += AE_CH_BROC;
+   }
+ 
+-  const uint8_t *sad = data + 20 + header.monitor_name_length;
+-  for(uint8_t i = 0; i < header.sad_count; ++i)
++  const size_t sadEnd = sadStart + 3 * header.sad_count;
++  if (sadEnd > length)
++    return std::nullopt;
++
++  // Baseline length excludes the four-byte header and is measured in words.
++  const size_t baselineBytes = 4 + 4 * header.baseline_eld_len;
++  // A filled four-bit SAD count may have lost descriptors from the EDID.
++  bool complete = header.eld_ver == ELD_VER_CEA_861D &&
++                  header.conn_type == ELD_CONN_TYPE_HDMI &&
++                  header.cea_edid_ver != ELD_EDID_VER_NONE && header.monitor_name_length <= 16 &&
++                  header.sad_count > 0 && header.sad_count < 15 && sadEnd <= baselineBytes &&
++                  baselineBytes <= length;
++  AEELDDtsCapabilities dts{};
++  for (size_t offset = sadStart; offset < sadEnd; offset += 3)
+   {
+-    uint8_t offset = i * 3;
+-    uint8_t formatCode   = (sad[offset + 0] >> 3) & 0xF;
+-    //uint8_t channelCount = (sad[offset + 0] & 0x7) + 1;
+-    //uint8_t sampleRates  =  sad[offset + 1];
++    const uint8_t formatCode = (data[offset] >> 3) & 0xF;
++    if (formatCode == CEA_861_FORMAT_RESERVED1 || !(data[offset + 1] & 0x7F))
++      complete = false;
++    dts.core |= formatCode == CEA_861_FORMAT_DTS;
++    dts.hd |= formatCode == CEA_861_FORMAT_DTSHD;
+ 
+     AEDataFormat fmt = AE_FMT_INVALID;
+     switch (formatCode)
+@@ -196,4 +220,8 @@ void CAEELDParser::Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info
+     if (std::ranges::find(info.m_dataFormats, fmt) == info.m_dataFormats.end())
+       info.m_dataFormats.push_back(fmt);
+   }
++
++  if (!complete)
++    return std::nullopt;
++  return dts;
+ }
+diff --git a/xbmc/cores/AudioEngine/Utils/AEELDParser.h b/xbmc/cores/AudioEngine/Utils/AEELDParser.h
+index 1e8bfb1..c124036 100644
+--- a/xbmc/cores/AudioEngine/Utils/AEELDParser.h
++++ b/xbmc/cores/AudioEngine/Utils/AEELDParser.h
+@@ -9,12 +9,21 @@
+ #pragma once
+ 
+ #include <cstring>
++#include <optional>
+ #include <stdint.h>
+ 
+ class CAEDeviceInfo;
+ 
++struct AEELDDtsCapabilities
++{
++  bool core;
++  bool hd;
++};
++
+ class CAEELDParser {
+ public:
+-  static void Parse(const uint8_t *data, size_t length, CAEDeviceInfo& info);
++  static std::optional<AEELDDtsCapabilities> Parse(const uint8_t* data,
++                                                    size_t length,
++                                                    CAEDeviceInfo& info);
+ };
+ 
