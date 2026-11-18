@@ -684,6 +684,7 @@ int main() {
 #include <array>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 #include "utils/DVBridgeDiagnosticState.h"
 #include "windowing/gbm/ModeChangeHold.h"
 #include "utils/DVBridgeLldv.h"
@@ -741,6 +742,8 @@ struct CDVBridgeGLES {
 };
 struct CWinSystemGbm {
   std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
+  struct DVOutputTiming {int index,width,height; double refresh;};
+  std::vector<DVOutputTiming> GetDVOutputTimings() const {return {{0,3840,2160,m_DRM->rate}};}
   bool SetFullScreen(bool,RESOLUTION_INFO& res,bool) {
     if(!m_DRM->accept) return false;
     if(m_DRM->receipt) m_DRM->rate=res.rate;
@@ -764,6 +767,7 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
+  std::vector<DVOutputTiming> m_dvOutputTimings;
   DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus(bool = false) const {return m_dvLldvStatus;}
   bool EndDVBridge() {return true;} bool RetireDVContext() {return true;}
   bool PrepareNvidiaModeRestore(const RESOLUTION_INFO&) {return true;}
