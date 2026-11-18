@@ -320,9 +320,9 @@
     "docs/cb1/README.md": "b8166be7406bafc10c001562fe67bf6406eeaa6e875c9a92a6f6d4ec334d31d1",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "29c6368b9f8d424e3a56f0fddbfccc714b79762e1ba8a540d712e7f55781ebdb",
     "tests/cb1/test_sdr_capture_color.py": "8d49acfc46e627d12a3d073d6b550fb67d72ed0151f37fbcb1ddf5c0e7f491ef",
-    "tests/cb1/test_master_screenshot.py": "9cc89a63ff08af27f78ae4863163b2fd509552389925e9fd79ee09996a5317d6",
+    "tests/cb1/test_master_screenshot.py": "25e23b62bbedf09ed1d15072380987776e0a2c33a96589882d79f8df173527bb",
     "tests/cb1/test_master_recovery.py": "171e6d9dc6644f578aabd9fca42ee9cf9ffeb01d87db4077fb9250002db32e6b",
-    "tests/cb1/test_native_spatial_contract.py": "bf1997f980201903eea6d9f8fc2a8f7c5001c4a49efa825c4311d942bbebe4da",
+    "tests/cb1/test_native_spatial_contract.py": "88cd1cb18ec7e8006f8b4890c7a86a3d49058ced51f3f5a646a4f91d854a67c4",
     "tests/cb1/test_vaapi_egl_probe.py": "1732ba41d1d9771b5e8de2570f3432bda2e82107c34570c6154bc239c166365e",
     "tests/cb1/test_frame_packing_gap.py": "b2b76548ad7a2f74db3d54233ea5929be494dbb85e256e06b1bb0a70612a8b32",
     "tests/cb1/test_sdr_native_surface.py": "228f351b42b5c0e2c4e7662e4a84cbf4e402cdd5f38196bd6809037571cdf601",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "28bb6d60f518327eba2fb92d00ff810d8375709f829e7e5c5a3db80a3ac3efef",
+    "config/cb1-patch-index.json": "8629faedbcbce42873d79c80f3540e130a435a6851df8f0c28240cbd6cb9862f",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -486,7 +486,8 @@
     "tests/cb1/test_alsa_hdmi_dts.py": "1ce66212dc04b075ed74c3e089acd38c176320c6991ea1cf53bb216f4cd5340e",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-reuse-gbm-front-buffer.patch": "fb6816dc55ed91ad35747f4c7a7ffd76d20d16427ce7e2dbf3101e4cf14b172a",
     "tests/cb1/test_gbm_front_buffer.py": "45e7e92170798d801dac03e0decd2bf47b860d75b115bc9063c43f5d4b191f52",
-    "projects/Generic/patches/linux/0103-wifi-mt76-mt7925-keep-join-roc-until-authorized.patch": "69765cc5aba260fdf236945818815bc102a20426ec35d29f4a7519a187225b2d"
+    "projects/Generic/patches/linux/0103-wifi-mt76-mt7925-keep-join-roc-until-authorized.patch": "69765cc5aba260fdf236945818815bc102a20426ec35d29f4a7519a187225b2d",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": "93513df95b7f3aac1c5284d286f676dfa01a4ffb0d7b9ebaaa26736dced0ae9e"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

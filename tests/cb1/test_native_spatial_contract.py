@@ -136,7 +136,9 @@ struct Test{
  struct{unsigned stream=0,picture=0,revision=0;}m_pendingIdentity;
  int m_effectiveMode=1;bool m_prepared=true,m_direct=true;unsigned m_scanoutFramebuffer=0,m_outputBits=8;
  struct Texture{struct{int w=1920,h=1080;}params;} texture;Texture* m_scanout=&texture;
- unsigned GetPQFramebuffer(){return 2;}
+ bool videoOnly=false,m_pendingOverlayVisible=false,m_overlayVisible=false,m_guiComposed=false;
+ struct CLog { static void Log(int,const char*){} };
+ unsigned GetPQFramebuffer(bool){return 2;}
  bool run(){ PREFIX return read && pixels.width==texture.params.w && pixels.height==texture.params.h;}
 };
 int main(){Test t;assert(t.run());t.m_effectiveMode=5;assert(t.run());
