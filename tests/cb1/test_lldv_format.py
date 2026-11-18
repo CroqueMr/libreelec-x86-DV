@@ -99,12 +99,22 @@ struct Mode
   unsigned flags;
 };
 using drmModeModeInfo = Mode;
-int LldvTimingIndex(const drmModeModeInfo* mode) TIMING
+int LldvTimingIndex(const drmModeModeInfo* mode, bool cta93FractionalOnly = false) TIMING
 struct Connector
 {
   uint32_t id=17;
   std::optional<uint64_t> active=0;
   bool connected=true;
+  bool cta93FractionalOnly=false;
+  bool r615=false;
+  bool r615Native16=false;
+  std::optional<uint64_t> nativeFormats;
+  uint64_t acceptedNativeFormat=0;
+  bool nativeLldvActive=true;
+  bool r580=false;
+  bool r580Native10=false;
+  bool intelNativeRgb10=false;
+  bool amdNative444=false;
   const Mode* advertised{};
   const Mode* alternate{};
   int GetModesCount() const { return alternate ? 2 : advertised ? 1 : 0; }
@@ -112,10 +122,54 @@ struct Connector
   uint32_t* GetConnectorId() { return &id; }
   bool IsConnected() const { return connected; }
   std::string_view GetType() const { return "HDMI-A"; }
-  bool SupportsProperty(std::string_view key) const { return key=="CB1_LLDV_FORMAT"; }
+  bool SupportsProperty(std::string_view key) const
+  {
+    return key=="CB1_LLDV_FORMAT" || (nativeFormats && key=="CB1_NATIVE_LLDV_FORMATS") ||
+        (r615 && key=="CB1_NATIVE_LLDV_ACTIVE") ||
+        (r580 && (key=="CB1_NATIVE_LLDV_422" || key=="CB1_NATIVE_LLDV_ACTIVE"));
+  }
+  std::optional<uint64_t> GetPropertyValue(std::string_view key) const
+  {
+    assert(key=="CB1_LLDV_CTA93_23976_ONLY");
+    return cta93FractionalOnly ? std::optional<uint64_t>(1) : std::nullopt;
+  }
   std::optional<uint64_t> GetPropertyEnumValue(std::string_view key, std::string_view name) const
   {
     assert(SupportsProperty(key));
+    if (r615)
+    {
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      if (name=="YCbCr 4:2:2 12 bits packed") return 2;
+      if (name=="YCbCr 4:2:2 12 bits RGB16" && r615Native16) return 3;
+      if (nativeFormats)
+      {
+        if (name=="RGB 12 bits RGB16") return 4;
+        if (name=="YCbCr 4:4:4 10 bits RGB10") return 5;
+        if (name=="YCbCr 4:4:4 12 bits RGB16") return 6;
+        if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 7;
+        if (name=="RGB 10 bits RGB10") return 8;
+      }
+      return {};
+    }
+    if (r580)
+    {
+      if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 2;
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      return {};
+    }
+    if (amdNative444)
+    {
+      if (name=="YCbCr 4:2:2 10 bits RGB10 lab") return 3;
+      if (name=="YCbCr 4:4:4 10 bits RGB10") return 4;
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      return {};
+    }
+    if (intelNativeRgb10)
+    {
+      if (name=="RGB 10 bits RGB10") return 3;
+      if (name=="YCbCr 4:2:2 10 bits forced") return 1;
+      return {};
+    }
     if (name=="YCbCr 4:2:2 10 useful bits") return 1;
     if (name=="YCbCr 4:2:2 12 bits") return 2;
     if (name=="YCbCr 4:2:2 10 bits forced") return 3;
@@ -123,6 +177,10 @@ struct Connector
   }
   std::optional<uint64_t> ReadPropertyValue(std::string_view key) const
   {
+    if (key=="CB1_NATIVE_LLDV_FORMATS") return nativeFormats;
+    if (key=="CB1_NATIVE_LLDV_ACTIVE")
+      return nativeFormats ? acceptedNativeFormat : nativeLldvActive ? 1 : 0;
+    if (key=="CB1_NATIVE_LLDV_422") return r580Native10 ? 1 : 0;
     assert(SupportsProperty(key));
     return active;
   }
@@ -146,6 +204,9 @@ struct Window
   uint32_t m_lldvEdidConnector=17;
   uint64_t m_lldvEdidGeneration=2;
   std::array<unsigned, 10> m_lldvRejectedTimings{};
+  bool usableRgb16{};
+  bool HasLldvRgb16Scanout() const { return usableRgb16; }
+  bool HasLldvRgb10Scanout() const { return true; }
   LldvConnectorStatus Read(bool snapshot = false) const OWNER
 };
 
@@ -198,6 +259,16 @@ int main()
   assert(supported(&widescreen));
   assert(!supported(&wrongAspect));
   assert(!supported(nullptr));
+  drm.connector.cta93FractionalOnly=true;
+  assert(supported(&fractional));
+  assert(!supported(&integer));
+  assert(!supported(&integer25));
+  assert(!supported(&fractional30));
+  drm.connector.advertised=&integer;
+  assert(!window.Read().availableTiming);
+  drm.connector.advertised=&fractional;
+  assert(window.Read().availableTiming);
+  drm.connector.cta93FractionalOnly=false;
   drm.connector.advertised=&fractional;
   assert(!supported(&integer60) && window.Read().availableTiming);
   assert(!SelectLldvTransport(window.Read(), 0).connectorId);
@@ -242,7 +313,7 @@ int main()
   drm.mode = &fractional;
   auto withAlternateCarrier = window.Read();
   withAlternateCarrier.rgb10Scanout = true;
-  assert(SelectLldvTransport(withAlternateCarrier, 0).rgb10Scanout);
+  assert(SelectLldvTransport(withAlternateCarrier, 0).rgbScanoutBits == 10);
   withAlternateCarrier.currentRejected |= LldvTransportBit(SelectLldvTransport(withAlternateCarrier, 0));
   assert(!SelectLldvTransport(withAlternateCarrier, 0).connectorId);
   assert(SelectLldvTransport(withAlternateCarrier, LLDV_FORCE_422_10).forced);
@@ -269,6 +340,97 @@ int main()
   assert(SelectLldvTransport(readback, 0).format==LldvFormat::Y422_12);
   const auto chosen=SelectLldvTransport(readback, LLDV_FORCE_422_10);
   assert(chosen.connectorId==17 && chosen.format==LldvFormat::Y422_10 && chosen.forced);
+  drm.connector.r615=true;
+  drm.connector.active=2;
+  readback=window.Read();
+  assert(readback.packed42212 && readback.forced42210);
+  assert(readback.active==LldvFormat::Y422_12 && !readback.activeForced);
+  assert(readback.driverFormats==LldvBit(LldvFormat::Y422_12));
+  assert(!SelectLldvTransport(readback, 0).connectorId);
+  assert(LldvUnavailableLabel(readback, int(LldvFormat::Y422_12), false)==41210);
+  window.m_lldvDisplay.sink.lldv_422_12=true;
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y422_12), false)==LLDV_CHOOSE_FORMAT_LABEL);
+  assert(SelectLldvTransport(window.Read(), LLDV_PACKED_422_12).format==LldvFormat::Y422_12);
+  drm.connector.active=1;
+  assert(window.Read().active==LldvFormat::Y422_10 && window.Read().activeForced);
+
+  drm.connector.r615Native16=true;
+  assert(window.Read().packed42212);
+  window.usableRgb16=true;
+  readback=window.Read();
+  assert(readback.packed42212 && readback.rgb16Scanout);
+  assert(SelectLldvTransport(readback, 0).rgbScanoutBits==16);
+  assert(SelectLldvTransport(readback, LLDV_FORCE_422_10).forced);
+  window.m_lldvDisplay.sink.lldv_422_12=false;
+  assert(!SelectLldvTransport(window.Read(), 0).connectorId);
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y422_12), false)==41210);
+  window.m_lldvDisplay.sink.lldv_422_12=true;
+  drm.connector.active=3;
+  assert(window.Read().active==LldvFormat::Y422_12);
+  assert(window.Read().activeRgbScanoutBits==16);
+  drm.connector.nativeLldvActive=false;
+  assert(window.Read().active==LldvFormat::Auto);
+
+  drm.connector.nativeFormats=(1ULL<<4) | (1ULL<<5) | (1ULL<<6);
+  window.m_lldvDisplay.sink.lldv_444_bits=12;
+  readback=window.Read();
+  assert(readback.packed42212 && !readback.rgb16Scanout);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Rgb12);
+  assert(SelectLldvTransport(readback, 0).rgbScanoutBits==16);
+  assert(SelectLldvTransport(readback, int(LldvFormat::Y444_12)).rgbScanoutBits==16);
+  assert(!SelectLldvTransport(readback, int(LldvFormat::Y444_10)).connectorId);
+  drm.connector.active=4;
+  drm.connector.acceptedNativeFormat=6;
+  assert(window.Read().active==LldvFormat::Auto);
+  drm.connector.acceptedNativeFormat=4;
+  assert(window.Read().active==LldvFormat::Rgb12);
+  window.usableRgb16=false;
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Rgb12), false)==41211);
+  window.m_lldvDisplay.sink.lldv_444_bits=10;
+  assert(SelectLldvTransport(window.Read(), 0).format==LldvFormat::Y444_10);
+  assert(SelectLldvTransport(window.Read(), 0).rgbScanoutBits==10);
+  assert(SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  *drm.connector.nativeFormats|=1ULL<<7;
+  assert(SelectLldvTransport(window.Read(), 0).format==LldvFormat::Y422_10);
+  assert(!SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  drm.connector.nativeFormats.reset();
+
+  drm.connector.r615=false;
+  drm.connector.intelNativeRgb10=true;
+  window.m_lldvDisplay.sink.lldv_444_bits=10;
+  drm.connector.active=3;
+  readback=window.Read();
+  assert(readback.active==LldvFormat::Rgb10 && readback.activeRgbScanoutBits==10);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Rgb10);
+  assert(SelectLldvTransport(readback, 0).rgbScanoutBits==10);
+  assert(SelectLldvTransport(readback, LLDV_FORCE_422_10).forced);
+  window.m_lldvDisplay.sink.lldv_444_bits=12;
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Rgb10), false)==41210);
+
+  drm.connector.intelNativeRgb10=false;
+  drm.connector.r580=true;
+  assert(!SelectLldvTransport(window.Read(), 0).connectorId);
+  assert(SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  drm.connector.r580Native10=true;
+  assert(SelectLldvTransport(window.Read(), 0).rgbScanoutBits==10);
+  assert(!SelectLldvTransport(window.Read(), LLDV_FORCE_422_10).forced);
+  drm.connector.active=2;
+  assert(window.Read().active==LldvFormat::Auto);
+  drm.connector.nativeLldvActive=true;
+  assert(window.Read().active==LldvFormat::Y422_10 && window.Read().activeRgbScanoutBits==10);
+
+  drm.connector.r580=false;
+  drm.connector.amdNative444=true;
+  drm.connector.nativeFormats=(1ULL<<3) | (1ULL<<4);
+  window.m_lldvDisplay.sink.lldv_444_bits=10;
+  drm.connector.active=4;
+  readback=window.Read();
+  assert(readback.active==LldvFormat::Y444_10 && readback.activeRgbScanoutBits==10);
+  assert(SelectLldvTransport(readback, 0).format==LldvFormat::Y422_10);
+  assert(SelectLldvTransport(readback, int(LldvFormat::Y444_10)).format==LldvFormat::Y444_10);
+  *drm.connector.nativeFormats&=~(1ULL<<4);
+  assert(LldvUnavailableLabel(window.Read(), int(LldvFormat::Y444_10), false)==41211);
+
   drm.connector.active.reset();
   assert(window.Read().active==LldvFormat::Auto);
   drm.active=false;
@@ -338,6 +500,7 @@ struct Window
   mutable std::mutex m_dvCapabilityMutex;
   struct Caps{bool playerLed=true;};
   Caps GetDVOutputCapabilities(void*,const DVBRIDGE::Preferences&,bool) const{return {};}
+  bool LldvSupportsPlaybackTiming(double) const{return true;}
   std::optional<RESOLUTION> Choose(double fps,bool atStartup=false) const CHOOSE_BODY
   int PlayerLedResolutionReason(RESOLUTION resolution,int preference) const REASON_BODY
 };
@@ -354,6 +517,7 @@ int main()
   status.sink.lldv_422=true;
   status.connectorId=403;
   status.driverFormats=LLDV_422;
+  status.output42212=true;
   status.currentTiming=false;
   status.availableTiming=true;
   const auto ten=LldvTransportBit({403,LldvFormat::Y422_10});
@@ -387,6 +551,10 @@ int main()
         kodi = Path(os.environ['KODI_NATIVE_SOURCE_TREE'])
         menu = body((kodi / 'xbmc/dialogs/DVPlaybackModes.cpp').read_text(),
                     'bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)\n')
+        self.assertIn('i <= static_cast<int>(LldvFormat::Y444_12)', menu)
+        self.assertIn('selected <= LldvFormat::Y444_12', menu)
+        self.assertIn('dvbridge_lldv_444_bits(display.sink)', menu)
+        self.assertIn('SelectLldvTransport(status, 0, allowModeSwitch)', menu)
         start = menu.index('  const int choice = dialog->GetSelectedItem();')
         finish = menu.index('  return true;', start) + len('  return true;')
         program = r'''
@@ -414,9 +582,8 @@ bool Confirm(const Dialog* dialog, Settings* settings, bool forCircuit,
              const LldvConnectorStatus& status, const LldvConnectorStatus& current,
              bool inPlayback = false)
 {
-  const auto requiresForcing = [&status](LldvFormat format) {
-    return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
-  };
+  const bool allowModeSwitch = !inPlayback && status.active == LldvFormat::Auto;
+  PREFERENCES
   CONFIRM
 }
 
@@ -457,7 +624,8 @@ int main()
   assert(Confirm(&dialog, &settings, false, {}, {}));
   assert(settings.stored == 0);
 }
-'''.replace('CONFIRM', menu[start:finish])
+'''.replace('CONFIRM', menu[start:finish]).replace('PREFERENCES',
+    menu[menu.index('  const auto requiresForcing'):menu.index('  const auto saved')])
         run(self, {'test.cpp': program})
 
     def test_edid_and_selection(self):
@@ -488,6 +656,10 @@ int main()
   const auto caps = [&] { checksum(cta); return dvbridge_parse_edid(edid, sizeof(edid)); };
   auto sink = caps();
   assert(sink.status == DV_EDID_STANDARD && dvbridge_lldv_422(sink));
+  assert(!dvbridge_lldv_422_12(sink));
+  cta[9] |= 1;
+  assert(dvbridge_lldv_422_12(caps()));
+  cta[9] &= ~1;
   assert(dvbridge_lldv_444_bits(sink) == 0);
   assert(LldvFormatReason(sink, LldvFormat::Y422_10, 0, true) == LldvReason::Driver);
   assert(LldvFormatReason(sink, LldvFormat::Rgb10, LLDV_422, true) == LldvReason::Display);
@@ -514,7 +686,34 @@ int main()
   assert(selected.connectorId && selected.format == LldvFormat::Y422_10 && selected.forced);
   auto native12 = forcedOnly;
   native12.driverFormats = LldvBit(LldvFormat::Y422_12);
+  native12.output42212 = true;
   assert(SelectLldvTransport(native12, 0).format == LldvFormat::Y422_12);
+  auto packed12 = native12;
+  packed12.output42212 = false;
+  packed12.packed42212 = true;
+  assert(LldvUnavailableLabel(packed12, int(LldvFormat::Y422_12), false) == 41210);
+  assert(!SelectLldvTransport(packed12, 0).connectorId);
+  assert(SelectLldvTransport(packed12, LLDV_FORCE_422_10).forced);
+  cta[9] |= 1;
+  packed12.sink = caps();
+  assert(!SelectLldvTransport(packed12, 0).connectorId);
+  assert(!SelectLldvTransport(packed12, int(LldvFormat::Y422_12)).connectorId);
+  assert(LldvCanChooseFormat(packed12, false));
+  selected = SelectLldvTransport(packed12, LLDV_PACKED_422_12);
+  assert(selected.connectorId && selected.format == LldvFormat::Y422_12 &&
+         selected.experimentalPacked12 && !selected.forced);
+  auto r615 = packed12;
+  r615.rgb16Scanout = true;
+  const auto preferred = SelectLldvTransport(r615, 0);
+  assert(preferred.rgbScanoutBits == 16 && !preferred.experimentalPacked12);
+  r615.currentRejected = LldvTransportBit(preferred);
+  assert(!SelectLldvTransport(r615, 0).connectorId);
+  assert(SelectLldvTransport(r615, LLDV_PACKED_422_12).experimentalPacked12);
+  r615.currentRejected |= LldvTransportBit(selected);
+  assert(!SelectLldvTransport(r615, LLDV_PACKED_422_12).connectorId);
+  packed12.driverFormats = LLDV_422;
+  assert(SelectLldvTransport(packed12, 0).format == LldvFormat::Y422_10);
+  cta[9] &= ~1;
   auto native10 = forcedOnly;
   native10.driverFormats = LLDV_422;
   selected = SelectLldvTransport(native10, LLDV_FORCE_422_10);
@@ -539,6 +738,29 @@ int main()
   sink = caps();
   assert(dvbridge_lldv_444_bits(sink) == 12);
   assert(ChooseLldvFormat(sink, LldvBit(LldvFormat::Y444_12), true) == LldvFormat::Y444_12);
+
+  // A failed 4:2:2 carrier must leave the two full-chroma formats available.
+  auto multiple = native12;
+  multiple.sink = sink;
+  multiple.driverFormats = LldvBit(LldvFormat::Y422_12) |
+      LldvBit(LldvFormat::Rgb12) | LldvBit(LldvFormat::Y444_12);
+  auto transport = SelectLldvTransport(multiple, 0);
+  assert(transport.format == LldvFormat::Y422_12);
+  multiple.currentRejected |= LldvTransportBit(transport);
+  transport = SelectLldvTransport(multiple, 0);
+  assert(transport.format == LldvFormat::Rgb12 && transport.rgbScanoutBits == 16);
+  multiple.currentRejected |= LldvTransportBit(transport);
+  assert(SelectLldvTransport(multiple, 0).format == LldvFormat::Y444_12);
+  assert(LldvTransportBit({7,LldvFormat::Y422_12,false,3,8}) !=
+         LldvTransportBit({7,LldvFormat::Y422_12,false,3,8,true}));
+  assert(!(LldvTransport{7,LldvFormat::Y422_12,false,3,8,true} ==
+           LldvTransport{7,LldvFormat::Y422_12,false,3,16,false}));
+  assert(!(LldvTransport{7,LldvFormat::Y422_10,false,3,8,false} ==
+           LldvTransport{7,LldvFormat::Y422_10,false,3,10,false}));
+  packed12.driverFormats = LldvBit(LldvFormat::Y422_12);
+  packed12.currentRejected = LldvTransportBit(SelectLldvTransport(packed12, LLDV_PACKED_422_12));
+  assert(LldvUnavailableLabel(packed12, LLDV_PACKED_422_12, false) == LLDV_DRIVER_REJECTED_LABEL);
+  assert(!SelectLldvTransport(packed12, 0).connectorId);
   cta[12] &= ~1;
   cta[9] = 0x20; // Short V1 with the LL bit clear, then set.
   sink = caps();

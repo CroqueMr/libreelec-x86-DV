@@ -51,12 +51,18 @@ struct CWinSystemGbmGLESContext : Window {
  DVBRIDGE::OutputCapabilities available, current;
  DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(std::nullptr_t,bool allowModeSwitch)
  {return allowModeSwitch ? available : current;}
+ bool lldvPlaybackRateAllowed=true, lldvCurrentTimingAllowed=true;
+ bool LldvSupportsPlaybackTiming(double, bool requireCurrentTiming=false) const {
+   return lldvPlaybackRateAllowed && (!requireCurrentTiming || lldvCurrentTimingAllowed);
+ }
 };
 }
 KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
 struct Localizer {std::string Get(int id) const {return std::to_string(id);}};
 struct Resources { Localizer localizer; const Localizer& GetLocalizeStrings() {return localizer;} };
 struct CServiceBroker {static Window* GetWinSystem() {return &window;}
+ struct Cache {double GetVideoFps() const {return 24.0;}};
+ static Cache GetDataCacheCore() {return {};}
  static Resources& GetResourcesComponent() {static Resources value;return value;} };
 struct CSetting {std::string id="dvbridge.outputmode"; const std::string& GetId() const {return id;}};
 struct IntegerSettingOption {std::string label="Standard",label2;int value{};
@@ -86,6 +92,21 @@ int main() {
  assert(disabled(8,quickSwitch));
  window.available.lldvUnavailableLabel=LLDV_CHOOSE_FORMAT_LABEL;
  assert(!disabled(8,quickSwitch) && modeProperty(8,quickSwitch,"cb1ChooseLldv"));
+ window.current=window.available;
+ window.lldvPlaybackRateAllowed=false;
+ assert(modeProperty(8,quickSwitch,"disabled",true));
+ assert(!modeProperty(8,quickSwitch,"cb1ChooseLldv",true));
+ assert(modeProperty(8,"dvbridge.playback","cb1ChooseLldv"));
+ window.current.playerLed=true;
+ assert(modeProperty(8,quickSwitch,"disabled",true));
+ window.current.playerLed=false;
+ window.lldvPlaybackRateAllowed=true;
+ window.lldvCurrentTimingAllowed=false;
+ assert(modeProperty(8,quickSwitch,"disabled",true));
+ assert(!modeProperty(8,quickSwitch,"cb1ChooseLldv",true));
+ window.lldvCurrentTimingAllowed=true;
+ assert(!modeProperty(8,quickSwitch,"disabled",true));
+ assert(modeProperty(8,quickSwitch,"cb1ChooseLldv",true));
  frame.capabilities.processing[DVBRIDGE_MODE_PLAYER_LED]={false,OutputReason::SourceIneligible};
  assert(disabled(8,quickSwitch) && !modeProperty(8,quickSwitch,"cb1ChooseLldv"));
  frame.capabilities.processing=window.available.processing;

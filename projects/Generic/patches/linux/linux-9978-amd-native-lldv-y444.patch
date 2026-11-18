@@ -1,0 +1,348 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -103,12 +103,21 @@
+ 			{ 0, "Off" },
+ 			{ 1, "YCbCr 4:2:2 10 bits forced" },
+ 			{ AMDGPU_LLDV_RGB10_LAB, "YCbCr 4:2:2 10 bits RGB10 lab" },
++			{ AMDGPU_LLDV_444_10, "YCbCr 4:4:4 10 bits RGB10" },
+ 		};
++
++		/* Read-only through atomic_get_property, refreshed from the live EDID. */
++		connector->lldv_native_formats_property = drm_property_create_range(connector->base.dev,
++			0, "CB1_NATIVE_LLDV_FORMATS", 0,
++			BIT(AMDGPU_LLDV_RGB10_LAB) | BIT(AMDGPU_LLDV_444_10));
++		if (connector->lldv_native_formats_property)
++			drm_object_attach_property(&connector->base.base,
++				connector->lldv_native_formats_property, 0);
+ 
+ 		connector->lldv_format_property = drm_property_create_enum(connector->base.dev,
+ 			DRM_MODE_PROP_ATOMIC, "CB1_LLDV_FORMAT", formats,
+-			dv_lldv_native_supported(adev->dm.dc->ctx->dce_version) ?
+-			ARRAY_SIZE(formats) : ARRAY_SIZE(formats) - 1);
++			dv_lldv_native_supported(ctx->dce_version) ?
++			ARRAY_SIZE(formats) - !connector->lldv_native_formats_property : 2);
+ 		if (connector->lldv_format_property)
+ 			drm_object_attach_property(&connector->base.base,
+ 					connector->lldv_format_property, 0);
+@@ -228,6 +237,72 @@
+ 		(mode->clock == 297000 || (mode->clock == 296703 && vic != 94));
+ }
+ 
++static u32 dv_lldv_native_formats(const struct drm_display_info *info,
++				  struct dvbridge_sink_caps caps)
++{
++	u32 formats = 0;
++
++	if (!info->is_hdmi || !info->has_hdmi_infoframe ||
++	    !dvbridge_lldv_422(caps) || caps.legacy_vsif)
++		return 0;
++	if (info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422))
++		formats |= BIT(AMDGPU_LLDV_RGB10_LAB);
++	if (dvbridge_lldv_444_bits(caps) == 10 &&
++	    (info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR444)) &&
++	    (info->edid_hdmi_ycbcr444_dc_modes & DRM_EDID_HDMI_DC_30))
++		formats |= BIT(AMDGPU_LLDV_444_10);
++	return formats;
++}
++
++static bool dv_lldv_native_link(const struct drm_display_info *info,
++			       int pixel_clock, unsigned int format)
++{
++	u64 tmds;
++
++	if (pixel_clock <= 0 ||
++	    (format != AMDGPU_LLDV_RGB10_LAB && format != AMDGPU_LLDV_444_10))
++		return false;
++	tmds = pixel_clock;
++	if (format == AMDGPU_LLDV_444_10)
++		tmds = (tmds * 5 + 3) / 4;
++	return info->max_tmds_clock > 0 && tmds <= (u64)info->max_tmds_clock &&
++		(tmds <= 340000 || (info->hdmi.scdc.supported && info->hdmi.scdc.scrambling.supported));
++}
++
++u32 amdgpu_dm_lldv_native_formats(struct drm_connector *connector)
++{
++	struct amdgpu_dm_connector *aconnector = to_amdgpu_dm_connector(connector);
++	struct amdgpu_device *adev = drm_to_adev(connector->dev);
++	const struct dc_context *ctx = adev->dm.dc ? adev->dm.dc->ctx : NULL;
++	const struct drm_property_blob *edid = connector->edid_blob_ptr;
++	u32 formats;
++
++	if (!ctx || !(dv_rx550(ctx) || dv_display_supported(ctx->dce_version)) ||
++	    connector->status != connector_status_connected || !edid ||
++	    connector->connector_type != DRM_MODE_CONNECTOR_HDMIA || !aconnector->dc_link ||
++	    aconnector->dc_link->connector_signal != SIGNAL_TYPE_HDMI_TYPE_A)
++		return 0;
++	formats = dv_lldv_native_formats(&connector->display_info,
++		dvbridge_parse_edid(edid->data, edid->length));
++	/* The admitted UHD timings start at 296.703 MHz. A format that cannot
++	 * carry even that mode must not be offered as a live capability.
++	 */
++	if (!dv_lldv_native_link(&connector->display_info, 296703, AMDGPU_LLDV_RGB10_LAB))
++		formats &= ~BIT(AMDGPU_LLDV_RGB10_LAB);
++	if (!dv_lldv_native_link(&connector->display_info, 296703, AMDGPU_LLDV_444_10))
++		formats &= ~BIT(AMDGPU_LLDV_444_10);
++	return formats;
++}
++
++static bool dv_lldv_native_mode(const struct drm_display_info *info,
++		struct dvbridge_sink_caps caps, const struct drm_display_mode *mode,
++		unsigned int format)
++{
++	return dv_lldv_native_link(info, mode->clock, format) &&
++		(dv_lldv_native_formats(info, caps) & BIT(format)) &&
++		!drm_mode_is_420_only(info, mode);
++}
++
+ int amdgpu_dm_dv_configure_stream(struct dc_stream_state *stream,
+ 				const struct dm_connector_state *state,
+ 				const struct drm_display_mode *mode)
+@@ -243,7 +318,8 @@
+ 	struct dc_info_packet avi_packet, vsp_packet;
+ 	u8 wire[HDMI_INFOFRAME_SIZE(DOLBY_VENDOR)];
+ 	const bool lldv = state->lldv_format != 0;
+-	const bool native = state->lldv_format == AMDGPU_LLDV_RGB10_LAB;
++	const bool y444 = state->lldv_format == AMDGPU_LLDV_444_10;
++	const bool native = state->lldv_format == AMDGPU_LLDV_RGB10_LAB || y444;
+ 	const bool rx550 = dv_rx550(stream->ctx);
+ 	struct drm_dvbridge_link link = {
+ 		.requested = amdgpu_dm_dv_transport(state),
+@@ -279,9 +355,8 @@
+ 		const struct drm_display_info *info = &connector->display_info;
+ 
+ 		if (!stream->ctx || !dv_lldv_native_supported(stream->ctx->dce_version) ||
+-		    link.requested_bpc != 10 || drm_mode_is_420_only(info, mode) ||
+-		    !(info->color_formats & BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422)) ||
+-		    info->max_tmds_clock <= 0 || mode->clock > info->max_tmds_clock)
++		    link.requested_bpc != 10 ||
++		    !dv_lldv_native_mode(info, caps, mode, state->lldv_format))
+ 			return -EOPNOTSUPP;
+ 	}
+ 	ret = native ? drm_dvbridge_validate_link(&link) : drm_dvbridge_validate(&link);
+@@ -303,7 +378,8 @@
+ 	avi.video_code = drm_match_cea_mode(mode);
+ 	if (caps.legacy_vsif && avi.video_code >= 93 && avi.video_code <= 95)
+ 		avi.video_code = 0;
+-	avi.colorspace = lldv ? HDMI_COLORSPACE_YUV422 : HDMI_COLORSPACE_RGB;
++	avi.colorspace = y444 ? HDMI_COLORSPACE_YUV444 :
++		(lldv ? HDMI_COLORSPACE_YUV422 : HDMI_COLORSPACE_RGB);
+ 	avi.colorimetry = lldv ? HDMI_COLORIMETRY_EXTENDED : HDMI_COLORIMETRY_NONE;
+ 	avi.extended_colorimetry = lldv ? HDMI_EXTENDED_COLORIMETRY_BT2020 : 0;
+ 	avi.quantization_range = lldv ? HDMI_QUANTIZATION_RANGE_DEFAULT : HDMI_QUANTIZATION_RANGE_FULL;
+@@ -339,11 +415,11 @@
+ 	stream->vsp_infopacket = vsp_packet;
+ 	stream->dv_standard = true;
+ 	stream->dv_low_latency = lldv;
+-	stream->dv_native_422 = native;
++	stream->dv_native_lldv = native;
+ 	stream->timing.hdmi_vic = caps.legacy_vsif ? legacy.vic : 0;
+ 	stream->timing.vic = avi.video_code;
+ 	if (native) {
+-		stream->timing.pixel_encoding = PIXEL_ENCODING_YCBCR422;
++		stream->timing.pixel_encoding = y444 ? PIXEL_ENCODING_YCBCR444 : PIXEL_ENCODING_YCBCR422;
+ 		stream->timing.display_color_depth = COLOR_DEPTH_101010;
+ 	}
+ 	stream->output_color_space = native ? COLOR_SPACE_2020_YCBCR_LIMITED : COLOR_SPACE_SRGB;
+@@ -487,7 +563,7 @@
+ 		struct dm_crtc_state *dm = to_dm_crtc_state(cs);
+ 		struct dc_stream_state *stream = dm->stream;
+ 		unsigned int planes = 0, connectors = 0;
+-		const bool native = stream && stream->dv_native_422;
++		const bool native = stream && stream->dv_native_lldv;
+ 
+ 		if (!cs->active || !stream || !stream->dv_standard)
+ 			continue;
+@@ -518,7 +594,7 @@
+ 		    stream->src.width != cs->mode.hdisplay || stream->src.height != cs->mode.vdisplay ||
+ 		    stream->dst.x || stream->dst.y ||
+ 		    stream->dst.width != cs->mode.hdisplay || stream->dst.height != cs->mode.vdisplay ||
+-		    stream->timing.pixel_encoding != (native ? PIXEL_ENCODING_YCBCR422 : PIXEL_ENCODING_RGB) ||
++		    (!native && stream->timing.pixel_encoding != PIXEL_ENCODING_RGB) ||
+ 		    stream->timing.display_color_depth != (native ? COLOR_DEPTH_101010 : COLOR_DEPTH_888) || stream->timing.flags.DSC)
+ 			return -EINVAL;
+ 		for_each_new_connector_in_state(state, connector, con, j) {
+@@ -529,10 +605,20 @@
+ 			if (con->crtc != crtc)
+ 				continue;
+ 
++			/* The validated DC stream must retain the exact requested transport. */
++			if (native &&
++			    (!dv_lldv_native_mode(&connector->display_info, caps, &cs->mode,
++				to_dm_connector_state(con)->lldv_format) ||
++			     stream->timing.pixel_encoding !=
++				(to_dm_connector_state(con)->lldv_format == AMDGPU_LLDV_444_10 ?
++				 PIXEL_ENCODING_YCBCR444 : PIXEL_ENCODING_YCBCR422) ||
++			     stream->timing.pix_clk_100hz != cs->mode.clock * 10))
++				return -EINVAL;
++
+ 			if (connector->connector_type != DRM_MODE_CONNECTOR_HDMIA ||
+ 			    (stream->dv_low_latency ?
+ 			     (!lldv_sink_supported(&caps, &cs->mode) ||
+-			      to_dm_connector_state(con)->lldv_format != (native ? AMDGPU_LLDV_RGB10_LAB : 1) ||
++			      (!native && to_dm_connector_state(con)->lldv_format != 1) ||
+ 			      to_dm_connector_state(con)->dv_standard) :
+ 			     (!dv_sink_supported(&caps, &cs->mode) ||
+ 			      !to_dm_connector_state(con)->dv_standard ||
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.h
+@@ -6,12 +6,14 @@
+ 
+ /* Separate from the legacy RGB8 carrier consumed by released players. */
+ #define AMDGPU_LLDV_RGB10_LAB 3
++#define AMDGPU_LLDV_444_10 4
+ 
+ static inline bool amdgpu_dm_dv_transport(const struct dm_connector_state *state)
+ {
+ 	return state->dv_standard || state->lldv_format;
+ }
+ 
++u32 amdgpu_dm_lldv_native_formats(struct drm_connector *connector);
+ void amdgpu_dm_dv_attach(struct amdgpu_dm_connector *connector);
+ int amdgpu_dm_dv_add_affected(struct drm_atomic_commit *state);
+ int amdgpu_dm_dv_atomic_check(struct drm_atomic_commit *state);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -795,6 +795,7 @@
+ 	struct drm_connector base;
+ 	struct drm_property *dv_standard_property;
+ 	struct drm_property *lldv_format_property;
++	struct drm_property *lldv_native_formats_property;
+ 	struct drm_property *hdr10_deep_color_property;
+ 	uint32_t connector_id;
+ 	int bl_idx;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -8231,8 +8231,11 @@
+ 		return 0;
+ 	}
+ 
++	if (property == to_amdgpu_dm_connector(connector)->lldv_native_formats_property)
++		return -EINVAL;
++
+ 	if (property == to_amdgpu_dm_connector(connector)->lldv_format_property) {
+-		if (val != 0 && val != 1 && val != AMDGPU_LLDV_RGB10_LAB)
++		if (val != 0 && val != 1 && val != AMDGPU_LLDV_RGB10_LAB && val != AMDGPU_LLDV_444_10)
+ 			return -EINVAL;
+ 		dm_new_state->lldv_format = val;
+ 		return 0;
+@@ -8309,6 +8312,11 @@
+ 
+ 	if (property == to_amdgpu_dm_connector(connector)->dv_standard_property) {
+ 		*val = dm_state->dv_standard;
++		return 0;
++	}
++
++	if (property == to_amdgpu_dm_connector(connector)->lldv_native_formats_property) {
++		*val = amdgpu_dm_lldv_native_formats(connector);
+ 		return 0;
+ 	}
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/dc_stream.h b/drivers/gpu/drm/amd/display/dc/dc_stream.h
+--- a/drivers/gpu/drm/amd/display/dc/dc_stream.h
++++ b/drivers/gpu/drm/amd/display/dc/dc_stream.h
+@@ -179,7 +179,7 @@
+ 	/* RGB8 carries packed video/metadata, not color-managed RGB content. */
+ 	bool dv_standard; /* Byte-preserving HDMI pipeline, including low latency. */
+ 	bool dv_low_latency;
+-	bool dv_native_422;
++	bool dv_native_lldv;
+ 	struct dc_panel_patch sink_patches;
+ 	struct dc_crtc_timing timing;
+ 	struct dc_crtc_timing_adjust adjust;
+diff --git a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+--- a/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
++++ b/drivers/gpu/drm/amd/display/dc/core/dc_resource.c
+@@ -1521,7 +1521,7 @@
+ 		const struct dc_stream_state *stream)
+ {
+ 	/* RGB8 tunnel bytes must not pass through DCE's 10-bit normalization. */
+-	if (stream->dv_standard && !stream->dv_native_422 &&
++	if (stream->dv_standard && !stream->dv_native_lldv &&
+ 	    (plane_state->ctx->dce_version == DCE_VERSION_11_22 ||
+ 	     plane_state->ctx->dce_version == DCE_VERSION_11_2))
+ 		return LB_PIXEL_DEPTH_24BPP;
+@@ -3725,7 +3725,7 @@
+ 	/* Entry and exit must reprogram HDMI packets and the color pipeline. */
+ 	if (cur_stream->dv_standard != new_stream->dv_standard ||
+ 	    cur_stream->dv_low_latency != new_stream->dv_low_latency ||
+-	    cur_stream->dv_native_422 != new_stream->dv_native_422)
++	    cur_stream->dv_native_lldv != new_stream->dv_native_lldv)
+ 		return true;
+ 
+ 	if (cur_stream->vsp_infopacket.valid != new_stream->vsp_infopacket.valid ||
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dce110/dce110_hwseq.c
+@@ -299,7 +299,7 @@
+ 	tf = &plane_state->in_transfer_func;
+ 
+ 	dce110_prescale_params(&prescale_params, plane_state);
+-	if (pipe_ctx->stream->dv_standard && !pipe_ctx->stream->dv_native_422)
++	if (pipe_ctx->stream->dv_standard && !pipe_ctx->stream->dv_native_lldv)
+ 		prescale_params.mode = IPP_PRESCALE_MODE_BYPASS_LUT;
+ 	ipp->funcs->ipp_program_prescale(ipp, &prescale_params);
+ 
+@@ -1640,8 +1640,9 @@
+ 	 */
+ 	enum dc_color_depth depth = stream->timing.display_color_depth;
+ 
+-	if (stream->dv_native_422 ||
+-	    (stream->dv_standard && stream->ctx->dce_version == DCE_VERSION_11_2))
++	if ((stream->dv_native_lldv && stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422) ||
++	    (stream->dv_standard && !stream->dv_native_lldv &&
++	     stream->ctx->dce_version == DCE_VERSION_11_2))
+ 		depth = COLOR_DEPTH_UNDEFINED;
+ 	opp->funcs->opp_set_dyn_expansion(opp, COLOR_SPACE_YCBCR601, depth,
+ 					  stream->signal);
+@@ -2773,7 +2774,7 @@
+ 
+ 	/* Select the native sRGB bypass instead of its programmable identity. */
+ 	default_adjust.force_hw_default = pipe_ctx->stream->dv_standard &&
+-		!pipe_ctx->stream->dv_native_422 &&
++		!pipe_ctx->stream->dv_native_lldv &&
+ 		pipe_ctx->stream->ctx->dce_version == DCE_VERSION_11_2;
+ 	default_adjust.in_color_space = pipe_ctx->plane_state->color_space;
+ 	default_adjust.out_color_space = pipe_ctx->stream->output_color_space;
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dcn20/dcn20_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dcn20/dcn20_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dcn20/dcn20_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dcn20/dcn20_hwseq.c
+@@ -2005,7 +2005,9 @@
+ 			pipe_ctx->stream_res.opp,
+ 			COLOR_SPACE_YCBCR601,
+ 			/* Suppress 10-to-12-bit replication for the native LLDV stream. */
+-			pipe_ctx->stream->dv_native_422 ? COLOR_DEPTH_UNDEFINED :
++			(pipe_ctx->stream->dv_native_lldv &&
++			 pipe_ctx->stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422) ?
++			COLOR_DEPTH_UNDEFINED :
+ 			pipe_ctx->stream->timing.display_color_depth,
+ 			pipe_ctx->stream->signal);
+ 
+diff --git a/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c b/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
+--- a/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
++++ b/drivers/gpu/drm/amd/display/dc/hwss/dcn401/dcn401_hwseq.c
+@@ -2311,7 +2311,9 @@
+ 		pipe_ctx->stream_res.opp->funcs->opp_set_dyn_expansion(
+ 			pipe_ctx->stream_res.opp,
+ 			COLOR_SPACE_YCBCR601,
+-			pipe_ctx->stream->dv_native_422 ? COLOR_DEPTH_UNDEFINED :
++			(pipe_ctx->stream->dv_native_lldv &&
++			 pipe_ctx->stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422) ?
++			COLOR_DEPTH_UNDEFINED :
+ 			pipe_ctx->stream->timing.display_color_depth,
+ 			pipe_ctx->stream->signal);
+ 
+@@ -2469,7 +2471,9 @@
+ 		|| pipe_ctx->update_flags.bits.opp_changed) {
+ 
+ 		hwss_add_opp_set_dyn_expansion(seq_state, pipe_ctx->stream_res.opp, COLOR_SPACE_YCBCR601,
+-			pipe_ctx->stream->dv_native_422 ? COLOR_DEPTH_UNDEFINED :
++			(pipe_ctx->stream->dv_native_lldv &&
++			 pipe_ctx->stream->timing.pixel_encoding == PIXEL_ENCODING_YCBCR422) ?
++			COLOR_DEPTH_UNDEFINED :
+ 			pipe_ctx->stream->timing.display_color_depth, pipe_ctx->stream->signal);
+ 
+ 		hwss_add_opp_program_fmt(seq_state, pipe_ctx->stream_res.opp,

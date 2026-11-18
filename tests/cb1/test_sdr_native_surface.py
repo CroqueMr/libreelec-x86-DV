@@ -24,6 +24,7 @@ class SDRNativeSurface(unittest.TestCase):
 #include <utility>
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
+#include <GLES2/gl2ext.h>
 extern "C" {
 #include <libplacebo/opengl.h>
 #include <libplacebo/renderer.h>
@@ -95,6 +96,26 @@ int main(){
   dv.m_playerLed=true;
   assert(dv.RebindOutputSurface(false,false,target));
   assert(dv.m_outputBits==10 && dv.m_scanoutFramebuffer==target);
+  GLuint fp16{}, unorm16{};
+  glGenTextures(1,&fp16);
+  glBindTexture(GL_TEXTURE_2D,fp16);
+  glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA16F,64,32);
+  glBindFramebuffer(GL_FRAMEBUFFER,target);
+  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,fp16,0);
+  assert(glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
+  assert(!dv.RebindOutputSurface(false,false,target));
+  if (pl_opengl_has_ext(dv.m_gl,"GL_EXT_texture_norm16"))
+  {
+    glGenTextures(1,&unorm16);
+    glBindTexture(GL_TEXTURE_2D,unorm16);
+    glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA16_EXT,64,32);
+    glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,unorm16,0);
+    assert(glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
+    assert(dv.RebindOutputSurface(false,false,target));
+    assert(dv.m_outputBits==16 && dv.m_scanoutFramebuffer==target);
+  }
+  glDeleteTextures(1,&unorm16);
+  glDeleteTextures(1,&fp16);
   assert(hdr.RebindOutputSurface(true,true));
   assert(hdr.m_scanout && hdr.m_outputBits==8 && hdr.m_scanoutFramebuffer==0);
   glDeleteFramebuffers(1,&target);
@@ -128,11 +149,11 @@ int main(){
         program=r'''
 #include <cassert>
 #include <initializer_list>
-constexpr int GL_FRAMEBUFFER=1,GL_FRAMEBUFFER_COMPLETE=2,GL_LINEAR=3;
+constexpr int GL_FRAMEBUFFER=1,GL_FRAMEBUFFER_COMPLETE=2,GL_LINEAR=3,GL_UNSIGNED_NORMALIZED=4;
 int status=GL_FRAMEBUFFER_COMPLETE;
 int glCheckFramebufferStatus(int){return status;}
 bool pl_opengl_wrap(int,const int*){return true;}
-bool admit(bool hdr10,bool sdr,int red,int green,int blue,int samples=0,int encoding=GL_LINEAR,bool m_playerLed=false){
+bool admit(bool hdr10,bool sdr,int red,int green,int blue,int samples=0,int encoding=GL_LINEAR,bool m_playerLed=false,int componentType=0){
  struct{int gpu=0;}gl,*m_gl=&gl;int output=0;bool candidate=false;
  ADMISSION
  return candidate;
@@ -143,6 +164,8 @@ int main(){
   assert(admit(true,false,bits,bits,bits)==(bits>=10));
   assert(admit(false,false,bits,bits,bits)==(bits==8));
   assert(admit(false,false,bits,bits,bits,0,GL_LINEAR,true)==(bits==8||bits==10));
+  assert(admit(false,false,bits,bits,bits,0,GL_LINEAR,true,GL_UNSIGNED_NORMALIZED)
+      ==(bits==8||bits==10||bits==16));
  }
  assert(!admit(true,true,7,8,8));assert(!admit(true,true,8,7,8));assert(!admit(true,true,8,8,7));
  assert(!admit(true,true,32,32,32));

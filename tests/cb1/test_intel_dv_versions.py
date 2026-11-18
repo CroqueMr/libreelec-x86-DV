@@ -58,8 +58,32 @@ static int drm_hdmi_vendor_infoframe_from_display_mode(struct hdmi_vendor_infofr
  struct drm_connector*c,const struct drm_display_mode*m){
  (void)c;(void)m;return hdmi_vendor_infoframe_init(f);}
 @@OWNER@@
+struct intel_display {
+ unsigned display_ver;
+ struct {bool alderlake_p,dg2,meteorlake,lunarlake,pantherlake,battlemage,novalake;} platform;
+};
+#define IS_DISPLAY_VER(display, first, last) \
+ ((display)->display_ver >= (first) && (display)->display_ver <= (last))
+@@LLDV_POLICY@@
 static void checksum(u8*b){u8 sum=0;b[127]=0;for(int i=0;i<127;i++)sum+=b[i];b[127]=-sum;}
 int main(void){
+ struct intel_display display={.display_ver=8};
+ assert(!intel_lldv_lab_enabled(&display));
+ for(display.display_ver=9;display.display_ver<=12;display.display_ver++)
+  assert(intel_lldv_lab_enabled(&display));
+ display.display_ver=13;
+ display.platform.alderlake_p=true;
+ assert(intel_lldv_lab_enabled(&display));
+ display.platform.alderlake_p=false;
+ assert(!intel_lldv_lab_enabled(&display));
+ display.display_ver=14;
+ display.platform.battlemage=true;
+ assert(intel_lldv_lab_enabled(&display));
+ display.platform.battlemage=false;
+ display.display_ver=35;
+ assert(!intel_lldv_lab_enabled(&display));
+ display.platform.novalake=true;
+ assert(intel_lldv_lab_enabled(&display));
  u8 raw[256],wire[31],golden[31]={0x81,1,27,0x4b,0x46,0xd0,0,2};
  struct drm_property_blob blob={raw,sizeof(raw)};
  struct intel_connector con={.base={{true},&blob}};
@@ -106,6 +130,7 @@ int main(void){
 }
 '''.replace("@@PACKERS@@","\n".join(function(hdmi,n) for n in names))
         program=program.replace("@@OWNER@@",function(intel,"intel_hdmi_compute_hdmi_infoframe"))
+        program=program.replace("@@LLDV_POLICY@@",function(intel,"intel_lldv_lab_enabled"))
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);path=root/"test.c";binary=root/"test"
             (root/"hdmi-test.h").write_text(re.sub(r"^#include .*$","",

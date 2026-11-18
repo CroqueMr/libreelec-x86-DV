@@ -1,0 +1,36 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+index 382f760..73af893 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_dv.c
+@@ -69,6 +69,7 @@ void amdgpu_dm_dv_attach(struct amdgpu_dm_connector *connector)
+ 
+ 	const struct dc_context *ctx = adev->dm.dc ? adev->dm.dc->ctx : NULL;
+ 	const bool rx550 = dv_rx550(ctx);
++	struct drm_property *lldv_23976_only = NULL;
+ 	const bool family = ctx && (rx550 || dv_display_supported(ctx->dce_version));
+ 	const bool hdmi = connector->base.connector_type == DRM_MODE_CONNECTOR_HDMIA &&
+ 		connector->dc_link &&
+@@ -90,7 +91,13 @@ void amdgpu_dm_dv_attach(struct amdgpu_dm_connector *connector)
+ 			drm_object_attach_property(&connector->base.base,
+ 					connector->dv_standard_property, 0);
+ 	}
+-	if (!rx550) {
++	if (rx550) {
++		lldv_23976_only = drm_property_create_bool(connector->base.dev,
++				DRM_MODE_PROP_IMMUTABLE, "CB1_LLDV_CTA93_23976_ONLY");
++		if (lldv_23976_only)
++			drm_object_attach_property(&connector->base.base, lldv_23976_only, 1);
++	}
++	if (!rx550 || lldv_23976_only) {
+ 		static const struct drm_prop_enum_list formats[] = {
+ 			{ 0, "Off" },
+ 			{ 1, "YCbCr 4:2:2 10 bits forced" },
+@@ -240,7 +247,7 @@ int amdgpu_dm_dv_configure_stream(struct dc_stream_state *stream,
+ 	struct drm_dvbridge_link link = {
+ 		.requested = amdgpu_dm_dv_transport(state),
+ 		.lab_enabled = (lldv || dv_standard) && stream->ctx &&
+-			(rx550 ? !lldv : dv_display_supported(stream->ctx->dce_version)),
++			(rx550 || dv_display_supported(stream->ctx->dce_version)),
+ 		.sink_standard = lldv ? lldv_sink_supported(&caps, mode) :
+ 			dv_sink_supported(&caps, mode),
+ 		.hdmi = stream->signal == SIGNAL_TYPE_HDMI_TYPE_A &&

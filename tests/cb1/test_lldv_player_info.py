@@ -43,7 +43,7 @@ int main()
   connector.display.status=LldvEdidStatus::Ready;
   connector.display.primaries={.68,.32,.25,.70,.15,.05};
   connector.edidGeneration=2;
-  connector.driverFormats=LLDV_422; connector.currentTiming=true;
+  connector.driverFormats=LLDV_422; connector.currentTiming=true; connector.output42212=true;
   connector.connectorId=17; connector.timingCommitted=true;
   LldvTransport packed{17,LldvFormat::Y422_10,false,2};
   dvbridge_creative_plan plan{};
@@ -101,6 +101,7 @@ int main()
   connector.activeForced=false;
   packed.forced=false;
   connector.driverFormats=LLDV_422;
+  connector.output42212=true;
   connector.sink.lldv_422=false;
   assert(!outputFor(CB1_MASTER_READY,id,id,true));
   connector.sink.lldv_422=true;
@@ -146,6 +147,19 @@ int main()
     assert(info.cm4 && info.profile==profile && info.compatibility==source.compatibility);
     assert(info.el==source.el && !(info.output.flags & CDVPlaybackInfo::FEL));
     assert(info.TransmittedBlocks().none());
+  }
+
+  using Encoding = VideoProcessingInfo::PlayerLed::Encoding;
+  for (const auto format : {LldvFormat::Rgb12, LldvFormat::Y444_10, LldvFormat::Y444_12})
+  {
+    const unsigned bits = LldvUses10Bits(format) ? 10 : 12;
+    connector.sink.lldv_444_bits=bits;
+    connector.active=packed.format=format;
+    connector.driverFormats=LldvBit(format);
+    connector.activeRgbScanoutBits=packed.rgbScanoutBits=bits == 10 ? 10 : 16;
+    output=outputFor(CB1_MASTER_READY,id,id,false);
+    assert(output && output->bits==bits && output->minimumLinkBits==bits);
+    assert(output->lldv->encoding==(format == LldvFormat::Rgb12 ? Encoding::RGB : Encoding::YCbCr444));
   }
 
   // A pending/failed frame has no accepted summary. TV-led and native SDR replace it.
