@@ -2297,5 +2297,14 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the playback-rate compatibility check.",
       "xbmc/settings/SettingConditions.cpp": "Report the playback timing restriction in Quick Switch."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-reuse-gbm-front-buffer.patch": {
+    "summary": "Probe the already locked GBM buffer during output setup",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Return the latest retained front buffer without acquiring it again.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Expose a non-owning accessor for the retained front buffer.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Reuse the buffer when validating float output."
+    }
   }
 }
