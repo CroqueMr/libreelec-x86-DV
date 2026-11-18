@@ -316,7 +316,7 @@
     "tests/cb1/test_fel_facts.py": "39717d8a179e5f2f71798f5a9382a6476aba23dfaf0047e7513387aaebc5461c",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "c08a48036ce3ea5c082f54036a7def395cf44af859053a9998ea64bfe30bb4dc",
     "packages/mediacenter/kodi/cb1/src/cb1_circuit.h": "0257bdfe0ae6c0963b3dd91b0548e518e24e1ec46dba446222dff87cca113045",
-    "README.md": "557958a2ee5139ef01dd2448328a7e8262496c8f5029da5ee93e1a6380978d96",
+    "README.md": "ddf562a445a5cbad38d03ddd3a8ab2c35f0a5a582c45451d399be39daa18c4b3",
     "docs/cb1/README.md": "b8166be7406bafc10c001562fe67bf6406eeaa6e875c9a92a6f6d4ec334d31d1",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "29c6368b9f8d424e3a56f0fddbfccc714b79762e1ba8a540d712e7f55781ebdb",
     "tests/cb1/test_sdr_capture_color.py": "8d49acfc46e627d12a3d073d6b550fb67d72ed0151f37fbcb1ddf5c0e7f491ef",
@@ -618,7 +618,7 @@
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.c": {
       "source": "src/dvbridge_fel.c",
-      "sha256": "7b291b3509f393a239a604b4e70c8d7323c725391e548264dd5dc8dc55859d0f"
+      "sha256": "a6689d79a556c09c60249ac1cecdb42b8f702fd9e5217907f52857473de50464"
     },
     "packages/mediacenter/kodi/cb1/src/dvbridge_fel.h": {
       "source": "src/dvbridge_fel.h",
@@ -718,7 +718,7 @@
     },
     "packages/mediacenter/kodi/cb1/config/owned-sources.json": {
       "source": "config/owned-sources.json",
-      "sha256": "13ac6679cdab12ad76654db35cef6f8d7326fcb16da7cbbcc7553681020d8bfa"
+      "sha256": "a07dbca379a02ad37cebc8b699c374f5cc42471400b01094b165240e347b3409"
     },
     "packages/mediacenter/kodi/cb1-model/contract/cb1_l1l3_bundle.h": {
       "source": "models/l1l3/contract/cb1_l1l3_bundle.h",

@@ -599,7 +599,9 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
             goto fail;
         }
         const unsigned limit = f->mel_deferred ? MEL_PACKET_MAX : QUEUE_MAX;
-        if (f->mel_deferred && !f->el_started &&
+        /* A renewed base decoder may accept more input before returning a
+         * picture. Give queued EL a chance to decode before rejecting the AU. */
+        if ((!f->source_timed || (f->mel_deferred && !f->el_started)) &&
             (f->num_packets >= limit || (size_t)copy->size > PACKET_BYTES_MAX - f->packet_bytes))
             if (!pump(f)) {
                 av_packet_free(&copy);
