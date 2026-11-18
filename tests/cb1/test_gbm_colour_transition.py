@@ -246,7 +246,28 @@ int main(){VideoPicture configured,buffered;assert(configured.IsSameParams(buffe
             self.assertIn("tmp.colorBits = buf.m_srcBits;", check)
             self.assertIn("tmp.color_transfer = buf.m_srcColTransfer;", check)
             shader_request = "!m_cmsOn" if backend == "GL" else "true"
-            self.assertIn(f"SetColorimetry(&tmp, {shader_request})", check)
+            end = check.index(f"SetColorimetry(&tmp, {shader_request});")
+            stage = check[check.index("VideoPicture tmp{};"):check.index(';', end) + 1]
+            compile_run(self, r'''
+#include <cassert>
+constexpr int AVCOL_SPC_UNSPECIFIED=0, AVCOL_PRI_BT2020=9;
+struct VideoPicture {int color_space{},color_transfer{},color_primaries{},iWidth{},iHeight{},colorBits{};};
+struct Window {
+ VideoPicture picture;
+ bool native=false;
+ void SetColorimetry(const VideoPicture* value,bool requested){picture=*value;native=requested;}
+};
+struct CServiceBroker {static inline Window window;static Window* GetWinSystem(){return &window;}};
+int main(){
+ const struct {int m_srcColSpace=9,m_srcColTransfer=1,m_srcPrimaries=AVCOL_PRI_BT2020,m_srcBits=10;} buf;
+ const int m_sourceWidth=3840,m_sourceHeight=2160;
+ const bool toneMap=false,m_cmsOn=false;
+ STAGE
+ const auto& output=CServiceBroker::window;
+ assert(output.native && output.picture.color_primaries==AVCOL_PRI_BT2020);
+ assert(output.picture.colorBits==10 && output.picture.color_transfer==1);
+}
+'''.replace('STAGE', stage))
             configure = method(renderer, f"CLinuxRenderer{backend}::" +
                                ("Configure" if backend == "GL" else "ConfigureVideoOutput"))
             output = "!m_ColorManager->IsEnabled()" if backend == "GL" else "true"

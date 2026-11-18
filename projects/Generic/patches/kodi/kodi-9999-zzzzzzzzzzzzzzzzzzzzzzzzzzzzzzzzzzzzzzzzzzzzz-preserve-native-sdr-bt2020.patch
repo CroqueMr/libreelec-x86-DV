@@ -81,7 +81,15 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  }
  
  bool CLinuxRendererGL::Render(unsigned int flags, int renderBuffer)
-@@ -2805,6 +2806,12 @@
+@@ -2795,6 +2796,7 @@
+   VideoPicture tmp{};
+   tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
+   tmp.color_transfer = buf.m_srcColTransfer;
++  tmp.color_primaries = buf.m_srcPrimaries;
+   tmp.iWidth = m_sourceWidth;
+   tmp.iHeight = m_sourceHeight;
+   tmp.colorBits = buf.m_srcBits;
+@@ -2805,6 +2807,12 @@
  {
    const CPictureBuffer& buf = m_buffers[index];
    const ETONEMAPMETHOD& toneMapMethod = m_videoSettings.m_ToneMapMethod;
@@ -171,6 +179,14 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  
    if (buf.m_srcPrimaries != m_srcPrimaries)
    {
+@@ -3148,6 +3156,7 @@
+       VideoPicture tmp{};
+       tmp.color_space = toneMap ? AVCOL_SPC_UNSPECIFIED : buf.m_srcColSpace;
+       tmp.color_transfer = buf.m_srcColTransfer;
++      tmp.color_primaries = buf.m_srcPrimaries;
+       tmp.iWidth = m_sourceWidth;
+       tmp.iHeight = m_sourceHeight;
+       // Keep Adaptive on the format already selected for this source depth.
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
 @@ -294,6 +294,7 @@
@@ -278,11 +294,12 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    virtual void EndGuiComposite() {}
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -1122,6 +1122,11 @@
+@@ -1122,6 +1122,12 @@
      DeferConnectorPreferences();
  
    auto atomic = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
-+  if (!StageNativeSDRSignal(rendered))
++  bool wideTransition = false;
++  if (!StageNativeSDRSignal(rendered, wideTransition))
 +  {
 +    if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
 +    return false;
@@ -290,7 +307,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    const bool transactional = rendered && atomic && (carrier || atomic->HasColorRangeTransition());
    struct gbm_bo* bo = nullptr;
  
-@@ -1147,6 +1152,19 @@
+@@ -1147,6 +1153,19 @@
      if (atomic->LastPageAccepted()) surface.EndTransactionalMode();
    }
  
@@ -298,7 +315,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 +  {
 +    if (atomic->LastPageAccepted())
 +      m_nativeSDRSubmitted = m_nativeSDRActive;
-+    else if (m_nativeSDRActive && transactional && !m_nativeSDRSubmitted)
++    else if (wideTransition)
 +    {
 +      // Retain the previous framebuffer and render the next frame into BT.709.
 +      m_queuedColorspace.reset();
@@ -310,7 +327,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    if (ConnectorPreferencesAllowed())
    {
      UpdateDriverLimitedRange();
-@@ -1296,8 +1314,22 @@
+@@ -1296,8 +1315,22 @@
                        : m_DRM->FindGuiPlane(current->GetFormat(), current->GetModifier());
  }
  
@@ -334,7 +351,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    m_queuedColorspace.reset();
    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
    if (!drm)
-@@ -1317,9 +1349,7 @@
+@@ -1317,9 +1350,7 @@
    if (videoPicture)
    {
      colorimetry = KODI::UTILS::GetColorimetry(*videoPicture);
@@ -345,7 +362,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
        colorimetry = KODI::UTILS::Colorimetry::BT709_YCC;
    }
  
-@@ -1328,6 +1358,96 @@
+@@ -1328,6 +1359,98 @@
    ApplyColorspace();
  }
  
@@ -393,8 +410,9 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 +  return compositing;
 +}
 +
-+bool CWinSystemGbm::StageNativeSDRSignal(bool rendered)
++bool CWinSystemGbm::StageNativeSDRSignal(bool rendered, bool& wideTransition)
 +{
++  wideTransition = false;
 +  if (!m_nativeSDRSubmitted && (!rendered || (!m_nativeSDRActive && !m_nativeSDRRejected)))
 +    return true;
 +
@@ -430,19 +448,20 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 +      return false;
 +  }
 +
-+  if (m_queuedColorspace != committed)
-+  {
-+    // Never attach a framebuffer in the new gamut to the old atomic request.
++  const bool tagChanged = m_queuedColorspace != committed;
++  wideTransition = wide && (tagChanged || !drm->IsSelectedModeCommitted());
++  // Never attach a framebuffer in the new gamut to the old atomic request.
++  if (tagChanged || wideTransition)
 +    drm->SetColorRangeTransition();
++  if (tagChanged)
 +    drm->RequestModeset();
-+  }
 +  return true;
 +}
 +
  void CWinSystemGbm::ApplyColorspace()
  {
    m_queuedColorspace.reset();
-@@ -1388,9 +1508,11 @@
+@@ -1388,9 +1511,11 @@
      CLog::LogF(LOGDEBUG, "setting connector colorspace to {} (source {}, {} output)",
                 KODI::UTILS::ColorimetryToString(scanoutColorimetry),
                 KODI::UTILS::ColorimetryToString(colorimetry), yuv ? "YCbCr" : "RGB");
@@ -480,7 +499,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    bool ContentNeedsSubsampling() const;
  
 +  std::optional<uint64_t> NativeSDRBT2020Colorspace() const;
-+  bool StageNativeSDRSignal(bool rendered);
++  bool StageNativeSDRSignal(bool rendered, bool& wideTransition);
 +
    bool IsYuvRequested() const;
    bool IsYuvFormatCommitted(const CDRMConnector& connector) const;

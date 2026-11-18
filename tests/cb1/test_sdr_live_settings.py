@@ -61,7 +61,7 @@ int main(){
 #include <vector>
 #include <limits>
 #include "dvbridge_policy.h"
-constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18,LOGERROR=1,LOGDEBUG=2,DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3;
+constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_BT2020_10=14,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18,LOGERROR=1,LOGDEBUG=2,DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_FAILED=3;
 struct CLog{template<class... A>static void Log(A...){}};
 bool failLUT=false;unsigned textures=0;
 void glDeleteTextures(int,const unsigned*){}
@@ -70,6 +70,8 @@ struct CGuiCompositeShaderGLES{
  explicit CGuiCompositeShaderGLES(const std::string&){}bool CompileAndLink(){return true;}
  unsigned CreateLUTTexture(const std::vector<float>&){++textures;return failLUT?0:1;}
  std::vector<float>GenerateDegammaLUT(){return {0,1};}std::vector<float>GeneratePQLUT(float){return {0,1};}
+ bool wide=false;
+ void SetSDRBT2020(bool enabled){wide=enabled;}
  bool CreateLUTs(int colorTransfer,float sdrGamma) SHADER
 };
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR, PlayerLed};}
@@ -103,6 +105,11 @@ struct Window{
  Window(){m_dvSelection.policy.mode=DVBRIDGE_MODE_SDR;m_dvSelection.policy.sdr.preset=DVBRIDGE_SDR_REFERENCE;assert(SetGuiCompositing(AVCOL_TRC_GAMMA22));}
 };
 int main(int argc,char**argv){assert(argc==2);std::string test=argv[1];Window w;const auto initial=textures;w.m_guiCacheValid=true;
+ if(test=="native"){w.m_sdrConversion=w.m_hdrConversion=false;
+  assert(w.SetGuiCompositing(AVCOL_TRC_BT2020_10));
+  assert(w.m_compositeShader->wide && w.m_compositeShader->m_ootfGamma==-2.4f);
+  assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));
+  assert(!w.m_compositeShader->wide && w.m_compositeShader->m_ootfGamma==-2.4f);}
  if(test=="live"){w.m_dvSelection.policy.sdr.preset=DVBRIDGE_SDR_BRIGHT;assert(w.Prepare());assert(w.m_compositeShader->m_ootfGamma==-2.2f&&!w.m_guiCacheValid);}
  if(test=="paused"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01,DVBRIDGE_GAMUT_UNSET};assert(w.Begin());assert(w.m_compositeShader->m_ootfGamma==-2.6f&&!w.m_guiCacheValid);}
  if(test=="unchanged"){for(unsigned i=0;i<100;++i){assert(w.Prepare()&&w.Begin());}assert(textures==initial&&w.m_guiCacheValid);}
@@ -116,7 +123,7 @@ int main(int argc,char**argv){assert(argc==2);std::string test=argv[1];Window w;
             'CONFIGGUI',body(source,'bool CWinSystemGbmGLESContext::ConfigureGuiCompositing(')).replace(
             'PREPARE',prepare).replace('BEGIN',begin).replace('SNAPSHOT',snapshot).replace(
             'ROLLBACK',body(source,'bool CWinSystemGbmGLESContext::PollRejectedDVSurface()'))
-        compile_run(self,program,('live','paused','unchanged','lut-failure','invalid-target','rollback','rollback-failure'),
+        compile_run(self,program,('native','live','paused','unchanged','lut-failure','invalid-target','rollback','rollback-failure'),
                     ('-DHAVE_DVBRIDGE','-Wall','-Wextra','-Werror'))
 
     def test_requested_hdr10plus_sdr_policy_comes_from_the_immutable_source(self):

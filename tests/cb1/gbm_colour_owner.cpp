@@ -64,7 +64,10 @@ struct CDRMAtomic : CDRMUtils {
  std::map<std::string,uint64_t> pending;bool accepted=true,addSuccess=true;
  bool AddProperty(CDRMConnector*,const char* name,uint64_t value) {
   if(!addSuccess)return false;pending[name]=value;return true;}
- bool rangeTransition=false;void SetColorRangeTransition(){rangeTransition=true;}
+ bool modeCommitted=true;
+ bool rangeTransition=false;
+ bool IsSelectedModeCommitted() const {return modeCommitted;}
+ void SetColorRangeTransition(){rangeTransition=true;}
  bool LastPageAccepted() const {return accepted;} void SetActive(bool) {}
  void Commit(bool accept,bool fallback=false) {
   accepted=accept;fellBack=fallback;
@@ -133,25 +136,31 @@ int main() {
  wd->connector.cache["Colorspace"]=0;
  wd->connector.enums["Colorspace"]=drm->connector.enums["Colorspace"];
  wide.SetColorimetry(&picture, true);
+ bool wideTransition=false;
  assert(wide.BeginFrameGuiComposite(true) && wide.m_nativeSDRActive);
- assert(wide.StageNativeSDRSignal(true));
- assert(wd->pending.at("Colorspace")==1 && wd->rangeTransition);
+ assert(wide.StageNativeSDRSignal(true, wideTransition));
+ assert(wd->pending.at("Colorspace")==1 && wd->rangeTransition && wideTransition);
  wd->Commit(true);
  wide.m_nativeSDRSubmitted=true;
+ assert(wide.StageNativeSDRSignal(true, wideTransition) && !wideTransition && !wd->rangeTransition);
+ wd->modeCommitted=false;
+ assert(wide.StageNativeSDRSignal(true, wideTransition) && wideTransition && wd->rangeTransition);
+ wd->modeCommitted=true;
+ wd->Commit(true);
  wide.m_colorFormat=3;
  wide.ApplyConnectorProperties();
- assert(wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true));
- assert(wd->pending.at("Colorspace")==2 && wd->rangeTransition);
+ assert(wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true, wideTransition));
+ assert(wd->pending.at("Colorspace")==2 && wd->rangeTransition && wideTransition);
  wd->Commit(true);
  // The requested wire encoding needs matching display and connector support.
  wide.m_info->wideYcc=false;
  assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
- assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==3 && wd->rangeTransition);
+ assert(wide.StageNativeSDRSignal(true, wideTransition) && wd->pending.at("Colorspace")==3 && wd->rangeTransition && !wideTransition);
  wd->Commit(true);
  wide.m_nativeSDRSubmitted=false;
  wide.m_info->wideYcc=true;
  wd->connector.enums["Colorspace"].erase("BT2020_YCC");
- assert(!wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true));
+ assert(!wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true, wideTransition));
  wide.m_colorFormat=1;wide.ApplyConnectorProperties();
  wd->connector.connected=false;
  assert(!wide.BeginFrameGuiComposite(true));
@@ -164,16 +173,16 @@ int main() {
  CServiceBroker::GetSettingsComponent()->cms=false;
  wide.fboAvailable=false;
  assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
- assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==0);
+ assert(wide.StageNativeSDRSignal(true, wideTransition) && wd->pending.at("Colorspace")==0);
  wide.fboAvailable=true;
  wide.SetColorimetry(&picture, true);
  assert(wide.BeginFrameGuiComposite(true));
  wd->addSuccess=false;
- assert(!wide.StageNativeSDRSignal(true));
+ assert(!wide.StageNativeSDRSignal(true, wideTransition));
  assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
  wd->addSuccess=true;
  wd->connector.cache["Colorspace"]=2; // The previous output was wide YCbCr.
- assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==0 && wd->rangeTransition);
+ assert(wide.StageNativeSDRSignal(true, wideTransition) && wd->pending.at("Colorspace")==0 && wd->rangeTransition);
  assert(w.m_contentBits==10);
  for (const int transfer : {AVCOL_TRC_SMPTE2084, AVCOL_TRC_ARIB_STD_B67})
  {
