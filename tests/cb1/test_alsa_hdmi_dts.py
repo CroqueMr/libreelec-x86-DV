@@ -161,6 +161,9 @@ int main()
       0x0d, 0x57, 0x07, 0x09, 0x07, 0x07, 0x15, 0x07, 0x50,
       0x57, 0x07, 0x01, 0x67, 0x54, 0x07};
   Check(eld, sizeof(eld), false, false);
+  eld[4] = 0x86; // reserved CTA revision with a plausible SAD list
+  Check(eld, sizeof(eld), true, true);
+  eld[4] = 0x66;
   Check(eld, sizeof(eld), true, false, "iec958:CARD=PCH,DEV=0");
   Check(eld, sizeof(eld), false, false, "@");
   Check(nullptr, 0, true, true);

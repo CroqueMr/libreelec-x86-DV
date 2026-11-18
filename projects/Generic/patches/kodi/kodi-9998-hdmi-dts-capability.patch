@@ -193,9 +193,9 @@ index 345c4f1..e0d67c8 100644
 +  // A filled four-bit SAD count may have lost descriptors from the EDID.
 +  bool complete = header.eld_ver == ELD_VER_CEA_861D &&
 +                  header.conn_type == ELD_CONN_TYPE_HDMI &&
-+                  header.cea_edid_ver != ELD_EDID_VER_NONE && header.monitor_name_length <= 16 &&
-+                  header.sad_count > 0 && header.sad_count < 15 && sadEnd <= baselineBytes &&
-+                  baselineBytes <= length;
++                  header.cea_edid_ver >= ELD_EDID_VER_CEA_861 &&
++                  header.cea_edid_ver <= ELD_EDID_VER_CEA_861_BCD && header.monitor_name_length <= 16 &&
++                  header.sad_count > 0 && header.sad_count < 15 && sadEnd <= baselineBytes && baselineBytes <= length;
 +  AEELDDtsCapabilities dts{};
 +  for (size_t offset = sadStart; offset < sadEnd; offset += 3)
    {
