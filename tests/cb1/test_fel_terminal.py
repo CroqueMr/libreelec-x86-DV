@@ -123,6 +123,14 @@ int main(){
  assert(incomplete.GetPicture(&out)==CDVDVideoCodec::VC_FATAL);
  CDVDVideoCodecFFmpeg cleanEnd;cleanEnd.baseResult=CDVDVideoCodec::VC_EOF;
  assert(cleanEnd.GetPicture(&out)==CDVDVideoCodec::VC_EOF);
+ CDVDVideoCodecFFmpeg leading;leading.m_dvFel->result=2;
+ leading.baseResult=CDVDVideoCodec::VC_PICTURE;
+ for (int i=0;i<74;++i) {
+   assert(leading.GetPicture(&out)==CDVDVideoCodec::VC_BUFFER);
+   assert(leading.m_dvPending.empty());
+ }
+ leading.m_dvFel->result=1;
+ assert(leading.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE && out.doviEnhancement);
  CDVDVideoCodecFFmpeg readyThenFailed;readyThenFailed.m_dvFailed=true;
  readyThenFailed.m_dvFel->failed=true;readyThenFailed.m_dvFel->result=1;
  readyThenFailed.m_dvPending.push_back(std::make_shared<VideoPicture>());

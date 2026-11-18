@@ -184,6 +184,40 @@ int main(void)
     assert(!dvbridge_fel_device(f, renewed));
     assert(dvbridge_fel_device(f, device) && !dvbridge_fel_failed(f));
     av_buffer_unref(&renewed);
+
+    /* A cut or seek can start with BL alone. Such pictures cannot be shown
+     * before the first usable EL anchor, even if the prefix spans the map. */
+    AVPacket *bare = av_packet_alloc();
+    assert(bare && av_new_packet(bare, sizeof(synthetic_base)) == 0);
+    memcpy(bare->data, synthetic_base, sizeof(synthetic_base));
+    for (int anchor = 0; anchor <= 1; ++anchor) {
+        dvbridge_fel_reset(f);
+        unsigned before = submissions;
+        for (int i = 0; i < 74; ++i) {
+            bare->pts = bare->dts = i * 41708;
+            assert(dvbridge_fel_submit(f, bare));
+            AVFrame *discarded = NULL;
+            assert(dvbridge_fel_take(f, bare->pts, &discarded) == 2 && !discarded);
+        }
+        assert(submissions == before);
+        if (anchor) {
+            p->pts = p->dts = 74 * 41708;
+            assert(dvbridge_fel_submit(f, p));
+            AVFrame *exact = NULL;
+            assert(dvbridge_fel_take(f, bare->pts, &exact) == 2 && !exact);
+            assert(dvbridge_fel_take(f, p->pts, &exact) == 1 && exact->pts == p->pts);
+            av_frame_free(&exact);
+        } else {
+            assert(!dvbridge_fel_drain(f) && dvbridge_fel_failed(f));
+        }
+    }
+    /* Missing EL cannot turn an unbounded input into endless preroll. */
+    dvbridge_fel_reset(f);
+    for (int i = 0; i <= 1024; ++i) {
+        bare->pts = bare->dts = i * 41708;
+        assert(dvbridge_fel_submit(f, bare) == (i < 1024));
+    }
+    av_packet_free(&bare);
     dvbridge_fel_reset(f);
     assert(frame->pts == 4 * 41708 && frame->buf[0]); /* downstream ref survives seek */
     av_frame_free(&frame);
