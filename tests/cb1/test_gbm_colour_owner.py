@@ -29,7 +29,8 @@ def native_owner_program(root):
              "MigrateLimitedRangeSetting", "DeferConnectorPreferences", "ApplyConnectorProperties",
              "ApplyBroadcastRange", "ApplyMaxBpc", "ApplyColorFormat", "IsRequestRejected",
              "RequeueConnectorProperties", "RetryConnectorProperties", "UpdateDriverLimitedRange",
-             "UseLimitedColor", "ApplyColorspace", "SetColorimetry"]
+             "UseLimitedColor", "ApplyColorspace", "SetColorimetry", "NativeSDRBT2020Colorspace",
+             "BeginFrameGuiComposite", "StageNativeSDRSignal"]
     bodies = "\n".join(method(source, "CWinSystemGbm::" + name) for name in names)
     # The two QueueConnectorProperty overloads are adjacent in the actual owner.
     start = source.index("bool CWinSystemGbm::QueueConnectorProperty(")

@@ -20,8 +20,9 @@ struct CSettings {static constexpr const char* SETTING_VIDEOSCREEN_LIMITEDRANGE=
 namespace KODI::MESSAGING {struct ThreadMessageCallback {void (*callback)(void*);void* owner;};}
 struct Setting {bool defaultValue=true;bool IsDefault() const {return defaultValue;}};
 struct Settings {
- bool legacy=false;std::map<std::string,int> values;Setting range;
- bool GetBool(const char*) const {return legacy;}int GetInt(const char* id){return values[id];}
+ bool legacy=false,cms=false;std::map<std::string,int> values;Setting range;
+ bool GetBool(std::string_view id) const {return id=="videoscreen.cmsenabled" ? cms : legacy;}
+ int GetInt(const char* id){return values[id];}
  std::shared_ptr<Setting> GetSetting(const char*) {return std::shared_ptr<Setting>(&range,[](auto*){});}
  void SetInt(const char* id,int value) {values[id]=value;range.defaultValue=false;}
  void SetBool(const char*,bool value) {legacy=value;}
@@ -35,7 +36,8 @@ struct CDRMConnector {
  std::map<std::string,std::map<std::string,uint64_t>> enums{
   {"Broadcast RGB",{{"Automatic",0},{"Full",1},{"Limited 16:235",2}}},
   {"color format",{{"AUTO",0},{"RGB",1},{"YUV 4:4:4",2},{"YUV 4:2:2",3},{"YUV 4:2:0",4}}}};
- std::string type="HDMI-A";int frl=0;uint32_t highestClock=594000;bool immutable=false;
+ std::string type="HDMI-A";int frl=0;uint32_t highestClock=594000;bool immutable=false,connected=true;
+ bool IsConnected() const {return connected;}
  bool SupportsProperty(const char* property) const {return cache.count(property);}
  std::optional<uint64_t> GetPropertyValue(const char* property) const {
   auto it=cache.find(property);if(it==cache.end()) return {};return it->second;}
@@ -50,6 +52,8 @@ struct CDRMConnector {
 };
 struct CDRMUtils {
  virtual ~CDRMUtils()=default;CDRMConnector connector;uint32_t clock=594000;
+ bool videoPlane=true,guiPlane=false;
+ bool GetVideoPlane() const {return videoPlane;} bool GetGuiPlane() const {return guiPlane;}
  bool fellBack=false;int modesets=0;
  CDRMConnector* GetConnector() {return &connector;}
  virtual bool LastCommitFellBack() const {return fellBack;}
@@ -72,15 +76,29 @@ enum class Colorimetry {DEFAULT,SMPTE_170M_YCC,BT709_YCC,XVYCC_601,XVYCC_709,SYC
 const char* ColorimetryToString(Colorimetry) {return "colorimetry";}
 }
 enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_HDR10};
-constexpr int AVCOL_TRC_SMPTE2084=16, AVCOL_TRC_ARIB_STD_B67=18;
-struct VideoPicture {int colorBits=10;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_NONE;int color_transfer=1;KODI::UTILS::Colorimetry color=KODI::UTILS::Colorimetry::BT2020_YCC;};
+constexpr int AVCOL_TRC_BT2020_10=14, AVCOL_TRC_SMPTE2084=16, AVCOL_TRC_ARIB_STD_B67=18;
+constexpr int AVCOL_PRI_BT709=1, AVCOL_PRI_BT2020=9;
+struct VideoPicture {int colorBits=10;StreamHdrType hdrType=StreamHdrType::HDR_TYPE_NONE;int color_transfer=1;
+ int color_primaries=AVCOL_PRI_BT2020;KODI::UTILS::Colorimetry color=KODI::UTILS::Colorimetry::BT2020_YCC;};
 namespace KODI::UTILS {Colorimetry GetColorimetry(const VideoPicture& picture){return picture.color;}}
+struct DisplayInfo {
+ bool wideRgb=true,wideYcc=true;
+ bool SupportsColorimetry(KODI::UTILS::Colorimetry color) const {
+  return color==KODI::UTILS::Colorimetry::BT2020_RGB ? wideRgb : wideYcc;}
+};
 template<class K,class V> std::map<K,V> make_map(std::initializer_list<std::pair<const K,V>> values) {return {values};}
 // NATIVE_CONSTANTS
 struct CWinSystemGbm {
  bool allowed=true;int colorSpaceApplications=0;
  std::shared_ptr<CDRMUtils> m_DRM=std::make_shared<CDRMAtomic>();Blob m_hdrBlob;
  bool ConnectorPreferencesAllowed() const {return allowed;}
+ bool BeginFrameGuiComposite(bool);
+ std::unique_ptr<DisplayInfo> m_info=std::make_unique<DisplayInfo>();
+ bool compositorAvailable=true,fboAvailable=true;
+ int guiTransfer=0;
+ bool SetGuiCompositing(int transfer) {guiTransfer=compositorAvailable ? transfer : 0;return guiTransfer;}
+ bool BeginGuiComposite(bool) {return IsHdrComposite() && fboAvailable;}
+ bool IsHdrComposite() const {return guiTransfer!=0;}
 
  void DeferConnectorPreferences();bool UseLimitedColor();void ApplyColorspace();void SetColorimetry(const VideoPicture*, bool sdrToBT709=false);
  std::optional<uint64_t> m_queuedColorspace;
@@ -110,6 +128,52 @@ int main() {
  assert(drm->pending.at("Colorspace")==3 && "BT.709 pixels need BT.709 YCbCr signalling");
  w.m_colorFormat=1;w.ApplyConnectorProperties();w.SetColorimetry(&picture, true);
  assert(drm->pending.at("Colorspace")==0 && "BT.709 RGB must not carry a BT.2020 tag");
+ CWinSystemGbm wide;
+ auto wd=std::dynamic_pointer_cast<CDRMAtomic>(wide.m_DRM);
+ wd->connector.cache["Colorspace"]=0;
+ wd->connector.enums["Colorspace"]=drm->connector.enums["Colorspace"];
+ wide.SetColorimetry(&picture, true);
+ assert(wide.BeginFrameGuiComposite(true) && wide.m_nativeSDRActive);
+ assert(wide.StageNativeSDRSignal(true));
+ assert(wd->pending.at("Colorspace")==1 && wd->rangeTransition);
+ wd->Commit(true);
+ wide.m_nativeSDRSubmitted=true;
+ wide.m_colorFormat=3;
+ wide.ApplyConnectorProperties();
+ assert(wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true));
+ assert(wd->pending.at("Colorspace")==2 && wd->rangeTransition);
+ wd->Commit(true);
+ // The requested wire encoding needs matching display and connector support.
+ wide.m_info->wideYcc=false;
+ assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
+ assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==3 && wd->rangeTransition);
+ wd->Commit(true);
+ wide.m_nativeSDRSubmitted=false;
+ wide.m_info->wideYcc=true;
+ wd->connector.enums["Colorspace"].erase("BT2020_YCC");
+ assert(!wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true));
+ wide.m_colorFormat=1;wide.ApplyConnectorProperties();
+ wd->connector.connected=false;
+ assert(!wide.BeginFrameGuiComposite(true));
+ wd->connector.connected=true;
+ wd->guiPlane=true;
+ assert(!wide.BeginFrameGuiComposite(true));
+ wd->guiPlane=false;
+ CServiceBroker::GetSettingsComponent()->cms=true;
+ assert(!wide.BeginFrameGuiComposite(true));
+ CServiceBroker::GetSettingsComponent()->cms=false;
+ wide.fboAvailable=false;
+ assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
+ assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==0);
+ wide.fboAvailable=true;
+ wide.SetColorimetry(&picture, true);
+ assert(wide.BeginFrameGuiComposite(true));
+ wd->addSuccess=false;
+ assert(!wide.StageNativeSDRSignal(true));
+ assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
+ wd->addSuccess=true;
+ wd->connector.cache["Colorspace"]=2; // The previous output was wide YCbCr.
+ assert(wide.StageNativeSDRSignal(true) && wd->pending.at("Colorspace")==0 && wd->rangeTransition);
  assert(w.m_contentBits==10);
  for (const int transfer : {AVCOL_TRC_SMPTE2084, AVCOL_TRC_ARIB_STD_B67})
  {

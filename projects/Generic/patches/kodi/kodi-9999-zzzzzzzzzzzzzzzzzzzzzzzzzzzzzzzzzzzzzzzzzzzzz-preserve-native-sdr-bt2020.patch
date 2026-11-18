@@ -1,0 +1,533 @@
+Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
+
+--- a/system/shaders/GL/1.5/gl_gui_composite.frag
++++ b/system/shaders/GL/1.5/gl_gui_composite.frag
+@@ -11,6 +11,7 @@
+ in vec2 v_tex;
+ out vec4 fragColor;
+ uniform sampler2D u_samp;
++uniform bool u_sdrBT2020;
+ uniform float u_sdrPeak; // SDR peak in normalized PQ (e.g. 100/10000 = 0.01)
+ 
+ // ST2084 (PQ) constants
+@@ -51,18 +52,15 @@
+   // BT.709 -> BT.2020 gamut mapping
+   linear = bt709_to_bt2020 * linear;
+ 
+-  // scale to PQ luminance range: SDR content at u_sdrPeak of 10000 nits
+-  linear *= u_sdrPeak;
+-
+-  // linear -> PQ
+-  vec3 pq = forwardPQ(linear);
++  vec3 result = u_sdrBT2020 ? pow(max(linear, vec3(0.0)), vec3(1.0 / 2.4)) :
++                             forwardPQ(linear * u_sdrPeak);
+ 
+   // Limited-range encoding at the BO write boundary. Canonical normalized
+   // ratios (bit-depth-agnostic in float space; BO write quantizes to the
+   // active surface bit depth).
+ #ifdef KODI_LIMITED_RANGE
+-  pq = pq * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
++  result = result * ((235.0 - 16.0) / 255.0) + (16.0 / 255.0);
+ #endif
+ 
+-  fragColor = vec4(pq, gui.a);
++  fragColor = vec4(result, gui.a);
+ }
+--- a/xbmc/application/Application.cpp
++++ b/xbmc/application/Application.cpp
+@@ -935,7 +935,7 @@
+        CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions()))
+     m_skipGuiRender = false;
+   const bool guiWillRender = appPower->GetRenderGUI() && !m_skipGuiRender;
+-  bool compositing = CServiceBroker::GetWinSystem()->BeginGuiComposite(guiWillRender);
++  bool compositing = CServiceBroker::GetWinSystem()->BeginFrameGuiComposite(guiWillRender);
+ 
+   if (guiWillRender)
+   {
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp
+@@ -1014,6 +1014,7 @@
+     // create regular progressive scan shader
+     // if single pass, create GLSLOutput helper and pass it to YUV2RGB shader
+     EShaderFormat shaderFormat = GetShaderFormat();
++    const auto dstPrimaries = m_passthroughHDR || m_shaderSDRBT2020 ? m_srcPrimaries : AVCOL_PRI_BT709;
+     std::shared_ptr<GLSLOutput> out;
+     m_toneMapMethod = m_videoSettings.m_ToneMapMethod;
+     if (m_renderQuality == RQ_SINGLEPASS)
+@@ -1027,7 +1028,7 @@
+       {
+         m_pYUVShader = new YUV2RGBFilterShader4(
+             m_textureTarget == GL_TEXTURE_RECTANGLE, shaderFormat, m_nonLinStretch,
+-            m_passthroughHDR ? m_srcPrimaries : AVColorPrimaries::AVCOL_PRI_BT709, m_srcPrimaries,
++            dstPrimaries, m_srcPrimaries,
+             m_toneMap, m_toneMapMethod, m_scalingMethod, out);
+         if (!m_cmsOn)
+           m_pYUVShader->SetConvertFullColorRange(m_fullRange);
+@@ -1053,7 +1054,7 @@
+       m_pYUVShader = new YUV2RGBProgressiveShader(
+           m_textureTarget == GL_TEXTURE_RECTANGLE, shaderFormat,
+           m_nonLinStretch && m_renderQuality == RQ_SINGLEPASS,
+-          m_passthroughHDR ? m_srcPrimaries : AVColorPrimaries::AVCOL_PRI_BT709, m_srcPrimaries,
++          dstPrimaries, m_srcPrimaries,
+           m_toneMap, m_toneMapMethod, out,
+           m_intermediateGammaCorrection && m_renderQuality == RQ_MULTIPASS);
+ 
+@@ -1117,7 +1118,7 @@
+ 
+ bool CLinuxRendererGL::IsGuiLayer()
+ {
+-  return !m_hdrFboActive;
++  return !m_hdrFboActive && !CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020();
+ }
+ 
+ bool CLinuxRendererGL::Render(unsigned int flags, int renderBuffer)
+@@ -2805,6 +2806,12 @@
+ {
+   const CPictureBuffer& buf = m_buffers[index];
+   const ETONEMAPMETHOD& toneMapMethod = m_videoSettings.m_ToneMapMethod;
++  const bool wide = CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020();
++  if (wide != m_shaderSDRBT2020)
++  {
++    m_shaderSDRBT2020 = wide;
++    m_reloadShaders = true;
++  }
+ 
+   if (buf.m_srcPrimaries != m_srcPrimaries)
+   {
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h
+@@ -14,6 +14,8 @@
+ 
+ #include "FrameBufferObject.h"
+ #include "cores/VideoSettings.h"
++#include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
++#include "cores/VideoPlayer/Interface/TimingConstants.h"
+ #include "RenderInfo.h"
+ #include "BaseRenderer.h"
+ #include "ColorManager.h"
+@@ -225,6 +227,7 @@
+   ETONEMAPMETHOD m_toneMapMethod = VS_TONEMAPMETHOD_OFF;
+   bool m_passthroughHDR = false;
+   bool m_hdrFboActive{false};
++  bool m_shaderSDRBT2020{false};
+   bool m_pboSupported = true;
+   bool m_pboUsed = false;
+   bool m_nonLinStretch = false;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -1304,6 +1304,8 @@
+           }
+ 
+           EShaderFormat shaderFormat = GetShaderFormat();
++          const auto dstPrimaries =
++              m_passthroughHDR || m_shaderSDRBT2020 ? m_srcPrimaries : AVCOL_PRI_BT709;
+           m_toneMapMethod = m_videoSettings.m_ToneMapMethod;
+ 
+           // Try single-pass filter shader for FAST scalers on GLES 3.1+
+@@ -1312,7 +1314,7 @@
+                m_scalingMethod == VS_SCALINGMETHOD_SPLINE36_FAST))
+           {
+             m_pYUVProgShader = new YUV2RGBFilterShader(
+-                shaderFormat, m_passthroughHDR ? m_srcPrimaries : AVColorPrimaries::AVCOL_PRI_BT709,
++                shaderFormat, dstPrimaries,
+                 m_srcPrimaries, m_toneMap, m_toneMapMethod, m_scalingMethod, m_useDithering);
+             // TODO: GL gates this on !m_cmsOn. Add when CMS is ported to GLES.
+             m_pYUVProgShader->SetConvertFullColorRange(m_fullRange);
+@@ -1339,14 +1341,14 @@
+ 
+           // Fall back to regular progressive shader
+           m_pYUVProgShader = new YUV2RGBProgressiveShader(
+-              shaderFormat, m_passthroughHDR ? m_srcPrimaries : AVColorPrimaries::AVCOL_PRI_BT709,
++              shaderFormat, dstPrimaries,
+               m_srcPrimaries, m_toneMap, m_toneMapMethod, m_useDithering);
+           m_pYUVProgShader->SetConvertFullColorRange(m_fullRange);
+ 
+           CLog::Log(LOGINFO, "GLES: Selecting YUV 2 RGB shader");
+ 
+           m_pYUVBobShader = new YUV2RGBBobShader(
+-              shaderFormat, m_passthroughHDR ? m_srcPrimaries : AVColorPrimaries::AVCOL_PRI_BT709,
++              shaderFormat, dstPrimaries,
+               m_srcPrimaries, m_toneMap, m_toneMapMethod, m_useDithering);
+           m_pYUVBobShader->SetConvertFullColorRange(m_fullRange);
+ 
+@@ -3115,13 +3117,19 @@
+ 
+ bool CLinuxRendererGLES::IsGuiLayer()
+ {
+-  return !m_hdrFboActive;
++  return !m_hdrFboActive && !CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020();
+ }
+ 
+ void CLinuxRendererGLES::CheckVideoParameters(int index)
+ {
+   const CPictureBuffer& buf = m_buffers[index];
+   const ETONEMAPMETHOD& toneMapMethod = m_videoSettings.m_ToneMapMethod;
++  const bool wide = CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020();
++  if (wide != m_shaderSDRBT2020)
++  {
++    m_shaderSDRBT2020 = wide;
++    m_reloadShaders = true;
++  }
+ 
+   if (buf.m_srcPrimaries != m_srcPrimaries)
+   {
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -294,6 +294,7 @@
+   // HDR FBO compositing: when active, IsGuiLayer() returns false so
+   // video renders separately from GUI via RenderUpdateVideo()
+   bool m_hdrFboActive{false};
++  bool m_shaderSDRBT2020{false};
+ 
+ private:
+   void ClearBackBuffer();
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+@@ -297,6 +297,8 @@
+       gbm && gbm->IsDVBridgeScreenshotSDR())
+     return true; // The SDR compositor expects sRGB overlays, including PQ bitmap palettes.
+ #endif
++  if (winSystem->UsesNativeSDRBT2020())
++    return true; // The SDR BT.2020 compositor takes an sRGB GUI layer.
+   const bool destinationIsPQ =
+       winSystem->IsHdrComposite() || winSystem->GetEotf() != KODI::UTILS::Eotf::TRADITIONAL_SDR;
+   return !destinationIsPQ;
+@@ -311,6 +313,8 @@
+     cb1PQ = window->HasDVBridgeScreenshot();
+ #endif
+   auto* window = CServiceBroker::GetWinSystem();
++  if (window->UsesNativeSDRBT2020())
++    return 1u; // The compositor applies the output range after gamut conversion.
+   return (ShouldConvertPQPaletteToSRGB(true) ? 1u : 0u) |
+          (window->IsHdrComposite() && window->UseLimitedColor() && !cb1PQ ? 2u : 0u);
+ }
+--- a/xbmc/rendering/gl/GuiCompositeShaderGL.cpp
++++ b/xbmc/rendering/gl/GuiCompositeShaderGL.cpp
+@@ -23,6 +23,7 @@
+   m_hSamp = glGetUniformLocation(ProgramHandle(), "u_samp");
+   m_hProj = glGetUniformLocation(ProgramHandle(), "u_proj");
+   m_hSdrPeak = glGetUniformLocation(ProgramHandle(), "u_sdrPeak");
++  m_hSDRBT2020 = glGetUniformLocation(ProgramHandle(), "u_sdrBT2020");
+ 
+   glUseProgram(ProgramHandle());
+   glUniform1i(m_hSamp, 0);
+@@ -35,5 +36,6 @@
+     glUniformMatrix4fv(m_hProj, 1, GL_FALSE, m_proj);
+ 
+   glUniform1f(m_hSdrPeak, m_sdrPeak);
++  glUniform1i(m_hSDRBT2020, m_sdrBT2020);
+   return true;
+ }
+--- a/xbmc/rendering/gl/GuiCompositeShaderGL.h
++++ b/xbmc/rendering/gl/GuiCompositeShaderGL.h
+@@ -19,6 +19,7 @@
+ 
+   void SetProjection(const GLfloat* proj) { m_proj = proj; }
+   void SetSdrPeak(float peak) { m_sdrPeak = peak; }
++  void SetSDRBT2020(bool enabled) { m_sdrBT2020 = enabled; }
+ 
+   GLint GetPosLoc() { return m_hPos; }
+   GLint GetTexLoc() { return m_hTex; }
+@@ -36,4 +37,6 @@
+   GLint m_hSamp{-1};
+   GLint m_hProj{-1};
+   GLint m_hSdrPeak{-1};
++  bool m_sdrBT2020{false};
++  GLint m_hSDRBT2020{-1};
+ };
+--- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
++++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
+@@ -195,10 +195,10 @@
+     return false;
+   }
+ 
+-  if (colorTransfer == AVCOL_TRC_GAMMA22)
++  if (colorTransfer == AVCOL_TRC_GAMMA22 || colorTransfer == AVCOL_TRC_BT2020_10)
+   {
+     if (!std::isfinite(sdrGamma) || sdrGamma < 1.8f || sdrGamma > 2.8f) return false;
+-    // Negative selects BT.709 SDR in the shared compositor; no PQ/HLG LUT.
++    // Negative selects SDR in the shared compositor; no PQ/HLG LUT.
+     m_ootfGamma = -sdrGamma;
+   }
+   else if (colorTransfer == AVCOL_TRC_SMPTE2084)
+--- a/xbmc/windowing/WinSystem.h
++++ b/xbmc/windowing/WinSystem.h
+@@ -238,10 +238,13 @@
+   /*!
+    * \brief Set colorimetry (BT.709, BT.2020, etc). Passing nullptr as the
+    * parameter resets to "Default" (display then decides based on rez). Native
+-   * YUV shaders set sdrToBT709 when they render SDR into the BT.709 gamut.
++   * YUV shaders set nativeSDRShader when the window system can choose their SDR output gamut.
+    *
+    */
+-  virtual void SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709 = false) {}
++  virtual void SetColorimetry(const VideoPicture* videoPicture, bool nativeSDRShader = false) {}
++
++  //! The native shader and GUI compositor are rendering this frame in SDR BT.2020.
++  virtual bool UsesNativeSDRBT2020() const { return false; }
+ 
+   /*!
+    * \brief Set the HDR metadata. Passing nullptr as the parameter should
+@@ -275,6 +278,7 @@
+   // guiWillRender: hint that GUI rendering is about to fire this frame.
+   // When false, implementations should skip FBO bind/clear since no GUI
+   // draws will land in the FBO this frame.
++  virtual bool BeginFrameGuiComposite(bool guiWillRender) { return BeginGuiComposite(guiWillRender); }
+   virtual bool BeginGuiComposite(bool guiWillRender) { return false; }
+   virtual bool CanReuseGuiComposite() const { return false; }
+   virtual void EndGuiComposite() {}
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1122,6 +1122,11 @@
+     DeferConnectorPreferences();
+ 
+   auto atomic = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!StageNativeSDRSignal(rendered))
++  {
++    if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
++    return false;
++  }
+   const bool transactional = rendered && atomic && (carrier || atomic->HasColorRangeTransition());
+   struct gbm_bo* bo = nullptr;
+ 
+@@ -1147,6 +1152,19 @@
+     if (atomic->LastPageAccepted()) surface.EndTransactionalMode();
+   }
+ 
++  if (rendered && atomic)
++  {
++    if (atomic->LastPageAccepted())
++      m_nativeSDRSubmitted = m_nativeSDRActive;
++    else if (m_nativeSDRActive && transactional && !m_nativeSDRSubmitted)
++    {
++      // Retain the previous framebuffer and render the next frame into BT.709.
++      m_queuedColorspace.reset();
++      m_nativeSDRRejected = true;
++      if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
++    }
++  }
++
+   if (ConnectorPreferencesAllowed())
+   {
+     UpdateDriverLimitedRange();
+@@ -1296,8 +1314,22 @@
+                       : m_DRM->FindGuiPlane(current->GetFormat(), current->GetModifier());
+ }
+ 
+-void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709)
++void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture, bool nativeSDRShader)
+ {
++  const bool nativeSDR = nativeSDRShader && videoPicture &&
++                         videoPicture->hdrType == StreamHdrType::HDR_TYPE_NONE &&
++                         videoPicture->color_transfer != AVCOL_TRC_SMPTE2084 &&
++                         videoPicture->color_transfer != AVCOL_TRC_ARIB_STD_B67;
++  m_nativeSDRSource = nativeSDR && videoPicture->color_primaries == AVCOL_PRI_BT2020;
++  m_nativeSDRRejected = false;
++  if (!m_nativeSDRSource)
++    m_nativeSDRActive = false;
++  if (!m_nativeSDRSource && m_nativeSDRCompositor)
++  {
++    SetGuiCompositing(0);
++    m_nativeSDRCompositor = false;
++  }
++
+   m_queuedColorspace.reset();
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   if (!drm)
+@@ -1317,9 +1349,7 @@
+   if (videoPicture)
+   {
+     colorimetry = KODI::UTILS::GetColorimetry(*videoPicture);
+-    if (sdrToBT709 && videoPicture->hdrType == StreamHdrType::HDR_TYPE_NONE &&
+-        videoPicture->color_transfer != AVCOL_TRC_SMPTE2084 &&
+-        videoPicture->color_transfer != AVCOL_TRC_ARIB_STD_B67)
++    if (nativeSDR)
+       colorimetry = KODI::UTILS::Colorimetry::BT709_YCC;
+   }
+ 
+@@ -1328,6 +1358,96 @@
+   ApplyColorspace();
+ }
+ 
++std::optional<uint64_t> CWinSystemGbm::NativeSDRBT2020Colorspace() const
++{
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  auto* connector = drm ? drm->GetConnector() : nullptr;
++  if (!connector || !connector->IsConnected() || !connector->GetType().starts_with("HDMI") ||
++      !connector->SupportsProperty("Colorspace") ||
++      connector->IsPropertyImmutable("Colorspace").value_or(false) || !m_info)
++    return {};
++
++  const auto target = IsYuvRequested() ? KODI::UTILS::Colorimetry::BT2020_YCC :
++                                        KODI::UTILS::Colorimetry::BT2020_RGB;
++  if (!m_info->SupportsColorimetry(target))
++    return {};
++  return connector->GetPropertyEnumValue("Colorspace", ColorimetryMap.at(target));
++}
++
++bool CWinSystemGbm::BeginFrameGuiComposite(bool guiWillRender)
++{
++  // Only the renderer that owns a single RGB scanout can compose both layers
++  // into BT.2020. Keep the existing CMS and CB1 transport owners independent.
++  const bool wide = m_nativeSDRSource && !m_nativeSDRRejected && ConnectorPreferencesAllowed() &&
++                    m_DRM && m_DRM->GetVideoPlane() && !m_DRM->GetGuiPlane() &&
++                    !CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
++                        "videoscreen.cmsenabled") &&
++                    NativeSDRBT2020Colorspace().has_value();
++  if (wide && (!m_nativeSDRCompositor || !IsHdrComposite()))
++    m_nativeSDRCompositor = SetGuiCompositing(AVCOL_TRC_BT2020_10);
++  else if (!wide && m_nativeSDRCompositor)
++  {
++    SetGuiCompositing(0);
++    m_nativeSDRCompositor = false;
++  }
++
++  const bool compositing = BeginGuiComposite(guiWillRender);
++  m_nativeSDRActive = wide && m_nativeSDRCompositor && compositing;
++  if (wide && !m_nativeSDRActive)
++  {
++    SetGuiCompositing(0);
++    m_nativeSDRCompositor = false;
++    m_nativeSDRRejected = true;
++  }
++  return compositing;
++}
++
++bool CWinSystemGbm::StageNativeSDRSignal(bool rendered)
++{
++  if (!m_nativeSDRSubmitted && (!rendered || (!m_nativeSDRActive && !m_nativeSDRRejected)))
++    return true;
++
++  const bool wide = rendered ? m_nativeSDRActive.load() : m_nativeSDRSubmitted;
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  auto* connector = drm ? drm->GetConnector() : nullptr;
++  if (!connector || !connector->SupportsProperty("Colorspace"))
++  {
++    m_nativeSDRSubmitted = false;
++    return !wide;
++  }
++
++  const auto committed = connector->GetPropertyValue("Colorspace");
++  if (wide)
++  {
++    const auto target = NativeSDRBT2020Colorspace();
++    if (!target || !drm->AddProperty(connector, "Colorspace", *target))
++    {
++      m_queuedColorspace.reset();
++      m_nativeSDRRejected = true;
++      return false;
++    }
++    m_queuedColorspace = target;
++  }
++  else
++  {
++    // An earlier wide request may have replaced the ordinary BT.709 request
++    // before it was accepted, even when no wide frame was ever submitted.
++    if (!m_nativeSDRSubmitted && m_queuedColorspace && m_queuedColorspace == committed)
++      return true;
++    ApplyColorspace();
++    if (!m_queuedColorspace)
++      return false;
++  }
++
++  if (m_queuedColorspace != committed)
++  {
++    // Never attach a framebuffer in the new gamut to the old atomic request.
++    drm->SetColorRangeTransition();
++    drm->RequestModeset();
++  }
++  return true;
++}
++
+ void CWinSystemGbm::ApplyColorspace()
+ {
+   m_queuedColorspace.reset();
+@@ -1388,9 +1508,11 @@
+     CLog::LogF(LOGDEBUG, "setting connector colorspace to {} (source {}, {} output)",
+                KODI::UTILS::ColorimetryToString(scanoutColorimetry),
+                KODI::UTILS::ColorimetryToString(colorimetry), yuv ? "YCbCr" : "RGB");
+-    drm->AddProperty(connector, "Colorspace", colorspace.value());
+-    m_queuedColorspace = colorspace;
+-    drm->SetActive(true);
++    if (drm->AddProperty(connector, "Colorspace", *colorspace))
++    {
++      m_queuedColorspace = colorspace;
++      drm->SetActive(true);
++    }
+   }
+ }
+ 
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -104,8 +104,13 @@
+ 
+   bool SetVideoOutput(const VideoPicture* videoPicture) override;
+ 
+-  void SetColorimetry(const VideoPicture* videoPicture, bool sdrToBT709 = false) override;
+-  KODI::UTILS::Colorimetry GetColorimetry() const override { return m_colorimetry; }
++  void SetColorimetry(const VideoPicture* videoPicture, bool nativeSDRShader = false) override;
++  KODI::UTILS::Colorimetry GetColorimetry() const override
++  {
++    return m_nativeSDRActive ? KODI::UTILS::Colorimetry::BT2020_YCC : m_colorimetry;
++  }
++  bool UsesNativeSDRBT2020() const override { return m_nativeSDRActive; }
++  bool BeginFrameGuiComposite(bool guiWillRender) override;
+   KODI::UTILS::Eotf GetEotf() const override { return m_eotf; }
+   bool SetHDR(const VideoPicture* videoPicture) override;
+   bool IsHDRDisplay() override;
+@@ -213,6 +218,9 @@
+   //! True if >8 bit video in the active HDMI mode does not fit as RGB, but does as YCbCr
+   bool ContentNeedsSubsampling() const;
+ 
++  std::optional<uint64_t> NativeSDRBT2020Colorspace() const;
++  bool StageNativeSDRSignal(bool rendered);
++
+   bool IsYuvRequested() const;
+   bool IsYuvFormatCommitted(const CDRMConnector& connector) const;
+   bool IsYuvFormat(const CDRMConnector& connector, std::optional<uint64_t> current) const;
+@@ -256,6 +264,12 @@
+   std::string m_colorFormatFailedMode;
+   std::string m_currentModeId;
+ 
++  bool m_nativeSDRSource{false};
++  bool m_nativeSDRCompositor{false};
++  std::atomic<bool> m_nativeSDRActive{false};
++  bool m_nativeSDRSubmitted{false};
++  bool m_nativeSDRRejected{false};
++
+   //! Whether the "Colorspace" tag was last set for a YCbCr output
+   bool m_scanoutYuv{false};
+   // Claim no 3D display formats until an entire DRM mode enumeration proves them.
+--- a/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLContext.cpp
+@@ -246,6 +246,8 @@
+     m_compositeShader.reset();
+   }
+ 
++  if (m_compositeShader)
++    m_compositeShader->SetSDRBT2020(colorTransfer == AVCOL_TRC_BT2020_10);
+   return m_guiCompositing;
+ }
+ 
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1232,6 +1232,7 @@
+       m_guiCompositing = false;
+       return false;
+     }
++    m_compositeShader->SetSDRBT2020(colorTransfer == AVCOL_TRC_BT2020_10);
+     m_guiSDRGamma = gamma;
+   }
+   else
+@@ -1640,7 +1641,10 @@
+   m_compositeShader->SetInputPQ(false);
+   m_compositeShader->SetOutputRange(1.0f, 0.0f);
+   m_compositeShader->SetPlayerLed();
+-  m_compositeShader->SetSDRBT2020(false);
++#ifdef HAVE_DVBRIDGE
++  if (m_sdrConversion)
++    m_compositeShader->SetSDRBT2020(false);
++#endif
+ 
+   glDisableVertexAttribArray(posLoc);
+   glDisableVertexAttribArray(texLoc);
