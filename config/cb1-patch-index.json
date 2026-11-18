@@ -2211,6 +2211,8 @@
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
+      "xbmc/windowing/gbm/drm/DRMPlane.cpp": "Allow read-only LLDV capability checks to query the plane format.",
+      "xbmc/windowing/gbm/drm/DRMPlane.h": "Allow read-only LLDV capability checks to query the plane format.",
       "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Resolve native LLDV scanout precision and confirm the active transport in Kodi.",
       "xbmc/windowing/gbm/drm/DRMUtils.h": "Resolve native LLDV scanout precision and confirm the active transport in Kodi."
     }

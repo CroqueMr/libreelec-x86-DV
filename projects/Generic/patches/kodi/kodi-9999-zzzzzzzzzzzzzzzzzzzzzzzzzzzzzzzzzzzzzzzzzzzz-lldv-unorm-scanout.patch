@@ -669,3 +669,27 @@ index 32d68fe..40eabcc 100644
                                                  {DRM_FORMAT_ABGR16161616F, 16, 16, false, {}}};
  };
  
+diff --git a/xbmc/windowing/gbm/drm/DRMPlane.cpp b/xbmc/windowing/gbm/drm/DRMPlane.cpp
+--- a/xbmc/windowing/gbm/drm/DRMPlane.cpp
++++ b/xbmc/windowing/gbm/drm/DRMPlane.cpp
+@@ -27,7 +27,7 @@ CDRMPlane::CDRMPlane(int fd, uint32_t plane)
+                              std::to_string(m_plane->plane_id));
+ }
+ 
+-bool CDRMPlane::SupportsFormat(uint32_t format)
++bool CDRMPlane::SupportsFormat(uint32_t format) const
+ {
+   for (uint32_t i = 0; i < m_plane->count_formats; i++)
+     if (m_plane->formats[i] == format)
+diff --git a/xbmc/windowing/gbm/drm/DRMPlane.h b/xbmc/windowing/gbm/drm/DRMPlane.h
+--- a/xbmc/windowing/gbm/drm/DRMPlane.h
++++ b/xbmc/windowing/gbm/drm/DRMPlane.h
+@@ -49,7 +49,7 @@ public:
+   uint64_t GetModifier() const { return m_modifier; }
+   std::vector<uint64_t>& GetModifiersForFormat(uint32_t format) { return m_modifiers_map[format]; }
+ 
+-  bool SupportsFormat(uint32_t format);
++  bool SupportsFormat(uint32_t format) const;
+   bool SupportsFormatAndModifier(uint32_t format, uint64_t modifier);
+   bool Check(
+       uint64_t w, uint64_t h, uint32_t format, uint64_t modifier, CDRMCrtc* crtc, PlaneType type);
