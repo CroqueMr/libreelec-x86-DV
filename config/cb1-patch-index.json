@@ -1044,6 +1044,15 @@
       "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9998-hdmi-dts-capability.patch": {
+    "owner": "Respect DTS descriptors from complete HDMI ELD on ALSA sinks.",
+    "files": {
+      "xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp": "Publish HDMI DTS core and HD independently while preserving the legacy fallback for unavailable capability data.",
+      "xbmc/cores/AudioEngine/Sinks/AESinkALSA.h": "Pass DTS capability data through the existing ELD control reading path.",
+      "xbmc/cores/AudioEngine/Utils/AEELDParser.cpp": "Validate the HDMI baseline and descriptor bounds and decode DTS core and HD support.",
+      "xbmc/cores/AudioEngine/Utils/AEELDParser.h": "Return DTS capabilities when the ELD descriptors provide enough evidence."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": {
     "summary": "Consolidated native CB1 audio ownership",
     "component": "kodi",
