@@ -2320,5 +2320,35 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Require a confirmed LLDV transport refusal and an admissible HDR10 output.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the shared startup fallback check."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-preserve-native-sdr-bt2020.patch": {
+    "owner": "Preserve native SDR BT.2020 on a capable GBM HDMI output.",
+    "files": {
+      "system/shaders/GL/1.5/gl_gui_composite.frag": "Convert straight SDR GUI colors to the video gamut while retaining coverage.",
+      "system/shaders/GLES/2.0/gles_gui_composite.frag": "Recover straight native SDR GUI colors before transfer and gamut conversion.",
+      "xbmc/guilib/GUIFontTTFGL.cpp": "Use the same coverage policy as GLES for translucent glyphs.",
+      "xbmc/guilib/GUITextureGL.cpp": "Retain coverage in native SDR textures and translucent quads.",
+      "xbmc/guilib/GUITextureGLES.cpp": "Retain coverage in native SDR translucent quads.",
+      "xbmc/rendering/RenderSystem.h": "Refresh GUI shader color state without restarting rendering.",
+      "xbmc/rendering/gl/RenderSystemGL.cpp": "Refresh the GUI range define when the composition target changes.",
+      "xbmc/rendering/gl/RenderSystemGL.h": "Expose the GL GUI shader color-state refresh.",
+      "xbmc/rendering/gles/RenderSystemGLES.cpp": "Refresh the GUI range define when the composition target changes.",
+      "xbmc/rendering/gles/RenderSystemGLES.h": "Expose the GLES GUI shader color-state refresh.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.h": "Track whether the SDR compositor receives premultiplied GUI colors.",
+      "xbmc/application/Application.cpp": "Negotiate output and GUI composition before either layer draws.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Use the negotiated SDR gamut in every native GL YUV shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Track the compiled native SDR gamut and include the existing buffer types.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Use the negotiated SDR gamut in the filtered, progressive and field shaders.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Track the compiled native SDR gamut.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Convert PQ bitmap palettes to sRGB before SDR GUI composition.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.cpp": "Bind the SDR composite mode uniform.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.h": "Expose the SDR composite mode.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.cpp": "Reuse the SDR gamma path for native BT.2020.",
+      "xbmc/windowing/WinSystem.h": "Give the renderer access to the negotiated gamut and initialize it before GUI rendering.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Negotiate and commit native SDR BT.2020 with the same framebuffer.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Own the negotiated and accepted native SDR gamut.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Select the SDR compositor for native BT.2020.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Reuse SDR gamut conversion for native GUI and subtitle composition."
+    }
   }
 }

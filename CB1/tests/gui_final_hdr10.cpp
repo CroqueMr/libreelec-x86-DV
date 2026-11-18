@@ -58,12 +58,13 @@ struct GUIFramebuffer {
   GLuint Texture()const{return guiTexture;}
 };
 struct CompositeShader {
-  const GLfloat* m_proj{};bool m_inputPQ{},m_sdrBT2020{};float m_outputScale=1,m_outputOffset=0,m_ootfGamma=0;
+  const GLfloat* m_proj{};bool m_inputPQ{},m_sdrBT2020{},m_unpremultiplyGui{};float m_outputScale=1,m_outputOffset=0,m_ootfGamma=0;
   GLuint m_lutDegammaTexId=degammaTexture,m_lutTFTexId=pqTexture;
   GLint m_hProj=glGetUniformLocation(nativeProgram,"u_proj");
   GLint m_hOotfGamma=glGetUniformLocation(nativeProgram,"u_ootfGamma");
   GLint m_hInputPQ=glGetUniformLocation(nativeProgram,"u_inputPQ");
   GLint m_hSDRBT2020=glGetUniformLocation(nativeProgram,"u_sdrBT2020");
+  GLint m_hUnpremultiplyGui=glGetUniformLocation(nativeProgram,"u_unpremultiplyGui");
   GLint m_hOutputRange=glGetUniformLocation(nativeProgram,"u_outputRange");
   GLint m_hPlayerLedScale=glGetUniformLocation(nativeProgram,"u_playerLedScale");
   GLint m_hPlayerLedGui=glGetUniformLocation(nativeProgram,"u_playerLedGui");
@@ -72,7 +73,7 @@ struct CompositeShader {
   std::array<float,9> m_playerLedGui{},m_playerLedSubtitles{};
   void SetProjection(const GLfloat* p){m_proj=p;}
   void SetInputPQ(bool p){m_inputPQ=p;}
-  void SetSDRBT2020(bool wide){m_sdrBT2020=wide;}
+  void SetSDRBT2020(bool wide,bool premultiplied=false){m_sdrBT2020=wide;m_unpremultiplyGui=premultiplied;}
   void SetOutputRange(float s,float o){m_outputScale=s;m_outputOffset=o;}
   void SetPlayerLed(float peak=0,const std::array<float,9>& guiMatrix={},
                     const std::array<float,9>& subMatrix={})

@@ -135,6 +135,12 @@ struct Window {
   std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
   std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
   std::shared_ptr<Bridge> m_videoLayerBridge;
+  bool m_nativeSDRActive=false,m_nativeSDRSubmitted=false,m_nativeSDRRejected=false;
+  std::optional<uint64_t> m_queuedColorspace;
+  bool StageNativeSDRSignal(bool rendered, bool& wideTransition) {
+    wideTransition=rendered && m_nativeSDRActive && static_cast<CDRMAtomic&>(*m_DRM).range;
+    return true;
+  }
   bool ConnectorPreferencesAllowed(){return true;}
   void DeferConnectorPreferences(){assert(false);}
   void UpdateDriverLimitedRange(){}void RetryConnectorProperties(){}
@@ -179,6 +185,17 @@ int main(){
   assert(drm->calls==calls&&window.m_GBM->m_pendingBuffer->Get()==borrowed);
   assert(CServiceBroker::GetGUI()->dirty==dirty+1);
   window.m_GBM->CompleteTransactionalBuffer(false);
+  window.m_nativeSDRActive=true;
+  window.FlipPage(true,false,true);
+  assert(window.m_nativeSDRSubmitted);
+  auto* previousWide=displayed;
+  drm->range=true;drm->accept=false;
+  window.FlipPage(true,false,true);
+  assert(displayed==previousWide && previousWide->locked);
+  assert(window.m_nativeSDRRejected && "a refused new gamut tag needs fallback after an accepted wide frame");
+  window.m_nativeSDRActive=false;drm->range=true;drm->accept=true;
+  window.FlipPage(true,false,true);
+  assert(displayed!=previousWide && !window.m_nativeSDRSubmitted);
   using namespace DVBRIDGE;
   CDVBridgeState state;
   auto* before=displayed;
