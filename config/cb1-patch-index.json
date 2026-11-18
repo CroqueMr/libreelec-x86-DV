@@ -2311,5 +2311,14 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the playback-rate compatibility check.",
       "xbmc/settings/SettingConditions.cpp": "Report the playback timing restriction in Quick Switch."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-startup-timing-fallback.patch": {
+    "summary": "Use the existing per-file HDR10 fallback when the default LLDV circuit cannot use the playback timing",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Resolve the fallback before opening the video decoder.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Require a confirmed LLDV transport refusal and an admissible HDR10 output.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the shared startup fallback check."
+    }
   }
 }

@@ -1,0 +1,58 @@
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -99,6 +99,7 @@
+   bool CompleteDVModeSwitch(const VideoPicture& picture);
+   std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
+   int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
++  bool CanFallbackPlayerLedStartup(RESOLUTION resolution, int preference) const;
+   bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
+   bool DVModeSwitchDeferred()
+   {
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1935,6 +1935,22 @@
+   return DVBRIDGE::LldvUnavailableLabel(target, preference, false);
+ }
+ 
++bool CWinSystemGbmGLESContext::CanFallbackPlayerLedStartup(RESOLUTION resolution,
++                                                           int preference) const
++{
++  constexpr int timingUnavailable = 41212;
++  const int reason = PlayerLedResolutionReason(resolution, preference);
++  if (reason != DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL && reason != timingUnavailable)
++    return false;
++
++  const bool allowModeSwitch = resolution != RES_INVALID;
++  if (allowModeSwitch && !SupportsDVOutputTiming(resolution))
++    return false;
++
++  const auto caps = GetDVOutputCapabilities(nullptr, allowModeSwitch);
++  return caps.hdr10 && !caps.HDR10DepthLimited();
++}
++
+ bool CWinSystemGbmGLESContext::CompleteDVModeSwitch(const VideoPicture& picture)
+ {
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4779,14 +4779,9 @@
+             streamFrameRate(), hint.width, hint.height, false, WantsNativePresentation(hint), true);
+ 
+       if ((!adjustRefresh || playerLedStartupResolution) &&
+-          window->PlayerLedResolutionReason(playerLedStartupResolution.value_or(RES_INVALID),
+-                                            preferences.lldvFormat) ==
+-              DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL)
+-      {
+-        const auto caps = window->GetDVOutputCapabilities(nullptr, true);
+-        if (caps.hdr10 && !caps.HDR10DepthLimited())
+-          DVBRIDGE::UsePlayerLedStartupFallback();
+-      }
++          window->CanFallbackPlayerLedStartup(playerLedStartupResolution.value_or(RES_INVALID),
++                                              preferences.lldvFormat))
++        DVBRIDGE::UsePlayerLedStartupFallback();
+     }
+     if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
+         window->GetDVOutputCapabilities(nullptr, true).HDR10DepthLimited())
