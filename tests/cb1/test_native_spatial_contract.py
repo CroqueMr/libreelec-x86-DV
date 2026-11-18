@@ -162,16 +162,16 @@ int main(){assert(admit(1920,1080) && admit(2560,1440) && admit(3840,2160));
 
     def test_dv_mode_admission_accepts_native_targets_not_stale_uhd_only(self):
         text = (TREE / "xbmc/windowing/gbm/WinSystemGbm.cpp").read_text()
-        function = body(text, "bool CWinSystemGbm::SupportsDVOutputMode(")
-        start = function.index("  const auto usable =")
-        predicate = function[start:function.index("  if (usable(", start)]
+        predicate = body(text, "double DVOutputTimingRate(")
         self.run_program(r'''
 #include <cassert>
 #include <cstdint>
+#include <initializer_list>
 constexpr int DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
 struct drmModeModeInfo {int hdisplay,vdisplay,clock=148500,htotal=2200,vtotal=1125,flags=0;};
 struct CResolutionUtils {static bool IsCB1RefreshRate(double value){return value>=10 && value<=60;}};
-int main(){PREDICATE
+double usable(const drmModeModeInfo* mode) PREDICATE
+int main(){
  assert(!usable(nullptr));
  for(int width: {1280,1920,2560,3840}){drmModeModeInfo mode{width,width*9/16};assert(usable(&mode));}
  drmModeModeInfo invalid{4096,2160};assert(!usable(&invalid));
@@ -179,7 +179,7 @@ int main(){PREDICATE
  invalid={1920,1080};invalid.flags=DRM_MODE_FLAG_INTERLACE;assert(!usable(&invalid));
  invalid.flags=0;invalid.clock*=2;assert(!usable(&invalid));
 }
-'''.replace("PREDICATE", predicate).replace("#include <cstdint>", "#include <cstdint>\n#include <initializer_list>"))
+'''.replace("PREDICATE", predicate))
 
     def test_overlay_wrap_and_bounds_follow_current_scanout(self):
         text = (TREE / "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp").read_text()
