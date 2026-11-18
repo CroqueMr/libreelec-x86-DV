@@ -311,7 +311,7 @@
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.h": "560dbfb112f687461ef9f394d867188724dbbd74135329876325fde4cc793392",
     "packages/mediacenter/kodi/cb1/src/cb1_hdr10_ingress.c": "cb704114ed95ebc2d6c50aa410f71ec1eb1a74f6c94bfd18d66c09b0e1331032",
     "packages/mediacenter/kodi/cb1/src/dvbridge_policy.c": "372986bc8bacd0cb68ca4af440a0b255e2954b1f357cfe84a3fbb9199b8b561d",
-    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "13ac6679cdab12ad76654db35cef6f8d7326fcb16da7cbbcc7553681020d8bfa",
+    "packages/mediacenter/kodi/cb1/config/owned-sources.json": "a07dbca379a02ad37cebc8b699c374f5cc42471400b01094b165240e347b3409",
     "tests/cb1/test_diagnostics_runtime.py": "95ce20fb327621ec2676b28a137b641d1728b06b3edfe08998edcb43991d93e7",
     "tests/cb1/test_fel_facts.py": "39717d8a179e5f2f71798f5a9382a6476aba23dfaf0047e7513387aaebc5461c",
     "packages/mediacenter/kodi/cb1/src/dvbridge_render.c": "c08a48036ce3ea5c082f54036a7def395cf44af859053a9998ea64bfe30bb4dc",
