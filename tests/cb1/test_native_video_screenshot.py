@@ -46,7 +46,8 @@ static unsigned bufferWidth=5; static int pitch=48;
 static unsigned decodeReads=0, ordinaryReads=0;
 namespace KODI::WINDOWING::GBM {
 bool HasDVBridgeScreenshot(Window&){return logical;}
-bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& b){
+bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& b, bool videoOnly=false){
+  assert(videoOnly);
   ++decodeReads;
   if(!valid)return false;
   b.width=bufferWidth; b.height=4; b.stride=bottom?-pitch:pitch; b.format=AV_PIX_FMT_RGBA64LE;

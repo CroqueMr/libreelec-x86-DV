@@ -320,9 +320,9 @@
     "docs/cb1/README.md": "b8166be7406bafc10c001562fe67bf6406eeaa6e875c9a92a6f6d4ec334d31d1",
     "docs/cb1/RELEASE-RC4-PREVIEW-UPDATE3.md": "29c6368b9f8d424e3a56f0fddbfccc714b79762e1ba8a540d712e7f55781ebdb",
     "tests/cb1/test_sdr_capture_color.py": "8d49acfc46e627d12a3d073d6b550fb67d72ed0151f37fbcb1ddf5c0e7f491ef",
-    "tests/cb1/test_master_screenshot.py": "9cc89a63ff08af27f78ae4863163b2fd509552389925e9fd79ee09996a5317d6",
+    "tests/cb1/test_master_screenshot.py": "25e23b62bbedf09ed1d15072380987776e0a2c33a96589882d79f8df173527bb",
     "tests/cb1/test_master_recovery.py": "171e6d9dc6644f578aabd9fca42ee9cf9ffeb01d87db4077fb9250002db32e6b",
-    "tests/cb1/test_native_spatial_contract.py": "6b2fac6fda998ec065ec5218077e35d7bcb822916bf6edcc407ab6baea9ac638",
+    "tests/cb1/test_native_spatial_contract.py": "235648ff0b54538de9df8dc28b3e127551b58c5f300a8939768769b3d55ab3d3",
     "tests/cb1/test_vaapi_egl_probe.py": "1732ba41d1d9771b5e8de2570f3432bda2e82107c34570c6154bc239c166365e",
     "tests/cb1/test_frame_packing_gap.py": "b2b76548ad7a2f74db3d54233ea5929be494dbb85e256e06b1bb0a70612a8b32",
     "tests/cb1/test_sdr_native_surface.py": "228f351b42b5c0e2c4e7662e4a84cbf4e402cdd5f38196bd6809037571cdf601",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "2dd143ce34fbbf38ff745c3643f101fc99f9202542521006f86d1be096f1ade5",
+    "config/cb1-patch-index.json": "a00727a305cf603596ae1e206e215e7a669504f93e5e8e0bed33c6431ac3c8d8",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -478,7 +478,7 @@
     "tests/cb1/test_nvidia_native_lldv_formats.py": "796c7dbf1e20a06408026a4174a5e22c5cf33133b86965f34aab35227fa0468b",
     "projects/Generic/patches/linux/linux-9978-amd-native-lldv-y444.patch": "ac731ef8997b977dca1a06c319e1dda129f63581147500f079b7aed1dc8d5370",
     "tests/cb1/test_amd_lldv_formats.py": "fb10e14e34ef3df637d6d9f1edcadb56b525247da9fc44205f2b43ad375132e8",
-    "projects/Generic/patches/kodi/kodi-9998-logical-video-screenshot.patch": "296cb02497412fd3ffb8ec76b7dc8676ad4200c0dc9e99e707cae51680884b75"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": "93513df95b7f3aac1c5284d286f676dfa01a4ffb0d7b9ebaaa26736dced0ae9e"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
