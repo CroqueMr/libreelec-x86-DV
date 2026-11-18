@@ -99,6 +99,8 @@ struct CWinSystemGbm {
  std::unique_ptr<DisplayInfo> m_info=std::make_unique<DisplayInfo>();
  bool compositorAvailable=true,fboAvailable=true;
  int guiTransfer=0;
+ struct RenderSystem {int refreshes=0;void UpdateGUIShaderColorState(){++refreshes;}} gui;
+ RenderSystem* GetRenderSystem() {return &gui;}
  bool SetGuiCompositing(int transfer) {guiTransfer=compositorAvailable ? transfer : 0;return guiTransfer;}
  bool BeginGuiComposite(bool) {return IsHdrComposite() && fboAvailable;}
  bool IsHdrComposite() const {return guiTransfer!=0;}
@@ -138,6 +140,7 @@ int main() {
  wide.SetColorimetry(&picture, true);
  bool wideTransition=false;
  assert(wide.BeginFrameGuiComposite(true) && wide.m_nativeSDRActive);
+ assert(wide.gui.refreshes==1);
  assert(wide.StageNativeSDRSignal(true, wideTransition));
  assert(wd->pending.at("Colorspace")==1 && wd->rangeTransition && wideTransition);
  wd->Commit(true);
@@ -150,11 +153,13 @@ int main() {
  wide.m_colorFormat=3;
  wide.ApplyConnectorProperties();
  assert(wide.BeginFrameGuiComposite(true) && wide.StageNativeSDRSignal(true, wideTransition));
+ assert(wide.gui.refreshes==1);
  assert(wd->pending.at("Colorspace")==2 && wd->rangeTransition && wideTransition);
  wd->Commit(true);
  // The requested wire encoding needs matching display and connector support.
  wide.m_info->wideYcc=false;
  assert(!wide.BeginFrameGuiComposite(true) && !wide.m_nativeSDRActive);
+ assert(wide.gui.refreshes==2);
  assert(wide.StageNativeSDRSignal(true, wideTransition) && wd->pending.at("Colorspace")==3 && wd->rangeTransition && !wideTransition);
  wd->Commit(true);
  wide.m_nativeSDRSubmitted=false;

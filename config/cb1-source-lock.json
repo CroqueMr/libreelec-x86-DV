@@ -272,7 +272,7 @@
     "docs/cb1/CEC.md": "77cd87903b98a066e7d157b24d010dd25c2858ec874dfc34b0174312d3de01cd",
     "docs/cb1/GBM-COLOUR-SETTINGS.md": "026865f9df4c00b716dbedf2ad6822c0f68d95d6c4bd4c5948240e45edccc8f0",
     "projects/Generic/patches/kodi/kodi-9996-gbm-colour-preferences.patch": "bbbce54a81ce00e459f60c3d2d2129e53325f04211267a851015ed404322936a",
-    "tests/cb1/gbm_colour_owner.cpp": "e14eb331383d346e62022449ea0aaf73807439afa3ad14a8e7839c7ed7b3ed47",
+    "tests/cb1/gbm_colour_owner.cpp": "bdc53ac0ba221e41038deb4ffcb914bb0fcbafbb0dd75c3c6777683bed18012f",
     "tests/cb1/gbm_colour_transition.cpp": "8acaee4e7d99350bccad52a9e46c0250c98c90ed79bfca3ad2117adce14037d4",
     "tests/cb1/test_gbm_colour_owner.py": "8cb86baa0011037764789c54fa266881efd11d31adbe312e8df63856a592f897",
     "tests/cb1/test_gbm_colour_transition.py": "346aac7db58fee98fbda826b7e3d609172e96e7b32ca194781aa5c68869f13e9",
@@ -328,7 +328,7 @@
     "tests/cb1/test_sdr_native_surface.py": "228f351b42b5c0e2c4e7662e4a84cbf4e402cdd5f38196bd6809037571cdf601",
     "tests/cb1/test_process_info_pending.py": "018eda5214da1fec3caf2a772e198fb20fe74778f6a7bf9f9e3593d3e6b81b8f",
     "tests/cb1/test_native_video_telemetry.py": "c10e8392d2a917064aa75cc84e2344209c1529779ab111a1cd32585aaee40128",
-    "tests/cb1/test_sdr_live_settings.py": "447c8f734d7764cdce356f572000a6fa1b4d8a42d9fe07d44cae98cb6954ccc8",
+    "tests/cb1/test_sdr_live_settings.py": "b3b869704061203c77b874f343dd5e978fbfdd98f2d66c7adc1801263af2e7e4",
     "tests/cb1/test_sdr_applied_metadata.py": "828d531ee9d0c6418f7d600b4947691b51ce487b6265c1b3c2b7e67eacd5cf85",
     "tests/cb1/test_output_supersession.py": "82f522f5366babde399c232dcbf4b8281d5b3e027ee9824b7183ddd7232a82c8",
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
@@ -343,7 +343,7 @@
     "tests/cb1/test_sdr_direct_integration.py": "e4845b25655a02e42d0199e90878b4a1a7fab57d8b49594139bd80c9858d2bc1",
     "tests/cb1/test_sdr_render.py": "6c5cbdd57b424333a5e51ad87a82272e296318bfc5d4bcbc5171ef21d99bf258",
     "tests/cb1/sdr_direct_owners.cpp": "20f892bba6e379292998d3c031bc07552cda4dabc9aa793b781a7578b406a679",
-    "CB1/tests/gui_coverage_alpha.cpp": "a80d942dd1b705bdff7281ac48ba648e9a74847dff580054109eb6c58b175ad8",
+    "CB1/tests/gui_coverage_alpha.cpp": "f0e2113976cffe282fec7ce527ae09c8c7f0a45ee8f5979978ba682f36f5470e",
     "tests/cb1/process_info_structure.json": "e4fbec1933bc9d91b9fcc9bc3c630d43d99fc75292e69542aed6215a76c1b305",
     "tests/cb1/test_fel_upscaling.py": "6ca5c876fd82694a657e461f30d2a486d43898f243b789c31fc91ceef897fd13",
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "efba54e561b0ae02953f7263d84320f77221b93e8dc4d5a53701784e3200a8e9",
+    "config/cb1-patch-index.json": "f51017de41e5dcfb7fdef925817b33b96dcca3f99a5db651b121fc812214a048",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -478,7 +478,8 @@
     "tests/cb1/test_nvidia_native_lldv_formats.py": "796c7dbf1e20a06408026a4174a5e22c5cf33133b86965f34aab35227fa0468b",
     "projects/Generic/patches/linux/linux-9978-amd-native-lldv-y444.patch": "ac731ef8997b977dca1a06c319e1dda129f63581147500f079b7aed1dc8d5370",
     "tests/cb1/test_amd_lldv_formats.py": "fb10e14e34ef3df637d6d9f1edcadb56b525247da9fc44205f2b43ad375132e8",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-preserve-native-sdr-bt2020.patch": "c19761d80a528aafaace608749d1adbd16d9807c28821e278b747457e14bd052"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-preserve-native-sdr-bt2020.patch": "951d25bc723b9322ee5881edb0cc570241dfd799e9a9fb9a56457a4dfe1ad165",
+    "CB1/tests/gui_final_hdr10.cpp": "1b53eb00e24ae9810b838f8fbbfebbda9d49c93d1538eece6176a9a975cc6020"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

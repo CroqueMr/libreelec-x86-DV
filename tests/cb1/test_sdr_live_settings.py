@@ -70,8 +70,8 @@ struct CGuiCompositeShaderGLES{
  explicit CGuiCompositeShaderGLES(const std::string&){}bool CompileAndLink(){return true;}
  unsigned CreateLUTTexture(const std::vector<float>&){++textures;return failLUT?0:1;}
  std::vector<float>GenerateDegammaLUT(){return {0,1};}std::vector<float>GeneratePQLUT(float){return {0,1};}
- bool wide=false;
- void SetSDRBT2020(bool enabled){wide=enabled;}
+ bool wide=false,premultiplied=false;
+ void SetSDRBT2020(bool enabled,bool coverage){wide=enabled;premultiplied=coverage;}
  bool CreateLUTs(int colorTransfer,float sdrGamma) SHADER
 };
 namespace DVBRIDGE {enum class OutputRoute{Vanilla,NativeDV,HDR10,SDR, PlayerLed};}
@@ -107,9 +107,9 @@ struct Window{
 int main(int argc,char**argv){assert(argc==2);std::string test=argv[1];Window w;const auto initial=textures;w.m_guiCacheValid=true;
  if(test=="native"){w.m_sdrConversion=w.m_hdrConversion=false;
   assert(w.SetGuiCompositing(AVCOL_TRC_BT2020_10));
-  assert(w.m_compositeShader->wide && w.m_compositeShader->m_ootfGamma==-2.4f);
+  assert(w.m_compositeShader->wide && w.m_compositeShader->premultiplied && w.m_compositeShader->m_ootfGamma==-2.4f);
   assert(w.SetGuiCompositing(AVCOL_TRC_GAMMA22));
-  assert(!w.m_compositeShader->wide && w.m_compositeShader->m_ootfGamma==-2.4f);}
+  assert(!w.m_compositeShader->wide && !w.m_compositeShader->premultiplied && w.m_compositeShader->m_ootfGamma==-2.4f);}
  if(test=="live"){w.m_dvSelection.policy.sdr.preset=DVBRIDGE_SDR_BRIGHT;assert(w.Prepare());assert(w.m_compositeShader->m_ootfGamma==-2.2f&&!w.m_guiCacheValid);}
  if(test=="paused"){w.m_dvSelection.policy.sdr={DVBRIDGE_SDR_CUSTOM,120,2.6,.01,DVBRIDGE_GAMUT_UNSET};assert(w.Begin());assert(w.m_compositeShader->m_ootfGamma==-2.6f&&!w.m_guiCacheValid);}
  if(test=="unchanged"){for(unsigned i=0;i<100;++i){assert(w.Prepare()&&w.Begin());}assert(textures==initial&&w.m_guiCacheValid);}

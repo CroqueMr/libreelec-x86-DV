@@ -10,7 +10,21 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  uniform float u_sdrPeak; // SDR peak in normalized PQ (e.g. 100/10000 = 0.01)
  
  // ST2084 (PQ) constants
-@@ -51,18 +52,15 @@
+@@ -43,26 +44,25 @@
+   if (gui.a == 0.0)
+     discard;
+ 
+-  // sRGB -> linear (IEC 61966-2-1 piecewise EOTF)
+-  vec3 linear = mix(gui.rgb / 12.92,
+-                    pow((gui.rgb + 0.055) / 1.055, vec3(2.4)),
+-                    step(0.04045, gui.rgb));
++  // Native SDR stores true coverage and premultiplied sRGB in its GUI FBO.
++  // Convert straight colors and pass coverage to the final SRC_ALPHA blend.
++  vec3 rgb = u_sdrBT2020 ? clamp(gui.rgb / gui.a, 0.0, 1.0) : gui.rgb;
++  vec3 linear = mix(rgb / 12.92,
++                    pow((rgb + 0.055) / 1.055, vec3(2.4)),
++                    step(0.04045, rgb));
+ 
    // BT.709 -> BT.2020 gamut mapping
    linear = bt709_to_bt2020 * linear;
  
@@ -33,6 +47,191 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 -  fragColor = vec4(pq, gui.a);
 +  fragColor = vec4(result, gui.a);
  }
+--- a/system/shaders/GLES/2.0/gles_gui_composite.frag
++++ b/system/shaders/GLES/2.0/gles_gui_composite.frag
+@@ -16,6 +16,7 @@
+ uniform highp float u_ootfGamma; // HLG OOTF or negative SDR target gamma
+                                 // PQ: 0.0 (use LUT path instead)
+ uniform bool u_sdrBT2020;
++uniform bool u_unpremultiplyGui;
+ uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
+ uniform highp vec2 u_outputRange; // CB1 exact bit-depth scale and black code.
+ uniform highp float u_playerLedScale;
+@@ -53,11 +54,13 @@
+     return;
+   }
+ 
++  // Convert the native SDR GUI's straight colors before the final SRC_ALPHA blend.
++  highp vec3 rgb = u_unpremultiplyGui ? clamp(gui.rgb / gui.a, 0.0, 1.0) : gui.rgb;
+   // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
+   highp vec3 linear = vec3(
+-    texture2D(u_lutDegamma, vec2(gui.r, 0.5)).r,
+-    texture2D(u_lutDegamma, vec2(gui.g, 0.5)).r,
+-    texture2D(u_lutDegamma, vec2(gui.b, 0.5)).r
++    texture2D(u_lutDegamma, vec2(rgb.r, 0.5)).r,
++    texture2D(u_lutDegamma, vec2(rgb.g, 0.5)).r,
++    texture2D(u_lutDegamma, vec2(rgb.b, 0.5)).r
+   );
+ 
+   if (u_playerLedScale > 0.0)
+--- a/xbmc/guilib/GUIFontTTFGL.cpp
++++ b/xbmc/guilib/GUIFontTTFGL.cpp
+@@ -140,7 +140,7 @@
+   // alpha blend that approximately matches SDR perceived translucency. It
+   // is a "close enough" compromise; a mathematically correct fix would
+   // require linear-light compositing (too expensive on typical ARM GPUs).
+-  if (CServiceBroker::GetWinSystem()->IsHdrComposite())
++  if (!CServiceBroker::GetWinSystem()->UseGuiCoverageAlpha())
+     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   else
+     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA, GL_ONE);
+--- a/xbmc/guilib/GUITextureGL.cpp
++++ b/xbmc/guilib/GUITextureGL.cpp
+@@ -93,7 +93,7 @@
+     // coverage alpha; HDR FBO composite uses a compensated squared-alpha
+     // blend because the FBO is color-transformed to PQ before composite,
+     // and alpha blending in non-linear space is mathematically wrong.
+-    if (CServiceBroker::GetWinSystem()->IsHdrComposite())
++    if (!CServiceBroker::GetWinSystem()->UseGuiCoverageAlpha())
+       glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA,
+                           GL_ONE_MINUS_SRC_ALPHA);
+     else
+@@ -282,7 +282,10 @@
+ 
+   if (blending)
+   {
+-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
++    if (CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020())
++      glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++    else
++      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+     glEnable(GL_BLEND);
+   }
+   else
+--- a/xbmc/guilib/GUITextureGLES.cpp
++++ b/xbmc/guilib/GUITextureGLES.cpp
+@@ -295,7 +295,10 @@
+ 
+   if (blending)
+   {
+-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
++    if (CServiceBroker::GetWinSystem()->UsesNativeSDRBT2020())
++      glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
++    else
++      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+     glEnable(GL_BLEND);
+   }
+   else
+--- a/xbmc/rendering/RenderSystem.h
++++ b/xbmc/rendering/RenderSystem.h
+@@ -56,6 +56,7 @@
+   virtual bool ResetRenderSystem(int width, int height) = 0;
+ 
+   virtual bool BeginRender() = 0;
++  virtual void UpdateGUIShaderColorState() {}
+   virtual bool EndRender() = 0;
+   virtual void PresentRender(bool rendered, bool videoLayer) = 0;
+   virtual void InvalidateColorBuffer() {}
+--- a/xbmc/rendering/gl/RenderSystemGL.cpp
++++ b/xbmc/rendering/gl/RenderSystemGL.cpp
+@@ -263,7 +263,12 @@
+     return false;
+ 
+   m_GUIElementCount = 0;
++  UpdateGUIShaderColorState();
++  return true;
++}
+ 
++void CRenderSystemGL::UpdateGUIShaderColorState()
++{
+   bool useLimited = CServiceBroker::GetWinSystem()->UseLimitedColor() &&
+                     !CServiceBroker::GetWinSystem()->IsHdrComposite();
+ 
+@@ -274,7 +279,6 @@
+   }
+ 
+   m_limitedColorRange = useLimited;
+-  return true;
+ }
+ 
+ bool CRenderSystemGL::EndRender()
+--- a/xbmc/rendering/gl/RenderSystemGL.h
++++ b/xbmc/rendering/gl/RenderSystemGL.h
+@@ -73,6 +73,7 @@
+   bool ResetRenderSystem(int width, int height) override;
+ 
+   bool BeginRender() override;
++  void UpdateGUIShaderColorState() override;
+   bool EndRender() override;
+   void PresentRender(bool rendered, bool videoLayer) override;
+   void InvalidateColorBuffer() override;
+--- a/xbmc/rendering/gles/RenderSystemGLES.cpp
++++ b/xbmc/rendering/gles/RenderSystemGLES.cpp
+@@ -177,7 +177,12 @@
+     return false;
+ 
+   m_GUIElementCount = 0;
++  UpdateGUIShaderColorState();
++  return true;
++}
+ 
++void CRenderSystemGLES::UpdateGUIShaderColorState()
++{
+   const bool useLimited = CServiceBroker::GetWinSystem()->UseLimitedColor() &&
+                           !CServiceBroker::GetWinSystem()->IsHdrComposite();
+   const bool usePQ = CServiceBroker::GetWinSystem()->GetGfxContext().IsTransferPQ();
+@@ -191,8 +196,6 @@
+ 
+     InitialiseShaders();
+   }
+-
+-  return true;
+ }
+ 
+ bool CRenderSystemGLES::EndRender()
+--- a/xbmc/rendering/gles/RenderSystemGLES.h
++++ b/xbmc/rendering/gles/RenderSystemGLES.h
+@@ -93,6 +93,7 @@
+   bool ResetRenderSystem(int width, int height) override;
+ 
+   bool BeginRender() override;
++  void UpdateGUIShaderColorState() override;
+   bool EndRender() override;
+   void PresentRender(bool rendered, bool videoLayer) override;
+   void InvalidateColorBuffer() override;
+--- a/xbmc/rendering/gles/GuiCompositeShaderGLES.h
++++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.h
+@@ -22,7 +22,11 @@
+ 
+   void SetProjection(const GLfloat* proj) { m_proj = proj; }
+   void SetInputPQ(bool value) { m_inputPQ = value; }
+-  void SetSDRBT2020(bool value) { m_sdrBT2020 = value; }
++  void SetSDRBT2020(bool value, bool premultiplied = false)
++  {
++    m_sdrBT2020 = value;
++    m_unpremultiplyGui = premultiplied;
++  }
+   void SetOutputRange(float scale, float offset) { m_outputScale = scale; m_outputOffset = offset; }
+ 
+   bool CreateLUTs(int colorTransfer, float sdrGamma = 2.4f);
+@@ -57,7 +61,7 @@
+   GLuint m_lutDegammaTexId{0};
+   GLuint m_lutTFTexId{0};
+   float m_ootfGamma{0.0f};
+-  bool m_inputPQ{false}, m_sdrBT2020{false};
++  bool m_inputPQ{false}, m_sdrBT2020{false}, m_unpremultiplyGui{false};
+   float m_outputScale{1.0f}, m_outputOffset{0.0f};
+ 
+   GLint m_hPos{-1};
+@@ -67,7 +71,7 @@
+   GLint m_hLutTF{-1};
+   GLint m_hProj{-1};
+   GLint m_hOotfGamma{-1};
+-  GLint m_hInputPQ{-1}, m_hSDRBT2020{-1};
++  GLint m_hInputPQ{-1}, m_hSDRBT2020{-1}, m_hUnpremultiplyGui{-1};
+   GLint m_hOutputRange{-1};
+   GLint m_hPlayerLedScale{-1}, m_hPlayerLedGui{-1}, m_hPlayerLedSubtitles{-1};
+   float m_playerLedScale{};
 --- a/xbmc/application/Application.cpp
 +++ b/xbmc/application/Application.cpp
 @@ -935,7 +935,7 @@
@@ -253,7 +452,23 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  };
 --- a/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
 +++ b/xbmc/rendering/gles/GuiCompositeShaderGLES.cpp
-@@ -195,10 +195,10 @@
+@@ -65,6 +65,7 @@
+   m_hOotfGamma = glGetUniformLocation(ProgramHandle(), "u_ootfGamma");
+   m_hInputPQ = glGetUniformLocation(ProgramHandle(), "u_inputPQ");
+   m_hSDRBT2020 = glGetUniformLocation(ProgramHandle(), "u_sdrBT2020");
++  m_hUnpremultiplyGui = glGetUniformLocation(ProgramHandle(), "u_unpremultiplyGui");
+   m_hOutputRange = glGetUniformLocation(ProgramHandle(), "u_outputRange");
+   m_hPlayerLedScale = glGetUniformLocation(ProgramHandle(), "u_playerLedScale");
+   m_hPlayerLedGui = glGetUniformLocation(ProgramHandle(), "u_playerLedGui");
+@@ -84,6 +85,7 @@
+   glUniform1f(m_hOotfGamma, m_ootfGamma);
+   glUniform1i(m_hInputPQ, m_inputPQ);
+   glUniform1i(m_hSDRBT2020, m_sdrBT2020);
++  glUniform1i(m_hUnpremultiplyGui, m_unpremultiplyGui);
+   glUniform2f(m_hOutputRange, m_outputScale, m_outputOffset);
+   glUniform1f(m_hPlayerLedScale, m_playerLedScale);
+   if (m_playerLedScale > 0)
+@@ -195,10 +197,10 @@
      return false;
    }
  
@@ -292,9 +507,26 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    virtual bool BeginGuiComposite(bool guiWillRender) { return false; }
    virtual bool CanReuseGuiComposite() const { return false; }
    virtual void EndGuiComposite() {}
+@@ -287,7 +291,7 @@
+   // alpha blend (see CGUIFontTTFGLES::FirstBegin).
+   virtual bool IsHdrComposite() const { return false; }
+   // Native HDR keeps its perceived-translucency compensation by default.
+-  virtual bool UseGuiCoverageAlpha() const { return !IsHdrComposite(); }
++  virtual bool UseGuiCoverageAlpha() const { return UsesNativeSDRBT2020() || !IsHdrComposite(); }
+ 
+   /*!
+    * \brief Gets debug info from video renderer for use in "Debug Info OSD" (Alt + O)
 --- a/xbmc/windowing/gbm/WinSystemGbm.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
-@@ -1122,6 +1122,12 @@
+@@ -24,6 +24,7 @@
+ #include "messaging/ApplicationMessenger.h"
+ #include "guilib/GUIComponent.h"
+ #include "guilib/GUIWindowManager.h"
++#include "rendering/RenderSystem.h"
+ #include "settings/DisplaySettings.h"
+ #include "settings/Settings.h"
+ #include "settings/SettingsComponent.h"
+@@ -1122,6 +1123,12 @@
      DeferConnectorPreferences();
  
    auto atomic = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
@@ -307,7 +539,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    const bool transactional = rendered && atomic && (carrier || atomic->HasColorRangeTransition());
    struct gbm_bo* bo = nullptr;
  
-@@ -1147,6 +1153,19 @@
+@@ -1147,6 +1154,19 @@
      if (atomic->LastPageAccepted()) surface.EndTransactionalMode();
    }
  
@@ -327,7 +559,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    if (ConnectorPreferencesAllowed())
    {
      UpdateDriverLimitedRange();
-@@ -1296,8 +1315,22 @@
+@@ -1296,8 +1316,22 @@
                        : m_DRM->FindGuiPlane(current->GetFormat(), current->GetModifier());
  }
  
@@ -351,7 +583,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
    m_queuedColorspace.reset();
    auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
    if (!drm)
-@@ -1317,9 +1350,7 @@
+@@ -1317,9 +1351,7 @@
    if (videoPicture)
    {
      colorimetry = KODI::UTILS::GetColorimetry(*videoPicture);
@@ -362,7 +594,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
        colorimetry = KODI::UTILS::Colorimetry::BT709_YCC;
    }
  
-@@ -1328,6 +1359,98 @@
+@@ -1328,6 +1360,105 @@
    ApplyColorspace();
  }
  
@@ -384,6 +616,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 +
 +bool CWinSystemGbm::BeginFrameGuiComposite(bool guiWillRender)
 +{
++  const bool wasNative = m_nativeSDRCompositor;
 +  // Only the renderer that owns a single RGB scanout can compose both layers
 +  // into BT.2020. Keep the existing CMS and CB1 transport owners independent.
 +  const bool wide = m_nativeSDRSource && !m_nativeSDRRejected && ConnectorPreferencesAllowed() &&
@@ -406,6 +639,12 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
 +    SetGuiCompositing(0);
 +    m_nativeSDRCompositor = false;
 +    m_nativeSDRRejected = true;
++  }
++  if (wasNative != m_nativeSDRCompositor)
++  {
++    // BeginRender ran before negotiation. Match the GUI shaders to the FBO
++    // so the first frame also applies display range only once.
++    GetRenderSystem()->UpdateGUIShaderColorState();
 +  }
 +  return compositing;
 +}
@@ -461,7 +700,7 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  void CWinSystemGbm::ApplyColorspace()
  {
    m_queuedColorspace.reset();
-@@ -1388,9 +1511,11 @@
+@@ -1388,9 +1519,11 @@
      CLog::LogF(LOGDEBUG, "setting connector colorspace to {} (source {}, {} output)",
                 KODI::UTILS::ColorimetryToString(scanoutColorimetry),
                 KODI::UTILS::ColorimetryToString(colorimetry), yuv ? "YCbCr" : "RGB");
@@ -530,15 +769,16 @@ Subject: [PATCH] GBM: preserve native SDR BT.2020 when the HDMI link supports it
  
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -1232,6 +1232,7 @@
+@@ -1232,6 +1232,8 @@
        m_guiCompositing = false;
        return false;
      }
-+    m_compositeShader->SetSDRBT2020(colorTransfer == AVCOL_TRC_BT2020_10);
++    const bool nativeSDR = colorTransfer == AVCOL_TRC_BT2020_10;
++    m_compositeShader->SetSDRBT2020(nativeSDR, nativeSDR);
      m_guiSDRGamma = gamma;
    }
    else
-@@ -1640,7 +1641,10 @@
+@@ -1640,7 +1642,10 @@
    m_compositeShader->SetInputPQ(false);
    m_compositeShader->SetOutputRange(1.0f, 0.0f);
    m_compositeShader->SetPlayerLed();
