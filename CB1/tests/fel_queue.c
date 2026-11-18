@@ -282,6 +282,33 @@ int main(void)
     avcodec_parameters_free(&parameters);
     assert(f && dvbridge_fel_device(f, device));
     assert(initialized_pool == 41); /* Fixed pools retain the existing 32+4 headroom. */
+    /* A renewed BL decoder can accept another input window before its next
+     * output. Decode compressed EL on pressure, then deliver every exact pair. */
+    p->pts = p->dts = 0;
+    assert(dvbridge_fel_submit(f, p));
+    assert(dvbridge_fel_take(f, 0, &frame) == 1);
+    av_frame_free(&frame);
+    before = submissions;
+    for (unsigned i = 1; i <= QUEUE_MAX; ++i) {
+        p->pts = p->dts = i * 41708;
+        assert(dvbridge_fel_submit(f, p));
+    }
+    assert(submissions == before);
+    p->pts = p->dts = (QUEUE_MAX + 1) * 41708;
+    assert(dvbridge_fel_submit(f, p));
+    for (unsigned i = 1; i <= QUEUE_MAX + 1; ++i) {
+        int64_t pts = i * 41708;
+        assert(dvbridge_fel_take(f, pts, &frame) == 1 && frame->pts == pts);
+        av_frame_free(&frame);
+    }
+    /* With both stages full and no base consumption, the bound still holds. */
+    dvbridge_fel_reset(f);
+    for (unsigned i = 0; i < 2 * QUEUE_MAX; ++i) {
+        p->pts = p->dts = i * 41708;
+        assert(dvbridge_fel_submit(f, p));
+    }
+    p->pts = p->dts = 2 * QUEUE_MAX * 41708;
+    assert(!dvbridge_fel_submit(f, p) && dvbridge_fel_failed(f));
     dvbridge_fel_destroy(f);
     parameters = avcodec_parameters_alloc();
     parameters->codec_type = AVMEDIA_TYPE_VIDEO;
