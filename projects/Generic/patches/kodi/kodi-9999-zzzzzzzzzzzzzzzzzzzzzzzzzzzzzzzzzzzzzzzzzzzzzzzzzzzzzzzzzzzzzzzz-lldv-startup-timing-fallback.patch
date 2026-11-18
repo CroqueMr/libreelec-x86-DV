@@ -1,7 +1,7 @@
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-@@ -99,6 +99,7 @@
+@@ -100,6 +100,7 @@
    bool CompleteDVModeSwitch(const VideoPicture& picture);
    std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
    int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
@@ -12,10 +12,21 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -1935,6 +1935,22 @@
-   return DVBRIDGE::LldvUnavailableLabel(target, preference, false);
- }
+@@ -1947,7 +1947,7 @@
+   if (resolution == RES_INVALID)
+     return DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, preference, false);
  
+-  const auto& id = CDisplaySettings::GetInstance().GetResolutionInfo(resolution).strId;
++  const auto id = CDisplaySettings::GetInstance().GetResolutionInfoCopy(resolution).strId;
+   int modeIndex = -1;
+   const auto end = id.data() + id.size();
+   const auto parsed = std::from_chars(id.data(), end, modeIndex);
+@@ -1961,6 +1961,22 @@
+   target.currentTiming = true;
+   target.currentRejected = mode->second;
+   return DVBRIDGE::LldvUnavailableLabel(target, preference, false);
++}
++
 +bool CWinSystemGbmGLESContext::CanFallbackPlayerLedStartup(RESOLUTION resolution,
 +                                                           int preference) const
 +{
@@ -30,11 +41,9 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 +
 +  const auto caps = GetDVOutputCapabilities(nullptr, allowModeSwitch);
 +  return caps.hdr10 && !caps.HDR10DepthLimited();
-+}
-+
+ }
+ 
  bool CWinSystemGbmGLESContext::CompleteDVModeSwitch(const VideoPicture& picture)
- {
-   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
 diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
 --- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp

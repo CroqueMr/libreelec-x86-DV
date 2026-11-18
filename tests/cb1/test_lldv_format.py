@@ -483,6 +483,7 @@ struct CDisplaySettings
   static CDisplaySettings& GetInstance(){static CDisplaySettings settings;return settings;}
   size_t ResolutionInfoSize() const{return modes.size();}
   const Mode& GetResolutionInfo(RESOLUTION index) const{return modes.at(index);}
+  Mode GetResolutionInfoCopy(RESOLUTION index) const{return modes.at(index);}
 };
 namespace DVBRIDGE
 {
