@@ -2297,5 +2297,14 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the playback-rate compatibility check.",
       "xbmc/settings/SettingConditions.cpp": "Report the playback timing restriction in Quick Switch."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-logical-video-screenshot.patch": {
+    "owner": "Read logical CB1 pixels when capturing native video-only screenshots.",
+    "files": {
+      "xbmc/rendering/capture/CaptureBlit.cpp": "Choose the video readback and crop logical pixels with their native stride.",
+      "xbmc/rendering/capture/CaptureBlit.h": "Declare the video capture operation.",
+      "xbmc/rendering/capture/CapturePixels.h": "Keep the decoded buffer alive for an offset visible region.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Route the native video tap through the capture operation."
+    }
   }
 }
