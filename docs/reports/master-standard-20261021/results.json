@@ -1,0 +1,315 @@
+{
+  "fidelity": [
+    {
+      "film": "Avatar",
+      "channel": "Y",
+      "mean": 0.7878688579420574,
+      "maximum": 2,
+      "p999": 2,
+      "changedPercent": 74.70471933015754,
+      "above16Percent": 0.0,
+      "above64Percent": 0.0,
+      "frames": 14386,
+      "samples": 119102269440,
+      "profile": "8.1"
+    },
+    {
+      "film": "Avatar",
+      "channel": "Cb",
+      "mean": 2.0142974104524334,
+      "maximum": 165,
+      "p999": 17,
+      "changedPercent": 95.91988744559727,
+      "above16Percent": 0.10230198347427896,
+      "above64Percent": 0.00029330759324950104,
+      "frames": 14386,
+      "samples": 59551134720,
+      "profile": "8.1"
+    },
+    {
+      "film": "Avatar",
+      "channel": "Cr",
+      "mean": 1.2554676102568143,
+      "maximum": 103,
+      "p999": 7,
+      "changedPercent": 93.76347289860676,
+      "above16Percent": 0.011704898710618557,
+      "above64Percent": 6.977197024936891e-06,
+      "frames": 14386,
+      "samples": 59551134720,
+      "profile": "8.1"
+    },
+    {
+      "film": "1917",
+      "channel": "Y",
+      "mean": 0.4557183295638091,
+      "maximum": 16,
+      "p999": 2,
+      "changedPercent": 41.753565372325646,
+      "above16Percent": 0.0,
+      "above64Percent": 0.0,
+      "frames": 14386,
+      "samples": 88774279680,
+      "profile": "7 FEL"
+    },
+    {
+      "film": "1917",
+      "channel": "Cb",
+      "mean": 1.8492552483868265,
+      "maximum": 95,
+      "p999": 11,
+      "changedPercent": 85.33899696070166,
+      "above16Percent": 0.009402950978695004,
+      "above64Percent": 9.957839175789526e-07,
+      "frames": 14386,
+      "samples": 44387139840,
+      "profile": "7 FEL"
+    },
+    {
+      "film": "1917",
+      "channel": "Cr",
+      "mean": 1.492489797986497,
+      "maximum": 50,
+      "p999": 7,
+      "changedPercent": 84.53419350121389,
+      "above16Percent": 0.0003387737992176069,
+      "above64Percent": 0.0,
+      "frames": 14386,
+      "samples": 44387139840,
+      "profile": "7 FEL"
+    }
+  ],
+  "worst": [
+    {
+      "film": "avatar",
+      "channel": "Y",
+      "frame": 28,
+      "pts": 1.168,
+      "x": 0,
+      "y": 4,
+      "max": 2
+    },
+    {
+      "film": "avatar",
+      "channel": "Cb",
+      "frame": 12425,
+      "pts": 518.226,
+      "x": 2406,
+      "y": 505,
+      "max": 165
+    },
+    {
+      "film": "avatar",
+      "channel": "Cr",
+      "frame": 3621,
+      "pts": 151.026,
+      "x": 2382,
+      "y": 969,
+      "max": 103
+    },
+    {
+      "film": "1917",
+      "channel": "Y",
+      "frame": 10913,
+      "pts": 455.163,
+      "x": 2851,
+      "y": 887,
+      "max": 16
+    },
+    {
+      "film": "1917",
+      "channel": "Cb",
+      "frame": 5910,
+      "pts": 246.497,
+      "x": 2148,
+      "y": 869,
+      "max": 95
+    },
+    {
+      "film": "1917",
+      "channel": "Cr",
+      "frame": 7985,
+      "pts": 333.041,
+      "x": 0,
+      "y": 1605,
+      "max": 50
+    }
+  ],
+  "performance": [
+    {
+      "film": "1917",
+      "mode": "master",
+      "trial": 0,
+      "renderGPU": 19.41496118219215,
+      "missed": 0,
+      "seconds": 90.00913968499663,
+      "refresh": 23.98
+    },
+    {
+      "film": "1917",
+      "mode": "standard",
+      "trial": 1,
+      "renderGPU": 9.519415201223248,
+      "missed": 0,
+      "seconds": 90.00929469299808,
+      "refresh": 23.98
+    },
+    {
+      "film": "1917",
+      "mode": "standard",
+      "trial": 2,
+      "renderGPU": 9.849708923889466,
+      "missed": 0,
+      "seconds": 90.0091023970017,
+      "refresh": 23.98
+    },
+    {
+      "film": "1917",
+      "mode": "master",
+      "trial": 3,
+      "renderGPU": 19.46133839538263,
+      "missed": 0,
+      "seconds": 90.00924707099693,
+      "refresh": 23.98
+    },
+    {
+      "film": "Avatar",
+      "mode": "standard",
+      "trial": 1,
+      "renderGPU": 8.666331078782777,
+      "missed": 0,
+      "seconds": 90.0091579789987,
+      "refresh": 23.98
+    },
+    {
+      "film": "Avatar",
+      "mode": "standard",
+      "trial": 2,
+      "renderGPU": 8.888924333203375,
+      "missed": 0,
+      "seconds": 90.00969306200204,
+      "refresh": 23.98
+    },
+    {
+      "film": "Avatar",
+      "mode": "master",
+      "trial": 3,
+      "renderGPU": 13.542270500703022,
+      "missed": 0,
+      "seconds": 90.009273200998,
+      "refresh": 23.98
+    },
+    {
+      "film": "Avatar",
+      "mode": "master",
+      "trial": 4,
+      "renderGPU": 13.071016559454598,
+      "missed": 0,
+      "seconds": 90.00942421000218,
+      "refresh": 23.98
+    }
+  ],
+  "performance_summary": [
+    {
+      "film": "Avatar",
+      "mode": "Master Reference",
+      "gfx": 13.306643332422707,
+      "gfxMsPerNominalFrame": 5.549979156564638,
+      "missed": 0,
+      "seconds": 180.01869741100018,
+      "windows": 2
+    },
+    {
+      "film": "Avatar",
+      "mode": "Standard",
+      "gfx": 8.77762803680806,
+      "gfxMsPerNominalFrame": 3.661002360352029,
+      "missed": 0,
+      "seconds": 180.01885104100074,
+      "windows": 2
+    },
+    {
+      "film": "1917",
+      "mode": "Master Reference",
+      "gfx": 19.438149802620043,
+      "gfxMsPerNominalFrame": 8.107328313509443,
+      "missed": 0,
+      "seconds": 180.01838675599356,
+      "windows": 2
+    },
+    {
+      "film": "1917",
+      "mode": "Standard",
+      "gfx": 9.684561886146163,
+      "gfxMsPerNominalFrame": 4.039269353346795,
+      "missed": 0,
+      "seconds": 180.01839708999978,
+      "windows": 2
+    }
+  ],
+  "gains": [
+    {
+      "film": "Avatar",
+      "gpuDecreasePP": 4.529015295614647,
+      "gpuDecreasePercent": 34.03574577353656,
+      "gfxOccupancyMsSaved": 1.8889767962126092
+    },
+    {
+      "film": "1917",
+      "gpuDecreasePP": 9.75358791647388,
+      "gpuDecreasePercent": 50.177552984796975,
+      "gfxOccupancyMsSaved": 4.068058960162648
+    }
+  ],
+  "definitions": {
+    "fidelity": [
+      {
+        "label": "Mean absolute error",
+        "definition": "Sum of absolute Standard-minus-Master code differences divided by all active-picture component samples. Chroma counts one value per 4:2:2 pair."
+      },
+      {
+        "label": "Maximum",
+        "definition": "Largest absolute difference in any active-picture 12-bit component sample over all 600 source seconds."
+      },
+      {
+        "label": "p99.9",
+        "definition": "Exact 99.9th percentile of all absolute sample errors, computed from the complete 4096-bin histogram."
+      },
+      {
+        "label": "Above 16 / 64 codes",
+        "definition": "Share of component samples with an absolute error strictly greater than the stated code count. These are descriptive bins, not visibility thresholds."
+      }
+    ],
+    "gains": [
+      {
+        "label": "GFX decrease",
+        "definition": "Master Reference GFX busy percentage minus Standard GFX busy percentage, in percentage points. Relative decrease divides this difference by Master Reference GFX busy percentage."
+      }
+    ],
+    "performance": [
+      {
+        "label": "GPU rendering load",
+        "definition": "Delta of Kodi DRM fdinfo gfx-engine busy nanoseconds divided by elapsed wall-clock nanoseconds, expressed as a percentage. This excludes separate decode-engine counters."
+      }
+    ],
+    "curves": [
+      {
+        "label": "Maximum (%)",
+        "definition": "Maximum across all useful-picture samples in all frames of each second, divided by 4095 and multiplied by 100. Percentage of the full 12-bit digital code range, not image-quality loss."
+      },
+      {
+        "label": "Whole-image mean (%)",
+        "definition": "Mean absolute difference across the entire useful picture, pixel-weighted over every frame of each second, divided by 4095 and multiplied by 100. Letterbox and metadata carrier rows are excluded."
+      }
+    ]
+  },
+  "scope": {
+    "date": "2026-10-21",
+    "device": "AMD Ryzen 5 7430U",
+    "build": "DV R1.0.0 Beta5 Debug",
+    "image_seconds_per_source": 600,
+    "image_frames_per_source": 14386,
+    "playback_windows_per_mode_source": 2,
+    "window_seconds": 90
+  }
+}
