@@ -439,6 +439,7 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-bluray-menu-retained-palettes.patch": "48ec995be46471bd21fb3dd80704c857ae8a251ffa7e34c2ad6bc12aaa69edb6",
     "tests/cb1/test_bluray_menu_hdr.py": "4731dfbfd65029871bff11e33e70f9eba13135491b2208a3a5c34e4a37656c8e",
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-09-dovi-aligned-padding.patch": "98cba1d4b0cd986a747d9c37732e58bae366f2279623141182d071b3c9422e49",
+    "projects/Generic/patches/ffmpeg/ffmpeg-9900-10-hevc-active-sps.patch": "03e4f6412375510eb8b97bc753f570c92ec1e21524d067da21b5831a4c5516e7",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-default-hdmi-connector.patch": "970e8bfde5894ac72bbaf01f57700210b646c04a61bf2a3bc1c3320bcab361d6",
     "tests/cb1/test_drm_monitor_selection.py": "79256c3a73ec04612617e53f110c111c563778a3526d0d6dc58206ad20737109",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-format-opt-in.patch": "3dfabfd9099329c8a33f766d89b16ff9a8acb52ba1fa1420b8cfd530a84f33d0",
