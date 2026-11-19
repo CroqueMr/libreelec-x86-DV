@@ -1,0 +1,63 @@
+Subject: [PATCH] avcodec/hevc: keep the active decoder for repeated effective SPS
+
+An access unit may replace a parameter set and restore its original value
+before the first slice. The SPS referenced by that slice is a new object
+even though its RBSP and VPS match the active base layer. Treat that
+case as a repeated SPS, preserving reordered output on hardware decoders
+when a new get_format call would retire their surfaces.
+
+diff --git a/libavcodec/hevc/hevcdec.c b/libavcodec/hevc/hevcdec.c
+index 18e22f6..d443074 100644
+--- a/libavcodec/hevc/hevcdec.c
++++ b/libavcodec/hevc/hevcdec.c
+@@ -3214,6 +3214,12 @@ static int hevc_frame_start(HEVCContext *s, HEVCLayerContext *l,
+     }
+ 
+     av_refstruct_replace(&s->pps, pps);
++    // Headers can replace an SPS and restore it before a picture uses it.
++    // Preserve the active base decoder when the effective SPS is identical.
++    if (l == &s->layers[0] && l->sps && l->sps != sps &&
++        s->vps == sps->vps && ff_hevc_sps_equal(l->sps, sps))
++        av_refstruct_replace(&l->sps, sps);
++
+     if (l->sps != sps) {
+         const HEVCSPS *sps_base = s->layers[0].sps;
+         enum AVPixelFormat pix_fmt = sps->pix_fmt;
+diff --git a/libavcodec/hevc/ps.c b/libavcodec/hevc/ps.c
+index c303ae4..ced6922 100644
+--- a/libavcodec/hevc/ps.c
++++ b/libavcodec/hevc/ps.c
+@@ -1726,9 +1726,9 @@ static void hevc_sps_free(AVRefStructOpaque opaque, void *obj)
+     av_freep(&sps->data);
+ }
+ 
+-static int compare_sps(const HEVCSPS *sps1, const HEVCSPS *sps2)
++int ff_hevc_sps_equal(const HEVCSPS *sps1, const HEVCSPS *sps2)
+ {
+-    return sps1->data_size == sps2->data_size &&
++    return sps1->vps == sps2->vps && sps1->data_size == sps2->data_size &&
+            !memcmp(sps1->data, sps2->data, sps1->data_size);
+ }
+ 
+@@ -1772,7 +1772,7 @@ int ff_hevc_decode_nal_sps(GetBitContext *gb, AVCodecContext *avctx,
+      * original one.
+      * otherwise drop all PPSes that depend on it */
+     if (ps->sps_list[sps_id] &&
+-        compare_sps(ps->sps_list[sps_id], sps)) {
++        ff_hevc_sps_equal(ps->sps_list[sps_id], sps)) {
+         av_refstruct_unref(&sps);
+     } else {
+         remove_sps(ps, sps_id);
+diff --git a/libavcodec/hevc/ps.h b/libavcodec/hevc/ps.h
+index f5c5f81..1a6f0e6 100644
+--- a/libavcodec/hevc/ps.h
++++ b/libavcodec/hevc/ps.h
+@@ -524,6 +524,8 @@ int ff_hevc_parse_sps(HEVCSPS *sps, GetBitContext *gb, unsigned int *sps_id,
+                       unsigned nuh_layer_id, int apply_defdispwin,
+                       const HEVCVPS * const *vps_list, AVCodecContext *avctx);
+ 
++int ff_hevc_sps_equal(const HEVCSPS *sps1, const HEVCSPS *sps2);
++
+ int ff_hevc_decode_nal_vps(GetBitContext *gb, AVCodecContext *avctx,
+                            HEVCParamSets *ps);
+ int ff_hevc_decode_nal_sps(GetBitContext *gb, AVCodecContext *avctx,
