@@ -514,9 +514,9 @@ struct Window
     return {true,allowModeSwitch ? hdr10 : currentHDR10,limited};
   }
   RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION resolution) const {return resolution;}
-  bool SupportsDVOutputTiming(RESOLUTION resolution) const
+  bool SupportsDVOutputTiming(const Mode& mode) const
   {
-    return resolution!=1 && resolution!=5;
+    return !mode.strId.empty() && mode.strId!="7";
   }
   Caps GetDVOutputCapabilities(void*,const DVBRIDGE::Preferences&,bool) const{return {};}
   bool LldvSupportsPlaybackTiming(double) const{return true;}
@@ -551,6 +551,10 @@ int main()
   assert(window.PlayerLedResolutionReason(1,0)!=LLDV_DRIVER_REJECTED_LABEL);
   // 59.94 Hz is a known HDMI timing with HDR10 transport, but no LLDV carrier.
   assert(window.PlayerLedStartupHDR10Resolution(0,0));
+  status.display.status=LldvEdidStatus::Missing;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
+  status.display.status=LldvEdidStatus::Ready;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,static_cast<int>(LldvFormat::Rgb12)));
   assert(window.PlayerLedStartupHDR10Resolution(2,0));
   assert(!window.PlayerLedStartupHDR10Resolution(1,0)); // unknown DRM mode
   assert(!window.PlayerLedStartupHDR10Resolution(4,0)); // usable LLDV

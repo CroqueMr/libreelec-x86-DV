@@ -163,7 +163,7 @@ struct Window {
  std::vector<DVOutputTiming> m_dvOutputTimings;
  std::vector<DVOutputTiming> GetDVOutputTimings() const;
  bool available=true;bool CanRetainDVSource()const{return available;}
- bool SupportsDVOutputTiming(RESOLUTION resolution) const;
+ bool SupportsDVOutputTiming(const RESOLUTION_INFO& mode) const;
  struct Caps {
   bool hdr10=true, depthLimited=false;
   bool HDR10DepthLimited() const {return depthLimited;}
@@ -201,7 +201,7 @@ bool DVBRIDGE::WantsNativeOutput(const CDVDStreamInfo& stream) WANTS_CODE
 RESOLUTION_CODE
 double DVOutputTimingRate(const drmModeModeInfo* mode) TIMING_CODE
 std::vector<Window::DVOutputTiming> Window::GetDVOutputTimings() const SNAPSHOT_CODE
-bool Window::SupportsDVOutputTiming(RESOLUTION resolution) const SUPPORT_CODE
+bool Window::SupportsDVOutputTiming(const RESOLUTION_INFO& mode) const SUPPORT_CODE
 RESOLUTION Window::ChooseHDR10FallbackResolution(RESOLUTION chosen) const SELECT_FALLBACK_CODE
 std::optional<RESOLUTION> Window::PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference) const FALLBACK_CODE
 enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10};
@@ -365,6 +365,12 @@ int main() {
  assert(selected==desktop8k || selected==RES_DESKTOP);
  assert(window->PlayerLedStartupHDR10Resolution(selected,0)==uhd60 &&
         "Startup must admit UHD60 HDR10 before the fallback flag is set");
+ auto unconventional=drm.connector.modes[1];
+ unconventional.flags=DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF;
+ assert(DVOutputTimingRate(&unconventional)==0.0);
+ unconventional.flags=0;
+ unconventional.vscan=2;
+ assert(DVOutputTimingRate(&unconventional)==0.0);
  list({desktop8k});
  assert(!window->PlayerLedStartupHDR10Resolution(selected,0));
  component.settings.whitelist.clear();
