@@ -1,0 +1,227 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Pack transport bytes with isolated GL state; never apply ordinary RGB color processing. */
+#include "dvbridge_gl_pack.h"
+#include <GLES3/gl3.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <EGL/egl.h>
+
+struct dvbridge_gl_packer {
+    GLuint program, vao, sampler;
+    GLint input, words, count, flip, raster;
+    struct dvbridge_gl_packer *patch;
+    struct dvbridge_gl_packer *fetch;
+};
+
+static GLuint compile(GLenum type, const char *source)
+{
+    if (!source)
+        return 0;
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, NULL);
+    glCompileShader(shader);
+    GLint ok;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        char log[4096];
+        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
+        fprintf(stderr, "DV transport shader: %s\n", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+static struct dvbridge_gl_packer *create(const char *vertex,const char *fragment,bool input)
+{
+    GLuint vs = compile(GL_VERTEX_SHADER, vertex), fs = compile(GL_FRAGMENT_SHADER, fragment);
+    if (!vs || !fs) {
+        glDeleteShader(vs);
+        glDeleteShader(fs);
+        return NULL;
+    }
+    struct dvbridge_gl_packer *p = calloc(1, sizeof(*p));
+    if (!p) {
+        glDeleteShader(vs);
+        glDeleteShader(fs);
+        return NULL;
+    }
+    p->program = glCreateProgram();
+    glAttachShader(p->program, vs);
+    glAttachShader(p->program, fs);
+    glLinkProgram(p->program);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+    GLint linked;
+    glGetProgramiv(p->program, GL_LINK_STATUS, &linked);
+    p->input = glGetUniformLocation(p->program, "pq_input");
+    p->words = glGetUniformLocation(p->program, "metadata_words");
+    p->count = glGetUniformLocation(p->program, "packet_count");
+    p->flip = glGetUniformLocation(p->program, "flip_y");
+    p->raster = glGetUniformLocation(p->program, "raster_size");
+    if (!linked || (input && p->input < 0) || p->words < 0 || p->count < 0 || p->flip < 0 || p->raster < 0) {
+        dvbridge_gl_packer_destroy(p);
+        return NULL;
+    }
+    glGenVertexArrays(1, &p->vao);
+    glGenSamplers(1, &p->sampler);
+    glSamplerParameteri(p->sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glSamplerParameteri(p->sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glSamplerParameteri(p->sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glSamplerParameteri(p->sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    if (!p->vao || !p->sampler || glGetError() != GL_NO_ERROR) {
+        dvbridge_gl_packer_destroy(p);
+        return NULL;
+    }
+    return p;
+}
+
+struct dvbridge_gl_packer *dvbridge_gl_packer_create(const char *vertex,const char *fragment)
+{return create(vertex,fragment,true);}
+
+void dvbridge_gl_packer_destroy(struct dvbridge_gl_packer *p)
+{
+    if (!p)
+        return;
+    glDeleteVertexArrays(1, &p->vao);
+    glDeleteSamplers(1, &p->sampler);
+    dvbridge_gl_packer_destroy(p->patch);
+    dvbridge_gl_packer_destroy(p->fetch);
+    glDeleteProgram(p->program);
+    free(p);
+}
+
+static bool pack(struct dvbridge_gl_packer *p, unsigned texture, unsigned framebuffer,
+                 int width, int height, const uint32_t packets[640], unsigned count, bool flip,bool header)
+{
+    if (!p || (!texture && p->input>=0) || !packets || !count || count > 5 ||
+        width <= 0 || height <= 0 || (width & 1) || (uint64_t)width * height < count * 3072u)
+        return false;
+    for (unsigned i = 0; i < count * 128; ++i)
+        if (packets[i] > 255)
+            return false;
+    if (glGetError() != GL_NO_ERROR)
+        return false;
+    GLint limits[2];
+    glGetIntegerv(GL_MAX_VIEWPORT_DIMS, limits);
+    if (width > limits[0] || height > limits[1] || glGetError() != GL_NO_ERROR)
+        return false;
+    GLint program, vao, draw, read, viewport[4], active, binding, sampler,scissor[4];
+    GLboolean mask[4];
+    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    if(header)glGetIntegerv(GL_SCISSOR_BOX,scissor);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+    glGetBooleanv(GL_COLOR_WRITEMASK, mask);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+    glGetIntegerv(GL_SAMPLER_BINDING, &sampler);
+    const GLenum caps[] = {GL_BLEND, GL_DEPTH_TEST, GL_STENCIL_TEST, GL_SCISSOR_TEST,
+        GL_DITHER, GL_CULL_FACE, GL_RASTERIZER_DISCARD, GL_SAMPLE_ALPHA_TO_COVERAGE,
+        GL_SAMPLE_COVERAGE};
+    GLboolean enabled[sizeof(caps) / sizeof(*caps)];
+    for (unsigned i = 0; i < sizeof(caps) / sizeof(*caps); ++i) {
+        enabled[i] = glIsEnabled(caps[i]);
+        glDisable(caps[i]);
+    }
+    bool ok = false;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    GLint red, green, blue, samples, encoding;
+    glGetIntegerv(GL_RED_BITS, &red);
+    glGetIntegerv(GL_GREEN_BITS, &green);
+    glGetIntegerv(GL_BLUE_BITS, &blue);
+    glGetIntegerv(GL_SAMPLES, &samples);
+    glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER,
+        framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK,
+        GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE ||
+        red != 8 || green != 8 || blue != 8 || samples > 1 || encoding != GL_LINEAR)
+        goto restore;
+    glViewport(0, 0, width, height);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glUseProgram(p->program);
+    glBindVertexArray(p->vao);
+    // libplacebo-owned textures use sampler objects and need not have usable
+    // default texture filtering (e.g. mipmaps may be absent). Own our exact
+    // non-mipmapped sampler without mutating the borrowed texture's state.
+    glBindSampler(0, p->sampler);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(p->input, 0);
+    glUniform4uiv(p->words, count*32, packets);
+    glUniform1ui(p->count, count);
+    glUniform1ui(p->flip, flip);
+    glUniform2i(p->raster, width, height);
+    if(header){
+        int rows=(count*3072+width-1)/width;
+        glEnable(GL_SCISSOR_TEST);glScissor(0,flip?height-rows:0,width,rows);
+    }
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    ok = glGetError() == GL_NO_ERROR;
+restore:
+    glBindTexture(GL_TEXTURE_2D, binding);
+    glBindSampler(0, sampler);
+    glActiveTexture(active);
+    glBindVertexArray(vao);
+    glUseProgram(program);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    glColorMask(mask[0], mask[1], mask[2], mask[3]);
+    if(header){glDisable(GL_SCISSOR_TEST);glScissor(scissor[0],scissor[1],scissor[2],scissor[3]);}
+    for (unsigned i = 0; i < sizeof(caps) / sizeof(*caps); ++i)
+        if (enabled[i]) glEnable(caps[i]);
+    return ok && glGetError() == GL_NO_ERROR;
+}
+
+bool dvbridge_gl_pack(struct dvbridge_gl_packer *p,unsigned texture,unsigned framebuffer,
+    int width,int height,const uint32_t packets[640],unsigned count,bool flip)
+{return pack(p,texture,framebuffer,width,height,packets,count,flip,false);}
+
+bool dvbridge_gl_patch(struct dvbridge_gl_packer *p,unsigned texture,unsigned framebuffer,
+    int width,int height,const uint32_t packets[640],unsigned count,bool flip)
+{
+    if(!p)return false;
+    if(!p->patch){
+        const char *vertex="#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
+        const char *fragment="#version 300 es\nprecision highp float;precision highp int;"
+            "uniform highp sampler2D pq_input;uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;uniform ivec2 raster_size;out vec4 color;"
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=raster_size.y-1-pixel.y;"
+            "uvec3 bytes=uvec3(floor(texelFetch(pq_input,pixel,0).rgb*255.0+.5));"
+            "uint raster=uint(pixel.y*raster_size.x+pixel.x),packet=raster/3072u;"
+            "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
+            "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
+            "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
+            "parity^=parity>>8u;parity^=parity>>4u;parity=(0x6996u>>(parity&15u))&1u;"
+            "bytes.b=(bytes.b&0xefu)|((data^parity)<<4u);}"
+            "color=vec4(vec3(bytes),255.0)/255.0;}";
+        p->patch=dvbridge_gl_packer_create(vertex,fragment);
+        if(!p->patch)return false;
+    }
+    return pack(p->patch,texture,framebuffer,width,height,packets,count,flip,true);
+}
+
+bool dvbridge_gl_patch_inplace(struct dvbridge_gl_packer *p,unsigned framebuffer,int width,int height,
+    const uint32_t packets[640],unsigned count,bool flip)
+{
+    void (*barrier)(void)=(void (*)(void))eglGetProcAddress("glFramebufferFetchBarrierEXT");
+    if(!p || !barrier)return false;
+    if(!p->fetch){
+        const char *vertex="#version 300 es\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
+        const char *fragment="#version 300 es\n#extension GL_EXT_shader_framebuffer_fetch_non_coherent:require\n"
+            "precision highp float;precision highp int;layout(noncoherent,location=0)inout highp vec4 color;"
+            "uniform uvec4 metadata_words[160];uniform uint packet_count,flip_y;uniform ivec2 raster_size;"
+            "void main(){ivec2 pixel=ivec2(gl_FragCoord.xy);if(flip_y!=0u)pixel.y=raster_size.y-1-pixel.y;"
+            "uvec3 bytes=uvec3(floor(color.rgb*255.0+.5));uint raster=uint(pixel.y*raster_size.x+pixel.x),packet=raster/3072u;"
+            "if(packet<packet_count){uint bit=raster%1024u,address=packet*128u+bit/8u;"
+            "uint data=(metadata_words[address/4u][int(address%4u)]>>(7u-bit%8u))&1u;"
+            "uint parity=(bytes.r<<3u)^(bytes.b>>5u)^(bytes.g<<4u)^(bytes.b&15u);"
+            "parity^=parity>>8u;parity^=parity>>4u;parity=(0x6996u>>(parity&15u))&1u;"
+            "bytes.b=(bytes.b&0xefu)|((data^parity)<<4u);}color=vec4(vec3(bytes),255.0)/255.0;}";
+        p->fetch=create(vertex,fragment,false);if(!p->fetch)return false;
+    }
+    barrier();
+    return pack(p->fetch,0,framebuffer,width,height,packets,count,flip,true);
+}
