@@ -2403,8 +2403,8 @@
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": {
     "owner": "Preserve NVIDIA EGL/GBM buffer ownership through surface replacement and shutdown.",
     "files": {
-      "xbmc/utils/EGLUtils.cpp": "Offer an ordered buffer release before destroying an EGL drawable.",
-      "xbmc/utils/EGLUtils.h": "Expose ordered drawable retirement and reversible config selection.",
+      "xbmc/utils/EGLUtils.cpp": "Keep live drawables during NVIDIA config errors and release their buffers before retirement.",
+      "xbmc/utils/EGLUtils.h": "Expose ordered drawable retirement and optional preservation on config errors.",
       "xbmc/windowing/gbm/DVWindowRetirement.h": "Return display buffers before deferred EGL teardown.",
       "xbmc/windowing/gbm/GBMUtils.cpp": "Drain the discarded surface's owned buffers without destroying its native window.",
       "xbmc/windowing/gbm/GBMUtils.h": "Expose the matching GBM buffer queue to the window owner.",

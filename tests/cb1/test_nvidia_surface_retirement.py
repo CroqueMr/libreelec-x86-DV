@@ -15,11 +15,13 @@ class NvidiaSurfaceRetirement(unittest.TestCase):
         gbm_source = (gbm / "GBMUtils.cpp").read_text()
         window_source = (gbm / "WinSystemGbmEGLContext.cpp").read_text()
 
-        # The old tree has no explicit drain. Its deleter below still releases its
-        # queue, faithfully exposing the old call through an already destroyed owner.
-        release = "void CGBMUtils::CGBMDevice::ReleaseSurfaceBuffers("
+        choose = body(egl_source, "bool CEGLContextUtils::ChooseConfig(")
         snippets = {
-            "drain": body(gbm_source, release) if release in gbm_source else "{}",
+            "drain": body(gbm_source, "void CGBMUtils::CGBMDevice::ReleaseSurfaceBuffers("),
+            "destroy_all": body(egl_source, "bool CEGLContextUtils::DestroyRetiredContext("),
+            "destroy_egl": body(egl_source, "bool CEGLContextUtils::DestroyAfterRelease("),
+            "shutdown": body(window_source, "bool CWinSystemGbmEGLContext::DestroyNvidiaWindowSystem("),
+            "config_error": choose[choose.index("  if (errorMsg)"):choose.index("  EGLConfig match")],
             "ordinary_egl": body(egl_source, "bool CEGLContextUtils::DestroySurfaceAfterRelease("),
             "ordinary_window": body(window_source, "bool CWinSystemGbmEGLContext::DestroyOutputSurface("),
             "gbm": body(gbm_source, "void CGBMUtils::CGBMDevice::CompleteOutputSurface("),
@@ -33,7 +35,9 @@ class NvidiaSurfaceRetirement(unittest.TestCase):
 #include <string>
 #include <vector>
 
-constexpr int EGL_TRUE = 1, EGL_NO_SURFACE = 0, EGL_NO_CONTEXT = 0;
+constexpr int EGL_TRUE = 1, EGL_NO_SURFACE = 0, EGL_NO_CONTEXT = 0, EGL_NO_DISPLAY = 0;
+enum { LOGERROR, LOGINFO };
+struct CEGLUtils { static void Log(int, const char*) {} };
 constexpr int oldSurface = 1, newSurface = 2;
 constexpr int QUIRK_NVIDIA_EGL_GBM = 1;
 std::vector<std::string> events;
@@ -62,11 +66,36 @@ int eglMakeCurrent(int, int draw, int read, int context)
   return unbindWorks ? EGL_TRUE : 0;
 }
 
+int eglDestroyContext(int, int) { return EGL_TRUE; }
+
+int eglTerminate(int)
+{
+  events.emplace_back("terminate");
+  return EGL_TRUE;
+}
+
 struct CEGLContextUtils
 {
   bool m_outputSurfaceTransaction{true};
   int m_eglSurface{newSurface}, m_priorSurface{oldSurface};
-  int m_eglDisplay{}, m_eglConfig{}, m_priorConfig{}, m_eglHDRConfig{}, m_priorHDRConfig{};
+  int m_eglDisplay{1}, m_eglContext{1}, m_eglUploadContext{2};
+  int m_eglConfig{}, m_priorConfig{}, m_eglHDRConfig{}, m_priorHDRConfig{};
+  struct RetainedContext
+  {
+    int display, context, uploadContext, surface, priorSurface;
+  };
+
+  static bool DestroyRetiredContext(RetainedContext& state,
+                                    const std::function<void()>& releaseBuffers) @destroy_all@
+  bool DestroyAfterRelease(const std::function<void()>& releaseBuffers) @destroy_egl@
+  void Destroy() { events.emplace_back("premature display destruction"); }
+  bool ConfigQueryFailed(bool preserveSurface)
+  {
+    const char* errorMsg = "eglChooseConfig failed";
+    const bool probe = false, hdr = false, floating = false;
+    @config_error@
+    return true;
+  }
 
   bool CompleteOutputSurface(bool presented,
                              const std::function<void()>& releaseBuffers = {}) @egl@
@@ -151,6 +180,7 @@ struct CWinSystemGbmEGLContext
   bool UsesNvidiaGbm() const { return m_DRM->HasQuirk(QUIRK_NVIDIA_EGL_GBM); }
   bool CompleteDVOutputSurface(bool submitted) @window@
   bool DestroyOutputSurface() @ordinary_window@
+  bool DestroyNvidiaWindowSystem() @shutdown@
 };
 
 void Reset()
@@ -165,8 +195,15 @@ void Accepted()
   Reset();
   CWinSystemGbmEGLContext window;
   // The driver's blocking commit returned; its physical notification comes later.
+  destroyWorks = false;
+  assert(!window.CompleteDVOutputSurface(true));
+  assert((events == std::vector<std::string>{"release 1", "destroy 1"}));
+  assert(alive[oldSurface] && alive[newSurface]);
+
+  events.clear();
+  destroyWorks = true;
   assert(window.CompleteDVOutputSurface(true));
-  assert((events == std::vector<std::string>{"release 1", "destroy 1", "delete native 1"}));
+  assert((events == std::vector<std::string>{"destroy 1", "delete native 1"}));
   assert(alive[newSurface]);
   assert(window.m_GBM->GetDevice().m_surface->buffers == 3);
 }
@@ -219,6 +256,40 @@ void OrdinaryRecreation()
   assert(alive[oldSurface] && window.m_GBM->GetDevice().m_priorSurface->buffers == 3);
 }
 
+void Shutdown()
+{
+  Reset();
+  CWinSystemGbmEGLContext pending;
+  destroyWorks = false;
+  assert(!pending.DestroyNvidiaWindowSystem());
+  assert((events == std::vector<std::string>{"unbind", "release 1", "release 2", "destroy 1"}));
+  assert(alive[oldSurface] && alive[newSurface]);
+
+  events.clear();
+  destroyWorks = true;
+  assert(pending.DestroyNvidiaWindowSystem());
+  assert((events == std::vector<std::string>{"unbind", "destroy 1", "destroy 2", "terminate"}));
+
+  Reset();
+  CWinSystemGbmEGLContext alias;
+  alias.m_GBM->GetDevice().m_priorSurface.reset();
+  alias.m_eglContext.m_priorSurface = newSurface;
+  events.clear();
+  assert(alias.DestroyNvidiaWindowSystem());
+  assert((events == std::vector<std::string>{"unbind", "release 2", "destroy 2", "terminate"}));
+}
+
+void ConfigSelectionFailure()
+{
+  Reset();
+  CWinSystemGbmEGLContext window;
+  window.m_eglContext.m_outputSurfaceTransaction = false;
+  assert(!window.m_eglContext.ConfigQueryFailed(true));
+  assert(events.empty() && alive[newSurface]);
+  assert(!window.m_eglContext.ConfigQueryFailed(false));
+  assert((events == std::vector<std::string>{"premature display destruction"}));
+}
+
 void UnchangedAndAliased()
 {
   Reset();
@@ -241,6 +312,8 @@ int main()
   Accepted();
   Rejected();
   OrdinaryRecreation();
+  Shutdown();
+  ConfigSelectionFailure();
   UnchangedAndAliased();
 }
 """
