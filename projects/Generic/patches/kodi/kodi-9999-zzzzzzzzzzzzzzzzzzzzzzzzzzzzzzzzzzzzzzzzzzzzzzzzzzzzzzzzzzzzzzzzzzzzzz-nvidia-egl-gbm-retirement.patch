@@ -1,0 +1,426 @@
+diff --git a/xbmc/utils/EGLUtils.cpp b/xbmc/utils/EGLUtils.cpp
+--- a/xbmc/utils/EGLUtils.cpp
++++ b/xbmc/utils/EGLUtils.cpp
+@@ -272,7 +272,7 @@
+ }
+ 
+ bool CEGLContextUtils::ChooseConfig(EGLint renderableType, EGLint visualId, bool hdr, int alpha,
+-                                   bool floating, bool probe)
++                                   bool floating, bool probe, bool preserveSurface)
+ {
+   EGLint numMatched{0};
+ 
+@@ -322,7 +322,7 @@
+     if (!hdr)
+     {
+       CEGLUtils::Log(LOGERROR, errorMsg);
+-      if (!m_outputSurfaceTransaction && !floating)
++      if (!m_outputSurfaceTransaction && !floating && !preserveSurface)
+         Destroy();
+     }
+     else
+@@ -567,7 +567,8 @@
+   return eglMakeCurrent(m_eglDisplay,m_priorSurface,m_priorSurface,m_eglContext) == EGL_TRUE;
+ }
+ 
+-bool CEGLContextUtils::CompleteOutputSurface(bool presented)
++bool CEGLContextUtils::CompleteOutputSurface(bool presented,
++                                             const std::function<void()>& releaseBuffers)
+ {
+   if (!m_outputSurfaceTransaction)
+     return true;
+@@ -575,9 +576,13 @@
+   {
+     if (m_eglSurface == EGL_NO_SURFACE)
+       return false;
+-    if (m_priorSurface != m_eglSurface &&
+-        eglDestroySurface(m_eglDisplay, m_priorSurface) != EGL_TRUE)
+-      return false;
++    if (m_priorSurface != m_eglSurface)
++    {
++      if (releaseBuffers)
++        releaseBuffers();
++      if (eglDestroySurface(m_eglDisplay, m_priorSurface) != EGL_TRUE)
++        return false;
++    }
+   }
+   else
+   {
+@@ -585,9 +590,13 @@
+     if (!BindPriorOutputSurface())
+       return false;
+     const auto rejected = m_eglSurface;
+-    if (rejected != EGL_NO_SURFACE && rejected != m_priorSurface &&
+-        eglDestroySurface(m_eglDisplay, rejected) != EGL_TRUE)
+-      return false;
++    if (rejected != EGL_NO_SURFACE && rejected != m_priorSurface)
++    {
++      if (releaseBuffers)
++        releaseBuffers();
++      if (eglDestroySurface(m_eglDisplay, rejected) != EGL_TRUE)
++        return false;
++    }
+     m_eglSurface = m_priorSurface;
+     m_eglConfig = m_priorConfig;
+     m_eglHDRConfig = m_priorHDRConfig;
+@@ -610,10 +619,17 @@
+   return state;
+ }
+ 
+-bool CEGLContextUtils::DestroyRetiredContext(RetainedContext& state)
++bool CEGLContextUtils::DestroyRetiredContext(RetainedContext& state,
++                                             const std::function<void()>& releaseBuffers)
+ {
+   if (state.display == EGL_NO_DISPLAY) return true;
+   if (!eglMakeCurrent(state.display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT)) return false;
++  if (releaseBuffers)
++  {
++    releaseBuffers();
++    if (state.priorSurface == state.surface)
++      state.priorSurface = EGL_NO_SURFACE;
++  }
+   for (auto* surface : {&state.priorSurface,&state.surface})
+     if (*surface != EGL_NO_SURFACE)
+     {
+@@ -629,6 +645,19 @@
+   if (!eglTerminate(state.display)) return false;
+   state.display = EGL_NO_DISPLAY;
+   return true;
++}
++
++bool CEGLContextUtils::DestroyAfterRelease(const std::function<void()>& releaseBuffers)
++{
++  RetainedContext state{m_eglDisplay, m_eglContext, m_eglUploadContext, m_eglSurface, m_priorSurface};
++  const bool destroyed = DestroyRetiredContext(state, releaseBuffers);
++  m_eglDisplay = state.display;
++  m_eglContext = state.context;
++  m_eglUploadContext = state.uploadContext;
++  m_eglSurface = state.surface;
++  m_priorSurface = state.priorSurface;
++  m_outputSurfaceTransaction = m_priorSurface != EGL_NO_SURFACE;
++  return destroyed;
+ }
+ 
+ void CEGLContextUtils::Destroy()
+@@ -669,6 +698,22 @@
+   }
+ }
+ 
++
++bool CEGLContextUtils::DestroySurfaceAfterRelease(const std::function<void()>& releaseBuffers)
++{
++  if (m_eglSurface == EGL_NO_SURFACE)
++    return true;
++  if (eglMakeCurrent(m_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT) != EGL_TRUE)
++    return false;
++  releaseBuffers();
++  if (eglDestroySurface(m_eglDisplay, m_eglSurface) != EGL_TRUE)
++  {
++    BindContext();
++    return false;
++  }
++  m_eglSurface = EGL_NO_SURFACE;
++  return true;
++}
+ 
+ bool CEGLContextUtils::SetVSync(bool enable)
+ {
+diff --git a/xbmc/utils/EGLUtils.h b/xbmc/utils/EGLUtils.h
+--- a/xbmc/utils/EGLUtils.h
++++ b/xbmc/utils/EGLUtils.h
+@@ -12,6 +12,7 @@
+ #include "threads/CriticalSection.h"
+ 
+ #include <array>
++#include <functional>
+ #include <set>
+ #include <stdexcept>
+ #include <string>
+@@ -198,7 +199,7 @@
+   // Opt-in custom output staging. Ordinary creation/destruction is unchanged.
+   bool BeginOutputSurface();
+   bool StageOutputSurface(void* nativeWindow, EGLNativeWindowType nativeWindowLegacy);
+-  bool CompleteOutputSurface(bool presented);
++  bool CompleteOutputSurface(bool presented, const std::function<void()>& releaseBuffers = {});
+   bool BindPriorOutputSurface();
+   bool HasOutputSurfaceTransaction() const { return m_outputSurfaceTransaction; }
+   struct RetainedContext
+@@ -208,14 +209,17 @@
+     EGLSurface surface, priorSurface;
+   };
+   RetainedContext RetainForRetirement();
+-  static bool DestroyRetiredContext(RetainedContext& state);
++  static bool DestroyRetiredContext(RetainedContext& state,
++                                    const std::function<void()>& releaseBuffers = {});
++  bool DestroyAfterRelease(const std::function<void()>& releaseBuffers);
+   bool InitializeDisplay(EGLint renderingApi);
+   bool ChooseConfig(EGLint renderableType, EGLint visualId = 0, bool hdr = false, int alpha = 8,
+-                    bool floating = false, bool probe = false);
++                    bool floating = false, bool probe = false, bool preserveSurface = false);
+   bool CreateContext(CEGLAttributesVec contextAttribs);
+   bool BindContext();
+   void Destroy();
+   void DestroySurface();
++  bool DestroySurfaceAfterRelease(const std::function<void()>& releaseBuffers);
+   void DestroyContext();
+   bool SetVSync(bool enable);
+   bool TrySwapBuffers();
+@@ -236,6 +240,7 @@
+   {
+     return m_eglContext;
+   }
++  void RestoreEGLConfig(EGLConfig config) { m_eglConfig = config; }
+   EGLConfig GetEGLConfig() const
+   {
+     return m_eglConfig;
+diff --git a/xbmc/windowing/gbm/DVWindowRetirement.h b/xbmc/windowing/gbm/DVWindowRetirement.h
+--- a/xbmc/windowing/gbm/DVWindowRetirement.h
++++ b/xbmc/windowing/gbm/DVWindowRetirement.h
+@@ -17,6 +17,7 @@
+   {
+     std::shared_ptr<void> gbm, drm, vaapi, fence, properties;
+     std::function<bool()> completeDisplay;
++    std::function<void()> releaseDisplayBuffers;
+   };
+   static bool Occupied() { return m_retained != nullptr; }
+   static bool Keep(std::shared_ptr<CDVBridgeGLES::Context> context,
+@@ -58,7 +59,8 @@
+       held.m_resources.vaapi.reset();
+       held.m_resources.fence.reset();
+     }
+-    const bool destroyed = CEGLContextUtils::DestroyRetiredContext(held.m_egl);
++    const bool destroyed = CEGLContextUtils::DestroyRetiredContext(
++        held.m_egl, held.m_resources.releaseDisplayBuffers);
+     if (!destroyed)
+     {
+       held.m_quarantined = true;
+diff --git a/xbmc/windowing/gbm/GBMUtils.cpp b/xbmc/windowing/gbm/GBMUtils.cpp
+--- a/xbmc/windowing/gbm/GBMUtils.cpp
++++ b/xbmc/windowing/gbm/GBMUtils.cpp
+@@ -89,6 +89,13 @@
+   m_priorSurface.reset();
+ }
+ 
++void CGBMUtils::CGBMDevice::ReleaseSurfaceBuffers(bool prior)
++{
++  auto& surface = prior ? m_priorSurface : m_surface;
++  if (surface && surface.get_deleter().releaseBuffers)
++    surface->ReleaseBuffers();
++}
++
+ CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurface(gbm_surface* surface) : m_surface(surface)
+ {
+ }
+@@ -174,6 +181,14 @@
+     m_buffers.push(std::move(m_scanoutBuffer));
+ }
+ 
++void CGBMUtils::CGBMDevice::CGBMSurface::ReleaseBuffers()
++{
++  m_pendingBuffer.reset();
++  m_scanoutBuffer.reset();
++  while (!m_buffers.empty())
++    m_buffers.pop();
++}
++
+ CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer::~CGBMSurfaceBuffer()
+ {
+   if (m_surface && m_buffer)
+diff --git a/xbmc/windowing/gbm/GBMUtils.h b/xbmc/windowing/gbm/GBMUtils.h
+--- a/xbmc/windowing/gbm/GBMUtils.h
++++ b/xbmc/windowing/gbm/GBMUtils.h
+@@ -76,6 +76,7 @@
+       return CreateSurface(width, height, format, modifiers, count, true);
+     }
+     void CompleteOutputSurface(bool presented);
++    void ReleaseSurfaceBuffers(bool prior);
+     bool HasOutputSurfaceTransition() const { return bool(m_priorSurface); }
+     void UseDVOutputLifetime()
+     {
+@@ -151,6 +152,7 @@
+       gbm_bo* AdoptTransactionalBuffer(gbm_bo* buffer, std::shared_ptr<void> lease);
+       void CompleteTransactionalBuffer(bool presented);
+       void EndTransactionalMode();
++      void ReleaseBuffers();
+ 
+     private:
+       gbm_surface* m_surface{nullptr};
+@@ -193,6 +195,11 @@
+    * @return CGBMDevice* A pointer to the CGBMDevice object
+    */
+   CGBMUtils::CGBMDevice& GetDevice() const { return *m_device; }
++  void ReleaseSurfaceBuffers(bool prior = false)
++  {
++    if (m_device)
++      m_device->ReleaseSurfaceBuffers(prior);
++  }
+ 
+ private:
+   struct CGBMDeviceDeleter
+diff --git a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+@@ -116,7 +116,8 @@
+ 
+   for (const auto& format : candidates)
+   {
+-    if (m_eglContext.ChooseConfig(renderableType, format.drm, false, format.alpha))
++    if (m_eglContext.ChooseConfig(renderableType, format.drm, false, format.alpha, false,
++                                  false, UsesNvidiaGbm()))
+       return true;
+   }
+ 
+@@ -241,6 +242,7 @@
+     // final fence covers their commands before the matching context can retire.
+     m_nativeDVRetirement->FenceLastUse();
+     m_GBM->GetDevice().UseDVOutputLifetime();
++    const bool nvidia = UsesNvidiaGbm();
+     CDVWindowRetirement::Resources resources;
+     resources.gbm = std::shared_ptr<CGBMUtils>(std::move(m_GBM));
+     resources.drm = std::move(m_DRM);
+@@ -260,14 +262,55 @@
+       };
+     }
+     const auto egl = m_eglContext.RetainForRetirement();
++    if (nvidia)
++    {
++      auto* gbm = static_cast<CGBMUtils*>(resources.gbm.get());
++      resources.releaseDisplayBuffers = [gbm] {
++        gbm->ReleaseSurfaceBuffers(true);
++        gbm->ReleaseSurfaceBuffers();
++      };
++    }
+     CDVWindowRetirement::Keep(std::move(m_nativeDVRetirement),egl,std::move(resources));
++    return;
+   }
+ #endif
++  // The GBM base is destroyed before the EGL base. Finalize while both are alive.
++  if (UsesNvidiaGbm() && !DestroyNvidiaWindowSystem())
++  {
++    CLog::LogF(LOGERROR, "Failed to retire the NVIDIA EGL window");
++    // There is no caller to retry during destruction. Try the remaining
++    // EGL cleanup here, while the native windows and their device still exist.
++    m_GBM->ReleaseSurfaceBuffers(true);
++    m_GBM->ReleaseSurfaceBuffers();
++    m_eglContext.Destroy();
++  }
++}
++
++bool CWinSystemGbmEGLContext::UsesNvidiaGbm() const
++{
++  return m_GBM && m_DRM && m_DRM->HasQuirk(QUIRK_NVIDIA_EGL_GBM);
++}
++
++bool CWinSystemGbmEGLContext::DestroyOutputSurface()
++{
++  if (UsesNvidiaGbm())
++    return m_eglContext.DestroySurfaceAfterRelease([this] { m_GBM->ReleaseSurfaceBuffers(); });
++  m_eglContext.DestroySurface();
++  return true;
++}
++
++bool CWinSystemGbmEGLContext::DestroyNvidiaWindowSystem()
++{
++  return m_eglContext.DestroyAfterRelease([this] {
++    m_GBM->ReleaseSurfaceBuffers(true);
++    m_GBM->ReleaseSurfaceBuffers();
++  });
+ }
+ 
+ bool CWinSystemGbmEGLContext::DestroyWindow()
+ {
+-  m_eglContext.DestroySurface();
++  if (!DestroyOutputSurface())
++    return false;
+ 
+   CLog::Log(LOGDEBUG, "CWinSystemGbmEGLContext::{} - deinitialized GBM", __FUNCTION__);
+   return true;
+@@ -346,6 +389,7 @@
+ 
+   // Pick an EGL config matching the target bit depth, then rebuild
+   // the surface only if that pick changed the native visual ID.
++  const auto currentConfig = m_eglContext.GetEGLConfig();
+   uint32_t currentFormat = m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID);
+ 
+   bool separateScanout = false;
+@@ -364,7 +408,11 @@
+ 
+   if (format != currentFormat)
+   {
+-    if (!m_dvOutputSurface) m_eglContext.DestroySurface();
++    if (!m_dvOutputSurface && !DestroyOutputSurface())
++    {
++      m_eglContext.RestoreEGLConfig(currentConfig);
++      return false;
++    }
+ 
+     auto modifierList = OutputModifiers(format);
+     auto* modifiers = &modifierList;
+@@ -452,8 +500,14 @@
+ bool CWinSystemGbmEGLContext::CompleteDVOutputSurface(bool submitted)
+ {
+   if (!m_dvSurfacePending) return true;
+-  // Refused rebinding leaves both matching drawable/surface owners retained.
+-  if (!m_eglContext.CompleteOutputSurface(submitted)) return false;
++  // NVIDIA's GBM release callback still uses the EGL drawable's stream.
++  // Rebind first on rollback, then release the discarded drawable's buffers
++  // before EGL destroys it. GBM keeps the native window alive until after EGL.
++  std::function<void()> releaseBuffers;
++  if (UsesNvidiaGbm())
++    releaseBuffers = [this, submitted] { m_GBM->ReleaseSurfaceBuffers(submitted); };
++  if (!m_eglContext.CompleteOutputSurface(submitted, releaseBuffers))
++    return false;
+   m_GBM->GetDevice().CompleteOutputSurface(submitted);
+   if (!submitted && m_priorOutputPlane)
+   {
+@@ -473,7 +527,13 @@
+ {
+   CDVDFactoryCodec::ClearHWAccels();
+   VIDEOPLAYER::CRendererFactory::ClearRenderer();
+-  m_eglContext.Destroy();
++  if (UsesNvidiaGbm())
++  {
++    if (!DestroyNvidiaWindowSystem())
++      return false;
++  }
++  else
++    m_eglContext.Destroy();
+ 
+   return CWinSystemGbm::DestroyWindowSystem();
+ }
+diff --git a/xbmc/windowing/gbm/WinSystemGbmEGLContext.h b/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
+@@ -79,6 +79,9 @@
+   bool CompleteDVOutputSurface(bool submitted);
+   virtual bool RejectDVOutputSurface() { return CompleteDVOutputSurface(false); }
+   bool HasPendingDVOutputSurface() const { return m_dvSurfacePending; }
++  bool UsesNvidiaGbm() const;
++  bool DestroyOutputSurface();
++  bool DestroyNvidiaWindowSystem();
+ 
+   EGLint m_renderableType{0};
+   bool m_dvOutputSurface{}, m_dvSurfacePending{};
+diff --git a/xbmc/windowing/gbm/drm/DRMUtils.cpp b/xbmc/windowing/gbm/drm/DRMUtils.cpp
+--- a/xbmc/windowing/gbm/drm/DRMUtils.cpp
++++ b/xbmc/windowing/gbm/drm/DRMUtils.cpp
+@@ -617,6 +617,8 @@
+ #endif
+       if (strcmp(version->name, "amdgpu") == 0)
+         m_drm_quirks |= QUIRK_NEEDSPRIMARY;
++      else if (strcmp(version->name, "nvidia-drm") == 0)
++        m_drm_quirks |= QUIRK_NVIDIA_EGL_GBM;
+       drmFreeVersion(version);
+     }
+ 
+diff --git a/xbmc/windowing/gbm/drm/DRMUtils.h b/xbmc/windowing/gbm/drm/DRMUtils.h
+--- a/xbmc/windowing/gbm/drm/DRMUtils.h
++++ b/xbmc/windowing/gbm/drm/DRMUtils.h
+@@ -36,6 +36,7 @@
+ //
+ // amdgpu drm driver needs at least 1 primary plane to active when doing a modeset
+ inline constexpr int QUIRK_NEEDSPRIMARY = 1 << 0;
++inline constexpr int QUIRK_NVIDIA_EGL_GBM = 1 << 1;
+ 
+ struct drm_fb
+ {

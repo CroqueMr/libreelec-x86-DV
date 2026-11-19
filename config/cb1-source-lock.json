@@ -331,7 +331,7 @@
     "tests/cb1/test_native_video_telemetry.py": "c10e8392d2a917064aa75cc84e2344209c1529779ab111a1cd32585aaee40128",
     "tests/cb1/test_sdr_live_settings.py": "b3b869704061203c77b874f343dd5e978fbfdd98f2d66c7adc1801263af2e7e4",
     "tests/cb1/test_sdr_applied_metadata.py": "828d531ee9d0c6418f7d600b4947691b51ce487b6265c1b3c2b7e67eacd5cf85",
-    "tests/cb1/test_output_supersession.py": "9828a78d552cb5defe8f629c2cef048f7b98c5887c78f40be5cb7f1b2d05bc31",
+    "tests/cb1/test_output_supersession.py": "1019825be811a897fc21e852b205adabb757319ac9745a63312649e0cb227652",
     "projects/Generic/patches/linux/linux-9943-intel-hdmi-scdc-diagnostics.patch": "5d6822eb4ddbada4c9751f6c0392d86eba93d55e531e60b7819e0f8a0afffc87",
     "tests/cb1/test_hdmi_scdc_diagnostics.py": "b82425e1906205f8e6d6685a634f3fa8b3c83def89660c13a7bb691f04612bd2",
     "projects/Generic/patches/linux/linux-9944-intel-hdmi-deferred-link-check.patch": "e73a5a3c32a8a83781dcf693bf6f096921526b910ab7373a17ddde8b62bb425b",
@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "bc115b245c955af2c17d4f014f66a3b3b8149f2bb944b722e44ff3ed0c11fd85",
+    "config/cb1-patch-index.json": "8f39699f38657437d93edb74d8023ad2195729854828bb4d984976688ecec332",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -498,7 +498,10 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-unpaired-mel.patch": "c38fb838d7bf5a082dc563828c551fcc2d76e5cd9d94fe273b201c7a7686f193",
     "tests/cb1/test_mvc_cadence.py": "5cc7b922e99324abb6cf2e7b9bd7f997c53d33a72db23d70c1b2da2ffbadb273",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-print-screen-sdr.patch": "2cb1e98389f9474abe1de3083218db14c799205bd530b9f73199abffaaa527c5",
-    "tests/cb1/test_print_screen_sdr.py": "bc60a2f7b435972f8a4ebec3221951fef91ed43a5c2c4fd6f950c0788eb2bf35"
+    "tests/cb1/test_print_screen_sdr.py": "bc60a2f7b435972f8a4ebec3221951fef91ed43a5c2c4fd6f950c0788eb2bf35",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": "957170369482dd2e74d3665aa49d003d599347257ec6bf0502eb90823571eaa4",
+    "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
+    "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

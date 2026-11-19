@@ -11,8 +11,10 @@ from shipped_kodi import shipped_code
 class NvidiaHDRSurface(unittest.TestCase):
     def test_float_requires_nvidia_capability_and_never_admits_eight_bit(self):
         path='xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp'
-        override=os.environ.get('CB1_DRM_STATE_SOURCE')
-        source=(Path(override)/path).read_text() if override else shipped_code(path)
+        tree = os.environ.get('CB1_DRM_STATE_SOURCE') or os.environ.get('KODI_NATIVE_SOURCE_TREE')
+        if not tree:
+            self.skipTest('Requires the fully patched Kodi source tree')
+        source = (Path(tree) / path).read_text()
         method=re.search(r'bool CWinSystemGbmEGLContext::ChooseEGLConfig.*?^}',source,re.S|re.M).group()
         program=r'''
 #include <algorithm>
@@ -29,7 +31,9 @@ struct DRM {
 };
 struct EGL {
   unsigned accepted=4, selected=0;
-  bool ChooseConfig(int,unsigned format,bool,int,bool=false) {
+  bool preserveOnError=false;
+  bool ChooseConfig(int,unsigned format,bool,int,bool=false,bool=false,bool preserveSurface=false) {
+    preserveOnError=preserveSurface;
     if(format!=accepted) return false;
     selected=format; return true;
   }
@@ -38,6 +42,7 @@ struct CWinSystemGbmEGLContext {
   DRM drm; DRM* m_DRM=&drm; EGL m_eglContext; bool nvidia=false;
   bool m_floatOutputBlocked=false;
   bool FloatOutputUsable() const {return nvidia;}
+  bool UsesNvidiaGbm() const {return nvidia;}
   bool m_dvOutputSurface{};
   bool HasLldvRgb16Scanout() const {return false;}
   bool ChooseEGLConfig(EGLint,int);
@@ -52,10 +57,13 @@ int main() {
   window.m_eglContext.accepted=1;
   assert(!window.ChooseEGLConfig(1,10));
   assert(window.ChooseEGLConfig(1,8));
-  assert(window.m_eglContext.selected==1);
-  window.nvidia=false; window.m_eglContext.accepted=2;
+  assert(window.m_eglContext.selected==1 && window.m_eglContext.preserveOnError);
+  window.m_eglContext.accepted=2;
   assert(window.ChooseEGLConfig(1,10));
-  assert(window.m_eglContext.selected==2);
+  assert(window.m_eglContext.selected==2 && window.m_eglContext.preserveOnError);
+  window.nvidia=false;
+  assert(window.ChooseEGLConfig(1,10));
+  assert(window.m_eglContext.selected==2 && !window.m_eglContext.preserveOnError);
 }
 '''.replace('METHOD',method)
         with tempfile.TemporaryDirectory() as directory:
