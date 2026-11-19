@@ -1,0 +1,139 @@
+Subject: [PATCH] drm/i915: observe HDMI SCDC reset decisions under KMS debug
+
+Diagnostic-only reads after existing connection/CRTC/active/commit guards.
+STATUS never influences recovery and is not read when KMS debug is disabled.
+
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4756,52 +4756,113 @@
+ 	u8 config;
+ 	int ret;
+ 
+-	if (connector->base.status != connector_status_connected)
++	if (connector->base.status != connector_status_connected) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=not-connected connector=%u status=%d\n",
++			    connector->base.base.id, connector->base.status);
+ 		return 0;
++	}
+ 
+ 	ret = drm_modeset_lock(&display->drm->mode_config.connection_mutex,
+ 			       ctx);
+-	if (ret)
++	if (ret) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=connection-lock connector=%u ret=%d\n",
++			    connector->base.base.id, ret);
+ 		return ret;
++	}
+ 
+ 	conn_state = connector->base.state;
+ 
+ 	crtc = to_intel_crtc(conn_state->crtc);
+-	if (!crtc)
++	if (!crtc) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=no-crtc connector=%u\n",
++			    connector->base.base.id);
+ 		return 0;
++	}
+ 
+ 	ret = drm_modeset_lock(&crtc->base.mutex, ctx);
+-	if (ret)
++	if (ret) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=crtc-lock connector=%u ret=%d\n",
++			    connector->base.base.id, ret);
+ 		return ret;
++	}
+ 
+ 	crtc_state = to_intel_crtc_state(crtc->base.state);
+ 
+ 	drm_WARN_ON(display->drm,
+ 		    !intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI));
+ 
+-	if (!crtc_state->hw.active)
++	if (!crtc_state->hw.active) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=inactive connector=%u\n",
++			    connector->base.base.id);
+ 		return 0;
++	}
+ 
+ 	if (!crtc_state->hdmi_high_tmds_clock_ratio &&
+-	    !crtc_state->hdmi_scrambling)
++	    !crtc_state->hdmi_scrambling) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=not-scrambled connector=%u expected_scrambling=0 expected_ratio40=0\n",
++			    connector->base.base.id);
+ 		return 0;
++	}
+ 
+ 	if (conn_state->commit &&
+-	    !try_wait_for_completion(&conn_state->commit->hw_done))
++	    !try_wait_for_completion(&conn_state->commit->hw_done)) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=commit-pending connector=%u expected_scrambling=%d expected_ratio40=%d hw_done=0\n",
++			    connector->base.base.id, crtc_state->hdmi_scrambling,
++			    crtc_state->hdmi_high_tmds_clock_ratio);
+ 		return 0;
++	}
++
++	drm_dbg_kms(display->drm,
++		    "HDMI SCDC reset-link: reason=check connector=%u active=1 expected_scrambling=%d expected_ratio40=%d commit=%d hw_done=%s\n",
++		    connector->base.base.id, crtc_state->hdmi_scrambling,
++		    crtc_state->hdmi_high_tmds_clock_ratio, !!conn_state->commit,
++		    conn_state->commit ? "1" : "n/a");
+ 
+ 	ret = drm_scdc_readb(ddc, SCDC_TMDS_CONFIG, &config);
+ 	if (ret < 0) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=config-read-error connector=%u config_ret=%d\n",
++			    connector->base.base.id, ret);
+ 		drm_err(display->drm, "[CONNECTOR:%d:%s] Failed to read TMDS config: %d\n",
+ 			connector->base.base.id, connector->base.name, ret);
+ 		return 0;
+ 	}
+ 
++	/* Observation only: never read STATUS unless KMS diagnostics are enabled.
++	 * Keep typed I/O errors separate from a valid unlocked status, and leave
++	 * every recovery decision below based on its original CONFIG predicate.
++	 */
++	if (drm_debug_enabled(DRM_UT_KMS)) {
++		u8 status;
++		int status_ret;
++
++		status_ret = drm_scdc_readb(ddc, SCDC_SCRAMBLER_STATUS, &status);
++		if (status_ret < 0)
++			drm_dbg_kms(display->drm,
++				    "HDMI SCDC reset-link: reason=observe connector=%u config_ret=0 config=0x%02x status_ret=%d status=unavailable\n",
++				    connector->base.base.id, config, status_ret);
++		else
++			drm_dbg_kms(display->drm,
++				    "HDMI SCDC reset-link: reason=observe connector=%u config_ret=0 config=0x%02x status_ret=%d status=0x%02x\n",
++				    connector->base.base.id, config, status_ret, status);
++	}
++
+ 	if (!!(config & SCDC_TMDS_BIT_CLOCK_RATIO_BY_40) ==
+ 	    crtc_state->hdmi_high_tmds_clock_ratio &&
+ 	    !!(config & SCDC_SCRAMBLING_ENABLE) ==
+-	    crtc_state->hdmi_scrambling)
++	    crtc_state->hdmi_scrambling) {
++		drm_dbg_kms(display->drm,
++			    "HDMI SCDC reset-link: reason=config-match connector=%u\n",
++			    connector->base.base.id);
+ 		return 0;
++	}
+ 
+ 	/*
+ 	 * HDMI 2.0 says that one should not send scrambled data
+@@ -4812,6 +4873,9 @@
+ 	 * would be perfectly happy if were to just reconfigure
+ 	 * the SCDC settings on the fly.
+ 	 */
++	drm_dbg_kms(display->drm,
++		    "HDMI SCDC reset-link: reason=config-mismatch reset=full-modeset connector=%u\n",
++		    connector->base.base.id);
+ 	return intel_modeset_commit_pipes(display, BIT(crtc->pipe), ctx);
+ }
+ 

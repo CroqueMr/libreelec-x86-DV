@@ -1,0 +1,56 @@
+From 39c2d49c9ecec40592211f01093ee1e4083b5a1b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Thu, 8 Oct 2026 01:23:10 +0300
+Subject: [PATCH] drm/i915/gmbus: Stop frobbing with pin direction in
+ .getsda()/.getscl()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+i2c .getscl() and .getsda() are just supposed to report the state
+of the pin without changing its state in any way. So nuke the
+bogus register writes from there that configure the pin as an
+input (ie. tri-state the pin).
+
+Given how i2c works the pin will already be tri-stated when
+.getsda()/.getscl() are called so these writes are in fact
+redundant. And even if that weren't the case the input bit
+does appear to reflect the state of the pin, even when driven
+as an output.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20261007222314.5714-2-ville.syrjala@linux.intel.com
+Reviewed-by: Sebastian Brzezinka <sebastian.brzezinka@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_gmbus.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_gmbus.c b/drivers/gpu/drm/i915/display/intel_gmbus.c
+index 13bc6ab6b2f6..d23422e12aa4 100644
+--- a/drivers/gpu/drm/i915/display/intel_gmbus.c
++++ b/drivers/gpu/drm/i915/display/intel_gmbus.c
+@@ -269,10 +269,6 @@ static int get_clock(void *data)
+ {
+ 	struct intel_gmbus *bus = data;
+ 	struct intel_display *display = bus->display;
+-	u32 reserved = get_reserved(bus);
+-
+-	intel_de_write_fw(display, bus->gpio_reg, reserved | GPIO_CLOCK_DIR_MASK);
+-	intel_de_write_fw(display, bus->gpio_reg, reserved);
+ 
+ 	return (intel_de_read_fw(display, bus->gpio_reg) & GPIO_CLOCK_VAL_IN) != 0;
+ }
+@@ -281,10 +277,6 @@ static int get_data(void *data)
+ {
+ 	struct intel_gmbus *bus = data;
+ 	struct intel_display *display = bus->display;
+-	u32 reserved = get_reserved(bus);
+-
+-	intel_de_write_fw(display, bus->gpio_reg, reserved | GPIO_DATA_DIR_MASK);
+-	intel_de_write_fw(display, bus->gpio_reg, reserved);
+ 
+ 	return (intel_de_read_fw(display, bus->gpio_reg) & GPIO_DATA_VAL_IN) != 0;
+ }
+-- 
+GitLab
+

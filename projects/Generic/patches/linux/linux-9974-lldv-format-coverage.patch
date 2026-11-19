@@ -1,0 +1,54 @@
+diff --git a/include/drm/drm_dvbridge_edid.h b/include/drm/drm_dvbridge_edid.h
+index 69ab06b..c919789 100644
+--- a/include/drm/drm_dvbridge_edid.h
++++ b/include/drm/drm_dvbridge_edid.h
+@@ -22,6 +22,7 @@ struct dvbridge_sink_caps {
+ 	unsigned int version, offset, length;
+ 	bool legacy_vsif, supports_2160p60, lldv_422;
+ 	unsigned int lldv_444_bits;
++	bool lldv_422_12;
+ };
+ 
+ static inline const char *dvbridge_edid_reason(enum dvbridge_edid_status status)
+@@ -45,6 +46,11 @@ static inline bool dvbridge_lldv_422(struct dvbridge_sink_caps caps)
+ 	return (caps.status == DV_EDID_STANDARD || caps.status == DV_EDID_LLDV_ONLY) && caps.lldv_422;
+ }
+ 
++static inline bool dvbridge_lldv_422_12(struct dvbridge_sink_caps caps)
++{
++	return dvbridge_lldv_422(caps) && caps.lldv_422_12;
++}
++
+ static inline unsigned int dvbridge_lldv_444_bits(struct dvbridge_sink_caps caps)
+ {
+ 	return dvbridge_lldv_422(caps) ? caps.lldv_444_bits : 0;
+@@ -54,7 +60,7 @@ static inline struct dvbridge_sink_caps
+ dvbridge_parse_edid(const unsigned char *edid, size_t size)
+ {
+ 	static const unsigned char magic[8] = {0, 255, 255, 255, 255, 255, 255, 0};
+-	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false, false, 0};
++	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false, false, 0, false};
+ 	unsigned int block, i, blocks, found = 0;
+ 
+ 	if (!edid || !size)
+@@ -146,6 +152,7 @@ dvbridge_parse_edid(const unsigned char *edid, size_t size)
+ 					result.status = DV_EDID_VERSION;
+ 					return result;
+ 				}
++				result.lldv_422_12 = (data[4] & 1) != 0;
+ 				result.status = result.version == 2 && (data[6] & 3) < 2 ?
+ 					DV_EDID_LLDV_ONLY : DV_EDID_STANDARD;
+ 			}
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+index f1eae71..4b930e9 100644
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
++++ b/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2598,7 +2598,7 @@ static bool intel_lldv_lab_enabled(const struct intel_display *display)
+ 	return IS_DISPLAY_VER(display, 9, 12) || display->platform.alderlake_p ||
+ 		display->platform.dg2 || display->platform.meteorlake ||
+ 		display->platform.lunarlake || display->platform.battlemage ||
+-		display->platform.pantherlake;
++		display->platform.pantherlake || display->platform.novalake;
+ }
+ 
+ int intel_hdmi_compute_config(struct intel_encoder *encoder,

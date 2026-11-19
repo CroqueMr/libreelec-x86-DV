@@ -1,0 +1,51 @@
+From e860dbc1849510e0be36194628ca0c3e4e7da646 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Thu, 8 Oct 2026 01:23:11 +0300
+Subject: [PATCH] drm/i915/gmbus: Handle the internal pullup disable bits more
+ sensibly
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On gen2/3 platforms the GPIO register bits 5 and 13 are
+documented to be either internal pullup disable bits, or
+documented as reserved bits that must be preserved by software.
+It seems to be that either way we want to preserve their
+state always. That is, if they really are pullup disables, then
+presumably the firmware has configured them appropriately for us.
+So let's always preserve the state of these pins on gen2/3
+platforms.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20261007222314.5714-3-ville.syrjala@linux.intel.com
+Reviewed-by: Ankit Nautiyal <ankit.k.nautiyal@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_gmbus.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_gmbus.c b/drivers/gpu/drm/i915/display/intel_gmbus.c
+index d23422e12aa4..e808f5c4106b 100644
+--- a/drivers/gpu/drm/i915/display/intel_gmbus.c
++++ b/drivers/gpu/drm/i915/display/intel_gmbus.c
+@@ -251,11 +251,13 @@ static u32 get_reserved(struct intel_gmbus *bus)
+ 	struct intel_display *display = bus->display;
+ 	u32 preserve_bits = 0;
+ 
+-	if (display->platform.i830 || display->platform.i845g)
+-		return 0;
+-
+-	/* On most chips, these bits must be preserved in software. */
+-	preserve_bits |= GPIO_DATA_PULLUP_DISABLE | GPIO_CLOCK_PULLUP_DISABLE;
++	/*
++	 * On gen2/3 these are either internal pullup disables, or
++	 * documented as reserved bits that need to be preserved.
++	 */
++	if (DISPLAY_VER(display) < 4)
++		preserve_bits |= GPIO_DATA_PULLUP_DISABLE |
++			GPIO_CLOCK_PULLUP_DISABLE;
+ 
+ 	/* Wa_16025573575: the masks bits need to be preserved through out */
+ 	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+-- 
+GitLab
+

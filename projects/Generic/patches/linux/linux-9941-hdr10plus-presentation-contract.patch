@@ -1,0 +1,56 @@
+Subject: [PATCH] Preserve HDR10+ request ownership and native AVI timings
+
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Capture primary membership before native helpers add inherited planes.
+Carry CTA timing in AVI when HDR10+ occupies the AMD vendor packet.
+
+--- a/drivers/gpu/drm/drm_connector.c
++++ b/drivers/gpu/drm/drm_connector.c
+@@ -21,6 +21,8 @@
+  */
+ 
+ #include <drm/drm_auth.h>
++#include <drm/drm_atomic.h>
++#include <drm/drm_plane.h>
+ #include <drm/drm_connector.h>
+ #include <drm/drm_drv.h>
+ #include <drm/drm_edid.h>
+@@ -2936,6 +2938,27 @@
+ EXPORT_SYMBOL(drm_connector_check_hdr10plus);
+ 
+ /**
++ * drm_atomic_hdr10plus_frame_mask - capture primaries before helper expansion
++ * @state: original atomic request
++ *
++ * Return: CRTCs with a primary image supplied by this request.
++ */
++u32 drm_atomic_hdr10plus_frame_mask(struct drm_atomic_commit *state)
++{
++	struct drm_plane *plane;
++	struct drm_plane_state *primary;
++	u32 mask = 0;
++	int i;
++
++	for_each_new_plane_in_state(state, plane, primary, i) {
++		if (primary->crtc && primary->fb && plane == primary->crtc->primary)
++			mask |= drm_crtc_mask(primary->crtc);
++	}
++	return mask;
++}
++EXPORT_SYMBOL(drm_atomic_hdr10plus_frame_mask);
++
++/**
+  * drm_connector_attach_broadcast_rgb_property - attach "Broadcast RGB" property
+  * @connector: connector to attach the property on.
+  *
+--- a/include/drm/drm_connector.h
++++ b/include/drm/drm_connector.h
+@@ -2565,6 +2565,7 @@
+ void drm_connector_attach_hdr_output_metadata_property(struct drm_connector *connector);
+ void drm_connector_attach_hdr10plus_metadata_property(struct drm_connector *connector);
+ int drm_connector_check_hdr10plus(const struct drm_connector_state *state);
++u32 drm_atomic_hdr10plus_frame_mask(struct drm_atomic_commit *state);
+ bool drm_connector_atomic_hdr_metadata_equal(struct drm_connector_state *old_state,
+ 					     struct drm_connector_state *new_state);
+ int drm_mode_create_aspect_ratio_property(struct drm_device *dev);
