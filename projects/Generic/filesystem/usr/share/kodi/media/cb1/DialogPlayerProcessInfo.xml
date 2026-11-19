@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+  <depth>0.5</depth>
+  <onunload>ClearProperty(DV.Enhanced)</onunload>
+  <controls>
+    <include file="special://xbmc/media/cb1/IncludesDVProcessInfo.xml">DVProcessPanel</include>
+  </controls>
+</window>
