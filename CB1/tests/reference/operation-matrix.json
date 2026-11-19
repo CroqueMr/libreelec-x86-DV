@@ -1,0 +1,820 @@
+{
+  "schema": 1,
+  "status": "complete declared offline image contract; independent review and sponsor approval pending; no runtime implementation",
+  "required_pipeline": [
+    "CB1_PQ_RESCALE",
+    "CB1_L1_LIBRARY_REPRESENTATION",
+    "CB1_SOURCE_ELIGIBILITY",
+    "CB1_TARGET_DESCRIPTOR",
+    "CB1_HDR10_DESCRIPTOR",
+    "CB1_RECONSTRUCTION_IMAGE",
+    "CB1_SOURCE_SCENE_POLICY",
+    "CB1_DISPLAY_MAP_IMAGE",
+    "CB1_GAMUT_MAP_IMAGE",
+    "CB1_ENHANCE_NATURAL_IMAGE",
+    "CB1_ENHANCE_INTENSE_IMAGE",
+    "CB1_OUTPUT_RESOLVE_IMAGE",
+    "CB1_ENHANCE_NATURAL_POLICY",
+    "CB1_ENHANCE_INTENSE_POLICY",
+    "CB1_HDR10_LIFECYCLE",
+    "CB1_TARGET_CAPABILITY",
+    "CB1_DV_METADATA_PAIR",
+    "CB1_DV_LIFECYCLE"
+  ],
+  "operations": [
+{
+  "id": "CB1_DV_METADATA_PAIR",
+  "domain": "transformed BT2020 PQ image and legacy metadata",
+  "units": "PQ, integers and identity",
+  "order": 6,
+  "authority": "independent-decimal-analysis-frozen-c-images-and-polynomial-wire",
+  "coverage": [
+    "image",
+    "metadata"
+  ],
+  "required_cases": [
+    "dv-pair-output-0-BT709-0-1",
+    "dv-pair-output-0-BT709-0-2",
+    "dv-pair-output-0-BT709-1-1",
+    "dv-pair-output-0-BT709-1-2",
+    "dv-pair-output-0-P3-D65-0-1",
+    "dv-pair-output-0-P3-D65-0-2",
+    "dv-pair-output-0-P3-D65-1-1",
+    "dv-pair-output-0-P3-D65-1-2",
+    "dv-pair-output-0-BT2020-0-1",
+    "dv-pair-output-0-BT2020-0-2",
+    "dv-pair-output-0-BT2020-1-1",
+    "dv-pair-output-0-BT2020-1-2",
+    "dv-pair-output-1-BT709-0-1",
+    "dv-pair-output-1-BT709-0-2",
+    "dv-pair-output-1-BT709-1-1",
+    "dv-pair-output-1-BT709-1-2",
+    "dv-pair-output-1-P3-D65-0-1",
+    "dv-pair-output-1-P3-D65-0-2",
+    "dv-pair-output-1-P3-D65-1-1",
+    "dv-pair-output-1-P3-D65-1-2",
+    "dv-pair-output-1-BT2020-0-1",
+    "dv-pair-output-1-BT2020-0-2",
+    "dv-pair-output-1-BT2020-1-1",
+    "dv-pair-output-1-BT2020-1-2",
+    "dv-pair-output-scaled-BT709-0-1",
+    "dv-pair-output-scaled-BT709-0-2",
+    "dv-pair-output-scaled-BT709-1-1",
+    "dv-pair-output-scaled-BT709-1-2",
+    "dv-pair-output-scaled-P3-D65-0-1",
+    "dv-pair-output-scaled-P3-D65-0-2",
+    "dv-pair-output-scaled-P3-D65-1-1",
+    "dv-pair-output-scaled-P3-D65-1-2",
+    "dv-pair-output-scaled-BT2020-0-1",
+    "dv-pair-output-scaled-BT2020-0-2",
+    "dv-pair-output-scaled-BT2020-1-1",
+    "dv-pair-output-scaled-BT2020-1-2",
+    "dv-neutral-output-0-BT709-0-1",
+    "dv-neutral-output-0-BT709-0-2",
+    "dv-neutral-output-0-BT709-1-1",
+    "dv-neutral-output-0-BT709-1-2",
+    "dv-neutral-output-0-P3-D65-0-1",
+    "dv-neutral-output-0-P3-D65-0-2",
+    "dv-neutral-output-0-P3-D65-1-1",
+    "dv-neutral-output-0-P3-D65-1-2",
+    "dv-neutral-output-0-BT2020-0-1",
+    "dv-neutral-output-0-BT2020-0-2",
+    "dv-neutral-output-0-BT2020-1-1",
+    "dv-neutral-output-0-BT2020-1-2",
+    "dv-analysis-black",
+    "dv-analysis-gray",
+    "dv-analysis-white",
+    "dv-analysis-odd-maxrgb",
+    "dv-analysis-wire-collision",
+    "dv-analysis-precision-degenerate",
+    "dv-analysis-active-gui-exclusion"
+  ],
+  "status": "ready",
+  "essential": true,
+  "parameters": {
+    "contract": "REFERENCE-CONTRACTS.md transformed TV-Led experiment",
+    "receiver_qualified": false
+  },
+  "eligibility": "Enhanced DV only; coherent source and qualified deferred GLES path",
+  "state": "Candidate publication after actual presentation; retired GPU storage never reused"
+},
+{
+  "id": "CB1_DV_LIFECYCLE",
+  "domain": "deferred DV presentation state",
+  "units": "identity and ownership",
+  "order": 8,
+  "authority": "independent-hand-enumerated-dv-state-table",
+  "coverage": [
+    "state"
+  ],
+  "required_cases": [
+    "dv-deferred-refresh-repeat-failure",
+    "dv-supersession-seek-unsupported",
+    "dv-wrong-result-commit-and-new-picture"
+  ],
+  "status": "ready",
+  "essential": true,
+  "parameters": {
+    "contract": "REFERENCE-CONTRACTS.md transformed TV-Led experiment",
+    "receiver_qualified": false
+  },
+  "eligibility": "Enhanced DV only; coherent source and qualified deferred GLES path",
+  "state": "Candidate publication after actual presentation; retired GPU storage never reused"
+},
+    {
+      "id": "CB1_PQ_RESCALE",
+      "status": "ready",
+      "essential": true,
+      "domain": "ideal binary64 absolute PQ",
+      "units": "nits or normalized PQ",
+      "order": 1,
+      "parameters": {
+        "m1": "2610/16384",
+        "m2": "2523/32",
+        "c1": "3424/4096",
+        "c2": "2413/128",
+        "c3": "2392/128",
+        "zero": "pinned rescale exact-zero special case"
+      },
+      "eligibility": "finite input in [0,10000] nits or [0,1] PQ",
+      "state": "stateless; immutable source and policy revision",
+      "authority": "ideal-st2084-binary64-with-pinned-zero-convention",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "pq-zero",
+        "pq-nearblack",
+        "pq-100",
+        "pq-1000",
+        "pq-10000",
+        "pq-decode-half"
+      ]
+    },
+    {
+      "id": "CB1_L1_LIBRARY_REPRESENTATION",
+      "status": "ready",
+      "essential": true,
+      "domain": "binary32 library PQ hints",
+      "units": "normalized PQ",
+      "order": 1,
+      "parameters": {
+        "divisor": "4095.0f; binary32 division and field storage",
+        "semantics": "field representation only; not authored maxRGB-to-CIE-Y equivalence"
+      },
+      "eligibility": "one usable frame-matched L1; integer 0<=min<=avg<=max<=4095 and max>0",
+      "state": "stateless; immutable source and policy revision",
+      "authority": "pinned-libplacebo-avdovi",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "l1-float-dark",
+        "l1-float-high-key",
+        "l1-float-zero-average"
+      ]
+    },
+    {
+      "id": "CB1_L1_IDEAL_DIVISION",
+      "status": "ready",
+      "essential": false,
+      "domain": "ideal binary64 PQ hints",
+      "units": "normalized PQ",
+      "order": 1,
+      "parameters": {
+        "divisor": 4095,
+        "representation": "ideal binary64 only, not library float fields"
+      },
+      "eligibility": "one usable L1 with integer codes in [0,4095]",
+      "state": "stateless",
+      "authority": "ideal-l1-integer-ratio-binary64",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "l1-dark",
+        "l1-high-key"
+      ]
+    },
+    {
+      "id": "CB1_SOURCE_ELIGIBILITY",
+      "status": "ready",
+      "essential": true,
+      "domain": "metadata presence",
+      "units": "boolean",
+      "order": 0,
+      "parameters": {
+        "required": [
+          "validated reconstruction metadata",
+          "one usable L1"
+        ],
+        "optional": "L2/L3/L8 not applied; absence or present-zero do not reject"
+      },
+      "eligibility": "already bounded parsed source; no invented missing values",
+      "state": "stateless; immutable source and policy revision",
+      "authority": "cb1-own-eligibility",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "optional-absent",
+        "optional-zero",
+        "missing-l1",
+        "zero-l1",
+        "duplicate-l1",
+        "invalid-order",
+        "invalid-metadata",
+        "missing-reconstruction"
+      ]
+    },
+    {
+      "id": "CB1_TARGET_DESCRIPTOR",
+      "status": "ready",
+      "essential": true,
+      "domain": "nominal target",
+      "units": "nits and named gamut",
+      "order": 2,
+      "parameters": {
+        "black_nits": 0.000001,
+        "measured": false,
+        "peak": "configured finite (0,10000] unchanged",
+        "panel": "OLED/LCD do not imply measured contrast"
+      },
+      "eligibility": "complete valid manual TV profile",
+      "state": "stateless; immutable source and policy revision",
+      "authority": "cb1-own-nominal-target",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "target-bt709",
+        "target-p3",
+        "target-bt2020"
+      ]
+    },
+    {
+      "id": "CB1_HDR10_DESCRIPTOR",
+      "status": "ready",
+      "essential": true,
+      "domain": "HDR10 signaling",
+      "units": "static descriptor integers",
+      "order": 6,
+      "parameters": {
+        "container": "BT2020/PQ",
+        "max_cll": 0,
+        "max_fall": 0,
+        "min_luminance": 0,
+        "peak": "ceil configured nits",
+        "mastering": "nominal output intent, not copied source mastering"
+      },
+      "eligibility": "qualified transformed output; values below only descriptor arithmetic",
+      "state": "stateless; immutable source and policy revision",
+      "authority": "cb1-own-output-descriptor",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "descriptor-p3",
+        "descriptor-709"
+      ]
+    },
+    {
+      "id": "CB1_RECONSTRUCTION_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 1,
+      "domain": "source-equation full FEL",
+      "units": "linear BT2020 nits and normalized coded signal",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "reconstruction-full-fel",
+        "reconstruction-neutral-fel",
+        "reconstruct-nonidentity-polynomial",
+        "reconstruct-nonidentity-mmr",
+        "reconstruct-nonidentity-matrices"
+      ]
+    },
+    {
+      "id": "CB1_SOURCE_SCENE_POLICY",
+      "status": "ready",
+      "essential": true,
+      "order": 2,
+      "domain": "resolved source scene",
+      "units": "linear nits and source PQ hints",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "source-0-BT709-0-0",
+        "source-0-BT709-1-0",
+        "source-0-P3-D65-0-0",
+        "source-0-P3-D65-1-0",
+        "source-0-BT2020-0-0",
+        "source-0-BT2020-1-0"
+      ]
+    },
+    {
+      "id": "CB1_DISPLAY_MAP_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 3,
+      "domain": "IPT tone/chroma image",
+      "units": "linear nominal target nits",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "tone-0-BT709-0-0",
+        "tone-0-BT709-1-0",
+        "tone-1-BT709-0-0",
+        "tone-1-BT709-1-0"
+      ]
+    },
+    {
+      "id": "CB1_GAMUT_MAP_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 4,
+      "domain": "mapped nominal target RGB",
+      "units": "linear nominal target nits",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "gamut-0-BT709-0-0",
+        "gamut-0-BT709-1-0",
+        "gamut-0-P3-D65-0-0",
+        "gamut-0-P3-D65-1-0",
+        "gamut-0-BT2020-0-0",
+        "gamut-0-BT2020-1-0"
+      ]
+    },
+    {
+      "id": "CB1_ENHANCE_NATURAL_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 5,
+      "domain": "mapped nominal target RGB",
+      "units": "linear nominal target nits",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "enhance-0-BT709-0-1",
+        "enhance-0-BT709-1-1",
+        "enhance-0-P3-D65-0-1",
+        "enhance-0-P3-D65-1-1",
+        "enhance-0-BT2020-0-1",
+        "enhance-0-BT2020-1-1"
+      ]
+    },
+    {
+      "id": "CB1_ENHANCE_INTENSE_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 5,
+      "domain": "mapped nominal target RGB",
+      "units": "linear nominal target nits",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "enhance-0-BT709-0-2",
+        "enhance-0-BT709-1-2",
+        "enhance-0-P3-D65-0-2",
+        "enhance-0-P3-D65-1-2",
+        "enhance-0-BT2020-0-2",
+        "enhance-0-BT2020-1-2"
+      ]
+    },
+    {
+      "id": "CB1_OUTPUT_RESOLVE_IMAGE",
+      "status": "ready",
+      "essential": true,
+      "order": 7,
+      "domain": "BT2020 PQ and resolve",
+      "units": "normalized PQ and integer codes",
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md full image continuation",
+        "library": "pinned spline/IPT/perceptual facilities",
+        "immutable_source": true
+      },
+      "eligibility": "validated matched BL/RPU and full FEL when applicable; one usable L1; representable target; no missing-source invention",
+      "state": "stateless original-source composition; coherent stream/picture/revision; lifecycle operation governs publication",
+      "authority": "public-source-equations-and-independent-c-control",
+      "coverage": [
+        "image"
+      ],
+      "required_cases": [
+        "output-0-BT709-0-0",
+        "output-0-BT709-0-1",
+        "output-0-BT709-0-2",
+        "output-0-BT709-1-0",
+        "output-0-BT709-1-1",
+        "output-0-BT709-1-2",
+        "output-0-P3-D65-0-0",
+        "output-0-P3-D65-0-1",
+        "output-0-P3-D65-0-2",
+        "output-0-P3-D65-1-0",
+        "output-0-P3-D65-1-1",
+        "output-0-P3-D65-1-2",
+        "output-0-BT2020-0-0",
+        "output-0-BT2020-0-1",
+        "output-0-BT2020-0-2",
+        "output-0-BT2020-1-0",
+        "output-0-BT2020-1-1",
+        "output-0-BT2020-1-2",
+        "output-1-BT709-0-0",
+        "output-1-BT709-0-1",
+        "output-1-BT709-0-2",
+        "output-1-BT709-1-0",
+        "output-1-BT709-1-1",
+        "output-1-BT709-1-2",
+        "output-1-P3-D65-0-0",
+        "output-1-P3-D65-0-1",
+        "output-1-P3-D65-0-2",
+        "output-1-P3-D65-1-0",
+        "output-1-P3-D65-1-1",
+        "output-1-P3-D65-1-2",
+        "output-1-BT2020-0-0",
+        "output-1-BT2020-0-1",
+        "output-1-BT2020-0-2",
+        "output-1-BT2020-1-0",
+        "output-1-BT2020-1-1",
+        "output-1-BT2020-1-2",
+        "output-scaled-BT709-0-0",
+        "output-scaled-BT709-0-1",
+        "output-scaled-BT709-0-2",
+        "output-scaled-BT709-1-0",
+        "output-scaled-BT709-1-1",
+        "output-scaled-BT709-1-2",
+        "output-scaled-P3-D65-0-0",
+        "output-scaled-P3-D65-0-1",
+        "output-scaled-P3-D65-0-2",
+        "output-scaled-P3-D65-1-0",
+        "output-scaled-P3-D65-1-1",
+        "output-scaled-P3-D65-1-2",
+        "output-scaled-BT2020-0-0",
+        "output-scaled-BT2020-0-1",
+        "output-scaled-BT2020-0-2",
+        "output-scaled-BT2020-1-0",
+        "output-scaled-BT2020-1-1",
+        "output-scaled-BT2020-1-2",
+        "output-border-overlay-flip"
+      ]
+    },
+    {
+      "id": "PQ_TARGET_REPRESENTATION",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": false,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L1_SOURCE_STATISTICS",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L2_PARAMETER_ENCODING",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L2_SLOPE_OFFSET_POWER",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L2_BASE_CURVE_EXAMPLE",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": false,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L2_CHROMA_SATURATION",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "L2_DETAIL",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "CM4_L3",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "CM4_L8_PRIMARY",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "CM4_L8_ADDITIONAL",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "AUTHORED_TARGETS",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": true,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "TARGET_SELECTION_AND_GENERATION",
+      "status": "not_applied",
+      "essential": false,
+      "creative": true,
+      "disposition": {
+        "parsed": false,
+        "applied": false,
+        "transmitted": false,
+        "not_applied": true
+      },
+      "scope": "Expert/Enhanced DV only; native transmission unchanged; Enhanced DV disposition belongs to Task 6B",
+      "gap": "Historical encoding/scalar foundation does not qualify this authored creative image operation. No target interpolation/extrapolation or Dolby-equivalence claim."
+    },
+    {
+      "id": "CB1_ENHANCE_NATURAL_POLICY",
+      "status": "ready",
+      "essential": true,
+      "domain": "mapped nominal target RGB",
+      "units": "linear nits per RGB component",
+      "order": 5,
+      "parameters": {
+        "peak": "same configured target peak for both presets",
+        "shadow_onset": [
+          0.01,
+          0.02
+        ],
+        "brightness_onset": [
+          0.25,
+          0.75
+        ],
+        "brightness_strength": 0.2,
+        "entrance_projection": "identity in cube; common clipped midpoint anchor and largest common factor into nominal cube",
+        "chroma_strength": 0.04,
+        "scene_mask": "1-0.5*smoothstep(0.1,0.5,decoded-L1-avg/decoded-L1-max)",
+        "color_protection": "midpoint opponent expansion with cube-headroom cap; not CIE-Y",
+        "black": "exactly unchanged when maxRGB/peak<=0.01"
+      },
+      "eligibility": "Already qualified mapped nominal target RGB cube; one usable matched L1; no direct raw reconstructed-PQ application",
+      "state": "Stateless per source picture and coherent policy; never reapply to transformed paused image",
+      "authority": "cb1-own-selective-policy-rational",
+      "coverage": [
+        "image",
+        "black",
+        "nearblack",
+        "highlights",
+        "dark",
+        "high-key",
+        "non-neutral",
+        "gamut-boundary"
+      ],
+      "required_cases": [
+        "natural-dark-gray",
+        "natural-high-key-gray",
+        "natural-dark-color",
+        "natural-boundary"
+      ]
+    },
+    {
+      "id": "CB1_ENHANCE_INTENSE_POLICY",
+      "status": "ready",
+      "essential": true,
+      "domain": "mapped nominal target RGB",
+      "units": "linear nits per RGB component",
+      "order": 5,
+      "parameters": {
+        "peak": "same configured target peak for both presets",
+        "shadow_onset": [
+          0.01,
+          0.02
+        ],
+        "brightness_onset": [
+          0.02,
+          0.25
+        ],
+        "brightness_strength": 0.35,
+        "entrance_projection": "identity in cube; common clipped midpoint anchor and largest common factor into nominal cube",
+        "chroma_strength": 0.08,
+        "scene_mask": "1-0.5*smoothstep(0.1,0.5,decoded-L1-avg/decoded-L1-max)",
+        "color_protection": "midpoint opponent expansion with cube-headroom cap; not CIE-Y",
+        "black": "exactly unchanged when maxRGB/peak<=0.01"
+      },
+      "eligibility": "Already qualified mapped nominal target RGB cube; one usable matched L1; no direct raw reconstructed-PQ application",
+      "state": "Stateless per source picture and coherent policy; never reapply to transformed paused image",
+      "authority": "cb1-own-selective-policy-rational",
+      "coverage": [
+        "image",
+        "black",
+        "nearblack",
+        "highlights",
+        "dark",
+        "high-key",
+        "non-neutral",
+        "gamut-boundary"
+      ],
+      "required_cases": [
+        "intense-dark-gray",
+        "intense-high-key-gray",
+        "intense-dark-color",
+        "intense-boundary"
+      ]
+    },
+    {
+      "id": "CB1_HDR10_LIFECYCLE",
+      "status": "ready",
+      "essential": true,
+      "domain": "HDR10 presentation state",
+      "units": "identities, availability and caller surface names",
+      "order": 8,
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md and exact LE numerical API"
+      },
+      "eligibility": "Expert/Enhanced DV only; native/Basic unchanged",
+      "state": "exact original identities and explicit capability failure preserve state",
+      "authority": "independent-hand-enumerated-state-table",
+      "coverage": [
+        "state"
+      ],
+      "required_cases": [
+        "identity-owned-surface-pause-revision-failure-reset",
+        "failed-presentation-supersession-new-stream",
+        "cancel-pending-preserves-committed-and-caller"
+      ]
+    },
+    {
+      "id": "CB1_TARGET_CAPABILITY",
+      "status": "ready",
+      "essential": true,
+      "domain": "target representation capability",
+      "units": "nits, boolean and reason",
+      "order": 8,
+      "parameters": {
+        "contract": "REFERENCE-CONTRACTS.md and exact LE numerical API"
+      },
+      "eligibility": "Expert/Enhanced DV only; native/Basic unchanged",
+      "state": "exact original identities and explicit capability failure preserve state",
+      "authority": "independent-binary32-rounding-and-pinned-sentinel",
+      "coverage": [
+        "scalar"
+      ],
+      "required_cases": [
+        "target-capability-0",
+        "target-capability-1",
+        "target-capability-2",
+        "target-capability-3",
+        "target-capability-4",
+        "target-capability-5"
+      ]
+    }
+  ]
+}

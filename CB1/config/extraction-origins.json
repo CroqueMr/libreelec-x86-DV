@@ -1,0 +1,166 @@
+{
+  "source_commit": "dcb70bf30147a85094583dc83aa42b9926276029",
+  "upstream_kodi": "b7afba240133a570145466cfaf6a6825f84c6ad1",
+  "files": {
+    "src/CMakeLists.txt": {
+      "source": "tools/dvbridge/CMakeLists.txt",
+      "sha256": "8f6a8c3eab002798638b950b58c157bf433bd71ac8158cd8b94c68f3f8b69e88",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/PROVENANCE.json": {
+      "source": "tools/dvbridge/PROVENANCE.json",
+      "sha256": "4967c790327c463f3713f8c496d2b4e84045594bf59557dd894148d913dea6cc",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_core.c": {
+      "source": "tools/dvbridge/dvbridge_core.c",
+      "sha256": "d9a1e0ed6281390a4fc9f6709c4713e3e894cf11e4cc3e3007c449258df122c2",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_core.h": {
+      "source": "tools/dvbridge/dvbridge_core.h",
+      "sha256": "1435a02f84061d4901f466d49b695858f10a7e7fb9d6501bd827f553b0fd949a",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_dmabuf.c": {
+      "source": "tools/dvbridge/dvbridge_dmabuf.c",
+      "sha256": "f551c5d24422ccbe79fe18a63e803f739d71a54e42cb2d9a39bca80ca0fbd9db",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_dmabuf.h": {
+      "source": "tools/dvbridge/dvbridge_dmabuf.h",
+      "sha256": "48c7ab025798ccd7fab88249cee584e86cf27db76fe7cb6756910cb3cd2ef04c",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_fel.c": {
+      "source": "tools/dvbridge/dvbridge_fel.c",
+      "sha256": "c61bd7a7f2f7dba5b134ef27c15ea6fc959e5489959ba25cc0440037e41b6b28",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9993-fel-presentation-pairing.patch"
+      ]
+    },
+    "src/dvbridge_fel.h": {
+      "source": "tools/dvbridge/dvbridge_fel.h",
+      "sha256": "1d6983253efe4341e9068cfebb9af85ff872b9df37c3dc039fecef4bcd5ba7ad",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9993-fel-presentation-pairing.patch"
+      ]
+    },
+    "src/dvbridge_fel_seek.h": {
+      "source": "tools/dvbridge/dvbridge_fel_seek.h",
+      "sha256": "312c117bf0890f2d4cbdd278497b689687ae97af2c43ab8e9a81f2dbb882be19",
+      "patches": [
+        "patches/kodi/kodi-9993-fel-presentation-pairing.patch"
+      ]
+    },
+    "src/dvbridge_gl_frame.c": {
+      "source": "tools/dvbridge/dvbridge_gl_frame.c",
+      "sha256": "80d270152ba397a8ba2c17e7f4168188f4f0a883f1bd5eba6b42c882356b5a7d",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_gl_frame.h": {
+      "source": "tools/dvbridge/dvbridge_gl_frame.h",
+      "sha256": "fc5751ced640709c761bf9db3fea70be0bac909a97742c02f40ac4ef589e17a8",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_gl_pack.c": {
+      "source": "tools/dvbridge/dvbridge_gl_pack.c",
+      "sha256": "afa8edda927f106184fbb76748e4f6ad243837f332c64b9a14932a372d0d3dec",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_gl_pack.h": {
+      "source": "tools/dvbridge/dvbridge_gl_pack.h",
+      "sha256": "5e77b914f05c81a0f7096359596d9bf30332c4134df51781943e3caa7bbf5805",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_metadata.h": {
+      "source": "tools/dvbridge/dvbridge_metadata.h",
+      "sha256": "fee312586d3ea1b196733327c9c9137ea0d2fe17677b913ec70ba6ef26c2ac9f",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_metadata_bounds.h": {
+      "source": "tools/dvbridge/dvbridge_metadata_bounds.h",
+      "sha256": "445b9be0a4634faf57f33efa866133061e7f3eee98f8a650224383de48cbad25",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/dvbridge_placebo.c": {
+      "source": "tools/dvbridge/dvbridge_placebo.c",
+      "sha256": "9ec9523236fe3166f323c0fbc9a267f03df0f0b63bd8458610449dd00da2e65d",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9996-output-modes-and-info.patch"
+      ]
+    },
+    "src/dvbridge_placebo.h": {
+      "source": "tools/dvbridge/dvbridge_placebo.h",
+      "sha256": "84d16c31d239b947131a93966b0f206252bb782c70487461c8f27e8317e9dcf3",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9996-output-modes-and-info.patch"
+      ]
+    },
+    "src/dvbridge_render.c": {
+      "source": "tools/dvbridge/dvbridge_render.c",
+      "sha256": "0c8fc17e178eeaba6c53a9712ebff08844b89d61fc8408c9d2c87c98b336f1f8",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9996-output-modes-and-info.patch"
+      ]
+    },
+    "src/dvbridge_render.h": {
+      "source": "tools/dvbridge/dvbridge_render.h",
+      "sha256": "e1b22138604d9c28275538203793c0a064f3f555bdb7ab82c7b601b9878cae8b",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch",
+        "patches/kodi/kodi-9996-output-modes-and-info.patch"
+      ]
+    },
+    "src/mpv_dvbridge_cm4.h": {
+      "source": "tools/dvbridge/mpv_dvbridge_cm4.h",
+      "sha256": "f6762808f5d7a5824983d72b0188098f19e86bd2a6db7b997ef63e2d35612661",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/pack_gles300.frag": {
+      "source": "tools/dvbridge/pack_gles300.frag",
+      "sha256": "a846fa69145cb98eef7bfe6d49d47e1680e2a4b566a49b819c18e5fd34a51896",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    },
+    "src/pack_gles300.vert": {
+      "source": "tools/dvbridge/pack_gles300.vert",
+      "sha256": "55662e6ebfd1bdef5539f2aac80db7771b1521b980e52be2f348f6340c148311",
+      "patches": [
+        "patches/kodi/kodi-9990-native-dv.patch"
+      ]
+    }
+  }
+}
