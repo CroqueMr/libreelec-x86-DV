@@ -1,0 +1,324 @@
+diff --git a/addons/resource.language.en_gb/resources/strings.po b/addons/resource.language.en_gb/resources/strings.po
+index 3f9ccd4..0a12594 100644
+--- a/addons/resource.language.en_gb/resources/strings.po
++++ b/addons/resource.language.en_gb/resources/strings.po
+@@ -26794,6 +26794,14 @@ msgctxt "#41340"
+ msgid "Choose a compatible HDMI format"
+ msgstr ""
+ 
++msgctxt "#41341"
++msgid "EDID RGB / YCbCr 4:4:4"
++msgstr ""
++
++msgctxt "#41342"
++msgid "Packed · experimental"
++msgstr ""
++
+ msgctxt "#41300"
+ msgid "EDID target gamut exceeds BT.2020"
+ msgstr ""
+diff --git a/system/settings/settings.xml b/system/settings/settings.xml
+index 2611f4d..25603e5 100755
+--- a/system/settings/settings.xml
++++ b/system/settings/settings.xml
+@@ -113,7 +113,7 @@
+         </setting>
+         <setting id="dvbridge.lldvformatvalue" type="integer" label="41200">
+           <requirement>HAVE_DVBRIDGE</requirement><level>3</level><visible>false</visible>
+-          <default>0</default><constraints><minimum>0</minimum><maximum>7</maximum></constraints>
++          <default>0</default><constraints><minimum>0</minimum><maximum>8</maximum></constraints>
+           <control type="list" format="integer" />
+         </setting>
+         <setting id="dvbridge.outputmode" type="integer" label="40811" help="40815">
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+index 92b9c1e..f3a70b5 100644
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -424,21 +424,27 @@ bool ShowLldvFormatMenu(bool forCircuit)
+     return false;
+ 
+   const bool usableTiming = status.currentTiming || status.availableTiming;
+-  const auto preferred = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, usableTiming);
++  const auto preferred = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), usableTiming);
+   const auto requiresForcing = [&status](LldvFormat format) {
+     return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
+   };
++  const auto preferenceFor = [&status, &requiresForcing](LldvFormat format) {
++    if (requiresForcing(format))
++      return LLDV_FORCE_422_10;
++    if (format == LldvFormat::Y422_12 && status.packed42212)
++      return LLDV_PACKED_422_12;
++    return static_cast<int>(format);
++  };
+   const auto saved = settings->GetInt("dvbridge.lldvformatvalue");
+   dialog->Reset();
+   dialog->SetHeading(strings.Get(41200));
+-  // Estuary fits all formats in its simple list and displays the notes inline.
++  // Estuary displays the format notes inline.
+   const bool estuary = settings->GetString(CSettings::SETTING_LOOKANDFEEL_SKIN) == "skin.estuary";
+   dialog->SetUseDetails(!estuary);
+   dialog->EnableButton(!estuary, 41320);
+ 
+   const int summary = LldvUnavailableLabel(status, saved, true);
+-  const bool chooseFormat = summary && (!LldvUnavailableLabel(status, 0, true) ||
+-      !LldvUnavailableLabel(status, LLDV_FORCE_422_10, true));
++  const bool chooseFormat = summary && LldvCanChooseFormat(status);
+   std::string summaryText = strings.Get(summary ? 41322 : 41321);
+   if (summary)
+     summaryText += '\n' + strings.Get(chooseFormat ? LLDV_CHOOSE_FORMAT_LABEL : summary);
+@@ -466,6 +472,8 @@ bool ShowLldvFormatMenu(bool forCircuit)
+   }
+   else
+     addDetail(41323, strings.Get(40851));
++  if (const unsigned bits = dvbridge_lldv_444_bits(display.sink))
++    addDetail(41341, StringUtils::Format("{}-bit", bits));
+   if (display.status == LldvEdidStatus::Incomplete)
+     addDetail(41330, StringUtils::Format("{} / {} bytes", display.received, display.expected));
+   if (display.peak > 0)
+@@ -479,11 +487,11 @@ bool ShowLldvFormatMenu(bool forCircuit)
+   dialog->SetProperty("CB1.LldvDetails", details);
+   dialog->SetProperty("CB1.LldvDetailLabels", labels);
+   dialog->SetProperty("CB1.LldvDetailValues", values);
+-  for (int i = 0; i <= static_cast<int>(LldvFormat::Y444_12); ++i)
++  for (int i = 0; i <= static_cast<int>(LldvFormat::Y422_12); ++i)
+   {
+     const auto format = static_cast<LldvFormat>(i);
+     const bool forced = requiresForcing(format);
+-    const int reason = LldvUnavailableLabel(status, forced ? LLDV_FORCE_422_10 : i, true);
++    const int reason = LldvUnavailableLabel(status, preferenceFor(format), true);
+     const bool disabled = reason != 0 &&
+         (format != LldvFormat::Auto || forCircuit || status.active != LldvFormat::Auto);
+     const auto label = strings.Get(LldvFormatLabel(format, !estuary && forced));
+@@ -496,6 +504,8 @@ bool ShowLldvFormatMenu(bool forCircuit)
+     else if (i == 0)
+       item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
+           : strings.Get(LldvFormatLabel(preferred, !estuary && requiresForcing(preferred))));
++    else if (format == LldvFormat::Y422_12 && status.packed42212)
++      item.SetLabel2(strings.Get(41342));
+     else if (format == status.active)
+       item.SetLabel2(strings.Get(status.activeForced && !requiresForcing(format) ? 41218 : 41214));
+     else
+@@ -506,22 +516,25 @@ bool ShowLldvFormatMenu(bool forCircuit)
+         item.SetProperty("CB1.LldvFocusNote", strings.Get(reason == 41210 ? 41332 : reason));
+       else if (format != LldvFormat::Auto && format == status.rejected)
+         item.SetProperty("CB1.LldvFocusNote", item.GetLabel2());
+-      else if (i == 0 || forced)
+-        item.SetProperty("CB1.LldvNote", i == 0 ? item.GetLabel2() : strings.Get(41331));
++      else if (i == 0 || (format == LldvFormat::Y422_12 && status.packed42212))
++        item.SetProperty("CB1.LldvNote", item.GetLabel2());
++      else if (forced)
++        item.SetProperty("CB1.LldvNote", strings.Get(41331));
+     }
+     dialog->Add(item);
+   }
+-  dialog->SetSelected(static_cast<int>(LldvFormatPreference(saved)));
++  const auto selected = LldvFormatPreference(saved);
++  dialog->SetSelected(selected <= LldvFormat::Y422_12 ? static_cast<int>(selected) : 0);
+   dialog->Open();
+   for (const char* key : {"CB1.LldvStatus", "CB1.LldvDetails", "CB1.LldvDetailLabels",
+                           "CB1.LldvDetailValues"})
+     dialog->SetProperty(key, CVariant{});
+   const auto current = ReadLldvConnector();
+   const int choice = dialog->GetSelectedItem();
+-  if (!dialog->IsConfirmed() || choice < 0 || choice > static_cast<int>(LldvFormat::Y444_12))
++  if (!dialog->IsConfirmed() || choice < 0 || choice > static_cast<int>(LldvFormat::Y422_12))
+     return false;
+   const auto format = static_cast<LldvFormat>(choice);
+-  const int preference = requiresForcing(format) ? LLDV_FORCE_422_10 : choice;
++  const int preference = preferenceFor(format);
+   if ((current.connectorId != status.connectorId || current.edidGeneration != status.edidGeneration) ||
+       ((format != LldvFormat::Auto || forCircuit || current.active != LldvFormat::Auto) &&
+        LldvUnavailableLabel(current, preference, current.active == LldvFormat::Auto)) ||
+diff --git a/xbmc/utils/DVBridgeEdid.h b/xbmc/utils/DVBridgeEdid.h
+index 69ab06b..c919789 100644
+--- a/xbmc/utils/DVBridgeEdid.h
++++ b/xbmc/utils/DVBridgeEdid.h
+@@ -22,6 +22,7 @@ struct dvbridge_sink_caps {
+ 	unsigned int version, offset, length;
+ 	bool legacy_vsif, supports_2160p60, lldv_422;
+ 	unsigned int lldv_444_bits;
++	bool lldv_422_12;
+ };
+ 
+ static inline const char *dvbridge_edid_reason(enum dvbridge_edid_status status)
+@@ -45,6 +46,11 @@ static inline bool dvbridge_lldv_422(struct dvbridge_sink_caps caps)
+ 	return (caps.status == DV_EDID_STANDARD || caps.status == DV_EDID_LLDV_ONLY) && caps.lldv_422;
+ }
+ 
++static inline bool dvbridge_lldv_422_12(struct dvbridge_sink_caps caps)
++{
++	return dvbridge_lldv_422(caps) && caps.lldv_422_12;
++}
++
+ static inline unsigned int dvbridge_lldv_444_bits(struct dvbridge_sink_caps caps)
+ {
+ 	return dvbridge_lldv_422(caps) ? caps.lldv_444_bits : 0;
+@@ -54,7 +60,7 @@ static inline struct dvbridge_sink_caps
+ dvbridge_parse_edid(const unsigned char *edid, size_t size)
+ {
+ 	static const unsigned char magic[8] = {0, 255, 255, 255, 255, 255, 255, 0};
+-	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false, false, 0};
++	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false, false, 0, false};
+ 	unsigned int block, i, blocks, found = 0;
+ 
+ 	if (!edid || !size)
+@@ -146,6 +152,7 @@ dvbridge_parse_edid(const unsigned char *edid, size_t size)
+ 					result.status = DV_EDID_VERSION;
+ 					return result;
+ 				}
++				result.lldv_422_12 = (data[4] & 1) != 0;
+ 				result.status = result.version == 2 && (data[6] & 3) < 2 ?
+ 					DV_EDID_LLDV_ONLY : DV_EDID_STANDARD;
+ 			}
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+index 28e87bb..854b60c 100644
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -172,12 +172,15 @@ enum class LldvFormat { Auto, Y422_10, Y422_12, Rgb10, Rgb12, Y444_10, Y444_12 }
+ enum class LldvReason { Ready, Edid, Display, Driver, Timing };
+ 
+ constexpr int LLDV_FORCE_422_10 = 7; // Saved choice, not an HDMI format or DRM enum.
++constexpr int LLDV_PACKED_422_12 = 8;
+ constexpr int LLDV_CHOOSE_FORMAT_LABEL = 41340;
+ 
+ constexpr LldvFormat LldvFormatPreference(int value)
+ {
+   if (value == LLDV_FORCE_422_10)
+     return LldvFormat::Y422_10;
++  if (value == LLDV_PACKED_422_12)
++    return LldvFormat::Y422_12;
+   return value >= 0 && value <= static_cast<int>(LldvFormat::Y444_12)
+              ? static_cast<LldvFormat>(value) : LldvFormat::Auto;
+ }
+@@ -256,8 +259,16 @@ struct LldvConnectorStatus
+   uint64_t edidGeneration{};
+   LldvFormat rejected{LldvFormat::Auto};
+   bool cta93FractionalOnly{};
++  bool packed42212{};
+ };
+ 
++inline unsigned LldvAutomaticFormats(const LldvConnectorStatus& status)
++{
++  const unsigned formats = status.driverFormats & LLDV_422;
++  // The experimental R615 carrier is an explicit choice, like forced 10-bit.
++  return status.packed42212 ? formats & ~LldvBit(LldvFormat::Y422_12) : formats;
++}
++
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
+                                 bool allowModeSwitch)
+ {
+@@ -267,8 +278,15 @@ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preferenc
+   if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, true);
++    format = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), true);
+   if (format == LldvFormat::Auto) return 41213;
++  if (format == LldvFormat::Y422_12 && status.packed42212)
++  {
++    if (!dvbridge_lldv_422_12(status.sink))
++      return 41210;
++    if (preference != LLDV_PACKED_422_12)
++      return LLDV_CHOOSE_FORMAT_LABEL;
++  }
+   const auto reason = LldvFormatReason(status.sink, format, status.driverFormats, true,
+       preference == LLDV_FORCE_422_10 && status.forced42210);
+   if (reason != LldvReason::Ready) return 41208 + static_cast<int>(reason);
+@@ -277,13 +295,20 @@ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preferenc
+   return 0;
+ }
+ 
++inline bool LldvCanChooseFormat(const LldvConnectorStatus& status)
++{
++  return !LldvUnavailableLabel(status, 0, true) ||
++         !LldvUnavailableLabel(status, LLDV_FORCE_422_10, true) ||
++         !LldvUnavailableLabel(status, LLDV_PACKED_422_12, true);
++}
++
+ inline LldvTransport SelectLldvTransport(const LldvConnectorStatus& status, int preference,
+                                         bool allowModeSwitch = false)
+ {
+   const bool timing = status.currentTiming || (allowModeSwitch && status.availableTiming);
+   auto format = LldvFormatPreference(preference);
+   if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, status.driverFormats & LLDV_422, timing);
++    format = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), timing);
+   if (LldvUnavailableLabel(status, preference, allowModeSwitch) || !(LldvBit(format) & LLDV_422))
+     return {};
+   return {status.connectorId, format,
+@@ -300,6 +325,7 @@ inline const char* LldvCompatibilityReason(const LldvConnectorStatus& status, in
+     case 41210: return "format-not-advertised-by-tv";
+     case 41211: return "format-not-supported-by-driver-or-port";
+     case 41212: return "hdmi-timing-unavailable";
++    case LLDV_CHOOSE_FORMAT_LABEL: return "experimental-format-not-selected";
+     default: return "no-common-format";
+   }
+ }
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+index a674b15..4fd73d5 100644
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1674,13 +1674,16 @@ bool CWinSystemGbm::FlipPlayerLedPage(CDVBridgeState& state,
+       (packed.format != LldvFormat::Y422_10 && packed.format != LldvFormat::Y422_12) ||
+       (packed.rgb10Scanout && (!status.rgb10Scanout || packed.forced)) ||
+       (packed.forced && (packed.format != LldvFormat::Y422_10 || !status.forced42210)) ||
++      (packed.format == LldvFormat::Y422_12 && status.packed42212 &&
++       !dvbridge_lldv_422_12(status.sink)) ||
+       LldvFormatReason(status.sink, packed.format, status.driverFormats,
+                        status.currentTiming, packed.forced) != LldvReason::Ready)
+     return reject();
+ 
+   const char* name = packed.rgb10Scanout ? "YCbCr 4:2:2 10 bits RGB10 lab" :
+       packed.forced ? "YCbCr 4:2:2 10 bits forced" :
+-      packed.format == LldvFormat::Y422_10 ? "YCbCr 4:2:2 10 useful bits" : "YCbCr 4:2:2 12 bits";
++      packed.format == LldvFormat::Y422_10 ? "YCbCr 4:2:2 10 useful bits" :
++      status.packed42212 ? "YCbCr 4:2:2 12 bits packed" : "YCbCr 4:2:2 12 bits";
+   auto* connector = drm->GetConnector();
+   const auto value = connector ? connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", name) :
+                                  std::nullopt;
+@@ -1753,15 +1756,19 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+   {
+     const auto native10 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 useful bits");
+-    const auto native12 =
+-        connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 12 bits");
++    auto output12 = connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 12 bits");
++    if (!output12)
++    {
++      output12 = connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 12 bits packed");
++      status.packed42212 = output12.has_value();
++    }
+     const auto rgb10 = connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 bits RGB10 lab");
+     status.rgb10Scanout = rgb10.has_value();
+     const auto forced10 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 bits forced");
+     if (native10 || rgb10)
+       status.driverFormats |= DVBRIDGE::LldvBit(DVBRIDGE::LldvFormat::Y422_10);
+-    if (native12)
++    if (output12)
+       status.driverFormats |= DVBRIDGE::LldvBit(DVBRIDGE::LldvFormat::Y422_12);
+     status.forced42210 = forced10.has_value();
+     status.cta93FractionalOnly =
+@@ -1793,7 +1800,7 @@ DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
+       status.active = DVBRIDGE::LldvFormat::Y422_10;
+       status.activeRgb10Scanout = active == rgb10;
+     }
+-    else if (active && active == native12)
++    else if (active && active == output12)
+       status.active = DVBRIDGE::LldvFormat::Y422_12;
+     else if (active && active == forced10)
+     {
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index 895947a..832f57f 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1944,8 +1944,7 @@ DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(
+       preferences.lldvFormat, allowModeSwitch);
+   if (allowModeSwitch)
+   {
+-    if (!caps.playerLed && (!DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, 0, true) ||
+-        !DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, DVBRIDGE::LLDV_FORCE_422_10, true)))
++    if (!caps.playerLed && DVBRIDGE::LldvCanChooseFormat(m_dvLldvStatus))
+       caps.lldvUnavailableLabel = DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL;
+     caps.nativeDV = m_dvAvailableNativeDV;
+     caps.hdr10 = m_dvAvailableHDR10;

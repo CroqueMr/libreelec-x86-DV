@@ -1,0 +1,328 @@
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -234,6 +234,7 @@
+   LldvFormat format{LldvFormat::Auto};
+   bool forced{false};
+   uint64_t edidGeneration{};
++  bool rgb10Scanout{false};
+ };
+ 
+ struct LldvConnectorStatus
+@@ -244,6 +245,8 @@
+   LldvFormat active{LldvFormat::Auto};
+   bool forced42210{false};
+   bool activeForced{false};
++  bool rgb10Scanout{false};
++  bool activeRgb10Scanout{false};
+   uint32_t connectorId{0};
+   bool timingCommitted{false};
+   bool availableTiming{false};
+@@ -281,7 +284,8 @@
+   if (LldvUnavailableLabel(status, preference, allowModeSwitch) || !(LldvBit(format) & LLDV_422))
+     return {};
+   return {status.connectorId, format,
+-          LldvRequiresForcing(format, status.driverFormats, status.forced42210), status.edidGeneration};
++          LldvRequiresForcing(format, status.driverFormats, status.forced42210), status.edidGeneration,
++          status.rgb10Scanout && format == LldvFormat::Y422_10};
+ }
+ 
+ inline const char* LldvCompatibilityReason(const LldvConnectorStatus& status, int preference)
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1588,12 +1588,14 @@
+   if (!packed.connectorId || packed.connectorId != status.connectorId ||
+       packed.edidGeneration != status.edidGeneration || status.display.status != LldvEdidStatus::Ready ||
+       (packed.format != LldvFormat::Y422_10 && packed.format != LldvFormat::Y422_12) ||
++      (packed.rgb10Scanout && (!status.rgb10Scanout || packed.forced)) ||
+       (packed.forced && (packed.format != LldvFormat::Y422_10 || !status.forced42210)) ||
+       LldvFormatReason(status.sink, packed.format, status.driverFormats,
+                        status.currentTiming, packed.forced) != LldvReason::Ready)
+     return reject();
+ 
+-  const char* name = packed.forced ? "YCbCr 4:2:2 10 bits forced" :
++  const char* name = packed.rgb10Scanout ? "YCbCr 4:2:2 10 bits RGB10 lab" :
++      packed.forced ? "YCbCr 4:2:2 10 bits forced" :
+       packed.format == LldvFormat::Y422_10 ? "YCbCr 4:2:2 10 useful bits" : "YCbCr 4:2:2 12 bits";
+   auto* connector = drm->GetConnector();
+   const auto value = connector ? connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", name) :
+@@ -1606,11 +1608,16 @@
+                        surface.LockTransactionalBuffer();
+   if (!bo) return reject();
+   const auto format = gbm_bo_get_format(bo);
+-  const bool ready = (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888) &&
++  const bool validFormat = packed.rgb10Scanout ?
++      (format == DRM_FORMAT_XRGB2101010 || format == DRM_FORMAT_ARGB2101010 ||
++       format == DRM_FORMAT_XBGR2101010 || format == DRM_FORMAT_ABGR2101010) :
++      (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888);
++  const bool ready = validFormat &&
+       gbm_bo_get_width(bo) == 3840 && gbm_bo_get_height(bo) == 2160 &&
+-      state.StagePlayerLed(*drm, *value) && StageTransportPreferences();
++      state.StagePlayerLed(*drm, *value, packed.rgb10Scanout ? 10 : 8) && StageTransportPreferences();
+   const bool stable = status.timingCommitted && status.active == packed.format &&
+-                      status.activeForced == packed.forced;
++                      status.activeForced == packed.forced &&
++                      status.activeRgb10Scanout == packed.rgb10Scanout;
+   if (ready)
+   {
+     drm->StageHDR10Plus(std::nullopt, 0);
+@@ -1652,9 +1659,11 @@
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 useful bits");
+     const auto native12 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 12 bits");
++    const auto rgb10 = connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 bits RGB10 lab");
++    status.rgb10Scanout = rgb10.has_value();
+     const auto forced10 =
+         connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", "YCbCr 4:2:2 10 bits forced");
+-    if (native10)
++    if (native10 || rgb10)
+       status.driverFormats |= DVBRIDGE::LldvBit(DVBRIDGE::LldvFormat::Y422_10);
+     if (native12)
+       status.driverFormats |= DVBRIDGE::LldvBit(DVBRIDGE::LldvFormat::Y422_12);
+@@ -1680,8 +1689,11 @@
+     status.timingCommitted = status.currentTiming && atomic && atomic->IsActive() &&
+                              !atomic->HasPendingCB1Page() && atomic->IsSelectedModeCommitted();
+     const auto active = connector->ReadPropertyValue("CB1_LLDV_FORMAT");
+-    if (active && active == native10)
++    if (active && (active == native10 || active == rgb10))
++    {
+       status.active = DVBRIDGE::LldvFormat::Y422_10;
++      status.activeRgb10Scanout = active == rgb10;
++    }
+     else if (active && active == native12)
+       status.active = DVBRIDGE::LldvFormat::Y422_12;
+     else if (active && active == forced10)
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.cpp
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.cpp
+@@ -222,14 +222,14 @@
+   return StageTransport(drm, restore, 0, broadcastRange);
+ }
+ 
+-bool CDVBridgeState::StagePlayerLed(CDRMAtomic& drm, uint64_t format)
++bool CDVBridgeState::StagePlayerLed(CDRMAtomic& drm, uint64_t format, uint64_t bpc)
+ {
+   return format && m_backend != Backend::NONE && Before("CB1_LLDV_FORMAT") &&
+-         StageTransport(drm, false, format);
++         StageTransport(drm, false, format, {}, bpc);
+ }
+ 
+ bool CDVBridgeState::StageTransport(CDRMAtomic& drm, bool restore, uint64_t playerLedFormat,
+-                                   std::optional<uint64_t> broadcastRange)
++                                   std::optional<uint64_t> broadcastRange, uint64_t playerLedBpc)
+ {
+   if (!Captured() || m_owner != &drm || m_changes.front().object != drm.GetConnector())
+     return false;
+@@ -241,6 +241,8 @@
+       value = *broadcastRange;
+     if (playerLedFormat && change.name == "CB1_LLDV_FORMAT")
+       value = playerLedFormat;
++    else if (playerLedFormat && change.name == "max bpc")
++      value = playerLedBpc;
+     else if (playerLedFormat && (change.name == "DVBRIDGE_DV_STANDARD_LAB" ||
+                                 change.name == "NV_HDMI_VSIF_METADATA"))
+       value = 0;
+--- a/xbmc/windowing/gbm/drm/DVBridgeState.h
++++ b/xbmc/windowing/gbm/drm/DVBridgeState.h
+@@ -19,7 +19,7 @@
+   std::optional<uint64_t> Before(const char* name) const;
+   bool Stage(CDRMAtomic&, bool restore, std::optional<uint64_t> broadcastRange = {});
+   bool CapturePlayerLed(CDRMAtomic&);
+-  bool StagePlayerLed(CDRMAtomic&, uint64_t format);
++  bool StagePlayerLed(CDRMAtomic&, uint64_t format, uint64_t bpc);
+   void Restored() { m_changes.clear(); m_owner = nullptr; m_backend = Backend::NONE; }
+   bool Captured() const { return !m_changes.empty(); }
+   Backend CapturedBackend() const { return m_backend; }
+@@ -38,7 +38,7 @@
+             bool required, bool blob, const char* enumName);
+   bool CaptureTransport(CDRMAtomic&, uint64_t ownVsif, bool legacyVsif, bool playerLed);
+   bool StageTransport(CDRMAtomic&, bool restore, uint64_t playerLedFormat,
+-                      std::optional<uint64_t> broadcastRange = {});
++                      std::optional<uint64_t> broadcastRange = {}, uint64_t playerLedBpc = 8);
+   std::vector<Change> m_changes;
+   CDRMAtomic* m_owner = nullptr;
+   Backend m_backend = Backend::NONE;
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -818,6 +818,7 @@
+   CDVBridgeGLES::Submission submission;
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   if (drm && transport.connectorId && transport.edidGeneration == m_dvSelection.lldvEdidGeneration &&
++      transport.rgb10Scanout == m_dvSelection.lldvRgb10Scanout &&
+       m_dvBridge->PackPlayerLed(transport))
+   {
+     submission = m_dvBridge->CaptureSubmission();
+@@ -825,7 +826,8 @@
+     // Format changes always commit synchronously. Once the link is stable,
+     // use the same acquire/retire fences as the other CB1 circuits.
+     const bool asynchronous = status.timingCommitted && status.active == transport.format &&
+-        status.activeForced == transport.forced && !drm->HasPendingRequest() &&
++        status.activeForced == transport.forced && status.activeRgb10Scanout == transport.rgb10Scanout &&
++        !drm->HasPendingRequest() &&
+         CreateCB1GPUFence(submission);
+     if (m_eglContext.TrySwapBuffers())
+     {
+@@ -1551,8 +1553,9 @@
+ int CWinSystemGbmGLESContext::VideoOutputBitDepth(const VideoPicture* picture) const
+ {
+   const auto selection = SelectedDVOutput(picture);
+-  return (selection.route == DVBRIDGE::OutputRoute::NativeDV ||
+-          selection.route == DVBRIDGE::OutputRoute::PlayerLed) ? 8 :
++  if (selection.route == DVBRIDGE::OutputRoute::PlayerLed)
++    return selection.lldvRgb10Scanout ? 10 : 8;
++  return selection.route == DVBRIDGE::OutputRoute::NativeDV ? 8 :
+       selection.route == DVBRIDGE::OutputRoute::HDR10 ? 10 :
+       selection.route == DVBRIDGE::OutputRoute::SDR ? 8 :
+       CWinSystemGbmEGLContext::VideoOutputBitDepth(picture);
+@@ -1770,6 +1773,8 @@
+       preferences.lldvFormat, allowModeSwitch).connectorId != 0;
+   caps.lldvDisplay = m_dvLldvStatus.display;
+   caps.lldvEdidGeneration = m_dvLldvStatus.edidGeneration;
++  caps.lldvRgb10Scanout = DVBRIDGE::LldvFormatPreference(preferences.lldvFormat) !=
++      DVBRIDGE::LldvFormat::Y422_12 && m_dvLldvStatus.rgb10Scanout;
+   caps.lldvUnavailableLabel = DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus,
+       preferences.lldvFormat, allowModeSwitch);
+   if (allowModeSwitch)
+@@ -2426,7 +2431,9 @@
+   const auto selected = m_DRM->GetSelectedMode();
+   if (!selected || m_nWidth != selected->hdisplay || m_nHeight != selected->vdisplay)
+     return failure("output-format", "drawable-size");
+-  if (sdr ? GetOutputBitDepth() < 8 : hdr10 ? GetOutputBitDepth() < 10 : GetOutputBitDepth() != 8)
++  const bool rgb10PlayerLed = playerLed && m_dvSelection.lldvRgb10Scanout;
++  if (sdr ? GetOutputBitDepth() < 8 : hdr10 ? GetOutputBitDepth() < 10 :
++      GetOutputBitDepth() != (rgb10PlayerLed ? 10 : 8))
+     return failure("output-format", "drawable-depth");
+   if (m_renderableType != EGL_OPENGL_ES3_BIT) return failure("output-format", "egl-renderable");
+   if (m_dvBridge && m_dvConfiguredOutput == m_dvSelection.policy.mode &&
+@@ -2579,7 +2586,7 @@
+     const bool requested = DVBridgeRequested(picture);
+     const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 ||
+         m_dvSelection.route == DVBRIDGE::OutputRoute::SDR;
+-    if (requested && m_dvBridge &&
++    if (requested && m_dvBridge && playerLed == wasPlayerLed &&
+         !m_dvBridge->RebindOutputSurface(hdr10, m_dvSelection.route == DVBRIDGE::OutputRoute::SDR,
+                                          HDR10Framebuffer()))
+     {
+@@ -2665,7 +2672,8 @@
+   if (HasPendingDVOutputSurface() &&
+       (m_dvPendingStream != binding.stream || m_dvPendingPolicy != preferences.revision ||
+        m_dvSelection.route != selection.route || m_dvSelection.policy.mode != selection.policy.mode ||
+-       m_dvSelection.lldvEdidGeneration != selection.lldvEdidGeneration))
++       m_dvSelection.lldvEdidGeneration != selection.lldvEdidGeneration ||
++       m_dvSelection.lldvRgb10Scanout != selection.lldvRgb10Scanout))
+   {
+     // A pending drawable and renderer belong to their original target. Retire
+     // and unwind that transaction before selecting any successor, even at the
+@@ -2724,12 +2732,14 @@
+       m_dvProfileLoggedStream = binding.stream;
+     }
+   }
+-  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring &&
++  const bool matchedPlayerLedDepth = m_dvSelection.route != DVBRIDGE::OutputRoute::PlayerLed ||
++      GetOutputBitDepth() == (m_dvSelection.lldvRgb10Scanout ? 10 : 8);
++  if (m_dvConfiguredOutput == m_dvSelection.policy.mode && !m_dvOutputRetiring && matchedPlayerLedDepth &&
+       (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla || m_dvState.Captured() || m_hdrConversion))
+     return m_dvSelection.route != DVBRIDGE::OutputRoute::SDR ||
+         SetGuiCompositing(AVCOL_TRC_GAMMA22);
+   const bool requested = DVBridgeRequested(&picture);
+-  if (requested && m_dvBridge && !HasPendingDVOutputSurface() &&
++  if (requested && m_dvBridge && !HasPendingDVOutputSurface() && matchedPlayerLedDepth &&
+       (m_dvSelection.route == DVBRIDGE::OutputRoute::PlayerLed) == m_dvBridge->PlayerLed() &&
+       (m_dvState.Captured() || m_hdrConversion) &&
+       (m_dvSelection.route == DVBRIDGE::OutputRoute::SDR) == m_sdrConversion &&
+@@ -2828,6 +2838,10 @@
+   }
+   // Ordinary restoration may retain a 10-bit drawable without CB1 processing.
+   m_pascalHDRActive = m_priorPascalHDRActive;
++  const bool discardedRenderer = m_dvBridge && m_dvPriorConfiguredOutput &&
++      m_dvBridge->PlayerLed() != (*m_dvPriorConfiguredOutput == DVBRIDGE_MODE_PLAYER_LED);
++  if (discardedRenderer)
++    m_dvBridge.reset(); // The rejected renderer is retired and cannot own the restored surface.
+   if (m_dvBridge && m_dvPriorConfiguredOutput &&
+       !m_dvBridge->RebindOutputSurface(m_dvPriorHDRConversion, m_dvPriorSDRConversion,
+                                        HDR10Framebuffer()))
+@@ -2838,7 +2852,7 @@
+   m_hdrConversion = m_dvPriorHDRConversion;
+   m_sdrConversion = m_dvPriorSDRConversion;
+   m_hdr10Signal.reset();
+-  m_dvConfiguredOutput = m_dvPriorConfiguredOutput;
++  m_dvConfiguredOutput = discardedRenderer ? std::nullopt : m_dvPriorConfiguredOutput;
+   const bool guiReady = ConfigureGuiCompositing(m_dvPriorGuiCompositing ?
+       (m_dvPriorSDRConversion ? AVCOL_TRC_GAMMA22 : AVCOL_TRC_SMPTE2084) : 0,
+       m_dvPriorGuiSDRGamma);
+@@ -3034,7 +3048,8 @@
+   m_dvNativeGui = false;
+   const auto policy = m_dvSelection.policy;
+   const bool allowAsync = CB1AsyncAvailable() && !capturing;
+-  m_dvBridge->EnablePlayerLedCpu(m_dvBridge->PlayerLed() && allowAsync && overlayFree &&
++  m_dvBridge->EnablePlayerLedCpu(m_dvBridge->PlayerLed() && GetOutputBitDepth() == 8 &&
++      allowAsync && overlayFree &&
+       enhancement && player && player->GetPlaySpeed() == 1 && m_GBM ?
+       m_GBM->GetDevice().Get() : nullptr);
+ #ifdef CB1_HAS_HDR10_AI
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h
+@@ -16,6 +16,7 @@
+   OutputReason reason{OutputReason::None};
+   int lldvFormat{};
+   uint64_t lldvEdidGeneration{};
++  bool lldvRgb10Scanout{};
+ };
+ 
+ inline OutputSelection SelectOutput(const OutputPreferences& preferences,
+@@ -84,6 +85,7 @@
+       result.policy.lldv_edid_version = display.sink.version;
+       std::copy(display.primaries.begin(), display.primaries.end(), result.policy.lldv_primaries);
+       result.lldvEdidGeneration = caps.lldvEdidGeneration;
++      result.lldvRgb10Scanout = caps.lldvRgb10Scanout;
+     }
+     result.lldvFormat = preferences.lldvFormat;
+     return result;
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlaybackInfo.h
+@@ -28,6 +28,7 @@
+   bool hdr10plus{}, playerLed{};
+   LldvDisplay lldvDisplay;
+   uint64_t lldvEdidGeneration{};
++  bool lldvRgb10Scanout{};
+   int lldvUnavailableLabel{41280};
+   uint64_t hdr10MaxBpc{}; // Zero means the HDMI ceiling is unknown.
+ 
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1602,7 +1602,8 @@
+   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE &&
+       ((sdr && hdr10 && red >= 8 && green >= 8 && blue >= 8 && red <= 16 && green <= 16 && blue <= 16) ||
+        (!sdr && hdr10 && red >= 10 && green >= 10 && blue >= 10) ||
+-       (!sdr && !hdr10 && red == 8 && green == 8 && blue == 8)) &&
++       (!sdr && !hdr10 && red == green && green == blue &&
++        (red == 8 || (m_playerLed && red == 10)))) &&
+       samples <= 1 && encoding == GL_LINEAR)
+     candidate = pl_opengl_wrap(m_gl->gpu, &output);
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+@@ -2837,6 +2838,17 @@
+        transport.format != DVBRIDGE::LldvFormat::Y422_12))
+     return Failure("player-led-pack-target");
+ 
++  if (transport.rgb10Scanout)
++  {
++    m_packed = m_outputBits == 10 && dvbridge_resolve_player_led_rgb10(
++        m_renderer, &m_playerLedPolicy, m_playerLedPicture, m_scanout, true) &&
++        m_context->FenceLastUse();
++    if (!m_packed) return Failure("player-led-rgb10");
++    m_playerLedTransport = transport;
++    m_submission = {m_pendingIdentity,m_scanout,0,++m_submissionSequence,m_asyncEligible};
++    return true;
++  }
++
+   const auto gpu = m_gl->gpu;
+   const int w = m_scanout->params.w, h = m_scanout->params.h;
+   if (!m_playerLedCarrier || m_playerLedCarrier->params.w != w || m_playerLedCarrier->params.h != h)
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVPlayerLedOutput.h
+@@ -22,6 +22,7 @@
+       connector.display.status != LldvEdidStatus::Ready ||
+       !connector.timingCommitted || packed.format != format ||
+       packed.forced != connector.activeForced ||
++      packed.rgb10Scanout != connector.activeRgb10Scanout ||
+       plan.status == DVBRIDGE_CREATIVE_INVALID || plan.status == DVBRIDGE_CREATIVE_UNSUPPORTED ||
+       (format != LldvFormat::Y422_10 && format != LldvFormat::Y422_12) ||
+       (connector.activeForced && format != LldvFormat::Y422_10) ||

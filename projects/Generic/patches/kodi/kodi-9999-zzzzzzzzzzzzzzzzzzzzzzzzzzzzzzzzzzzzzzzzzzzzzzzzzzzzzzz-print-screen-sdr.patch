@@ -1,0 +1,342 @@
+--- a/xbmc/rendering/capture/CaptureReadback.h
++++ b/xbmc/rendering/capture/CaptureReadback.h
+@@ -33,6 +33,7 @@
+   //! signed linesize; negative when the rows are bottom-up
+   int stride{0};
+   AVPixelFormat format{AV_PIX_FMT_NONE};
++  bool colorEncodingVerified{true};
+ };
+ 
+ //! Read a width x height region of the bound read framebuffer at (x, y) in GL
+--- a/xbmc/utils/IScreenshotSurface.h
++++ b/xbmc/utils/IScreenshotSurface.h
+@@ -38,6 +38,7 @@
+   int GetStride() const { return m_stride; }
+   //! source coding of the delivered bytes, handed to the consumer's swscale
+   AVPixelFormat GetFormat() const { return m_format; }
++  bool IsColorEncodingVerified() const { return m_colorEncodingVerified; }
+   unsigned char* GetBuffer() const { return m_buffer; }
+ 
+   //! \brief Transfer buffer ownership to the caller.
+@@ -53,5 +54,6 @@
+   int m_height{0};
+   int m_stride{0};
+   AVPixelFormat m_format{AV_PIX_FMT_NONE};
++  bool m_colorEncodingVerified{true};
+   unsigned char* m_buffer{nullptr};
+ };
+--- a/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
++++ b/xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp
+@@ -60,6 +60,7 @@
+   m_height = static_cast<int>(buffer.height);
+   m_stride = buffer.stride;
+   m_format = buffer.format;
++  m_colorEncodingVerified = buffer.colorEncodingVerified;
+   m_buffer = reinterpret_cast<unsigned char*>(buffer.pixels.release());
+   return m_buffer != nullptr;
+ }
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -2639,6 +2639,9 @@
+     pixels.stride=-int(pixels.width*8);
+     pixels.format=AV_PIX_FMT_RGBA64LE;
+   }
++  // The LLDV intermediate is display-linear and a converted IPT carrier
++  // cannot be decoded with the source matrices. Neither is verified PQ RGB.
++  pixels.colorEncodingVerified = sdr || (master ? UsesMasterSourceCarrier() : m_hdr10 && !m_playerLed);
+   out=std::move(pixels);
+   return true;
+ }
+--- a/xbmc/rendering/capture/CaptureTypes.h
++++ b/xbmc/rendering/capture/CaptureTypes.h
+@@ -79,6 +79,7 @@
+   //! source coding of the bytes, handed straight to swscale by the consumer
+   AVPixelFormat format{AV_PIX_FMT_NONE};
+   ImageColorMetadata color;
++  bool colorEncodingVerified{true};
+   //! which tap produced this result; stamped at delivery so a BOTH consumer
+   //! knows whether it holds the video-only or the composite capture
+   CaptureContent content{CaptureContent::COMPOSITE};
+--- a/xbmc/application/Application.cpp
++++ b/xbmc/application/Application.cpp
+@@ -880,6 +880,7 @@
+   result.height = static_cast<unsigned int>(surface->GetHeight());
+   result.stride = surface->GetStride();
+   result.format = surface->GetFormat();
++  result.colorEncodingVerified = surface->IsColorEncodingVerified();
+   result.color = GetOutputColorMetadata(*winSystem);
+   result.content = CaptureContent::COMPOSITE; // this tap is the composite half
+ 
+--- a/xbmc/rendering/capture/CaptureConvert.h
++++ b/xbmc/rendering/capture/CaptureConvert.h
+@@ -38,6 +38,10 @@
+                    unsigned int height,
+                    uint8_t* buffer);
+ 
++//! Convert a verified PQ or HLG composite to a full-range sRGB image at native size.
++//! Preserve deep readbacks at 16 bits and fail if color management is unavailable.
++bool CaptureToDisplaySDR(const CaptureResult& result, CaptureResult& sdr);
++
+ } // namespace CAPTURE
+ } // namespace RENDERING
+ } // namespace KODI
+--- a/xbmc/rendering/capture/CaptureConvert.cpp
++++ b/xbmc/rendering/capture/CaptureConvert.cpp
+@@ -92,8 +92,10 @@
+   const int srcStride[] = {result.stride, 0, 0, 0};
+   uint8_t* dst[] = {out.data(), nullptr, nullptr, nullptr};
+   const int dstStride[] = {stride, 0, 0, 0};
+-  sws_scale(context, src, srcStride, 0, static_cast<int>(result.height), dst, dstStride);
++  const int rows = sws_scale(context, src, srcStride, 0, static_cast<int>(result.height), dst, dstStride);
+   sws_freeContext(context);
++  if (rows != static_cast<int>(result.height))
++    return false;
+ 
+   // 16..235 scaled by 257 to 16-bit -> full 0..65535, alpha left alone
+   constexpr int64_t lo = 16 * 257;
+@@ -116,17 +118,24 @@
+                          const uint8_t* src0,
+                          unsigned int width,
+                          unsigned int height,
+-                         uint8_t* buffer)
++                         uint8_t* buffer,
++                         AVPixelFormat destination = AV_PIX_FMT_BGRA,
++                         bool displaySDR = false)
+ {
+   std::vector<uint8_t> expanded;
+   const uint8_t* srcData = src0;
+   AVPixelFormat srcFormat = result.format;
+   int srcStride = result.stride;
+-  if (result.color.range == AVCOL_RANGE_MPEG && ExpandRange(result, src0, expanded))
+-  {
+-    srcData = expanded.data();
+-    srcFormat = AV_PIX_FMT_RGBA64LE;
+-    srcStride = static_cast<int>(result.width * 8);
++  if (result.color.range == AVCOL_RANGE_MPEG)
++  {
++    if (ExpandRange(result, src0, expanded))
++    {
++      srcData = expanded.data();
++      srcFormat = AV_PIX_FMT_RGBA64LE;
++      srcStride = static_cast<int>(result.width * 8);
++    }
++    else if (displaySDR)
++      return false;
+   }
+ 
+   bool converted = false;
+@@ -148,12 +157,28 @@
+       srcFrame->color_primaries = static_cast<AVColorPrimaries>(result.color.primaries);
+       srcFrame->color_trc = static_cast<AVColorTransferCharacteristic>(result.color.transfer);
+ 
+-      // the source peak: without it swscale assumes the full PQ range and crushes
+-      if (result.hasDisplayMetadata)
++      bool colorMetadataReady = true;
++      const auto& mastering = result.displayMetadata;
++      // Match the sRGB reference display with a stable nominal PQ source peak
++      // when mastering is unknown. Overlays must not change movie exposure.
++      const bool nominalPQ = displaySDR && srcFrame->color_trc == AVCOL_TRC_SMPTE2084 &&
++          (!result.hasDisplayMetadata || !mastering.has_luminance ||
++           mastering.max_luminance.num <= 0 || mastering.max_luminance.den <= 0);
++      if (result.hasDisplayMetadata || nominalPQ)
+       {
+-        AVMasteringDisplayMetadata* mdm = av_mastering_display_metadata_create_side_data(srcFrame);
++        auto* mdm = av_mastering_display_metadata_create_side_data(srcFrame);
+         if (mdm)
+-          *mdm = result.displayMetadata;
++        {
++          *mdm = mastering;
++          if (nominalPQ)
++          {
++            mdm->has_luminance = 1;
++            mdm->min_luminance = {0, 1};
++            mdm->max_luminance = {1000, 1};
++          }
++        }
++        else if (displaySDR)
++          colorMetadataReady = false;
+       }
+       if (result.hasLightMetadata)
+       {
+@@ -164,21 +189,34 @@
+ 
+       dstFrame->width = static_cast<int>(width);
+       dstFrame->height = static_cast<int>(height);
+-      dstFrame->format = AV_PIX_FMT_BGRA;
++      dstFrame->format = destination;
+       dstFrame->data[0] = buffer;
+-      dstFrame->linesize[0] = static_cast<int>(width * 4);
++      dstFrame->linesize[0] = static_cast<int>(width * (destination == AV_PIX_FMT_RGBA64LE ? 8 : 4));
+       dstFrame->colorspace = AVCOL_SPC_RGB;
+       dstFrame->color_range = AVCOL_RANGE_JPEG;
+       dstFrame->color_primaries = AVCOL_PRI_BT709;
+-      dstFrame->color_trc = AVCOL_TRC_BT709;
++      dstFrame->color_trc = displaySDR ? AVCOL_TRC_IEC61966_2_1 : AVCOL_TRC_BT709;
++      if (displaySDR)
++      {
++        // sRGB reference display.
++        auto* targetPeak = av_mastering_display_metadata_create_side_data(dstFrame);
++        if (targetPeak)
++        {
++          targetPeak->has_luminance = 1;
++          targetPeak->min_luminance = {0, 1};
++          targetPeak->max_luminance = {100, 1};
++        }
++        else
++          colorMetadataReady = false;
++      }
+ 
+       sws->flags = SWS_BILINEAR;
+       // stated explicitly: the default intent is relative colorimetric, which clips
+       sws->intent = SWS_INTENT_PERCEPTUAL;
+ 
+-      const int res = sws_scale_frame(sws, dstFrame, srcFrame);
++      const int res = colorMetadataReady ? sws_scale_frame(sws, dstFrame, srcFrame) : AVERROR(ENOMEM);
+       if (res < 0)
+-        CLog::LogF(LOGWARNING, "sws_scale_frame failed ({}), using legacy conversion", res);
++        CLog::LogF(LOGWARNING, "capture color conversion failed ({})", res);
+       else
+         converted = true;
+     }
+@@ -188,6 +226,8 @@
+   }
+ #endif
+ 
++  if (!converted && displaySDR)
++    return false; // Never encode the original HDR codes as sRGB.
+   if (!converted)
+   {
+     // pre-CMS swscale cannot tonemap: plain-convert so the image at least has
+@@ -251,6 +291,31 @@
+   return RawToBGRA8(result, src0, width, height, buffer);
+ }
+ 
++bool CaptureToDisplaySDR(const CaptureResult& result, CaptureResult& sdr)
++{
++  if (!result.pixels || !result.width || !result.height || !result.colorEncodingVerified)
++    return false;
++  CScopedCapturePixels lock(*result.pixels);
++  if (!lock.data())
++    return false;
++
++  const bool deep = CaptureIsDeep(result.format);
++  const AVPixelFormat format = deep ? AV_PIX_FMT_RGBA64LE : AV_PIX_FMT_BGRA;
++  const auto stride = result.width * (deep ? 8 : 4);
++  auto pixels = std::make_unique<uint8_t[]>(static_cast<size_t>(stride) * result.height);
++  const auto* src0 = CaptureSrcRow0(lock.data(), result.stride, result.height);
++  if (!ConvertColorManaged(result, src0, result.width, result.height, pixels.get(), format, true))
++    return false;
++
++  sdr.width = result.width;
++  sdr.height = result.height;
++  sdr.stride = static_cast<int>(stride);
++  sdr.format = format;
++  sdr.color = {AVCOL_PRI_BT709, AVCOL_TRC_IEC61966_2_1, AVCOL_RANGE_JPEG};
++  sdr.pixels = std::make_shared<CHeapCapturePixels>(std::move(pixels));
++  return true;
++}
++
+ } // namespace CAPTURE
+ } // namespace RENDERING
+ } // namespace KODI
+--- a/xbmc/utils/Screenshot.cpp
++++ b/xbmc/utils/Screenshot.cpp
+@@ -13,6 +13,7 @@
+ #include "Util.h"
+ #include "guilib/TextureFormats.h"
+ #include "pictures/Picture.h"
++#include "rendering/capture/CaptureConvert.h"
+ #include "rendering/capture/CaptureHandle.h"
+ #include "rendering/capture/CapturePixels.h"
+ #include "rendering/capture/CaptureService.h"
+@@ -65,16 +66,29 @@
+ // Encode a delivered capture to the destination file; runs on the capture
+ // service's callback worker.
+ void WriteCapture(const KODI::RENDERING::CAPTURE::CaptureResult& result,
+-                  const std::string& filename)
+-{
+-  using namespace KODI::RENDERING::CAPTURE;
+-  if (!result.pixels)
++                  const std::string& filename,
++                  bool displaySDR)
++{
++  using namespace KODI::RENDERING::CAPTURE;
++  CaptureResult converted;
++  const bool hdr = result.color.transfer == AVCOL_TRC_SMPTE2084 ||
++                   result.color.transfer == AVCOL_TRC_ARIB_STD_B67;
++  if (displaySDR && result.content == CaptureContent::COMPOSITE && hdr && result.colorEncodingVerified)
++  {
++    if (!CaptureToDisplaySDR(result, converted))
++    {
++      CLog::Log(LOGERROR, "Unable to convert screenshot {} to sRGB", CURL::GetRedacted(filename));
++      return;
++    }
++  }
++  const auto& image = converted.pixels ? converted : result;
++  if (!image.pixels)
+   {
+     CLog::Log(LOGERROR, "Unable to write screenshot {}: no pixels", CURL::GetRedacted(filename));
+     return;
+   }
+ 
+-  CScopedCapturePixels lock(*result.pixels);
++  CScopedCapturePixels lock(*image.pixels);
+   if (!lock.data())
+   {
+     CLog::Log(LOGERROR, "Unable to write screenshot {}: pixel lock failed",
+@@ -83,12 +97,12 @@
+   }
+ 
+   // OPAQUE: the encoder drops the framebuffer alpha through an X-variant source
+-  const unsigned int format = CaptureXbFormat(result.format) | XB_FMT_OPAQUE;
+-  const uint8_t* src0 = CaptureSrcRow0(lock.data(), result.stride, result.height);
+-
+-  if (!CPicture::CreateThumbnailFromSurface(src0, result.width, result.height,
+-                                            static_cast<unsigned int>(result.stride), filename,
+-                                            format, result.color))
++  const unsigned int format = CaptureXbFormat(image.format) | XB_FMT_OPAQUE;
++  const uint8_t* src0 = CaptureSrcRow0(lock.data(), image.stride, image.height);
++
++  if (!CPicture::CreateThumbnailFromSurface(src0, image.width, image.height,
++                                            static_cast<unsigned int>(image.stride), filename,
++                                            format, image.color))
+     CLog::Log(LOGERROR, "Unable to write screenshot {}", CURL::GetRedacted(filename));
+ }
+ } // namespace
+@@ -107,8 +121,7 @@
+ 
+   CLog::Log(LOGDEBUG, "Saving screenshot {}", CURL::GetRedacted(filename));
+ 
+-  // screenshots are tagged captures whatever their content: native depth
+-  // kept, the display's coding carried as cICP by the writer
++  // The writer maps the standard composite to display SDR after readback.
+   CaptureSpec spec;
+   spec.content = content;
+   spec.format = CaptureFormat::NATIVE;
+@@ -116,7 +129,7 @@
+   // failure dispatches an empty result because some consumers must act on
+   // it (a bookmark still writes its DB row); here WriteCapture declines it
+   auto handle = captureService->Submit(spec, [filename](const CaptureResult& result)
+-                                       { WriteCapture(result, filename); });
++                                       { WriteCapture(result, filename, true); });
+   handle->Detach();
+ }
+ 
+@@ -185,7 +198,7 @@
+                                  return;
+                                }
+                                CLog::Log(LOGDEBUG, "Saving screenshot {}", CURL::GetRedacted(file));
+-                               WriteCapture(result, file);
++                               WriteCapture(result, file, true);
+                              });
+   handle->Detach();
+ }
+@@ -229,7 +242,7 @@
+                                      ? composite->substr(0, composite->length() - 4) + "-video.png"
+                                      : *composite;
+         CLog::Log(LOGDEBUG, "Saving screenshot {}", CURL::GetRedacted(file));
+-        WriteCapture(result, file);
++        WriteCapture(result, file, false);
+       });
+   handle->Detach();
+ }

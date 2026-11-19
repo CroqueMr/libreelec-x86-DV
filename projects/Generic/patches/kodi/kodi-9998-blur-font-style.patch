@@ -1,0 +1,438 @@
+Subject: [PATCH] guilib: add a "blur" font style
+
+A font with <style>blur</style> draws its glyphs blurred: three box blurs
+(close to a gaussian) of each glyph, in a margin, when it is cached. The
+text keeps the sharp font's layout. Skins can hide text that must not be
+read yet, such as an unwatched episode's plot, and still show its shape.
+System.SupportsBlurFont tells a skin that the style is there, so it can
+fall back on another Kodi.
+
+diff --git a/xbmc/GUIInfoManager.cpp b/xbmc/GUIInfoManager.cpp
+index 1f39870..5dbd70c 100644
+--- a/xbmc/GUIInfoManager.cpp
++++ b/xbmc/GUIInfoManager.cpp
+@@ -2052,6 +2052,12 @@ constexpr std::array<InfoMap, 10> weather = {{
+ ///     @skinning_v19 **[New Boolean Condition]** \link  System_SupportsCPUUsage `
+ ///     System.SupportsCPUUsage`\endlink <p>
+ ///   }
++///   \table_row3{   <b>`System.SupportsBlurFont`</b>,
++///                  \anchor System_SupportsBlurFont
++///                  _boolean_,
++///     @return **True** if fonts can take the `blur` style.
++///     <p>
++///   }
+ ///   \table_row3{   <b>`System.SupportedHDRTypes`</b>,
+ ///                  \anchor System_SupportedHDRTypes
+ ///                  _string_,
+@@ -2067,7 +2073,7 @@ constexpr std::array<InfoMap, 10> weather = {{
+ ///     <p>
+ ///   }
+ // clang-format off
+-constexpr std::array<InfoMap, 75> system_labels = {{
++constexpr std::array<InfoMap, 76> system_labels = {{
+     {"hasnetwork",              SYSTEM_ETHERNET_LINK_ACTIVE},
+     {"hasmediadvd",             SYSTEM_MEDIA_DVD},
+     {"hasmediaaudiocd",         SYSTEM_MEDIA_AUDIO_CD},
+@@ -2141,6 +2147,7 @@ constexpr std::array<InfoMap, 75> system_labels = {{
+     {"haspvraddon",             SYSTEM_HAS_PVR_ADDON},
+     {"addonupdatecount",        SYSTEM_ADDON_UPDATE_COUNT},
+     {"supportscpuusage",        SYSTEM_SUPPORTS_CPU_USAGE},
++    {"supportsblurfont",        SYSTEM_SUPPORTS_BLUR_FONT},
+     {"supportedhdrtypes",       SYSTEM_SUPPORTED_HDR_TYPES},
+     {"isscreensaverinhibited",  SYSTEM_IS_SCREENSAVER_INHIBITED},
+ }};
+diff --git a/xbmc/guilib/GUIFont.h b/xbmc/guilib/GUIFont.h
+--- a/xbmc/guilib/GUIFont.h
++++ b/xbmc/guilib/GUIFont.h
+@@ -14,6 +14,7 @@
+ */
+ 
+ #include "utils/ColorUtils.h"
++#include "utils/Geometry.h"
+ 
+ #include <assert.h>
+ #include <math.h>
+@@ -56,6 +57,8 @@
+ constexpr int FONT_STYLE_UPPERCASE = (1 << 3);
+ constexpr int FONT_STYLE_LOWERCASE = (1 << 4);
+ constexpr int FONT_STYLE_CAPITALIZE = (1 << 5);
++//! Glyphs drawn blurred, for text that must not be read yet (spoilers)
++constexpr int FONT_STYLE_BLUR = (1 << 6);
+ constexpr int FONT_STYLE_MASK = 0xFF;
+ constexpr int FONT_STYLES_COUNT = 7;
+ 
+@@ -172,6 +175,7 @@
+   float GetTextHeight(int numLines) const;
+   float GetTextBaseLine() const;
+   float GetLineHeight() const;
++  CPoint GetRenderPadding() const;
+ 
+   //! get font scale factor (rendered height / original height)
+   float GetScaleFactor() const;
+diff --git a/xbmc/guilib/GUIFontManager.cpp b/xbmc/guilib/GUIFontManager.cpp
+index d1334d6..ebae589 100644
+--- a/xbmc/guilib/GUIFontManager.cpp
++++ b/xbmc/guilib/GUIFontManager.cpp
+@@ -194,14 +194,16 @@ CGUIFont* GUIFontManager::LoadTTF(const std::string& strFontName,
+   }
+ 
+   // check if we already have this font file loaded (font object could differ only by color or style)
+-  const std::string fontIdent =
+-      StringUtils::Format("{}_{:f}_{:f}{}", strFilename, newSize, aspect, border ? "_border" : "");
++  // a blurred font caches its own, larger glyphs
++  const bool blur = (iStyle & FONT_STYLE_BLUR) != 0;
++  const std::string fontIdent = StringUtils::Format(
++      "{}_{:f}_{:f}{}{}", strFilename, newSize, aspect, border ? "_border" : "", blur ? "_blur" : "");
+ 
+   CGUIFontTTF* pFontFile = GetFontFile(fontIdent);
+   if (!pFontFile)
+   {
+     pFontFile = CGUIFontTTF::CreateGUIFontTTF(fontIdent);
+-    bool bFontLoaded = pFontFile->Load(strPath, newSize, aspect, 1.0f, border);
++    bool bFontLoaded = pFontFile->Load(strPath, newSize, aspect, 1.0f, border, blur);
+ 
+     if (!bFontLoaded)
+     {
+@@ -237,6 +239,7 @@ CGUIFont* GUIFontManager::LoadTTF(const std::string& strFontName,
+   fontInfo.sourceRes = *sourceRes;
+   fontInfo.preserveAspect = preserveAspect;
+   fontInfo.border = border;
++  fontInfo.blur = blur;
+   m_vecFontInfo.emplace_back(fontInfo);
+ 
+   return pNewFont;
+@@ -295,13 +298,15 @@ void GUIFontManager::ReloadTTFFonts(void)
+     RescaleFontSizeAndAspect(winSystem->GetGfxContext(), &newSize, &aspect, fontInfo.sourceRes,
+                              fontInfo.preserveAspect);
+ 
+-    const std::string fontIdent = StringUtils::Format("{}_{:f}_{:f}{}", strFilename, newSize,
+-                                                      aspect, fontInfo.border ? "_border" : "");
++    const std::string fontIdent =
++        StringUtils::Format("{}_{:f}_{:f}{}{}", strFilename, newSize, aspect,
++                            fontInfo.border ? "_border" : "", fontInfo.blur ? "_blur" : "");
+     CGUIFontTTF* pFontFile = GetFontFile(fontIdent);
+     if (!pFontFile)
+     {
+       pFontFile = CGUIFontTTF::CreateGUIFontTTF(fontIdent);
+-      if (!pFontFile || !pFontFile->Load(strPath, newSize, aspect, 1.0f, fontInfo.border))
++      if (!pFontFile ||
++          !pFontFile->Load(strPath, newSize, aspect, 1.0f, fontInfo.border, fontInfo.blur))
+       {
+         delete pFontFile;
+         // This font could not be re-rasterised, but the rest still can. It
+@@ -633,6 +638,8 @@ void GUIFontManager::GetStyle(const TiXmlNode* fontNode, int& iStyle)
+         iStyle |= FONT_STYLE_CAPITALIZE;
+       else if (i == "lighten")
+         iStyle |= FONT_STYLE_LIGHT;
++      else if (i == "blur")
++        iStyle |= FONT_STYLE_BLUR;
+     }
+   }
+ }
+diff --git a/xbmc/guilib/GUIFontManager.h b/xbmc/guilib/GUIFontManager.h
+index 27e85ff..73894ba 100644
+--- a/xbmc/guilib/GUIFontManager.h
++++ b/xbmc/guilib/GUIFontManager.h
+@@ -45,6 +45,7 @@ struct OrigFontInfo
+   RESOLUTION_INFO sourceRes;
+   bool preserveAspect;
+   bool border;
++  bool blur;
+ };
+ 
+ struct FontMetadata
+diff --git a/xbmc/guilib/GUIFontTTF.cpp b/xbmc/guilib/GUIFontTTF.cpp
+index 4c4cecc..77a28d0 100644
+--- a/xbmc/guilib/GUIFontTTF.cpp
++++ b/xbmc/guilib/GUIFontTTF.cpp
+@@ -259,8 +259,12 @@ void CGUIFontTTF::Clear()
+   m_fontFileInMemory.clear();
+ }
+ 
+-bool CGUIFontTTF::Load(
+-    const std::string& strFilename, float height, float aspect, float lineSpacing, bool border)
++bool CGUIFontTTF::Load(const std::string& strFilename,
++                       float height,
++                       float aspect,
++                       float lineSpacing,
++                       bool border,
++                       bool blur)
+ {
+   // we now know that this object is unique - only the GUIFont objects are non-unique, so no need
+   // for reference tracking these fonts
+@@ -320,6 +324,8 @@ bool CGUIFontTTF::Load(
+   m_cellHeight = cellAscender - cellDescender;
+ 
+   m_height = height;
++  // three box blurs approach a gaussian; its spread follows the font's size
++  m_blurRadius = blur ? std::max(1, MathUtils::round_int(static_cast<double>(height) / 7)) : 0;
+ 
+   m_texture.reset();
+   m_texture = nullptr;
+@@ -732,8 +738,9 @@ float CGUIFontTTF::GetTextWidthInternal(std::span<const character_t> text,
+       // If last character in line, we want to add render width
+       // and not advance distance - this makes sure that italic text isn't
+       // choped on the end (as render width is larger than advance then).
++      // (without a blurred glyph's margin: blurred text breaks into lines as the sharp one)
+       if (std::next(it) == glyphs.end())
+-        width += std::max(c->m_right - c->m_left + c->m_offsetX, c->m_advance);
++        width += std::max(c->m_right - c->m_left + c->m_offsetX - 3 * m_blurRadius, c->m_advance);
+       else if ((ch & 0xffff) == static_cast<character_t>('\t'))
+         width += GetTabSpaceLength();
+       else
+@@ -773,7 +780,9 @@ float CGUIFontTTF::GetLineHeight(float lineSpacing) const
+ 
+ unsigned int CGUIFontTTF::GetTextureLineHeight() const
+ {
+-  return m_cellHeight + SPACING_BETWEEN_CHARACTERS_IN_TEXTURE;
++  // a blurred glyph is larger than its cell: room for its margins in the texture only, the
++  // text's layout (cell, base line, line height) is the sharp font's
++  return m_cellHeight + 6 * m_blurRadius + SPACING_BETWEEN_CHARACTERS_IN_TEXTURE;
+ }
+ 
+ unsigned int CGUIFontTTF::GetMaxFontHeight() const
+@@ -1007,6 +1016,25 @@ bool CGUIFontTTF::CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character*
+   }
+ 
+   FT_BitmapGlyph bitGlyph = (FT_BitmapGlyph)glyph;
++  // FONT_STYLE_BLUR: the glyph's coverage, blurred into a larger bitmap centred on it. FreeType
++  // frees its own buffer with the glyph, so its bitmap points back to it on every return.
++  std::vector<uint8_t> blurred;
++  const FT_Bitmap sharp = bitGlyph->bitmap;
++  auto restoreBitmap = [&]() { bitGlyph->bitmap = sharp; };
++  // (a font with FONT_STYLE_BLUR has its own CGUIFontTTF: its characters carry only bold,
++  // italics and light)
++  if (m_blurRadius > 0 && sharp.width > 0 && sharp.rows > 0 &&
++      sharp.pixel_mode == FT_PIXEL_MODE_GRAY)
++  {
++    const int pad = 3 * m_blurRadius;
++    blurred = BlurGlyph(sharp, m_blurRadius);
++    bitGlyph->bitmap.buffer = blurred.data();
++    bitGlyph->bitmap.width = sharp.width + 2 * pad;
++    bitGlyph->bitmap.rows = sharp.rows + 2 * pad;
++    bitGlyph->bitmap.pitch = static_cast<int>(sharp.width + 2 * pad);
++    bitGlyph->left -= pad;
++    bitGlyph->top += pad;
++  }
+   FT_Bitmap bitmap = bitGlyph->bitmap;
+   bool isEmptyGlyph = (bitmap.width == 0 || bitmap.rows == 0);
+ 
+@@ -1034,6 +1062,7 @@ bool CGUIFontTTF::CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character*
+         {
+           CLog::LogF(LOGDEBUG, "New cache texture is too large ({} > {} pixels long)", newHeight,
+                      m_renderSystem->GetMaxTextureSize());
++          restoreBitmap();
+           FT_Done_Glyph(glyph);
+           return false;
+         }
+@@ -1041,6 +1070,7 @@ bool CGUIFontTTF::CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character*
+         std::unique_ptr<CTexture> newTexture = ReallocTexture(newHeight);
+         if (!newTexture)
+         {
++          restoreBitmap();
+           FT_Done_Glyph(glyph);
+           CLog::LogF(LOGDEBUG, "Failed to allocate new texture of height {}", newHeight);
+           return false;
+@@ -1052,6 +1082,7 @@ bool CGUIFontTTF::CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character*
+ 
+     if (!m_texture)
+     {
++      restoreBitmap();
+       FT_Done_Glyph(glyph);
+       CLog::LogF(LOGDEBUG, "no texture to cache character to");
+       return false;
+@@ -1086,11 +1117,59 @@ bool CGUIFontTTF::CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character*
+   }
+ 
+   // free the glyph
++  restoreBitmap();
+   FT_Done_Glyph(glyph);
+ 
+   return true;
+ }
+ 
++std::vector<uint8_t> CGUIFontTTF::BlurGlyph(const FT_Bitmap& bitmap, int radius)
++{
++  // three box blurs of this radius, horizontal then vertical, in a margin three times as wide
++  const int pad = 3 * radius;
++  const int width = static_cast<int>(bitmap.width) + 2 * pad;
++  const int height = static_cast<int>(bitmap.rows) + 2 * pad;
++  std::vector<float> plane(static_cast<size_t>(width) * height, 0.0f);
++  for (unsigned int y = 0; y < bitmap.rows; y++)
++  {
++    const uint8_t* row = bitmap.buffer + static_cast<ptrdiff_t>(y) * bitmap.pitch;
++    for (unsigned int x = 0; x < bitmap.width; x++)
++      plane[(y + pad) * width + x + pad] = row[x];
++  }
++
++  std::vector<float> line(std::max(width, height));
++  const float span = static_cast<float>(2 * radius + 1);
++  auto pass = [&](int count, int length, int step, int stride) {
++    for (int n = 0; n < count; n++)
++    {
++      float* start = plane.data() + static_cast<ptrdiff_t>(n) * stride;
++      for (int i = 0; i < length; i++)
++        line[i] = start[static_cast<ptrdiff_t>(i) * step];
++      float sum = 0.0f; // the window [i - radius, i + radius], zero outside the line
++      for (int i = 0; i < radius && i < length; i++)
++        sum += line[i];
++      for (int i = 0; i < length; i++)
++      {
++        if (i + radius < length)
++          sum += line[i + radius];
++        if (i - radius - 1 >= 0)
++          sum -= line[i - radius - 1];
++        start[static_cast<ptrdiff_t>(i) * step] = sum / span;
++      }
++    }
++  };
++  for (int i = 0; i < 3; i++)
++  {
++    pass(height, width, 1, width); // each row
++    pass(width, height, width, 1); // each column
++  }
++
++  std::vector<uint8_t> result(plane.size());
++  for (size_t i = 0; i < plane.size(); i++)
++    result[i] = static_cast<uint8_t>(std::min(255.0f, plane[i] + 0.5f));
++  return result;
++}
++
+ void CGUIFontTTF::RenderCharacter(CGraphicContext& context,
+                                   float posX,
+                                   float posY,
+diff --git a/xbmc/guilib/GUIFontTTF.h b/xbmc/guilib/GUIFontTTF.h
+index 38972a5..3d0de15 100644
+--- a/xbmc/guilib/GUIFontTTF.h
++++ b/xbmc/guilib/GUIFontTTF.h
+@@ -93,7 +93,8 @@ public:
+             float height = 20.0f,
+             float aspect = 1.0f,
+             float lineSpacing = 1.0f,
+-            bool border = false);
++            bool border = false,
++            bool blur = false);
+ 
+   void Begin();
+   void End();
+@@ -174,6 +175,8 @@ protected:
+   // Stuff for pre-rendering for speed
+   Character* GetCharacter(character_t letter, FT_UInt glyphIndex);
+   bool CacheCharacter(FT_UInt glyphIndex, uint32_t style, Character* ch);
++  //! The coverage of a FONT_STYLE_BLUR glyph: its own, blurred, in a margin of 3 * radius
++  static std::vector<uint8_t> BlurGlyph(const FT_Bitmap& bitmap, int radius);
+   void RenderCharacter(CGraphicContext& context,
+                        float posX,
+                        float posY,
+@@ -222,6 +225,9 @@ protected:
+   unsigned int m_cellBaseLine{0};
+   unsigned int m_cellHeight{0};
+   unsigned int m_maxFontHeight{0};
++  // FONT_STYLE_BLUR: the box blur's radius, run three times, in pixels; its glyphs grow by
++  // three times it on each side
++  int m_blurRadius{0};
+ 
+   unsigned int m_nestedBeginCount{0}; // speedups
+ 
+diff --git a/xbmc/guilib/guiinfo/GUIInfoLabels.h b/xbmc/guilib/guiinfo/GUIInfoLabels.h
+index 6c7c762..e6dac74 100644
+--- a/xbmc/guilib/guiinfo/GUIInfoLabels.h
++++ b/xbmc/guilib/guiinfo/GUIInfoLabels.h
+@@ -128,7 +128,7 @@ constexpr uint32_t SYSTEM_BUILD_VERSION              = 120;
+ constexpr uint32_t SYSTEM_BUILD_DATE                 = 121;
+ constexpr uint32_t SYSTEM_ETHERNET_LINK_ACTIVE       = 122;
+ constexpr uint32_t SYSTEM_FPS                        = 123;
+-// unused id 124
++constexpr uint32_t SYSTEM_SUPPORTS_BLUR_FONT         = 124;
+ constexpr uint32_t SYSTEM_ALWAYS_TRUE                = 125;   // useful for <visible fade="10" start="hidden">true</visible>, to fade in a control
+ constexpr uint32_t SYSTEM_ALWAYS_FALSE               = 126;   // used for <visible fade="10">false</visible>, to fade out a control (ie not particularly useful!;
+ constexpr uint32_t SYSTEM_MEDIA_DVD                  = 127;
+diff --git a/xbmc/guilib/guiinfo/SystemGUIInfo.cpp b/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
+index 358cf48..1ddcd58 100644
+--- a/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
++++ b/xbmc/guilib/guiinfo/SystemGUIInfo.cpp
+@@ -680,6 +680,9 @@ bool CSystemGUIInfo::GetBool(bool& value,
+     case SYSTEM_SUPPORTS_CPU_USAGE:
+       value = CServiceBroker::GetCPUInfo()->SupportsCPUUsage();
+       return true;
++    case SYSTEM_SUPPORTS_BLUR_FONT: // a skin can fall back where fonts have no blur style
++      value = true;
++      return true;
+     case SYSTEM_GET_BOOL:
+       value = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(info.GetData3());
+       return true;
+diff --git a/xbmc/guilib/GUIFont.cpp b/xbmc/guilib/GUIFont.cpp
+--- a/xbmc/guilib/GUIFont.cpp
++++ b/xbmc/guilib/GUIFont.cpp
+@@ -261,7 +261,9 @@
+   if (alignment & XBFONT_CENTER_Y)
+     y -= m_font->GetLineHeight(m_lineSpacing);
+ 
+-  return !context.SetClipRegion(x, y, width, m_font->GetTextHeight(1, 2) * context.GetGUIScaleY());
++  const CPoint padding = GetRenderPadding();
++  return !context.SetClipRegion(x - padding.x, y - padding.y, width + 2 * padding.x,
++                                m_font->GetTextHeight(1, 2) * context.GetGUIScaleY() + 2 * padding.y);
+ }
+ 
+ float CGUIFont::GetTextWidth(std::span<const character_t> text)
+@@ -313,6 +315,17 @@
+     return 0;
+ 
+   return m_font->GetLineHeight(m_lineSpacing) * winSystem->GetGfxContext().GetGUIScaleY();
++}
++
++CPoint CGUIFont::GetRenderPadding() const
++{
++  CWinSystemBase* const winSystem = CServiceBroker::GetWinSystem();
++  if (!m_font || !winSystem)
++    return {};
++
++  const float padding = 3.0f * m_font->m_blurRadius;
++  const CGraphicContext& context = winSystem->GetGfxContext();
++  return {padding * context.GetGUIScaleX(), padding * context.GetGUIScaleY()};
+ }
+ 
+ float CGUIFont::GetScaleFactor() const
+diff --git a/xbmc/guilib/GUITextBox.h b/xbmc/guilib/GUITextBox.h
+--- a/xbmc/guilib/GUITextBox.h
++++ b/xbmc/guilib/GUITextBox.h
+@@ -61,6 +61,7 @@
+   void UpdateVisibility(const CGUIListItem *item = NULL) override;
+   bool UpdateColors(const CGUIListItem* item) override;
+   void UpdateInfo(const CGUIListItem *item = NULL) override;
++  CRect CalcRenderRegion() const override;
+   void UpdatePageControl();
+   void ScrollToOffset(int offset, bool autoScroll = false);
+   unsigned int GetRows() const;
+diff --git a/xbmc/guilib/GUITextBox.cpp b/xbmc/guilib/GUITextBox.cpp
+--- a/xbmc/guilib/GUITextBox.cpp
++++ b/xbmc/guilib/GUITextBox.cpp
+@@ -197,6 +197,17 @@
+     CServiceBroker::GetWinSystem()->GetGfxContext().RemoveTransform();
+ }
+ 
++CRect CGUITextBox::CalcRenderRegion() const
++{
++  CRect region = CGUIControl::CalcRenderRegion();
++  const CPoint padding = m_font ? m_font->GetRenderPadding() : CPoint{};
++  region.x1 -= padding.x;
++  region.y1 -= padding.y;
++  region.x2 += padding.x;
++  region.y2 += padding.y;
++  return region;
++}
++
+ void CGUITextBox::Render()
+ {
+   if (CServiceBroker::GetWinSystem()->GetGfxContext().GetRenderOrder() ==
+@@ -207,7 +218,9 @@
+   if (m_autoScrollRepeatAnim)
+     CServiceBroker::GetWinSystem()->GetGfxContext().SetTransform(m_cachedTextMatrix);
+ 
+-  if (CServiceBroker::GetWinSystem()->GetGfxContext().SetClipRegion(m_posX, m_posY, m_width, m_renderHeight))
++  const CRect clip = CalcRenderRegion();
++  if (CServiceBroker::GetWinSystem()->GetGfxContext().SetClipRegion(
++          clip.x1, clip.y1, clip.Width(), clip.Height()))
+   {
+     // we offset our draw position to take into account scrolling and whether or not our focused
+     // item is offscreen "above" the list.

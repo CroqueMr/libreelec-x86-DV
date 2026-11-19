@@ -1,0 +1,57 @@
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h
+@@ -239,7 +239,7 @@
+       {
+         m_rpu.clear();
+         m_bytes = 0;
+-        return AVERROR(EAGAIN);
++        return AVERROR_EOF;
+       }
+       m_timing = {AV_NOPTS_VALUE, m_enhancement.front()->pts, m_epoch, false};
+       m_bytes -= m_enhancement.front()->size;
+@@ -251,11 +251,11 @@
+       return AVERROR(EAGAIN);
+     auto rpu = m_rpu.find(m_base.front()->pts);
+     const bool missing = rpu == m_rpu.end() || rpu->second.bytes.empty();
+-    // A seek may leave a BL reference unit whose RPU was before the read point.
+-    // Preserve that unit for decoding, but never allow it to become a picture.
+-    const bool primer = m_resync && (end || (m_transportClock &&
+-        m_lastDts[1] != AV_NOPTS_VALUE && m_base.front()->pts < m_lastDts[1]));
+-    if (missing && !primer)
++    // At EOF no more metadata can arrive. Keep the BL for reference decoding
++    // even without its own RPU; Timing().presentable excludes that picture.
++    const bool seekPreroll = m_resync && m_transportClock &&
++        m_lastDts[1] != AV_NOPTS_VALUE && m_base.front()->pts < m_lastDts[1];
++    if (missing && !end && !seekPreroll)
+       return AVERROR(EAGAIN);
+     const auto* layer = m_enhancement.empty() ? nullptr : m_enhancement.front().get();
+     const int baseSize = m_base.front()->size;
+--- a/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp
+@@ -3514,10 +3514,11 @@
+     result = av_read_frame(m_pFormatContext, packet);
+     if (result < 0)
+     {
+-      if (result == AVERROR_EOF && take(true) == 0)
+-        return 0;
+-      if (result == AVERROR_EOF && m_blurayDovi->Pending())
+-        CLog::Log(LOGWARNING, "DV Blu-ray: incomplete layer pair at end of stream");
++      if (result != AVERROR_EOF)
++        return result;
++      result = take(true);
++      if (result < 0 && result != AVERROR_EOF)
++        CLog::Log(LOGERROR, "DV Blu-ray: draining the layer pair failed ({})", result);
+       return result;
+     }
+     if (packet->stream_index != m_blurayBase && packet->stream_index != m_blurayEnhancement)
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -741,7 +741,7 @@
+   avpkt->size = packet.iSize;
+   bool discard = packet.videoDecodeOnly;
+ #ifdef HAVE_DVBRIDGE
+-  const bool decodeOnly = discard || (hybridLayer && layer.valid && !layer.presentable);
++  const bool decodeOnly = discard || (layer.valid && !layer.presentable);
+   if ((m_dvFel && packet.videoWindowed) || (hybridLayer && (packet.videoWindowed || decodeOnly)))
+     avpkt->opaque = decodeOnly ? &decodeOnlyDVPacket : &presentableDVPacket;
+   discard = !m_dvFel && decodeOnly;

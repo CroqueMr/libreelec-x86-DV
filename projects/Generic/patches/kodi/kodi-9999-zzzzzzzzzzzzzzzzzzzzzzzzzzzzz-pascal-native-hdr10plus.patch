@@ -1,0 +1,52 @@
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -560,6 +560,7 @@
+     auto* bo = carrier ? surface.AdoptTransactionalBuffer(carrier.get(), carrier)
+                        : surface.LockTransactionalBuffer();
+     AnnounceCB1Mode(false);
++    if (carrier) StageNativeHDR10Plus();
+     const bool nvidiaRestore = !carrier &&
+         m_dvState.CapturedBackend() == CDVBridgeState::Backend::NVIDIA;
+     const bool submitted = nvidiaRestore ? FlipDVBridgePage(m_dvState,true,false,true,bo) :
+@@ -841,9 +842,7 @@
+ 
+ #ifdef HAVE_DVBRIDGE
+     AnnounceCB1Mode(false);
+-    if (!carrier)
+-      StageNativeHDR10Plus(CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
+-          CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->HasVisibleOverlay());
++    StageNativeHDR10Plus();
+ #endif
+ #ifdef CB1_HAS_HDR10_AI
+     if (m_hdr10HandoffPending)
+@@ -1071,7 +1070,7 @@
+   return true;
+ }
+ 
+-void CWinSystemGbmGLESContext::StageNativeHDR10Plus(bool overlay)
++void CWinSystemGbmGLESContext::StageNativeHDR10Plus()
+ {
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   if (!drm) return;
+@@ -1093,6 +1092,8 @@
+       reason = "display-unsupported";
+     else
+     {
++      const bool overlay = CServiceBroker::GetGUI()->GetWindowManager().HasVisibleControls() ||
++          CServiceBroker::GetAppComponents().GetComponent<CApplicationPlayer>()->HasVisibleOverlay();
+       std::array<uint8_t, CB1_HDR10PLUS_VSIF_BYTES> bytes{};
+       const auto status = cb1_hdr10plus_vsif(bytes.data(), metadata, overlay, true);
+       reason = status == CB1_HDR10PLUS_OK ? "staged" :
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -221,7 +221,7 @@
+   bool FinishPlayerLedFrame(const CDVBridgeGLES::PlayerLedFrame& frame, double pts);
+   std::optional<CDVBridgeGLES::PlayerLedFrame> m_playerLedPage;
+   double m_playerLedPagePts{};
+-  void StageNativeHDR10Plus(bool overlay);
++  void StageNativeHDR10Plus();
+   std::string m_hdr10plusReason;
+   uint64_t m_dvProfileLoggedRevision{},m_dvProfileLoggedStream{};
+ #endif
