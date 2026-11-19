@@ -63,6 +63,7 @@ pre_configure_target() {
 }
 
 post_makeinstall_target() {
-  # clean up
-  safe_remove ${INSTALL}
+  # Retain helper libraries required by codecparsers and Nvidia VAAPI.
+  safe_remove ${INSTALL}/usr/lib/gstreamer-1.0
+  safe_remove ${INSTALL}/usr/share
 }
