@@ -1,0 +1,217 @@
+--- a/src/libbluray/bluray.c
++++ b/src/libbluray/bluray.c
+@@ -162,6 +162,7 @@
+     BD_UO_MASK           gc_uo_mask;      /* UO mask from current menu page */
+     uint32_t             gc_status;
+     uint8_t              decode_pg;
++    uint8_t              dv_video_preroll;
+ 
+     /* TextST */
+     uint32_t gc_wakeup_time;  /* stream timestamp of next subtitle */
+@@ -687,7 +688,12 @@
+                 st->m2ts_filter = m2ts_filter_init((int64_t)st->clip->in_time << 1,
+                                                    (int64_t)st->clip->out_time << 1,
+                                                    stn->num_video, stn->num_audio,
+-                                                   stn->num_ig, stn->num_pg);
++                                                   stn->num_ig, stn->num_pg,
++                                                   bd->dv_video_preroll &&
++                                                   stn->num_video == 1 && stn->video &&
++                                                   stn->video[0].coding_type == 0x24 &&
++                                                   stn->num_dv == 1 && stn->dv &&
++                                                   stn->dv[0].coding_type == 0x24);
+ 
+                 _update_clip_psrs(bd, st->clip);
+ 
+@@ -1930,7 +1936,14 @@
+         // Find the closest access unit to the requested position
+         clip = nav_mark_search(bd->title, mark, &clip_pkt, &out_pkt);
+ 
+-        _seek_internal(bd, clip, out_pkt, clip_pkt);
++        /* Distinct mark times can share one access packet. A mark seek
++         * consumes its target, not the later marks in that same packet. */
++        if (_seek_internal(bd, clip, out_pkt, clip_pkt) >= 0 &&
++            mark + 1 < bd->title->mark_list.count &&
++            (uint64_t)bd->title->mark_list.mark[mark + 1].title_pkt * 192L == bd->s_pos) {
++            bd->next_mark = mark + 1;
++            bd->next_mark_pos = bd->s_pos;
++        }
+ 
+     } else {
+         BD_DEBUG(DBG_BLURAY | DBG_CRIT, "bd_seek_mark(%u) failed\n", mark);
+@@ -2029,7 +2042,7 @@
+     return bd->s_pos;
+ }
+ 
+-static int _bd_read(BLURAY *bd, unsigned char *buf, int len)
++static int _bd_read(BLURAY *bd, unsigned char *buf, int len, int nav_boundary)
+ {
+     BD_STREAM *st = &bd->st0;
+     int out_len = 0;
+@@ -2042,6 +2055,9 @@
+             clip_pkt = SPN(st->clip_pos);
+             if (bd->seamless_angle_change) {
+                 if (clip_pkt >= bd->angle_change_pkt) {
++                    if (nav_boundary && out_len) {
++                        return out_len;
++                    }
+                     if (clip_pkt >= st->clip->end_pkt) {
+                         st->clip = nav_next_clip(bd->title, st->clip);
+                         if (!_open_m2ts(bd, st)) {
+@@ -2053,6 +2069,9 @@
+                         _clip_seek_time(bd, bd->angle_change_time);
+                     }
+                     bd->seamless_angle_change = 0;
++                    if (nav_boundary) {
++                        return 0;
++                    }
+                 } else {
+                     uint64_t angle_pos;
+ 
+@@ -2099,6 +2118,11 @@
+                     if (st->clip->connection == CONNECT_NON_SEAMLESS) {
+                         /* application layer demuxer buffers must be reset here */
+                         _queue_event(bd, BD_EVENT_DISCONTINUITY, st->clip->in_time);
++                    }
++                    /* Announce the new play item before its first transport bytes.
++                     * The application may recreate its demuxer for this event. */
++                    if (nav_boundary) {
++                        return 0;
+                     }
+ 
+                 }
+@@ -2170,7 +2194,7 @@
+         return out_len;
+ }
+ 
+-static int _bd_read_locked(BLURAY *bd, unsigned char *buf, int len)
++static int _bd_read_locked(BLURAY *bd, unsigned char *buf, int len, int nav_boundary)
+ {
+     BD_STREAM *st = &bd->st0;
+     int r;
+@@ -2190,7 +2214,7 @@
+ 
+     BD_DEBUG(DBG_STREAM, "Reading [%d bytes] at %" PRIu64 "...\n", len, bd->s_pos);
+ 
+-    r = _bd_read(bd, buf, len);
++    r = _bd_read(bd, buf, len, nav_boundary);
+ 
+     /* mark tracking */
+     if (bd->next_mark >= 0 && bd->s_pos > bd->next_mark_pos) {
+@@ -2205,7 +2229,7 @@
+     int result;
+ 
+     bd_mutex_lock(&bd->mutex);
+-    result = _bd_read_locked(bd, buf, len);
++    result = _bd_read_locked(bd, buf, len, 0);
+     bd_mutex_unlock(&bd->mutex);
+ 
+     return result;
+@@ -3061,6 +3085,16 @@
+ 
+     unsigned i;
+     int result;
++
++    if (idx == BLURAY_PLAYER_SETTING_DV_VIDEO_PREROLL) {
++        bd_mutex_lock(&bd->mutex);
++        result = value <= 1 && bd->title_type == title_undef && !bd->title;
++        if (result) {
++            bd->dv_video_preroll = (uint8_t)value;
++        }
++        bd_mutex_unlock(&bd->mutex);
++        return result;
++    }
+ 
+     if (idx == BLURAY_PLAYER_SETTING_DECODE_PG) {
+         bd_mutex_lock(&bd->mutex);
+@@ -3902,7 +3936,7 @@
+         }
+     }
+ 
+-    int bytes = _bd_read_locked(bd, buf, len);
++    int bytes = _bd_read_locked(bd, buf, len, bd->event_queue != NULL);
+ 
+     if (bytes == 0) {
+ 
+--- a/src/libbluray/bluray.h
++++ b/src/libbluray/bluray.h
+@@ -749,6 +749,7 @@
+     BLURAY_PLAYER_SETTING_TEXT_CAP       = 30,    /**< Text Subtitle capability.    Bit mask. */
+     BLURAY_PLAYER_SETTING_PLAYER_PROFILE = 31,    /**< Player profile and version. */
+ 
++    BLURAY_PLAYER_SETTING_DV_VIDEO_PREROLL     = 0x103, /**< Keep DV base-video decode references before IN. Default: disabled. Set before playback; client must suppress pictures outside the authored PTS window. */
+     BLURAY_PLAYER_SETTING_DECODE_PG            = 0x100, /**< Enable/disable PG (subtitle) decoder. Integer. Default: disabled. */
+     BLURAY_PLAYER_SETTING_PERSISTENT_STORAGE   = 0x101, /**< Enable/disable BD-J persistent storage. Integer. Default: enabled. */
+     BLURAY_PLAYER_SETTING_UO_RESTRICTION_LEVEL = 0x102, /**< Set User Operations (UO) restriction mask enforcement level. bd_player_setting_uo_restriction_level value. Default: BLURAY_PLAYER_SETTING_UO_RESTRICTION_RELAXED. */
+--- a/src/libbluray/decoders/m2ts_filter.c
++++ b/src/libbluray/decoders/m2ts_filter.c
+@@ -52,11 +52,15 @@
+     int64_t  out_pts;
+     uint32_t pat_packets; /* how many packets to search for PAT (seeked pat_packets packets before the actual seek point) */
+     uint8_t  pat_seen;
++    unsigned video_preroll; /* number of video PIDs whose decode references are retained */
+ };
++
++static void _remove_pid(uint16_t *list, uint16_t pid);
++static void _add_pid(uint16_t *list, uint16_t pid);
+ 
+ M2TS_FILTER *m2ts_filter_init(int64_t in_pts, int64_t out_pts,
+                               unsigned num_video, unsigned num_audio,
+-                              unsigned num_ig, unsigned num_pg)
++                              unsigned num_ig, unsigned num_pg, int video_preroll)
+ {
+     M2TS_FILTER *p = calloc(1, sizeof(*p));
+ 
+@@ -64,6 +68,7 @@
+         unsigned ii, npid;
+         uint16_t *pid;
+ 
++        p->video_preroll = video_preroll ? num_video : 0;
+         p->in_pts   = in_pts;
+         p->out_pts  = out_pts;
+         p->wipe_pid = calloc(num_audio + num_video + num_ig + num_pg + 1, sizeof(uint16_t));
+@@ -81,11 +86,20 @@
+         for (ii = 0; ii < num_audio; ii++) {
+             pid[npid++] = HDMV_PID_AUDIO_FIRST + ii;
+         }
++        for (ii = 0; ii < num_pg; ii++) {
++            pid[npid++] = HDMV_PID_PG_FIRST + ii;
++        }
+         for (ii = 0; ii < num_ig; ii++) {
+             pid[npid++] = HDMV_PID_IG_FIRST + ii;
+         }
+-        for (ii = 0; ii < num_pg; ii++) {
+-            pid[npid++] = HDMV_PID_PG_FIRST + ii;
++
++        /* The lists are sorted for _pid_in_list. Video references are decoded
++         * before IN only when the application negotiated presentation gating. */
++        if (in_pts >= 0) {
++            for (ii = 0; ii < p->video_preroll; ii++) {
++                _remove_pid(p->wipe_pid, HDMV_PID_VIDEO + ii);
++                _add_pid(p->pass_pid, HDMV_PID_VIDEO + ii);
++            }
+         }
+     }
+ 
+@@ -194,6 +208,11 @@
+         _add_pid(p->wipe_pid, *pid);
+         *pid = 0;
+         pid++;
++    }
++
++    for (unsigned ii = 0; ii < p->video_preroll; ii++) {
++        _remove_pid(p->wipe_pid, HDMV_PID_VIDEO + ii);
++        _add_pid(p->pass_pid, HDMV_PID_VIDEO + ii);
+     }
+ 
+     p->in_pts   = in_pts;
+--- a/src/libbluray/decoders/m2ts_filter.h
++++ b/src/libbluray/decoders/m2ts_filter.h
+@@ -33,7 +33,7 @@
+ 
+ BD_PRIVATE M2TS_FILTER *m2ts_filter_init(int64_t in_pts, int64_t out_pts,
+                                          unsigned num_video, unsigned num_audio,
+-                                         unsigned num_ig, unsigned num_pg);
++                                         unsigned num_ig, unsigned num_pg, int video_preroll);
+ BD_PRIVATE void         m2ts_filter_close(M2TS_FILTER **);
+ 
+ /*

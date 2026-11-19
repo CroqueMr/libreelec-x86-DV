@@ -3,7 +3,7 @@
 
 PKG_NAME="jre.zulu"
 PKG_VERSION="1.0"
-PKG_REV="0"
+PKG_REV="1"
 PKG_LICENSE="GPL-2.0-only WITH Classpath-exception-2.0"
 PKG_DEPENDS_TARGET="jre-libbluray libXext libXi libXrender chrome-libXtst jre-libXinerama"
 PKG_DEPENDS_UNPACK="jdk-${TARGET_ARCH}-zulu"
@@ -25,10 +25,13 @@ _pkg_copy_lib() {
 }
 
 addon() {
+  local bluray_version="$(get_pkg_version libbluray)"
+  local bluray_jars="$(get_install_dir jre-libbluray)/usr/share/java"
   mkdir -p ${ADDON_BUILD}/${PKG_ADDON_ID}/lib
 
   cp -a $(get_build_dir jdk-${TARGET_ARCH}-zulu)/jre \
-        $(get_install_dir jre-libbluray)/usr/share/java/*.jar \
+        "${bluray_jars}/libbluray-j2se-${bluray_version}.jar" \
+        "${bluray_jars}/libbluray-awt-j2se-${bluray_version}.jar" \
         ${PKG_DIR}/profile.d \
     ${ADDON_BUILD}/${PKG_ADDON_ID}
 

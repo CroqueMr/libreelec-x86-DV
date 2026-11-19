@@ -29,3 +29,46 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dfontconfig=enabled \
                        -Dfreetype=enabled \
                        -Dlibxml2=enabled"
+
+CB1_BLURAY_SOURCE_REPOSITORY="https://github.com/CroqueMr/libbluray-cb1"
+CB1_BLURAY_SOURCE_COMMIT="c65c064fbfead8610ca93af8c113230ecc72fa31"
+CB1_BLURAY_SOURCE_SHA256="7975282c11ff61cc0bd196794b6b162b0b3103c5def88a2b58361fee8c3b54a3"
+
+if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+  PKG_VERSION="1.5.1"
+  PKG_URL="${CB1_BLURAY_SOURCE_REPOSITORY}/archive/${CB1_BLURAY_SOURCE_COMMIT}.tar.gz"
+  PKG_SOURCE_NAME="${PKG_NAME}-${CB1_BLURAY_SOURCE_COMMIT}.tar.gz"
+  PKG_SOURCE_DIR="libbluray-cb1-${CB1_BLURAY_SOURCE_COMMIT}"
+  PKG_SHA256="${CB1_BLURAY_SOURCE_SHA256}"
+  PKG_SKIP_PATCHES="yes"
+  PKG_DEPENDS_UNPACK+=" jdk-${MACHINE_HARDWARE_NAME}-zulu cb1-udfread-source"
+fi
+
+post_unpack() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    # Source archives do not include Git submodules. Keep the original vendored revision.
+    cp -a "$(get_build_dir cb1-udfread-source)/." "${PKG_BUILD}/contrib/libudfread/"
+  fi
+}
+
+configure_package() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    PKG_DEPENDS_TARGET+=" apache-ant:host"
+    PKG_MESON_OPTS_TARGET="${PKG_MESON_OPTS_TARGET/bdj_jar=disabled/bdj_jar=enabled}"
+  fi
+}
+
+pre_configure_target() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    export JAVA_HOME="$(get_build_dir jdk-${MACHINE_HARDWARE_NAME}-zulu)"
+    export PATH+=":${JAVA_HOME}/bin"
+    PKG_MESON_OPTS_TARGET+=" -Djdk_home=${JAVA_HOME}"
+  fi
+}
+
+post_makeinstall_target() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    test -s "${INSTALL}/usr/share/java/libbluray-j2se-${PKG_VERSION}.jar"
+    test -s "${INSTALL}/usr/share/java/libbluray-awt-j2se-${PKG_VERSION}.jar"
+  fi
+}
