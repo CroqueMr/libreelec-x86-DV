@@ -4,10 +4,30 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from test_native_video_source import TREE
+from test_native_video_source import TREE, body
 
 
 class BlurayPairingTests(unittest.TestCase):
+
+    def test_demux_drains_incomplete_metadata_and_reports_terminal_errors(self):
+        if not os.environ.get('FFMPEG_TEST_PREFIX'):
+            self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')
+        prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
+        source = (TREE/'xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp').read_text()
+        fixture = Path(__file__).with_name('bluray_layer_drain.cpp')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'read-bluray-dovi.inc').write_text(body(source, 'int CDVDDemuxFFmpeg::ReadBlurayDovi('))
+            binary = root/'test'
+            subprocess.run(['c++', '-std=c++20', '-fsanitize=address,undefined',
+                '-I'+str(TREE/'xbmc'), '-I'+str(prefix/'include'), '-I'+str(root), str(fixture),
+                '-L'+str(prefix/'lib'), '-Wl,--wrap=av_packet_clone', '-lavcodec', '-lavutil',
+                '-o', str(binary)], check=True)
+            for case in ('gap', 'allocation'):
+                with self.subTest(case=case):
+                    run = subprocess.run([str(binary), case], capture_output=True, text=True)
+                    self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_exact_layer_clock_and_terminal_singletons(self):
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
             self.skipTest('Set FFMPEG_TEST_PREFIX to matched FFmpeg')
