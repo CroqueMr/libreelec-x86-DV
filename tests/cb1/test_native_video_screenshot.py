@@ -15,11 +15,18 @@ class NativeVideoScreenshot(unittest.TestCase):
         renderer = (xbmc / 'cores/VideoPlayer/VideoRenderers/RenderManager.cpp').read_text()
         loop = body(renderer, 'void CRenderManager::ServiceVideoCaptures()')
         loop = loop[loop.rindex('for (const auto& request : requests)'):-1]
+        bridge = (xbmc / 'cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp').read_text()
+        window = (xbmc / 'windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        prepare = body(window, 'bool CWinSystemGbmGLESContext::RenderDVBridge(')
+        refresh = prepare[prepare.index('  if (masterCapture)'):prepare.index('  const bool guiAvailable')]
         parts = [r'''
 #include "rendering/capture/CaptureReadback.h"
 #include "rendering/capture/CapturePixels.h"
+#include "dvbridge_metadata_bounds.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
 extern "C" {
 #include <libavutil/imgutils.h>
+#include <libavutil/mem.h>
 }
 #include <algorithm>
 #include <cassert>
@@ -33,19 +40,27 @@ struct Window { CGraphicContext gfx; CGraphicContext& GetGfxContext(){return gfx
 struct CServiceBroker { static Window* GetWinSystem(){static Window w; return &w;} };
 namespace MathUtils { int round_int(float v){return std::lround(v);} }
 enum class CaptureCadence { ONESHOT, CONTINUOUS };
-enum class CaptureFormat { NATIVE, BGRA8 }; enum class CaptureContent { VIDEO };
-struct CaptureSpec { unsigned width=0,height=0; CaptureFormat format=CaptureFormat::NATIVE; CaptureCadence cadence=CaptureCadence::ONESHOT; };
+enum class CaptureFormat { NATIVE, BGRA8 }; enum class CaptureContent { VIDEO, COMPOSITE, BOTH };
+struct CaptureSpec { unsigned width=0,height=0; CaptureFormat format=CaptureFormat::NATIVE; CaptureCadence cadence=CaptureCadence::ONESHOT; CaptureContent content=CaptureContent::VIDEO; };
 struct CaptureResult {
   std::shared_ptr<ICapturePixels> pixels; unsigned width=0,height=0; int stride=0;
   AVPixelFormat format=AV_PIX_FMT_NONE; int color=0, displayMetadata=0, lightMetadata=0;
   bool hasDisplayMetadata=false, hasLightMetadata=false; CaptureContent content=CaptureContent::VIDEO;
 };
 int GetOutputColorMetadata(Window&){return 1;}
-static bool logical=true, valid=true, bottom=true;
+enum dvbridge_mode { DVBRIDGE_MODE_MASTER_REFERENCE, HDR10, SDR, PLAYER_LED, ENHANCED };
+static dvbridge_mode mode=DVBRIDGE_MODE_MASTER_REFERENCE;
+static bool logical=true, masterIPT=false, valid=true, bottom=true;
+static CDVMetadataBuffer metadata;
+struct CDVBridgeGLES {
+  unsigned invalidations=0;
+  void InvalidateScreenshot() { ++invalidations; }
+  static bool UsesMasterSourceCarrier(dvbridge_mode mode,bool masterIPT,const CDVMetadataBuffer& metadata) CARRIER
+};
 static unsigned bufferWidth=5; static int pitch=48;
 static unsigned decodeReads=0, ordinaryReads=0;
 namespace KODI::WINDOWING::GBM {
-bool HasDVBridgeScreenshot(Window&){return logical;}
+bool HasMasterVideoScreenshot(Window&){return logical && CDVBridgeGLES::UsesMasterSourceCarrier(mode,masterIPT,metadata);}
 bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& b, bool videoOnly=false){
   assert(videoOnly);
   ++decodeReads;
@@ -63,12 +78,29 @@ public:
   bool Read(CaptureResult& out){out.format=AV_PIX_FMT_RGBA;return true;}
 };
 struct Request {CaptureSpec spec;};
+static bool fresh(const CaptureSpec& spec) {
+  Request item{spec};
+  struct {
+    Request* r;
+    std::vector<Request*> TakeActive(CaptureContent c) const {
+      return r->spec.content==c || r->spec.content==CaptureContent::BOTH ?
+          std::vector<Request*>{r} : std::vector<Request*>{};
+    }
+  } registry{&item};
+  auto* capture=&registry;
+  CDVBridgeGLES renderer; auto* m_dvBridge=&renderer;
+  struct {struct {dvbridge_mode mode;} policy;} m_dvSelection{{mode}};
+  struct { bool masterIPT; } preferences{masterIPT};
+  const bool masterCapture=mode==DVBRIDGE_MODE_MASTER_REFERENCE && !capture->TakeActive(CaptureContent::COMPOSITE).empty();
+  REFRESH
+  return renderer.invalidations!=0;
+}
 struct Service {
-  bool success=false; CaptureResult last;
+  bool success=false, failed=false; CaptureResult last;
   void Complete(Request*,CaptureResult r){success=true;last=std::move(r);}
-  void Fail(Request*){success=false;}
+  void Fail(Request*){failed=true;}
 };
-''']
+'''.replace('CARRIER',body(bridge,'bool CDVBridgeGLES::UsesMasterSourceCarrier(')).replace('REFRESH',refresh)]
         fill = blit.index('void FillResult(')
         parts += [blit[blit.index('bool ClampToOutput('):fill],
                   blit[fill:blit.index('} // namespace', fill)],
@@ -93,15 +125,33 @@ int main() {
   }
   auto full=run({},{-2,-2,7,7}); assert(full.success && full.last.width==5 && full.last.height==4);
   assert(!run({},{2,1,2,3}).success && !ordinaryReads);
-  valid=false; assert(!run({},crop).success && !ordinaryReads);
+  valid=false; assert(run({},crop).failed && !ordinaryReads);
+  CaptureSpec both; both.content=CaptureContent::BOTH;
+  auto partial=run(both,crop);
+  assert(!partial.success && !partial.failed); // The composite tap can still serve this request.
   valid=true; bufferWidth=4; assert(!run({},crop).success && !ordinaryReads); bufferWidth=5;
   pitch=8; assert(!run({},crop).success && !ordinaryReads); pitch=48;
   unsigned earlier=decodeReads;
   assert(run({2,3,CaptureFormat::NATIVE},crop).last.format==AV_PIX_FMT_RGBA);
   assert(run({0,0,CaptureFormat::BGRA8},crop).last.format==AV_PIX_FMT_RGBA);
   assert(run({0,0,CaptureFormat::NATIVE,CaptureCadence::CONTINUOUS},crop).last.format==AV_PIX_FMT_RGBA);
+  assert(fresh({}) && !fresh({2,3,CaptureFormat::NATIVE}) &&
+         !fresh({0,0,CaptureFormat::BGRA8}) && !fresh({0,0,CaptureFormat::NATIVE,CaptureCadence::CONTINUOUS}));
+  for (auto other : {HDR10,SDR,PLAYER_LED,ENHANCED}) {
+    mode=other; assert(!fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA);
+  }
+  mode=DVBRIDGE_MODE_MASTER_REFERENCE; masterIPT=true;
+  size_t size=0; auto* source=av_dovi_metadata_alloc(&size); assert(source);
+  auto* color=av_dovi_get_color(source);
+  color->signal_color_space=0; // YCC was converted to a different IPT carrier.
+  assert(metadata.Assign(reinterpret_cast<const uint8_t*>(source),size));
+  assert(!fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA);
+  color->signal_color_space=2; // An authored P5 IPT carrier stays in its source encoding.
+  assert(metadata.Assign(reinterpret_cast<const uint8_t*>(source),size));
+  assert(fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA64LE);
+  ++earlier; av_free(source);
   logical=false; assert(run({},crop).last.format==AV_PIX_FMT_RGBA);
-  assert(decodeReads==earlier && ordinaryReads==4);
+  assert(decodeReads==earlier && ordinaryReads==9);
 }
 ''']
         prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
@@ -109,8 +159,8 @@ int main() {
             program = Path(tmp) / 'capture.cpp'
             program.write_text('\n'.join(parts))
             binary = Path(tmp) / 'capture'
-            subprocess.run(['c++', '-std=c++17', '-DHAVE_DVBRIDGE', '-I'+str(xbmc),
-                            '-I'+str(prefix/'include'), str(program), '-L'+str(prefix/'lib'),
+            subprocess.run(['c++', '-std=c++20', '-DHAVE_DVBRIDGE', '-I'+str(xbmc),
+                            '-I'+str(prefix/'include'), '-I'+str(Path(__file__).resolve().parents[2]/'CB1/src'), str(program), '-L'+str(prefix/'lib'),
                             '-lavutil', '-o', str(binary)], check=True)
             subprocess.run([str(binary)], check=True,
                            env=dict(os.environ, LD_LIBRARY_PATH=str(prefix/'lib')))
