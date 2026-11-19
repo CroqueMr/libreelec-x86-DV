@@ -7,7 +7,7 @@ extern "C" {
 #include "task3_fixture.h"
 }
 constexpr int LOGWARNING=2,DVP_FLAG_DROPPED=1;
-constexpr unsigned CODEC_BLURAY_NAVIGATION=1;
+constexpr unsigned CODEC_BLURAY_NAVIGATION=0x04;
 struct CLog {template<class...T>static void Log(T...){}};
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct Picture {
