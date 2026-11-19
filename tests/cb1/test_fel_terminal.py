@@ -30,7 +30,10 @@ class FELTerminalTests(unittest.TestCase):
         has=body(source,'bool CVideoPlayerVideo::HasData(')
         send=body(source,'inline void CVideoPlayerVideo::SendMessage(')
         flush=body(source,'inline void CVideoPlayerVideo::FlushMessages(')
-        drain=source.split('else if (pMsg->IsType(CDVDMsg::VIDEO_DRAIN))',1)[1].split('else if',1)[0].strip()
+        worker = body(source, 'void CVideoPlayerVideo::Process()')
+        timeout = body(worker, 'else if (ret == MSGQ_TIMEOUT)')
+        drain = body(timeout, 'if (drain == DrainState::Draining)')
+        retry = body(timeout, 'if (retryOutput)')
         program=r'''
 #include <atomic>
 #include <cassert>
@@ -44,23 +47,43 @@ struct Codec{void SetCodecControl(int){}};
 struct CVideoPlayerVideo{
  mutable std::atomic_uint m_drainPending=0;std::mutex m_drainMutex;
  Queue m_messageQueue,m_messageParent;struct{void SetLevelVQ(int){}}m_processInfo;
- bool m_bStop=false;Codec codec;Codec*m_pVideoCodec=&codec;
+ Codec codec;Codec*m_pVideoCodec=&codec;
+ enum class DrainState { Idle, Draining, Complete };
+ DrainState drain=DrainState::Idle;
+ enum { OUTPUT_NORMAL, OUTPUT_AGAIN, OUTPUT_ABORT };
+ int m_outputSate=OUTPUT_NORMAL;
+ static constexpr int DVD_PLAYSPEED_PAUSE=0;
+ int m_speed=1;bool m_paused=false,onlyPrioMsgs=false,backpressure=false;
+ struct {bool videoBuffer=true;} m_picture;
+ int picturesRead=0;
+ int OutputPicture(decltype(m_picture)*) {return backpressure ? OUTPUT_AGAIN : OUTPUT_NORMAL;}
  bool HasData()const @HAS@
  void SendMessage(std::shared_ptr<CDVDMsg>pMsg,int priority) @SEND@
  void FlushMessages() @FLUSH@
- bool ProcessDecoderOutput(double&,double&){++m_messageParent.queued;return false;}
- void Drain(){double frametime=0,pts=0;@DRAIN@}
+ bool ProcessDecoderOutput(double&,double&){++picturesRead;++m_messageParent.queued;return false;}
+ void Drain(){
+   double frametime=0,pts=0;
+   for (int i=0;i<1;++i) {
+     if (m_outputSate==OUTPUT_AGAIN && m_picture.videoBuffer) @RETRY@
+     if (drain==DrainState::Draining) @DRAIN@
+   }
+ }
 };
 int main(){CVideoPlayerVideo p;assert(!p.HasData());
  p.SendMessage(std::make_shared<CDVDMsg>(CDVDMsg{CDVDMsg::VIDEO_DRAIN}),0);
  assert(p.HasData());p.m_messageQueue.queued=0;assert(p.HasData());
- p.Drain();assert(!p.m_drainPending && p.HasData());
+ p.drain=CVideoPlayerVideo::DrainState::Draining;
+ p.backpressure=true;p.m_outputSate=CVideoPlayerVideo::OUTPUT_AGAIN;
+ p.Drain();assert(p.m_drainPending==1 && p.picturesRead==0);
+ p.backpressure=false;
+ p.Drain();assert(!p.m_drainPending && p.HasData() && p.picturesRead==1);
  p.m_messageParent.queued=0;assert(!p.HasData());
  p.SendMessage(std::make_shared<CDVDMsg>(CDVDMsg{CDVDMsg::VIDEO_DRAIN}),0);
  p.SendMessage(std::make_shared<CDVDMsg>(CDVDMsg{CDVDMsg::VIDEO_DRAIN}),0);
+ p.drain=CVideoPlayerVideo::DrainState::Draining;
  p.Drain();p.m_messageParent.queued=0;assert(p.HasData());
  p.FlushMessages();assert(!p.HasData());}
-'''.replace('@HAS@',has).replace('@SEND@',send).replace('@DRAIN@',drain).replace('@FLUSH@',flush)
+'''.replace('@HAS@',has).replace('@SEND@',send).replace('@DRAIN@',drain).replace('@RETRY@',retry).replace('@FLUSH@',flush)
         self.compile_run(program)
 
     def test_actual_fel_decoder_reports_terminal_failure_and_keeps_vanilla_result(self):
@@ -87,7 +110,7 @@ struct AVHWFramesContext{void* device_ref=nullptr;Device* device_ctx=nullptr;};
 AVVAAPIDeviceContext va;Device device{&va};AVHWFramesContext pool{nullptr,&device};Buffer frameBuffer{&pool};
 int waited=0,syncError=0;
 int vaSyncSurface(void* display,unsigned surface){assert(display==(void*)123 && surface==17);++waited;return syncError;}
-struct AVFrame{Buffer* hw_frames_ctx=&frameBuffer;uint8_t* data[4]={nullptr,nullptr,nullptr,(uint8_t*)17};};
+struct AVFrame{int64_t pts=0,best_effort_timestamp=0;Buffer* hw_frames_ctx=&frameBuffer;uint8_t* data[4]={nullptr,nullptr,nullptr,(uint8_t*)17};};
 void av_frame_free(AVFrame** f){delete *f;*f=nullptr;}
 struct Metadata{bool valid=true;int Binding()const{return 1;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}};
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
@@ -95,7 +118,7 @@ struct SourceSideData {bool HDR10PlusIsPrimary()const{return false;}};
 struct VideoPicture{
  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
  std::shared_ptr<SourceSideData> sourceSideData;
-int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
+int64_t doviSourcePts=1,doviPairPts=AV_NOPTS_VALUE;Metadata doviMetadata;unsigned iFlags=0;
  int doviSourceBinding=1;
  struct {bool frameRpu=false;} doviSourceInfo;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
@@ -105,7 +128,10 @@ struct Fel{bool failed=false,exhausted=false;int result=0;bool missingEnhancemen
 bool dvbridge_fel_failed(Fel*f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*f){return f->exhausted;}
 bool dvbridge_fel_has_enhancement(Fel*f){return !f->missingEnhancement;}
-int dvbridge_fel_take(Fel*f,int64_t,AVFrame**out){if(f->result==1)*out=new AVFrame;return f->result;}
+std::deque<int64_t> acceptedPairPts;
+int dvbridge_fel_take(Fel*f,int64_t pts,AVFrame**out){
+ if(f->result==1){*out=new AVFrame;acceptedPairPts.push_back(pts);}
+ return f->result;}
 constexpr int CODEC_BLURAY_NAVIGATION=4;
 int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
@@ -148,6 +174,15 @@ int main(){
  CDVDVideoCodecFFmpeg incomplete;incomplete.m_dvFel->result=-1;incomplete.m_dvFel->exhausted=true;
  incomplete.m_dvPending.push_back(std::make_shared<VideoPicture>());
  assert(incomplete.GetPicture(&out)==CDVDVideoCodec::VC_FATAL);
+ CDVDVideoCodecFFmpeg pairedTimeline;pairedTimeline.m_dvLayerEpoch=1;pairedTimeline.m_dvFel->result=1;
+ for(int64_t pts : {-2,-1}){
+   auto frame=std::make_shared<VideoPicture>();
+   frame->doviSourcePts=0;frame->doviPairPts=pts;
+   pairedTimeline.m_dvPending.push_back(frame);
+   assert(pairedTimeline.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE);
+   assert(out.doviEnhancement && out.doviEnhancement->pts==0);
+ }
+ assert((acceptedPairPts==std::deque<int64_t>{-2,-1}));
  CDVDVideoCodecFFmpeg cleanEnd;cleanEnd.baseResult=CDVDVideoCodec::VC_EOF;
  assert(cleanEnd.GetPicture(&out)==CDVDVideoCodec::VC_EOF);
  CDVDVideoCodecFFmpeg missing;missing.m_dvFel->missingEnhancement=true;missing.baseResult=CDVDVideoCodec::VC_EOF;
