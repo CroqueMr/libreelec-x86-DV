@@ -308,7 +308,7 @@ if [ "${1}" = "release" ] || [ "${1}" = "mkimage" ] || [ "${1}" = "noobs" ]; the
   fi
 
   mkdir -p ${RELEASE_DIR}/licenses
-  cp ${ROOT}/licenses/* ${RELEASE_DIR}/licenses
+  cp -a "${ROOT}/licenses/." "${RELEASE_DIR}/licenses/"
 
   mkdir -p ${RELEASE_DIR}/target
   cp ${TARGET_IMG}/${IMAGE_NAME}.system ${RELEASE_DIR}/target/SYSTEM
@@ -467,7 +467,7 @@ if [ "${1}" = "release" ] || [ "${1}" = "mkimage" ] || [ "${1}" = "noobs" ]; the
 
     # Copy additional files
     mkdir -p ${RELEASE_DIR}/${NOOBS_DISTRO}/System/licenses
-    cp ${ROOT}/licenses/* ${RELEASE_DIR}/${NOOBS_DISTRO}/System/licenses
+    cp -a "${ROOT}/licenses/." "${RELEASE_DIR}/${NOOBS_DISTRO}/System/licenses/"
 
     # Create Storage dir
     mkdir -p ${RELEASE_DIR}/${NOOBS_DISTRO}/Storage
