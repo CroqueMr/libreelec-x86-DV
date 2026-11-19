@@ -123,7 +123,7 @@
     "tests/cb1/test_dual_carriage.py": "dcc57a32d28964d733d5f4438a98afc2b10cc0833669c52f30442edcd836eead",
     "tests/cb1/test_joined_headers.py": "672e9636c920b03fba8cd5dcdf1b0b2aac930978b296e3c8e2dcc8d41c473119",
     "tests/cb1/test_dovi_association_updates.py": "2281ca7f2e7795ac35807e996f009696256eb1f2ec34fbe761404186bb9172c0",
-    "tests/cb1/test_dv_uhd_mode.py": "26afeaca4f1ad7524e5ac4e0bff5f763b7db6ff7b1da160e2f20aa0772eaa951",
+    "tests/cb1/test_dv_uhd_mode.py": "b07ad4010cb940307f053d5e0863e9a4f07639ec6b7a983cd302fdc38603dd1b",
     "tests/cb1/test_auto_view_mode.py": "211362a9f8a51fa5261cc6fa73fe84524d1c3d510d2862a4e22be1db2fafe9ee",
     "tests/cb1/test_cmv40.py": "9fc8d881623af68f808a02d16af047f2fe54233bb195584d126cdf8490f540b6",
     "tests/cb1/test_nvidia_packet_bytes.py": "e2fdad7450ede6c78d71472e7f17f3c7ced183043e446ade3cc30b6aa78c9936",
@@ -360,7 +360,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9007-player-led-lab.patch": "a9ccc0f168cce398277c0f9f3652527b525b96da6e6a1d0d39aeb9567fab97d5",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzz-lldv-format.patch": "30ac4d651d33e3db112681a1c2d936db9f3b21c1d6bf2a380ad09f262f2eca28",
     "projects/Generic/patches/linux/linux-9945-lldv-format-lab.patch": "b44fb2b3c825ee0ae4757c3e3df92d0ef2e9836b0813c5591e0bcc1b5fb38dc9",
-    "tests/cb1/test_lldv_format.py": "e9d3a2d45b1c2a43537e8816777db2d053fd51dc677e9284a388204079293d08",
+    "tests/cb1/test_lldv_format.py": "f02e7c6e4822175cfe587bf0813a32f9c0841c2cacda3c3fa81874b0c3f3cf19",
     "tests/cb1/test_lldv_player_info.py": "7303e656eb1852428b01d5fc5386c149461fd23948c80e8d754139edeeb8031e",
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
@@ -453,7 +453,7 @@
     "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": "a3399f38cee9cbecd97d97f635f145b942807cca0979f959e7c46017a1b4ffd6",
     "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": "a8c40d82c2fd2b2426feb79b1c9bf64f9a8477e5868f94c64964cae046e8fb23",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": "7a0a7f1d79d73108fd6ed814480ac0dc3cf2428d460a392eb7ee70ebf71e55f6",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hdr10-fallback-mode.patch": "efb35a56bd8add6328b0280b108a29d2f9b9e491c48a836c77ed96686354b6ad",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hdr10-fallback-mode.patch": "8b1db692fce5f47853dbdac5377f3df0f086771f5e43e6690b1158fe9b637fd0",
     "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": "1d7e9547641029841c9cae4d2ff8c21841cf929b5e41e65a45f90c4a6a6e56b9",
     "tests/cb1/test_intel_hdmi_pin_out.py": "726fd74c4a135d30705631b986792aafa171b1e08794627e93b83e063b5810fe",
     "tests/cb1/amd_dv_versions.c": "a1fbcb0d09bffd2523281ebe32bba1e132630aa4ffc70ce539272d4336593dec",
@@ -479,7 +479,7 @@
     "tests/cb1/test_nvidia_native_lldv_formats.py": "796c7dbf1e20a06408026a4174a5e22c5cf33133b86965f34aab35227fa0468b",
     "projects/Generic/patches/linux/linux-9978-amd-native-lldv-y444.patch": "ac731ef8997b977dca1a06c319e1dda129f63581147500f079b7aed1dc8d5370",
     "tests/cb1/test_amd_lldv_formats.py": "fb10e14e34ef3df637d6d9f1edcadb56b525247da9fc44205f2b43ad375132e8",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-startup-timing-fallback.patch": "4d85b3531ef3167255bdce3daea700b83edfd2023ff57ffdb770aa19f621ed20"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-startup-timing-fallback.patch": "4c7ac91fc23f20cda971f9446308fca71438e971791c6bb569e5171ceb9a494f"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

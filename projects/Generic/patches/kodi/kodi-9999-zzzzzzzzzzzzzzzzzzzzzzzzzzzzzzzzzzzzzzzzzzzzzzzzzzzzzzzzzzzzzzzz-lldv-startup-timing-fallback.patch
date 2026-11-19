@@ -1,67 +1,92 @@
-diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
---- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-+++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-@@ -100,6 +100,7 @@
-   bool CompleteDVModeSwitch(const VideoPicture& picture);
-   std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
-   int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
-+  bool CanFallbackPlayerLedStartup(RESOLUTION resolution, int preference) const;
-   bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
-   bool DVModeSwitchDeferred()
-   {
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+index e5b4225..acc8186 100644
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4778,14 +4778,16 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
+         playerLedStartupResolution = CRenderManager::ChoosePlaybackResolution(
+             streamFrameRate(), hint.width, hint.height, false, WantsNativePresentation(hint), true);
+ 
+-      if ((!adjustRefresh || playerLedStartupResolution) &&
+-          window->PlayerLedResolutionReason(playerLedStartupResolution.value_or(RES_INVALID),
+-                                            preferences.lldvFormat) ==
+-              DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL)
++      if (!adjustRefresh || playerLedStartupResolution)
+       {
+-        const auto caps = window->GetDVOutputCapabilities(nullptr, true);
+-        if (caps.hdr10 && !caps.HDR10DepthLimited())
++        const auto fallback = window->PlayerLedStartupHDR10Resolution(
++            playerLedStartupResolution.value_or(RES_INVALID), preferences.lldvFormat);
++        if (fallback)
++        {
++          if (playerLedStartupResolution)
++            playerLedStartupResolution = fallback;
+           DVBRIDGE::UsePlayerLedStartupFallback();
++        }
+       }
+     }
+     if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+index 9cc88ca..cb216e2 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -1947,7 +1947,7 @@
+@@ -1958,7 +1958,7 @@ std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double f
+   std::optional<RESOLUTION> rejected;
+   for (size_t index = RES_DESKTOP; index < settings.ResolutionInfoSize(); ++index)
+   {
+-    const auto& mode = settings.GetResolutionInfo(index);
++    const auto mode = settings.GetResolutionInfoCopy(static_cast<RESOLUTION>(index));
+     if (mode.iWidth == 3840 && mode.iHeight == 2160 &&
+         mode.iScreenWidth == 3840 && mode.iScreenHeight == 2160 &&
+         std::abs(mode.fRefreshRate - wanted) < 0.01 &&
+@@ -1976,11 +1976,10 @@ std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double f
+ 
+ int CWinSystemGbmGLESContext::PlayerLedResolutionReason(RESOLUTION resolution, int preference) const
+ {
++  const auto id = CDisplaySettings::GetInstance().GetResolutionInfoCopy(resolution).strId;
+   std::lock_guard lock(m_dvCapabilityMutex);
    if (resolution == RES_INVALID)
      return DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, preference, false);
- 
+-
 -  const auto& id = CDisplaySettings::GetInstance().GetResolutionInfo(resolution).strId;
-+  const auto id = CDisplaySettings::GetInstance().GetResolutionInfoCopy(resolution).strId;
    int modeIndex = -1;
    const auto end = id.data() + id.size();
    const auto parsed = std::from_chars(id.data(), end, modeIndex);
-@@ -1961,6 +1961,22 @@
-   target.currentTiming = true;
-   target.currentRejected = mode->second;
+@@ -1996,6 +1995,25 @@ int CWinSystemGbmGLESContext::PlayerLedResolutionReason(RESOLUTION resolution, i
    return DVBRIDGE::LldvUnavailableLabel(target, preference, false);
-+}
-+
-+bool CWinSystemGbmGLESContext::CanFallbackPlayerLedStartup(RESOLUTION resolution,
-+                                                           int preference) const
+ }
+ 
++std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedStartupHDR10Resolution(
++    RESOLUTION resolution, int preference) const
 +{
 +  constexpr int timingUnavailable = 41212;
 +  const int reason = PlayerLedResolutionReason(resolution, preference);
 +  if (reason != DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL && reason != timingUnavailable)
-+    return false;
++    return std::nullopt;
 +
 +  const bool allowModeSwitch = resolution != RES_INVALID;
-+  if (allowModeSwitch && !SupportsDVOutputTiming(resolution))
-+    return false;
++  const auto target = allowModeSwitch ? ChooseHDR10FallbackResolution(resolution) : RES_INVALID;
++  if (allowModeSwitch && !SupportsDVOutputTiming(target))
++    return std::nullopt;
 +
 +  const auto caps = GetDVOutputCapabilities(nullptr, allowModeSwitch);
-+  return caps.hdr10 && !caps.HDR10DepthLimited();
- }
- 
++  if (!caps.hdr10 || caps.HDR10DepthLimited())
++    return std::nullopt;
++  return target;
++}
++
  bool CWinSystemGbmGLESContext::CompleteDVModeSwitch(const VideoPicture& picture)
-diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
---- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
-+++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
-@@ -4779,14 +4779,9 @@
-             streamFrameRate(), hint.width, hint.height, false, WantsNativePresentation(hint), true);
- 
-       if ((!adjustRefresh || playerLedStartupResolution) &&
--          window->PlayerLedResolutionReason(playerLedStartupResolution.value_or(RES_INVALID),
--                                            preferences.lldvFormat) ==
--              DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL)
--      {
--        const auto caps = window->GetDVOutputCapabilities(nullptr, true);
--        if (caps.hdr10 && !caps.HDR10DepthLimited())
--          DVBRIDGE::UsePlayerLedStartupFallback();
--      }
-+          window->CanFallbackPlayerLedStartup(playerLedStartupResolution.value_or(RES_INVALID),
-+                                              preferences.lldvFormat))
-+        DVBRIDGE::UsePlayerLedStartupFallback();
-     }
-     if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
-         window->GetDVOutputCapabilities(nullptr, true).HDR10DepthLimited())
+ {
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+index d03f1f4..82b4e92 100644
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -101,6 +101,8 @@ public:
+   bool CompleteDVModeSwitch(const VideoPicture& picture);
+   std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
+   int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
++  std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,
++                                                           int preference) const;
+   bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
+   bool DVModeSwitchDeferred()
+   {

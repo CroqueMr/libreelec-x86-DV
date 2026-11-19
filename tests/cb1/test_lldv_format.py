@@ -458,7 +458,7 @@ int main()
         source = (kodi / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         choose = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolution(')
         reason = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolutionReason(')
-        fallback = body(source, 'CWinSystemGbmGLESContext::CanFallbackPlayerLedStartup(')
+        fallback = body(source, 'CWinSystemGbmGLESContext::PlayerLedStartupHDR10Resolution(')
         program = r'''
 #include "utils/DVBridgeLldv.h"
 #include <algorithm>
@@ -483,7 +483,10 @@ struct CDisplaySettings
   static CDisplaySettings& GetInstance(){static CDisplaySettings settings;return settings;}
   size_t ResolutionInfoSize() const{return modes.size();}
   const Mode& GetResolutionInfo(RESOLUTION index) const{return modes.at(index);}
-  Mode GetResolutionInfoCopy(RESOLUTION index) const{return modes.at(index);}
+  Mode GetResolutionInfoCopy(RESOLUTION index) const
+  {
+    return index >= 0 && static_cast<std::size_t>(index) < modes.size() ? modes[index] : Mode{};
+  }
 };
 namespace DVBRIDGE
 {
@@ -510,6 +513,7 @@ struct Window
   {
     return {true,allowModeSwitch ? hdr10 : currentHDR10,limited};
   }
+  RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION resolution) const {return resolution;}
   bool SupportsDVOutputTiming(RESOLUTION resolution) const
   {
     return resolution!=1 && resolution!=5;
@@ -518,7 +522,7 @@ struct Window
   bool LldvSupportsPlaybackTiming(double) const{return true;}
   std::optional<RESOLUTION> Choose(double fps,bool atStartup=false) const CHOOSE_BODY
   int PlayerLedResolutionReason(RESOLUTION resolution,int preference) const REASON_BODY
-  bool CanFallbackPlayerLedStartup(RESOLUTION resolution,int preference) const FALLBACK_BODY
+  std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,int preference) const FALLBACK_BODY
 };
 
 int main()
@@ -546,20 +550,20 @@ int main()
   assert(window.PlayerLedResolutionReason(4,0)==0);
   assert(window.PlayerLedResolutionReason(1,0)!=LLDV_DRIVER_REJECTED_LABEL);
   // 59.94 Hz is a known HDMI timing with HDR10 transport, but no LLDV carrier.
-  assert(window.CanFallbackPlayerLedStartup(0,0));
-  assert(window.CanFallbackPlayerLedStartup(2,0));
-  assert(!window.CanFallbackPlayerLedStartup(1,0)); // unknown DRM mode
-  assert(!window.CanFallbackPlayerLedStartup(4,0)); // usable LLDV
-  assert(!window.CanFallbackPlayerLedStartup(5,0)); // 120 Hz unavailable for HDR10 conversion
-  assert(window.CanFallbackPlayerLedStartup(RES_INVALID,0));
+  assert(window.PlayerLedStartupHDR10Resolution(0,0));
+  assert(window.PlayerLedStartupHDR10Resolution(2,0));
+  assert(!window.PlayerLedStartupHDR10Resolution(1,0)); // unknown DRM mode
+  assert(!window.PlayerLedStartupHDR10Resolution(4,0)); // usable LLDV
+  assert(!window.PlayerLedStartupHDR10Resolution(5,0)); // 120 Hz unavailable for HDR10 conversion
+  assert(window.PlayerLedStartupHDR10Resolution(RES_INVALID,0)==RES_INVALID);
   window.currentHDR10=false;
-  assert(!window.CanFallbackPlayerLedStartup(RES_INVALID,0));
-  assert(window.CanFallbackPlayerLedStartup(0,0));
+  assert(!window.PlayerLedStartupHDR10Resolution(RES_INVALID,0));
+  assert(window.PlayerLedStartupHDR10Resolution(0,0));
   window.limited=true;
-  assert(!window.CanFallbackPlayerLedStartup(0,0));
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
   window.limited=false;
   window.hdr10=false;
-  assert(!window.CanFallbackPlayerLedStartup(0,0));
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
   status.modeRejections.emplace_back(5,0);
   assert(window.Choose(film,true)==3);
   status.modeRejections.front().second=ten;

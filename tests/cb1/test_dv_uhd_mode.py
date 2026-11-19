@@ -8,6 +8,57 @@ from test_native_video_source import TREE, body
 
 
 class DVUHDModeTests(unittest.TestCase):
+    def test_resolution_catalogue_removal_takes_the_reader_lock(self):
+        display = (TREE/'xbmc/settings/DisplaySettings.cpp').read_text()
+        read = body(display, 'RESOLUTION_INFO CDisplaySettings::GetResolutionInfoCopy(')
+        clear = body(display, 'void CDisplaySettings::ClearCustomResolutions()')
+        program = r'''#include <cassert>
+#include <mutex>
+#include <string>
+#include <vector>
+
+enum RESOLUTION {RES_INVALID = -1, RES_DESKTOP = 0, RES_CUSTOM = 1};
+using RESOLUTION_INFO = std::string;
+const RESOLUTION_INFO EmptyResolution;
+
+struct CDisplaySettings {
+  struct Catalogue : std::vector<RESOLUTION_INFO> {
+    using std::vector<RESOLUTION_INFO>::vector;
+    bool* locked;
+    iterator erase(iterator first, iterator last) {
+      assert(*locked && "Catalogue removal must exclude readers");
+      return std::vector<RESOLUTION_INFO>::erase(first, last);
+    }
+  };
+  struct Mutex {
+    bool locked=false;
+    void lock() {assert(!locked); locked=true;}
+    void unlock() {assert(locked); locked=false;}
+  };
+  mutable Mutex m_critical;
+  Catalogue m_resolutions{"desktop", "custom"};
+  CDisplaySettings() {m_resolutions.locked=&m_critical.locked;}
+  RESOLUTION_INFO GetResolutionInfoCopy(RESOLUTION resolution) const READ
+  void ClearCustomResolutions() CLEAR
+};
+
+int main() {
+  CDisplaySettings settings;
+  const auto copy = settings.GetResolutionInfoCopy(RES_CUSTOM);
+  settings.ClearCustomResolutions();
+  assert(copy=="custom");
+  assert(settings.GetResolutionInfoCopy(RES_CUSTOM).empty());
+  assert(settings.GetResolutionInfoCopy(RES_DESKTOP)=="desktop");
+}
+'''.replace(' READ', ' ' + read).replace(' CLEAR', ' ' + clear)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root/'test.cpp'
+            binary = root/'test'
+            source.write_text(program)
+            subprocess.run(['c++', '-std=c++20', str(source), '-o', str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
     def test_real_selector_preserves_whitelist_override_and_adjustment_off(self):
         resolution = (TREE/'xbmc/windowing/Resolution.cpp').read_text()
         resolution = re.sub(r'^#include[^\n]*', '', resolution, flags=re.M)
@@ -21,6 +72,8 @@ class DVUHDModeTests(unittest.TestCase):
         timing = body(gbm_window, 'double DVOutputTimingRate(')
         snapshot = body(gbm_window, 'CWinSystemGbm::GetDVOutputTimings()')
         support = body(gbm, 'bool CWinSystemGbmGLESContext::SupportsDVOutputTiming(')
+        select_fallback = body(gbm, 'CWinSystemGbmGLESContext::ChooseHDR10FallbackResolution(')
+        fallback = body(gbm, 'CWinSystemGbmGLESContext::PlayerLedStartupHDR10Resolution(')
         program = r'''
 #define HAVE_DVBRIDGE
 #include "windowing/Resolution.h"
@@ -111,6 +164,14 @@ struct Window {
  std::vector<DVOutputTiming> GetDVOutputTimings() const;
  bool available=true;bool CanRetainDVSource()const{return available;}
  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
+ struct Caps {
+  bool hdr10=true, depthLimited=false;
+  bool HDR10DepthLimited() const {return depthLimited;}
+ } caps;
+ Caps GetDVOutputCapabilities(const void*, bool) const {return caps;}
+ RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION chosen) const;
+ std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference) const;
+ int PlayerLedResolutionReason(RESOLUTION, int) const {return 41212;}
  std::optional<RESOLUTION> PlayerLedResolution(double, bool) const {return {};}
 };
 namespace KODI::WINDOWING::GBM {using CWinSystemGbmGLESContext=Window;}
@@ -129,6 +190,7 @@ public:
  int codecOptions=0;bool interlaced=false;std::string stereo_mode;
 };
 namespace DVBRIDGE {
+ constexpr int LLDV_DRIVER_REJECTED_LABEL = 41247;
  enum class OutputMode {Standard,Disabled};
  std::atomic<OutputMode> playbackMode{OutputMode::Standard};
  struct Preferences { bool hdr10TransportFallback{}; } preferences;
@@ -140,6 +202,8 @@ RESOLUTION_CODE
 double DVOutputTimingRate(const drmModeModeInfo* mode) TIMING_CODE
 std::vector<Window::DVOutputTiming> Window::GetDVOutputTimings() const SNAPSHOT_CODE
 bool Window::SupportsDVOutputTiming(RESOLUTION resolution) const SUPPORT_CODE
+RESOLUTION Window::ChooseHDR10FallbackResolution(RESOLUTION chosen) const SELECT_FALLBACK_CODE
+std::optional<RESOLUTION> Window::PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference) const FALLBACK_CODE
 enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10};
 struct VideoPicture {
  int iWidth=3840,iHeight=2160;
@@ -279,6 +343,7 @@ int main() {
   drm.connector.modes.push_back(mode);
  };
  advertise(desktop8k,594000);
+ advertise(uhd60,594000);
  advertise(film8k,237363);
  advertise(interlaced,237363,DRM_MODE_FLAG_INTERLACE);
  advertise(sbs,237363,DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF);
@@ -296,6 +361,20 @@ int main() {
  component.settings.adjust=1;
  manager.m_picture.iWidth=3840;manager.m_picture.iHeight=2160;
  assert(manager.GetResolution()==film8k && "ordinary playback must keep the 8K desktop floor");
+ const auto selected=CRenderManager::ChoosePlaybackResolution(60.0,3840,2160,false,true,true);
+ assert(selected==desktop8k || selected==RES_DESKTOP);
+ assert(window->PlayerLedStartupHDR10Resolution(selected,0)==uhd60 &&
+        "Startup must admit UHD60 HDR10 before the fallback flag is set");
+ list({desktop8k});
+ assert(!window->PlayerLedStartupHDR10Resolution(selected,0));
+ component.settings.whitelist.clear();
+ window->caps.depthLimited=true;
+ assert(!window->PlayerLedStartupHDR10Resolution(selected,0));
+ window->caps.depthLimited=false;
+ component.advanced.m_videoAdjustRefreshOverrides.push_back({false,59,61,59,61});
+ assert(!window->PlayerLedStartupHDR10Resolution(selected,0));
+ component.advanced.m_videoAdjustRefreshOverrides.clear();
+
  DVBRIDGE::preferences.hdr10TransportFallback=true;
  assert(choose(3840,2160)==film8k);
  assert(manager.GetResolution()==fhd && "automatic recovery must skip an unusable 8K mode");
@@ -318,7 +397,7 @@ int main() {
  assert(manager.GetResolution()==RES_DESKTOP);
  component.settings.adjust=1;
  drm.connector.modes.back().flags=DRM_MODE_FLAG_DBLSCAN;
- drm.connector.modes[4].clock=237600;
+ drm.connector.modes[5].clock=237600;
  publish();
  assert(manager.GetResolution()==film8k && "keep Kodi's choice if the cadence has no usable mode");
  drm.connector.modes.back().flags=0;
@@ -327,7 +406,7 @@ int main() {
  assert(manager.GetResolution()==film8k && "a disconnected display has no eligible candidate");
 }
 '''.replace('RESOLUTION_CODE', resolution).replace('CHOICE_CODE',choice).replace('MANAGER_CODE', manager).replace(
-            'TIMING_CODE', timing).replace('SNAPSHOT_CODE', snapshot).replace('SUPPORT_CODE', support).replace(
+            'TIMING_CODE', timing).replace('SNAPSHOT_CODE', snapshot).replace('SUPPORT_CODE', support).replace('SELECT_FALLBACK_CODE', select_fallback).replace('FALLBACK_CODE', fallback).replace(
             'ELIGIBLE_CODE', eligible).replace('WANTS_CODE', wants)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)

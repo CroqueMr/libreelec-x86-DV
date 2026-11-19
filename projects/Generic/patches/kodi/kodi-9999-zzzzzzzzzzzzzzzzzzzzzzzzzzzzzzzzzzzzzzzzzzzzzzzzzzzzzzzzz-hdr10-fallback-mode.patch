@@ -14,7 +14,7 @@ index 0b1c250..e5b4225 100644
          using HDRSignal = DVBRIDGE::NativeHDRSignal;
          auto hdrSignal = HDRSignal::None;
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
-index 4b23854..6ed6c2e 100644
+index 4b23854..abc5f4b 100644
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 @@ -28,11 +28,11 @@
@@ -40,7 +40,7 @@ index 4b23854..6ed6c2e 100644
  #endif
  #if defined(HAVE_GBM) && defined(HAS_GLES)
  #include "windowing/gbm/WinSystemGbmGLESContext.h"
-@@ -1006,22 +1008,65 @@ void CRenderManager::SetViewMode(int iViewMode)
+@@ -1006,22 +1008,39 @@ void CRenderManager::SetViewMode(int iViewMode)
    m_playerPort->VideoParamsChange();
  }
  
@@ -79,41 +79,15 @@ index 4b23854..6ed6c2e 100644
 +  // can hide usable HDR10 modes on an 8K display. Keep the refresh Kodi selected.
 +  if (window && (!picture || picture->doviSourceInfo.profile ||
 +                 picture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION) &&
-+      DVBRIDGE::FrameOutputSettings().hdr10TransportFallback &&
-+      !window->SupportsDVOutputTiming(chosen))
-+  {
-+    const auto& display = CDisplaySettings::GetInstance();
-+    const auto original = display.GetResolutionInfoCopy(chosen);
-+    std::vector<RESOLUTION> candidates;
-+    window->GetGfxContext().GetAllowedResolutions(candidates);
-+    RESOLUTION best = chosen;
-+    int bestArea = 0;
-+    for (const RESOLUTION candidate : candidates)
-+    {
-+      const auto mode = display.GetResolutionInfoCopy(candidate);
-+      if (std::abs(mode.fRefreshRate - original.fRefreshRate) < 0.01f &&
-+          window->SupportsDVOutputTiming(candidate))
-+      {
-+        const int area = mode.iScreenWidth * mode.iScreenHeight;
-+        if (area > bestArea)
-+        {
-+          best = candidate;
-+          bestArea = area;
-+        }
-+      }
-+    }
-+    if (best != chosen)
-+      CLog::Log(LOGDEBUG, "CB1 HDR10 fallback: selected {} (original mode {})",
-+                display.GetResolutionInfoCopy(best).strMode, original.strMode);
-+    return best;
-+  }
++      DVBRIDGE::FrameOutputSettings().hdr10TransportFallback)
++    return window->ChooseHDR10FallbackResolution(chosen);
  #endif
 -  return CResolutionUtils::ChooseBestResolution(fps, width, height, stereo);
 +  return chosen;
  }
  
  RESOLUTION CRenderManager::GetResolution()
-@@ -1035,7 +1080,7 @@ RESOLUTION CRenderManager::GetResolution()
+@@ -1035,7 +1054,7 @@ RESOLUTION CRenderManager::GetResolution()
    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
    {
      res = ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
@@ -122,7 +96,7 @@ index 4b23854..6ed6c2e 100644
    }
  
    return res;
-@@ -1304,8 +1349,9 @@ void CRenderManager::UpdateResolution()
+@@ -1304,8 +1323,9 @@ void CRenderManager::UpdateResolution()
      {
        if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
        {
@@ -149,7 +123,7 @@ index 7f36a0e..e6cc20f 100644
    void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
                                 bool nativeDV = false);
 diff --git a/xbmc/settings/DisplaySettings.cpp b/xbmc/settings/DisplaySettings.cpp
-index 50d5efc..04260c7 100644
+index 50d5efc..c31f479 100644
 --- a/xbmc/settings/DisplaySettings.cpp
 +++ b/xbmc/settings/DisplaySettings.cpp
 @@ -515,6 +515,27 @@ RESOLUTION_INFO& CDisplaySettings::GetResolutionInfo(RESOLUTION resolution)
@@ -180,6 +154,14 @@ index 50d5efc..04260c7 100644
  void CDisplaySettings::AddResolutionInfo(const RESOLUTION_INFO &resolution)
  {
    std::unique_lock lock(m_critical);
+@@ -987,6 +1008,7 @@ void CDisplaySettings::SettingOptionsMonitorsFiller(const SettingConstPtr& setti
+ 
+ void CDisplaySettings::ClearCustomResolutions()
+ {
++  std::unique_lock lock(m_critical);
+   if (m_resolutions.size() > RES_CUSTOM)
+   {
+     std::vector<RESOLUTION_INFO>::iterator firstCustom = m_resolutions.begin()+RES_CUSTOM;
 diff --git a/xbmc/settings/DisplaySettings.h b/xbmc/settings/DisplaySettings.h
 index b983b3f..c359848 100644
 --- a/xbmc/settings/DisplaySettings.h
@@ -310,7 +292,7 @@ index b0c60dd..09cc0ae 100644
    void DeferConnectorPreferences();
    void ApplyColorspace();
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-index 123cbc9..77c6401 100644
+index 123cbc9..9cc88ca 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 @@ -1751,6 +1751,9 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
@@ -339,7 +321,7 @@ index 123cbc9..77c6401 100644
    if (DVBRIDGE::DiagnosticsEnabled())
    {
      try
-@@ -1853,6 +1858,29 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+@@ -1853,6 +1858,62 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
    }
  }
  
@@ -366,10 +348,43 @@ index 123cbc9..77c6401 100644
 +  });
 +}
 +
++RESOLUTION CWinSystemGbmGLESContext::ChooseHDR10FallbackResolution(RESOLUTION chosen) const
++{
++  const auto advanced = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings();
++  if (SupportsDVOutputTiming(chosen) || CResolutionUtils::HasWhitelist() ||
++      !advanced->m_videoAdjustRefreshOverrides.empty())
++    return chosen;
++
++  const auto& display = CDisplaySettings::GetInstance();
++  const auto original = display.GetResolutionInfoCopy(chosen);
++  std::vector<RESOLUTION> candidates;
++  GetGfxContext().GetAllowedResolutions(candidates);
++  RESOLUTION best = chosen;
++  int bestArea = 0;
++  for (const RESOLUTION candidate : candidates)
++  {
++    const auto mode = display.GetResolutionInfoCopy(candidate);
++    if (std::abs(mode.fRefreshRate - original.fRefreshRate) < 0.01f &&
++        SupportsDVOutputTiming(candidate))
++    {
++      const int area = mode.iScreenWidth * mode.iScreenHeight;
++      if (area > bestArea)
++      {
++        best = candidate;
++        bestArea = area;
++      }
++    }
++  }
++  if (best != chosen)
++    CLog::Log(LOGDEBUG, "CB1 HDR10 fallback: selected {} (original mode {})",
++              display.GetResolutionInfoCopy(best).strMode, original.strMode);
++  return best;
++}
++
  bool CWinSystemGbmGLESContext::CanRetainDVSource() const
  {
    const auto preferences = DVBRIDGE::FrameOutputSettings();
-@@ -4001,6 +4029,10 @@ bool CWinSystemGbmGLESContext::DestroyWindowSystem()
+@@ -4001,6 +4062,10 @@ bool CWinSystemGbmGLESContext::DestroyWindowSystem()
    if (!RetireDVContext()) return false;
    SelectPascalHDRMode(PascalHDRMode::None);
    m_pascalHDRScanout.reset();
@@ -380,7 +395,7 @@ index 123cbc9..77c6401 100644
    if (!CWinSystemGbmEGLContext::DestroyWindowSystem()) return false;
    std::lock_guard lock(m_dvCapabilityMutex);
    const auto generation = m_dvCapabilities.generation + 1;
-@@ -4063,7 +4095,8 @@ bool CWinSystemGbmGLESContext::CreateContext()
+@@ -4063,7 +4128,8 @@ bool CWinSystemGbmGLESContext::CreateContext()
      const auto generation = m_dvCapabilities.generation + 1;
      m_dvCapabilities = {};
      m_dvAvailableNativeDV = m_dvAvailableHDR10 = false;
@@ -391,18 +406,19 @@ index 123cbc9..77c6401 100644
      m_dvImportBinding = {};
      m_dvImportUsable = false;
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-index 29a1cbc..b17ecec 100644
+index 29a1cbc..d03f1f4 100644
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-@@ -96,6 +96,7 @@ public:
+@@ -96,6 +96,8 @@ public:
    DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
        bool allowModeSwitch = false) const;
    bool CanRetainDVSource() const;
 +  bool SupportsDVOutputTiming(RESOLUTION resolution) const;
++  RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION chosen) const;
    bool CompleteDVModeSwitch(const VideoPicture& picture);
    std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
    int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
-@@ -301,6 +302,7 @@ private:
+@@ -301,6 +303,7 @@ private:
  #endif
    DVBRIDGE::OutputCapabilities m_dvCapabilities;
    bool m_dvAvailableNativeDV{}, m_dvAvailableHDR10{};
