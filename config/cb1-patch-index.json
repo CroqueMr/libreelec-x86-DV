@@ -198,6 +198,15 @@
       "drivers/net/wireless/mediatek/mt76/mt7925/main.c": "Keep the join ROC after a successful non-MLO association and release it on authorization, disassociation or station removal."
     }
   },
+  "projects/Generic/patches/linux/0104-wifi-mt76-mt7925-track-join-roc-ownership.patch": {
+    "summary": "Release the MT7925 non-MLO association channel only while the grant belongs to that interface",
+    "component": "linux",
+    "files": {
+      "drivers/net/wireless/mediatek/mt76/mt7925/main.c": "Track successful association grants and serialize release with new channel requests and timer expiry.",
+      "drivers/net/wireless/mediatek/mt76/mt7925/mcu.c": "Arm the expiry timer before publishing the firmware grant.",
+      "drivers/net/wireless/mediatek/mt76/mt792x.h": "Keep the active MT7925 association owner on the shared PHY."
+    }
+  },
   "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": {
     "summary": "Expose the validated Dolby Vision connector control",
     "component": "linux",
