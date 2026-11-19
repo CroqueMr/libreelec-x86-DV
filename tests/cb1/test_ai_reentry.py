@@ -48,7 +48,7 @@ struct CRenderManager{
  double m_aiStartPts=40000000;
  Slot m_Queue[3];std::deque<int> m_queued,m_discard,m_free;
  int m_presentsource=1,m_presentsourcePast=0,m_presentstep=PRESENT_FRAME,m_QueueSize=3;
- bool m_cb1PresentPending=true;
+ bool m_cb1PresentPending=true,m_cb1OutputPending=true;
  std::deque<int> observed;
  void ReleaseDiscardedBuffers(bool){}
  bool Select(std::unique_lock<CCriticalSection>& lock) SELECTION
