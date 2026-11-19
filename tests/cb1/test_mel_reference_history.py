@@ -22,6 +22,8 @@ constexpr int AV_LOG_ERROR=0,AV_LOG_DEBUG=1;
 template<class... T> void av_log(T...){}
 struct AVPacket {const uint8_t* data;int size;};
 struct AVFrame {int64_t pts{},best_effort_timestamp{};};
+struct AVCodecParameters {const uint8_t* extradata{};int extradata_size{};};
+struct AVBSFContext {AVCodecParameters* par_out;};
 void av_packet_free(AVPacket** p){delete *p;*p=nullptr;}
 constexpr uint8_t idr[]={0,0,1,64,1,7,0,0,1,66,1,7,0,0,1,68,1,7,0,0,1,40,1,7};
 constexpr uint8_t bareIdr[]={0,0,1,40,1,7};
@@ -36,8 +38,9 @@ struct dvbridge_fel {
  bool el_started=false,mel_deferred=false,eof=false,recovering=false;
  int64_t anchor_pts=1,wanted=AV_NOPTS_VALUE;
  void* decoder=nullptr;
+ AVBSFContext* split=nullptr;
 };
-int vcl_type(const AVPacket* packet) VCL
+int vcl_type(const AVPacket* packet,const AVCodecParameters* parameters) VCL
 bool self_contained_idr(const AVPacket* packet) IDR
 void prune_mel_history(dvbridge_fel* f) PRUNE
 bool pump(dvbridge_fel* f) {
@@ -56,7 +59,10 @@ template <size_t N> void append(dvbridge_fel& f,int64_t pts,const uint8_t(&data)
  f.packet_order[i]=pts;f.packet_key[i]=key;f.packet_bytes+=N;
 }
 int main() {
+ AVCodecParameters annexB;
+ AVBSFContext split{&annexB};
  dvbridge_fel f; AVFrame* frame=nullptr;
+ f.split=&split;
  append(f,1,idr,true);append(f,2,inter,false);append(f,3,bareIdr,true);
  append(f,4,idr,true);append(f,5,inter,false);
  assert(take_source(&f,1000,&frame,true)==3 && !frame && !f.el_started);
