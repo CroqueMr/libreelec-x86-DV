@@ -2387,7 +2387,7 @@
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": {
-    "owner": "Decode the source-domain Master carrier for native video-only screenshots.",
+    "owner": "Capture native video from decoded Master, HDR10 and SDR outputs and decline unsupported DV carriers.",
     "files": {
       "xbmc/rendering/capture/CaptureBlit.cpp": "Choose the video readback and crop logical pixels with their native stride.",
       "xbmc/rendering/capture/CaptureBlit.h": "Declare the video capture operation.",
@@ -2397,7 +2397,7 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/DVBridgeCapture.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused Master captures and select source-domain readback."
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
   }
 }

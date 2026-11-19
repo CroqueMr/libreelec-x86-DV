@@ -139,7 +139,7 @@ struct Test{
  bool videoOnly=false,m_nativeOverlayEnabled=false,m_guiComposed=false;
  struct {float rect[4]{};} m_nativeOverlay;
  struct CLog { static void Log(int,const char*){} };
- unsigned GetPQFramebuffer(){return 2;}
+ unsigned GetPQFramebuffer(bool){return 2;}
  bool run(){ PREFIX return read && pixels.width==texture.params.w && pixels.height==texture.params.h;}
 };
 int main(){Test t;assert(t.run());t.m_effectiveMode=5;assert(t.run());

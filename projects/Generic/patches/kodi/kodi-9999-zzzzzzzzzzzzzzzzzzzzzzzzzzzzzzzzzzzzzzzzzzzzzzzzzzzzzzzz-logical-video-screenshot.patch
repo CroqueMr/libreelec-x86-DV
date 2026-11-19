@@ -19,7 +19,7 @@ diff --git a/xbmc/rendering/capture/CaptureBlit.cpp b/xbmc/rendering/capture/Cap
  #include <cstring>
  #include <memory>
  #include <utility>
-@@ -56,15 +66,48 @@
+@@ -56,15 +66,51 @@
  }
  
  // Move a readback buffer's pixels and shape into a delivered CaptureResult.
@@ -41,7 +41,7 @@ diff --git a/xbmc/rendering/capture/CaptureBlit.cpp b/xbmc/rendering/capture/Cap
 +#ifdef HAVE_DVBRIDGE
 +  auto& window = *CServiceBroker::GetWinSystem();
 +  if (spec.cadence == CaptureCadence::ONESHOT && spec.format == CaptureFormat::NATIVE &&
-+      !spec.width && !spec.height && KODI::WINDOWING::GBM::HasMasterVideoScreenshot(window))
++      !spec.width && !spec.height && KODI::WINDOWING::GBM::HasDVBridgeScreenshot(window))
 +  {
 +    int x0, y0, x1, y1, fbHeight;
 +    ReadbackBuffer buffer;
@@ -60,6 +60,9 @@ diff --git a/xbmc/rendering/capture/CaptureBlit.cpp b/xbmc/rendering/capture/Cap
 +    const std::size_t offset = firstRow * pitch + x0 * static_cast<std::size_t>(pixelBytes);
 +    buffer.width = static_cast<unsigned int>(x1 - x0);
 +    buffer.height = static_cast<unsigned int>(y1 - y0);
++    // Source mastering and light levels do not describe a reconstructed or tone-mapped image.
++    result.hasDisplayMetadata = false;
++    result.hasLightMetadata = false;
 +    FillResult(result, buffer, offset);
 +    return true;
 +  }
@@ -108,7 +111,7 @@ diff --git a/xbmc/rendering/capture/CapturePixels.h b/xbmc/rendering/capture/Cap
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
-@@ -972,14 +972,8 @@
+@@ -972,29 +972,21 @@
  
    for (const auto& request : requests)
    {
@@ -120,11 +123,22 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/core
      CaptureResult result;
 -    if (m_captureBlit->Blit(visible, width, height, request->spec.format) &&
 -        m_captureBlit->Read(result))
++    // The ordinary video readback retains the mastering metadata of its source.
++    result.hasDisplayMetadata = m_picture.hasDisplayMetadata;
++    result.displayMetadata = m_picture.displayMetadata;
++    result.hasLightMetadata = m_picture.hasLightMetadata;
++    result.lightMetadata = m_picture.lightMetadata;
 +    if (m_captureBlit->Capture(visible, request->spec, result))
      {
        result.color = GetOutputColorMetadata(*CServiceBroker::GetWinSystem());
-       // the presented PQ is the content's during passthrough, so carry its
-@@ -993,8 +987,9 @@
+-      // the presented PQ is the content's during passthrough, so carry its
+-      // mastering metadata verbatim: the source peak an SDR tonemap needs.
+-      // NOTE: m_picture, not m_pConfigPicture, which Configure() has already
+-      // reset by the time this frame reaches CONFIGURED.
+-      result.hasDisplayMetadata = m_picture.hasDisplayMetadata;
+-      result.displayMetadata = m_picture.displayMetadata;
+-      result.hasLightMetadata = m_picture.hasLightMetadata;
+-      result.lightMetadata = m_picture.lightMetadata;
        result.content = CaptureContent::VIDEO; // this tap delivers video-only
        captureService->Complete(request, std::move(result));
      }
@@ -170,7 +184,7 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
  {
    using namespace KODI::RENDERING::CAPTURE;
    const auto failed = [&](const char* stage, int format = -1) {
-@@ -2554,6 +2570,14 @@
+@@ -2554,9 +2570,17 @@
    const bool master=m_effectiveMode==DVBRIDGE_MODE_MASTER_REFERENCE;
    const bool sdr=m_effectiveMode==DVBRIDGE_MODE_SDR;
    if (!m_prepared) return failed("unprepared");
@@ -184,7 +198,29 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores
 +  }
    if (!m_scanout) return failed("no-scanout");
    if ((master || sdr) && !m_direct) return failed("direct-target");
-   const auto framebuffer=master || sdr ? m_scanoutFramebuffer : GetPQFramebuffer();
+-  const auto framebuffer=master || sdr ? m_scanoutFramebuffer : GetPQFramebuffer();
++  const auto framebuffer=master || sdr ? m_scanoutFramebuffer : GetPQFramebuffer(!videoOnly);
+   if (!master && !sdr && !framebuffer) return failed("direct-target");
+   GLint previous=0;
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&previous);
+@@ -3207,7 +3231,7 @@
+   return m_packed || Failure("hdr10-resolve");
+ }
+ 
+-unsigned int CDVBridgeGLES::GetPQFramebuffer()
++unsigned int CDVBridgeGLES::GetPQFramebuffer(bool forGUI)
+ {
+   const auto texture = m_playerLed && m_prepared && m_playerLedPicture ?
+       pl_opengl_unwrap(m_gl->gpu, m_playerLedPicture, nullptr, nullptr, nullptr) : GetPQTexture();
+@@ -3221,7 +3245,7 @@
+   glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+   const bool valid = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previous);
+-  if (valid && m_live) m_guiComposed = true;
++  if (valid && m_live && forGUI) m_guiComposed = true;
+   return valid ? m_framebuffer : 0;
+ }
+ 
 diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 --- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
 +++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
@@ -203,14 +239,21 @@ diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/V
    static constexpr bool CanComposeSDRGUI(bool enabled, bool hdr10, bool capture,
                                           int width, int height, unsigned pqDraws)
    {
+@@ -234,7 +240,7 @@
+   bool PrepareHardware(const Layer& base, const AVFrame* enhancement,
+                        const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked = false);
+   unsigned int GetPQTexture() const;
+-  unsigned int GetPQFramebuffer();
++  unsigned int GetPQFramebuffer(bool forGUI = true);
+   bool GetHDR10OutputTarget(unsigned& framebuffer, unsigned& bits)
+   {
+     if (!m_hdr10 || !m_prepared || !m_direct || !m_scanout) return false;
 diff --git a/xbmc/windowing/gbm/DVBridgeCapture.h b/xbmc/windowing/gbm/DVBridgeCapture.h
 --- a/xbmc/windowing/gbm/DVBridgeCapture.h
 +++ b/xbmc/windowing/gbm/DVBridgeCapture.h
-@@ -7,6 +7,8 @@
- namespace KODI::WINDOWING::GBM
+@@ -8,5 +8,6 @@
  {
  bool HasDVBridgeScreenshot(CWinSystemBase& window);
-+bool HasMasterVideoScreenshot(CWinSystemBase& window);
  bool IsDVBridgeScreenshotSDR(CWinSystemBase& window);
 -bool ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out);
 +bool ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out,
@@ -219,16 +262,7 @@ diff --git a/xbmc/windowing/gbm/DVBridgeCapture.h b/xbmc/windowing/gbm/DVBridgeC
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
-@@ -168,11 +168,16 @@
-   void EndDVPQSubtitle();
-   bool DVPQSubtitlesReady() const { return m_dvPQSubtitleDraws != 0; }
-   bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
-+  bool HasMasterVideoScreenshot() const
-+  {
-+    return m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && HasDVBridgeScreenshot() &&
-+           m_dvBridge && m_dvBridge->UsesMasterSourceCarrier();
-+  }
-   bool IsDVBridgeScreenshotSDR() const
+@@ -172,7 +172,7 @@
    {
      return HasDVBridgeScreenshot() && m_sdrConversion;
    }
@@ -240,19 +274,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/W
 diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 --- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
 +++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
-@@ -3274,13 +3274,19 @@
-   return gbm && gbm->HasDVBridgeScreenshot();
- }
- 
-+bool KODI::WINDOWING::GBM::HasMasterVideoScreenshot(CWinSystemBase& window)
-+{
-+  const auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
-+  return gbm && gbm->HasMasterVideoScreenshot();
-+}
-+
- bool KODI::WINDOWING::GBM::IsDVBridgeScreenshotSDR(CWinSystemBase& window)
- {
-   auto* gbm = dynamic_cast<CWinSystemGbmGLESContext*>(&window);
+@@ -3280,7 +3280,7 @@
    return gbm && gbm->IsDVBridgeScreenshotSDR();
  }
  
@@ -261,7 +283,7 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  {
    if (!m_dvFrame || !m_dvBridge)
    {
-@@ -3293,13 +3299,13 @@
+@@ -3293,13 +3293,16 @@
            m_guiCompositing, m_guiWillRender, m_nWidth, m_nHeight);
      return false;
    }
@@ -269,6 +291,9 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
 -}
 -
 -bool KODI::WINDOWING::GBM::ReadDVBridgeScreenshot(CWinSystemBase& window, KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
++  // The other DV outputs have a packed carrier or display-linear RGB. Neither is BT.2020 PQ.
++  if (videoOnly && !m_hdrConversion && !m_dvBridge->UsesMasterSourceCarrier())
++    return false;
 +  return m_dvBridge->ReadScreenshot(out, videoOnly);
 +}
 +
@@ -280,37 +305,43 @@ diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm
  }
  
  bool CWinSystemGbmGLESContext::CB1AsyncAvailable() const
-@@ -3372,10 +3378,28 @@
+@@ -3372,10 +3375,33 @@
      if (!CB1AsyncAvailable()) return false;
    }
    const auto capture = CServiceBroker::GetCaptureService();
+-  const bool capturing = capture && !capture->TakeActive(
 +  const auto preferences = DVBRIDGE::FrameOutputSettings(
 +      !layer.sourceInfo.profile && layer.hdr10PlusSource,
 +      !layer.sourceInfo.profile && layer.hlg);
-   const bool capturing = capture && !capture->TakeActive(
++  bool capturing = capture && !capture->TakeActive(
        KODI::RENDERING::CAPTURE::CaptureContent::COMPOSITE).empty();
    const bool masterCapture=capturing && m_dvSelection.policy.mode==DVBRIDGE_MODE_MASTER_REFERENCE;
 -  if (masterCapture) m_dvBridge->InvalidateScreenshot();
 +  if (masterCapture)
 +    m_dvBridge->InvalidateScreenshot();
-+  else if (capture && m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE)
++  else if (capture && (m_hdrConversion || m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE))
 +  {
-+    // A paused Master frame may already have been consumed by scanout.
++    // A paused frame may already have been consumed by scanout.
 +    using namespace KODI::RENDERING::CAPTURE;
 +    const auto requests = capture->TakeActive(CaptureContent::VIDEO);
 +    if (!requests.empty())
 +    {
 +      const auto& spec = requests.front()->spec;
 +      if (spec.cadence == CaptureCadence::ONESHOT && spec.format == CaptureFormat::NATIVE &&
-+          !spec.width && !spec.height && CDVBridgeGLES::UsesMasterSourceCarrier(
-+              m_dvSelection.policy.mode, preferences.masterIPT, metadata))
++          !spec.width && !spec.height && (m_hdrConversion || CDVBridgeGLES::UsesMasterSourceCarrier(
++              m_dvSelection.policy.mode, preferences.masterIPT, metadata)))
++      {
 +        m_dvBridge->InvalidateScreenshot();
++        // Direct HDR10 writes scanout only. Prepare its PQ RGB target for the video tap.
++        if (m_hdrConversion && !m_sdrConversion)
++          capturing = true;
++      }
 +    }
 +  }
    const bool guiAvailable = m_guiWillRender || CanReuseGuiComposite();
    const bool overlayFree = (!capturing || masterCapture) &&
        (!guiAvailable || GetGUIElementCount() == 0) && !m_dvOverlays;
-@@ -3384,9 +3408,6 @@
+@@ -3384,9 +3410,6 @@
        m_previousSourceStream == layer.binding.stream &&
        DVBRIDGE::ContinuousPresentationPicture(layer.pts, m_previousSourcePts) &&
        m_dvSelection.reason == DVBRIDGE::OutputReason::None;

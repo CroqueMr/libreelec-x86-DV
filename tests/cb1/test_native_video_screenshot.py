@@ -19,6 +19,10 @@ class NativeVideoScreenshot(unittest.TestCase):
         window = (xbmc / 'windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         prepare = body(window, 'bool CWinSystemGbmGLESContext::RenderDVBridge(')
         refresh = prepare[prepare.index('  if (masterCapture)'):prepare.index('  const bool guiAvailable')]
+        reader = body(window, 'bool CWinSystemGbmGLESContext::ReadDVBridgeScreenshot(')
+        dispatch = reader[reader.rindex('  }') + 3:-1]
+        colors = body((xbmc / 'rendering/capture/CaptureMetadata.cpp').read_text(),
+                      'ImageColorMetadata GetOutputColorMetadata(')
         parts = [r'''
 #include "rendering/capture/CaptureReadback.h"
 #include "rendering/capture/CapturePixels.h"
@@ -36,7 +40,14 @@ extern "C" {
 using namespace KODI::RENDERING::CAPTURE;
 struct CRect { float x1,y1,x2,y2; float Width() const{return x2-x1;} float Height() const{return y2-y1;} };
 struct CGraphicContext { int GetWidth() const{return 5;} int GetHeight() const{return 4;} };
-struct Window { CGraphicContext gfx; CGraphicContext& GetGfxContext(){return gfx;} };
+namespace KODI::UTILS { enum class Colorimetry { BT709, BT2020_RGB, BT2020_YCC, BT2020_CYCC }; enum class Eotf { SDR, PQ, HLG }; }
+struct ImageColorMetadata { AVColorPrimaries primaries{}; AVColorTransferCharacteristic transfer{}; AVColorRange range{}; };
+struct Window { CGraphicContext gfx;
+  KODI::UTILS::Eotf eotf=KODI::UTILS::Eotf::PQ;
+  auto GetEotf() const {return eotf;}
+  auto GetColorimetry() const {return eotf==KODI::UTILS::Eotf::PQ ? KODI::UTILS::Colorimetry::BT2020_RGB : KODI::UTILS::Colorimetry::BT709;}
+  bool UseLimitedColor() const {return true;}
+ CGraphicContext& GetGfxContext(){return gfx;} };
 struct CServiceBroker { static Window* GetWinSystem(){static Window w; return &w;} };
 namespace MathUtils { int round_int(float v){return std::lround(v);} }
 enum class CaptureCadence { ONESHOT, CONTINUOUS };
@@ -44,10 +55,10 @@ enum class CaptureFormat { NATIVE, BGRA8 }; enum class CaptureContent { VIDEO, C
 struct CaptureSpec { unsigned width=0,height=0; CaptureFormat format=CaptureFormat::NATIVE; CaptureCadence cadence=CaptureCadence::ONESHOT; CaptureContent content=CaptureContent::VIDEO; };
 struct CaptureResult {
   std::shared_ptr<ICapturePixels> pixels; unsigned width=0,height=0; int stride=0;
-  AVPixelFormat format=AV_PIX_FMT_NONE; int color=0, displayMetadata=0, lightMetadata=0;
+  AVPixelFormat format=AV_PIX_FMT_NONE; ImageColorMetadata color; int displayMetadata=0, lightMetadata=0;
   bool hasDisplayMetadata=false, hasLightMetadata=false; CaptureContent content=CaptureContent::VIDEO;
 };
-int GetOutputColorMetadata(Window&){return 1;}
+
 enum dvbridge_mode { DVBRIDGE_MODE_MASTER_REFERENCE, HDR10, SDR, PLAYER_LED, ENHANCED };
 static dvbridge_mode mode=DVBRIDGE_MODE_MASTER_REFERENCE;
 static bool logical=true, masterIPT=false, valid=true, bottom=true;
@@ -55,13 +66,22 @@ static CDVMetadataBuffer metadata;
 struct CDVBridgeGLES {
   unsigned invalidations=0;
   void InvalidateScreenshot() { ++invalidations; }
+  bool UsesMasterSourceCarrier() const {return UsesMasterSourceCarrier(mode,masterIPT,metadata);}
+  bool ReadScreenshot(ReadbackBuffer& b, bool videoOnly);
   static bool UsesMasterSourceCarrier(dvbridge_mode mode,bool masterIPT,const CDVMetadataBuffer& metadata) CARRIER
 };
 static unsigned bufferWidth=5; static int pitch=48;
 static unsigned decodeReads=0, ordinaryReads=0;
 namespace KODI::WINDOWING::GBM {
-bool HasMasterVideoScreenshot(Window&){return logical && CDVBridgeGLES::UsesMasterSourceCarrier(mode,masterIPT,metadata);}
-bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& b, bool videoOnly=false){
+bool HasDVBridgeScreenshot(Window&){return logical;}
+bool IsDVBridgeScreenshotSDR(Window&){return mode==SDR;}
+bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& out, bool videoOnly=false){
+  CDVBridgeGLES bridge;auto* m_dvBridge=&bridge;
+  bool m_hdrConversion=mode==HDR10 || mode==SDR;
+  DISPATCH
+}
+}
+bool CDVBridgeGLES::ReadScreenshot(ReadbackBuffer& b, bool videoOnly){
   assert(videoOnly);
   ++decodeReads;
   if(!valid)return false;
@@ -70,7 +90,7 @@ bool ReadDVBridgeScreenshot(Window&, ReadbackBuffer& b, bool videoOnly=false){
   for(int y=0;y<4;++y) for(int x=0;x<5;++x) b.pixels[(bottom?3-y:y)*48+x*8]=10*y+x;
   return true;
 }
-}
+ImageColorMetadata GetOutputColorMetadata(Window& winSystem) COLORS
 class CCaptureBlit {
 public:
   bool Capture(const CRect&,const CaptureSpec&,CaptureResult&);
@@ -91,8 +111,12 @@ static bool fresh(const CaptureSpec& spec) {
   CDVBridgeGLES renderer; auto* m_dvBridge=&renderer;
   struct {struct {dvbridge_mode mode;} policy;} m_dvSelection{{mode}};
   struct { bool masterIPT; } preferences{masterIPT};
-  const bool masterCapture=mode==DVBRIDGE_MODE_MASTER_REFERENCE && !capture->TakeActive(CaptureContent::COMPOSITE).empty();
+  bool capturing=!capture->TakeActive(CaptureContent::COMPOSITE).empty();
+  const bool m_sdrConversion=mode==SDR,m_hdrConversion=mode==HDR10 || m_sdrConversion;
+  const bool masterCapture=mode==DVBRIDGE_MODE_MASTER_REFERENCE && capturing;
   REFRESH
+  if(m_hdrConversion && spec.content==CaptureContent::VIDEO && spec.width==0 && spec.height==0 &&
+     spec.format==CaptureFormat::NATIVE && spec.cadence==CaptureCadence::ONESHOT) assert(capturing==!m_sdrConversion);
   return renderer.invalidations!=0;
 }
 struct Service {
@@ -100,7 +124,7 @@ struct Service {
   void Complete(Request*,CaptureResult r){success=true;last=std::move(r);}
   void Fail(Request*){failed=true;}
 };
-'''.replace('CARRIER',body(bridge,'bool CDVBridgeGLES::UsesMasterSourceCarrier(')).replace('REFRESH',refresh)]
+'''.replace('CARRIER',body(bridge,'bool CDVBridgeGLES::UsesMasterSourceCarrier(')).replace('REFRESH',refresh).replace('COLORS',colors).replace('DISPATCH',dispatch)]
         fill = blit.index('void FillResult(')
         parts += [blit[blit.index('bool ClampToOutput('):fill],
                   blit[fill:blit.index('} // namespace', fill)],
@@ -110,6 +134,7 @@ struct Service {
 static Service run(CaptureSpec spec, CRect visible) {
   CCaptureBlit blit; auto* m_captureBlit=&blit; Service service;auto* captureService=&service;
   Request item{spec}; std::vector<Request*> requests{&item}; CaptureResult m_picture;
+  m_picture.hasDisplayMetadata=m_picture.hasLightMetadata=true;
 ''', loop, r'''
   return service;
 }
@@ -131,27 +156,41 @@ int main() {
   assert(!partial.success && !partial.failed); // The composite tap can still serve this request.
   valid=true; bufferWidth=4; assert(!run({},crop).success && !ordinaryReads); bufferWidth=5;
   pitch=8; assert(!run({},crop).success && !ordinaryReads); pitch=48;
-  unsigned earlier=decodeReads;
   assert(run({2,3,CaptureFormat::NATIVE},crop).last.format==AV_PIX_FMT_RGBA);
   assert(run({0,0,CaptureFormat::BGRA8},crop).last.format==AV_PIX_FMT_RGBA);
   assert(run({0,0,CaptureFormat::NATIVE,CaptureCadence::CONTINUOUS},crop).last.format==AV_PIX_FMT_RGBA);
   assert(fresh({}) && !fresh({2,3,CaptureFormat::NATIVE}) &&
          !fresh({0,0,CaptureFormat::BGRA8}) && !fresh({0,0,CaptureFormat::NATIVE,CaptureCadence::CONTINUOUS}));
-  for (auto other : {HDR10,SDR,PLAYER_LED,ENHANCED}) {
-    mode=other; assert(!fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA);
+  for (auto other : {PLAYER_LED,ENHANCED}) {
+    mode=other; auto single=run({},crop);
+    assert(single.failed && !single.success && !fresh({}));
+    auto pair=run(both,crop); assert(!pair.failed && !pair.success);
+  }
+  for(auto conversion : {HDR10,SDR}) {
+    mode=conversion; assert(fresh({})); auto single=run({},crop);
+    assert(single.success && single.last.format==AV_PIX_FMT_RGBA64LE);
+    assert(single.last.color.primaries==(mode==SDR ? AVCOL_PRI_BT709 : AVCOL_PRI_BT2020));
+    assert(single.last.color.transfer==(mode==SDR ? AVCOL_TRC_IEC61966_2_1 : AVCOL_TRC_SMPTE2084));
+    assert(single.last.color.range==AVCOL_RANGE_JPEG && !single.last.hasDisplayMetadata && !single.last.hasLightMetadata);
   }
   mode=DVBRIDGE_MODE_MASTER_REFERENCE; masterIPT=true;
   size_t size=0; auto* source=av_dovi_metadata_alloc(&size); assert(source);
   auto* color=av_dovi_get_color(source);
   color->signal_color_space=0; // YCC was converted to a different IPT carrier.
   assert(metadata.Assign(reinterpret_cast<const uint8_t*>(source),size));
-  assert(!fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA);
+  assert(!fresh({}) && run({},crop).failed);
+  partial=run(both,crop); assert(!partial.success && !partial.failed);
   color->signal_color_space=2; // An authored P5 IPT carrier stays in its source encoding.
   assert(metadata.Assign(reinterpret_cast<const uint8_t*>(source),size));
   assert(fresh({}) && run({},crop).last.format==AV_PIX_FMT_RGBA64LE);
-  ++earlier; av_free(source);
-  logical=false; assert(run({},crop).last.format==AV_PIX_FMT_RGBA);
-  assert(decodeReads==earlier && ordinaryReads==9);
+  av_free(source);
+  assert(ordinaryReads==3);
+  logical=false; auto pass=run({},crop);
+  assert(pass.success && pass.last.format==AV_PIX_FMT_RGBA && pass.last.color.transfer==AVCOL_TRC_SMPTE2084 && pass.last.color.range==AVCOL_RANGE_MPEG);
+  CServiceBroker::GetWinSystem()->eotf=KODI::UTILS::Eotf::SDR;
+  pass=run({},crop);
+  assert(pass.success && pass.last.format==AV_PIX_FMT_RGBA && pass.last.color.transfer==AVCOL_TRC_SMPTE170M && pass.last.color.range==AVCOL_RANGE_MPEG);
+  assert(pass.last.hasDisplayMetadata && pass.last.hasLightMetadata && ordinaryReads==5);
 }
 ''']
         prefix = Path(os.environ['FFMPEG_TEST_PREFIX'])
