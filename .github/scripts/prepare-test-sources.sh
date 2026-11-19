@@ -16,7 +16,10 @@ download() {
 
 test_root=$(mktemp -d "${RUNNER_TEMP:?}/cb1-tests.XXXXXX")
 kodi_version=$(pin PKG_VERSION packages/mediacenter/kodi/package.mk)
-ffmpeg_version=$(pin PKG_VERSION packages/multimedia/ffmpeg/package.mk)
+ffmpeg_recipe=packages/multimedia/ffmpeg/package.mk
+ffmpeg_version=$(pin PKG_VERSION "$ffmpeg_recipe")
+ffmpeg_fork=$(pin CB1_FFMPEG_SOURCE_REPOSITORY "$ffmpeg_recipe")
+ffmpeg_revision=$(pin CB1_FFMPEG_SOURCE_COMMIT "$ffmpeg_recipe")
 placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk
 placebo_version=$(pin PKG_VERSION "$placebo_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
@@ -35,8 +38,11 @@ test -n "$linux_version" && test -n "$linux_sha"
 test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_version" && test -n "$bluray_version"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
   "$test_root/kodi.tar.gz" "$(pin PKG_SHA256 packages/mediacenter/kodi/package.mk)"
+# Retain the original archive as input to tests that inspect historical patches.
 download "https://ffmpeg.org/releases/ffmpeg-$ffmpeg_version.tar.xz" \
-  "$test_root/ffmpeg.tar.xz" "$(pin PKG_SHA256 packages/multimedia/ffmpeg/package.mk)"
+  "$test_root/ffmpeg.tar.xz" "$(pin PKG_SHA256 "$ffmpeg_recipe")"
+download "$ffmpeg_fork/archive/$ffmpeg_revision.tar.gz" \
+  "$test_root/ffmpeg-cb1.tar.gz" "$(pin CB1_FFMPEG_SOURCE_SHA256 "$ffmpeg_recipe")"
 download "https://github.com/haasn/libplacebo/archive/$placebo_version.tar.gz" \
   "$test_root/libplacebo.tar.gz" "$(pin PKG_SHA256 "$placebo_recipe")"
 download "https://download.videolan.org/pub/videolan/libbluray/$bluray_version/libbluray-$bluray_version.tar.xz" \
@@ -48,7 +54,7 @@ download "https://www.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/linux-
 python3 scripts/cb1-stage.py
 mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray" "$test_root/linux"
 tar -xf "$test_root/kodi.tar.gz" -C "$test_root/kodi" --strip-components=1
-tar -xf "$test_root/ffmpeg.tar.xz" -C "$test_root/ffmpeg" --strip-components=1
+tar -xf "$test_root/ffmpeg-cb1.tar.gz" -C "$test_root/ffmpeg" --strip-components=1
 tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
 tar -xf "$test_root/libbluray.tar.xz" -C "$test_root/libbluray" --strip-components=1
 tar -xf "$test_root/linux.tar.xz" -C "$test_root/linux" --strip-components=1
@@ -61,11 +67,6 @@ done
 for patch_file in packages/mediacenter/kodi/patches/*.patch projects/Generic/patches/kodi/*.patch \
                   projects/Generic/patches/kodi/x86/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/kodi" < "$patch_file"
-done
-for patch_file in packages/multimedia/ffmpeg/patches/postproc/*.patch \
-                  packages/multimedia/ffmpeg/patches/libreelec/*.patch \
-                  projects/Generic/patches/ffmpeg/*.patch; do
-  patch --batch --forward --fuzz=0 -p1 -d "$test_root/ffmpeg" < "$patch_file"
 done
 for patch_file in CB1/patches/libplacebo/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/libplacebo" < "$patch_file"
