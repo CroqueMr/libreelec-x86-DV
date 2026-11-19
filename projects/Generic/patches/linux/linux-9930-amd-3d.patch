@@ -1,0 +1,55 @@
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_plane.c
+@@ -1101,18 +1101,23 @@
+ 	if (fb && state->crtc) {
+ 		/* Validate viewport to cover the case when only the position changes */
+ 		if (state->plane->type != DRM_PLANE_TYPE_CURSOR) {
++			int mode_hdisplay, mode_vdisplay;
+ 			int viewport_width = state->crtc_w;
+ 			int viewport_height = state->crtc_h;
+ 
++			/* frame-packed 3D scans out the doubled timing */
++			drm_mode_get_hv_timing(&new_crtc_state->mode,
++					       &mode_hdisplay, &mode_vdisplay);
++
+ 			if (state->crtc_x < 0)
+ 				viewport_width += state->crtc_x;
+-			else if (state->crtc_x + state->crtc_w > new_crtc_state->mode.crtc_hdisplay)
+-				viewport_width = new_crtc_state->mode.crtc_hdisplay - state->crtc_x;
++			else if (state->crtc_x + state->crtc_w > mode_hdisplay)
++				viewport_width = mode_hdisplay - state->crtc_x;
+ 
+ 			if (state->crtc_y < 0)
+ 				viewport_height += state->crtc_y;
+-			else if (state->crtc_y + state->crtc_h > new_crtc_state->mode.crtc_vdisplay)
+-				viewport_height = new_crtc_state->mode.crtc_vdisplay - state->crtc_y;
++			else if (state->crtc_y + state->crtc_h > mode_vdisplay)
++				viewport_height = mode_vdisplay - state->crtc_y;
+ 
+ 			if (viewport_width < 0 || viewport_height < 0) {
+ 				DRM_DEBUG_ATOMIC("Plane completely outside of screen\n");
+--- a/drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c
++++ b/drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c
+@@ -608,6 +608,9 @@
+ 
+ 	if (timing->timing_3d_format != TIMING_3D_FORMAT_NONE &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_HW_FRAME_PACKING &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_SW_FRAME_PACKING &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_SBS_SW_PACKED &&
++		timing->timing_3d_format != TIMING_3D_FORMAT_TB_SW_PACKED &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_TOP_AND_BOTTOM &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_SIDE_BY_SIDE &&
+ 		timing->timing_3d_format != TIMING_3D_FORMAT_FRAME_ALTERNATE &&
+--- a/drivers/gpu/drm/amd/display/modules/info_packet/info_packet.c
++++ b/drivers/gpu/drm/amd/display/modules/info_packet/info_packet.c
+@@ -556,6 +556,10 @@
+ 			case TIMING_3D_FORMAT_TOP_AND_BOTTOM:
+ 			case TIMING_3D_FORMAT_TB_SW_PACKED:
+ 				info_packet->sb[5] = (0x6 << 4);
++				/* Some sinks (JVC D-ILA) only engage TAB when the
++				 * 3D_Ext_Data byte is present, as Amlogic sources send it.
++				 */
++				length = 6;
+ 				break;
+ 
+ 			default:

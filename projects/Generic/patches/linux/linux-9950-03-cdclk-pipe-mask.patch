@@ -1,0 +1,55 @@
+From 67d77d9472c668577dd156c22b649f64957b2c63 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Fri, 12 Jun 2026 20:36:52 +0300
+Subject: [PATCH] drm/i915/cdclk: Introduce bxt_cdclk_cd2x_pipe_mask() and use
+ it
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Currently bxt_sanitize_cdclk() assumes that
+bxt_cdclk_cd2x_pipe(INVALID_PIPE) gives us the full mask for
+for the relevant bitfield. While that is true, it does make the
+code a bit confusing to read. Introduce bxt_cdclk_cd2x_pipe_mask()
+to make the situation a bit less confusing.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20260612173653.7830-6-ville.syrjala@linux.intel.com
+Reviewed-by: Michał Grzelak <michal.grzelak@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_cdclk.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_cdclk.c b/drivers/gpu/drm/i915/display/intel_cdclk.c
+index b612ab6f462a..8db79758187d 100644
+--- a/drivers/gpu/drm/i915/display/intel_cdclk.c
++++ b/drivers/gpu/drm/i915/display/intel_cdclk.c
+@@ -1944,6 +1944,16 @@ static void adlp_cdclk_pll_crawl(struct intel_display *display, int vco)
+ 	display->cdclk.hw.vco = vco;
+ }
+ 
++static u32 bxt_cdclk_cd2x_pipe_mask(struct intel_display *display)
++{
++	if (DISPLAY_VER(display) >= 12)
++		return TGL_CDCLK_CD2X_PIPE_MASK;
++	else if (DISPLAY_VER(display) >= 11)
++		return ICL_CDCLK_CD2X_PIPE_MASK;
++	else
++		return BXT_CDCLK_CD2X_PIPE_MASK;
++}
++
+ static u32 bxt_cdclk_cd2x_pipe(struct intel_display *display, enum pipe pipe)
+ {
+ 	if (DISPLAY_VER(display) >= 12) {
+@@ -2378,7 +2388,7 @@ static void bxt_sanitize_cdclk(struct intel_display *display)
+ 	 * dividers both syncing to an active pipe, or asynchronously
+ 	 * (PIPE_NONE).
+ 	 */
+-	cdctl &= ~bxt_cdclk_cd2x_pipe(display, INVALID_PIPE);
++	cdctl &= ~bxt_cdclk_cd2x_pipe_mask(display);
+ 	cdctl |= bxt_cdclk_cd2x_pipe(display, INVALID_PIPE);
+ 
+ 	if (cdctl != expected) {
+-- 
+GitLab
+

@@ -1,0 +1,193 @@
+From b21a0ab8fb95f1e496890e581c068bdf921a2452 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Thu, 8 Oct 2026 01:23:13 +0300
+Subject: [PATCH] drm/i915/gmbus: Fix i2c bit banging for PTL+
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The current implementation of w/a 16025573575 does not actually work.
+The GPIO register mask bits are write only, and thus the read-modify-write
+cycles we do will not preserve them. Furthermore the implementation makes
+no effort to preserve the actual direction/output value bits, which is
+a must if all the mask bits were actually set all the time.
+
+Rewrite the whole thing so that we always set all the mask bits,
+and correctly preserve the previous state of the direction/output value
+bits. And do that on all platforms so that we only have a single codepath
+to worry about. As a bonus this approach will also make the code
+work on upcoming platforms where the mask bits no longer even exist.
+
+Smoke tested on alm,cl,tgl,lnl,ptl.
+
+Fixes: 7565fd5dcb0b ("drm/i915/gmbus: Add Wa_16025573575 for PTL/WCL for bit-bashing")
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20261007222314.5714-5-ville.syrjala@linux.intel.com
+Reviewed-by: Sebastian Brzezinka <sebastian.brzezinka@intel.com>
+Reviewed-by: Ankit Nautiyal <ankit.k.nautiyal@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_gmbus.c | 98 ++++++++++++++--------
+ 1 file changed, 61 insertions(+), 37 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_gmbus.c b/drivers/gpu/drm/i915/display/intel_gmbus.c
+index 854f439ac5ba..b6c63a466233 100644
+--- a/drivers/gpu/drm/i915/display/intel_gmbus.c
++++ b/drivers/gpu/drm/i915/display/intel_gmbus.c
+@@ -246,25 +246,45 @@ static void bxt_gmbus_clock_gating(struct intel_display *display,
+ 		     !enable ? BXT_GMBUS_GATING_DIS : 0);
+ }
+ 
+-static u32 get_reserved(struct intel_gmbus *bus)
++static u32 gpio_mask_bits(struct intel_display *display)
+ {
+-	struct intel_display *display = bus->display;
+-	u32 preserve_bits = 0;
++	return GPIO_CLOCK_DIR_MASK | GPIO_CLOCK_VAL_MASK |
++		GPIO_DATA_DIR_MASK | GPIO_DATA_VAL_MASK;
++}
++
++static u32 gpio_preserved_bits(struct intel_display *display)
++{
++	u32 val = GPIO_CLOCK_DIR_OUT | GPIO_CLOCK_VAL_OUT |
++		GPIO_DATA_DIR_OUT | GPIO_DATA_VAL_OUT;
+ 
+ 	/*
+ 	 * On gen2/3 these are either internal pullup disables, or
+ 	 * documented as reserved bits that need to be preserved.
+ 	 */
+ 	if (DISPLAY_VER(display) < 4)
+-		preserve_bits |= GPIO_DATA_PULLUP_DISABLE |
++		val |= GPIO_DATA_PULLUP_DISABLE |
+ 			GPIO_CLOCK_PULLUP_DISABLE;
+ 
+-	/* Wa_16025573575: the masks bits need to be preserved through out */
+-	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+-		preserve_bits |= GPIO_CLOCK_DIR_MASK | GPIO_CLOCK_VAL_MASK |
+-				 GPIO_DATA_DIR_MASK | GPIO_DATA_VAL_MASK;
++	return val;
++}
++
++static u32 gpio_read_reg(struct intel_gmbus *bus)
++{
++	struct intel_display *display = bus->display;
++	u32 val;
++
++	val = intel_de_read_fw(display, bus->gpio_reg);
++
++	val &= gpio_preserved_bits(display);
++
++	/*
++	 * Wa_16025573575:
++	 * The (write only!) masks bits need to be kept set through out
++	 * on PTL. Do it always to keep the code uniform for all platforms.
++	 */
++	val |= gpio_mask_bits(display);
+ 
+-	return intel_de_read_fw(display, bus->gpio_reg) & preserve_bits;
++	return val;
+ }
+ 
+ static int get_clock(void *data)
+@@ -287,16 +307,16 @@ static void set_clock(void *data, int state_high)
+ {
+ 	struct intel_gmbus *bus = data;
+ 	struct intel_display *display = bus->display;
+-	u32 reserved = get_reserved(bus);
+-	u32 clock_bits;
++	u32 val;
+ 
+-	if (state_high)
+-		clock_bits = GPIO_CLOCK_DIR_IN | GPIO_CLOCK_DIR_MASK;
+-	else
+-		clock_bits = GPIO_CLOCK_DIR_OUT | GPIO_CLOCK_DIR_MASK |
+-			     GPIO_CLOCK_VAL_MASK;
++	val = gpio_read_reg(bus);
+ 
+-	intel_de_write_fw(display, bus->gpio_reg, reserved | clock_bits);
++	val &= ~(GPIO_CLOCK_DIR_OUT | GPIO_CLOCK_VAL_OUT);
++
++	if (!state_high)
++		val |= GPIO_CLOCK_DIR_OUT;
++
++	intel_de_write_fw(display, bus->gpio_reg, val);
+ 	intel_de_posting_read_fw(display, bus->gpio_reg);
+ }
+ 
+@@ -304,32 +324,36 @@ static void set_data(void *data, int state_high)
+ {
+ 	struct intel_gmbus *bus = data;
+ 	struct intel_display *display = bus->display;
+-	u32 reserved = get_reserved(bus);
+-	u32 data_bits;
++	u32 val;
+ 
+-	if (state_high)
+-		data_bits = GPIO_DATA_DIR_IN | GPIO_DATA_DIR_MASK;
+-	else
+-		data_bits = GPIO_DATA_DIR_OUT | GPIO_DATA_DIR_MASK |
+-			GPIO_DATA_VAL_MASK;
++	val = gpio_read_reg(bus);
+ 
+-	intel_de_write_fw(display, bus->gpio_reg, reserved | data_bits);
++	val &= ~(GPIO_DATA_DIR_OUT | GPIO_DATA_VAL_OUT);
++
++	if (!state_high)
++		val |= GPIO_DATA_DIR_OUT;
++
++	intel_de_write_fw(display, bus->gpio_reg, val);
+ 	intel_de_posting_read_fw(display, bus->gpio_reg);
+ }
+ 
+ static void
+-ptl_handle_mask_bits(struct intel_gmbus *bus, bool set)
++gpio_set_mask(struct intel_gmbus *bus, bool enable)
+ {
+ 	struct intel_display *display = bus->display;
+-	u32 reg_val = intel_de_read_fw(display, bus->gpio_reg);
+-	u32 mask_bits = GPIO_CLOCK_DIR_MASK | GPIO_CLOCK_VAL_MASK |
+-			GPIO_DATA_DIR_MASK | GPIO_DATA_VAL_MASK;
+-	if (set)
+-		reg_val |= mask_bits;
++	u32 val;
++
++	val = gpio_read_reg(bus);
++
++	val &= ~(GPIO_DATA_DIR_OUT | GPIO_CLOCK_DIR_OUT |
++		 GPIO_DATA_VAL_OUT | GPIO_CLOCK_VAL_OUT);
++
++	if (enable)
++		val |= gpio_mask_bits(display);
+ 	else
+-		reg_val &= ~mask_bits;
++		val &= ~gpio_mask_bits(display);
+ 
+-	intel_de_write_fw(display, bus->gpio_reg, reg_val);
++	intel_de_write_fw(display, bus->gpio_reg, val);
+ 	intel_de_posting_read_fw(display, bus->gpio_reg);
+ }
+ 
+@@ -344,8 +368,8 @@ intel_gpio_pre_xfer(struct i2c_adapter *adapter)
+ 
+ 	intel_gmbus_reset(display);
+ 
+-	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+-		ptl_handle_mask_bits(bus, true);
++	if (gpio_mask_bits(display))
++		gpio_set_mask(bus, true);
+ 
+ 	set_data(bus, 1);
+ 	set_clock(bus, 1);
+@@ -362,8 +386,8 @@ intel_gpio_post_xfer(struct i2c_adapter *adapter)
+ 	set_data(bus, 1);
+ 	set_clock(bus, 1);
+ 
+-	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+-		ptl_handle_mask_bits(bus, false);
++	if (gpio_mask_bits(display))
++		gpio_set_mask(bus, false);
+ 
+ 	if (display->platform.pineview)
+ 		pnv_gmbus_clock_gating(display, true);
+-- 
+GitLab
+

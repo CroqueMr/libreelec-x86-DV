@@ -1,0 +1,654 @@
+From: LibreELEC DV hardware port
+Subject: [PATCH] nvidia R580: add kernel-private HDMI VSIF modesetting
+
+Base: NVIDIA 580.178.04, c8e699821c23e4335bf23330a54a23d15cfb95e9.
+Reuse the native Pascal HDMI packer and the DRM property contract used by Beta5.
+Rebuild only the MIT modeset core; keep proprietary RM and userspace at R580.
+Do not extend R580 userspace ioctl layouts. The extra modeset envelope is
+accepted only from the native in-kernel KAPI client under its existing lock.
+
+Software qualification only. Physical Pascal HDMI output remains unverified.
+NVIDIA source and copyright notices are retained. VSIF construction is adapted
+from NVIDIA 615; the existing Beta5/Hades max-bpc contract is reused.
+
+diff --git a/kernel-open/common/inc/nvkms-kapi.h b/kernel-open/common/inc/nvkms-kapi.h
+index 39affd0..cd93343 100644
+--- a/kernel-open/common/inc/nvkms-kapi.h
++++ b/kernel-open/common/inc/nvkms-kapi.h
+@@ -29,6 +29,7 @@
+ #include "nv-gpu-info.h"
+ #include "nv_dpy_id.h"
+ #include "nvkms-api-types.h"
++#include "nvkms-cb1-vsif.h"
+ #include "nvkms-format.h"
+ 
+ #define __NVKMS_KAPI_H__
+@@ -412,6 +413,8 @@ struct NvKmsKapiHeadModeSetConfig {
+     } olut;
+ 
+     NvU32 olutFpNormScale;
++    struct NvKmsCb1Vsif hdmiVsifMetadata;
++    NvU32 colorBpc;
+ };
+ 
+ struct NvKmsKapiHeadRequestedConfig {
+@@ -426,6 +429,8 @@ struct NvKmsKapiHeadRequestedConfig {
+         NvBool legacyOlutChanged      : 1;
+         NvBool olutChanged            : 1;
+         NvBool olutFpNormScaleChanged : 1;
++        NvBool hdmiVsifMetadataChanged : 1;
++        NvBool colorBpcChanged : 1;
+     } flags;
+ 
+     struct NvKmsKapiCursorRequestedConfig cursorRequestedConfig;
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.c b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+index c90a5d2..764efbb 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.c
+@@ -227,14 +227,86 @@ nv_drm_connector_detect(struct drm_connector *connector, bool force)
+     return __nv_drm_connector_detect_internal(connector);
+ }
+ 
++static struct nv_cb1_connector_state *nv_cb1_state(struct drm_connector_state *s)
++{
++    return container_of(s, struct nv_cb1_connector_state, base);
++}
++
++static void nv_cb1_destroy_state(struct drm_connector *c, struct drm_connector_state *s)
++{
++    drm_property_blob_put(nv_cb1_state(s)->vsif);
++    __drm_atomic_helper_connector_destroy_state(s);
++    nv_drm_free(nv_cb1_state(s));
++}
++
++static void nv_cb1_reset(struct drm_connector *c)
++{
++    struct nv_cb1_connector_state *s;
++    if (c->state) nv_cb1_destroy_state(c, c->state);
++    c->state = NULL;
++    s = nv_drm_calloc(1, sizeof(*s));
++    if (!s) return;
++    __drm_atomic_helper_connector_reset(c, &s->base);
++    s->base.max_requested_bpc = s->base.max_bpc = 12;
++}
++
++static struct drm_connector_state *nv_cb1_duplicate_state(struct drm_connector *c)
++{
++    struct nv_cb1_connector_state *s;
++    if (!c->state) return NULL;
++    s = nv_drm_calloc(1, sizeof(*s));
++    if (!s) return NULL;
++    __drm_atomic_helper_connector_duplicate_state(c, &s->base);
++    s->vsif = drm_property_blob_get(nv_cb1_state(c->state)->vsif);
++    s->dither_off = nv_cb1_state(c->state)->dither_off;
++    return &s->base;
++}
++
++static int nv_cb1_set_property(struct drm_connector *c, struct drm_connector_state *s,
++                              struct drm_property *p, uint64_t val)
++{
++    struct nv_drm_device *d = to_nv_device(c->dev);
++    struct nv_cb1_connector_state *ns = nv_cb1_state(s);
++    if (p == d->cb1_vsif_property) {
++        struct drm_property_blob *blob = val ? drm_property_lookup_blob(c->dev, val) : NULL;
++        if (val && !blob) return -EINVAL;
++        if (blob && (blob->length < 3 || blob->length > 27)) {
++            drm_property_blob_put(blob);
++            return -EINVAL;
++        }
++        drm_property_blob_put(ns->vsif);
++        ns->vsif = blob;
++        return 0;
++    }
++    if (p == d->cb1_dither_property) {
++        if (val > 1) return -EINVAL;
++        ns->dither_off = val == 1;
++        return 0;
++    }
++    return -EINVAL;
++}
++
++static int nv_cb1_get_property(struct drm_connector *c, const struct drm_connector_state *s,
++                              struct drm_property *p, uint64_t *val)
++{
++    struct nv_drm_device *d = to_nv_device(c->dev);
++    const struct nv_cb1_connector_state *ns = container_of(s, struct nv_cb1_connector_state, base);
++    if (p == d->cb1_vsif_property) *val = ns->vsif ? ns->vsif->base.id : 0;
++    else if (p == d->cb1_dither_property) *val = ns->dither_off;
++    else return -EINVAL;
++    return 0;
++}
++
+ static struct drm_connector_funcs nv_connector_funcs = {
+     .destroy                = nv_drm_connector_destroy,
+-    .reset                  = drm_atomic_helper_connector_reset,
++    .reset                  = nv_cb1_reset,
+     .force                  = __nv_drm_connector_force,
+     .detect                 = nv_drm_connector_detect,
+     .fill_modes             = drm_helper_probe_single_connector_modes,
+-    .atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+-    .atomic_destroy_state   = drm_atomic_helper_connector_destroy_state,
++    .atomic_duplicate_state = nv_cb1_duplicate_state,
++    .atomic_destroy_state   = nv_cb1_destroy_state,
++    .atomic_set_property    = nv_cb1_set_property,
++    .atomic_get_property    = nv_cb1_get_property,
+ };
+ 
+ static int nv_drm_connector_get_modes(struct drm_connector *connector)
+@@ -380,6 +452,24 @@ __nv_drm_connector_atomic_check(struct drm_connector *connector,
+     nv_crtc_state = to_nv_crtc_state(crtc_state);
+     req_config = &nv_crtc_state->req_config;
+ 
++    {
++        const struct nv_cb1_connector_state *ns = nv_cb1_state(new_connector_state);
++        struct NvKmsCb1Vsif next = {0};
++        NvU32 bpc = 0;
++        if (ns->vsif) {
++            next.payloadSize = ns->vsif->length;
++            memcpy(next.payload, ns->vsif->data, next.payloadSize);
++        }
++        next.disableDithering = ns->dither_off;
++        if (connector->max_bpc_property && new_connector_state->max_requested_bpc < 10)
++            bpc = 8;
++        req_config->flags.hdmiVsifMetadataChanged =
++            memcmp(&req_config->modeSetConfig.hdmiVsifMetadata, &next, sizeof(next)) != 0;
++        req_config->modeSetConfig.hdmiVsifMetadata = next;
++        req_config->flags.colorBpcChanged = req_config->modeSetConfig.colorBpc != bpc;
++        req_config->modeSetConfig.colorBpc = bpc;
++    }
++
+     /*
+      * Override metadata for the entire head instead of allowing NVKMS to derive
+      * it from the layers' metadata.
+@@ -494,10 +584,12 @@ nv_drm_connector_new(struct drm_device *dev,
+     }
+ 
+     if ((nv_connector->base.state =
+-            nv_drm_calloc(1, sizeof(*nv_connector->base.state))) == NULL) {
++            nv_drm_calloc(1, sizeof(struct nv_cb1_connector_state))) == NULL) {
+         goto failed_state_alloc;
+     }
+     nv_connector->base.state->connector = &nv_connector->base;
++    nv_connector->base.state->max_requested_bpc = 12;
++    nv_connector->base.state->max_bpc = 12;
+ 
+     nv_connector->physicalIndex = physicalIndex;
+     nv_connector->type     = type;
+@@ -531,6 +623,13 @@ nv_drm_connector_new(struct drm_device *dev,
+ 
+ #if defined(NV_DRM_CONNECTOR_ATTACH_HDR_OUTPUT_METADATA_PROPERTY_PRESENT)
+     if (nv_connector->type == NVKMS_CONNECTOR_TYPE_HDMI) {
++        nv_connector->base.max_bpc_property = nv_dev->cb1_bpc_property;
++        drm_object_attach_property(&nv_connector->base.base,
++            nv_dev->cb1_bpc_property, 12);
++        drm_object_attach_property(&nv_connector->base.base,
++            nv_dev->cb1_vsif_property, 0);
++        drm_object_attach_property(&nv_connector->base.base,
++            nv_dev->cb1_dither_property, 0);
+ #if defined(NV_DRM_MODE_CREATE_DP_COLORSPACE_PROPERTY_HAS_SUPPORTED_COLORSPACES_ARG)
+         if (drm_mode_create_hdmi_colorspace_property(
+                 &nv_connector->base,
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-connector.h b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+index 282606d..e5c39aa 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-connector.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-connector.h
+@@ -75,6 +75,12 @@ static inline struct nv_drm_connector *to_nv_connector(
+     return container_of(connector, struct nv_drm_connector, base);
+ }
+ 
++struct nv_cb1_connector_state {
++    struct drm_connector_state base;
++    struct drm_property_blob *vsif;
++    bool dither_off;
++};
++
+ static inline void nv_drm_connector_mark_connection_status_dirty(
+     struct nv_drm_connector *nv_connector)
+ {
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-drv.c b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+index f8376c4..6b1c333 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-drv.c
++++ b/kernel-open/nvidia-drm/nvidia-drm-drv.c
+@@ -644,6 +644,17 @@ static int nv_drm_create_properties(struct nv_drm_device *nv_dev)
+         return -ENOMEM;
+     }
+ 
++    {
++        static const struct drm_prop_enum_list dither[] = {{0, "auto"}, {1, "off"}};
++        nv_dev->cb1_vsif_property = drm_property_create(nv_dev->dev,
++            DRM_MODE_PROP_BLOB, "NV_HDMI_VSIF_METADATA", 0);
++        nv_dev->cb1_bpc_property = drm_property_create_range(nv_dev->dev,
++            0, "max bpc", 8, 12);
++        nv_dev->cb1_dither_property = drm_property_create_enum(nv_dev->dev,
++            0, "dithering mode", dither, ARRAY_SIZE(dither));
++        if (!nv_dev->cb1_vsif_property || !nv_dev->cb1_bpc_property ||
++            !nv_dev->cb1_dither_property) return -ENOMEM;
++    }
+     return 0;
+ }
+ 
+diff --git a/kernel-open/nvidia-drm/nvidia-drm-priv.h b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+index 8480123..9de6a4f 100644
+--- a/kernel-open/nvidia-drm/nvidia-drm-priv.h
++++ b/kernel-open/nvidia-drm/nvidia-drm-priv.h
+@@ -176,6 +176,9 @@ struct nv_drm_device {
+     struct drm_property *nv_crtc_regamma_lut_property;
+     struct drm_property *nv_crtc_regamma_lut_size_property;
+     struct drm_property *nv_crtc_regamma_divisor_property;
++    struct drm_property *cb1_vsif_property;
++    struct drm_property *cb1_bpc_property;
++    struct drm_property *cb1_dither_property;
+ 
+     struct nv_drm_device *next;
+ 
+diff --git a/src/common/inc/nvkms-cb1-vsif.h b/src/common/inc/nvkms-cb1-vsif.h
+new file mode 100644
+index 0000000..25e7209
+--- /dev/null
++++ b/src/common/inc/nvkms-cb1-vsif.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef NVKMS_CB1_VSIF_H
++#define NVKMS_CB1_VSIF_H
++#include "nvtypes.h"
++
++/* Kernel-private metadata; the R580 userspace ioctl layouts stay unchanged. */
++struct NvKmsCb1Vsif {
++    NvU32 payloadSize;
++    NvU8 payload[27];
++    NvBool disableDithering;
++};
++
++static inline NvBool nvCb1VsifValid(const struct NvKmsCb1Vsif *p)
++{
++    return p && (p->payloadSize == 0 ||
++                 (p->payloadSize >= 3 && p->payloadSize <= 27));
++}
++#endif
+diff --git a/src/nvidia-modeset/include/nvkms-modeset-types.h b/src/nvidia-modeset/include/nvkms-modeset-types.h
+index 11da38b..8d96264 100644
+--- a/src/nvidia-modeset/include/nvkms-modeset-types.h
++++ b/src/nvidia-modeset/include/nvkms-modeset-types.h
+@@ -42,6 +42,7 @@ typedef struct {
+     NVDispHeadInfoFrameStateEvoRec infoFrame;
+     enum NvKmsOutputTf tf;
+     NvBool hdrInfoFrameOverride;
++    struct NvKmsCb1Vsif hdmiVsifMetadata;
+     NvU32 hdrStaticMetadataLayerMask;
+     NvBool colorSpaceSpecified : 1;
+     NvBool colorBpcSpecified   : 1;
+diff --git a/src/nvidia-modeset/include/nvkms-modeset.h b/src/nvidia-modeset/include/nvkms-modeset.h
+index 1fb82d7..eb5290d 100644
+--- a/src/nvidia-modeset/include/nvkms-modeset.h
++++ b/src/nvidia-modeset/include/nvkms-modeset.h
+@@ -52,6 +52,14 @@ NvBool nvSetDispModeEvo(NVDevEvoPtr pDevEvo,
+                         NvBool bypassComposition,
+                         NvBool doRasterLock);
+ 
++NvBool nvSetDispModeEvoWithVsif(NVDevEvoPtr pDevEvo,
++                        struct NvKmsPerOpenDev *pOpenDev,
++                        const struct NvKmsSetModeRequest *pRequest,
++                        struct NvKmsSetModeReply *pReply,
++                        NvBool bypassComposition,
++                        NvBool doRasterLock,
++                        const struct NvKmsCb1Vsif (*vsif)[NVKMS_MAX_HEADS_PER_DISP]);
++
+ typedef NvBool (*NVShutDownApiHeadsTestFunc)(
+     const NVDispEvoRec *pDispEvo,
+     const NvU32 apiHead,
+diff --git a/src/nvidia-modeset/include/nvkms-types.h b/src/nvidia-modeset/include/nvkms-types.h
+index 224bdad..ac54f70 100644
+--- a/src/nvidia-modeset/include/nvkms-types.h
++++ b/src/nvidia-modeset/include/nvkms-types.h
+@@ -43,6 +43,7 @@ extern "C" {
+ #include <ctrl/ctrl0073/ctrl0073dfp.h>
+ 
+ #include "nvkms-api.h"
++#include "nvkms-cb1-vsif.h"
+ #include "nvkms-prealloc-types.h"
+ 
+ #include "nvos.h"
+@@ -1933,6 +1934,7 @@ typedef struct _NVDispHeadStateEvoRec {
+         enum NvKmsInfoFrameEOTF eotf;
+         struct NvKmsHDRStaticMetadata staticMetadata;
+     } hdrInfoFrameOverride;
++    struct NvKmsCb1Vsif hdmiVsifMetadata;
+ 
+     struct {
+         enum NvKmsHDRInfoFrameState state;
+@@ -1982,6 +1984,7 @@ typedef struct _NVDispApiHeadStateEvoRec {
+     enum NvKmsOutputTf tf;
+ 
+     NvBool hdrInfoFrameOverride;
++    struct NvKmsCb1Vsif hdmiVsifMetadata;
+     NvU32 hdrStaticMetadataLayerMask;
+ 
+     /*
+diff --git a/src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h b/src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h
+new file mode 100644
+index 0000000..733d2b3
+--- /dev/null
++++ b/src/nvidia-modeset/kapi/include/nvkms-kapi-vsif.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef NVKMS_KAPI_VSIF_H
++#define NVKMS_KAPI_VSIF_H
++#include "nvkms-api.h"
++#include "nvkms-cb1-vsif.h"
++
++/* Accepted only from the in-kernel KAPI client, under the native NVKMS lock. */
++#define NVKMS_IOCTL_KAPI_SET_MODE_VSIF 0x10000U
++struct NvKmsKapiSetModeVsif {
++    struct NvKmsSetModeParams mode;
++    struct NvKmsCb1Vsif vsif[NVKMS_MAX_SUBDEVICES][NVKMS_MAX_HEADS_PER_DISP];
++};
++#endif
+diff --git a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+index 39affd0..cd93343 100644
+--- a/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
++++ b/src/nvidia-modeset/kapi/interface/nvkms-kapi.h
+@@ -29,6 +29,7 @@
+ #include "nv-gpu-info.h"
+ #include "nv_dpy_id.h"
+ #include "nvkms-api-types.h"
++#include "nvkms-cb1-vsif.h"
+ #include "nvkms-format.h"
+ 
+ #define __NVKMS_KAPI_H__
+@@ -412,6 +413,8 @@ struct NvKmsKapiHeadModeSetConfig {
+     } olut;
+ 
+     NvU32 olutFpNormScale;
++    struct NvKmsCb1Vsif hdmiVsifMetadata;
++    NvU32 colorBpc;
+ };
+ 
+ struct NvKmsKapiHeadRequestedConfig {
+@@ -426,6 +429,8 @@ struct NvKmsKapiHeadRequestedConfig {
+         NvBool legacyOlutChanged      : 1;
+         NvBool olutChanged            : 1;
+         NvBool olutFpNormScaleChanged : 1;
++        NvBool hdmiVsifMetadataChanged : 1;
++        NvBool colorBpcChanged : 1;
+     } flags;
+ 
+     struct NvKmsKapiCursorRequestedConfig cursorRequestedConfig;
+diff --git a/src/nvidia-modeset/kapi/src/nvkms-kapi.c b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+index a12b06e..161b3d6 100644
+--- a/src/nvidia-modeset/kapi/src/nvkms-kapi.c
++++ b/src/nvidia-modeset/kapi/src/nvkms-kapi.c
+@@ -34,6 +34,7 @@
+ #include "nv-float.h"
+ 
+ #include "nvkms-kapi.h"
++#include "nvkms-kapi-vsif.h"
+ #include "nvkms-kapi-private.h"
+ #include "nvkms-kapi-internal.h"
+ #include "nvkms-kapi-notifiers.h"
+@@ -3448,6 +3449,25 @@ static NvBool NvKmsKapiRequestedModeSetConfigToKms(
+         paramsHead->flip.colorimetry.specified = NV_TRUE;
+         paramsHead->flip.colorimetry.val = headModeSetConfig->colorimetry;
+ 
++        if (headModeSetConfig->colorBpc != 0) {
++            paramsHead->colorBpcSpecified = TRUE;
++            paramsHead->colorBpc = headModeSetConfig->colorBpc;
++        }
++        if (headModeSetConfig->hdmiVsifMetadata.payloadSize != 0) {
++            if (!nvCb1VsifValid(&headModeSetConfig->hdmiVsifMetadata) ||
++                headModeSetConfig->hdrInfoFrame.enabled ||
++                headModeSetConfig->colorimetry != NVKMS_OUTPUT_COLORIMETRY_DEFAULT ||
++                headModeSetConfig->colorBpc != 8 ||
++                headModeSetConfig->numDisplays != 1 || tf != NVKMS_OUTPUT_TF_NONE ||
++                !headModeSetConfig->hdmiVsifMetadata.disableDithering) {
++                return FALSE;
++            }
++            paramsHead->colorSpaceSpecified = TRUE;
++            paramsHead->colorSpace = NV_KMS_DPY_ATTRIBUTE_REQUESTED_COLOR_SPACE_RGB;
++            paramsHead->colorRangeSpecified = TRUE;
++            paramsHead->colorRange = NV_KMS_DPY_ATTRIBUTE_COLOR_RANGE_FULL;
++        }
++
+         paramsHead->viewPortSizeIn.width =
+             headModeSetConfig->mode.timings.hVisible;
+         paramsHead->viewPortSizeIn.height =
+@@ -3470,7 +3490,7 @@ static NvBool KmsSetMode(
+     struct NvKmsSetModeParams *params = NULL;
+     NvBool status = NV_FALSE;
+ 
+-    params = nvKmsKapiCalloc(1, sizeof(*params));
++    params = nvKmsKapiCalloc(1, sizeof(struct NvKmsKapiSetModeVsif));
+ 
+     if (params == NULL) {
+         goto done;
+@@ -3483,9 +3503,15 @@ static NvBool KmsSetMode(
+         goto done;
+     }
+ 
+-    status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
+-                                              NVKMS_IOCTL_SET_MODE,
+-                                              params, sizeof(*params));
++    {
++        struct NvKmsKapiSetModeVsif *extended = (void *)params;
++        for (NvU32 head = 0; head < NVKMS_KAPI_MAX_HEADS; head++) {
++            extended->vsif[device->dispIdx][head] =
++                requestedConfig->headRequestedConfig[head].modeSetConfig.hdmiVsifMetadata;
++        }
++        status = nvkms_ioctl_from_kapi_try_pmlock(device->pKmsOpen,
++            NVKMS_IOCTL_KAPI_SET_MODE_VSIF, extended, sizeof(*extended));
++    }
+ 
+     replyConfig->flipResult =
+         (params->reply.status == NVKMS_SET_MODE_STATUS_SUCCESS) ?
+@@ -3804,7 +3830,9 @@ static NvBool ApplyModeSetConfig(
+             headRequestedConfig->flags.displaysChanged     ||
+             headRequestedConfig->flags.modeChanged         ||
+             headRequestedConfig->flags.hdrInfoFrameChanged ||
+-            headRequestedConfig->flags.colorimetryChanged;
++            headRequestedConfig->flags.colorimetryChanged ||
++            headRequestedConfig->flags.hdmiVsifMetadataChanged ||
++            headRequestedConfig->flags.colorBpcChanged;
+ 
+         /*
+          * NVKMS flip ioctl could not validate flip configuration for an
+diff --git a/src/nvidia-modeset/src/nvkms-hdmi.c b/src/nvidia-modeset/src/nvkms-hdmi.c
+index c9ca41b..305821b 100644
+--- a/src/nvidia-modeset/src/nvkms-hdmi.c
++++ b/src/nvidia-modeset/src/nvkms-hdmi.c
+@@ -463,6 +463,25 @@ SendVendorSpecificInfoFrame(const NVDispEvoRec *pDispEvo,
+     NVT_VENDOR_SPECIFIC_INFOFRAME vendorInfoFrame;
+     NVT_STATUS status;
+ 
++    /* Adapted from NVIDIA 615: use the native HDMI packet writer on Pascal. */
++    const struct NvKmsCb1Vsif *vsif = &pDispEvo->headState[head].hdmiVsifMetadata;
++    if (vsif->payloadSize != 0) {
++        if (!nvCb1VsifValid(vsif)) {
++            return;
++        }
++        nvkms_memset(&vendorInfoFrame, 0, sizeof(vendorInfoFrame));
++        vendorInfoFrame.Header.type = NVT_INFOFRAME_TYPE_VENDOR_SPECIFIC;
++        vendorInfoFrame.Header.version = 1;
++        vendorInfoFrame.Header.length = vsif->payloadSize;
++        ct_assert(sizeof(vendorInfoFrame.Data) >= sizeof(vsif->payload));
++        nvkms_memcpy(&vendorInfoFrame.Data, vsif->payload, vsif->payloadSize);
++        pDevEvo->hal->SendHdmiInfoFrame(pDispEvo, head,
++            NV_EVO_INFOFRAME_TRANSMIT_CONTROL_EVERY_FRAME,
++            &vendorInfoFrame.Header, sizeof(vendorInfoFrame.Header) + vsif->payloadSize,
++            TRUE);
++        return;
++    }
++
+     /*
+      * Disable the vendor specific infoframe if not requested to be
+      * enabled, or if HDMI 3D is requested but not supported by the monitor.
+diff --git a/src/nvidia-modeset/src/nvkms-modeset.c b/src/nvidia-modeset/src/nvkms-modeset.c
+index e18ae84..f4124e5 100644
+--- a/src/nvidia-modeset/src/nvkms-modeset.c
++++ b/src/nvidia-modeset/src/nvkms-modeset.c
+@@ -504,6 +504,8 @@ InitNVProposedModeSetStateOneApiHead(
+     pProposedApiHead->tf = pDispEvo->apiHeadState[apiHead].tf;
+     pProposedApiHead->hdrInfoFrameOverride =
+         pDispEvo->apiHeadState[apiHead].hdrInfoFrameOverride;
++    pProposedApiHead->hdmiVsifMetadata =
++        pDispEvo->apiHeadState[apiHead].hdmiVsifMetadata;
+     pProposedApiHead->hdrStaticMetadataLayerMask =
+         pDispEvo->apiHeadState[apiHead].hdrStaticMetadataLayerMask;
+     pProposedApiHead->viewPortPointIn =
+@@ -1047,7 +1049,8 @@ AssignProposedModeSetHwState(NVDevEvoRec *pDevEvo,
+                              const struct NvKmsPerOpenDev *pOpenDev,
+                              const struct NvKmsSetModeRequest *pRequest,
+                              struct NvKmsSetModeReply *pReply,
+-                             NVProposedModeSetHwState *pProposed)
++                             NVProposedModeSetHwState *pProposed,
++                             const struct NvKmsCb1Vsif (*vsif)[NVKMS_MAX_HEADS_PER_DISP])
+ {
+     NvU32 sd;
+     NVDispEvoPtr pDispEvo;
+@@ -1111,6 +1114,21 @@ AssignProposedModeSetHwState(NVDevEvoRec *pDevEvo,
+ 
+             pProposedApiHead->changed = TRUE;
+             pProposedApiHead->dpyIdList = pRequestHead->dpyIdList;
++            /* A normal userspace/console modeset clears the private override. */
++            nvkms_memset(&pProposedApiHead->hdmiVsifMetadata, 0,
++                         sizeof(pProposedApiHead->hdmiVsifMetadata));
++            if (vsif != NULL) {
++                if (!nvCb1VsifValid(&vsif[sd][apiHead]) ||
++                    (vsif[sd][apiHead].payloadSize != 0 &&
++                     (!nvDpyIsHdmiEvo(pDpyEvo) ||
++                      nvCountDpyIdsInDpyIdList(pRequestHead->dpyIdList) != 1))) {
++                    pReply->disp[sd].head[apiHead].status =
++                        NVKMS_SET_MODE_ONE_HEAD_STATUS_INVALID_MODE;
++                    ret = FALSE;
++                    continue;
++                }
++                pProposedApiHead->hdmiVsifMetadata = vsif[sd][apiHead];
++            }
+             pProposedApiHead->activeRmId =
+                 nvRmAllocDisplayId(pDispEvo, pProposedApiHead->dpyIdList);
+             if (pProposedApiHead->activeRmId == 0x0) {
+@@ -2160,6 +2178,13 @@ ValidateProposedModeSetHwStateOneDisp(
+                              pProposedApiHead->attributes.color.colorimetry,
+                              &pDpyEvo->requestedDithering,
+                              &pProposedApiHead->attributes.dithering);
++        if (pProposedApiHead->hdmiVsifMetadata.disableDithering) {
++            pProposedApiHead->attributes.dithering.enabled = FALSE;
++            pProposedApiHead->attributes.dithering.mode =
++                NV_KMS_DPY_ATTRIBUTE_CURRENT_DITHERING_MODE_NONE;
++            pProposedApiHead->attributes.dithering.depth =
++                NV_KMS_DPY_ATTRIBUTE_CURRENT_DITHERING_DEPTH_NONE;
++        }
+     }
+ 
+     /*
+@@ -2886,6 +2911,7 @@ ApplyProposedModeSetHwStateOneHeadPreUpdate(
+     NVEvoUpdateState *updateState = &pModesetUpdateState->updateState;
+ 
+     pHeadState->modeValidationParams = pProposedApiHead->modeValidationParams;
++    pHeadState->hdmiVsifMetadata = pProposedApiHead->hdmiVsifMetadata;
+     pHeadState->bypassComposition = bypassComposition;
+     pHeadState->activeRmId = pProposedApiHead->activeRmId;
+     pHeadState->pConnectorEvo = pProposedHead->pConnectorEvo;
+@@ -3082,6 +3108,7 @@ ApplyProposedModeSetStateOneApiHeadPreUpdate(
+     pApiHeadState->tf = pProposedApiHead->tf;
+     pApiHeadState->hdrInfoFrameOverride =
+         pProposedApiHead->hdrInfoFrameOverride;
++    pApiHeadState->hdmiVsifMetadata = pProposedApiHead->hdmiVsifMetadata;
+     pApiHeadState->hdrStaticMetadataLayerMask =
+         pProposedApiHead->hdrStaticMetadataLayerMask;
+     pApiHeadState->hs10bpcHint = pProposedApiHead->hs10bpcHint;
+@@ -3920,7 +3947,8 @@ AssignAndValidateProposedModeSet(NVDevEvoPtr pDevEvo,
+                                  const struct NvKmsSetModeRequest *pRequest,
+                                  struct NvKmsSetModeReply *pReply,
+                                  NVProposedModeSetHwState *pProposed,
+-                                 NVModeSetWorkArea *pWorkArea)
++                                 NVModeSetWorkArea *pWorkArea,
++                                 const struct NvKmsCb1Vsif (*vsif)[NVKMS_MAX_HEADS_PER_DISP])
+ {
+     NvBool ret = FALSE;
+     struct NvKmsSetModeRequest *pPatchedRequest = nvPreallocGet(pDevEvo,
+@@ -3958,7 +3986,7 @@ tryHsAgain:
+ 
+         /* assign pProposed from pPatchedRequest */
+         if (!AssignProposedModeSetHwState(pDevEvo, pOpenDev, pPatchedRequest,
+-                                          pReply, pProposed)) {
++                                          pReply, pProposed, vsif)) {
+ 
+             nvHsConfigClearPatchedSetModeRequest(pDevEvo,
+                                                  pOpenDev,
+@@ -4026,12 +4054,13 @@ done:
+  *                 the state of the hardware and software should not
+  *                 have been changed.
+  */
+-NvBool nvSetDispModeEvo(NVDevEvoPtr pDevEvo,
++NvBool nvSetDispModeEvoWithVsif(NVDevEvoPtr pDevEvo,
+                         struct NvKmsPerOpenDev *pOpenDev,
+                         const struct NvKmsSetModeRequest *pRequest,
+                         struct NvKmsSetModeReply *pReply,
+                         NvBool bypassComposition,
+-                        NvBool doRasterLock)
++                        NvBool doRasterLock,
++                        const struct NvKmsCb1Vsif (*vsif)[NVKMS_MAX_HEADS_PER_DISP])
+ {
+     NvBool ret = FALSE;
+     NVProposedModeSetHwState *pProposed =
+@@ -4063,7 +4092,7 @@ NvBool nvSetDispModeEvo(NVDevEvoPtr pDevEvo,
+     }
+ 
+     if (!AssignAndValidateProposedModeSet(pDevEvo, pOpenDev, pRequest, pReply,
+-                                          pProposed, pWorkArea)) {
++                                          pProposed, pWorkArea, vsif)) {
+         goto done;
+     }
+ 
+@@ -4204,6 +4233,17 @@ done:
+     return ret;
+ }
+ 
++NvBool nvSetDispModeEvo(NVDevEvoPtr pDevEvo,
++                        struct NvKmsPerOpenDev *pOpenDev,
++                        const struct NvKmsSetModeRequest *pRequest,
++                        struct NvKmsSetModeReply *pReply,
++                        NvBool bypassComposition,
++                        NvBool doRasterLock)
++{
++    return nvSetDispModeEvoWithVsif(pDevEvo, pOpenDev, pRequest, pReply,
++                                   bypassComposition, doRasterLock, NULL);
++}
++
+ /*!
+  * Register a callback to activate when vblank is reached on a given head.
+  *
+diff --git a/src/nvidia-modeset/src/nvkms.c b/src/nvidia-modeset/src/nvkms.c
+index ef24124..9650e52 100644
+--- a/src/nvidia-modeset/src/nvkms.c
++++ b/src/nvidia-modeset/src/nvkms.c
+@@ -24,6 +24,7 @@
+ #include "nvkms.h"
+ #include "nvkms-private.h"
+ #include "nvkms-api.h"
++#include "nvkms-kapi-vsif.h"
+ 
+ #include "nvkms-types.h"
+ #include "nvkms-utils.h"
+@@ -5149,6 +5150,22 @@ NvBool nvKmsIoctl(
+         return FALSE;
+     }
+ 
++    /* Keep every existing R580 userspace command and its wire layout intact. */
++    if (cmdOpaque == NVKMS_IOCTL_KAPI_SET_MODE_VSIF) {
++        struct NvKmsKapiSetModeVsif *p;
++        struct NvKmsPerOpenDev *pOpenDev;
++        if (pOpen->clientType != NVKMS_CLIENT_KERNEL_SPACE ||
++            paramSize != sizeof(*p)) {
++            return FALSE;
++        }
++        p = (void *)(NvUPtr)paramsAddress;
++        if (p == NULL) return FALSE;
++        pOpenDev = GetPerOpenDev(pOpen, p->mode.request.deviceHandle);
++        if (pOpenDev == NULL) return FALSE;
++        return nvSetDispModeEvoWithVsif(pOpenDev->pDevEvo, pOpenDev,
++            &p->mode.request, &p->mode.reply, FALSE, TRUE, p->vsif);
++    }
++
+     if (cmd >= ARRAY_LEN(dispatch)) {
+         return FALSE;
+     }

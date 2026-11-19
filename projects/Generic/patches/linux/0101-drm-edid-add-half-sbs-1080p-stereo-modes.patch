@@ -1,0 +1,13 @@
+--- a/drivers/gpu/drm/drm_edid.c	2026-09-04 19:38:45
++++ b/drivers/gpu/drm/drm_edid.c	2026-09-04 19:39:10
+@@ -4709,6 +4709,10 @@
+ static const struct stereo_mandatory_mode stereo_mandatory_modes[] = {
+ 	{ 1920, 1080, 24, DRM_MODE_FLAG_3D_TOP_AND_BOTTOM },
+ 	{ 1920, 1080, 24, DRM_MODE_FLAG_3D_FRAME_PACKING },
++	/* not mandatory, but common on projectors (JVC): half side-by-side at 1080p */
++	{ 1920, 1080, 24, DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF },
++	{ 1920, 1080, 50, DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF },
++	{ 1920, 1080, 60, DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF },
+ 	{ 1920, 1080, 50,
+ 	  DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF },
+ 	{ 1920, 1080, 60,
