@@ -1,4 +1,5 @@
 """Irrecoverable FEL must stop playback, not leave the last frame indefinitely."""
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,6 +9,22 @@ from test_native_video_source import TREE, body
 
 
 class FELTerminalTests(unittest.TestCase):
+    def test_native_unpaired_mel_and_fel_terminal_invariants(self):
+        prefix = os.environ.get("FFMPEG_TEST_PREFIX")
+        if not prefix:
+            self.skipTest("Matched FFmpeg required")
+        engine = Path(__file__).resolve().parents[2] / "CB1"
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "fel"
+            build = subprocess.run([
+                "cc", "-std=c11", "-I" + str(engine / "src"), "-I" + prefix + "/include",
+                str(engine / "tests/fel_terminal.c"), "-Wl,--wrap=av_parser_parse2",
+                "-L" + prefix + "/lib", "-lavcodec", "-lavutil", "-o", str(binary),
+            ], capture_output=True, text=True)
+            self.assertEqual(build.returncode, 0, build.stderr)
+            replay = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+
     def test_final_drain_keeps_error_observable_until_parent_consumes_it(self):
         source=(TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
         has=body(source,'bool CVideoPlayerVideo::HasData(')
@@ -80,12 +97,14 @@ struct VideoPicture{
  std::shared_ptr<SourceSideData> sourceSideData;
 int64_t doviSourcePts=1;Metadata doviMetadata;unsigned iFlags=0;
  int doviSourceBinding=1;
+ struct {bool frameRpu=false;} doviSourceInfo;
  std::shared_ptr<AVFrame>doviEnhancement;int doviEnhancementBinding=0;
  void Reset(){}void CopyRef(const VideoPicture&v){*this=v;}};
 struct Context{Buffer* hw_frames_ctx=nullptr;};
 struct Fel{bool failed=false,exhausted=false;int result=0;bool missingEnhancement=false;};
 bool dvbridge_fel_failed(Fel*f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*f){return f->exhausted;}
+bool dvbridge_fel_has_enhancement(Fel*f){return !f->missingEnhancement;}
 int dvbridge_fel_take(Fel*f,int64_t,AVFrame**out){if(f->result==1)*out=new AVFrame;return f->result;}
 constexpr int CODEC_BLURAY_NAVIGATION=4;
 int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
@@ -108,8 +127,8 @@ struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  uint64_t m_dvLayerEpoch=0;
  std::deque<std::shared_ptr<VideoPicture>>m_dvPending;Context context;Context*m_pCodecContext=&context;
  unsigned m_codecControlFlags=0;static constexpr unsigned DVEnhancementPendingPictures=16;
- int reads=0;VCReturn baseResult=VC_BUFFER;void ReportDVStartup(unsigned,const char*){}
- VCReturn GetBasePicture(VideoPicture*){++reads;return baseResult;}
+ int reads=0;VCReturn baseResult=VC_BUFFER;bool baseOwnRpu=false;void ReportDVStartup(unsigned,const char*){}
+ VCReturn GetBasePicture(VideoPicture* picture){++reads;picture->doviSourceInfo.frameRpu=baseOwnRpu;return baseResult;}
  VCReturn GetPicture(VideoPicture*pVideoPicture) @@NATIVE@@
  void SetCodecControl(int flags) @@CONTROL@@
 };
@@ -133,6 +152,16 @@ int main(){
  assert(cleanEnd.GetPicture(&out)==CDVDVideoCodec::VC_EOF);
  CDVDVideoCodecFFmpeg missing;missing.m_dvFel->missingEnhancement=true;missing.baseResult=CDVDVideoCodec::VC_EOF;
  assert(missing.GetPicture(&out)==CDVDVideoCodec::VC_FATAL && missingEnhancementLogs==1);
+ CDVDVideoCodecFFmpeg lastMel;
+ lastMel.m_codecControlFlags=DVD_CODEC_CTRL_DRAIN;
+ lastMel.baseResult=CDVDVideoCodec::VC_PICTURE;
+ lastMel.baseOwnRpu=true;
+ lastMel.m_dvFel->missingEnhancement=true;
+ out=VideoPicture{};
+ lastMel.baseResult=CDVDVideoCodec::VC_BUFFER;
+ assert(lastMel.GetPicture(&out)==CDVDVideoCodec::VC_BUFFER && missingEnhancementLogs==1);
+ lastMel.baseResult=CDVDVideoCodec::VC_PICTURE;
+ assert(lastMel.GetPicture(&out)==CDVDVideoCodec::VC_PICTURE && !out.doviEnhancement);
  CDVDVideoCodecFFmpeg optional;optional.m_hints.preferHybridHDR10Plus=true;
  optional.m_dvFel->missingEnhancement=true;optional.baseResult=CDVDVideoCodec::VC_EOF;
  assert(optional.GetPicture(&out)==CDVDVideoCodec::VC_EOF && missingEnhancementLogs==1);

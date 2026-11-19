@@ -33,8 +33,67 @@ int __wrap_av_parser_parse2(AVCodecParserContext *parser,AVCodecContext *context
     return result;
 }
 
+static void unanchored_mel(void)
+{
+    AVCodecParameters *parameters = avcodec_parameters_alloc();
+    assert(parameters);
+    parameters->codec_id = AV_CODEC_ID_HEVC;
+    parameters->codec_type = AVMEDIA_TYPE_VIDEO;
+    struct dvbridge_fel *fel = dvbridge_fel_create(parameters, (AVRational){1, 1000000});
+    avcodec_parameters_free(&parameters);
+    assert(fel);
+    size_t size;
+    AVDOVIMetadata *metadata = av_dovi_metadata_alloc(&size);
+    assert(metadata);
+    AVDOVIRpuDataHeader *header = av_dovi_get_header(metadata);
+    AVDOVIDataMapping *mapping = av_dovi_get_mapping(metadata);
+    header->coef_log2_denom = 23;
+    mapping->nlq_method_idc = AV_DOVI_NLQ_LINEAR_DZ;
+    for (unsigned i = 0; i < 3; ++i)
+        mapping->nlq[i].vdr_in_max = UINT64_C(1) << header->coef_log2_denom;
+    AVPacket *base = av_packet_alloc();
+    assert(base && av_new_packet(base, sizeof(synthetic_base)) == 0);
+    memcpy(base->data, synthetic_base, sizeof(synthetic_base));
+    AVFrame *frame = NULL;
+    for (int i = 0; i < 1100; ++i) {
+        base->pts = base->dts = i;
+        assert(dvbridge_fel_submit(fel, base));
+        assert(dvbridge_fel_take_mel(fel, i, &frame, metadata, size) == 3 && !frame);
+    }
+    assert(dvbridge_fel_drain(fel, NULL));
+    assert(dvbridge_fel_exhausted(fel));
+    for (int residual = 0; residual < 2; ++residual) {
+        dvbridge_fel_reset(fel);
+        base->pts = base->dts = 2000;
+        assert(dvbridge_fel_submit(fel, base));
+        assert(dvbridge_fel_take_mel(fel, 2000, &frame, metadata, size) == 3);
+        base->pts = base->dts = 2001;
+        assert(dvbridge_fel_submit(fel, base));
+        mapping->nlq[0].nlq_offset = residual;
+        assert(dvbridge_fel_take_mel(fel, 2001, &frame, residual ? metadata : NULL, size) == 2);
+        assert(!dvbridge_fel_drain(fel, NULL));
+        mapping->nlq[0].nlq_offset = 0;
+    }
+    dvbridge_fel_reset(fel);
+    base->pts = base->dts = 3000;
+    assert(dvbridge_fel_submit(fel, base));
+    assert(dvbridge_fel_take_mel(fel, 3000, &frame, metadata, size) == 3);
+    AVPacket *paired = av_packet_alloc();
+    assert(paired && av_new_packet(paired, sizeof(synthetic_paired)) == 0);
+    memcpy(paired->data, synthetic_paired, sizeof(synthetic_paired));
+    paired->pts = paired->dts = 3001;
+    assert(dvbridge_fel_submit(fel, paired) && !fel->synchronizing);
+    assert(fel->num_packets == 1 && fel->packet_order[0] == fel->base_order.maximum);
+    assert(dvbridge_fel_take_mel(fel, 3001, &frame, metadata, size) == 0 && !frame);
+    av_packet_free(&paired);
+    av_packet_free(&base);
+    av_free(metadata);
+    dvbridge_fel_destroy(fel);
+}
+
 int main(void)
 {
+    unanchored_mel();
     /* Draining closes this input epoch: only a proved out-of-range EL suffix
      * may be retired. Never discard an internal hole or a future reference. */
     terminal_mode=1;

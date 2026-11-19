@@ -2399,5 +2399,12 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-unpaired-mel.patch": {
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h": "Carry own-frame RPU provenance with decoded and reordered pictures.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Present verified metadata-only MEL pictures and classify the final base pictures before closing an absent EL."
+    }
   }
 }

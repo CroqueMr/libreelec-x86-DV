@@ -14,6 +14,8 @@
 #define PACKET_BYTES_MAX (64u * 1024u * 1024u)
 #define MAP_MAX (QUEUE_MAX * 2)
 
+enum unpaired_mel { MEL_UNVERIFIED, MEL_VERIFIED, MEL_REQUIRES_EL };
+
 /* Independently coded layers can have different decode
  * order and IDR boundaries. Use FFmpeg's HEVC parser rather than assigning
  * the BL packet timestamp blindly to the encapsulated EL access unit. */
@@ -83,6 +85,7 @@ struct dvbridge_fel {
     bool source_no_rasl;
     int64_t source_taken;
     bool mel_deferred, el_started;
+    enum unpaired_mel unpaired_mel;
 };
 
 static bool self_contained_idr(const AVPacket *packet)
@@ -185,6 +188,7 @@ static void clear_queues(struct dvbridge_fel *f)
     f->source_no_rasl = false;
     f->source_taken = AV_NOPTS_VALUE;
     f->mel_deferred = f->el_started = false;
+    f->unpaired_mel = MEL_UNVERIFIED;
 }
 
 void dvbridge_fel_reset(struct dvbridge_fel *f)
@@ -599,8 +603,12 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
                     /* All EL from this AU has been examined. Before the
                      * first accepted anchor these BL identities are preroll. */
                     f->num_times = 0;
-                    if (++f->preroll_packets > 1024)
+                    if (++f->preroll_packets > 1024) {
+                        av_log(f->decoder, AV_LOG_ERROR,
+                               "FEL decode: no usable enhancement anchor after %u preroll packets (EL received: %s)\n",
+                               f->preroll_packets, f->enhancement_order.seen ? "yes" : "no");
                         goto fail;
+                    }
                 }
                 return true; /* Submit EL when a decoded BL requests its matching picture. */
             }
@@ -712,6 +720,10 @@ bool dvbridge_fel_drain(struct dvbridge_fel *f, const char **reason)
     if (!f)
         return false;
     if (f->synchronizing) {
+        if (!f->failed && f->unpaired_mel == MEL_VERIFIED && !f->enhancement_order.seen) {
+            f->draining = f->eof = true;
+            return true;
+        }
         if (reason && !f->failed && f->base_order.seen && !f->enhancement_order.seen)
             *reason = "no enhancement video received before drain";
         f->failed = true;
@@ -808,6 +820,8 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
         return 1;
     if (f->failed || (f->eof && f->recovering))
         return -1;
+    if (f->synchronizing && !f->enhancement_order.seen)
+        f->unpaired_mel = MEL_REQUIRES_EL;
     if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
         return 2; /* Preroll before a recoverable EL picture, not a substitute. */
     bool ok = pump(f);
@@ -849,18 +863,32 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 int dvbridge_fel_take_mel(struct dvbridge_fel *f, int64_t pts, AVFrame **frame,
                          const void *data, size_t size)
 {
-    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || !f->source_timed ||
+    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE ||
         !dvbridge_metadata_bounds(data, size))
         return dvbridge_fel_take(f, pts, frame);
     const AVDOVIMetadata *metadata = data;
     const AVDOVIRpuDataHeader *header = av_dovi_get_header(metadata);
-    return take_source(f, pts, frame, header->disable_residual_flag == 1 ||
-                       dvbridge_dv_is_mel(metadata));
+    const bool no_residual = header->disable_residual_flag == 1 || dvbridge_dv_is_mel(metadata);
+    if (f->source_timed)
+        return take_source(f, pts, frame, no_residual);
+    if (no_residual && !f->failed && !f->draining && f->synchronizing &&
+        f->base_order.seen && !f->enhancement_order.seen && f->unpaired_mel != MEL_REQUIRES_EL) {
+        /* This picture is progress even though there is no EL to anchor. */
+        f->preroll_packets = 0;
+        f->unpaired_mel = MEL_VERIFIED;
+        return 3;
+    }
+    return dvbridge_fel_take(f, pts, frame);
 }
 
 bool dvbridge_fel_failed(const struct dvbridge_fel *f)
 {
     return !f || f->failed;
+}
+
+bool dvbridge_fel_has_enhancement(const struct dvbridge_fel *f)
+{
+    return f && f->enhancement_order.seen;
 }
 
 bool dvbridge_fel_exhausted(const struct dvbridge_fel *f)

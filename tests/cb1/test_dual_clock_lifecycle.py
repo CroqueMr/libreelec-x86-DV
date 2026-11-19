@@ -15,6 +15,7 @@ class DualClockLifecycle(unittest.TestCase):
         common=body(source,'bool CDVDVideoCodecFFmpeg::GetPictureCommon(')
         start=common.rfind('  if (m_dvLayerEpoch)')
         guard=body(common[start:],'  if (m_dvLayerEpoch)')
+        frame_rpu=body(common, '        if (m_dvFel && !m_dvLayerEpoch &&')
         program=r'''
 #include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
 extern "C" {
@@ -23,11 +24,17 @@ extern "C" {
 #include <cassert>
 constexpr int DVP_FLAG_DROPPED=8;
 char presentableDVPacket,decodeOnlyDVPacket;
-struct VideoPicture{CDVMetadataBuffer doviMetadata;int iFlags=0;};
+struct VideoPicture{CDVMetadataBuffer doviMetadata;int iFlags=0;int64_t doviSourcePts=123;
+ DVBRIDGE::SourceBinding doviSourceBinding{1,1,1};};
 void check(AVFrame* m_pFrame,VideoPicture* pVideoPicture,uint64_t m_dvLayerEpoch){
  bool m_dvVideoWindow=false,hybridHDR10Plus=false;
  struct {bool preferHybridHDR10Plus{};} m_hints;
  if(m_dvLayerEpoch) GUARD
+}
+bool own_rpu(AVFrame* m_pFrame,VideoPicture* pVideoPicture) {
+ DVBRIDGE::SourceInfo sourceInfo;
+ FRAME_RPU
+ return sourceInfo.frameRpu;
 }
 int main(){
  AVFrame* frame=av_frame_alloc();assert(frame);frame->pts=123;
@@ -41,13 +48,15 @@ int main(){
   frame->pts=mode==3?AV_NOPTS_VALUE:123;
   check(frame,&p,mode==4?0:1);
   assert(bool(p.doviMetadata.Data())==(mode==0||mode==4));
+  assert(own_rpu(frame,&p)==(mode==0||mode==4));
  }
  assert(p.doviMetadata.Assign(bytes,1,{1,1,1}));
  av_frame_remove_side_data(frame,AV_FRAME_DATA_DOVI_RPU_BUFFER);
+ assert(!own_rpu(frame,&p)); // Inherited parsed metadata alone is insufficient.
  check(frame,&p,1);assert(!p.doviMetadata.Data());
  av_frame_free(&frame);
 }
-'''.replace('GUARD',guard)
+'''.replace('GUARD',guard).replace('FRAME_RPU',frame_rpu)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'test.cpp').write_text(program)
             result=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
