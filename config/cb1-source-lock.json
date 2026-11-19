@@ -229,7 +229,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": "6f3e0313da94604ddae1cbba600339c89273d3651eab9b29a82b6b81f0cb7337",
     "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": "2181477fd5c9d0df4ba28635ed52e7013313d078ff031040d451b71a8e895408",
     "docs/cb1/RELEASE-RC4-PREVIEW.md": "cb4a86f57b21d6ba3f63c6f1acc30b6f862e90df237c8d386a50002064436a1b",
-    ".github/scripts/prepare-test-sources.sh": "51fdde42ba6df48eeb9f0604a0799226ddf61707739d0575d5ee917aaa04a1b1",
+    ".github/scripts/prepare-test-sources.sh": "5aef05789fcf62d80daeaf087a25657ecdbc57a47fa64badcf19d7e4f8ab998c",
     ".github/workflows/cb1-source-checks.yml": "888b4deb6a374b8e0e94883f134fac60a4ac9b663fa9db7237a01c9bc0cf46d9",
     "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": "5158f22790955e72b99bd6f8d6c7feb87bb44176ff06a5a4882cccdb5ea8e940",
     "projects/Generic/patches/linux/linux-9950-01-wcl-single-scaler.patch": "013646a5e7f11abe825ed7e9d4c8b6b0b6c49c96105d56b2c843238e782e6f40",
@@ -501,7 +501,8 @@
     "tests/cb1/test_print_screen_sdr.py": "bc60a2f7b435972f8a4ebec3221951fef91ed43a5c2c4fd6f950c0788eb2bf35",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": "957170369482dd2e74d3665aa49d003d599347257ec6bf0502eb90823571eaa4",
     "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
-    "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51"
+    "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
+    "packages/multimedia/ffmpeg/package.mk": "0ae09daa1517a4f61d2d04ba84b2bd05f5cdb54c9bd152cab56b278007691d56"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
