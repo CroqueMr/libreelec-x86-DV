@@ -13,7 +13,7 @@ class FELTerminalTests(unittest.TestCase):
         prefix = os.environ.get("FFMPEG_TEST_PREFIX")
         if not prefix:
             self.skipTest("Matched FFmpeg required")
-        engine = Path(__file__).resolve().parents[2] / "CB1"
+        engine = Path(os.environ.get("CB1_TEST_ENGINE", Path(__file__).resolve().parents[2] / "CB1"))
         with tempfile.TemporaryDirectory() as temporary:
             binary = Path(temporary) / "fel"
             build = subprocess.run([

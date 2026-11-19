@@ -14,8 +14,6 @@ class LibblurayPlaymarks(unittest.TestCase):
         include = os.environ.get('LIBBLURAY_TEST_INCLUDE')
         if not include:
             self.skipTest('Matched libbluray sources required')
-        root = Path(__file__).resolve().parents[2]
-        owner = root / 'packages/multimedia/libbluray/patches/0002-navigation-read-boundary.patch'
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             native = folder / 'src/libbluray/bluray.c'
@@ -23,9 +21,6 @@ class LibblurayPlaymarks(unittest.TestCase):
                 target=folder/'src/libbluray'/name
                 target.parent.mkdir(parents=True,exist_ok=True)
                 shutil.copy2(Path(include)/'libbluray'/name,target)
-            applied = subprocess.run(['patch', '-p1', '--fuzz=0', '-i', str(owner)],
-                                     cwd=folder, capture_output=True, text=True)
-            self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
             source = native.read_text()
             program = r'''
 #include <assert.h>

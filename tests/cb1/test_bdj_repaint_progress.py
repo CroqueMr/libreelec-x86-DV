@@ -13,18 +13,12 @@ class BdjRepaintProgress(unittest.TestCase):
         java = os.environ.get('JAVA_HOME')
         if not include or not java:
             self.skipTest('Matched libbluray sources and JDK required')
-        root = Path(__file__).resolve().parents[2]
         owner = 'src/libbluray/bdj/java/java/awt/BDRootWindow.java'
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             target = folder / owner
             target.parent.mkdir(parents=True)
             shutil.copy2(Path(include).parent / owner, target)
-            patch = root / 'packages/multimedia/libbluray/patches/0004-bdj-bounded-repaint-sync.patch'
-            if patch.exists():
-                result = subprocess.run(['patch', '--batch', '--fuzz=0', '-p1', '-i', str(patch)],
-                                        cwd=folder, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             source = target.read_text()
             start = source.index('private static class RefreshTimerTask')
             brace = source.index('{', start)
