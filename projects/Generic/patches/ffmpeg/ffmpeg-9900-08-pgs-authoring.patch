@@ -1,0 +1,71 @@
+From: CB1 contributors
+Subject: [PATCH] Explicit PGS palette matrix with byte-preserving native Auto
+
+SPDX-License-Identifier: LGPL-2.1-or-later
+
+Adapted from avdvplus/CoreELEC at 74f24ab95ac05c215de3d82919ecc5b3670c348f:
+packages/multimedia/ffmpeg/patches/libreelec/ffmpeg-003-pgs-bt2020-colorspace.patch.
+Retains pgssubdec.c's original Stephen Backway/FFmpeg LGPL notice.
+Only explicit BT.2020 selects new coefficients. Native Auto and BT.709 use
+the original conversion macros, preserving the default decoder output.
+
+diff --git a/libavcodec/pgssubdec.c b/libavcodec/pgssubdec.c
+--- a/libavcodec/pgssubdec.c
++++ b/libavcodec/pgssubdec.c
+@@ -38,6 +38,17 @@
+ #define MAX_EPOCH_PALETTES 8   // Max 8 allowed per PGS epoch
+ #define MAX_EPOCH_OBJECTS  64  // Max 64 allowed per PGS epoch
+ #define MAX_OBJECT_REFS    2   // Max objects per display set
++
++/* Explicit authoring override, adapted from avdvplus/CoreELEC
++ * 74f24ab95ac05c215de3d82919ecc5b3670c348f, ffmpeg-003-pgs-bt2020-colorspace.patch.
++ * Auto deliberately retains the original BT.709/BT.601 conversion byte-for-byte.
++ */
++enum PGSMatrixMode {
++    PGS_MATRIX_AUTO = 0,
++    PGS_MATRIX_BT601,
++    PGS_MATRIX_BT709,
++    PGS_MATRIX_BT2020,
++};
+ 
+ enum SegmentType {
+     PALETTE_SEGMENT      = 0x14,
+@@ -97,6 +108,7 @@
+     PGSSubPalettes     palettes;
+     PGSSubObjects      objects;
+     int forced_subs_only;
++    int pgs_matrix;
+ } PGSSubContext;
+ 
+ static void flush_cache(AVCodecContext *avctx)
+@@ -359,7 +371,17 @@
+         alpha     = bytestream_get_byte(&buf);
+ 
+         /* Default to BT.709 colorspace. In case of <= 576 height use BT.601 */
+-        if (avctx->height <= 0 || avctx->height > 576) {
++        if (ctx->pgs_matrix == PGS_MATRIX_BT2020) {
++            /* BT.2020 non-constant luminance, limited-range YCbCr. */
++            cb -= 128;
++            cr -= 128;
++            r_add = ONE_HALF + FIX(1.4746  * 255.0 / 224.0) * cr;
++            g_add = ONE_HALF - FIX(0.16455 * 255.0 / 224.0) * cb
++                             - FIX(0.57135 * 255.0 / 224.0) * cr;
++            b_add = ONE_HALF + FIX(1.8814  * 255.0 / 224.0) * cb;
++        } else if (ctx->pgs_matrix == PGS_MATRIX_BT709 ||
++                   (ctx->pgs_matrix == PGS_MATRIX_AUTO &&
++                    (avctx->height <= 0 || avctx->height > 576))) {
+             YUV_TO_RGB1_CCIR_BT709(cb, cr);
+         } else {
+             YUV_TO_RGB1_CCIR(cb, cr);
+@@ -680,6 +702,11 @@
+ #define SD AV_OPT_FLAG_SUBTITLE_PARAM | AV_OPT_FLAG_DECODING_PARAM
+ static const AVOption options[] = {
+     {"forced_subs_only", "Only show forced subtitles", OFFSET(forced_subs_only), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, SD},
++    {"pgs_matrix", "PGS palette YCbCr to RGB matrix", OFFSET(pgs_matrix), AV_OPT_TYPE_INT, {.i64 = PGS_MATRIX_AUTO}, PGS_MATRIX_AUTO, PGS_MATRIX_BT2020, SD, "pgs_matrix"},
++    {"auto", "Native BT.709/BT.601 height heuristic", 0, AV_OPT_TYPE_CONST, {.i64 = PGS_MATRIX_AUTO}, 0, 0, SD, "pgs_matrix"},
++    {"bt601", "BT.601", 0, AV_OPT_TYPE_CONST, {.i64 = PGS_MATRIX_BT601}, 0, 0, SD, "pgs_matrix"},
++    {"bt709", "BT.709", 0, AV_OPT_TYPE_CONST, {.i64 = PGS_MATRIX_BT709}, 0, 0, SD, "pgs_matrix"},
++    {"bt2020", "BT.2020 non-constant luminance", 0, AV_OPT_TYPE_CONST, {.i64 = PGS_MATRIX_BT2020}, 0, 0, SD, "pgs_matrix"},
+     { NULL },
+ };
+ 

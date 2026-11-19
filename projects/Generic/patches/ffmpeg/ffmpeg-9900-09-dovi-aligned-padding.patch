@@ -1,0 +1,70 @@
+From 5e95a3ddfbdb68e81bbe58db10c75961566c7c02 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kacper=20Michaj=C5=82ow?= <kasper93@gmail.com>
+Date: Wed, 3 Jun 2026 17:42:24 +0200
+Subject: [PATCH] avcodec/dovi_rpudec: skip full padding byte if it is already
+ aligned
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On some files when we land already at a byte boundary, there is a full
+padding byte added by the encoder. Skip this byte and also validate
+it's zero as the alignment padding should be.
+
+It is likely just an encoder quirk that adds padding always, and if it
+is aligned, it does full additional byte.
+
+When extremely unlikely situation happens that we cannot infer
+terminator position by looking at the surrounding bytes, calculate crc
+twice, to avoid failing it on padded streams.
+
+Signed-off-by: Kacper Michajłow <kasper93@gmail.com>
+---
+ libavcodec/dovi_rpudec.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/dovi_rpudec.c b/libavcodec/dovi_rpudec.c
+index ba4e7cd214096..d0374f6717d63 100644
+--- a/libavcodec/dovi_rpudec.c
++++ b/libavcodec/dovi_rpudec.c
+@@ -721,18 +721,39 @@ int ff_dovi_rpu_parse(DOVIContext *s, const uint8_t *rpu, size_t rpu_size,
+         av_refstruct_unref(&s->ext_blocks);
+     }
+
++    int aligned = get_bits_count(gb) % 8 == 0;
+     align_get_bits(gb);
++
++    /* The payload is followed by a CRC32 and a 0x80 terminator. Some encoders
++     * emit an extra zero padding byte before the CRC32 when the payload already
++     * ended on a byte boundary. A leading zero byte is then ambiguous: it may
++     * be that padding, or simply a CRC32 that starts with a zero byte. If only
++     * the padded position holds the terminator, assume the padding is real. If
++     * both do (the last CRC32 byte is 0x80 or there is stray 0x80 after real
++     * payload) the terminator position is ambiguous. Calculate CRC twice when
++     * AV_EF_CRCCHECK is requested. Note that this situation is extremely
++     * unlikely, there shouldn't be non-zero data after payload. */
++    int pad = aligned && show_bits(gb, 8) == 0;
+     skip_bits(gb, 32); /* CRC32 */
+-    if (get_bits(gb, 8) != 0x80) {
++    int term_unpadded = get_bits(gb, 8) == 0x80;       /* terminator w/o padding */
++    int term_padded = pad && show_bits(gb, 8) == 0x80; /* terminator w/ padding */
++
++    if (!term_unpadded && !term_padded) {
+         avpriv_request_sample(s->logctx, "Unexpected RPU format");
+         ff_dovi_ctx_unref(s);
+         return AVERROR_PATCHWELCOME;
+     }
+
+     if (err_recognition & AV_EF_CRCCHECK) {
++        if (term_padded && !term_unpadded)
++            skip_bits(gb, 8); /* unambiguously padded */
+         rpu_size = get_bits_count(gb) / 8;
+         uint32_t crc = av_bswap32(av_crc(av_crc_get_table(AV_CRC_32_IEEE),
+                                   -1, rpu, rpu_size - 1)); /* exclude 0x80 */
++        if (crc && term_padded && term_unpadded) {
++            crc = av_bswap32(av_crc(av_crc_get_table(AV_CRC_32_IEEE),
++                                    -1, rpu, rpu_size)); /* include padding byte */
++        }
+         if (crc) {
+             av_log(s->logctx, AV_LOG_ERROR, "RPU CRC mismatch: %X\n", crc);
+             if (err_recognition & AV_EF_EXPLODE) {
