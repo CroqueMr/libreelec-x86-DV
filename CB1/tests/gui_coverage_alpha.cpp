@@ -7,7 +7,8 @@
 #endif
 namespace Drawing {
 struct CWinSystemBase {
-  bool m_guiCompositing=true;
+  bool m_guiCompositing=true,nativeSDR=false;
+  bool UsesNativeSDRBT2020() const {return nativeSDR;}
   virtual bool IsHdrComposite()const{return m_guiCompositing;}
   virtual bool UseGuiCoverageAlpha()const @@NATIVE_POLICY@@
 };
@@ -23,12 +24,13 @@ enum class ShaderMethodGLES {SM_FONTS,SM_FONTS_SHADER_CLIP,SM_MULTI_111R_111R_BL
 GLuint fontProgram,textureProgram,inputTexture;
 struct RenderBase{virtual ~RenderBase()=default;};
 struct CRenderSystemGLES:RenderBase {
+  std::array<float,3> colour{.8f,.8f,.8f};
   bool ScissorsCanEffectClipping(){return true;} void ResetScissors(){}
   void EnableGUIShader(ShaderMethodGLES method){
     GLuint p=method==ShaderMethodGLES::SM_FONTS?fontProgram:textureProgram;
     glUseProgram(p);glUniform1i(glGetUniformLocation(p,"m_samp0"),0);
-    glUniform4f(glGetUniformLocation(p,"test_colour"),.8,.8,.8,1);
-    glUniform4f(glGetUniformLocation(p,"m_unicol"),.8,.8,.8,1);
+    glUniform4f(glGetUniformLocation(p,"test_colour"),colour[0],colour[1],colour[2],1);
+    glUniform4f(glGetUniformLocation(p,"m_unicol"),colour[0],colour[1],colour[2],1);
   }
 } render;
 struct Texture {
@@ -75,7 +77,8 @@ GLuint guiProgram(const std::string& fragment){
   GLint linked;glGetProgramiv(p,GL_LINK_STATUS,&linked);assert(linked);return p;
 }
 std::string read(const std::string& path){std::ifstream f(path);std::stringstream s;s<<f.rdbuf();assert(f);return s.str();}
-void draw(int x,bool font,float alpha){
+void draw(int x,bool font,float alpha,const std::array<float,3>& colour={.8f,.8f,.8f}){
+  render.colour=colour;
   glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,inputTexture);
   const float pixel[]={1,1,1,alpha};glTexSubImage2D(GL_TEXTURE_2D,0,0,0,1,1,GL_RGBA,GL_FLOAT,pixel);
   if(font){CGUIFontTTFGLES glyph;assert(glyph.FirstBegin());}
@@ -104,13 +107,13 @@ int main(int argc,char**argv){
   GLuint target=texture(width,height,film.data());finalFramebuffer=framebuffer(target);
   unsigned failures=0;
   auto check=[&](bool pass,const char* reason){if(!pass){std::cerr<<reason<<'\n';++failures;}};
-  for(GLint format:{GL_RGBA32F,GL_RGBA8})for(bool font:{true,false})for(int mode=0;mode<8;mode++){
+  for(GLint format:{GL_RGBA32F,GL_RGBA8})for(bool font:{true,false})for(int mode=0;mode<9;mode++){
     auto&w=Drawing::window;w.m_guiCompositing=mode!=4;w.m_dvState.captured=mode==1||mode==6||mode==7;
     w.m_hdrConversion=mode==2||mode==3;w.m_dvContext=mode==5?&w:nullptr;
-    w.m_cb1RestoringPreferences=mode==6;w.m_dvOrdinaryFrame=mode==7;
-    bool coverage=mode==1||mode==2||mode==3||mode==4;
+    w.m_cb1RestoringPreferences=mode==6;w.m_dvOrdinaryFrame=mode==7;w.nativeSDR=mode==8;
+    bool coverage=mode==1||mode==2||mode==3||mode==4||w.nativeSDR;
 #ifdef CB1_TEST_DISABLE_DV
-    coverage=mode==4;
+    coverage=mode==4||w.nativeSDR;
 #endif
     if(format==GL_RGBA8){
       glGenTextures(1,&guiTexture);glBindTexture(GL_TEXTURE_2D,guiTexture);
@@ -165,6 +168,42 @@ int main(int argc,char**argv){
     std::cout<<(font?"font":"texture")<<" format="<<(format==GL_RGBA8?8:32)<<" mode="<<mode
       <<" panel="<<pixels[3]<<" glyph="<<pixels[7]<<" outside="<<pixels[11]<<" edge="<<pixels[15]
       <<" cached_film_delta="<<leak<<std::endl;
+    if(w.nativeSDR){
+      glBindFramebuffer(GL_FRAMEBUFFER,guiFbo);glViewport(0,0,width,height);
+      glClearColor(0,0,0,0);glClear(GL_COLOR_BUFFER_BIT);
+      Drawing::draw(0,font,.5,{0,0,0});
+      Drawing::draw(1,font,.5,{1,1,1});
+      Drawing::draw(2,font,.5,{0,1,0});
+      Drawing::draw(3,font,.5,{0,1,0});Drawing::draw(3,font,.5,{0,1,0});
+
+      // Endpoints are used for straight black/white/green. Sampling the middle
+      // means the compositor mistakenly degammaed a premultiplied component.
+      const float nativeLut[]={0,0,0,1, .214041f,.214041f,.214041f,1, 1,1,1,1};
+      const GLuint previousLut=degammaTexture;
+      degammaTexture=texture(3,1,nativeLut);
+      for(unsigned i=0;i<width*height;i++)for(unsigned c=0;c<4;c++)
+        film[i*4+c]=c==3 || i==0 ? 1 : 0;
+      glBindTexture(GL_TEXTURE_2D,target);
+      glTexSubImage2D(GL_TEXTURE_2D,0,0,0,width,height,GL_RGBA,GL_FLOAT,film.data());
+      glBindFramebuffer(GL_FRAMEBUFFER,finalFramebuffer);glViewport(0,0,width,height);
+      CWinSystemGbmGLESContext composite;
+      composite.m_hdrConversion=false;
+      composite.m_compositeShader->m_ootfGamma=-2.4f;
+      composite.m_compositeShader->SetSDRBT2020(true,true);
+      composite.CompositeGui();
+      std::array<float,width*height*4> result{};
+      glReadPixels(0,0,width,height,GL_RGBA,GL_FLOAT,result.data());
+      const std::array<float,3> green={.3293f,.9195f,.0880f};
+      const float blendTolerance=std::max(shaderTolerance,1.5f/255);
+      for(unsigned c=0;c<3;c++){
+        check(std::abs(result[c]-.5f)<=blendTolerance,"50% black over white changed opacity");
+        check(std::abs(result[4+c]-.5f)<=blendTolerance,"50% white over black changed opacity");
+        const float expected=std::pow(green[c],1.f/2.4f);
+        check(std::abs(result[8+c]-.5f*expected)<=blendTolerance,"50% green was converted with premultiplied RGB");
+        check(std::abs(result[12+c]-.75f*expected)<=blendTolerance,"overlapping green lost accumulated coverage");
+      }
+      glDeleteTextures(1,&degammaTexture);degammaTexture=previousLut;
+    }
     glDeleteFramebuffers(1,&guiFbo);glDeleteTextures(1,&guiTexture);
   }
   assert(glGetError()==GL_NO_ERROR);return failures?1:0;

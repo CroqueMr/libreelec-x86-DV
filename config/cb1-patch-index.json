@@ -191,6 +191,22 @@
       "drivers/net/wireless/mediatek/mt76/mt792x.h": "Track the held join ROC per interface."
     }
   },
+  "projects/Generic/patches/linux/0103-wifi-mt76-mt7925-keep-join-roc-until-authorized.patch": {
+    "summary": "Keep the MT7925 join ROC until the station is authorized (mainline ac22c8c723c6)",
+    "component": "linux",
+    "files": {
+      "drivers/net/wireless/mediatek/mt76/mt7925/main.c": "Keep the join ROC after a successful non-MLO association and release it on authorization, disassociation or station removal."
+    }
+  },
+  "projects/Generic/patches/linux/0104-wifi-mt76-mt7925-track-join-roc-ownership.patch": {
+    "summary": "Release the MT7925 non-MLO association channel only while the grant belongs to that interface",
+    "component": "linux",
+    "files": {
+      "drivers/net/wireless/mediatek/mt76/mt7925/main.c": "Track successful association grants and serialize release with new channel requests and timer expiry.",
+      "drivers/net/wireless/mediatek/mt76/mt7925/mcu.c": "Arm the expiry timer before publishing the firmware grant.",
+      "drivers/net/wireless/mediatek/mt76/mt792x.h": "Keep the active MT7925 association owner on the shared PHY."
+    }
+  },
   "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": {
     "summary": "Expose the validated Dolby Vision connector control",
     "component": "linux",
@@ -1042,6 +1058,15 @@
       "xbmc/cores/VideoSettings.h": "Register the native Auto view mode and avoid at most 1% enlargement without changing scaling filters or HDMI selection.",
       "xbmc/cores/VideoSourceSideData.cpp": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+.",
       "xbmc/cores/VideoSourceSideData.h": "Provide lightweight automatic DV diagnostics in the normal Kodi log.; Present native HDR10+ and convert reconstructed Dolby Vision to HDR10+."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9998-hdmi-dts-capability.patch": {
+    "owner": "Respect DTS descriptors from complete HDMI ELD on ALSA sinks.",
+    "files": {
+      "xbmc/cores/AudioEngine/Sinks/AESinkALSA.cpp": "Publish HDMI DTS core and HD independently while preserving the legacy fallback for unavailable capability data.",
+      "xbmc/cores/AudioEngine/Sinks/AESinkALSA.h": "Pass DTS capability data through the existing ELD control reading path.",
+      "xbmc/cores/AudioEngine/Utils/AEELDParser.cpp": "Validate the HDMI baseline and descriptor bounds and decode DTS core and HD support.",
+      "xbmc/cores/AudioEngine/Utils/AEELDParser.h": "Return DTS capabilities when the ELD descriptors provide enough evidence."
     }
   },
   "projects/Generic/patches/kodi/kodi-9991-cb1-audio.patch": {
@@ -1925,7 +1950,7 @@
     "owner": "Keep the Stable video settings and LLDV output readable.",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Keep subordinate labels consistent.",
-      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuary’s native dialog controls.",
+      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuaryâ€™s native dialog controls.",
       "addons/skin.estuary/xml/Includes.xml": "Show optional inline format notes in the compact select list.",
       "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Show EDID diagnostics beside the LLDV format list.",
       "system/settings/settings.xml": "Group playback and scaling settings and expose SDR controls only for applicable defaults.",
@@ -1933,7 +1958,7 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous preparation enabled and present CPU-packed LLDV in scanout order.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Keep connector diagnostics outside the selectable items.",
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary.",
-      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodi’s native text viewer without closing the LLDV selector."
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodiâ€™s native text viewer without closing the LLDV selector."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": {
@@ -2121,10 +2146,24 @@
       "xbmc/windowing/gbm/drm/DRMAtomic.h": "Return the confirmation from the same atomic transaction."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hdr10-fallback-mode.patch": {
+    "owner": "Keep the selected cadence on a usable display mode when Dolby Vision startup falls back to HDR10.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Use the shared playback mode choice before opening the decoder.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Replace an unusable default mode for automatic HDR10 recovery with a usable mode at the same refresh rate.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Carry decoded source identity into the shared choice.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Collect eligible physical timings on the display owner.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Expose eligible timing values to the display owner.",
+      "xbmc/settings/DisplaySettings.cpp": "Copy mode identity and update the desktop resolution under the catalogue lock.",
+      "xbmc/settings/DisplaySettings.h": "Expose locked resolution catalogue access.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Publish and invalidate eligible timings with the display capabilities, and match the requested mode to that snapshot.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Keep the timing snapshot with the existing capability state."
+    }
+  },
   "projects/Generic/patches/linux/linux-9949-intel-hdmi-pin-out.patch": {
     "owner": "Restore the enabled output bit on an active Alder Lake-P HDMI audio route.",
     "files": {
-      "sound/hda/codecs/hdmi/intelhdmi.c": "Check the selected pin's control register during Intel route fixup and preserve its audio mode."
+      "sound/hda/codecs/hdmi/hdmi.c": "Restore the active Alder Lake-P pin during PCM setup and HDMI link refresh, preserving the audio mode."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-y444-scanout.patch": {
@@ -2279,7 +2318,7 @@
   "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": {
     "owner": "Reuse the experimental packed LLDV path on additional Intel HDMI engines.",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit Display9–12 and Battlemage under the existing link guards, with bounded connector diagnostics."
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit Display9â€“12 and Battlemage under the existing link guards, with bounded connector diagnostics."
     }
   },
   "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": {
@@ -2296,6 +2335,69 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refuse a preferred LLDV mode at an incompatible playback rate.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the playback-rate compatibility check.",
       "xbmc/settings/SettingConditions.cpp": "Report the playback timing restriction in Quick Switch."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-startup-timing-fallback.patch": {
+    "summary": "Use the existing per-file HDR10 fallback when the default LLDV circuit cannot use the playback timing",
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoPlayer.cpp": "Resolve the fallback before opening the video decoder.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Use the same timing criteria for the current mode and candidate modes.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Require a confirmed LLDV transport refusal and an admissible HDR10 output.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose the shared startup fallback check."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-preserve-native-sdr-bt2020.patch": {
+    "owner": "Preserve native SDR BT.2020 on a capable GBM HDMI output.",
+    "files": {
+      "system/shaders/GL/1.5/gl_gui_composite.frag": "Convert straight SDR GUI colors to the video gamut while retaining coverage.",
+      "system/shaders/GLES/2.0/gles_gui_composite.frag": "Recover straight native SDR GUI colors before transfer and gamut conversion.",
+      "xbmc/guilib/GUIFontTTFGL.cpp": "Use the same coverage policy as GLES for translucent glyphs.",
+      "xbmc/guilib/GUITextureGL.cpp": "Retain coverage in native SDR textures and translucent quads.",
+      "xbmc/guilib/GUITextureGLES.cpp": "Retain coverage in native SDR translucent quads.",
+      "xbmc/rendering/RenderSystem.h": "Refresh GUI shader color state without restarting rendering.",
+      "xbmc/rendering/gl/RenderSystemGL.cpp": "Refresh the GUI range define when the composition target changes.",
+      "xbmc/rendering/gl/RenderSystemGL.h": "Expose the GL GUI shader color-state refresh.",
+      "xbmc/rendering/gles/RenderSystemGLES.cpp": "Refresh the GUI range define when the composition target changes.",
+      "xbmc/rendering/gles/RenderSystemGLES.h": "Expose the GLES GUI shader color-state refresh.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.h": "Track whether the SDR compositor receives premultiplied GUI colors.",
+      "xbmc/application/Application.cpp": "Negotiate output and GUI composition before either layer draws.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.cpp": "Use the negotiated SDR gamut in every native GL YUV shader.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h": "Track the compiled native SDR gamut and include the existing buffer types.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp": "Use the negotiated SDR gamut in the filtered, progressive and field shaders.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h": "Track the compiled native SDR gamut.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp": "Convert PQ bitmap palettes to sRGB before SDR GUI composition.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.cpp": "Bind the SDR composite mode uniform.",
+      "xbmc/rendering/gl/GuiCompositeShaderGL.h": "Expose the SDR composite mode.",
+      "xbmc/rendering/gles/GuiCompositeShaderGLES.cpp": "Reuse the SDR gamma path for native BT.2020.",
+      "xbmc/windowing/WinSystem.h": "Give the renderer access to the negotiated gamut and initialize it before GUI rendering.",
+      "xbmc/windowing/gbm/WinSystemGbm.cpp": "Negotiate and commit native SDR BT.2020 with the same framebuffer.",
+      "xbmc/windowing/gbm/WinSystemGbm.h": "Own the negotiated and accepted native SDR gamut.",
+      "xbmc/windowing/gbm/WinSystemGbmGLContext.cpp": "Select the SDR compositor for native BT.2020.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Reuse SDR gamut conversion for native GUI and subtitle composition."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-reuse-gbm-front-buffer.patch": {
+    "summary": "Probe the already locked GBM buffer during output setup",
+    "component": "kodi",
+    "files": {
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Return the latest retained front buffer without acquiring it again.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Expose a non-owning accessor for the retained front buffer.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Reuse the buffer when validating float output."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": {
+    "owner": "Capture native video from decoded Master, HDR10 and SDR outputs and decline unsupported DV carriers.",
+    "files": {
+      "xbmc/rendering/capture/CaptureBlit.cpp": "Choose the video readback and crop logical pixels with their native stride.",
+      "xbmc/rendering/capture/CaptureBlit.h": "Declare the video capture operation.",
+      "xbmc/rendering/capture/CapturePixels.h": "Keep the decoded buffer alive for an offset visible region.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Serve the video tap and retain the composite leg of a paired screenshot.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Guard video-only screenshots of composed frames.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Guard video-only screenshots of composed frames.",
+      "xbmc/windowing/gbm/DVBridgeCapture.h": "Guard video-only screenshots of composed frames.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
   }
 }

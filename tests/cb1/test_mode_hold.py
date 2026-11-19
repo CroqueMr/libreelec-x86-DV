@@ -13,7 +13,13 @@ class ModeHoldTests(unittest.TestCase):
         resolve = opening.index('const bool nativeDV =')
         trigger = opening.index('m_renderManager.TriggerUpdateResolution', resolve)
         mode = opening[resolve:trigger]
-        synchronous = body(mode, 'if (!pMenus)')
+        synchronous = body(mode, 'if (!pMenus && !dvStartupModeSet)')
+        startup = body(opening, 'if (window && !m_HasVideo && !pMenus && !hint.interlaced')
+        callback = body(startup, 'auto setStartupMode = [&]')
+        self.assertIn('ChoosePlaybackResolution(', callback)
+        self.assertIn('PlayerLedStartupHDR10Resolution(', callback)
+        self.assertIn('SetVideoResolution(resolution, false)', callback)
+        self.assertIn('SendMsg(TMSG_CALLBACK', startup)
         self.assertEqual(mode.count('SetVideoResolution('), 1)
         self.assertIn('SetVideoResolution(', synchronous)
         self.assertIn('nativeDV', opening[trigger:opening.index(';', trigger)])
@@ -216,7 +222,7 @@ struct Port {int changes=0;void VideoParamsChange(){++changes;}};
 struct Manager {
  bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;float m_fps=24;Picture m_picture;
  Renderer renderer,*m_pRenderer=&renderer;Port port,*m_playerPort=&port;
- int ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool)const{return CResolutionUtils::ChooseBestResolution(fps,width,height,stereo);}
+ int ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool,bool,const Picture*)const{return CResolutionUtils::ChooseBestResolution(fps,width,height,stereo);}
  void UpdateLatencyTweak(){}
  void update() METHOD
 };

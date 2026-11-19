@@ -57,7 +57,7 @@ bool dvbridge_fel_exhausted(Fel*){return false;}
 constexpr int CODEC_BLURAY_NAVIGATION=4;
 int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
-bool dvbridge_fel_drain(Fel*){return true;}
+bool dvbridge_fel_drain(Fel*,const char**){return true;}
 int dvbridge_fel_take(Fel* f,int64_t pts,AVFrame** frame){
  if(pts<=f->discardUntil)return 2;
  if(!f->ready)return 0;assert(pts>=1);++f->takes;*frame=new AVFrame;return 1;

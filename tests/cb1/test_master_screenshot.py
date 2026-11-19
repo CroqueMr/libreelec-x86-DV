@@ -18,6 +18,7 @@ class MasterScreenshot(unittest.TestCase):
 #include <utility>
 #include <string>
 constexpr int LOGWARNING=1;
+struct CLog { static void Log(int,const char*){} };
 namespace DVBRIDGE {
 class DiagnosticFailures DIAGNOSTICS;
 inline bool enabled=false;inline uint64_t now=0;inline unsigned logs=0;inline std::string lastStage;
@@ -62,16 +63,31 @@ struct CDVBridgeGLES {
  struct Texture{struct{int w=3840,h=2160;}params;} texture;Texture* m_scanout=&texture;
  unsigned m_scanoutFramebuffer=42,m_pendingInfo=2;int pqCalls=0;
  struct {const void* Data(){return this;}size_t Size(){return 10;}}m_pendingMetadata;
- unsigned GetPQFramebuffer(){++pqCalls;return 77;}
+ bool m_pendingOverlayVisible=false, m_overlayVisible=false, m_guiComposed=false, m_nativeOverlayEnabled=false;
+ struct {float rect[4]{};} m_nativeOverlay;
+ unsigned GetPQFramebuffer(bool forGUI){++pqCalls;if(forGUI)m_guiComposed=true;return 77;}
  struct {struct {int primaries=PL_COLOR_PRIM_BT_709;} container;} sdrOutput;
  auto HDR10Output() const {return &sdrOutput;}
- bool ReadScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out) @@BODY@@
+ bool ReadScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out, bool videoOnly=false) @@BODY@@
 };
 int main(){
  CDVBridgeGLES bridge;KODI::RENDERING::CAPTURE::ReadbackBuffer out;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==8 && flip);
  assert(out.format==AV_PIX_FMT_RGBA64LE && out.stride==-16 && bridge.pqCalls==0);
- auto* accepted=out.pixels.get();bridge.m_direct=false;
+ auto* accepted=out.pixels.get();
+ bridge.m_pendingOverlayVisible=bridge.m_overlayVisible=true; // Scheduled for later, clean current frame.
+ assert(bridge.ReadScreenshot(out,true));
+ bridge.m_nativeOverlayEnabled=true; // An empty rect only primes the Master compositor.
+ assert(bridge.ReadScreenshot(out,true));
+ bridge.m_nativeOverlay.rect[2]=bridge.m_nativeOverlay.rect[3]=1;
+ accepted=out.pixels.get();
+ assert(!bridge.ReadScreenshot(out,true) && out.pixels.get()==accepted);
+ assert(bridge.ReadScreenshot(out,false));
+ bridge.m_pendingOverlayVisible=bridge.m_overlayVisible=bridge.m_nativeOverlayEnabled=false;
+ bridge.m_guiComposed=true;
+ assert(!bridge.ReadScreenshot(out,true));
+ bridge.m_guiComposed=false;
+ assert(bridge.ReadScreenshot(out,true)); accepted=out.pixels.get(); bridge.m_direct=false;
  assert(!bridge.ReadScreenshot(out) && out.pixels.get()==accepted && bound==99);
  bridge.m_direct=true;readOK=false;
  assert(!bridge.ReadScreenshot(out) && bound==99 && out.pixels.get()==accepted);
@@ -80,6 +96,8 @@ int main(){
  bridge.m_effectiveMode=1;bridge.m_direct=false;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==16 && !flip && bridge.pqCalls==1);
  assert(out.format==AV_PIX_FMT_RGBA && out.stride==8);
+ bridge.m_guiComposed=false;
+ assert(bridge.ReadScreenshot(out,true) && !bridge.m_guiComposed);
  bridge.m_effectiveMode=DVBRIDGE_MODE_SDR;bridge.m_direct=true;mapOK=false;
  const int priorPQ=bridge.pqCalls;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==10 && flip);

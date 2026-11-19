@@ -212,6 +212,7 @@ struct GBM {
  void CompleteOutputSurface(bool accepted){if(pending&&!accepted)front=prior;pending=false;}
 gbm_bo*LockTransactionalBuffer(){return &front;}void CompleteTransactionalBuffer(bool){}void EndTransactionalMode(){}
  Lease LockFrontBuffer(){return {&front};}
+ gbm_bo* GetLockedFrontBuffer(){return &front;}
 };
 struct CWinSystemGbm {
  int m_nWidth=3840,m_nHeight=2160,m_renderableType=EGL_OPENGL_ES3_BIT;std::shared_ptr<CDRMAtomic>m_DRM=std::make_shared<CDRMAtomic>();std::shared_ptr<GBM>m_GBM=std::make_shared<GBM>();

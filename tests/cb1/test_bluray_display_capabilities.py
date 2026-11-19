@@ -47,7 +47,9 @@ struct CDisplaySettings {
  static CDisplaySettings& GetInstance(){static CDisplaySettings s;return s;}
  void ClearCustomResolutions(){if(observer)observer();}
  void AddResolutionInfo(const RESOLUTION_INFO&){if(observer)observer();}
- RESOLUTION_INFO& GetResolutionInfo(int){static RESOLUTION_INFO r;return r;}
+ RESOLUTION_INFO desktop;
+ RESOLUTION_INFO& GetResolutionInfo(int){return desktop;}
+ void SetDesktopResolutionInfo(const RESOLUTION_INFO& resolution){desktop=resolution;}
  void ApplyCalibrations(){}void UpdateCalibrations(){}
 };
 struct Window {Window& GetGfxContext(){return *this;}void ResetOverscan(RESOLUTION_INFO&){} };

@@ -458,6 +458,7 @@ int main()
         source = (kodi / 'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
         choose = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolution(')
         reason = body(source, 'CWinSystemGbmGLESContext::PlayerLedResolutionReason(')
+        fallback = body(source, 'CWinSystemGbmGLESContext::PlayerLedStartupHDR10Resolution(')
         program = r'''
 #include "utils/DVBridgeLldv.h"
 #include <algorithm>
@@ -482,6 +483,10 @@ struct CDisplaySettings
   static CDisplaySettings& GetInstance(){static CDisplaySettings settings;return settings;}
   size_t ResolutionInfoSize() const{return modes.size();}
   const Mode& GetResolutionInfo(RESOLUTION index) const{return modes.at(index);}
+  Mode GetResolutionInfoCopy(RESOLUTION index) const
+  {
+    return index >= 0 && static_cast<std::size_t>(index) < modes.size() ? modes[index] : Mode{};
+  }
 };
 namespace DVBRIDGE
 {
@@ -498,18 +503,33 @@ struct Window
 {
   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus;
   mutable std::mutex m_dvCapabilityMutex;
-  struct Caps{bool playerLed=true;};
+  struct Caps
+  {
+    bool playerLed=true, hdr10=true, limited=false;
+    bool HDR10DepthLimited() const{return limited;}
+  };
+  bool hdr10=true, currentHDR10=true, limited=false;
+  Caps GetDVOutputCapabilities(void*,bool allowModeSwitch) const
+  {
+    return {true,allowModeSwitch ? hdr10 : currentHDR10,limited};
+  }
+  RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION resolution) const {return resolution;}
+  bool SupportsDVOutputTiming(const Mode& mode) const
+  {
+    return !mode.strId.empty() && mode.strId!="7";
+  }
   Caps GetDVOutputCapabilities(void*,const DVBRIDGE::Preferences&,bool) const{return {};}
   bool LldvSupportsPlaybackTiming(double) const{return true;}
   std::optional<RESOLUTION> Choose(double fps,bool atStartup=false) const CHOOSE_BODY
   int PlayerLedResolutionReason(RESOLUTION resolution,int preference) const REASON_BODY
+  std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,int preference) const FALLBACK_BODY
 };
 
 int main()
 {
   using namespace DVBRIDGE;
   constexpr double film=24000.0/1001;
-  CDisplaySettings::GetInstance().modes={{"0",60},{"",film},{"4",film},{"5",film},{"6",24}};
+  CDisplaySettings::GetInstance().modes={{"0",60000.0/1001},{"",film},{"4",film},{"5",film},{"6",24},{"7",120}};
   Window window;
   auto& status=window.m_dvLldvStatus;
   status.display.status=LldvEdidStatus::Ready;
@@ -529,6 +549,25 @@ int main()
   assert(window.PlayerLedResolutionReason(2,0)==LLDV_DRIVER_REJECTED_LABEL);
   assert(window.PlayerLedResolutionReason(4,0)==0);
   assert(window.PlayerLedResolutionReason(1,0)!=LLDV_DRIVER_REJECTED_LABEL);
+  // 59.94 Hz is a known HDMI timing with HDR10 transport, but no LLDV carrier.
+  assert(window.PlayerLedStartupHDR10Resolution(0,0));
+  status.display.status=LldvEdidStatus::Missing;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
+  status.display.status=LldvEdidStatus::Ready;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,static_cast<int>(LldvFormat::Rgb12)));
+  assert(window.PlayerLedStartupHDR10Resolution(2,0));
+  assert(!window.PlayerLedStartupHDR10Resolution(1,0)); // unknown DRM mode
+  assert(!window.PlayerLedStartupHDR10Resolution(4,0)); // usable LLDV
+  assert(!window.PlayerLedStartupHDR10Resolution(5,0)); // 120 Hz unavailable for HDR10 conversion
+  assert(window.PlayerLedStartupHDR10Resolution(RES_INVALID,0)==RES_INVALID);
+  window.currentHDR10=false;
+  assert(!window.PlayerLedStartupHDR10Resolution(RES_INVALID,0));
+  assert(window.PlayerLedStartupHDR10Resolution(0,0));
+  window.limited=true;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
+  window.limited=false;
+  window.hdr10=false;
+  assert(!window.PlayerLedStartupHDR10Resolution(0,0));
   status.modeRejections.emplace_back(5,0);
   assert(window.Choose(film,true)==3);
   status.modeRejections.front().second=ten;
@@ -541,7 +580,7 @@ int main()
   preferences.hdr10TransportFallback=true;
   assert(!window.Choose(film,true));
 }
-'''.replace('CHOOSE_BODY', choose).replace('REASON_BODY', reason)
+'''.replace('CHOOSE_BODY', choose).replace('REASON_BODY', reason).replace('FALLBACK_BODY', fallback)
         run(self, {'test.cpp': program})
 
     def test_menu_keeps_live_forced_format_when_auto_is_unavailable(self):

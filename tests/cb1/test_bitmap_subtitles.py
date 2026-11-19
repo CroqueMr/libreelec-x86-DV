@@ -29,9 +29,10 @@ struct CDVDOverlayLibass : CDVDOverlay {
 namespace KODI::UTILS {enum class Eotf {TRADITIONAL_SDR,PQ};}
 struct CWinSystemBase {
  virtual ~CWinSystemBase()=default;
- bool composite=true,limited=false,cb1=false;
+ bool composite=true,limited=false,cb1=false,nativeSDRBT2020=false;
  KODI::UTILS::Eotf eotf=KODI::UTILS::Eotf::PQ;
  bool IsHdrComposite() const {return composite;}
+ bool UsesNativeSDRBT2020() const {return nativeSDRBT2020;}
  bool UseLimitedColor() const {return limited;}
  auto GetEotf() const {return eotf;}
 };
@@ -57,9 +58,7 @@ struct Texture : COverlay {
  unsigned loadedState;
  Texture(const CDVDOverlayImage& image) {
   m_isHDROverlay=image.m_isHDROverlay;
-  auto& window=CServiceBroker::window;
-  loadedState=(ShouldConvertPQPaletteToSRGB(true)?1u:0u)|
-              ((window.composite && window.limited && !window.cb1)?2u:0u);
+  loadedState=BitmapPaletteOutputState();
   SET_CACHED_STATE
  }
  void Render(SRenderState&) override {}
@@ -100,6 +99,12 @@ int main() {
  renderer.Reset();
  auto limited=std::dynamic_pointer_cast<Texture>(renderer.Convert(entry));
  assert(limited->loadedState==2 && limited!=sdr);
+ CServiceBroker::window.nativeSDRBT2020=true;
+ CServiceBroker::window.eotf=KODI::UTILS::Eotf::TRADITIONAL_SDR;
+ auto wide=std::dynamic_pointer_cast<Texture>(renderer.Convert(entry));
+ assert(wide->loadedState==1 && wide!=limited && "native SDR needs sRGB palettes before composition");
+ CServiceBroker::window.nativeSDRBT2020=false;
+ CServiceBroker::window.eotf=KODI::UTILS::Eotf::PQ;
  CServiceBroker::window.cb1=true;
  auto cb1=std::dynamic_pointer_cast<Texture>(renderer.Convert(entry));
  assert(cb1->loadedState==0 && cb1!=limited && "CB1 composition must not reuse pre-encoded limited PQ");

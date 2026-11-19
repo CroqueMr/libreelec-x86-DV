@@ -213,6 +213,8 @@ int main() {
 #include <vector>
 enum class StreamHdrType { HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10PLUS };
 enum VCReturn {VC_PICTURE,VC_BUFFER,VC_NONE,VC_FATAL,VC_EOF};
+enum { LOGERROR };
+struct CLog { template<class... Args> static void Log(Args...) {} };
 enum { DVD_CODEC_CTRL_POLL=1, DVD_CODEC_CTRL_DRAIN=2, DVEnhancementPendingPictures=16 };
 struct AVHWFramesContext { void* device_ref{}; };
 struct HWBuffer { void* data{}; };
@@ -220,7 +222,7 @@ struct Context { HWBuffer* hw_frames_ctx{}; };
 struct Fel { bool deviceOK=false, failed=false; };
 bool dvbridge_fel_device(Fel* f, void*) { return f->deviceOK; }
 bool dvbridge_fel_failed(Fel* f) { return f->failed; }
-bool dvbridge_fel_drain(Fel*) { return true; }
+bool dvbridge_fel_drain(Fel*,const char**) { return true; }
 struct VideoPicture {
   StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
   int pts=0;

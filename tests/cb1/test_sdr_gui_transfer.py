@@ -12,7 +12,7 @@ class SDRGUITransferTests(unittest.TestCase):
 #include <cassert>
 #include <cmath>
 #include <vector>
-constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18;
+constexpr int AVCOL_TRC_GAMMA22=4,AVCOL_TRC_BT2020_10=14,AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18;
 constexpr int LOGERROR=1,LOGDEBUG=2;
 struct CLog{template<typename...Args>static void Log(Args...){}};
 unsigned deleted=0;
@@ -27,9 +27,11 @@ struct CGuiCompositeShaderGLES{
 };
 int main(){
  CGuiCompositeShaderGLES shader;
- for(float gamma:{2.2f,2.4f,2.6f}){
-  assert(shader.CreateLUTs(AVCOL_TRC_GAMMA22,gamma));
-  assert(shader.m_ootfGamma==-gamma && !shader.m_lutTFTexId && shader.pqCalls==0);
+ for(int transfer:{AVCOL_TRC_GAMMA22,AVCOL_TRC_BT2020_10}){
+  for(float gamma:{2.2f,2.4f,2.6f}){
+   assert(shader.CreateLUTs(transfer,gamma));
+   assert(shader.m_ootfGamma==-gamma && !shader.m_lutTFTexId && shader.pqCalls==0);
+  }
  }
  assert(!shader.CreateLUTs(AVCOL_TRC_GAMMA22,NAN));
  assert(shader.CreateLUTs(AVCOL_TRC_SMPTE2084));assert(shader.m_ootfGamma==0 && shader.pqCalls==1);
