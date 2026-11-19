@@ -44,6 +44,7 @@ class SDRDirectIntegration(unittest.TestCase):
         for token,code in {'@ADMISSION@':admission,'@DEMUX_COPY@':demux_copy,
             '@HINTS_COPY@':next(line for line in hints.splitlines() if 'dovi = stream->dovi;' in line),
             '@DECODED@':decoded,'@LAYER_COPY@':layer_copy,
+            '@FEL_IDENTITY@':body(decoder,'struct FELBaseIdentity'),
             '@LAYER_BINDING@':next(line for line in producer.splitlines() if 'layer.binding=hdr10 ?' in line)}.items():
             provenance = provenance.replace(token,code)
         program = (Path(__file__).with_name('sdr_direct_owners.cpp')).read_text()
