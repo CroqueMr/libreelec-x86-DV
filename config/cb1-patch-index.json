@@ -2399,5 +2399,19 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": {
+    "owner": "Preserve NVIDIA EGL/GBM buffer ownership through surface replacement and shutdown.",
+    "files": {
+      "xbmc/utils/EGLUtils.cpp": "Offer an ordered buffer release before destroying an EGL drawable.",
+      "xbmc/utils/EGLUtils.h": "Expose ordered drawable retirement and reversible config selection.",
+      "xbmc/windowing/gbm/DVWindowRetirement.h": "Return display buffers before deferred EGL teardown.",
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Drain the discarded surface's owned buffers without destroying its native window.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Expose the matching GBM buffer queue to the window owner.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Apply ordered retirement only to the NVIDIA DRM backend.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Declare NVIDIA drawable retirement helpers.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Recognize the NVIDIA DRM backend from the selected device.",
+      "xbmc/windowing/gbm/drm/DRMUtils.h": "Keep the EGL/GBM ownership quirk scoped to NVIDIA."
+    }
   }
 }
