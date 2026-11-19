@@ -14,8 +14,8 @@ PKG_PATCH_DIRS="postproc libreelec"
 PKG_NO_REFRESH_PATCHES="tools/ffmpeg/gen-patches.sh"
 
 CB1_FFMPEG_SOURCE_REPOSITORY="https://github.com/CroqueMr/FFmpeg"
-CB1_FFMPEG_SOURCE_COMMIT="60bea7d4e6459399f94a6d1bd0036a58b824ad9a"
-CB1_FFMPEG_SOURCE_SHA256="64af8697704d2257568f0aa47cb4c457878583ef31069a164ea5600be59566c6"
+CB1_FFMPEG_SOURCE_COMMIT="91adfbb2f53a742e75c3925be5f4d5c15f2305f0"
+CB1_FFMPEG_SOURCE_SHA256="925cfd029d6c2d2156052174523b4e2e7b5848bb50c7dd5d14d25f21addda381"
 
 PKG_FFMPEG_REQUEST_DISABLE="--disable-libudev --disable-v4l2-request"
 PKG_FFMPEG_REQUEST_ENABLE="--enable-libudev --enable-v4l2-request"
@@ -28,6 +28,7 @@ case "${PROJECT}" in
     PKG_URL="https://github.com/jc-kynesim/rpi-ffmpeg/archive/${PKG_VERSION}.tar.gz"
     ;;
   Generic)
+    PKG_VERSION="9.0.2"
     PKG_FFMPEG_REQUEST_DISABLE=""
     PKG_FFMPEG_REQUEST_ENABLE=""
     # The fork includes the complete Generic patch stack for this source pin.
