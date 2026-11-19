@@ -2399,5 +2399,19 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-print-screen-sdr.patch": {
+    "component": "kodi",
+    "files": {
+      "xbmc/rendering/capture/CaptureReadback.h": "Track whether the readback matches the advertised color encoding.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Mark only known SDR and PQ readback paths as color verified.",
+      "xbmc/utils/IScreenshotSurface.h": "Expose color verification alongside the captured surface.",
+      "xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp": "Transfer readback color verification to the screenshot surface.",
+      "xbmc/rendering/capture/CaptureTypes.h": "Keep verified surface encoding with the capture result.",
+      "xbmc/application/Application.cpp": "Snapshot color verification before delivering the composite.",
+      "xbmc/rendering/capture/CaptureConvert.h": "Expose an explicit display SDR conversion for the screenshot writer.",
+      "xbmc/rendering/capture/CaptureConvert.cpp": "Reuse FFmpeg CMS to convert verified HDR composites to display sRGB.",
+      "xbmc/utils/Screenshot.cpp": "Normalize standard Print Screen exports on the capture worker."
+    }
   }
 }

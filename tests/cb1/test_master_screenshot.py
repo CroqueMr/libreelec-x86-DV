@@ -32,7 +32,8 @@ int bound=99,depth=0,readFormat=AV_PIX_FMT_RGBA;bool flip=false,readOK=true,mapO
 void glGetIntegerv(int,int* out){*out=bound;}
 void glBindFramebuffer(int,unsigned value){bound=value;}
 namespace KODI::RENDERING::CAPTURE {
-struct ReadbackBuffer {std::unique_ptr<uint8_t[]> pixels; unsigned width=0,height=0;int stride=0,format=0;};
+struct ReadbackBuffer {std::unique_ptr<uint8_t[]> pixels; unsigned width=0,height=0;int stride=0,format=0;
+ bool colorEncodingVerified=true;};
 bool ReadFramebufferRegion(int,int,int w,int h,int bits,bool upsideDown,ReadbackBuffer& out){
  assert(w==3840 && h==2160);depth=bits;flip=upsideDown;
  if(!readOK)return false;
@@ -60,6 +61,8 @@ struct CDVBridgeGLES {
  DVBRIDGE::DiagnosticFailures m_captureFailures;
  struct{uint64_t stream=3,picture=4,revision=5;}m_pendingIdentity;
  int m_effectiveMode=5;bool m_prepared=true,m_direct=true,m_hdr10Limited=false;unsigned m_outputBits=10;
+ bool m_hdr10=true,m_playerLed=false,sourceCarrier=true;
+ bool UsesMasterSourceCarrier() const {return sourceCarrier;}
  struct Texture{struct{int w=3840,h=2160;}params;} texture;Texture* m_scanout=&texture;
  unsigned m_scanoutFramebuffer=42,m_pendingInfo=2;int pqCalls=0;
  struct {const void* Data(){return this;}size_t Size(){return 10;}}m_pendingMetadata;
@@ -74,6 +77,7 @@ int main(){
  CDVBridgeGLES bridge;KODI::RENDERING::CAPTURE::ReadbackBuffer out;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==8 && flip);
  assert(out.format==AV_PIX_FMT_RGBA64LE && out.stride==-16 && bridge.pqCalls==0);
+ assert(out.colorEncodingVerified);
  auto* accepted=out.pixels.get();
  bridge.m_pendingOverlayVisible=bridge.m_overlayVisible=true; // Scheduled for later, clean current frame.
  assert(bridge.ReadScreenshot(out,true));
@@ -83,6 +87,9 @@ int main(){
  accepted=out.pixels.get();
  assert(!bridge.ReadScreenshot(out,true) && out.pixels.get()==accepted);
  assert(bridge.ReadScreenshot(out,false));
+ bridge.sourceCarrier=false;
+ assert(bridge.ReadScreenshot(out,false) && !out.colorEncodingVerified);
+ bridge.sourceCarrier=true;
  bridge.m_pendingOverlayVisible=bridge.m_overlayVisible=bridge.m_nativeOverlayEnabled=false;
  bridge.m_guiComposed=true;
  assert(!bridge.ReadScreenshot(out,true));
@@ -96,6 +103,10 @@ int main(){
  bridge.m_effectiveMode=1;bridge.m_direct=false;
  assert(bridge.ReadScreenshot(out));assert(bound==99 && depth==16 && !flip && bridge.pqCalls==1);
  assert(out.format==AV_PIX_FMT_RGBA && out.stride==8);
+ assert(out.colorEncodingVerified);
+ bridge.m_playerLed=true;
+ assert(bridge.ReadScreenshot(out) && !out.colorEncodingVerified);
+ bridge.m_playerLed=false;
  bridge.m_guiComposed=false;
  assert(bridge.ReadScreenshot(out,true) && !bridge.m_guiComposed);
  bridge.m_effectiveMode=DVBRIDGE_MODE_SDR;bridge.m_direct=true;mapOK=false;
