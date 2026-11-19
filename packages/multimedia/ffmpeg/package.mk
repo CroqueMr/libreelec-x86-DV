@@ -13,6 +13,10 @@ PKG_LONGDESC="FFmpeg is a complete, cross-platform solution to record, convert a
 PKG_PATCH_DIRS="postproc libreelec"
 PKG_NO_REFRESH_PATCHES="tools/ffmpeg/gen-patches.sh"
 
+CB1_FFMPEG_SOURCE_REPOSITORY="https://github.com/CroqueMr/FFmpeg"
+CB1_FFMPEG_SOURCE_COMMIT="60bea7d4e6459399f94a6d1bd0036a58b824ad9a"
+CB1_FFMPEG_SOURCE_SHA256="64af8697704d2257568f0aa47cb4c457878583ef31069a164ea5600be59566c6"
+
 PKG_FFMPEG_REQUEST_DISABLE="--disable-libudev --disable-v4l2-request"
 PKG_FFMPEG_REQUEST_ENABLE="--enable-libudev --enable-v4l2-request"
 
@@ -26,6 +30,11 @@ case "${PROJECT}" in
   Generic)
     PKG_FFMPEG_REQUEST_DISABLE=""
     PKG_FFMPEG_REQUEST_ENABLE=""
+    # The fork includes the complete Generic patch stack for this source pin.
+    PKG_URL="${CB1_FFMPEG_SOURCE_REPOSITORY}/archive/${CB1_FFMPEG_SOURCE_COMMIT}.tar.gz"
+    PKG_SOURCE_NAME="${PKG_NAME}-${CB1_FFMPEG_SOURCE_COMMIT}.tar.gz"
+    PKG_SHA256="${CB1_FFMPEG_SOURCE_SHA256}"
+    PKG_SKIP_PATCHES="yes"
     ;;
   Rockchip)
     case "${DEVICE}" in
