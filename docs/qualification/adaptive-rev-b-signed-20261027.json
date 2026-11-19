@@ -1,0 +1,1210 @@
+{
+  "renderer": "D3D12 (AMD Radeon(TM) Graphics)",
+  "timing_scope": "expansion, statistics, fused carrier prepack and auxiliary PQ write; no final resolve",
+  "mini_pc_or_hdmi_tested": false,
+  "timings": [
+    {
+      "analytic": 0,
+      "samples_per_mode": 72,
+      "median_ms": [
+        29.36328,
+        24.27144
+      ],
+      "p95_ms": [
+        30.67032,
+        24.847
+      ],
+      "paired_delta_median_ms": -5.1093399999999995,
+      "paired_delta_p95_ms": -4.63156
+    },
+    {
+      "analytic": 1,
+      "samples_per_mode": 72,
+      "median_ms": [
+        20.852980000000002,
+        22.88266
+      ],
+      "p95_ms": [
+        23.2882,
+        25.16132
+      ],
+      "paired_delta_median_ms": 2.0294800000000013,
+      "paired_delta_p95_ms": 2.829840000000001
+    }
+  ],
+  "pixels": [
+    {
+      "kind": "pixels",
+      "mode": 0,
+      "analytic": 0,
+      "max_error_code12": 0.00388418535,
+      "black_error_nits": 0.000209607184,
+      "protected_components": 960,
+      "max_rgb_ratio_error": 2.4664811e-05,
+      "measured_pq": [
+        0,
+        0.847897845,
+        0.596301375
+      ],
+      "source_mean_pq": 0.572781041,
+      "projected_L1": [
+        0,
+        3472,
+        2362
+      ],
+      "projected_avg_minus_measured_proxy_code12": -79.85413062499993
+    },
+    {
+      "kind": "pixels",
+      "mode": 1,
+      "analytic": 0,
+      "max_error_code12": 0.00386670792,
+      "black_error_nits": 0.000209607184,
+      "protected_components": 960,
+      "max_rgb_ratio_error": 2.25843358e-05,
+      "measured_pq": [
+        0,
+        0.839704753,
+        0.590216211
+      ],
+      "source_mean_pq": 0.572781041,
+      "projected_L1": [
+        0,
+        3439,
+        2346
+      ],
+      "projected_avg_minus_measured_proxy_code12": -70.93538404499986
+    },
+    {
+      "kind": "pixels",
+      "mode": 0,
+      "analytic": 1,
+      "max_error_code12": 0.0353302706,
+      "black_error_nits": 0.000340729952,
+      "protected_components": 960,
+      "max_rgb_ratio_error": 4.42091593e-05,
+      "measured_pq": [
+        0,
+        0.847897845,
+        0.596300863
+      ],
+      "source_mean_pq": 0.572781041,
+      "projected_L1": [
+        0,
+        3472,
+        2362
+      ],
+      "projected_avg_minus_measured_proxy_code12": -79.85203398499971
+    },
+    {
+      "kind": "pixels",
+      "mode": 1,
+      "analytic": 1,
+      "max_error_code12": 0.0286022853,
+      "black_error_nits": 0.000340729952,
+      "protected_components": 960,
+      "max_rgb_ratio_error": 3.76888216e-05,
+      "measured_pq": [
+        0,
+        0.839704753,
+        0.590215947
+      ],
+      "source_mean_pq": 0.572781041,
+      "projected_L1": [
+        0,
+        3439,
+        2346
+      ],
+      "projected_avg_minus_measured_proxy_code12": -70.93430296499992
+    }
+  ],
+  "clips": {
+    "avatar": {
+      "frames_per_mode": 6,
+      "sampled_components_per_mode": 34560,
+      "protected_roundtrip_max_nits": 0.000377655029,
+      "rev_b_vs_baseline_max_difference_code12": 239.310213,
+      "rev_b_vs_baseline_mean_difference_code12": 100.88228844999999,
+      "metadata": [
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 168,
+          "pts": 39.289,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.0928686857,
+            0.475232928,
+            0.72322917
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 168,
+          "pts": 39.289,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.0928686857,
+            0.444467351,
+            0.706103265
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 192,
+          "pts": 40.29,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.101197951,
+            0.452351406,
+            0.694803953
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 192,
+          "pts": 40.29,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.101197951,
+            0.42476665,
+            0.668135047
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 216,
+          "pts": 41.291,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0,
+            0.415982289,
+            0.758086741
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 216,
+          "pts": 41.291,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0,
+            0.391076268,
+            0.744856238
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 240,
+          "pts": 42.292,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0,
+            0.401614342,
+            0.753766239
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 240,
+          "pts": 42.292,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0,
+            0.378046272,
+            0.740516663
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 264,
+          "pts": 43.293,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.0824012235,
+            0.436482928,
+            0.802113354
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 264,
+          "pts": 43.293,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.0824012235,
+            0.411224139,
+            0.788264394
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 288,
+          "pts": 44.294,
+          "reason": 0,
+          "L1": [
+            0,
+            3283,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.126098439,
+            0.43764986,
+            0.796848774
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 288,
+          "pts": 44.294,
+          "reason": 0,
+          "L1": [
+            0,
+            3224,
+            1229
+          ],
+          "source_max_pq": 3489,
+          "measured_proxy": [
+            0.126098439,
+            0.417156817,
+            0.782865107
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 2,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        }
+      ]
+    },
+    "dragon": {
+      "frames_per_mode": 6,
+      "sampled_components_per_mode": 34560,
+      "protected_roundtrip_max_nits": 0.000338554382,
+      "rev_b_vs_baseline_max_difference_code12": 56.8266991,
+      "rev_b_vs_baseline_mean_difference_code12": 11.274043075,
+      "metadata": [
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 24,
+          "pts": 1.042,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0474510416,
+            0.239385106,
+            0.58461833
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 24,
+          "pts": 1.042,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0474510416,
+            0.23856515,
+            0.577594757
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 48,
+          "pts": 2.043,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.100290179,
+            0.342420992,
+            0.633586884
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 48,
+          "pts": 2.043,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.100290179,
+            0.338836457,
+            0.626422107
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 72,
+          "pts": 3.044,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0924205929,
+            0.334830183,
+            0.633724809
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 72,
+          "pts": 3.044,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0924205929,
+            0.331470779,
+            0.626559138
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 96,
+          "pts": 4.045,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0564370044,
+            0.265138035,
+            0.563665926
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 96,
+          "pts": 4.045,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0564370044,
+            0.263203817,
+            0.557296157
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 120,
+          "pts": 5.046,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0251316298,
+            0.225451114,
+            0.574344754
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 120,
+          "pts": 5.046,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0251316298,
+            0.223411224,
+            0.567647696
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 0,
+          "picture": 144,
+          "pts": 6.047,
+          "reason": 0,
+          "L1": [
+            162,
+            2518,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0296673179,
+            0.252012197,
+            0.627104044
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        },
+        {
+          "kind": "pipeline",
+          "mode": 1,
+          "picture": 144,
+          "pts": 6.047,
+          "reason": 0,
+          "L1": [
+            162,
+            2486,
+            1031
+          ],
+          "source_max_pq": 3697,
+          "measured_proxy": [
+            0.0296673179,
+            0.249685512,
+            0.619303286
+          ],
+          "analysis_model": "cb1-authored-scene-curve-v1",
+          "trim_family": 8,
+          "trim_anchors": 1,
+          "same_picture": true,
+          "source_immutable": true,
+          "trims_preserved": true
+        }
+      ]
+    }
+  },
+  "curves": [
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 0,
+      "baseline": 0,
+      "rev_b": 0
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 5,
+      "baseline": 5,
+      "rev_b": 5
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 10,
+      "baseline": 10,
+      "rev_b": 10
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 20,
+      "baseline": 21.4330013,
+      "rev_b": 20
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 50,
+      "baseline": 72.1718313,
+      "rev_b": 50.0104485
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 100,
+      "baseline": 212.049843,
+      "rev_b": 114.458017
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 200,
+      "baseline": 699.22341,
+      "rev_b": 541.978824
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 400,
+      "baseline": 2393.83495,
+      "rev_b": 2181.08229
+    },
+    {
+      "kind": "curve",
+      "scene": 0,
+      "input_nits": 800,
+      "baseline": 2460.96051,
+      "rev_b": 2432.03753
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 0,
+      "baseline": 0,
+      "rev_b": 0
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 5,
+      "baseline": 5,
+      "rev_b": 5
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 10,
+      "baseline": 10,
+      "rev_b": 10
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 20,
+      "baseline": 20.2826163,
+      "rev_b": 20
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 50,
+      "baseline": 54.3727245,
+      "rev_b": 50
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 100,
+      "baseline": 122.09845,
+      "rev_b": 100.006214
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 200,
+      "baseline": 298.45675,
+      "rev_b": 212.660756
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 400,
+      "baseline": 814.81311,
+      "rev_b": 684.044901
+    },
+    {
+      "kind": "curve",
+      "scene": 1,
+      "input_nits": 800,
+      "baseline": 2414.54786,
+      "rev_b": 2243.47086
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 0,
+      "baseline": 0,
+      "rev_b": 0
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 5,
+      "baseline": 5,
+      "rev_b": 5
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 10,
+      "baseline": 10,
+      "rev_b": 10
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 20,
+      "baseline": 20.0000457,
+      "rev_b": 20
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 50,
+      "baseline": 50.0075962,
+      "rev_b": 50
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 100,
+      "baseline": 100.164449,
+      "rev_b": 100
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 200,
+      "baseline": 202.815506,
+      "rev_b": 200.001473
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 400,
+      "baseline": 443.385444,
+      "rev_b": 411.870074
+    },
+    {
+      "kind": "curve",
+      "scene": 2,
+      "input_nits": 800,
+      "baseline": 1435.81477,
+      "rev_b": 1340.44255
+    }
+  ],
+  "temporal": [
+    {
+      "kind": "temporal",
+      "mode": 0,
+      "frames": 240,
+      "max_step_code12": 2,
+      "reset_at": 120
+    },
+    {
+      "kind": "temporal",
+      "mode": 1,
+      "frames": 240,
+      "max_step_code12": 1,
+      "reset_at": 120
+    }
+  ],
+  "cpu_plan_median_us": [
+    4.293451,
+    11.55658
+  ],
+  "trim_responses": [
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 0,
+      "code": 1536,
+      "at100": 100.005792,
+      "at200": 211.800449,
+      "at800": 2145.38604
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 0,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 0,
+      "code": 2560,
+      "at100": 100.006587,
+      "at200": 213.4196,
+      "at800": 2329.9878
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 1,
+      "code": 1536,
+      "at100": 100.003598,
+      "at200": 207.329635,
+      "at800": 1916.39498
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 1,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 1,
+      "code": 2560,
+      "at100": 100.010205,
+      "at200": 219.625591,
+      "at800": 2414.58965
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 2,
+      "code": 1536,
+      "at100": 100.008067,
+      "at200": 215.480316,
+      "at800": 2351.89364
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 2,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 2,
+      "code": 2560,
+      "at100": 100.004755,
+      "at200": 210.288877,
+      "at800": 2131.82492
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 3,
+      "code": 1536,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 3,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 3,
+      "code": 2560,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 4,
+      "code": 1536,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 4,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 2,
+      "field": 4,
+      "code": 2560,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 0,
+      "code": 1536,
+      "at100": 100.005792,
+      "at200": 211.800449,
+      "at800": 2145.38604
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 0,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 0,
+      "code": 2560,
+      "at100": 100.006587,
+      "at200": 213.4196,
+      "at800": 2329.9878
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 1,
+      "code": 1536,
+      "at100": 100.003598,
+      "at200": 207.329635,
+      "at800": 1916.39498
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 1,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 1,
+      "code": 2560,
+      "at100": 100.010205,
+      "at200": 219.625591,
+      "at800": 2414.58965
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 2,
+      "code": 1536,
+      "at100": 100.008067,
+      "at200": 215.480316,
+      "at800": 2351.89364
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 2,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 2,
+      "code": 2560,
+      "at100": 100.004755,
+      "at200": 210.288877,
+      "at800": 2131.82492
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 3,
+      "code": 1536,
+      "at100": 100.008628,
+      "at200": 216.038484,
+      "at800": 2318.60648
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 3,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 3,
+      "code": 2560,
+      "at100": 100.004147,
+      "at200": 209.440821,
+      "at800": 2150.74169
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 4,
+      "code": 1536,
+      "at100": 100.006251,
+      "at200": 212.736354,
+      "at800": 2240.44559
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 4,
+      "code": 2048,
+      "at100": 100.006214,
+      "at200": 212.660756,
+      "at800": 2243.47086
+    },
+    {
+      "kind": "trim_response",
+      "family": 8,
+      "field": 4,
+      "code": 2560,
+      "at100": 100.006178,
+      "at200": 212.586503,
+      "at800": 2246.43578
+    }
+  ],
+  "cpu_trim_plan_median_us": {
+    "2": [
+      19.06324,
+      30.34443
+    ],
+    "8": [
+      12.97344,
+      19.46535
+    ]
+  }
+}

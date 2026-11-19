@@ -1,0 +1,99 @@
+Subject: [PATCH] Avoid decoding verified MEL pictures during disc navigation
+
+--- a/xbmc/cores/VideoPlayer/DVDStreamInfo.h
++++ b/xbmc/cores/VideoPlayer/DVDStreamInfo.h
+@@ -19,6 +19,7 @@
+ 
+ #define CODEC_FORCE_SOFTWARE 0x01
+ #define CODEC_ALLOW_FALLBACK 0x02
++#define CODEC_BLURAY_NAVIGATION 0x04
+ 
+ class CDemuxStream;
+ struct DemuxCryptoSession;
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4728,6 +4728,10 @@
+   std::shared_ptr<CDVDInputStream::IMenus> pMenus = std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInputStream);
+   if(pMenus && pMenus->IsInMenu())
+     hint.stills = true;
++#ifdef HAVE_DVBRIDGE
++  if (pMenus && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY))
++    hint.codecOptions |= CODEC_BLURAY_NAVIGATION;
++#endif
+ 
+   if (hint.stereo_mode.empty())
+   {
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -844,8 +844,13 @@
+           if (base->doviSourcePts == AV_NOPTS_VALUE)
+             return VC_FATAL;
+           AVFrame* enhancement = nullptr;
+-          int result = dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts,
+-                                         &enhancement);
++          const auto& metadata = base->doviMetadata;
++          const bool exactDiscPicture = (m_hints.codecOptions & CODEC_BLURAY_NAVIGATION) &&
++              m_dvLayerEpoch && metadata.Binding() == base->doviSourceBinding;
++          const int result = exactDiscPicture ?
++              dvbridge_fel_take_mel(m_dvFel.get(), base->doviSourcePts, &enhancement,
++                                   metadata.Data(), metadata.Size()) :
++              dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts, &enhancement);
+           if (result == 2)
+           {
+             m_dvPending.pop_front();
+@@ -865,32 +870,35 @@
+             av_frame_free(&enhancement);
+             return VC_FATAL;
+           }
+-          ReportDVStartup(4, "el-decoded");
++          if (result == 1)
++          {
++            ReportDVStartup(4, "el-decoded");
+ #ifdef HAVE_LIBVA
+-          if (base->iFlags & DVP_FLAG_DROPPED)
+-          {
+-            // Preroll bypasses the renderer's normal EL completion check. Consume
+-            // its decode report before retiring the image, as Kodi does for BL.
+-            const auto* frames = enhancement->hw_frames_ctx ?
+-                reinterpret_cast<const AVHWFramesContext*>(enhancement->hw_frames_ctx->data) : nullptr;
+-            const auto* device = frames ?
+-                reinterpret_cast<const AVVAAPIDeviceContext*>(frames->device_ctx->hwctx) : nullptr;
+-            if (!device || vaSyncSurface(device->display,
+-                static_cast<VASurfaceID>(reinterpret_cast<uintptr_t>(enhancement->data[3]))) != VA_STATUS_SUCCESS)
++            if (base->iFlags & DVP_FLAG_DROPPED)
+             {
+-              CLog::Log(LOGERROR, "DV FEL: discarded picture decode did not complete at {}",
+-                        base->doviSourcePts);
+-              av_frame_free(&enhancement);
+-              return VC_FATAL;
++              // Preroll bypasses the renderer's normal EL completion check. Consume
++              // its decode report before retiring the image, as Kodi does for BL.
++              const auto* frames = enhancement->hw_frames_ctx ?
++                  reinterpret_cast<const AVHWFramesContext*>(enhancement->hw_frames_ctx->data) : nullptr;
++              const auto* device = frames ?
++                  reinterpret_cast<const AVVAAPIDeviceContext*>(frames->device_ctx->hwctx) : nullptr;
++              if (!device || vaSyncSurface(device->display,
++                  static_cast<VASurfaceID>(reinterpret_cast<uintptr_t>(enhancement->data[3]))) != VA_STATUS_SUCCESS)
++              {
++                CLog::Log(LOGERROR, "DV FEL: discarded picture decode did not complete at {}",
++                          base->doviSourcePts);
++                av_frame_free(&enhancement);
++                return VC_FATAL;
++              }
+             }
++#endif
++            base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
++            // The pairing owner consumed the exact EL from this stream/reset epoch.
++            base->doviEnhancementBinding = base->doviMetadata.Binding();
+           }
+-#endif
+-          base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
+-          // The pairing owner consumed the exact EL from this stream/reset epoch.
+-          base->doviEnhancementBinding = base->doviMetadata.Binding();
+           pVideoPicture->CopyRef(*base);
+           m_dvPending.pop_front();
+-          ReportDVStartup(8, "fel-paired");
++          ReportDVStartup(8, result == 3 ? "mel-metadata-only" : "fel-paired");
+           return VC_PICTURE;
+         }
+         return VC_NONE;

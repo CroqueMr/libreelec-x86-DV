@@ -1,0 +1,33 @@
+From: LibreELEC Dolby Vision contributors
+Subject: [PATCH] bdj: bound refresh deferral during continuous repaint
+
+Adapted from avdvplus R10's bounded-sync-deferral patch. Keep the normal
+40ms quiet-paint coalescing, but do not wait forever for a busy animation
+to stop changing. Measure the 100ms budget monotonically from creation of
+each pending refresh task; sync cancels that task, so no window-global
+timestamp or wall-clock dependency is needed. The existing timer samples
+the bound at its normal 40ms cadence.
+
+Origin: https://github.com/avdvplus/CoreELEC/blob/55282781e6cfd4886208efc0681ffe593be7d254/packages/multimedia/libbluray/patches/libbluray-05-bdj-bounded-sync-deferral.patch
+License: LGPL-2.1-or-later, as the libbluray owner.
+
+--- a/src/libbluray/bdj/java/java/awt/BDRootWindow.java
++++ b/src/libbluray/bdj/java/java/awt/BDRootWindow.java
+@@ -152,7 +152,8 @@ public class BDRootWindow extends Frame {
+ 
+         public void run() {
+             synchronized (window) {
+-                if (this.changeCount == window.changeCount)
++                if (this.changeCount == window.changeCount ||
++                    System.nanoTime() - startTime >= 100000000L)
+                     window.sync();
+                 else
+                     this.changeCount = window.changeCount;
+@@ -161,6 +162,7 @@ public class BDRootWindow extends Frame {
+ 
+         private BDRootWindow window;
+         private int changeCount;
++        private final long startTime = System.nanoTime();
+     }
+ 
+     private void close() {

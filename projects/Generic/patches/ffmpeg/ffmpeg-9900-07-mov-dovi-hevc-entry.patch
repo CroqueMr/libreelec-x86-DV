@@ -1,0 +1,130 @@
+Recognize and seek explicitly declared dual-track Dolby Vision.
+
+--- a/libavformat/mov.c
++++ b/libavformat/mov.c
+@@ -2675,9 +2675,15 @@
+     if (!tag)
+         return AVERROR(ENOMEM);
+ 
+-    int ret = mov_add_tref_id(tag, avio_rb32(pb));
+-    if (ret < 0)
+-        return ret;
++    /* Two distinct targets suffice to reject an ambiguous DV association. */
++    for (int64_t i = 0; i < atom.size / 4 && tag->nb_id < 2; i++) {
++        uint32_t id = avio_rb32(pb);
++        if (avio_feof(pb))
++            return AVERROR_INVALIDDATA;
++        int ret = mov_add_tref_id(tag, id);
++        if (ret < 0)
++            return ret;
++    }
+ 
+     return 0;
+ }
+@@ -11131,6 +11137,7 @@
+ static int mov_parse_dovi_streams(AVFormatContext *s)
+ {
+     int err;
++    unsigned reported = 0;
+ 
+     if (s->nb_streams <= 1)
+         return 0;
+@@ -11138,9 +11145,8 @@
+     /* Identify legacy dual-track Dolby Vision profile 7 carriage per Annex
+      * C of "Dolby Vision Streams Within the ISO Base Media File Format",
+      * v2.7.1. The 'vdep' track reference type is shared with depth video
+-     * and multi-view dependencies. The spec-mandated DV-specific sample
+-     * entry combined with the dvcC configuration record disambiguates
+-     * those uses. */
++     * and multi-view dependencies. Require the DV configuration record
++     * even when a muxer uses an ordinary HEVC sample entry. */
+     for (int i = 0; i < s->nb_streams; i++) {
+         AVStreamGroup *stg;
+         AVStream *st = s->streams[i];
+@@ -11150,16 +11156,38 @@
+         const AVPacketSideData *sd;
+         const AVDOVIDecoderConfigurationRecord *dovi;
+ 
+-        if (st->codecpar->codec_id != AV_CODEC_ID_HEVC || !tag)
+-            continue;
+-
+-        if (st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
+-            st->codecpar->codec_tag != MKTAG('d','v','h','1'))
++        if (st->codecpar->codec_id != AV_CODEC_ID_HEVC)
+             continue;
+ 
+         sd = av_packet_side_data_get(st->codecpar->coded_side_data,
+                                      st->codecpar->nb_coded_side_data,
+                                      AV_PKT_DATA_DOVI_CONF);
++        if (sd && sd->size >= sizeof(*dovi)) {
++            const AVDOVIDecoderConfigurationRecord *config = (const void *)sd->data;
++            if (config->dv_profile == 7 && config->rpu_present_flag &&
++                config->el_present_flag && !config->bl_present_flag && reported++ < 16) {
++                const char *reason = !tag ? "no-vdep" : tag->nb_id != 1 ? "ambiguous-vdep" :
++                    st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
++                    st->codecpar->codec_tag != MKTAG('d','v','h','1') &&
++                    st->codecpar->codec_tag != MKTAG('h','v','c','1') &&
++                    st->codecpar->codec_tag != MKTAG('h','e','v','1') ?
++                    "unsupported-sample-entry" : "declared";
++                av_log(s, AV_LOG_INFO, "DV MOV association: el_index=%d el_track=%d codec_tag=0x%08x "
++                       "vdep_count=%d target0=%u target1=%u reason=%s\n", st->index, st->id,
++                       st->codecpar->codec_tag, tag ? tag->nb_id : 0,
++                       tag && tag->nb_id ? tag->id[0] : 0,
++                       tag && tag->nb_id > 1 ? tag->id[1] : 0, reason);
++            }
++        }
++        if (!tag || tag->nb_id != 1)
++            continue;
++
++        if (st->codecpar->codec_tag != MKTAG('d','v','h','e') &&
++            st->codecpar->codec_tag != MKTAG('d','v','h','1') &&
++            st->codecpar->codec_tag != MKTAG('h','v','c','1') &&
++            st->codecpar->codec_tag != MKTAG('h','e','v','1'))
++            continue;
++
+         if (!sd)
+             continue;
+         dovi = (const AVDOVIDecoderConfigurationRecord *)sd->data;
+@@ -11173,7 +11201,8 @@
+         st_base = mov_find_reference_track(s, st, tag->id, tag->nb_id, 0);
+         if (!st_base) {
+             int loglevel = (s->error_recognition & AV_EF_EXPLODE) ? AV_LOG_ERROR : AV_LOG_WARNING;
+-            av_log(s, loglevel, "Failed to find base layer for Dolby Vision EL stream\n");
++            av_log(s, loglevel, "DV MOV association rejected: el_track=%d target=%u reason=missing-base\n",
++                   st->id, tag->id[0]);
+             if (s->error_recognition & AV_EF_EXPLODE)
+                 return AVERROR_INVALIDDATA;
+             continue;
+@@ -12074,6 +12103,11 @@
+     if (mc->seek_individually) {
+         /* adjust seek timestamp to found sample timestamp */
+         int64_t seek_timestamp = sti->index_entries[sample].timestamp;
++        const MOVStreamContext *sc = st->priv_data;
++        int64_t seek_pts = seek_timestamp;
++        if (sc->ctts_count && sc->tts_index < sc->tts_count)
++            seek_pts = av_sat_add64(seek_timestamp,
++                av_sat_add64(sc->dts_shift, sc->tts_data[sc->tts_index].offset));
+         sti->skip_samples = mov_get_skip_samples(st, sample);
+ 
+         for (i = 0; i < s->nb_streams; i++) {
+@@ -12084,7 +12118,19 @@
+             if (stream_index == i)
+                 continue;
+ 
+-            timestamp = av_rescale_q(seek_timestamp, s->streams[stream_index]->time_base, st->time_base);
++            /* Dolby layers share presentation time, but may use different decode clocks. */
++            timestamp = seek_timestamp;
++            for (unsigned j = 0; seek_pts != seek_timestamp && j < s->nb_stream_groups; j++) {
++                const AVStreamGroup *group = s->stream_groups[j];
++                if (group->type == AV_STREAM_GROUP_PARAMS_DOLBY_VISION &&
++                    group->nb_streams == 2 &&
++                    ((group->streams[0] == s->streams[stream_index] && group->streams[1] == st) ||
++                     (group->streams[1] == s->streams[stream_index] && group->streams[0] == st))) {
++                    timestamp = seek_pts;
++                    break;
++                }
++            }
++            timestamp = av_rescale_q(timestamp, s->streams[stream_index]->time_base, st->time_base);
+             sample = mov_seek_stream(s, st, timestamp, flags);
+             if (sample >= 0)
+                 sti->skip_samples = mov_get_skip_samples(st, sample);

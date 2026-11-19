@@ -1,0 +1,216 @@
+Subject: [PATCH] Retain Master Reference output across compatible renderer replacement
+
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.cpp
+@@ -90,6 +90,12 @@
+ 
+ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps, unsigned int orientation)
+ {
++  return Configure(picture, fps, orientation, false);
++}
++
++bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps,
++                                  unsigned int orientation, bool retainedNativeDV)
++{
+   CVaapiRenderPicture *pic = dynamic_cast<CVaapiRenderPicture*>(picture.videoBuffer);
+   if (pic->procPic.videoSurface != VA_INVALID_ID)
+     m_isVAAPIBuffer = true;
+@@ -135,7 +141,7 @@
+     }
+   }
+ 
+-  return CLinuxRendererGLES::Configure(picture, fps, orientation);
++  return CLinuxRendererGLES::Configure(picture, fps, orientation, retainedNativeDV);
+ }
+ 
+ #ifdef CB1_HAS_HDR10_AI
+@@ -146,25 +152,28 @@
+   return info;
+ }
+ 
+-bool CRendererVAAPIGLES::RetainHDR10DVOutput(const VideoPicture& picture, float fps,
+-                                            unsigned int orientation)
++CRendererVAAPIGLES::DVHandoff CRendererVAAPIGLES::RetainDVOutput(
++    const VideoPicture& picture, float fps, unsigned int orientation)
+ {
+   const auto* next = dynamic_cast<const CVaapiRenderPicture*>(picture.videoBuffer);
+-  if (!m_dvRequested || !m_aiLookahead || !next || !next->valid ||
++  if (!m_dvRequested || !m_isVAAPIBuffer || !next || !next->valid ||
+       next->procPic.videoSurface == VA_INVALID_ID || next->procPic.fourcc != m_vaapiFourcc ||
+-      next->renderBufferCount <= NUM_BUFFERS || picture.iWidth != m_sourceWidth ||
+-      picture.iHeight != m_sourceHeight || !DVBridgeOrientationSupported(orientation) ||
++      picture.iWidth != m_sourceWidth || picture.iHeight != m_sourceHeight ||
++      picture.colorBits != m_srcColorBits || !DVBridgeOrientationSupported(orientation) ||
+       (picture.iFlags & DVP_FLAG_INTERLACED) || std::abs(fps - m_fps) > 0.001f)
+-    return false;
++    return DVHandoff::None;
+ 
+   auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+       CServiceBroker::GetWinSystem());
+-  if (!window || !window->RetainHDR10DVOutput(picture))
+-    return false;
+-
+-  // The successor owns output cleanup. The old renderer only frees its textures.
+-  m_dvRequested = m_bConfigured = false;
+-  return true;
++  if (!window)
++    return DVHandoff::None;
++
++  const auto handoff = window->RetainNativeDVOutput(picture) ? DVHandoff::Native :
++      m_aiLookahead && next->renderBufferCount > NUM_BUFFERS && window->RetainHDR10DVOutput(picture)
++          ? DVHandoff::HDR10AI : DVHandoff::None;
++  if (handoff != DVHandoff::None)
++    m_dvRequested = m_bConfigured = false; // The successor owns output cleanup.
++  return handoff;
+ }
+ 
+ bool CRendererVAAPIGLES::HDR10AILookahead() const
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/HwDecRender/RendererVAAPIGLES.h
+@@ -42,13 +42,16 @@
+   static CBaseRenderer* Create(CVideoBuffer *buffer);
+   static void Register(VAAPI::IVaapiWinSystem *winSystem, VADisplay vaDpy, EGLDisplay eglDisplay, bool &general, bool &deepColor);
+ 
+-  bool Configure(const VideoPicture &picture, float fps, unsigned int orientation) override;
++  bool Configure(const VideoPicture& picture, float fps, unsigned int orientation) override;
++  bool Configure(const VideoPicture& picture, float fps, unsigned int orientation,
++                 bool retainedNativeDV);
+ 
+   // Player functions
+   bool ConfigChanged(const VideoPicture &picture) override;
+ #ifdef CB1_HAS_HDR10_AI
+   CRenderInfo GetRenderInfo() override;
+-  bool RetainHDR10DVOutput(const VideoPicture& picture, float fps, unsigned int orientation);
++  enum class DVHandoff { None, HDR10AI, Native };
++  DVHandoff RetainDVOutput(const VideoPicture& picture, float fps, unsigned int orientation);
+   bool HDR10AIQueueEligible() const override { return m_aiBuffers > NUM_BUFFERS; }
+   bool HDR10AILookahead() const override;
+   bool HDR10AIFrameCommitted() const override;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -208,8 +208,9 @@
+ 
+ #if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
+   auto* vaapi = dynamic_cast<CRendererVAAPIGLES*>(m_pRenderer);
+-  const bool retained = vaapi &&
+-      vaapi->RetainHDR10DVOutput(*m_pConfigPicture, m_fps, m_orientation);
++  using DVHandoff = CRendererVAAPIGLES::DVHandoff;
++  const auto retained = vaapi ? vaapi->RetainDVOutput(*m_pConfigPicture, m_fps, m_orientation)
++                              : DVHandoff::None;
+ #endif
+   if (m_pRenderer)
+     DeleteRenderer();
+@@ -217,10 +218,19 @@
+   CreateRenderer();
+   if (m_pRenderer)
+     m_pRenderer->SetVideoSettings(m_playerPort->GetVideoSettings());
+-  const bool result = m_pRenderer &&
+-      m_pRenderer->Configure(*m_pConfigPicture, m_fps, m_orientation);
++  bool result;
+ #if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
+-  if (retained && !result)
++  if (retained == DVHandoff::Native)
++  {
++    auto* successor = dynamic_cast<CRendererVAAPIGLES*>(m_pRenderer);
++    result = successor && successor->Configure(*m_pConfigPicture, m_fps, m_orientation, true);
++  }
++  else
++#endif
++    result = m_pRenderer && m_pRenderer->Configure(*m_pConfigPicture, m_fps, m_orientation);
++
++#if defined(CB1_HAS_HDR10_AI) && defined(HAVE_LIBVA) && defined(HAVE_GBM) && defined(HAS_GLES)
++  if (retained != DVHandoff::None && !result)
+     if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+             CServiceBroker::GetWinSystem()))
+       window->StopDVBridgePlayback();
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp
+@@ -175,7 +175,13 @@
+   return false;
+ }
+ 
+-bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsigned int orientation)
++bool CLinuxRendererGLES::Configure(const VideoPicture& picture, float fps, unsigned int orientation)
++{
++  return Configure(picture, fps, orientation, false);
++}
++
++bool CLinuxRendererGLES::Configure(const VideoPicture& picture, float fps,
++                                   unsigned int orientation, bool retainedNativeDV)
+ {
+   auto colorimetry = KODI::UTILS::GetColorimetry(picture);
+   bool inferred = (picture.color_space == AVCOL_SPC_UNSPECIFIED);
+@@ -229,6 +235,16 @@
+         CServiceBroker::GetWinSystem());
+     m_dvRequested = window && window->OwnsHDR10DVOutput();
+     m_passthroughHDR = m_hdrFboActive = false;
++    return true;
++  }
++#endif
++#ifdef HAVE_DVBRIDGE
++  if (retainedNativeDV)
++  {
++    // The renderer owns cleanup now. Source admission happens after import.
++    m_dvRequested = m_hdrFboActive = true;
++    m_passthroughHDR = false;
++    CLog::Log(LOGDEBUG, "DVBridge: retained Master Reference HDMI output across renderer replacement");
+     return true;
+   }
+ #endif
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h
+@@ -93,6 +93,8 @@
+ 
+ protected:
+   bool m_frameRendered{false};
++  bool Configure(const VideoPicture& picture, float fps, unsigned int orientation,
++                 bool retainedNativeDV);
+   bool ConfigureVideoOutput(const VideoPicture& picture);
+ #ifdef CB1_HAS_HDR10_AI
+   bool m_aiOutputPending{false};
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -1863,6 +1863,33 @@
+ #ifndef CB1_L1L3_BUNDLE_DIR
+ #define CB1_L1L3_BUNDLE_DIR "/usr/share/cb1/l1l3"
+ #endif
++bool CWinSystemGbmGLESContext::RetainNativeDVOutput(const VideoPicture& picture)
++{
++  if (!picture.doviSourceInfo.profile || !picture.doviSourceBinding.Valid() ||
++      !picture.stereoMode.empty() || !m_dvBridge || !m_previousSourceStream ||
++      !m_dvState.Captured() || m_dvSelection.route != DVBRIDGE::OutputRoute::NativeDV ||
++      !m_dvConfiguredOutput || m_dvOutputRetiring || m_dvStopPending || m_dvEndPending ||
++      m_dvActivating || m_dvRecoveryPending || m_dvRejectedSurface || m_dvRollbackFailed ||
++      m_dvOrdinaryFrame || m_dvShutdownFence || HasPendingDVOutputSurface())
++    return false;
++
++  const auto preferences = DVBRIDGE::FrameOutputSettings();
++  if (preferences.output != DVBRIDGE::OutputMode::MasterReference ||
++      m_dvSelection.policy.mode != DVBRIDGE_MODE_MASTER_REFERENCE ||
++      m_dvSelection.policy.revision != preferences.revision || !SupportsDVOutputMode())
++    return false;
++
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  if (!drm || !drm->IsSelectedModeCommitted())
++    return false;
++
++  // Only retain the accepted scanout. The successor imports and admits its own BL/EL/RPU.
++  m_dvBridge->Reset();
++  m_cb1FramePending = m_dvFrame = m_dvNativeGui = false;
++  m_dvConfiguredOutput.reset();
++  return true;
++}
++
+ bool CWinSystemGbmGLESContext::RetainHDR10DVOutput(const VideoPicture& picture)
+ {
+   // Source format and policy can change independently of the current scanout.
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -113,6 +113,7 @@
+   bool PrepareDVOutputFrame(const VideoPicture& picture);
+ #ifdef CB1_HAS_HDR10_AI
+   bool HDR10AILookaheadActive() const;
++  bool RetainNativeDVOutput(const VideoPicture& picture);
+   bool RetainHDR10DVOutput(const VideoPicture& picture);
+   bool OwnsHDR10DVOutput() const
+   {

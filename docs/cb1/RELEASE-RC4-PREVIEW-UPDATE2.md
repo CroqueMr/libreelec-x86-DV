@@ -1,0 +1,52 @@
+# R1.0.0 RC4 Preview - Update 2
+
+> Work-in-progress build, not a stable release.
+
+## Changes since Update 1
+
+- Improved Blu-ray menu highlighting and disappearance, while keeping subtitles and menu layers separate.
+- Prevent busy Java menu animations from indefinitely delaying their display.
+- Correct menu capability decisions and strengthen chapter/navigation handling of malformed disc data.
+- Improved Intel Xe3 / Wildcat Lake display initialization and I2C handling, with the required upstream dependencies.
+- Preserve installer boot logs on the USB boot partition, including the previous attempt after a failed boot.
+- Retain on-screen NVIDIA boot diagnostics, including kernel audio/PCI messages when emitted.
+- Enable native HDMI CEC discovery on compatible boards and converters, alongside USB CEC adapters.
+- Add display colour range and maximum bit depth controls, plus colour format selection when supported by the driver.
+
+This is the normal Generic x86_64 image for Intel, AMD and supported NVIDIA
+systems. It includes the existing ISO/menu, HDR10+, VAAPI and NVIDIA changes
+from Update 1. NVIDIA work retains credit to
+[Hades / hadesdevls](https://github.com/hadesdevls/LibreELEC-Hades).
+The experimental Player information redesign in PR92 is excluded.
+
+General Blu-ray fixes are adapted from
+[AVDVPlus](https://github.com/avdvplus/CoreELEC),
+[SamuriHL](https://github.com/SamuriHL) and VideoLAN/libbluray work, with
+upstream attribution retained in the patches.
+
+Display controls are adapted from [smp79's Kodi PR30099](https://github.com/xbmc/xbmc/pull/30099)
+and [PR30192](https://github.com/xbmc/xbmc/pull/30192), with their dependency
+and CB1 output restoration handled together. See [display settings](GBM-COLOUR-SETTINGS.md).
+
+## Installation and logs
+
+Use the `.img.gz` for a new USB installation, or the `.tar` through LibreELEC's
+normal update procedure. Installer boots save `cb1-boot-logs/current.log` and
+`previous.log` on the FAT boot partition, readable on another computer. See
+[installer logging and Xonar comparison](INSTALLER-LOGS-XONAR.md) for limits.
+
+## Qualification limits
+
+Xe3 changes are tested and compiled backports, not confirmation that issue93
+is fixed on the affected HP. The Xonar STX II startup hang remains under
+investigation; Hades RC8 uses the same 28 Virtuoso/oxygen source files and no
+Xonar-specific patch was identified. Console text depends on a working kernel
+and display; files improve diagnosis when screen text is unavailable.
+
+[Blu-ray menu corrections](BLURAY-MENU-SCOPE.md) apply to shared reader and
+navigation behavior. Complete compatibility with every BD-J disc, BD-Live and
+physical stereoscopic menus is not claimed.
+
+[CEC](CEC.md) requires a controller and a wired CEC route on the board or
+converter; CPU compatibility alone is insufficient. Colour format selection
+stays hidden without the driver property; this update retains kernel 7.2.6.

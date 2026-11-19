@@ -1,0 +1,8 @@
+cb1-tick.png is the unchanged native Kodi tick bitmap from
+addons/skin.estuary/media/icons/menumarks/tick.png, Kodi revision
+28ea2eac1eb7af8fdcbd2672d933ce87f594be79.
+Artwork by phil65 (Team Kodi). SPDX-License-Identifier: CC-BY-SA-4.0.
+https://creativecommons.org/licenses/by-sa/4.0/
+The bitmap is unchanged. Source and original notice:
+https://github.com/xbmc/xbmc/blob/28ea2eac1eb7af8fdcbd2672d933ce87f594be79/addons/skin.estuary/LICENSE.txt
+No skin XML or addon code is bundled with this application-owned panel.

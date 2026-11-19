@@ -1,0 +1,568 @@
+Subject: [PATCH] GBM: retain 10-bit CB1 HDR10 output on NVIDIA R580
+
+Use a probed RGB10_A2 target and two GBM scanout buffers when R580 has no 10-bit EGL window.
+The reversed GLES blit and readback adapt hadesdevls’ LibreELEC Hades 1.0 Kodi patch 9719.
+
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -1555,7 +1555,8 @@
+   return true;
+ }
+ 
+-bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<Context> context, bool sdr)
++bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<Context> context,
++                              bool sdr, unsigned int framebuffer)
+ {
+   if (m_gl)
+     return m_renderer && m_packer;
+@@ -1570,10 +1571,10 @@
+     return Failure("float-blend-or-linear-unavailable");
+   m_renderer = m_context->Attach();
+   m_packer = dvbridge_gl_packer_create(DVBRIDGE_VERTEX, DVBRIDGE_FRAGMENT);
+-  return m_renderer && m_packer && RebindOutputSurface(hdr10,sdr);
+-}
+-
+-bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr)
++  return m_renderer && m_packer && RebindOutputSurface(hdr10, sdr, framebuffer);
++}
++
++bool CDVBridgeGLES::RebindOutputSurface(bool hdr10, bool sdr, unsigned int framebuffer)
+ {
+   if (!m_gl || m_pending || m_prepared) return false;
+   m_playerLedCpu.reset();
+@@ -1588,12 +1589,14 @@
+   GLint draw, read, red, green, blue, samples, encoding;
+   glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+   glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
++  output.framebuffer = framebuffer;
++  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+   glGetIntegerv(GL_RED_BITS, &red);
+   glGetIntegerv(GL_GREEN_BITS, &green);
+   glGetIntegerv(GL_BLUE_BITS, &blue);
+   glGetIntegerv(GL_SAMPLES, &samples);
+-  glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK,
++  glGetFramebufferAttachmentParameteriv(
++      GL_FRAMEBUFFER, framebuffer ? GL_COLOR_ATTACHMENT0 : GL_BACK,
+       GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &encoding);
+   pl_tex candidate{};
+   if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE &&
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h
+@@ -213,11 +213,12 @@
+   CDVBridgeGLES& operator=(const CDVBridgeGLES&) = delete;
+ 
+   bool Initialize(bool allowSoftware = false, bool hdr10 = false,
+-                  std::shared_ptr<Context> context = {}, bool sdr = false);
++                  std::shared_ptr<Context> context = {}, bool sdr = false,
++                  unsigned int framebuffer = 0);
+   bool PlayerLed() const { return m_playerLed; }
+   bool SetHDR10Session(const dvbridge_hdr10_session& session, uint64_t stream = 0,
+                       bool limited = false);
+-  bool RebindOutputSurface(bool hdr10, bool sdr = false);
++  bool RebindOutputSurface(bool hdr10, bool sdr = false, unsigned int framebuffer = 0);
+   void Reset();
+   bool Prepare(const Layer& base, const Layer* enhancement,
+                const CDVMetadataBuffer& metadata, dvbridge_geometry geometry, bool allowPacked = false);
+diff --git a/xbmc/windowing/gbm/CMakeLists.txt b/xbmc/windowing/gbm/CMakeLists.txt
+--- a/xbmc/windowing/gbm/CMakeLists.txt
++++ b/xbmc/windowing/gbm/CMakeLists.txt
+@@ -19,8 +19,8 @@
+   list(APPEND HEADERS WinSystemGbmGLContext.h)
+ endif()
+ if(TARGET ${APP_NAME_LC}::OpenGLES)
+-  list(APPEND SOURCES WinSystemGbmGLESContext.cpp)
+-  list(APPEND HEADERS WinSystemGbmGLESContext.h)
++  list(APPEND SOURCES WinSystemGbmGLESContext.cpp PascalHDR10Scanout.cpp)
++  list(APPEND HEADERS WinSystemGbmGLESContext.h PascalHDR10Scanout.h)
+ endif()
+ 
+ core_add_library(windowing_gbm)
+diff --git a/xbmc/windowing/gbm/PascalHDR10Scanout.cpp b/xbmc/windowing/gbm/PascalHDR10Scanout.cpp
+new file mode 100644
+--- /dev/null
++++ b/xbmc/windowing/gbm/PascalHDR10Scanout.cpp
+@@ -0,0 +1,192 @@
++/*
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ *  The reversed GLES blit and framebuffer readback are adapted from
++ *  LibreELEC Hades v1.0 (hadesdevls, Kodi patch 9719).
++ */
++
++#include "PascalHDR10Scanout.h"
++
++#include "drm/DRMAtomic.h"
++#include "utils/EGLImage.h"
++
++#include <GLES3/gl3.h>
++#include <gbm.h>
++#include <unistd.h>
++
++using namespace KODI::WINDOWING::GBM;
++
++namespace
++{
++struct FramebufferBindings
++{
++  FramebufferBindings()
++  {
++    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
++    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
++  }
++
++  ~FramebufferBindings()
++  {
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
++  }
++
++  GLint read{};
++  GLint draw{};
++};
++
++bool FlipHDR10Frame(GLuint source, GLuint target, int width, int height)
++{
++  const FramebufferBindings bindings;
++  const bool scissor = glIsEnabled(GL_SCISSOR_TEST);
++  glDisable(GL_SCISSOR_TEST);
++  glBindFramebuffer(GL_READ_FRAMEBUFFER, source);
++  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target);
++  glBlitFramebuffer(0, 0, width, height, 0, height, width, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
++  const bool copied = glGetError() == GL_NO_ERROR;
++  if (scissor)
++    glEnable(GL_SCISSOR_TEST);
++  return copied;
++}
++
++bool Attach(GLuint& framebuffer, GLuint texture)
++{
++  glGenFramebuffers(1, &framebuffer);
++  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
++  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
++  return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
++}
++}
++
++std::unique_ptr<CPascalHDR10Scanout> CPascalHDR10Scanout::Create(
++    gbm_device* device, CDRMAtomic& drm, int width, int height)
++{
++  auto scanout = std::make_unique<CPascalHDR10Scanout>();
++  scanout->m_width = width;
++  scanout->m_height = height;
++  if (!scanout->Init(device, drm))
++    return {};
++  return scanout;
++}
++
++CPascalHDR10Scanout::~CPascalHDR10Scanout()
++{
++  for (const auto& buffer : m_buffers)
++  {
++    glDeleteFramebuffers(1, &buffer.framebuffer);
++    glDeleteTextures(1, &buffer.texture);
++  }
++  glDeleteFramebuffers(1, &m_source);
++  glDeleteTextures(1, &m_texture);
++}
++
++bool CPascalHDR10Scanout::Init(gbm_device* device, CDRMAtomic& drm)
++{
++  const FramebufferBindings bindings;
++  auto* plane = drm.GetGuiPlane() ? drm.GetGuiPlane() : drm.GetVideoPlane();
++  constexpr uint32_t format = DRM_FORMAT_XRGB2101010;
++  if (!plane || !plane->SupportsFormat(format) || !device ||
++      m_width < 2 || m_height < 2)
++    return false;
++
++  // CEGLImage owns the import until the texture has taken its reference.
++  CEGLImage image(eglGetCurrentDisplay());
++  GLint previousTexture{};
++  glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
++  const auto create = [&] {
++    glGenTextures(1, &m_texture);
++    glBindTexture(GL_TEXTURE_2D, m_texture);
++    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB10_A2, m_width, m_height);
++    if (!Attach(m_source, m_texture))
++      return false;
++
++    for (auto& buffer : m_buffers)
++    {
++      auto& modifiers = plane->GetModifiersForFormat(format);
++      constexpr uint32_t usage = GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING;
++      auto* bo = modifiers.empty() ? nullptr : gbm_bo_create_with_modifiers2(
++          device, m_width, m_height, format, modifiers.data(), modifiers.size(), usage);
++      if (!bo)
++        bo = gbm_bo_create(device, m_width, m_height, format, usage);
++      if (!bo)
++        return false;
++      buffer.bo = {bo, gbm_bo_destroy};
++      const auto modifier = gbm_bo_get_modifier(bo);
++      if (!plane->SupportsFormatAndModifier(format, modifier) || gbm_bo_get_plane_count(bo) != 1)
++        return false;
++      const int fd = gbm_bo_get_fd(bo);
++      if (fd < 0)
++        return false;
++      CEGLImage::EglAttrs attrs{};
++      attrs.width = m_width;
++      attrs.height = m_height;
++      attrs.format = format;
++      attrs.planes[0] = {fd, static_cast<int>(gbm_bo_get_offset(bo, 0)),
++                        static_cast<int>(gbm_bo_get_stride(bo)), modifier};
++      const bool imported = image.CreateImage(attrs);
++      close(fd);
++      if (!imported)
++        return false;
++
++      glGenTextures(1, &buffer.texture);
++      glBindTexture(GL_TEXTURE_2D, buffer.texture);
++      image.UploadImage(GL_TEXTURE_2D);
++      image.DestroyImage();
++      if (!Attach(buffer.framebuffer, buffer.texture) || !drm.TestFramebuffer(bo))
++        return false;
++    }
++    return Probe();
++  };
++  const bool ready = create();
++  glBindTexture(GL_TEXTURE_2D, previousTexture);
++  return ready;
++}
++
++bool CPascalHDR10Scanout::Probe() const
++{
++  const bool scissor = glIsEnabled(GL_SCISSOR_TEST);
++  GLint box[4], packBuffer{};
++  GLboolean mask[4];
++  glGetIntegerv(GL_SCISSOR_BOX, box);
++  glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &packBuffer);
++  glGetBooleanv(GL_COLOR_WRITEMASK, mask);
++  glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
++  glBindFramebuffer(GL_FRAMEBUFFER, m_source);
++  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++  const GLfloat black[]{0, 0, 0, 1};
++  const GLfloat sample[]{65.f / 1023, 513.f / 1023, 937.f / 1023, 1};
++  glDisable(GL_SCISSOR_TEST);
++  glClearBufferfv(GL_COLOR, 0, black);
++  glEnable(GL_SCISSOR_TEST);
++  glScissor(0, 0, 1, 1);
++  glClearBufferfv(GL_COLOR, 0, sample);
++
++  bool valid = true;
++  for (const auto& buffer : m_buffers)
++  {
++    valid &= FlipHDR10Frame(m_source, buffer.framebuffer, m_width, m_height);
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, buffer.framebuffer);
++    GLuint top{}, bottom{};
++    glReadPixels(0, m_height - 1, 1, 1, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, &top);
++    glReadPixels(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, &bottom);
++    valid &= glGetError() == GL_NO_ERROR &&
++        (top & 0x3fffffff) == (65u | (513u << 10) | (937u << 20)) &&
++        (bottom & 0x3fffffff) == 0;
++  }
++  glBindBuffer(GL_PIXEL_PACK_BUFFER, packBuffer);
++  glScissor(box[0], box[1], box[2], box[3]);
++  if (!scissor)
++    glDisable(GL_SCISSOR_TEST);
++  glColorMask(mask[0], mask[1], mask[2], mask[3]);
++  return valid;
++}
++
++std::shared_ptr<gbm_bo> CPascalHDR10Scanout::Blit()
++{
++  auto& buffer = m_buffers[m_next];
++  if (!FlipHDR10Frame(m_source, buffer.framebuffer, m_width, m_height))
++    return {};
++  glFinish();
++  return buffer.bo;
++}
+diff --git a/xbmc/windowing/gbm/PascalHDR10Scanout.h b/xbmc/windowing/gbm/PascalHDR10Scanout.h
+new file mode 100644
+--- /dev/null
++++ b/xbmc/windowing/gbm/PascalHDR10Scanout.h
+@@ -0,0 +1,46 @@
++/*
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ */
++
++#pragma once
++
++#include <array>
++#include <memory>
++
++struct gbm_bo;
++struct gbm_device;
++
++namespace KODI::WINDOWING::GBM
++{
++class CDRMAtomic;
++
++// Keep the render target stable while alternating two scanout buffers.
++class CPascalHDR10Scanout
++{
++public:
++  static std::unique_ptr<CPascalHDR10Scanout> Create(
++      gbm_device* device, CDRMAtomic& drm, int width, int height);
++  ~CPascalHDR10Scanout();
++
++  unsigned int Framebuffer() const { return m_source; }
++  std::shared_ptr<gbm_bo> Blit();
++  void Presented() { m_next = 1 - m_next; }
++
++private:
++  struct Buffer
++  {
++    std::shared_ptr<gbm_bo> bo;
++    unsigned int texture{};
++    unsigned int framebuffer{};
++  };
++
++  bool Init(gbm_device* device, CDRMAtomic& drm);
++  bool Probe() const;
++  std::array<Buffer, 2> m_buffers;
++  unsigned int m_source{};
++  unsigned int m_texture{};
++  unsigned int m_next{};
++  int m_width{};
++  int m_height{};
++};
++}
+diff --git a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+@@ -316,10 +316,16 @@
+   // the surface only if that pick changed the native visual ID.
+   uint32_t currentFormat = m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID);
+ 
++  bool separateScanout = false;
+   if (!ChooseEGLConfig(m_renderableType, bitDepth))
+   {
+-    CLog::LogF(LOGERROR, "failed to choose EGL config for {}-bit", bitDepth);
+-    return reject();
++    separateScanout = m_dvOutputSurface && bitDepth >= 10 &&
++        ChooseEGLConfig(m_renderableType, 8) && PrepareHDR10Scanout();
++    if (!separateScanout)
++    {
++      CLog::LogF(LOGERROR, "failed to choose EGL config for {}-bit", bitDepth);
++      return reject();
++    }
+   }
+ 
+   uint32_t format = m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID);
+@@ -397,7 +403,8 @@
+       return reject();
+   }
+   // No new drawable exists when only a same-format policy value changes.
+-  if (m_dvOutputSurface && format == currentFormat)
++  if (m_dvOutputSurface && format == currentFormat && !separateScanout &&
++      !RetainHDR10ScanoutOnTransition())
+     return CompleteDVOutputSurface(true);
+   return true;
+ }
+diff --git a/xbmc/windowing/gbm/WinSystemGbmEGLContext.h b/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmEGLContext.h
+@@ -68,6 +68,8 @@
+   std::unique_ptr<VideoPicture> m_floatOutputPicture;
+   virtual bool CreateContext() = 0;
+   virtual int VideoOutputBitDepth(const VideoPicture* picture) const;
++  virtual bool PrepareHDR10Scanout() { return false; }
++  virtual bool RetainHDR10ScanoutOnTransition() const { return false; }
+   // Opt-in only for DV frame transactions. Ordinary output keeps native semantics.
+   void UseDVOutputSurfaceTransaction(bool enabled) { m_dvOutputSurface = enabled; }
+   bool CompleteDVOutputSurface(bool submitted);
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -66,6 +66,7 @@
+ #include <unistd.h>
+ #ifdef HAVE_DVBRIDGE
+ #include "DVBridgeCapture.h"
++#include <fstream>
+ #include "application/ApplicationComponents.h"
+ #include "application/ApplicationPlayer.h"
+ #include "guilib/GUIComponent.h"
+@@ -541,13 +542,15 @@
+     {
+       submitted = m_dvBridge->CaptureSubmission();
+       submitted.sourceSideData = m_videoSourceSideData;
+-      const bool asynchronous = CreateCB1GPUFence(submitted);
+-      if (!asynchronous && !m_dvBridge->Advanced()) glFinish();
+-      if (m_eglContext.TrySwapBuffers())
++      const bool asynchronous = !m_pascalHDRActive && CreateCB1GPUFence(submitted);
++      if (!m_pascalHDRActive && !asynchronous && !m_dvBridge->Advanced()) glFinish();
++      auto carrier = m_pascalHDRActive ? m_pascalHDRScanout->Blit() : nullptr;
++      if (m_pascalHDRActive ? static_cast<bool>(carrier) : m_eglContext.TrySwapBuffers())
+       {
+         auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+         auto& surface = m_GBM->GetDevice().GetSurface();
+-        auto* bo = surface.LockTransactionalBuffer();
++        auto* bo = carrier ? surface.AdoptTransactionalBuffer(carrier.get(), carrier) :
++                             surface.LockTransactionalBuffer();
+         const bool valid = drm && bo &&
+             (m_sdrConversion || (drm->GetConnector()->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR") ?
+              drm->AddProperty(drm->GetConnector(), "DVBRIDGE_HDR10_DEEP_COLOR", 1) :
+@@ -561,8 +564,9 @@
+         CompleteCB1Mode(presented,true);
+         submitted.hdr10plusAccepted = presented && drm && drm->HDR10PlusActive();
+         if (!drm || !drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(presented);
++        if (carrier && presented) m_pascalHDRScanout->Presented();
+       }
+-      else if (asynchronous)
++      else if (asynchronous || m_pascalHDRActive)
+         std::dynamic_pointer_cast<CDRMAtomic>(m_DRM)->FlipPageTransactional(nullptr);
+     }
+     if (m_dvBridge && m_dvBridge->Presented(presented,submitted))
+@@ -2119,6 +2123,44 @@
+   return true;
+ }
+ 
++bool CWinSystemGbmGLESContext::PrepareHDR10Scanout()
++{
++  if (m_dvSelection.route != DVBRIDGE::OutputRoute::HDR10)
++    return false;
++  const auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  auto* connector = drm ? drm->GetConnector() : nullptr;
++  if (!connector || !connector->GetType().starts_with("HDMI") ||
++      !connector->SupportsProperty("DVBRIDGE_HDR10_DEEP_COLOR"))
++    return false;
++  std::string driverVersion;
++  std::ifstream("/sys/module/nvidia/version") >> driverVersion;
++  if (!driverVersion.starts_with("580."))
++    return false;
++
++  if (!m_pascalHDRScanout)
++  {
++    try
++    {
++      m_pascalHDRScanout = CPascalHDR10Scanout::Create(
++          m_GBM->GetDevice().Get(), *drm, m_nWidth, m_nHeight);
++    }
++    catch (const std::exception& error)
++    {
++      CLog::LogF(LOGWARNING, "R580 HDR10 scanout import failed: {}", error.what());
++    }
++    CLog::LogF(m_pascalHDRScanout ? LOGINFO : LOGWARNING,
++              "R580 10-bit HDR10 scanout probe: {}",
++              m_pascalHDRScanout ? "passed" : "unavailable");
++  }
++  m_pascalHDRActive = static_cast<bool>(m_pascalHDRScanout);
++  return m_pascalHDRActive;
++}
++
++unsigned int CWinSystemGbmGLESContext::HDR10Framebuffer() const
++{
++  return m_pascalHDRActive ? m_pascalHDRScanout->Framebuffer() : 0;
++}
++
+ bool CWinSystemGbmGLESContext::ConfigureHDR10Conversion(const VideoPicture& picture)
+ {
+   if (!CompleteDVBridgePage()) return false;
+@@ -2350,7 +2392,7 @@
+   if (!m_dvBridge)
+   {
+     m_dvBridge = std::make_unique<CDVBridgeGLES>(playerLed);
+-    if (!m_dvBridge->Initialize(false, hdr10,m_dvContext,sdr))
++    if (!m_dvBridge->Initialize(false, hdr10, m_dvContext, sdr, HDR10Framebuffer()))
+       return failure("renderer-init");
+     m_dvBridge->SetHDR10PlusVersion(hdr10plusVersion);
+   }
+@@ -2465,15 +2507,24 @@
+     if (linkChange && m_modeAnnouncement.Pending() == CHeldModeAnnouncement::Step::NONE)
+       m_modeAnnouncement.Held();
+     m_GBM->GetDevice().UseDVOutputLifetime();
++    m_priorPascalHDRActive = m_pascalHDRActive;
++    m_pascalHDRActive = false;
+     UseDVOutputSurfaceTransaction(true);
+     const bool staged = CWinSystemGbmEGLContext::SetVideoOutput(picture);
+     UseDVOutputSurfaceTransaction(false);
+-    if (!staged) return false;
++    if (!staged)
++    {
++      if (!HasPendingDVOutputSurface())
++        m_pascalHDRActive = m_priorPascalHDRActive;
++      return false;
++    }
+     m_hdr10Signal.reset();
+     const bool requested = DVBridgeRequested(picture);
+     const bool hdr10 = m_dvSelection.route == DVBRIDGE::OutputRoute::HDR10 ||
+         m_dvSelection.route == DVBRIDGE::OutputRoute::SDR;
+-    if (requested && m_dvBridge && !m_dvBridge->RebindOutputSurface(hdr10, m_dvSelection.route == DVBRIDGE::OutputRoute::SDR))
++    if (requested && m_dvBridge &&
++        !m_dvBridge->RebindOutputSurface(hdr10, m_dvSelection.route == DVBRIDGE::OutputRoute::SDR,
++                                         HDR10Framebuffer()))
+     {
+       RejectDVOutputSurface();
+       return false;
+@@ -2718,8 +2769,10 @@
+     return false;
+   }
+   // Ordinary restoration may retain a 10-bit drawable without CB1 processing.
++  m_pascalHDRActive = m_priorPascalHDRActive;
+   if (m_dvBridge && m_dvPriorConfiguredOutput &&
+-      !m_dvBridge->RebindOutputSurface(m_dvPriorHDRConversion, m_dvPriorSDRConversion))
++      !m_dvBridge->RebindOutputSurface(m_dvPriorHDRConversion, m_dvPriorSDRConversion,
++                                       HDR10Framebuffer()))
+   {
+     m_dvRollbackFailed = true;
+     return false;
+@@ -3432,6 +3485,7 @@
+   m_hdr10BasicSignal.reset();
+   m_hdr10Signal.reset();
+   m_hdr10SessionStream = 0;
++  m_pascalHDRActive = false;
+   m_hdrConversion = false;
+   m_sdrConversion = false;
+   CompleteCB1ConnectorRestore();
+@@ -3451,6 +3505,7 @@
+     return false;
+   m_dvBridge.reset();
+   if (!RetireDVContext()) return false;
++  m_pascalHDRScanout.reset();
+   if (!CWinSystemGbmEGLContext::DestroyWindowSystem()) return false;
+   std::lock_guard lock(m_dvCapabilityMutex);
+   const auto generation = m_dvCapabilities.generation + 1;
+@@ -3487,6 +3542,7 @@
+   if (HasPendingDVOutputSurface() &&
+       (!m_dvOrdinaryFrame || !CompleteDVOutputSurface(false))) return false;
+   m_dvOrdinaryFrame = false;
++  m_pascalHDRScanout.reset();
+   if (!CWinSystemGbmEGLContext::DestroyWindow()) return false;
+   ObserveDVImport({}, {}, false);
+   return true;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -23,6 +23,7 @@
+ #include "drm/DVBridgeState.h"
+ #include "ModeChangeHold.h"
+ #include "DVPresentStall.h"
++#include "PascalHDR10Scanout.h"
+ #include "utils/DVBridgePresentation.h"
+ #endif
+ 
+@@ -59,6 +60,10 @@
+   }
+ #ifdef HAVE_DVBRIDGE
+   bool BeginRender() override;
++  int GetOutputBitDepth() const override
++  {
++    return m_pascalHDRActive ? 10 : CWinSystemGbmEGLContext::GetOutputBitDepth();
++  }
+   bool Hide() override;
+   bool Show(bool raise = true) override;
+   float GetDisplayLatency() override;
+@@ -293,6 +298,12 @@
+   bool m_cb1FramePending{};
+   bool m_dvEndPending{};
+   bool m_dvStopPending{};
++  bool PrepareHDR10Scanout() override;
++  bool RetainHDR10ScanoutOnTransition() const override { return m_priorPascalHDRActive; }
++  unsigned int HDR10Framebuffer() const;
++  std::unique_ptr<CPascalHDR10Scanout> m_pascalHDRScanout;
++  bool m_pascalHDRActive{};
++  bool m_priorPascalHDRActive{};
+   bool m_hdrConversion = false;
+   bool m_sdrConversion = false;
+   bool m_dvPriorSDRConversion = false;

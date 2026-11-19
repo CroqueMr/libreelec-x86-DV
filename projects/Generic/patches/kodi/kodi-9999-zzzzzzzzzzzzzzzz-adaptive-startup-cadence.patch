@@ -1,0 +1,92 @@
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -1541,6 +1541,7 @@
+       m_dvdClock.IsPaused() && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
+ 
+   bool cb1Async = false;
++  bool adaptive = false;
+   std::optional<double> completionAge;
+ #ifdef HAVE_DVBRIDGE
+   if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+@@ -1551,6 +1552,7 @@
+     if (cb1Async)
+       if (const auto presented = window->CB1PresentedPicture())
+         m_clockSync.m_cb1Latency.Completed(presented->first, presented->second);
++    adaptive = window->CB1AdaptiveScanout() && !isPaused && m_dvdClock.GetClockSpeed() == 1.0;
+   }
+   m_clockSync.m_cb1LatencyActive = cb1Async;
+ #endif
+@@ -1636,6 +1638,8 @@
+     ++iter;
+     // Catch up against the same deadline used to admit this presentation.
+     const double latePts = renderPts;
++    // A Kodi render tick can run partway through the current scanout.
++    const double scanoutPts = frameOnScreen - std::max(0.0, completionAge.value_or(0.0));
+     while (iter != m_queued.end())
+     {
+       // the slot for rendering in time is [pts .. (pts +  x * frametime)]
+@@ -1646,7 +1650,14 @@
+       // refresh phase the pictures sit half a refresh from this boundary, so no
+       // hysteresis is needed and a picture of lag is removed at once.
+       double x = physicalPhase && completionAge ? 0 : (m_lateframes <= 6 ? 0.98 : 0);
+-      if (latePts < m_Queue[*iter].pts + x * frametime)
++      const auto& next = m_Queue[*iter];
++      double duration = frametime;
++#ifdef CB1_HAS_HDR10_AI
++      if (next.duration > 0) duration = next.duration;
++#endif
++      // Preparation lead does not make the next picture late on screen.
++      if ((adaptive && scanoutPts < next.pts + duration) ||
++          latePts < next.pts + x * frametime)
+         break;
+       idx = *iter;
+       ++iter;
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -108,6 +108,12 @@
+     }
+   }
+   return CWinSystemGbmEGLContext::GetDisplayLatency();
++}
++
++bool CWinSystemGbmGLESContext::CB1AdaptiveScanout() const
++{
++  return m_dvState.Captured() && m_dvSelection.policy.mode == DVBRIDGE_MODE_ENHANCED_DV &&
++      m_dvContext && m_dvContext->AsyncPreparationConfigured();
+ }
+ 
+ std::optional<double> CWinSystemGbmGLESContext::CB1PresentationAge() const
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -144,6 +144,7 @@
+   {
+     return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
+   }
++  bool CB1AdaptiveScanout() const;
+   std::optional<double> CB1PresentationAge() const;
+   // Kodi presentation timestamp and KMS completion time of the latest presented CB1 picture.
+   std::optional<std::pair<double, uint64_t>> CB1PresentedPicture() const;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp
+@@ -2046,13 +2046,15 @@
+     const bool fullRaster = !geometry.x && !geometry.y &&
+         geometry.width == geometry.target_width && geometry.height == geometry.target_height;
+     const bool emptyOverlay = m_nativeOverlayEnabled && m_nativeOverlay.rect[0] == m_nativeOverlay.rect[2];
+-    const bool placedRows = !m_overlayVisible && (!m_nativeOverlayEnabled || emptyOverlay) &&
++    // A placed picture can keep its native reconstruction with GUI. The core
++    // composites the overlay in the final draw instead of prepacking the image.
++    const bool placedRows = (!m_overlayVisible || m_nativeOverlayEnabled) &&
+         dvbridge_adaptive_placed_rows(geometry) >= 0;
+     if (allowPacked && m_directUsable && m_scanout && (fullRaster || placedRows))
+     {
+       status = dvbridge_render_dv_policy_prepare_packed(m_renderer,&policy,&m_pendingIdentity,
+           &bl.frame,metadata.Data(),metadata.Size(),base.pts,elPts,geometry,m_scanout,true,
+-          m_nativeOverlayEnabled && !(placedRows && emptyOverlay) ? &m_nativeOverlay : nullptr);
++          m_nativeOverlayEnabled && !(placedRows && emptyOverlay && !m_overlayVisible) ? &m_nativeOverlay : nullptr);
+       m_direct = status == DVBRIDGE_DV_READY || status == DVBRIDGE_DV_PENDING;
+       if (m_direct && m_nativeOverlayEnabled) m_nativeOverlayPrimed = true;
+       if (status == DVBRIDGE_DV_UNSUPPORTED)

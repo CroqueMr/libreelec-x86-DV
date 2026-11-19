@@ -1,0 +1,81 @@
+{
+  "source_commit": "dd997af3299a3091508a687f0ca8523fc5f76238",
+  "release": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-V2",
+  "artifacts": [
+    {
+      "name": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-V2.tar",
+      "bytes": 492226560,
+      "sha256": "0e0ddd8e6d3a76ec50552b65650e3a9eae16f014d4bd530c4dea9d7ae0916999"
+    },
+    {
+      "name": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-V2.img.gz",
+      "bytes": 492051051,
+      "sha256": "68b3497df507135b2d297b7589b63534600b88c43f90f3547c4ba2a9973f21e1"
+    }
+  ],
+  "delivered_sha256": {
+    "/flash/SYSTEM": "2f7b55cb358548b5a304691e73413b86980ddc0853ed6fd0993feed45698b96f",
+    "/flash/KERNEL": "aeb1ae81643c30b215a35509981e1710979829ff6dccb9c766517baff697ad48",
+    "/usr/lib/kodi/kodi.bin": "26fa4c78377eeacc3458ed30045f399171d55721e91076d63ff5918c2f2f17ea",
+    "/usr/lib/libplacebo.so.372": "9a49f77777b30f4652c492f43cf817b2a36bca2a07ca2aa1885a79e8596d89fe",
+    "/usr/lib/libavcodec.so.63": "3552792004128ad3c6bd631f5a924a54858d2ed6a09b6a3b6f56bf4db98da0eb",
+    "/usr/lib/libavformat.so.63": "d81e822cb7185b1b5f928f870ccdce05812f3f551bebdb86eede49f51d033e5e",
+    "/usr/lib/libavutil.so.61": "510c325935b8754a4dcfee9a4d4e0380b38767c1f0bf5cbf6823c7b5ac5fb716",
+    "/usr/share/kodi/system/settings/settings.xml": "c4cb8b9deb17adc940ae8dd2d96d6d5e1dd2acc389a24c9ee0f460714fa69dba"
+  },
+  "engine_tests": {
+    "registered": 242,
+    "passed": 227,
+    "skipped": 15,
+    "failed": 0
+  },
+  "native_tests": {
+    "passed": 212,
+    "failed": 0
+  },
+  "hardware": {
+    "target": "Intel N100",
+    "image_component_hashes_verified": true,
+    "boot_identity_changed": true,
+    "smoke": [
+      {
+        "mode": "Dolby Vision Adaptive HDR Mapping rev B",
+        "before": {
+          "Player.Process(videodebug)": "",
+          "Player.Process(videoprocessingmode)": "Dolby Vision Adaptive HDR Mapping rev B",
+          "VideoPlayer.VideoCodec": "hevc",
+          "VideoPlayer.VideoResolution": "4K"
+        },
+        "after": {
+          "Player.Process(videodebug)": "",
+          "Player.Process(videoprocessingmode)": "Dolby Vision Adaptive HDR Mapping rev B",
+          "VideoPlayer.VideoCodec": "hevc",
+          "VideoPlayer.VideoResolution": "4K"
+        }
+      },
+      {
+        "mode": "Dolby Vision Adaptive HDR Mapping",
+        "before": {
+          "Player.Process(videodebug)": "",
+          "Player.Process(videoprocessingmode)": "Dolby Vision Adaptive HDR Mapping",
+          "VideoPlayer.VideoCodec": "hevc",
+          "VideoPlayer.VideoResolution": "4K"
+        },
+        "after": {
+          "Player.Process(videodebug)": "",
+          "Player.Process(videoprocessingmode)": "Dolby Vision Adaptive HDR Mapping",
+          "VideoPlayer.VideoCodec": "hevc",
+          "VideoPlayer.VideoResolution": "4K"
+        }
+      },
+      {
+        "restored_output": 4,
+        "kodi_active": "active",
+        "drm": "/sys/class/drm/card0-HDMI-A-1/status:connected\n/sys/class/drm/card0-HDMI-A-2/status:disconnected"
+      }
+    ],
+    "performance_or_visual_quality_validated": false
+  },
+  "frozen_rc1_sha256": "73d8b825b87e5c69550ad834e946e7f3bf49cbadeac2693bf381014462429056",
+  "published": false
+}

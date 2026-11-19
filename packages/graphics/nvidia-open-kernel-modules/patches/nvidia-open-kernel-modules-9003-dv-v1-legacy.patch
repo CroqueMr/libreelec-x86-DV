@@ -1,0 +1,81 @@
+Subject: [PATCH] modeset: pair legacy Dolby Vision VSIF with selected AVI timing
+
+V1 legacy signaling only; leave modern DV and ordinary packets unchanged.
+Use the validated mode, not a userspace timing snapshot. No pixel changes.
+
+--- /dev/null
++++ b/src/common/inc/nvkms-dv-vsif.h
+@@ -0,0 +1,37 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef NVKMS_DV_VSIF_H
++#define NVKMS_DV_VSIF_H
++#include "nvtypes.h"
++
++/* Legacy DV reserves a 24-byte HDMI-OUI payload. Ordinary HDMI/3D and
++ * modern Dolby packets must never enter this timing rewrite. */
++static inline NvBool nvDoviLegacy(const NvU8 *p, NvU32 size)
++{
++    NvU32 i;
++    if (size != 24 || p[0] != 3 || p[1] != 12 || p[2] ||
++        (p[3] != 0 && p[3] != 32) || p[4] > 3 ||
++        ((p[3] == 0) != (p[4] == 0)))
++        return NV_FALSE;
++    for (i = 5; i < 24; i++)
++        if (p[i])
++            return NV_FALSE;
++    return NV_TRUE;
++}
++
++static inline NvU8 nvDoviHdmiVic(NvU32 ceaVic, NvU32 hdmiVic)
++{
++    if (ceaVic >= 93 && ceaVic <= 95)
++        return 96 - ceaVic;
++    /* HDMI_EXT timings keep their VIC exclusively in the vendor control. */
++    return ceaVic == 0 && hdmiVic >= 1 && hdmiVic <= 3 ? hdmiVic : 0;
++}
++
++static inline void nvDoviTiming(NvU8 *p, NvU32 size, NvU32 ceaVic, NvU32 hdmiVic)
++{
++    if (nvDoviLegacy(p, size)) {
++        NvU8 vic = nvDoviHdmiVic(ceaVic, hdmiVic);
++        p[3] = vic ? 32 : 0;
++        p[4] = vic;
++    }
++}
++#endif
+--- a/src/nvidia-modeset/src/nvkms-hdmi.c
++++ b/src/nvidia-modeset/src/nvkms-hdmi.c
+@@ -29,6 +29,7 @@
+ #include "nvkms-api.h"
+ #include "nvkms-dpy.h"
+ #include "nvkms-hdmi.h"
++#include "nvkms-dv-vsif.h"
+ #include "nvkms-evo.h"
+ #include "nvkms-modepool.h"
+ #include "nvkms-rmapi.h"
+@@ -521,6 +522,13 @@ static void SendVideoInfoFrame(const NVDispEvoRec *pDispEvo,
+ 
+     CalculateVideoInfoFrameColorFormat(pDpyColor, hdTimings, pEdidInfo, &videoCtrl);
+ 
++    if (nvDoviLegacy(pDispEvo->headState[head].hdmiVsifMetadata.payload,
++                     pDispEvo->headState[head].hdmiVsifMetadata.payloadSize) &&
++        nvDoviHdmiVic(pInfoFrameState->ctrl.video_format_id,
++                     pInfoFrameState->vendorSpecificCtrl.HDMI_VIC)) {
++        videoCtrl.video_format_id = 0;
++    }
++
+     status = NvTiming_ConstructVideoInfoframe(pEdidInfo,
+                                               &videoCtrl,
+                                               NULL, &VideoInfoFrame);
+@@ -572,6 +580,11 @@ SendVendorSpecificInfoFrame(const NVDispEvoRec *pDispEvo,
+                      pHeadState->hdmiVsifMetadata.payload,
+                      pHeadState->hdmiVsifMetadata.payloadSize);
+ 
++        nvDoviTiming((NvU8 *)&vendorInfoFrame.Data,
++                     pHeadState->hdmiVsifMetadata.payloadSize,
++                     pInfoFrameState->ctrl.video_format_id,
++                     pInfoFrameState->vendorSpecificCtrl.HDMI_VIC);
++
+         UpdateInfoFrameFlipStatePre(currentTransmitCtrl, newTransmitCtrl, NV_EVO_INFOFRAME_TRANSMIT_FREQUENCY_EVERY_FRAME, NV_TRUE);
+ 
+         pDevEvo->hal->SendHdmiInfoFrame(

@@ -1,0 +1,135 @@
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h
+@@ -31,6 +31,7 @@
+   unsigned maxCLL{}, maxFALL{};
+   unsigned compatibility{};
+   uint64_t informationGeneration{};
++  bool frameRpu{};
+ };
+ // Native source epochs and preference changes share a monotonic revision domain.
+ inline std::atomic<uint64_t> nativeRevision{1};
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp
+@@ -850,9 +850,10 @@
+             return VC_FATAL;
+           AVFrame* enhancement = nullptr;
+           const auto& metadata = base->doviMetadata;
+-          const bool exactDiscPicture = (m_hints.codecOptions & CODEC_BLURAY_NAVIGATION) &&
+-              m_dvLayerEpoch && metadata.Binding() == base->doviSourceBinding;
+-          const int result = exactDiscPicture ?
++          const bool ownRpu = metadata.Binding() == base->doviSourceBinding &&
++              (base->doviSourceInfo.frameRpu ||
++               ((m_hints.codecOptions & CODEC_BLURAY_NAVIGATION) && m_dvLayerEpoch));
++          const int result = ownRpu ?
+               dvbridge_fel_take_mel(m_dvFel.get(), base->doviSourcePts, &enhancement,
+                                    metadata.Data(), metadata.Size()) :
+               dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts, &enhancement);
+@@ -950,7 +951,15 @@
+         ReportDVStartup(1, "base-decoded");
+         m_dvPending.push_back(std::move(base));
+       }
+-      if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
++      // Classify the last decoded BL before closing the enhancement stream.
++      paired = emit();
++      if (paired == VC_FATAL)
++        break;
++      if (paired != VC_NONE)
++        return paired;
++      if (result == VC_EOF || ((m_codecControlFlags & DVD_CODEC_CTRL_DRAIN) &&
++          ((m_hints.codecOptions & CODEC_BLURAY_NAVIGATION) || m_dvLayerEpoch ||
++           dvbridge_fel_has_enhancement(m_dvFel.get()))))
+       {
+         const char* reason = nullptr;
+         if (!dvbridge_fel_drain(m_dvFel.get(), &reason))
+@@ -959,12 +968,12 @@
+             CLog::Log(LOGERROR, "DV FEL: {}; choose Kodi Default to play the Profile 7 HDR10 base", reason);
+           break;
+         }
++        paired = emit();
++        if (paired == VC_FATAL)
++          break;
++        if (paired != VC_NONE)
++          return paired;
+       }
+-      paired = emit();
+-      if (paired == VC_FATAL)
+-        break;
+-      if (paired != VC_NONE)
+-        return paired;
+       if (result == VC_EOF && !m_dvPending.empty())
+         break;
+       if (result == VC_PICTURE && (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+@@ -1137,7 +1146,16 @@
+     return VC_ERROR;
+   }
+ 
+-  // here we got a frame
++  // The base advanced. During terminal drain an empty VAAPI output slot
++  // must not end playback before the remaining BL pictures are classified.
++#ifdef HAVE_DVBRIDGE
++  const bool continueBaseDrain = m_dvFel && !m_dvLayerEpoch &&
++      !(m_hints.codecOptions & CODEC_BLURAY_NAVIGATION) &&
++      (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN) &&
++      !dvbridge_fel_has_enhancement(m_dvFel.get());
++#else
++  constexpr bool continueBaseDrain = false;
++#endif
+   if (!m_multiview)
+     UpdateDropControl(m_pDecodedFrame->best_effort_timestamp);
+ 
+@@ -1177,7 +1195,7 @@
+     else
+     {
+       av_frame_unref(m_pDecodedFrame);
+-      return VC_BUFFER;
++      return continueBaseDrain ? VC_NONE : VC_BUFFER;
+     }
+   }
+ 
+@@ -1207,7 +1225,7 @@
+         return VC_ERROR;
+     }
+ 
+-    return ret;
++    return ret == VC_BUFFER && continueBaseDrain ? VC_NONE : ret;
+   }
+   // process filters for sw decoding
+   else
+@@ -1696,24 +1714,21 @@
+       {
+         const auto* dovi = reinterpret_cast<const AVDOVIMetadata*>(pVideoPicture->doviMetadata.Data());
+         const AVDOVIRpuDataHeader* hdr = av_dovi_get_header(dovi);
+-        const AVDOVIDataMapping* mapping = av_dovi_get_mapping(dovi);
+-
+-        if (hdr != nullptr && hdr->el_spatial_resampling_filter_flag == 1 &&
+-            hdr->disable_residual_flag == 0)
++        if (hdr->el_spatial_resampling_filter_flag == 1 && hdr->disable_residual_flag == 0)
++          pVideoPicture->strDVELType = dvbridge_dv_is_mel(dovi) ? "MEL" : "FEL";
++#ifdef HAVE_DVBRIDGE
++        if (m_dvFel && !m_dvLayerEpoch && !(m_hints.codecOptions & CODEC_BLURAY_NAVIGATION))
+         {
+-          pVideoPicture->strDVELType = "MEL";
+-          for (int i = 0; i < 3; i++)
+-          {
+-            if (mapping != nullptr &&
+-                (mapping->nlq[i].nlq_offset != 0 || mapping->nlq[i].vdr_in_max != 8388608 ||
+-                 mapping->nlq[i].linear_deadzone_slope != 0 ||
+-                 mapping->nlq[i].linear_deadzone_threshold != 0))
+-            {
+-              pVideoPicture->strDVELType = "FEL";
+-              break;
+-            }
+-          }
++          // FFmpeg can retain parsed metadata from a previous picture. The
++          // current picture must also carry its own RPU.
++          const auto* raw = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_DOVI_RPU_BUFFER);
++          sourceInfo.frameRpu = pVideoPicture->doviSourceBinding.Valid() &&
++              m_pFrame->pts != AV_NOPTS_VALUE && pVideoPicture->doviSourcePts == m_pFrame->pts &&
++              !m_pFrame->decode_error_flags &&
++              !(m_pFrame->flags & (AV_FRAME_FLAG_CORRUPT | AV_FRAME_FLAG_DISCARD)) &&
++              raw && raw->data && raw->size >= 5 && raw->data[0] == 25 && (raw->data[1] >> 2) == 2;
+         }
++#endif
+       }
+     }
+   }

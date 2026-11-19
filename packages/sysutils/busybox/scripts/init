@@ -1040,7 +1040,10 @@ done
 /usr/bin/busybox rm -fr /tmp
 
 # setup kernel overlays
-/usr/bin/busybox chroot /sysroot /usr/sbin/kernel-overlays-setup
+if ! /usr/bin/busybox chroot /sysroot /usr/sbin/kernel-overlays-setup; then
+  echo "*** Kernel-overlay setup failed; refusing an incomplete driver stack ***" >&2
+  exec /usr/bin/busybox chroot /sysroot /bin/sh
+fi
 
 # tell OE settings addon to disable updates
 if [ "$UPDATE_DISABLED" = "yes" ]; then
@@ -1061,6 +1064,7 @@ if [ "$STORAGE_NETBOOT" = "yes" ]; then
 fi
 
 # switch to new sysroot and start real init
+[ ! -e /sysroot/run/nvidia-boot-diagnostics ] || INIT_ARGS="$INIT_ARGS --show-status=yes"
 exec /usr/bin/busybox switch_root /sysroot /usr/lib/systemd/systemd $INIT_ARGS
 
 error "switch_root" "Error in initramfs. Could not switch to new root"

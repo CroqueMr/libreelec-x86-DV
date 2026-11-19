@@ -1,0 +1,59 @@
+From: LibreELEC Dolby Vision contributors
+Subject: [PATCH] bdj: report UHD dimensions and correct stream controls
+
+Fix shared video-size validation, successful language selection, and actual
+component inventories. These small fixes follow SamuriHL's CoreELEC patches
+05, 11 and 12; the libbluray Java sources remain LGPL-2.1-or-later.
+Origin: https://github.com/SamuriHL/CoreELEC/tree/bd95c331afe287a23f1851aab685fb2c6aa4907b/packages/multimedia/libbluray/patches
+
+--- a/src/libbluray/bdj/java/org/videolan/StreamInfo.java
++++ b/src/libbluray/bdj/java/org/videolan/StreamInfo.java
+@@ -77,6 +77,7 @@
+         case (byte)0x08:
+             width = 3840;
+             height = 2160;
++            break;
+         default:
+                 return null;
+         }
+--- a/src/libbluray/bdj/java/org/videolan/media/content/playlist/VideoControl.java
++++ b/src/libbluray/bdj/java/org/videolan/media/content/playlist/VideoControl.java
+@@ -82,7 +82,8 @@
+         StreamInfo stream = getCurrentStream();
+         if (stream == null)
+             return new Dimension(0, 0);
+-        return stream.getVideoSize();
++        Dimension size = stream.getVideoSize();
++        return size == null ? new Dimension(0, 0) : size;
+     }
+ 
+     public Dimension getVideoSize() {
+--- a/src/libbluray/bdj/java/org/videolan/media/content/playlist/StreamControl.java
++++ b/src/libbluray/bdj/java/org/videolan/media/content/playlist/StreamControl.java
+@@ -117,6 +117,7 @@
+             if (streams[i].getLang().equals(language)) {
+                 try {
+                     selectStreamNumber(i + 1);
++                    return;
+                 } catch (StreamNotAvailableException e) {
+                     throw new NotAuthorizedException();
+                 }
+--- a/src/libbluray/bdj/java/org/bluray/ti/PlayItemImpl.java
++++ b/src/libbluray/bdj/java/org/bluray/ti/PlayItemImpl.java
+@@ -66,11 +66,11 @@
+ 
+     public ServiceComponent[] getComponents() {
+         StreamInfo[] video = clip.getVideoStreams();
+-        StreamInfo[] audio = clip.getVideoStreams();
+-        StreamInfo[] pg = clip.getVideoStreams();
+-        StreamInfo[] ig = clip.getVideoStreams();
+-        StreamInfo[] secVideo = clip.getVideoStreams();
+-        StreamInfo[] secAudio = clip.getVideoStreams();
++        StreamInfo[] audio = clip.getAudioStreams();
++        StreamInfo[] pg = clip.getPgStreams();
++        StreamInfo[] ig = clip.getIgStreams();
++        StreamInfo[] secVideo = clip.getSecVideoStreams();
++        StreamInfo[] secAudio = clip.getSecAudioStreams();
+ 
+         int count = video.length + audio.length + pg.length + ig.length + secVideo.length + secAudio.length;
+ 

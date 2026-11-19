@@ -1,0 +1,88 @@
+Subject: [PATCH] Continue compatible seamless Blu-ray play items in navigation
+
+Adapt SamuriHL's seamless continuation principle to the existing libbluray
+navigation boundary and Kodi playlist parser. Kodi keeps its existing timestamp
+continuity handling, stream selection, and discontinuity ownership.
+
+Reference: https://github.com/SamuriHL/CoreELEC/releases/tag/v22.0-samurihl-20261030200017
+
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+@@ -758,6 +758,49 @@
+   m_event.event = BD_EVENT_NONE;
+ }
+ 
++bool CDVDInputStreamBluray::CanContinuePlayItem(uint32_t next) const
++{
++  if (!m_playlistInfoValid || !m_titleInfo || next == 0 || next - 1 != m_playItem ||
++      next >= m_titleInfo->clip_count || next >= m_playlistInfo.playItems.size() ||
++      IsStereoscopic())
++    return false;
++
++  // libbluray treats MPLS connection conditions 5 and 6 as seamless.
++  const auto connection = static_cast<unsigned>(m_playlistInfo.playItems[next].connectionCondition);
++  if (connection != 5 && connection != 6)
++    return false;
++
++  const auto& current = m_titleInfo->clips[m_playItem];
++  const auto& incoming = m_titleInfo->clips[next];
++  // Dual-layer preroll and pairing keep a presentation window per play item.
++  if (current.dv_stream_count || incoming.dv_stream_count || !current.video_stream_count)
++    return false;
++
++  const auto sameStreams = [](const BLURAY_STREAM_INFO* left, unsigned leftCount,
++                              const BLURAY_STREAM_INFO* right, unsigned rightCount) {
++    if (leftCount != rightCount)
++      return false;
++    if (!leftCount)
++      return true;
++    return left && right &&
++           std::equal(left, left + leftCount, right,
++                      [](const BLURAY_STREAM_INFO& a, const BLURAY_STREAM_INFO& b) {
++                        return a.pid == b.pid && a.coding_type == b.coding_type &&
++                               a.format == b.format && a.rate == b.rate && a.aspect == b.aspect &&
++                               a.subpath_id == b.subpath_id && a.char_code == b.char_code &&
++                               a.dynamic_range_type == b.dynamic_range_type &&
++                               a.color_space == b.color_space && a.cr_flag == b.cr_flag &&
++                               a.hdr_plus_flag == b.hdr_plus_flag;
++                      });
++  };
++  return sameStreams(current.video_streams, current.video_stream_count,
++                     incoming.video_streams, incoming.video_stream_count) &&
++         sameStreams(current.audio_streams, current.audio_stream_count,
++                     incoming.audio_streams, incoming.audio_stream_count) &&
++         sameStreams(current.pg_streams, current.pg_stream_count,
++                     incoming.pg_streams, incoming.pg_stream_count);
++}
++
+ bool CDVDInputStreamBluray::HoldEvent()
+ {
+   if (m_hold == HOLD_EXIT || m_hold == HOLD_ERROR)
+@@ -765,11 +808,16 @@
+ 
+   switch (m_event.event)
+   {
++    case BD_EVENT_PLAYITEM:
++      // Navigation reads already deliver the event before the next clip's bytes.
++      // Keep the demuxer running across an authored, compatible continuation.
++      if (m_hold == HOLD_NONE && CanContinuePlayItem(m_event.param))
++        return false;
++      [[fallthrough]];
+     case BD_EVENT_SEEK:
+     case BD_EVENT_TITLE:
+     case BD_EVENT_ANGLE:
+     case BD_EVENT_PLAYLIST:
+-    case BD_EVENT_PLAYITEM:
+       if (m_hold != HOLD_DATA)
+       {
+         m_hold = HOLD_HELD;
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+@@ -227,6 +227,7 @@
+   BLURAY_TITLE_INFO* GetTitleFile(const std::string& name);
+ 
+   void ProcessEvent();
++  bool CanContinuePlayItem(uint32_t next) const;
+   bool HoldEvent();
+ 
+   void SaveCurrentState(const CStreamDetails& details) override;

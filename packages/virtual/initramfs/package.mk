@@ -11,6 +11,7 @@ PKG_DEPENDS_INIT="libc:init busybox:init plymouth-lite:init util-linux:init e2fs
 PKG_DEPENDS_TARGET="toolchain initramfs:init"
 PKG_SECTION="virtual"
 PKG_LONGDESC="Metapackage for installing initramfs"
+PKG_NEED_UNPACK="${PROJECT_DIR}/${PROJECT}/splash"
 
 if [ "${INITRAMFS_PARTED_SUPPORT}" = yes ]; then
   PKG_DEPENDS_INIT+=" parted:init"

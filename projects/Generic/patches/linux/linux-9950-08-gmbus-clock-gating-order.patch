@@ -1,0 +1,58 @@
+From 548a600780cc677f98125bd9daf4b689c596325b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ville=20Syrj=C3=A4l=C3=A4?= <ville.syrjala@linux.intel.com>
+Date: Thu, 8 Oct 2026 01:23:12 +0300
+Subject: [PATCH] drm/i915/gmbus: Reorder the PNV clock gating GPIO w/a
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Move the PNV bit banging clock gating toggle to be the
+outermost operation in the pre/post xfer hooks. We don't
+want the clock gating to kick in once we've touched something
+in the GPIO registers. Right now this doesn't really matter,
+but upcoming changes to the GPIO register mask handling will
+need this.
+
+Signed-off-by: Ville Syrjälä <ville.syrjala@linux.intel.com>
+Link: https://patch.msgid.link/20261007222314.5714-4-ville.syrjala@linux.intel.com
+Reviewed-by: Sebastian Brzezinka <sebastian.brzezinka@intel.com>
+---
+ drivers/gpu/drm/i915/display/intel_gmbus.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_gmbus.c b/drivers/gpu/drm/i915/display/intel_gmbus.c
+index e808f5c4106b..854f439ac5ba 100644
+--- a/drivers/gpu/drm/i915/display/intel_gmbus.c
++++ b/drivers/gpu/drm/i915/display/intel_gmbus.c
+@@ -339,11 +339,11 @@ intel_gpio_pre_xfer(struct i2c_adapter *adapter)
+ 	struct intel_gmbus *bus = to_intel_gmbus(adapter);
+ 	struct intel_display *display = bus->display;
+ 
+-	intel_gmbus_reset(display);
+-
+ 	if (display->platform.pineview)
+ 		pnv_gmbus_clock_gating(display, false);
+ 
++	intel_gmbus_reset(display);
++
+ 	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+ 		ptl_handle_mask_bits(bus, true);
+ 
+@@ -362,11 +362,11 @@ intel_gpio_post_xfer(struct i2c_adapter *adapter)
+ 	set_data(bus, 1);
+ 	set_clock(bus, 1);
+ 
+-	if (display->platform.pineview)
+-		pnv_gmbus_clock_gating(display, true);
+-
+ 	if (intel_display_wa(display, INTEL_DISPLAY_WA_16025573575))
+ 		ptl_handle_mask_bits(bus, false);
++
++	if (display->platform.pineview)
++		pnv_gmbus_clock_gating(display, true);
+ }
+ 
+ static void
+-- 
+GitLab
+

@@ -161,7 +161,7 @@ mkdir -p $BASEDIR/$LOGDIR
 
 # Journal (prev)
 # only exists if using persistent journal
-  if [ -f "/storage/.cache/journald.conf.d/00_settings.conf" ]; then
+  if [ -f "/storage/.cache/journald.conf.d/00_settings.conf" ] || [ -e /run/nvidia-boot-diagnostics ]; then
     LOGFILE="10_Journal-prev.log"
     getlog_cmd journalctl --no-pager -b -1
   fi

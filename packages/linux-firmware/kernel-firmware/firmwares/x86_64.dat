@@ -7,6 +7,7 @@ qca/*00000302.bin
 qca/*00190200.bin
 mediatek/*MT7961*.bin
 mediatek/*MT7922*.bin
+mediatek/mt7925/*.bin
 rt2561.bin
 rt2561s.bin
 rt2661.bin

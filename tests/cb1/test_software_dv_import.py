@@ -1,0 +1,201 @@
+"""Software-decoded DV reuses Kodi's uploaded planar textures."""
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from test_native_video_source import TREE,body
+
+
+class SoftwareDVImportTests(unittest.TestCase):
+    def test_software_renderer_uses_the_shared_ai_queue(self):
+        renderer = TREE / 'xbmc/cores/VideoPlayer/VideoRenderers'
+        header = (renderer / 'LinuxRendererGLES.h').read_text()
+        source = (renderer / 'LinuxRendererGLES.cpp').read_text()
+        self.assertIn('bool HDR10AIQueueEligible() const override', header)
+        capture = body(source, 'HDR10AIQueuePreparation CLinuxRendererGLES::CaptureHDR10AIQueue(')
+        self.assertIn('PrepareHDR10AIQueue(*head,layers', capture)
+        self.assertIn('buffered && !metadataOnly', capture)
+        self.assertNotIn('buffered && head->hdrType', capture)
+        vaapi = (renderer / 'HwDecRender/RendererVAAPIGLES.cpp').read_text()
+        self.assertNotIn('CRendererVAAPIGLES::CaptureHDR10AIQueue(', vaapi)
+
+    def test_entering_ai_can_expand_the_software_render_queue(self):
+        source = (TREE / 'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text()
+        changed = body(source, 'bool CLinuxRendererGLES::ConfigChanged(')
+        self.assertIn('SoftwareHDR10AIBufferCount(picture, m_fps, m_renderOrientation)', changed)
+        self.assertIn('> m_softwareAIBuffers', changed)
+
+    def test_hlg_queue_growth_preserves_only_an_active_native_output(self):
+        renderer = TREE / 'xbmc/cores/VideoPlayer/VideoRenderers'
+        manager = (renderer / 'RenderManager.cpp').read_text()
+        source = (renderer / 'LinuxRendererGLES.cpp').read_text()
+        prepare = 'void CLinuxRendererGLES::PreserveHDR10AIOutputOnReconfigure('
+        self.assertTrue(prepare in source, "The software renderer must own output retention")
+        configure = body(manager, 'bool CRenderManager::Configure()')
+        self.assertIn('if (m_aiSameInputReconfigure)', configure)
+        self.assertLess(configure.index('PreserveHDR10AIOutputOnReconfigure'),
+                        configure.index('DeleteRenderer()'))
+        teardown = body(source, 'void CLinuxRendererGLES::UnInit()')
+        self.assertLess(teardown.index('m_preserveHLGOutput'),
+                        teardown.index('SetVideoOutput(nullptr)'))
+        program = r'''
+#include <cassert>
+enum class StreamHdrType {HDR_TYPE_HLG, HDR_TYPE_HDR10};
+struct VideoPicture {
+  struct Buffer { int format{1}; int GetFormat() const { return format; } };
+  Buffer* videoBuffer;
+  StreamHdrType hdrType{StreamHdrType::HDR_TYPE_HLG};
+};
+unsigned required{27};
+unsigned SoftwareHDR10AIBufferCount(const VideoPicture&, float, unsigned) { return required; }
+struct Renderer {
+  bool m_passthroughHDR{true}, m_dvRequested{}, m_preserveHLGOutput{};
+  int m_format{1};
+  float m_fps{24};
+  unsigned m_renderOrientation{}, m_softwareAIBuffers{6};
+  void Prepare(const VideoPicture& picture) BODY
+};
+int main()
+{
+  VideoPicture::Buffer buffer;
+  VideoPicture picture{&buffer};
+  Renderer renderer;
+  renderer.Prepare(picture);
+  assert(renderer.m_preserveHLGOutput);
+  renderer.m_passthroughHDR = false;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  renderer.m_passthroughHDR = true;
+  renderer.m_dvRequested = true;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  renderer.m_dvRequested = false;
+  buffer.format = 2;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  buffer.format = 1;
+  picture.hdrType = StreamHdrType::HDR_TYPE_HDR10;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+  picture.hdrType = StreamHdrType::HDR_TYPE_HLG;
+  required = 6;
+  renderer.Prepare(picture);
+  assert(!renderer.m_preserveHLGOutput);
+}
+'''.replace('BODY', body(source, prepare))
+        with tempfile.TemporaryDirectory() as directory:
+            src = Path(directory) / 'check.cpp'
+            binary = Path(directory) / 'check'
+            src.write_text(program)
+            built = subprocess.run(['c++', '-std=c++20', str(src), '-o', str(binary)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            run = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_planar_ten_bit_frame_is_admitted_before_output_selection(self):
+        source=(TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text()
+        upload=body(source,'bool CLinuxRendererGLES::UploadTexture(')
+        build=body(source,'bool CLinuxRendererGLES::BuildDVBridgeLayer(') if \
+            'bool CLinuxRendererGLES::BuildDVBridgeLayer(' in source else '{return false;}'
+        source_type=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text()
+        source_type='\n'.join(line for line in source_type.splitlines() if not line.startswith('#'))
+        program=r'''
+#include <cassert>
+#include <cmath>
+#include <memory>
+#define HAVE_DVBRIDGE
+constexpr int AV_PIX_FMT_YUV420P10LE=1,AV_PIX_FMT_YUV444P10LE=2,
+ AV_PIX_FMT_NV12=3,AV_PIX_FMT_YUYV422=4,AV_PIX_FMT_UYVY422=5,
+ GL_TEXTURE_2D=6,FIELD_FULL=0,DVBRIDGE_YUV420P10=7,DVBRIDGE_YUV444P10=8;
+constexpr double DVD_NOPTS_VALUE=-1,DVD_TIME_BASE=1000000,AV_NOPTS_VALUE=-2;
+enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
+SOURCE_TYPE
+double av_q2d(double value){return value;}
+struct SourceInfo{int profile=8;};
+struct Side{unsigned Serial()const{return 1;}};
+struct HDR{double max_luma{},min_luma{},max_cll{},max_fall{};};
+struct Binding{int picture=0;bool Valid()const{return picture>0;}};
+struct Metadata{const char* Data()const{return "dv";}::Binding Binding()const{return {1};}};
+struct Picture{SourceInfo doviSourceInfo;std::shared_ptr<Side> sourceSideData;int chroma_position{};::Binding doviSourceBinding{1};
+ StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;double pts=1000000,doviSourcePts=1000000;
+ int color_range{};bool hasDisplayMetadata{},hasLightMetadata{};
+ struct{bool has_luminance{};double max_luminance{},min_luminance{};}displayMetadata;
+ struct{unsigned MaxCLL{},MaxFALL{};}lightMetadata;};
+struct Plane{unsigned id,texwidth,texheight;};
+struct YuvImage{int plane[3]{},stride[3]{};};
+struct VideoBuffer{void GetPlanes(int*){} void GetStrides(int*){}};
+struct Buffer{std::shared_ptr<Picture>doviSourcePicture=std::make_shared<Picture>();
+ std::shared_ptr<VideoBuffer>videoBuffer=std::make_shared<VideoBuffer>();
+ Metadata doviMetadata;double doviPts=100;bool loaded=false;YuvImage image;
+ Plane fields[1][3]={{{11,3840,1920},{12,1920,960},{13,1920,960}}};};
+struct CDVBridgeGLES{struct Layer{int layout{},scalingMethod{},autoScalingMethod{},width{},height{};
+ double pts{};::Binding binding{};std::shared_ptr<void>lease;SourceInfo sourceInfo;std::shared_ptr<Side> sourceSideData;unsigned sourceSerial{};int chromaLocation{};bool fullRange{},hdr10PlusSource{},hlg{};HDR hdr;
+ struct{unsigned texture;int width,height;}planes[3]{};};};
+struct WindowBase{virtual ~WindowBase()=default;};
+namespace KODI::WINDOWING::GBM{struct CWinSystemGbmGLESContext:WindowBase{
+ int observed{};bool usable{};::Binding last{};
+ void ObserveDVImport(::Binding binding,int,bool value){observed++;usable=value;last=binding;}};}
+KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
+struct CServiceBroker{static WindowBase*GetWinSystem(){return &window;}};
+struct CLinuxRendererGLES{
+ int m_format=AV_PIX_FMT_YUV420P10LE,m_textureTarget=GL_TEXTURE_2D;
+ int m_sourceWidth=3840,m_sourceHeight=1920,m_renderOrientation{};
+ Buffer m_buffers[1];int uploads{};
+ bool UploadNV12Texture(int){return false;} bool UploadPackedYUVTexture(int){return false;}
+ bool UploadPlanarYUVTexture(int){uploads++;return true;}
+ void CalculateTextureSourceRects(int,int){} int SelectScalingMethod(){return 9;}
+ int AutoUpscalingOverride() { return 0; }
+ int DVBridgeGeometry(){return 42;}
+ bool BuildDVBridgeLayer(int index,CDVBridgeGLES::Layer& layer) BUILD
+ bool UploadTexture(int index) UPLOAD
+};
+int main(){CLinuxRendererGLES r;
+ assert(r.UploadTexture(0));assert(r.uploads==1);
+ assert(window.observed==1 && window.usable);
+ CDVBridgeGLES::Layer layer;assert(r.BuildDVBridgeLayer(0,layer));
+ assert(layer.layout==DVBRIDGE_YUV420P10 && layer.width==3840 && layer.height==1920);
+ assert(layer.planes[0].texture==11 && layer.planes[1].texture==12 && layer.planes[2].texture==13);
+ assert(layer.planes[1].width==1920 && layer.planes[1].height==960);
+ assert(layer.lease && layer.binding.Valid() && layer.pts==100 && !layer.hdr10PlusSource);
+ assert(r.UploadTexture(0) && r.uploads==1 && window.observed==2);
+ r.m_format=AV_PIX_FMT_YUV444P10LE;
+ r.m_buffers[0].fields[0][1]={12,3840,1920};r.m_buffers[0].fields[0][2]={13,3840,1920};
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.layout==DVBRIDGE_YUV444P10);
+ r.m_format=AV_PIX_FMT_NV12;assert(!r.BuildDVBridgeLayer(0,layer));
+ r.m_format=AV_PIX_FMT_YUV420P10LE;r.m_renderOrientation=90;
+ assert(!r.BuildDVBridgeLayer(0,layer));
+ assert(r.UploadTexture(0) && !window.usable && window.last.Valid());
+ r.m_renderOrientation=0;r.m_sourceWidth=320;r.m_sourceHeight=181;
+ r.m_buffers[0].fields[0][0]={11,320,181};
+ r.m_buffers[0].fields[0][1]={12,160,90};r.m_buffers[0].fields[0][2]={13,160,90};
+ assert(!r.BuildDVBridgeLayer(0,layer));
+ assert(r.UploadTexture(0) && !window.usable && window.last.Valid());
+ r.m_sourceHeight=180;r.m_buffers[0].fields[0][0]={11,320,180};
+ assert(r.UploadTexture(0) && window.usable && window.last.Valid());
+ r.m_renderOrientation=0;r.m_buffers[0].doviPts=DVD_NOPTS_VALUE;
+ assert(!r.BuildDVBridgeLayer(0,layer));
+ auto& source=*r.m_buffers[0].doviSourcePicture;
+ source.doviSourceInfo.profile=0;source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ source.hasDisplayMetadata=true;source.displayMetadata.has_luminance=true;source.displayMetadata.max_luminance=1000;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.pts==1 && layer.hdr.max_luma==1000 && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ assert(r.BuildDVBridgeLayer(0,layer) && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HLG;
+ assert(r.BuildDVBridgeLayer(0,layer) && layer.hlg && layer.pts==1 && !layer.hdr10PlusSource);
+ source.hdrType=StreamHdrType::HDR_TYPE_HDR10;
+ assert(r.BuildDVBridgeLayer(0,layer) && !layer.hlg);
+ source.doviSourcePts=AV_NOPTS_VALUE;assert(!r.BuildDVBridgeLayer(0,layer));}
+'''.replace('BUILD',build).replace('UPLOAD',upload).replace('SOURCE_TYPE',source_type)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'check.cpp').write_text(program)
+            compiled=subprocess.run(['c++','-std=c++20','-Wall','-Wextra','-Werror',
+                '-Wno-unused-parameter',str(root/'check.cpp'),'-o',str(root/'check')],capture_output=True,text=True)
+            self.assertEqual(compiled.returncode,0,compiled.stderr)
+            run=subprocess.run([str(root/'check')],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+
+
+if __name__=='__main__':unittest.main()
