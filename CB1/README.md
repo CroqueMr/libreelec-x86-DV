@@ -1,0 +1,94 @@
+# CB1
+
+CB1 is an open-source Dolby Vision processing engine with HDR10 and HDR10+ output.
+**CB1 1.0** is a C11 static library linked into the player's render path, without
+a separate service or external player.
+
+
+## Dolby Vision profiles
+
+| Profile | Support |
+| --- | --- |
+| 5 | Yes |
+| 7 MEL | Yes |
+| 7 FEL | Yes, including enhancement-layer reconstruction |
+| 8.1 | Yes |
+| 8.2 | Yes |
+| 8.4 | Yes |
+| 10 | Yes |
+| 9, legacy profiles, 20 | No |
+
+CM2.9 and CM4 metadata are supported. Profile support does not imply that every
+source contains creative trims or that every output mode applies every field.
+[Algorithms and metadata](docs/ALGORITHMS.md) explains the processing rules.
+
+## Conversions
+
+| Source | Mode | Output | Result |
+| --- | --- | --- | --- |
+| Dolby Vision | Dolby Vision Reference | Dolby Vision, TV-Led | Prioritize performance with small reconstruction differences and final TV mapping |
+| Dolby Vision | Dolby Vision Master Reference | Dolby Vision, TV-Led | Reference reconstruction, aiming for bit-perfect playback within the supported contract |
+| Dolby Vision | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Metadata-guided highlight expansion to the display profile |
+| Dolby Vision | HDR10 Rendering | HDR10 | Play Dolby Vision content in HDR10 without a manual TV profile |
+| Dolby Vision | LLDV Reference – HDR10 Output | HDR10 | Map to the display's peak, black floor and gamut with compatible L2 guidance |
+| Dolby Vision | LLDV Reference – Native | Dolby Vision, Low Latency | Use the display target from its Dolby Vision EDID |
+| Dolby Vision | HDR10+ Rendering | HDR10+ | Reconstruct the source and generate frame-associated statistics and representable luminance guidance |
+| HDR10 | Dolby Vision Rendering | Dolby Vision, TV-Led | Generate scene metadata without an enhancement grade |
+| HDR10 | Dolby Vision Adaptive HDR Mapping | Dolby Vision, TV-Led | Adapt HDR10 highlights and colors to the display profile for Dolby Vision output |
+| HDR10+ | Dolby Vision Rendering | Dolby Vision, TV-Led | Preserve source pixels; use compatible source statistics and labelled estimates when incomplete |
+
+For more details, see [rendering modes and algorithms](docs/ALGORITHMS.md).
+
+LLDV Reference – HDR10 Output uses separate manual peak, black-floor and gamut settings.
+Adaptive HDR Mapping requires a manual display profile. AI conversion uses the
+included [CB1-L1L3 0.1 LightGBM model](models/l1l3/README.md).
+Native HDR10, HLG and SDR remain the player's responsibility.
+Native HDR10+ preserves the source picture and its authored dynamic metadata
+through the player's supported output path. [HDR10+ processing](docs/HDR10PLUS.md).
+
+Master Reference offers YCbCr or IPT-PQc2 output, with YCbCr selected by default.
+Profile 5 keeps the shared direct IPT path in both Master variants. Reference uses
+the dedicated, performance-oriented P5 IPT path.
+
+## Documentation
+
+- [Algorithms and metadata](docs/ALGORITHMS.md): pipeline, equations, ratios and coefficients.
+- [Circuits](docs/CIRCUITS.md): independently versioned end-to-end paths.
+- [Build](docs/BUILD.md) and [API](docs/API.md): dependencies and integration.
+- [Licensing](docs/LICENSING.md): licenses and source attribution.
+
+## Repository layout
+
+| Path | Content |
+| --- | --- |
+| `src/` | Processing library and native API |
+| `patches/` | Matched FFmpeg and libplacebo changes |
+| `config/` | Dependencies, circuit and license manifests |
+| `models/l1l3/` | LightGBM model, normalization and runtime contract |
+| `tests/` | Regression and numerical controls |
+| `tools/` | Source verification helpers |
+| `docs/` | Technical and integration documentation |
+| `LICENSES/` | Retained license texts and notices |
+
+## Integration
+
+The player owns decoding, timing, audio, subtitles, UI and presentation. CB1
+owns reconstruction, processing and output metadata. Its native C API shares
+FFmpeg metadata and libplacebo/GLES resources, not a network API.
+
+The LibreELEC integration supports the listed Intel and AMD integrated/dedicated
+GPUs and NVIDIA GeForce GPUs. [Hardware and output support](../docs/cb1/HARDWARE.md).
+Performance may vary by hardware. Report playback problems to the integration
+repository with the exact CPU/GPU, display, connection chain and build version.
+
+## Integration limits
+
+- Visible menus and heavy conversions can exceed the capacity of lower-powered GPUs.
+- Adaptive HDR Mapping remains subject to visual refinement.
+- Interface screenshots do not establish HDR/Dolby Vision HDMI output fidelity.
+
+See the integration [release notes](../docs/cb1/RELEASE.md) and
+[issues](https://github.com/CroqueMr/libreelec-x86-DV/issues) for current playback reports.
+
+Test media and training datasets are excluded. No affiliation with or certification
+by Dolby, Intel or AMD.

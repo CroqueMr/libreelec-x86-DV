@@ -1,0 +1,14 @@
+{
+  "algorithm": "cb1-cm4-v1",
+  "reference": "independent binary64 equations; analytically derived fixtures",
+  "units": "absolute linear nits before gamut mapping",
+  "cases": [
+    {"name": "neutral_rgb", "peak_nits": 1000, "controls": {"primary": [2048,2048,2048,2048,2048,2048]}, "input_nits": [70,140,320], "expected_nits": [70,140,320], "tolerance_nits": 1e-12},
+    {"name": "positive_authored_offset", "peak_nits": 1000, "controls": {"primary": [2048,2304,2048,2048,2048,2048]}, "input_nits": [0,0,0], "expected_nits": [62.5,62.5,62.5], "tolerance_nits": 1e-12},
+    {"name": "slope", "peak_nits": 1000, "controls": {"primary": [3072,2048,2048,2048,2048,2048]}, "input_nits": [100,200,400], "expected_nits": [125,250,500], "tolerance_nits": 1e-12},
+    {"name": "square_root_power", "peak_nits": 1000, "controls": {"primary": [2048,2048,0,2048,2048,2048]}, "input_nits": [40,90,160], "expected_nits": [200,300,400], "tolerance_nits": 1e-10},
+    {"name": "clip_negative_endpoint", "peak_nits": 1000, "controls": {"clip_trim": 0}, "input_nits": [1000,1000,1000], "expected_nits": [750,750,750], "tolerance_nits": 1e-10},
+    {"name": "clip_positive_3000", "peak_nits": 1000, "controls": {"clip_trim": 3072}, "input_nits": [750,750,750], "expected_nits": [796.875,796.875,796.875], "tolerance_nits": 1e-10},
+    {"name": "mid_positive_quarter", "peak_nits": 1000, "controls": {"mid_contrast": 3072}, "input_nits": [250,250,250], "expected_nits": [174.55649247215670,174.55649247215670,174.55649247215670], "tolerance_nits": 1e-10}
+  ]
+}

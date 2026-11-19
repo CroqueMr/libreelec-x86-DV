@@ -1,0 +1,89 @@
+# HDR10+ playback and conversion
+
+Supported: native HDR10+ playback, Dolby Vision-to-HDR10+ conversion and explicit
+metadata-guided HDR10+-to-Dolby Vision conversion.
+
+| Source | Output | Processing |
+| --- | --- | --- |
+| HDR10+ | HDR10+ | Original pixels and frame-owned FFmpeg metadata. |
+| HDR10+ | Dolby Vision Rendering, explicit metadata-guided mode | Source pixels retained; MaxSCL and weighted PQ percentiles, with labelled estimates for missing statistics. Authored curves and saturation maps are not translated. |
+| Dolby Vision | HDR10+ | BL/EL/RPU reconstruction, image statistics and representable luminous trims. |
+| Unsupported transport | HDR10 | Dynamic metadata cleared; fallback reported. |
+
+Intel, AMD and NVIDIA use their supported native-HDMI driver routes, an accepted
+dynamic-metadata transaction and at least 10-bit output. Native and converted
+HDR10+ share the output contract. For HDR10+ sources, Kodi default uses ordinary
+HDR playback. Select HDR10+ Native to transmit the source dynamic metadata.
+The choice stays visible and is disabled unless both the HDMI driver and
+display advertise support. Dolby Vision conversion requires explicit selection of the
+metadata-guided mode and an admitted Dolby Vision output.
+[Driver/output matrix](../../docs/cb1/DRIVER-COVERAGE.md).
+
+## Metadata conversion
+
+**Purpose.** Convert Dolby Vision to HDR10+ by reconstructing the original image and generating dynamic HDR10+ metadata for each picture.
+
+This section describes **Dolby Vision to HDR10+**. The reverse direction is
+described [below](#hdr10-to-dolby-vision).
+
+- Analyze every pixel in the active film area before GUI composition or mapping.
+- Measure linear-light channel maxima, average maxRGB and a 256-bin histogram.
+- Resolve L1/L3 and applicable L8 or L2 controls through the existing creative resolver.
+- Fit one luminous curve, not both trim families. Reject unrepresentable color/spatial controls.
+- Validate the transmitted, quantized curve on gray and colored probes with a
+  maximum normalized PQ error of 2/1023. This is not an image-wide error guarantee.
+- Keep descriptive statistics when a curve cannot be represented; report omitted coverage.
+- Do not tone-map pixels before sending the curve. The receiver applies it once.
+
+The curve reference is 992 nits, the largest nonzero value represented by the
+selected HDMI field. It does not clip pixels or describe the TV's brightness.
+The top transmitted percentile supplies the receiver's normalization because
+this payload does not transmit MaxSCL.
+
+Unsupported multi-window, saturation-map and nonmonotone quantized native curves
+use HDR10. Packets belong to the same atomic transaction as their framebuffer.
+Seek, source changes, rejected imports and teardown clear stale metadata.
+
+Native and generated metadata support receiver versions 0 and 1. Generated V0
+uses measured 5th/10th maxRGB percentiles. Generated V1 measures linear BT.2020
+luminance in the same GPU pass. DistributionY99 is the maximum of the
+99.99th percentiles seen so far in the scene. DistributionY100nit is the mean
+per-picture percentage of pixels at or below 100 nits. The running statistics
+start over at scene cuts and picture discontinuities.
+Native V1 also accepts its Y99 luminance and Y100nit percentage fields. The latter
+is transmitted without luminance quantization; values 101..254 remain rejected.
+Changing receiver version cancels pending conversion metadata before reuse.
+
+## HDR10+ to Dolby Vision
+
+**Purpose.** Play HDR10+ on a Dolby Vision display using its source scene statistics to generate Dolby Vision metadata. The decoded picture retains its grade.
+
+- Use validated single-window MaxSCL for the source peak, not the HDR10+ target display peak.
+- Estimate mean PQ from weighted PQ-percentile trapezoids, adapted from [AVDVPlus HistogramPlus](https://github.com/avdvplus/xbmc/blob/e0614d7a6713369bbcfe42152223f1cdaec3dbf1/xbmc/utils/HDR10PlusConvert.cpp). Linear AverageMaxRGB validates consistency; PQ(mean linear light) is not treated as mean PQ.
+- Missing or unusable percentiles retain supplied per-picture AI estimates; otherwise PQ(AverageMaxRGB) is explicitly labelled as estimated. Content minimum is zero without image analysis. Zero MaxSCL requires a supplied estimate.
+- Fold estimated L3 once and emit neutral output L3. Preserve known mastering minimum separately from content minimum.
+- Keep decoded pixels without an enhancement grade. The existing DV transport conversion and quantization still apply.
+- Do not translate authored Bezier curves, saturation operations or multiple spatial windows into invented DV trims.
+
+Source snapshots and generated metadata belong to the same presented picture.
+Invalid or missing metadata after activation retains native fallback until a
+source/mode reset, without carrying a previous scene's RPU.
+[Full algorithm](ALGORITHMS.md#hdr10-dolby-vision-rendering).
+
+## Verification
+
+Software tests cover byte layout, rational units, curve quantization, invalid
+inputs, L1/L3/L2/L8 coverage, frame ownership and HDR10 fallback. Intel N100 and
+AMD 3200U GPU witnesses cover active-area statistics, BL/FEL/P5 reconstruction,
+cancel/retry and unchanged analyzed pixels. Driver tests cover packet ownership,
+accepted depth, failed commits and restoration. These checks are not Dolby or
+HDMI certification.
+
+## References
+
+- [SMPTE ST 2094-40](https://pub.smpte.org/pub/st2094-40/st2094-40-2020.pdf).
+- [Qualcomm HDR10+ system field description, section 0170/Table 2](https://patents.google.com/patent/EP4591567A1/en), citing HDR10+ specification 1.6. This is supporting implementation evidence, not HDMI certification.
+- FFmpeg `AVDynamicHDRPlus`, its LGPL parser and serializer.
+- [Amlogic public HDMI quantization implementation](https://nest-open-source.googlesource.com/manifest_repos/kernel/+/1650886512330522da41d487bb2ce75fd5da5ec8/drivers/amlogic/media/enhancement/amvecm/hdr/am_hdr10_plus.c), cross-checked, not copied.
+
+The original project helpers use GPL-2.0-or-later. Upstream component licenses remain unchanged.

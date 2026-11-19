@@ -1,0 +1,72 @@
+# Engine and circuits
+
+**CB1 1.0** is the engine version for R1.0.0. The table lists the identifiers reported by Player Information.
+
+| Circuit | Version |
+| --- | --- |
+| Dolby Vision to Dolby Vision Reference | `CB1-DVDVR.1.0` |
+| Dolby Vision Master Reference | `CB1-DVDVMR.1.0` |
+| Dolby Vision Master Reference, IPT-PQc2 output | `CB1-DVDVMRI.1.0` |
+| Dolby Vision to HDR10 Rendering | `CB1-DVHDR10B.1.0` |
+| LLDV Reference – HDR10 Output | `CB1-DVHDR10X.1.0` |
+| LLDV Reference – Native | `CB1-DVLLDV.1.0` |
+| Dolby Vision to HDR10+ | `CB1-DVHDR10P.1.0` |
+| Dolby Vision to Dolby Vision Adaptive HDR Mapping | `CB1-DVDVA.1.0` |
+| HDR10 to Dolby Vision Rendering, AI-assisted | `CB1-HDR10DVR.1.0` |
+| HDR10 to Dolby Vision Adaptive HDR Mapping, AI-assisted | `CB1-HDR10DVA.1.0` |
+| HDR10+ to Dolby Vision Rendering, metadata-guided | `CB1-HDR10PDVR.1.0` |
+| Dolby Vision to SDR Rendering | `CB1-DVSDR.1.0` |
+| HDR10/HDR10+ to SDR Rendering | `CB1-HDR10SDR.1.0` |
+| Plain HLG to SDR | `CB1-HLGSDR.1.0` |
+| Plain HLG to Dolby Vision Rendering | `CB1-HLGDVR.1.0` |
+
+Identifiers are defined in `src/cb1_circuit.c`. A circuit revision changes when
+its processing contract or rendered result changes. Player UI and driver-only
+changes do not require a circuit revision.
+
+Adaptive expands valid L1/L3
+scene highlights without requiring creative trims. Resolved HDR L8 anchors take
+priority over L2. Trims guide the expansion and remain in the output metadata;
+they are not applied twice. Missing or invalid analysis retains the safety path.
+The circuit protects blacks and uses the existing temporal slew limit.
+It uses an FP16 reconstruction intermediate; the curve and metadata model retain
+their existing precision.
+
+Each mode owns one fixed rendering recipe. Reference and conversions retain their
+qualified performance filters; Master retains its exact reconstruction. Optional
+Master-to-Reference recovery is off by default. Transport, GUI and supported FEL
+upscaling optimizations are automatic.
+
+HDR10 Adaptive uses the same scene-guided expansion curve and temporal limit as DV Adaptive.
+Predicted L1, adjusted by predicted L3, guides the curve without invented creative
+trims. Output L1 follows that curve rather than instantaneous frame extrema.
+The inference model and HDR10 Reference AI circuit are unchanged.
+
+HDR10+ Dolby Vision Rendering preserves source pixels. Single-window MaxSCL and
+weighted PQ percentiles provide descriptive statistics without GPU analysis when
+usable. Missing statistics use explicitly labelled estimates; content minimum
+is zero without image analysis. HDR10+ target
+display luminance is not the source peak. Authored tone curves and saturation
+adjustments are not translated or applied to pixels. Unsupported source metadata
+does not reuse an earlier frame's RPU.
+
+HDR10 Rendering, LLDV Reference – HDR10 Output and Adaptive process the source-sized picture before final
+enlargement. Reconstruction, creative guidance and intermediate precision follow
+the circuit policy, not the input dimensions. Adaptive's final enlargement retains
+the declared luminance envelope before GUI composition and transport packing.
+Reference preserves admitted source-domain transport when fitting smaller or
+cropped pictures. Master Reference and the Reference P5 recipe are unchanged.
+
+Input-chroma recipes are shared by Intel and AMD. Intel ADL-N's validated scaler
+cache and AMD's eligible presentation-edge rule remain independent backend
+optimizations, not user-selectable quality variants.
+
+The integration image has an independent release version and records the exact
+CB1 source revision. Standard HDR10/SDR playback remains owned by the player.
+
+[SDR and HLG contracts](SDR-HLG.md) define the independent BT.709 target,
+complete DV reconstruction, reference HLG normalization and qualification limits.
+
+[Master Reference](MASTER-REFERENCE.md) defines its admitted representations,
+integer reconstruction and deterministic spatial contract. The saved FEL scaler
+preference does not affect this circuit.

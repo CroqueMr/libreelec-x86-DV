@@ -1,0 +1,35 @@
+--- a/src/shaders/sampling.c
++++ b/src/shaders/sampling.c
+@@ -962,9 +962,33 @@
+     uint8_t comps;
+     float ratio[SEP_PASSES], scale;
+     ident_t src_tex, pos, pt;
++    // Lanczos taps are texel-centered along the filtered axis. Nearest tap
++    // fetches preserve the convolution when the other axis is aligned 1:1.
++    bool centered = false;
++    if (src->tex && src->new_w > 0 && src->new_h > 0 &&
++        (src->tex->params.format->caps & PL_FMT_CAP_LINEAR) &&
++        pl_rect_w(src->rect) != 0 &&
++        params->filter.kernel == &pl_filter_function_sinc &&
++        params->filter.window == &pl_filter_function_sinc &&
++        params->filter.radius == 3.0f && !params->filter.blur &&
++        !params->filter.clamp && !params->filter.taper)
++    {
++        // Match the pass selection below, including its 1:1 tolerance.
++        // An identity-size crop/shift must not select the wrong aligned axis.
++        float rx = src->new_w / fabs(pl_rect_w(src->rect));
++        if (fabs(rx - 1.0f) < 1e-6f) {
++            centered = src->new_w == src->tex->params.w &&
++                       src->rect.x0 == 0 &&
++                       src->rect.x1 == src->tex->params.w;
++        } else {
++            centered = src->new_h == src->tex->params.h &&
++                       src->rect.y0 == 0 &&
++                       src->rect.y1 == src->tex->params.h;
++        }
++    }
+     if (!setup_src(sh, src, &src_tex, &pos, &pt,
+                    &ratio[SEP_HORIZ], &ratio[SEP_VERT],
+-                   &comps, &scale, false, LINEAR))
++                   &comps, &scale, false, centered ? NEAREST : LINEAR))
+         return false;
