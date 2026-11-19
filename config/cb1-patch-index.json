@@ -2377,17 +2377,17 @@
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": {
-    "owner": "Read logical CB1 pixels when capturing native video-only screenshots.",
+    "owner": "Decode the source-domain Master carrier for native video-only screenshots.",
     "files": {
       "xbmc/rendering/capture/CaptureBlit.cpp": "Choose the video readback and crop logical pixels with their native stride.",
       "xbmc/rendering/capture/CaptureBlit.h": "Declare the video capture operation.",
       "xbmc/rendering/capture/CapturePixels.h": "Keep the decoded buffer alive for an offset visible region.",
-      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Route the native video tap through the capture operation.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Serve the video tap and retain the composite leg of a paired screenshot.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Guard video-only screenshots of composed frames.",
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/DVBridgeCapture.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
-      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Guard video-only screenshots of composed frames."
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused Master captures and select source-domain readback."
     }
   }
 }
