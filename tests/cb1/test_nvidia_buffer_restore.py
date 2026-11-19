@@ -1,4 +1,4 @@
-"""Execute both NVIDIA restore callers with the native GBM buffer ownership."""
+"""Exercise transport restoration on the current and replacement GBM drawables."""
 from pathlib import Path
 import re
 import subprocess
@@ -8,7 +8,7 @@ from test_native_video_source import TREE, body
 
 
 class NvidiaBufferRestore(unittest.TestCase):
-    def test_restore_uses_the_buffer_already_locked_by_its_caller(self):
+    def test_restore_preserves_target_signal_and_buffer_ownership(self):
         base = TREE / 'xbmc/windowing/gbm'
         window = (base / 'WinSystemGbm.cpp').read_text()
         header = (base / 'WinSystemGbm.h').read_text()
@@ -20,6 +20,9 @@ class NvidiaBufferRestore(unittest.TestCase):
         ordinary = ordinary[ordinary.index('{') + 1:].replace('return;', 'return false;') + '\nreturn submitted;'
         hdr = present.split('  if (m_hdrConversion)\n', 1)[1]
         hdr = hdr[hdr.index('        auto drm ='):hdr.index('      }\n      else if (asynchronous')]
+        end = body(context, 'bool CWinSystemGbmGLESContext::EndDVBridge(')
+        captured = body(end, 'if (m_dvState.Captured())')
+        immediate = captured[captured.index('    AnnounceCB1Mode(false);'):captured.index('    if (!restored)')]
         signature = re.search(r'bool FlipDVBridgePage\([^;]+;', header).group()
         program = r'''
 #include <cassert>
@@ -27,6 +30,7 @@ class NvidiaBufferRestore(unittest.TestCase):
 #include <memory>
 #include <queue>
 #include <optional>
+#include <vector>
 struct gbm_bo {unsigned format=1;};
 constexpr unsigned DRM_FORMAT_XRGB8888=1,DRM_FORMAT_ARGB8888=2;
 constexpr unsigned DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
@@ -43,6 +47,9 @@ struct CDRMAtomic:DRM {
   std::optional<int> GetPropertyEnumValue(const char*,const char*)const{return {};}}connector;
  struct Mode {unsigned hdisplay=3840,vdisplay=2160,flags=0,htotal=4400,vtotal=2250,clock=594000;}mode;
  bool stageOK=true,commitOK=true,active=false;unsigned accepted=0,missing=0;
+ int stagedHDR=-1;
+ unsigned rejectAttempt=0;
+ std::vector<int> attemptedHDR;
  gbm_bo* acceptedBuffer=nullptr;
  auto* GetConnector(){return &connector;} auto* GetSelectedMode(){return &mode;}
  bool AddProperty(Connector*,const char*,int){return true;}
@@ -50,7 +57,10 @@ struct CDRMAtomic:DRM {
  void SetActive(bool value){active=value;}
  bool HasPendingCB1Page(){return false;}
  bool FlipPageTransactional(gbm_bo* bo,bool,bool=false){
-   if(!bo){++missing;return false;}if(!commitOK)return false;
+   if(!bo){++missing;return false;}
+   attemptedHDR.push_back(stagedHDR);
+   stagedHDR=-1;
+   if(!commitOK || attemptedHDR.size()==rejectAttempt)return false;
    ++accepted;acceptedBuffer=bo;return true;
  }
  void StageHDR10Plus(int,int){}
@@ -60,7 +70,8 @@ struct CDRMAtomic:DRM {
 struct CDVBridgeState {
  enum class Backend{KERNEL,NVIDIA};Backend backend=Backend::NVIDIA;bool captured=true;
  bool Captured(){return captured;}Backend CapturedBackend(){return backend;}
- bool Stage(CDRMAtomic& drm,bool){return drm.stageOK;}
+ int capturedHDR=461;
+ bool Stage(CDRMAtomic& drm,bool restore){if(restore)drm.stagedHDR=capturedHDR;return drm.stageOK;}
  void Restored(){captured=false;}
 };
 struct Surface {
@@ -85,10 +96,20 @@ struct Window {
  std::shared_ptr<DRM> m_DRM=std::make_shared<CDRMAtomic>();
  std::shared_ptr<Surface> m_GBM=std::make_shared<Surface>();
  CDVBridgeState m_dvState;bool m_dvStopPending=false,m_sdrConversion=false;
+ struct {
+   bool Captured(){return false;}
+   bool Stage(CDRMAtomic&,bool,std::optional<uint64_t>){return true;}
+ } m_cb1ConnectorState;
+ bool m_cb1RestoringPreferences=false,m_hdrConversion=false;
+ std::optional<uint64_t> m_sdrBroadcastRange;
+ void ApplyColorspace(){}
  std::optional<int> m_queuedColorspace;
  int GetOutputBitDepth(){return 8;}
- void SetHDR(const VideoPicture*){assert(false);}
- void SetColorimetry(const VideoPicture*){assert(false);}
+ void SetHDR(const VideoPicture* picture){
+   assert(!picture);
+   std::static_pointer_cast<CDRMAtomic>(m_DRM)->stagedHDR=0;
+ }
+ void SetColorimetry(const VideoPicture* picture){assert(!picture);}
  double m_preparedRenderPts{};
  std::optional<uint64_t>m_hdrDeepColorPrevious;
  enum class PascalHDRMode {None,Conversion,Native};
@@ -101,11 +122,12 @@ struct Window {
  struct EGL {bool TrySwapBuffers(){return true;}} m_eglContext;
  bool PrepareOrdinaryDVOutput(void*){return true;}
  bool CompleteDVBridgePage(){return true;}bool SupportsDVOutputMode(){return true;}
- bool StageTransportPreferences(){return true;}
- bool StageCB1ConnectorPreferences(bool){return true;}
+ bool StageTransportPreferences() @TRANSPORT@
+ bool StageCB1ConnectorPreferences(bool restore) @PREFERENCES@
  bool RequeueOutputProperties(){return true;}bool FloatOutputUsable(){return true;}
  void AnnounceCB1Mode(bool){}void CompleteCB1Mode(bool,bool){}
  @SIGNATURE@
+ bool SameDrawableRestore(){@IMMEDIATE@ return restored;}
  bool Ordinary(bool rendered){@ORDINARY@}
  bool HDR(std::shared_ptr<gbm_bo> carrier={}){bool presented=false,asynchronous=false;
    constexpr bool signalChange=false;
@@ -119,6 +141,23 @@ struct Window {
 };
 @FLIP@
 int main(){
+ // A desktop resize can restore the transport on the current drawable while stop is pending.
+ for(bool stopping:{false,true}){
+   for(bool nvidia:{false,true}){
+     Window w;
+     w.m_dvStopPending=stopping;
+     w.m_dvState.backend=nvidia?CDVBridgeState::Backend::NVIDIA:CDVBridgeState::Backend::KERNEL;
+     auto drm=std::static_pointer_cast<CDRMAtomic>(w.m_DRM);
+     drm->active=true;
+     // Reject the second leg of an NVIDIA restart or the sole kernel commit.
+     drm->rejectAttempt=nvidia?2:1;
+     assert(!w.SameDrawableRestore() && w.m_dvState.Captured());
+     assert(w.SameDrawableRestore() && !w.m_dvState.Captured());
+     assert(drm->attemptedHDR.size()==(nvidia?4:2));
+     for(int metadata:drm->attemptedHDR)
+       assert(metadata==(stopping?0:w.m_dvState.capturedHDR));
+   }
+ }
  for(bool hdr:{false,true})for(bool nvidia:{true,false})for(bool active:{false,true})
  for(bool alternate:{false,true}){
    if(alternate&&!hdr)continue;
@@ -154,6 +193,9 @@ int main(){
             'COMPLETE': body(surface, 'void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer('),
             'END': body(surface, 'void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode('),
             'SIGNATURE': signature, 'ORDINARY': ordinary, 'HDR': hdr,
+            'IMMEDIATE': immediate,
+            'TRANSPORT': body(context, 'bool CWinSystemGbmGLESContext::StageTransportPreferences('),
+            'PREFERENCES': body(context, 'bool CWinSystemGbmGLESContext::StageCB1ConnectorPreferences('),
             'FLIP': 'bool Window::FlipDVBridgePage' +
                 window.split('bool CWinSystemGbm::FlipDVBridgePage', 1)[1].split('{', 1)[0] +
                 body(window, 'bool CWinSystemGbm::FlipDVBridgePage('),
