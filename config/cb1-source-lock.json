@@ -118,7 +118,7 @@
     "tests/cb1/test_dcn4_transport.py": "4ae8f46442fbee27af8f5a322167c5c1a3f9567f094c70d2c2bdb1d0bea0845a",
     "tests/cb1/dcn4_transport.c": "63284b5b2cef0bb2f4be1eced5a9b52358e834a1afc8d4d1b8eeeac91e15ab2a",
     "tests/cb1/amd_dv_atomic.c": "4980d2b125537afafba99864ce8ff29e6f93ad7883db185563711f6ce7b9ea42",
-    "tests/cb1/test_bluray_pairing.py": "4f14cfce8f8f320ebd38f65a4507228c01f74f55946c36f8c9369ae4808aedca",
+    "tests/cb1/test_bluray_pairing.py": "a85dfefb0cf49c504b626c752e30395865b2be49382cba84cf3873cae9224eb3",
     "tests/cb1/test_bluray_el_preroll.py": "f3f849acae74763fb5416e9f8e95223fff66b426a0cbcdb293ccf683f929f430",
     "tests/cb1/test_dual_carriage.py": "dcc57a32d28964d733d5f4438a98afc2b10cc0833669c52f30442edcd836eead",
     "tests/cb1/test_joined_headers.py": "672e9636c920b03fba8cd5dcdf1b0b2aac930978b296e3c8e2dcc8d41c473119",
@@ -213,7 +213,7 @@
     "tests/cb1/test_libbluray_video_preroll.py": "ccef6350d36176d37a470c49f2e566b37bfe7cf20cd4ba2838ef4ddacc24ac5e",
     "tests/cb1/test_bluray_navigation_drain.py": "1ffd4050d99c38b51d5d61b209ad9b4370a7c7af04c85844ca8c9fb8ba2ce1b8",
     "tests/cb1/test_bluray_video_window.py": "db8b191acece4e078689ad0c40c9bf3f8b4ade70a01b75250de3f2f740dac036",
-    "tests/cb1/test_bluray_video_disposition.py": "5cc2b24a37319347270afdacc92f86534917725cff2e830b2b256153af614602",
+    "tests/cb1/test_bluray_video_disposition.py": "63d11a7fe8ba157371b40080500b660d20e6a7f7a6b9350d15eb963dd881472d",
     "tests/cb1/test_decode_startup_diagnostics.py": "d76d2020744acd99577ddc72263f4777e2a89c6beaf2613faa5c5f6c3f3d6ba2",
     "tests/cb1/test_bluray_image_root.py": "f0a6a37b799d386cd28304a7b65adcc163f757ec7a44b4a6db5e3225af7e0dcb",
     "tests/cb1/test_bluray_display_capabilities.py": "0aa81084211675718ea3f3b805de83b2011634852e97d3efbc984de6ba08e747",
@@ -365,7 +365,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "6df9a0dce9012ae3f9c82b7113d5e67c8ce5cf3169d40511453153237b966569",
+    "config/cb1-patch-index.json": "f7b429e6da82dfe10cda490f9e5477c3797f1f8b2cbdaa5d5ee507bf94a609ed",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -490,7 +490,9 @@
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-logical-video-screenshot.patch": "3f9b1186d7089d24c1720c9481ed6903f8e17a4b7d7372e86274d52dda2e9362",
     "projects/Generic/patches/linux/0104-wifi-mt76-mt7925-track-join-roc-ownership.patch": "959074567d193b64107070207fce565164f1cae63df2dea1f37eee93438e8d9f",
     "tests/cb1/test_mt7925_roc.py": "ebd1df398e41d912fc018d97b269ffa2b11ac10fb1d9ef79ce89ebdaa5426cf9",
-    "tests/cb1/mt7925_roc.c": "0f4154d64644eeed97fe50e71a1d5b69c47c278e444a132c7133eb42bd5dee69"
+    "tests/cb1/mt7925_roc.c": "0f4154d64644eeed97fe50e71a1d5b69c47c278e444a132c7133eb42bd5dee69",
+    "tests/cb1/bluray_layer_drain.cpp": "5cb4b412e59c24aedfbbe6b4d580dc1945b7bd921ab6d01d1bf5d4ac80971275",
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-terminal-layer-drain.patch": "1111ee68bc93b69fea4535d98e6e5d6a998af4e6e3de1a240c577fd6e37677a5"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

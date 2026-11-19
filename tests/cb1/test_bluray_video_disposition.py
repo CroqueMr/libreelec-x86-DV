@@ -63,6 +63,11 @@ int main(){
   c.frame.opaque=packet.opaque;
   assert(c.Validate().iFlags&DVP_FLAG_DROPPED);
  }
+ {
+  Codec c;c.m_dvFel=false;
+  Packet p;p.doviLayerTimes={true,false};
+  assert(c.Tag(p).flags&AV_PKT_FLAG_DISCARD); // The base-only decoder still needs the reference.
+ }
  for(bool windowed:{false,true}){
   Codec c;c.m_dvFel=true;c.m_dvVideoWindow=windowed;
   c.frame.opaque=nullptr;assert(c.Validate().doviMetadata.valid==!windowed);

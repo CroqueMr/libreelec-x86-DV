@@ -2399,5 +2399,13 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
     }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-terminal-layer-drain.patch": {
+    "owner": "Drain joined Blu-ray layers without presenting a base picture whose metadata is missing.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Keep terminal base references in decode order and signal EOF only after all pending layers are drained.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Preserve terminal layer errors at the FFmpeg demux boundary.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Keep reference-only layer pictures out of the base-only video output."
+    }
   }
 }
