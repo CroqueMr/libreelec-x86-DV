@@ -9,6 +9,22 @@ from test_native_video_source import TREE, body
 
 
 class FELTerminalTests(unittest.TestCase):
+    def test_selected_engine_preserves_exact_shared_seek_anchors(self):
+        engine = os.environ.get("CB1_TEST_ENGINE")
+        prefix = os.environ.get("FFMPEG_TEST_PREFIX")
+        if not engine or not prefix:
+            self.skipTest("Selected engine and matched FFmpeg required")
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "fel-seek-clock"
+            subprocess.run(
+                ["cc", "-std=c11", "-fsanitize=address,undefined", "-fno-pie", "-no-pie",
+                 "-I" + engine + "/src", "-I" + prefix + "/include",
+                 engine + "/tests/fel_seek_clock.c", "-L" + prefix + "/lib",
+                 "-lavformat", "-lavcodec", "-lavutil", "-o", str(binary)],
+                check=True,
+            )
+            subprocess.run([binary], check=True)
+
     def test_native_unpaired_mel_and_fel_terminal_invariants(self):
         prefix = os.environ.get("FFMPEG_TEST_PREFIX")
         if not prefix:

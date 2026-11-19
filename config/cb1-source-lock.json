@@ -182,7 +182,7 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "9b24a8c836961922efb4c7823443c1c792219546d781a638d3b66e607a746ad9",
+    "tests/cb1/test_fel_terminal.py": "b5224cad373b9486f76a579a795d4c0e26abb248df8f733c77b7e5b159de4079",
     "tests/cb1/test_mel_reference_history.py": "037f9020ba75efa6c0a01de983bf9ba8701a7d9b40a0c836a3260497b4e443c8",
     "tests/cb1/test_optional_gui.py": "cd34349c3b323eb87c51c024bd71ca7e98757e1f501c70340c21bca26554800a",
     "tests/cb1/test_software_dv_import.py": "539cc08623dd1f54c98e117525eff4e4fe99ca7a18f79550ef3ff3784d4e2e90",
