@@ -2077,6 +2077,12 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose a pending output stop to the renderer."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stop-sdr-gui.patch": {
+    "owner": "Restore the GUI signal when playback stops with a captured DV transport.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Clear captured movie HDR metadata in each stopped transport restore."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": {
     "owner": "Signal the output gamut of native SDR Kodi shaders on GBM.",
     "files": {
