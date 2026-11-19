@@ -1,0 +1,1073 @@
+diff --git a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+--- a/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
++++ b/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h
+@@ -216,6 +216,7 @@
+   HLGSourceMode hlgSource{HLGSourceMode::Native};
+   int method{};
+   bool hdr10TransportFallback{};
++  bool playerLedStartup{};
+   void Apply(OutputPreferences& preferences) const
+   {
+     preferences.output=output;
+@@ -317,6 +318,16 @@
+   return next;
+ }
+
++inline void UsePlayerLedStartupFallback()
++{
++  std::lock_guard lock(OutputSettingsMutex());
++  if (activeOutputSelectors && activeOutputSelectors->playerLedStartup)
++  {
++    activeOutputSelectors->hdr10TransportFallback = true;
++    activeOutputSelectors->playerLedStartup = false;
++  }
++}
++
+ inline void SelectOutputSettings(bool nativeDV = true, bool playerLed = true)
+ {
+   {
+@@ -327,6 +338,7 @@
+     {
+       case OutputMode::PlayerLed:
+         defaults.hdr10TransportFallback = !playerLed;
++        defaults.playerLedStartup = playerLed;
+         break;
+       case OutputMode::Standard:
+       case OutputMode::EnhancedDV:
+diff --git a/xbmc/cores/VideoPlayer/VideoPlayer.cpp b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+--- a/xbmc/cores/VideoPlayer/VideoPlayer.cpp
++++ b/xbmc/cores/VideoPlayer/VideoPlayer.cpp
+@@ -4751,6 +4751,12 @@
+   if (hint.flags & AV_DISPOSITION_ATTACHED_PIC)
+     return false;
+
++  const auto streamFrameRate = [&hint] {
++    return DVD_TIME_BASE / CDVDCodecUtils::NormalizeFrameduration(
++        (double)DVD_TIME_BASE * hint.fpsscale / (hint.fpsrate * (hint.interlaced ? 2 : 1)));
++  };
++  std::optional<RESOLUTION> playerLedStartupResolution;
++
+ #ifdef HAVE_DVBRIDGE
+   const auto settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+   hint.preferHybridHDR10Plus = hint.HasHDR10PlusCompatibleDolbyVisionBase() &&
+@@ -4760,7 +4766,28 @@
+   {
+     auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+         CServiceBroker::GetWinSystem());
+-    const auto mode = DVBRIDGE::FrameOutputSettings().Policy().mode;
++    const auto preferences = DVBRIDGE::FrameOutputSettings();
++    const auto mode = preferences.Policy().mode;
++    if (window && !m_HasVideo && !pMenus && !hint.interlaced &&
++        mode == DVBRIDGE_MODE_PLAYER_LED && !preferences.hdr10TransportFallback)
++    {
++      const bool adjustRefresh = m_playerOptions.fullscreen &&
++          window->GetGfxContext().IsFullScreenRoot() &&
++          settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF;
++      if (adjustRefresh && hint.fpsrate && hint.fpsscale)
++        playerLedStartupResolution = CRenderManager::ChoosePlaybackResolution(
++            streamFrameRate(), hint.width, hint.height, false, WantsNativePresentation(hint), true);
++
++      if ((!adjustRefresh || playerLedStartupResolution) &&
++          window->PlayerLedResolutionReason(playerLedStartupResolution.value_or(RES_INVALID),
++                                            preferences.lldvFormat) ==
++              DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL)
++      {
++        const auto caps = window->GetDVOutputCapabilities(nullptr, true);
++        if (caps.hdr10 && !caps.HDR10DepthLimited())
++          DVBRIDGE::UsePlayerLedStartupFallback();
++      }
++    }
+     if (window && (mode == DVBRIDGE_MODE_HDR10_BASIC || mode == DVBRIDGE_MODE_HDR10_EXPERT) &&
+         window->GetDVOutputCapabilities(nullptr, true).HDR10DepthLimited())
+     {
+@@ -4782,16 +4809,16 @@
+   {
+     if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+     {
+-      const double framerate = DVD_TIME_BASE / CDVDCodecUtils::NormalizeFrameduration(
+-                                                   (double)DVD_TIME_BASE * hint.fpsscale /
+-                                                   (hint.fpsrate * (hint.interlaced ? 2 : 1)));
++      const double framerate = streamFrameRate();
+
+       const bool nativeDV = !hint.preferHybridHDR10Plus && WantsNativePresentation(hint);
+       // Disc navigation can reopen video while the GUI is joining this thread.
+       // Let the render thread change the mode without a synchronous GUI message.
+       if (!pMenus)
+       {
+-        RESOLUTION res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
++        const RESOLUTION res = playerLedStartupResolution ? *playerLedStartupResolution :
++            CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate), hint.width,
++                                                   hint.height, !hint.stereo_mode.empty());
+ #ifdef HAVE_DVBRIDGE
+         using HDRSignal = DVBRIDGE::NativeHDRSignal;
+         auto hdrSignal = HDRSignal::None;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -1006,25 +1006,23 @@
+   m_playerPort->VideoParamsChange();
+ }
+
+-namespace
+-{
+-RESOLUTION ChoosePlaybackResolution(const VideoPicture& picture, double fps, bool nativeDV)
++RESOLUTION CRenderManager::ChoosePlaybackResolution(double fps, int width, int height, bool stereo,
++                                                    bool nativeDV, bool atStartup)
+ {
+ #ifdef HAVE_DVBRIDGE
+   const auto advanced = CServiceBroker::GetSettingsComponent()->GetAdvancedSettings();
+-  if (nativeDV && picture.stereoMode.empty() && !CResolutionUtils::HasWhitelist() &&
++  if (nativeDV && !stereo && !CResolutionUtils::HasWhitelist() &&
+       advanced->m_videoAdjustRefreshOverrides.empty())
+     if (const auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+             CServiceBroker::GetWinSystem()))
+-      if (const auto resolution = window->PlayerLedResolution(fps))
++      if (const auto resolution = window->PlayerLedResolution(fps, atStartup))
+         return *resolution;
+ #else
+   (void)nativeDV;
+-#endif
+-  return CResolutionUtils::ChooseBestResolution(fps, picture.iWidth, picture.iHeight,
+-                                                 !picture.stereoMode.empty());
+-}
+-} // namespace
++  (void)atStartup;
++#endif
++  return CResolutionUtils::ChooseBestResolution(fps, width, height, stereo);
++}
+
+ RESOLUTION CRenderManager::GetResolution()
+ {
+@@ -1036,7 +1034,8 @@
+
+   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+   {
+-    res = ChoosePlaybackResolution(m_picture, m_fps, m_nativeDVRate);
++    res = ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
++                                      !m_picture.stereoMode.empty(), m_nativeDVRate);
+   }
+
+   return res;
+@@ -1305,7 +1304,8 @@
+     {
+       if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
+       {
+-        const RESOLUTION res = ChoosePlaybackResolution(m_picture, m_fps, m_nativeDVRate);
++        const RESOLUTION res = ChoosePlaybackResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
++                                      !m_picture.stereoMode.empty(), m_nativeDVRate);
+ #ifdef HAVE_DVBRIDGE
+         // Carry the stream's intent when this later request performs the modeset.
+         const auto previous = DVBRIDGE::guiModeChangeResolution;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+@@ -93,6 +93,8 @@
+   void Render(bool clear, DWORD flags = 0, DWORD alpha = 255, bool gui = true);
+
+   RESOLUTION GetResolution();
++  static RESOLUTION ChoosePlaybackResolution(double fps, int width, int height, bool stereo,
++                                             bool nativeDV, bool atStartup = false);
+   void UpdateResolution();
+   void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
+                                bool nativeDV = false);
+diff --git a/xbmc/dialogs/DVPlaybackModes.cpp b/xbmc/dialogs/DVPlaybackModes.cpp
+--- a/xbmc/dialogs/DVPlaybackModes.cpp
++++ b/xbmc/dialogs/DVPlaybackModes.cpp
+@@ -41,7 +41,7 @@
+
+ namespace
+ {
+-bool ShowLldvFormatMenu(bool forCircuit = false);
++bool ShowLldvFormatMenu(bool forCircuit = false, bool inPlayback = false);
+ struct Choice { int output,method,label; };
+ constexpr Choice dvChoices[]={{4,0,40913},{0,0,40812},
+     {5,0,40914},
+@@ -208,7 +208,7 @@
+           (int(currentOutput)==choice.output &&
+           (choice.output!=1 || currentMethod==choice.method))) current=i;
+     }
+-    CSettingConditions::DVOutputOptions(choiceSetting,options);
++    CSettingConditions::DVOutputOptions(choiceSetting, options, !settingsMenu);
+     DVBRIDGE::DiagnosticLog(LOGINFO,
+         "Playback mode menu: native_source={} source_known={} dv={} hdr10={} hdr10plus={} processing_known={} requested={} hdr10source={}",
+         int(nativeSource), source.sourceKnown, source.isDV, source.isHDR10, source.isHDR10Plus, source.processingKnown,
+@@ -294,7 +294,7 @@
+     auto& selectedOption = options[selected];
+     const auto refreshChoice = [&] {
+       selectedOption.properties.clear();
+-      CSettingConditions::DVOutputOptions(choiceSetting, options);
++      CSettingConditions::DVOutputOptions(choiceSetting, options, !settingsMenu);
+     };
+     const auto has = [&](std::string_view name) {
+       return std::ranges::any_of(selectedOption.properties, [name](const auto& property) {
+@@ -305,7 +305,7 @@
+     if (has("disabled")) return true;
+     if (has("cb1ChooseLldv"))
+     {
+-      if (!ShowLldvFormatMenu(true) || (!settingsMenu && SourceType()!=nativeSource)) return true;
++      if (!ShowLldvFormatMenu(true, !settingsMenu) || (!settingsMenu && SourceType()!=nativeSource)) return true;
+       refreshChoice();
+       if (has("disabled") || has("cb1ChooseLldv")) return true;
+     }
+@@ -346,6 +346,7 @@
+           active.output = static_cast<DVBRIDGE::OutputMode>(choice.output);
+           active.method = choice.method;
+           active.hdr10TransportFallback = false;
++          active.playerLedStartup = false;
+         }
+       }
+ #ifdef CB1_HAS_HDR10_AI
+@@ -424,7 +425,7 @@
+     settings->Save();
+ }
+
+-bool ShowLldvFormatMenu(bool forCircuit)
++bool ShowLldvFormatMenu(bool forCircuit, bool inPlayback)
+ {
+   using namespace DVBRIDGE;
+   const auto status = ReadLldvConnector();
+@@ -434,15 +435,18 @@
+   if (!dialog)
+     return false;
+
+-  const bool usableTiming = status.currentTiming || status.availableTiming;
+-  const auto preferred = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), usableTiming);
+-  const auto requiresForcing = [&status](LldvFormat format) {
+-    return LldvRequiresForcing(format, status.driverFormats, status.forced42210);
++  const bool allowModeSwitch = !inPlayback && status.active == LldvFormat::Auto;
++  const auto preferred = SelectLldvTransport(status, 0, allowModeSwitch).format;
++  const auto requiresForcing = [&status, allowModeSwitch](LldvFormat format) {
++    return LldvRequiresForcing(format, status.driverFormats, status.forced42210) ||
++        (format == LldvFormat::Y422_10 &&
++         SelectLldvTransport(status, LLDV_FORCE_422_10, allowModeSwitch).forced);
+   };
+-  const auto preferenceFor = [&status, &requiresForcing](LldvFormat format) {
++  const auto preferenceFor = [&status, &requiresForcing, allowModeSwitch](LldvFormat format) {
+     if (requiresForcing(format))
+       return LLDV_FORCE_422_10;
+-    if (format == LldvFormat::Y422_12 && status.packed42212)
++    if (format == LldvFormat::Y422_12 &&
++        SelectLldvTransport(status, LLDV_PACKED_422_12, allowModeSwitch).experimentalPacked12)
+       return LLDV_PACKED_422_12;
+     return static_cast<int>(format);
+   };
+@@ -454,8 +458,8 @@
+   dialog->SetUseDetails(!estuary);
+   dialog->EnableButton(!estuary, 41320);
+
+-  const int summary = LldvUnavailableLabel(status, saved, true);
+-  const bool chooseFormat = summary && LldvCanChooseFormat(status);
++  const int summary = LldvUnavailableLabel(status, saved, allowModeSwitch);
++  const bool chooseFormat = summary && LldvCanChooseFormat(status, allowModeSwitch);
+   std::string summaryText = strings.Get(summary ? 41322 : 41321);
+   if (summary)
+     summaryText += '\n' + strings.Get(chooseFormat ? LLDV_CHOOSE_FORMAT_LABEL : summary);
+@@ -502,7 +506,8 @@
+   {
+     const auto format = static_cast<LldvFormat>(i);
+     const bool forced = requiresForcing(format);
+-    const int reason = LldvUnavailableLabel(status, preferenceFor(format), true);
++    const int preference = preferenceFor(format);
++    const int reason = LldvUnavailableLabel(status, preference, allowModeSwitch);
+     const bool disabled = reason != 0 &&
+         (format != LldvFormat::Auto || forCircuit || status.active != LldvFormat::Auto);
+     const auto label = strings.Get(LldvFormatLabel(format, !estuary && forced));
+@@ -510,12 +515,10 @@
+     item.SetProperty("disabled", disabled);
+     if (reason)
+       item.SetLabel2(strings.Get(reason));
+-    else if (format != LldvFormat::Auto && format == status.rejected)
+-      item.SetLabel2(strings.Get(41298));
+     else if (i == 0)
+       item.SetLabel2(preferred == LldvFormat::Auto ? strings.Get(41213)
+           : strings.Get(LldvFormatLabel(preferred, !estuary && requiresForcing(preferred))));
+-    else if (format == LldvFormat::Y422_12 && status.packed42212)
++    else if (preference == LLDV_PACKED_422_12)
+       item.SetLabel2(strings.Get(41342));
+     else if (format == status.active)
+       item.SetLabel2(strings.Get(status.activeForced && !requiresForcing(format) ? 41218 : 41214));
+@@ -525,9 +528,7 @@
+     {
+       if (disabled)
+         item.SetProperty("CB1.LldvFocusNote", strings.Get(reason == 41210 ? 41332 : reason));
+-      else if (format != LldvFormat::Auto && format == status.rejected)
+-        item.SetProperty("CB1.LldvFocusNote", item.GetLabel2());
+-      else if (i == 0 || (format == LldvFormat::Y422_12 && status.packed42212))
++      else if (i == 0 || preference == LLDV_PACKED_422_12)
+         item.SetProperty("CB1.LldvNote", item.GetLabel2());
+       else if (forced)
+         item.SetProperty("CB1.LldvNote", strings.Get(41331));
+@@ -548,7 +549,7 @@
+   const int preference = preferenceFor(format);
+   if ((current.connectorId != status.connectorId || current.edidGeneration != status.edidGeneration) ||
+       ((format != LldvFormat::Auto || forCircuit || current.active != LldvFormat::Auto) &&
+-       LldvUnavailableLabel(current, preference, current.active == LldvFormat::Auto)) ||
++       LldvUnavailableLabel(current, preference, !inPlayback && current.active == LldvFormat::Auto)) ||
+       !settings->SetInt("dvbridge.lldvformatvalue", preference))
+     return false;
+   settings->Save();
+@@ -566,8 +567,7 @@
+   const auto& strings = CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+   if (format != LldvFormat::Auto && LldvUnavailableLabel(status, saved, true))
+     return strings.Get(40851);
+-  return strings.Get(LldvFormatLabel(format,
+-      LldvRequiresForcing(format, status.driverFormats, status.forced42210)));
++  return strings.Get(LldvFormatLabel(format, SelectLldvTransport(status, saved, true).forced));
+ }
+
+ std::string CDVPlaybackModes::SDRGamutLabel()
+diff --git a/xbmc/settings/SettingConditions.cpp b/xbmc/settings/SettingConditions.cpp
+--- a/xbmc/settings/SettingConditions.cpp
++++ b/xbmc/settings/SettingConditions.cpp
+@@ -506,7 +506,7 @@
+
+ #ifdef HAVE_DVBRIDGE
+ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
+-                                         std::vector<IntegerSettingOption>& list)
++                                         std::vector<IntegerSettingOption>& list, bool inPlayback)
+ {
+   // Availability never substitutes or saves a different requested preference.
+   const bool menu=setting->GetId()=="dvbridge.playbackchoice";
+@@ -534,14 +534,19 @@
+   caps.hdr10=available.hdr10;
+   caps.hdr10MaxBpc=available.hdr10MaxBpc;
+   caps.hdr10plus=available.hdr10plus;
+-  caps.playerLed=available.playerLed;
+-  caps.lldvUnavailableLabel=available.lldvUnavailableLabel;
+-  if (menu && window &&
+-      (caps.playerLed || caps.lldvUnavailableLabel == DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL) &&
+-      !window->LldvSupportsPlaybackTiming(CServiceBroker::GetDataCacheCore().GetVideoFps(), true))
++  caps.playerLed = available.playerLed;
++  caps.lldvUnavailableLabel = available.lldvUnavailableLabel;
++  if (window && menu && inPlayback)
+   {
+-    caps.playerLed = false;
+-    caps.lldvUnavailableLabel = 41212; // No compatible HDMI timing.
++    const auto lldv = window->GetDVOutputCapabilities(nullptr, false);
++    caps.playerLed = lldv.playerLed;
++    caps.lldvUnavailableLabel = lldv.lldvUnavailableLabel;
++    if ((caps.playerLed || caps.lldvUnavailableLabel == DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL) &&
++        !window->LldvSupportsPlaybackTiming(CServiceBroker::GetDataCacheCore().GetVideoFps(), true))
++    {
++      caps.playerLed = false;
++      caps.lldvUnavailableLabel = 41212;
++    }
+   }
+   if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
+   {
+diff --git a/xbmc/settings/SettingConditions.h b/xbmc/settings/SettingConditions.h
+--- a/xbmc/settings/SettingConditions.h
++++ b/xbmc/settings/SettingConditions.h
+@@ -24,7 +24,7 @@
+   static void Deinitialize();
+ #ifdef HAVE_DVBRIDGE
+   static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
+-                              std::vector<IntegerSettingOption>& list);
++                              std::vector<IntegerSettingOption>& list, bool inPlayback = false);
+ #endif
+
+   static const CProfile& GetCurrentProfile();
+diff --git a/xbmc/utils/DVBridgeLldv.h b/xbmc/utils/DVBridgeLldv.h
+--- a/xbmc/utils/DVBridgeLldv.h
++++ b/xbmc/utils/DVBridgeLldv.h
+@@ -6,6 +6,8 @@
+ #include <array>
+ #include <cmath>
+ #include <cstdint>
++#include <utility>
++#include <vector>
+
+ namespace DVBRIDGE
+ {
+@@ -258,7 +260,25 @@
+   bool forced{false};
+   uint64_t edidGeneration{};
+   unsigned rgbScanoutBits{8};
++  bool experimentalPacked12{false};
++
++  constexpr bool operator==(const LldvTransport& other) const
++  {
++    return connectorId == other.connectorId && format == other.format && forced == other.forced &&
++        edidGeneration == other.edidGeneration && rgbScanoutBits == other.rgbScanoutBits &&
++        experimentalPacked12 == other.experimentalPacked12;
++  }
+ };
++
++constexpr unsigned LldvTransportBit(const LldvTransport& transport)
++{
++  // Distinguish packed, native deep, forced 10-bit and experimental packed 12-bit.
++  const unsigned path = transport.forced ? 2 : transport.experimentalPacked12 ? 3 :
++      transport.rgbScanoutBits > 8 ? 1 : 0;
++  return 1U << (4 * static_cast<unsigned>(transport.format) + path);
++}
++
++constexpr int LLDV_DRIVER_REJECTED_LABEL = 41298;
+
+ struct LldvConnectorStatus
+ {
+@@ -275,9 +295,12 @@
+   bool availableTiming{false};
+   LldvDisplay display;
+   uint64_t edidGeneration{};
+-  LldvFormat rejected{LldvFormat::Auto};
++  unsigned currentRejected{}, availableRejected{};
++  std::vector<std::pair<int, unsigned>> modeRejections;
+   bool cta93FractionalOnly{};
+   bool packed42212{};
++  bool output42212{};
++  bool activeExperimentalPacked12{};
+   bool rgb16Scanout{};
+ };
+
+@@ -285,64 +308,97 @@
+ {
+   if (format == LldvFormat::Y422_10)
+     return status.rgb10Scanout ? 10 : 8;
+-  if (format == LldvFormat::Y422_12)
+-    return status.rgb16Scanout ? 16 : 8;
+   return LldvUses10Bits(format) ? 10 : 16;
+ }
+
+-inline unsigned LldvAutomaticFormats(const LldvConnectorStatus& status)
+-{
+-  const unsigned formats = status.driverFormats & LLDV_IMPLEMENTED;
+-  // The experimental R615 carrier is an explicit choice, like forced 10-bit.
+-  return status.packed42212 || (status.rgb16Scanout && !dvbridge_lldv_422_12(status.sink)) ?
+-      formats & ~LldvBit(LldvFormat::Y422_12) : formats;
++struct LldvChoice
++{
++  LldvTransport transport;
++  int unavailable{};
++};
++
++inline LldvChoice ResolveLldvTransport(const LldvConnectorStatus& status, int preference,
++                                       bool allowModeSwitch)
++{
++  if (status.display.status != LldvEdidStatus::Ready)
++    return {{}, status.display.status == LldvEdidStatus::UnsupportedGamut ? 41300 :
++        41280 + static_cast<int>(status.display.status)};
++  if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return {{}, 41211};
++
++  const bool timing = status.currentTiming || (allowModeSwitch && status.availableTiming);
++  const unsigned rejected = allowModeSwitch && status.availableTiming ?
++      status.availableRejected : status.currentRejected;
++  const auto check = [&](LldvFormat format, unsigned bits, bool forced = false,
++                         bool packed12 = false) -> LldvChoice {
++    const auto reason = LldvFormatReason(status.sink, format, status.driverFormats, true, forced);
++    if (reason != LldvReason::Ready) return {{}, 41208 + static_cast<int>(reason)};
++    if (!(LldvBit(format) & LLDV_IMPLEMENTED)) return {{}, 41211};
++    if (format == LldvFormat::Y422_12 && (packed12 || bits == 16) &&
++        !dvbridge_lldv_422_12(status.sink))
++      return {{}, 41210};
++    if (!timing) return {{}, 41212};
++    const LldvTransport transport{status.connectorId, format, forced, status.edidGeneration,
++        bits, packed12};
++    if (rejected & LldvTransportBit(transport)) return {{}, LLDV_DRIVER_REJECTED_LABEL};
++    if (packed12 && preference != LLDV_PACKED_422_12)
++      return {{}, LLDV_CHOOSE_FORMAT_LABEL};
++    return {transport, 0};
++  };
++
++  const auto native = [&](LldvFormat format) -> LldvChoice {
++    if (format != LldvFormat::Y422_12)
++      return check(format, LldvScanoutBits(status, format));
++    const auto deep = status.rgb16Scanout ? check(format, 16) : LldvChoice{{}, 41211};
++    if (!deep.unavailable) return deep;
++    if (status.output42212)
++      return check(format, 8);
++    return deep;
++  };
++  const auto format = LldvFormatPreference(preference);
++  if (format != LldvFormat::Auto)
++  {
++    const auto choice = native(format);
++    if (preference == LLDV_FORCE_422_10 && status.forced42210 &&
++        (choice.unavailable == 41211 || choice.unavailable == LLDV_DRIVER_REJECTED_LABEL))
++      return check(format, 8, true);
++    if (format == LldvFormat::Y422_12 && status.packed42212 &&
++        (choice.unavailable == 41211 || choice.unavailable == LLDV_DRIVER_REJECTED_LABEL))
++    {
++      const auto packed = check(format, 8, false, true);
++      return preference == LLDV_PACKED_422_12 || choice.unavailable == 41211 ? packed : choice;
++    }
++    return choice;
++  }
++  // Auto only considers native driver formats. Explicit forcing remains opt-in.
++  int unavailable = 41213;
++  for (const auto candidate : LLDV_PREFERRED)
++  {
++    if (!(status.driverFormats & LldvBit(candidate))) continue;
++    const auto choice = native(candidate);
++    if (!choice.unavailable) return choice;
++    if (choice.unavailable == 41212 || choice.unavailable == LLDV_DRIVER_REJECTED_LABEL)
++      unavailable = choice.unavailable;
++  }
++  return {{}, unavailable};
+ }
+
+ inline int LldvUnavailableLabel(const LldvConnectorStatus& status, int preference,
+                                 bool allowModeSwitch)
+ {
+-  if (status.display.status != LldvEdidStatus::Ready)
+-    return status.display.status == LldvEdidStatus::UnsupportedGamut ? 41300 :
+-        41280 + static_cast<int>(status.display.status);
+-  if (!status.connectorId || (!status.driverFormats && !status.forced42210)) return 41211;
+-  auto format = LldvFormatPreference(preference);
+-  if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), true);
+-  if (format == LldvFormat::Auto) return 41213;
+-  if (format == LldvFormat::Y422_12)
+-  {
+-    if ((status.packed42212 || status.rgb16Scanout) && !dvbridge_lldv_422_12(status.sink))
+-      return 41210;
+-    if (status.packed42212 && preference != LLDV_PACKED_422_12)
+-      return LLDV_CHOOSE_FORMAT_LABEL;
+-  }
+-  const auto reason = LldvFormatReason(status.sink, format, status.driverFormats, true,
+-      preference == LLDV_FORCE_422_10 && status.forced42210);
+-  if (reason != LldvReason::Ready) return 41208 + static_cast<int>(reason);
+-  if (!(LldvBit(format) & LLDV_IMPLEMENTED)) return 41211;
+-  if (!(status.currentTiming || (allowModeSwitch && status.availableTiming))) return 41212;
+-  return 0;
+-}
+-
+-inline bool LldvCanChooseFormat(const LldvConnectorStatus& status)
+-{
+-  return !LldvUnavailableLabel(status, 0, true) ||
+-         !LldvUnavailableLabel(status, LLDV_FORCE_422_10, true) ||
+-         !LldvUnavailableLabel(status, LLDV_PACKED_422_12, true);
++  return ResolveLldvTransport(status, preference, allowModeSwitch).unavailable;
+ }
+
+ inline LldvTransport SelectLldvTransport(const LldvConnectorStatus& status, int preference,
+                                         bool allowModeSwitch = false)
+ {
+-  const bool timing = status.currentTiming || (allowModeSwitch && status.availableTiming);
+-  auto format = LldvFormatPreference(preference);
+-  if (format == LldvFormat::Auto)
+-    format = ChooseLldvFormat(status.sink, LldvAutomaticFormats(status), timing);
+-  if (LldvUnavailableLabel(status, preference, allowModeSwitch) || !(LldvBit(format) & LLDV_IMPLEMENTED))
+-    return {};
+-  return {status.connectorId, format,
+-          LldvRequiresForcing(format, status.driverFormats, status.forced42210), status.edidGeneration,
+-          LldvScanoutBits(status, format)};
++  return ResolveLldvTransport(status, preference, allowModeSwitch).transport;
++}
++
++inline bool LldvCanChooseFormat(const LldvConnectorStatus& status, bool allowModeSwitch)
++{
++  return !LldvUnavailableLabel(status, 0, allowModeSwitch) ||
++         !LldvUnavailableLabel(status, LLDV_FORCE_422_10, allowModeSwitch) ||
++         !LldvUnavailableLabel(status, LLDV_PACKED_422_12, allowModeSwitch);
+ }
+
+ inline const char* LldvCompatibilityReason(const LldvConnectorStatus& status, int preference)
+@@ -354,6 +410,7 @@
+     case 41210: return "format-not-advertised-by-tv";
+     case 41211: return "format-not-supported-by-driver-or-port";
+     case 41212: return "hdmi-timing-unavailable";
++    case LLDV_DRIVER_REJECTED_LABEL: return "atomic-format-rejected";
+     case LLDV_CHOOSE_FORMAT_LABEL: return "experimental-format-not-selected";
+     default: return "no-common-format";
+   }
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -216,6 +216,7 @@
+     m_lldvDisplay = DVBRIDGE::ReadLldvDisplay(edid.data(), edid.size());
+     m_lldvEdidConnector = *connector->GetConnectorId();
+     ++m_lldvEdidGeneration;
++    m_lldvRejectedTimings = {};
+ #endif
+     if (!edid.empty())
+     {
+@@ -983,6 +984,7 @@
+       m_lldvDisplay = DVBRIDGE::ReadLldvDisplay(edid.data(), edid.size());
+       m_lldvEdidConnector = id;
+       ++m_lldvEdidGeneration;
++      m_lldvRejectedTimings = {};
+     }
+   }
+   if (edid == m_displayEdid)
+@@ -1663,6 +1665,34 @@
+ }
+
+ #ifdef HAVE_DVBRIDGE
++namespace
++{
++// Five supported CTA timings, each with or without the optional 16:9 flag.
++int LldvTimingIndex(const drmModeModeInfo* mode, bool cta93FractionalOnly)
++{
++  if (!mode || mode->hdisplay != 3840 || mode->vdisplay != 2160 || mode->vtotal != 2250 ||
++      mode->vsync_start != 2168 || mode->vsync_end != 2178 || mode->hskew || mode->vscan ||
++      (mode->clock != 297000 && mode->clock != 296703) ||
++      (mode->flags & ~DRM_MODE_FLAG_PIC_AR_16_9) !=
++          (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC))
++    return -1;
++
++  if (cta93FractionalOnly && (mode->htotal != 5500 || mode->clock != 296703))
++    return -1;
++
++  const int aspect = (mode->flags & DRM_MODE_FLAG_PIC_AR_16_9) ? 5 : 0;
++  const int fractional = mode->clock == 296703 ? 1 : 0;
++  if (mode->htotal == 5500 && mode->hsync_start == 5116 && mode->hsync_end == 5204)
++    return aspect + fractional;
++  if (mode->htotal == 5280 && mode->hsync_start == 4896 && mode->hsync_end == 4984 &&
++      !fractional)
++    return aspect + 2;
++  if (mode->htotal == 4400 && mode->hsync_start == 4016 && mode->hsync_end == 4104)
++    return aspect + 3 + fractional;
++  return -1;
++}
++} // namespace
++
+ bool CWinSystemGbm::FlipPlayerLedPage(CDVBridgeState& state,
+                                      const DVBRIDGE::LldvTransport& packed, bool async,
+                                      gbm_bo* carrier, std::shared_ptr<void> lease)
+@@ -1675,21 +1705,15 @@
+   if (!m_GBM || drm->IsSDRRestorePending()) return reject();
+
+   const auto status = GetLldvConnectorStatus();
+-  if (!packed.connectorId || packed.connectorId != status.connectorId ||
+-      packed.edidGeneration != status.edidGeneration || status.display.status != LldvEdidStatus::Ready ||
+-      !(LldvBit(packed.format) & LLDV_IMPLEMENTED) ||
+-      packed.rgbScanoutBits != LldvScanoutBits(status, packed.format) ||
+-      packed.forced != LldvRequiresForcing(packed.format, status.driverFormats, status.forced42210) ||
+-      (packed.format == LldvFormat::Y422_12 && (status.packed42212 || status.rgb16Scanout) &&
+-       !dvbridge_lldv_422_12(status.sink)) ||
+-      LldvFormatReason(status.sink, packed.format, status.driverFormats,
+-                       status.currentTiming, packed.forced) != LldvReason::Ready)
++  const int preference = packed.forced ? LLDV_FORCE_422_10 :
++      packed.experimentalPacked12 ? LLDV_PACKED_422_12 : static_cast<int>(packed.format);
++  if (!packed.connectorId || !(packed == SelectLldvTransport(status, preference)))
+     return reject();
+
+   const char* name = packed.rgbScanoutBits > 8 ? LldvNativeEnumName(packed.format) :
+       packed.forced ? "YCbCr 4:2:2 10 bits forced" :
+       packed.format == LldvFormat::Y422_10 ? "YCbCr 4:2:2 10 useful bits" :
+-      status.packed42212 ? "YCbCr 4:2:2 12 bits packed" : "YCbCr 4:2:2 12 bits";
++      packed.experimentalPacked12 ? "YCbCr 4:2:2 12 bits packed" : "YCbCr 4:2:2 12 bits";
+   auto* connector = drm->GetConnector();
+   const auto value = connector ? connector->GetPropertyEnumValue("CB1_LLDV_FORMAT", name) :
+                                  std::nullopt;
+@@ -1711,22 +1735,31 @@
+       state.StagePlayerLed(*drm, *value, packed.rgbScanoutBits == 16 ? 12 : packed.rgbScanoutBits) && StageTransportPreferences();
+   const bool stable = status.timingCommitted && status.active == packed.format &&
+                       status.activeForced == packed.forced &&
+-                      status.activeRgbScanoutBits == packed.rgbScanoutBits;
++                      status.activeRgbScanoutBits == packed.rgbScanoutBits &&
++                      status.activeExperimentalPacked12 == packed.experimentalPacked12;
+   if (ready)
+   {
+     drm->StageHDR10Plus(std::nullopt, 0);
+     if (!stable)
+       drm->AllowModeset();
+   }
+-  const bool accepted = drm->FlipPageTransactional(ready ? bo : nullptr, false, async && stable);
+-  if (ready && !stable)
++  const auto* mode = ready && !stable ? drm->GetSelectedMode() : nullptr;
++  const int timing = LldvTimingIndex(mode, status.cta93FractionalOnly);
++  const int clock = mode ? mode->clock : 0;
++  const int htotal = mode ? mode->htotal : 0;
++  bool formatRejected = false;
++  const bool accepted = drm->FlipPageTransactional(ready ? bo : nullptr, false, async && stable,
++      ready && !stable && timing >= 0 ? &formatRejected : nullptr);
++  if (formatRejected)
+   {
+     std::lock_guard lock(m_lldvEdidMutex);
+-    m_lldvRejected = accepted ? LldvTransport{} : packed;
++    if (packed.connectorId == m_lldvEdidConnector && packed.edidGeneration == m_lldvEdidGeneration)
++      m_lldvRejectedTimings[timing] |= LldvTransportBit(packed);
+   }
+   if (!accepted && !stable)
+-    CLog::Log(LOGWARNING, "CB1 LLDV: DRM commit refused connector={} edid_generation={} format={} forced={} staged={}",
+-              packed.connectorId, packed.edidGeneration, name, packed.forced, ready);
++    CLog::Log(LOGWARNING, "CB1 LLDV: DRM commit refused connector={} edid_generation={} format={} forced={} staged={} clock={} htotal={} format_rejected={}",
++              packed.connectorId, packed.edidGeneration, name, packed.forced, ready, clock, htotal,
++              formatRejected);
+   if (!drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(accepted);
+   return accepted;
+ }
+@@ -1743,9 +1776,10 @@
+   return SDRBT2020Support::Available;
+ }
+
+-DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus() const
++DVBRIDGE::LldvConnectorStatus CWinSystemGbm::GetLldvConnectorStatus(bool snapshot) const
+ {
+   DVBRIDGE::LldvConnectorStatus status;
++  decltype(m_lldvRejectedTimings) rejectedTimings{};
+   auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
+   if (connector && connector->IsConnected())
+   {
+@@ -1753,10 +1787,10 @@
+     status.connectorId = *connector->GetConnectorId();
+     status.edidGeneration = m_lldvEdidGeneration;
+     if (status.connectorId == m_lldvEdidConnector)
++    {
+       status.display = m_lldvDisplay;
+-    if (status.connectorId == m_lldvRejected.connectorId &&
+-        status.edidGeneration == m_lldvRejected.edidGeneration)
+-      status.rejected = m_lldvRejected.format;
++      rejectedTimings = m_lldvRejectedTimings;
++    }
+     status.sink = status.display.sink;
+   }
+   if (status.connectorId && connector->SupportsProperty("CB1_LLDV_FORMAT"))
+@@ -1801,7 +1835,8 @@
+       }
+     }
+
+-    status.packed42212 = packed12.has_value() && !status.rgb16Scanout && !output12;
++    status.packed42212 = packed12.has_value();
++    status.output42212 = output12.has_value();
+     if (native10) status.driverFormats |= LldvBit(LldvFormat::Y422_10);
+     if (output12 || status.packed42212) status.driverFormats |= LldvBit(LldvFormat::Y422_12);
+     status.forced42210 = forced10.has_value();
+@@ -1809,7 +1844,10 @@
+     if (active && active == native10)
+       status.active = LldvFormat::Y422_10;
+     else if (active && (active == output12 || active == packed12))
++    {
+       status.active = LldvFormat::Y422_12;
++      status.activeExperimentalPacked12 = active == packed12;
++    }
+     else if (active && active == forced10)
+     {
+       status.active = LldvFormat::Y422_10;
+@@ -1817,23 +1855,28 @@
+     }
+     status.cta93FractionalOnly =
+         connector->GetPropertyValue("CB1_LLDV_CTA93_23976_ONLY").value_or(0);
+-    const auto usable = [cta93FractionalOnly = status.cta93FractionalOnly](const drmModeModeInfo* mode) {
+-      return mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
+-                           mode->vtotal == 2250 &&
+-                           ((mode->htotal == 5500 && mode->hsync_start == 5116 && mode->hsync_end == 5204) ||
+-                            (mode->htotal == 5280 && mode->hsync_start == 4896 && mode->hsync_end == 4984 &&
+-                             mode->clock == 297000) ||
+-                            (mode->htotal == 4400 && mode->hsync_start == 4016 && mode->hsync_end == 4104)) &&
+-                           mode->vsync_start == 2168 && mode->vsync_end == 2178 &&
+-                           mode->hskew == 0 && mode->vscan == 0 &&
+-                           (mode->clock == 297000 || mode->clock == 296703) &&
+-                           (!cta93FractionalOnly || (mode->htotal == 5500 && mode->clock == 296703)) &&
+-                           (mode->flags & ~DRM_MODE_FLAG_PIC_AR_16_9) ==
+-                               (DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC);
+-    };
+-    status.currentTiming = usable(m_DRM->GetSelectedMode());
+-    for (int i = 0; i < connector->GetModesCount() && !status.availableTiming; ++i)
+-      status.availableTiming = usable(connector->GetModeForIndex(i));
++    const int timing = LldvTimingIndex(m_DRM->GetSelectedMode(), status.cta93FractionalOnly);
++    status.currentTiming = timing >= 0;
++    if (status.currentTiming)
++      status.currentRejected = rejectedTimings[timing];
++    // A format is refused for mode-switch admission only if every eligible
++    // timing refused it. The exact target is checked before playback starts.
++    unsigned rejectedInEveryMode = status.currentTiming ? status.currentRejected : ~0U;
++    for (int i = 0; i < connector->GetModesCount(); ++i)
++    {
++      const int available =
++          LldvTimingIndex(connector->GetModeForIndex(i), status.cta93FractionalOnly);
++      if (available < 0)
++        continue;
++      status.availableTiming = true;
++      rejectedInEveryMode &= rejectedTimings[available];
++      if (snapshot)
++        status.modeRejections.emplace_back(i, rejectedTimings[available]);
++      if (!snapshot && !rejectedInEveryMode)
++        break;
++    }
++    if (status.availableTiming)
++      status.availableRejected = rejectedInEveryMode;
+     status.connectorId = *connector->GetConnectorId();
+     const auto* atomic = dynamic_cast<const CDRMAtomic*>(m_DRM.get());
+     status.timingCommitted = status.currentTiming && atomic && atomic->IsActive() &&
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.h b/xbmc/windowing/gbm/WinSystemGbm.h
+--- a/xbmc/windowing/gbm/WinSystemGbm.h
++++ b/xbmc/windowing/gbm/WinSystemGbm.h
+@@ -113,7 +113,7 @@
+ #ifdef HAVE_DVBRIDGE
+   enum class SDRBT2020Support { Available, Display, Driver };
+   SDRBT2020Support GetSDRBT2020Support() const;
+-  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus() const;
++  DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus(bool snapshot = false) const;
+   bool FlipPlayerLedPage(CDVBridgeState& state, const DVBRIDGE::LldvTransport& packed,
+                          bool async = false, gbm_bo* carrier = nullptr,
+                          std::shared_ptr<void> lease = {});
+@@ -272,7 +272,7 @@
+   DVBRIDGE::LldvDisplay m_lldvDisplay;
+   uint32_t m_lldvEdidConnector{};
+   uint64_t m_lldvEdidGeneration{};
+-  DVBRIDGE::LldvTransport m_lldvRejected;
++  std::array<unsigned, 10> m_lldvRejectedTimings{};
+ #endif
+ };
+
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -58,6 +58,7 @@
+
+ #include <mutex>
+ #include <algorithm>
++#include <charconv>
+ #include <cmath>
+ #include <ctime>
+ #include <chrono>
+@@ -360,9 +361,9 @@
+       !m_DRM->SetVideoMode(res,nullptr)) return false;
+   // Admission sees the staged timing. Output telemetry still requires a commit.
+   {
+-    const auto status = GetLldvConnectorStatus();
++    auto status = GetLldvConnectorStatus(true);
+     std::lock_guard lock(m_dvCapabilityMutex);
+-    m_dvLldvStatus = status;
++    m_dvLldvStatus = std::move(status);
+   }
+   m_modeAnnouncement.Held();
+   DVBRIDGE::DiagnosticLog(LOGINFO,"CB1 HDMI transition: mode_selected={}x{}@{:.3f} commit=deferred",
+@@ -956,6 +957,7 @@
+     // use the same acquire/retire fences as the other CB1 circuits.
+     const bool asynchronous = status.timingCommitted && status.active == transport.format &&
+         status.activeForced == transport.forced && status.activeRgbScanoutBits == transport.rgbScanoutBits &&
++        status.activeExperimentalPacked12 == transport.experimentalPacked12 &&
+         !drm->HasPendingRequest() &&
+         CreateCB1GPUFence(submission);
+     if (m_eglContext.TrySwapBuffers())
+@@ -963,6 +965,7 @@
+       AnnounceCB1Mode(true);
+       drm->SetCB1PresentationPts(m_preparedRenderPts);
+       accepted = FlipPlayerLedPage(m_dvState, transport, asynchronous);
++      if (!accepted) RefreshPlayerLedRejection(transport);
+       CompleteCB1Mode(accepted, true);
+     }
+     else if (asynchronous)
+@@ -1005,9 +1008,7 @@
+   }
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   bool accepted = false;
+-  if (drm && transport.connectorId && transport.connectorId == requested.connectorId &&
+-      transport.format == requested.format && transport.forced == requested.forced &&
+-      transport.edidGeneration == requested.edidGeneration)
++  if (drm && transport.connectorId && transport == requested)
+   {
+     const int prior = drm->TakeOutFenceFd();
+     if (prior >= 0) close(prior);
+@@ -1015,6 +1016,7 @@
+     AnnounceCB1Mode(true);
+     drm->SetCB1PresentationPts(output->renderPts);
+     accepted = FlipPlayerLedPage(m_dvState, transport, true, output->buffer, std::move(output->lease));
++    if (!accepted) RefreshPlayerLedRejection(transport);
+     CompleteCB1Mode(accepted, true);
+   }
+   else if (output->acquire >= 0)
+@@ -1033,6 +1035,20 @@
+   }
+   m_dvActivating = true;
+   RejectDVOutputSurface();
++}
++
++void CWinSystemGbmGLESContext::RefreshPlayerLedRejection(const DVBRIDGE::LldvTransport& transport)
++{
++  auto status = GetLldvConnectorStatus(true);
++  if (status.connectorId != transport.connectorId || status.edidGeneration != transport.edidGeneration ||
++      !(status.currentRejected & DVBRIDGE::LldvTransportBit(transport)))
++    return;
++
++  // Retire this carrier before Auto prepares another format on the same mode.
++  if (DVBRIDGE::SelectLldvTransport(status, m_dvSelection.lldvFormat).connectorId)
++    m_dvSuperseded = true;
++  std::lock_guard lock(m_dvCapabilityMutex);
++  m_dvLldvStatus = std::move(status);
+ }
+
+ bool CWinSystemGbmGLESContext::CompleteDVBridgePage(int timeoutMs)
+@@ -1057,7 +1073,9 @@
+     m_dvSuperseded = true;
+     return false;
+   }
+-  if (!m_dvBridge || !m_dvBridge->ConfirmPlayerLed(frame, status)) return false;
++  if (!m_dvBridge || status.activeExperimentalPacked12 != frame.transport.experimentalPacked12 ||
++      !m_dvBridge->ConfirmPlayerLed(frame, status))
++    return false;
+   const auto& submission = frame.submission;
+   PublishVideoSource(true, submission.sourceSideData);
+   m_previousSourceStream = submission.identity.stream;
+@@ -1729,7 +1747,7 @@
+
+ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
+ {
+-  const auto lldvStatus = GetLldvConnectorStatus();
++  const auto lldvStatus = GetLldvConnectorStatus(true);
+   const auto previous = [&] {
+     std::lock_guard lock(m_dvCapabilityMutex);
+     auto prior = m_dvLldvStatus;
+@@ -1861,11 +1879,11 @@
+          ((!requireCurrentMode || m_dvLldvStatus.currentTiming) && std::abs(fps - 24000.0 / 1001) < 0.01);
+ }
+
+-std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double fps) const
++std::optional<RESOLUTION> CWinSystemGbmGLESContext::PlayerLedResolution(double fps, bool atStartup) const
+ {
+   const auto preferences = DVBRIDGE::FrameOutputSettings();
+   if (preferences.output != DVBRIDGE::OutputMode::PlayerLed ||
+-      preferences.hdr10TransportFallback || !std::isfinite(fps) ||
++      preferences.hdr10TransportFallback || !std::isfinite(fps) || !LldvSupportsPlaybackTiming(fps) ||
+       !GetDVOutputCapabilities(nullptr, preferences, true).playerLed)
+     return {};
+   constexpr std::array rates{24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0};
+@@ -1876,6 +1894,7 @@
+   const double wanted = *rate;
+
+   const auto& settings = CDisplaySettings::GetInstance();
++  std::optional<RESOLUTION> rejected;
+   for (size_t index = RES_DESKTOP; index < settings.ResolutionInfoSize(); ++index)
+   {
+     const auto& mode = settings.GetResolutionInfo(index);
+@@ -1883,9 +1902,37 @@
+         mode.iScreenWidth == 3840 && mode.iScreenHeight == 2160 &&
+         std::abs(mode.fRefreshRate - wanted) < 0.01 &&
+         !(mode.dwFlags & (D3DPRESENTFLAG_MODEMASK)))
+-      return static_cast<RESOLUTION>(index);
+-  }
+-  return {};
++    {
++      const auto target = static_cast<RESOLUTION>(index);
++      const int reason = PlayerLedResolutionReason(target, preferences.lldvFormat);
++      if (!reason) return target;
++      if (atStartup && !rejected && reason == DVBRIDGE::LLDV_DRIVER_REJECTED_LABEL)
++        rejected = target;
++    }
++  }
++  return rejected;
++}
++
++int CWinSystemGbmGLESContext::PlayerLedResolutionReason(RESOLUTION resolution, int preference) const
++{
++  std::lock_guard lock(m_dvCapabilityMutex);
++  if (resolution == RES_INVALID)
++    return DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus, preference, false);
++
++  const auto& id = CDisplaySettings::GetInstance().GetResolutionInfo(resolution).strId;
++  int modeIndex = -1;
++  const auto end = id.data() + id.size();
++  const auto parsed = std::from_chars(id.data(), end, modeIndex);
++  if (parsed.ec != std::errc{} || parsed.ptr != end || modeIndex < 0)
++    return 41212;
++  const auto& modes = m_dvLldvStatus.modeRejections;
++  const auto mode = std::ranges::find(modes, modeIndex, &std::pair<int, unsigned>::first);
++  if (mode == modes.end())
++    return 41212;
++  auto target = m_dvLldvStatus;
++  target.currentTiming = true;
++  target.currentRejected = mode->second;
++  return DVBRIDGE::LldvUnavailableLabel(target, preference, false);
+ }
+
+ bool CWinSystemGbmGLESContext::CompleteDVModeSwitch(const VideoPicture& picture)
+@@ -1945,10 +1992,10 @@
+   caps.lldvRgbScanoutBits = lldvTransport.rgbScanoutBits;
+   caps.lldvUnavailableLabel = DVBRIDGE::LldvUnavailableLabel(m_dvLldvStatus,
+       preferences.lldvFormat, allowModeSwitch);
++  if (!caps.playerLed && DVBRIDGE::LldvCanChooseFormat(m_dvLldvStatus, allowModeSwitch))
++    caps.lldvUnavailableLabel = DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL;
+   if (allowModeSwitch)
+   {
+-    if (!caps.playerLed && DVBRIDGE::LldvCanChooseFormat(m_dvLldvStatus))
+-      caps.lldvUnavailableLabel = DVBRIDGE::LLDV_CHOOSE_FORMAT_LABEL;
+     caps.nativeDV = m_dvAvailableNativeDV;
+     caps.hdr10 = m_dvAvailableHDR10;
+   }
+diff --git a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -97,7 +97,8 @@
+       bool allowModeSwitch = false) const;
+   bool CanRetainDVSource() const;
+   bool CompleteDVModeSwitch(const VideoPicture& picture);
+-  std::optional<RESOLUTION> PlayerLedResolution(double fps) const;
++  std::optional<RESOLUTION> PlayerLedResolution(double fps, bool atStartup = false) const;
++  int PlayerLedResolutionReason(RESOLUTION resolution, int preference) const;
+   bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
+   bool DVModeSwitchDeferred()
+   {
+@@ -219,6 +220,7 @@
+ #ifdef HAVE_DVBRIDGE
+   bool PresentPlayerLedFrame();
+   void PresentPlayerLedCpu(const DVBRIDGE::LldvTransport& transport);
++  void RefreshPlayerLedRejection(const DVBRIDGE::LldvTransport& transport);
+   bool CompleteDVBridgePage(int timeoutMs = 0);
+   bool FinishPlayerLedFrame(const CDVBridgeGLES::PlayerLedFrame& frame, double pts);
+   std::optional<CDVBridgeGLES::PlayerLedFrame> m_playerLedPage;
+diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.cpp b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.cpp
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.cpp
+@@ -245,7 +245,8 @@
+   return true;
+ }
+
+-bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
++bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict,
++                                bool* lldvTestRejected)
+ {
+   CDRMCrtc* oldCrtc = m_old_crtc;
+   const auto reject = [&](const char* stage, int error) {
+@@ -399,10 +400,13 @@
+   auto ret = TestAtomicFrame(flags, frameMetadata);
+   if (ret < 0)
+   {
+-    const int testError = errno;
++    // libdrm returns a negative errno from the ioctl and -1 for some local failures.
++    const int testError = ret == -1 ? errno : -ret;
+     if (strict || m_req->sdrRestore || frameMetadata || m_colorRangeTransition ||
+         (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
+     {
++      if (lldvTestRejected && !m_req->sdrRestore)
++        *lldvTestRejected = testError == EINVAL || testError == EOPNOTSUPP;
+       return reject("atomic-test", testError);
+     }
+     CLog::LogF(LOGERROR,
+@@ -614,8 +618,11 @@
+   return true;
+ }
+
+-bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore, bool async)
+-{
++bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore, bool async,
++                                      bool* lldvTestRejected)
++{
++  if (lldvTestRejected)
++    *lldvTestRejected = false;
+   if (m_cb1Pending) return false;
+   // The window owns the bounded retry decision after coherent restoration.
+   m_dvRestoring = restore;
+@@ -645,7 +652,7 @@
+   const int flags = (m_need_modeset || m_dvActivating || restore)
+                         ? DRM_MODE_ATOMIC_ALLOW_MODESET :
+                             asynchronous ? DRM_MODE_ATOMIC_NONBLOCK : 0;
+-  const bool accepted = DrmAtomicCommit(fb, flags, true, false, true);
++  const bool accepted = DrmAtomicCommit(fb, flags, true, false, true, restore ? nullptr : lldvTestRejected);
+   if (!accepted || !asynchronous)
+   {
+     ResetCB1PresentationTime();
+diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.h
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
+@@ -60,7 +60,8 @@
+   void DestroyDrm() override;
+   bool SupportsFencing() override { return true; }
+   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
+-  bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false, bool async = false);
++  bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false, bool async = false,
++                             bool* lldvTestRejected = nullptr);
+   bool FlipPageWithHDR10Metadata(struct gbm_bo* bo, uint32_t blob);
+   bool HasPendingCB1Page() const { return m_cb1Pending; }
+   bool HasPendingRequest() const { return m_need_modeset || (m_req && !m_req->Empty()); }
+@@ -103,7 +104,7 @@
+   bool m_hdr10plusClearRequired{};
+   void AcceptHDR10Plus(bool enabled);
+   bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
+-                       bool strict = false);
++                       bool strict = false, bool* lldvTestRejected = nullptr);
+   void FinishRequest(bool accepted);
+   DVBRIDGE::OutputRetry m_dvRetry;
+   bool m_dvLinkKnown{false};

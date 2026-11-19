@@ -1,0 +1,41 @@
+diff --git a/xbmc/windowing/gbm/GBMUtils.h b/xbmc/windowing/gbm/GBMUtils.h
+--- a/xbmc/windowing/gbm/GBMUtils.h
++++ b/xbmc/windowing/gbm/GBMUtils.h
+@@ -143,6 +143,8 @@
+        * @return CGBMSurfaceBuffer* A pointer to a CGBMSurfaceBuffer object
+        */
+       CGBMSurfaceBuffer& LockFrontBuffer();
++      // Reuse the front buffer when the drawable has not swapped again.
++      gbm_bo* GetLockedFrontBuffer() const;
+ 
+       // Blocking atomic presentation only: retain the current scanout on failure.
+       gbm_bo* LockTransactionalBuffer();
+diff --git a/xbmc/windowing/gbm/GBMUtils.cpp b/xbmc/windowing/gbm/GBMUtils.cpp
+--- a/xbmc/windowing/gbm/GBMUtils.cpp
++++ b/xbmc/windowing/gbm/GBMUtils.cpp
+@@ -114,6 +114,13 @@
+   return *m_buffers.back();
+ }
+ 
++gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::GetLockedFrontBuffer() const
++{
++  if (!m_buffers.empty())
++    return m_buffers.back()->Get();
++  return m_scanoutBuffer ? m_scanoutBuffer->Get() : nullptr;
++}
++
+ CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer::CGBMSurfaceBuffer(gbm_surface* surface)
+   : m_surface(surface), m_buffer(gbm_surface_lock_front_buffer(surface))
+ {
+diff --git a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp
+@@ -431,7 +431,7 @@
+   if (!m_dvOutputSurface && HasFloatOutput())
+   {
+     auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+-    if (!drm || !drm->TestFramebuffer(m_GBM->GetDevice().GetSurface().LockFrontBuffer().Get()))
++    if (!drm || !drm->TestFramebuffer(m_GBM->GetDevice().GetSurface().GetLockedFrontBuffer()))
+       return reject();
+   }
+   // No new drawable exists when only a same-format policy value changes.

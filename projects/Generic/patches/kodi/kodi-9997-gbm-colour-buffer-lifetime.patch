@@ -1,0 +1,59 @@
+From: CB1 backport maintainers
+Subject: [PATCH] GBM: retain accepted scanout through refused colour requests
+
+Colour-changing TEST_ONLY failures retain the previous framebuffer. Reuse
+the existing transactional GBM buffer owner for those requests so rejected
+frames cannot exhaust the ordinary FIFO and unlock the displayed buffer.
+Complete replacements synchronously before retiring buffers; ordinary
+presentation keeps its existing asynchronous path. Preserve a pending
+buffer owned by another caller and retry after it retires.
+
+diff --git a/xbmc/windowing/gbm/WinSystemGbm.cpp b/xbmc/windowing/gbm/WinSystemGbm.cpp
+--- a/xbmc/windowing/gbm/WinSystemGbm.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbm.cpp
+@@ -1091,14 +1091,30 @@
+   if (!ConnectorPreferencesAllowed())
+     DeferConnectorPreferences();
+ 
++  auto atomic = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
++  const bool colourTransition = rendered && atomic && atomic->HasColorRangeTransition();
+   struct gbm_bo* bo = nullptr;
+ 
+   if (rendered)
+   {
+-    bo = m_GBM->GetDevice().GetSurface().LockFrontBuffer().Get();
+-  }
+-
+-  m_DRM->FlipPage(bo, rendered, videoLayer, async);
++    auto& surface = m_GBM->GetDevice().GetSurface();
++    bo = colourTransition ? surface.LockTransactionalBuffer() : surface.LockFrontBuffer().Get();
++    if (colourTransition && !bo)
++    {
++      if (auto gui = CServiceBroker::GetGUI()) gui->GetWindowManager().MarkDirty();
++      return;
++    }
++  }
++
++  // A refused colour request keeps the old scanout. Release its GBM buffers
++  // only after a blocking replacement has completed, as in CB1 restoration.
++  m_DRM->FlipPage(bo, rendered, videoLayer, colourTransition ? false : async);
++  if (colourTransition)
++  {
++    auto& surface = m_GBM->GetDevice().GetSurface();
++    surface.CompleteTransactionalBuffer(atomic->LastPageAccepted());
++    if (atomic->LastPageAccepted()) surface.EndTransactionalMode();
++  }
+ 
+   if (ConnectorPreferencesAllowed())
+   {
+diff --git a/xbmc/windowing/gbm/drm/DRMAtomic.h b/xbmc/windowing/gbm/drm/DRMAtomic.h
+--- a/xbmc/windowing/gbm/drm/DRMAtomic.h
++++ b/xbmc/windowing/gbm/drm/DRMAtomic.h
+@@ -54,6 +54,7 @@
+   bool IsActive() const { return m_active; }
+   void RequestModeset() override { m_need_modeset = true; }
+   bool LastCommitFellBack() const override { return m_commitFellBack; }
++  bool HasColorRangeTransition() const { return m_colorRangeTransition; }
+   void AllowModeset() { m_need_modeset = true; }
+   bool InitDrm() override;
+   void DestroyDrm() override;

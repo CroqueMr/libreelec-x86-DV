@@ -1,0 +1,303 @@
+Subject: [PATCH] Blu-ray: draw UHD disc menus as the HDR graphics they are
+
+A UHD Blu-ray authors its graphics in the dynamic range of the video they
+accompany. Over HDR10 or Dolby Vision video, BD-J images and HDMV palettes
+hold BT.2020 PQ code values. The Call of the Wild names every menu image
+*_BT2020_HDR and Avatar: Fire and Ash *_bt2020_hdr, and neither disc
+carries SDR art. Kodi decoded these as BT.709 sRGB and sent them through
+the GUI composite at 203 nit reference white, so a menu authored at about
+283 nits (code 157/255) showed at 68 nits, and its BT.2020 colours were
+treated as BT.709 and washed out.
+
+Flag the disc's menu graphics as PQ (m_isHDROverlay) while the play item
+being played carries HDR video (its primary video stream's libbluray
+dynamic_range_type). HDMV palettes then use the BT.2020 limited-range
+matrix. A BD-J page drawn before the play item that says what it is is
+flagged again on the next flush, or sent again when the play item changes.
+
+Menus then take the route HDR PGS already takes:
+- Kodi's HDR output draws them straight into the PQ back buffer.
+- CB1's Dolby Vision circuits draw them into the PQ subtitle layer, which
+  each circuit composes. They no longer depend on the SDR GUI being
+  composed.
+- SDR output converts them to sRGB.
+BD-J pixels are straight-alpha ARGB rather than a palette. They get the
+same limited-range and sRGB conversions as a PQ palette, with each
+distinct colour converted once.
+
+Over SDR video nothing changes.
+
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+index bacd4d2..4c9976a 100644
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+@@ -678,6 +678,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
+     {
+       m_clip = &m_titleInfo->clips[m_event.param];
+       UpdateClipInfo(m_event.param);
++      UpdateGraphicsDynamicRange();
+     }
+     break;
+ 
+@@ -1001,11 +1002,24 @@ static uint8_t  clamp(double v)
+   return (v) > 255.0 ? 255 : ((v) < 0.0 ? 0 : static_cast<uint32_t>((v + 0.5)));
+ }
+ 
+-static uint32_t build_rgba(const BD_PG_PALETTE_ENTRY &e)
++static uint32_t build_rgba(const BD_PG_PALETTE_ENTRY &e, bool bt2020)
+ {
+-  double r = 1.164 * (e.Y - 16)                        + 1.596 * (e.Cr - 128);
+-  double g = 1.164 * (e.Y - 16) - 0.391 * (e.Cb - 128) - 0.813 * (e.Cr - 128);
+-  double b = 1.164 * (e.Y - 16) + 2.018 * (e.Cb - 128);
++  double r, g, b;
++  if (bt2020)
++  {
++    // BT.2020 non-constant luminance, limited range: the PQ code values of an HDR palette.
++    constexpr double y = 255.0 / 219.0;
++    constexpr double c = 255.0 / 224.0;
++    r = y * (e.Y - 16)                                   + 1.4746  * c * (e.Cr - 128);
++    g = y * (e.Y - 16) - 0.16455 * c * (e.Cb - 128) - 0.57135 * c * (e.Cr - 128);
++    b = y * (e.Y - 16) + 1.8814  * c * (e.Cb - 128);
++  }
++  else
++  {
++    r = 1.164 * (e.Y - 16)                        + 1.596 * (e.Cr - 128);
++    g = 1.164 * (e.Y - 16) - 0.391 * (e.Cb - 128) - 0.813 * (e.Cr - 128);
++    b = 1.164 * (e.Y - 16) + 2.018 * (e.Cb - 128);
++  }
+   return static_cast<uint32_t>(e.T)      << PIXEL_ASHIFT
+        | static_cast<uint32_t>(clamp(r)) << PIXEL_RSHIFT
+        | static_cast<uint32_t>(clamp(g)) << PIXEL_GSHIFT
+@@ -1114,7 +1128,65 @@ bool CDVDInputStreamBluray::PlaneShows(const SPlane& plane)
+ void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)
+ {
+ #if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  MatchGraphicsDynamicRange(updated.o);
+   updated.committed = updated.o;
++  SendMenuOverlays(pts);
++  // PG does not change committed IG; avoid rescanning it for subtitle-only updates.
++  if (&updated == &m_planes[1] || m_planes[1].committed.empty())
++    m_menuShows = PlaneShows(m_planes[1]);
++#endif
++}
++
++//! A UHD disc authors its graphics in the dynamic range of the video they accompany: over HDR10
++//! or Dolby Vision video its BD-J images and HDMV palettes hold BT.2020 PQ code values.
++static bool IsHdrGraphicsClip(const BLURAY_CLIP_INFO& clip)
++{
++  return clip.video_stream_count > 0 && clip.video_streams &&
++         clip.video_streams[0].dynamic_range_type != BLURAY_DYNAMIC_RANGE_SDR;
++}
++
++void CDVDInputStreamBluray::MatchGraphicsDynamicRange(SOverlays& overlays) const
++{
++#if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  // A BD-J image is the disc's own code values, so only its flag can be out of date. A page drawn
++  // before the play item that says what it is gets a copy: what was sent stays immutable.
++  for (SOverlay& overlay : overlays)
++  {
++    if (!overlay->palette.empty() || overlay->m_isHDROverlay == m_hdrGraphics)
++      continue;
++    auto copy = std::make_shared<CDVDOverlayImage>(*overlay, overlay->x, overlay->y,
++                                                   overlay->width, overlay->height);
++    copy->m_isHDROverlay = m_hdrGraphics;
++    overlay = copy;
++  }
++#endif
++}
++
++void CDVDInputStreamBluray::UpdateGraphicsDynamicRange()
++{
++#if(BD_OVERLAY_INTERFACE_VERSION >= 2)
++  if (!m_clip || IsHdrGraphicsClip(*m_clip) == m_hdrGraphics)
++    return;
++  m_hdrGraphics = !m_hdrGraphics;
++  CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - disc graphics are {}",
++            m_hdrGraphics ? "BT.2020 PQ" : "SDR");
++
++  bool shown = false;
++  for (SPlane& plane : m_planes)
++  {
++    MatchGraphicsDynamicRange(plane.o);
++    MatchGraphicsDynamicRange(plane.committed);
++    shown = shown || !plane.committed.empty();
++  }
++  // libbluray will not draw a still BD-J page again, so send it as what it now is.
++  if (shown)
++    SendMenuOverlays(0);
++#endif
++}
++
++void CDVDInputStreamBluray::SendMenuOverlays(int64_t pts)
++{
++#if(BD_OVERLAY_INTERFACE_VERSION >= 2)
+   auto group = std::make_shared<CDVDOverlayGroup>();
+   group->bForced       = true;
+   group->iPTSStartTime = static_cast<double>(pts);
+@@ -1133,9 +1205,6 @@ void CDVDInputStreamBluray::OverlayFlush(SPlane& updated, int64_t pts)
+   }
+ 
+   m_player->OnDiscNavResult(static_cast<void*>(&group), BD_EVENT_MENU_OVERLAY);
+-  // PG does not change committed IG; avoid rescanning it for subtitle-only updates.
+-  if (&updated == &m_planes[1] || m_planes[1].committed.empty())
+-    m_menuShows = PlaneShows(m_planes[1]);
+ #endif
+ }
+ 
+@@ -1181,7 +1250,7 @@ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
+     {
+       std::vector<uint32_t> palette(256);
+       for (unsigned i = 0; i < 256; ++i)
+-        palette[i] = build_rgba(ov->palette[i]);
++        palette[i] = build_rgba(ov->palette[i], m_hdrGraphics);
+       for (SOverlay& overlay : plane.o)
+       {
+         if (overlay->palette.empty())
+@@ -1190,6 +1259,7 @@ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
+         auto copy = std::make_shared<CDVDOverlayImage>(
+             *overlay, overlay->x, overlay->y, overlay->width, overlay->height);
+         copy->palette = palette;
++        copy->m_isHDROverlay = m_hdrGraphics;
+         overlay = copy;
+       }
+     }
+@@ -1204,13 +1274,14 @@ void CDVDInputStreamBluray::OverlayCallback(const BD_OVERLAY * const ov)
+   {
+     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+     overlay->SetSource(DVDOverlaySource::MENU);
++    overlay->m_isHDROverlay = m_hdrGraphics;
+ 
+     if (ov->palette)
+     {
+       overlay->palette.resize(256);
+ 
+       for(unsigned i = 0; i < 256; i++)
+-        overlay->palette[i] = build_rgba(ov->palette[i]);
++        overlay->palette[i] = build_rgba(ov->palette[i], m_hdrGraphics);
+     }
+     else
+       overlay->palette.clear();
+@@ -1275,6 +1346,7 @@ void CDVDInputStreamBluray::OverlayCallbackARGB(const struct bd_argb_overlay_s *
+   {
+     SOverlay overlay = std::make_shared<CDVDOverlayImage>();
+     overlay->SetSource(DVDOverlaySource::MENU);
++    overlay->m_isHDROverlay = m_hdrGraphics;
+ 
+     overlay->palette.clear();
+     overlay->linesize = ov->w * 4;
+diff --git a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+index 2cf2410..2f7b1c5 100644
+--- a/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
++++ b/xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h
+@@ -257,6 +257,8 @@ protected:
+ 
+   static bool PlaneShows(const SPlane& plane);
+   void OverlayFlush(SPlane& updated, int64_t pts);
++  void SendMenuOverlays(int64_t pts);
++  void UpdateGraphicsDynamicRange();
+   void OverlayClose();
+   static void OverlayClear(SPlane& plane, int x, int y, int w, int h);
+   static void OverlayInit (SPlane& plane, int w, int h);
+@@ -299,6 +301,12 @@ protected:
+   };
+ 
+   SPlane m_planes[2];
++  void MatchGraphicsDynamicRange(SOverlays& overlays) const;
++
++  //! The disc's graphics (BD-J and HDMV menus, PG) are BT.2020 PQ. A UHD disc authors them in the
++  //! dynamic range of the video they accompany, so this follows the play item being played.
++  bool m_hdrGraphics = false;
++
+   enum EHoldState {
+     HOLD_NONE = 0,
+     HOLD_HELD,
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
+index e80f81c..888b5a4 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererGLES.cpp
+@@ -30,6 +30,7 @@
+ #endif
+ 
+ #include <cmath>
++#include <cstring>
+ 
+ // GLES2.0 cant do CLAMP, but can do CLAMP_TO_EDGE.
+ #define GL_CLAMP GL_CLAMP_TO_EDGE
+@@ -169,7 +170,19 @@ COverlayTextureGLES::COverlayTextureGLES(const CDVDOverlayImage& o, CRect& rSour
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+ 
+-  if (o.palette.empty())
++  if (o.palette.empty() && m_isHDROverlay && m_paletteOutputState)
++  {
++    // A UHD disc's BD-J graphics are PQ code values; convert them as a PQ palette is.
++    m_pma = false;
++    std::vector<uint32_t> rgba(static_cast<size_t>(o.width) * o.height);
++    for (int y = 0; y < o.height; ++y)
++      std::memcpy(rgba.data() + static_cast<size_t>(y) * o.width,
++                  o.pixels.data() + static_cast<size_t>(y) * o.linesize,
++                  static_cast<size_t>(o.width) * 4);
++    OVERLAY::PreparePQPixels(rgba, m_paletteOutputState);
++    LoadTexture(GL_TEXTURE_2D, o.width, o.height, o.width * 4, &m_u, &m_v, false, rgba.data());
++  }
++  else if (o.palette.empty())
+   {
+     m_pma = false;
+     const uint32_t* rgba = reinterpret_cast<const uint32_t*>(o.pixels.data());
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+index 3a7c558..adf1d81 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.cpp
+@@ -383,6 +383,36 @@ void ConvertPQPaletteToSRGB(std::vector<uint32_t>& palette)
+   }
+ }
+ 
++void PreparePQPixels(std::vector<uint32_t>& pixels, unsigned outputState)
++{
++  if (outputState & 1u)
++  {
++    // A menu page is mostly a few flat colours and transparency: convert each colour once.
++    std::vector<uint32_t> colours(pixels);
++    std::sort(colours.begin(), colours.end());
++    colours.erase(std::unique(colours.begin(), colours.end()), colours.end());
++    std::vector<uint32_t> converted(colours);
++    ConvertPQPaletteToSRGB(converted);
++    for (uint32_t& px : pixels)
++      px = converted[std::lower_bound(colours.begin(), colours.end(), px) - colours.begin()];
++  }
++
++  if (outputState & 2u)
++  {
++    // Straight alpha: the blend scales the offset, so every texel takes all of it.
++    for (uint32_t& px : pixels)
++    {
++      const uint32_t a = (px >> PIXEL_ASHIFT) & 0xff;
++      const uint32_t r = (px >> PIXEL_RSHIFT) & 0xff;
++      const uint32_t g = (px >> PIXEL_GSHIFT) & 0xff;
++      const uint32_t b = (px >> PIXEL_BSHIFT) & 0xff;
++      px = (a << PIXEL_ASHIFT) | ((16 + (r * 219 + 127) / 255) << PIXEL_RSHIFT) |
++           ((16 + (g * 219 + 127) / 255) << PIXEL_GSHIFT) |
++           ((16 + (b * 219 + 127) / 255) << PIXEL_BSHIFT);
++    }
++  }
++}
++
+ int GetStereoscopicDepth()
+ {
+   int depth = 0;
+diff --git a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
+index d4fbd12..6cda5ca 100644
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/OverlayRendererUtil.h
+@@ -50,6 +50,11 @@ unsigned BitmapPaletteOutputState();
+ //! untouched.
+ void ConvertPQPaletteToSRGB(std::vector<uint32_t>& palette);
+ 
++//! Applies the conversions BitmapPaletteOutputState() reports to straight-alpha PQ pixels (a UHD
++//! disc's BD-J graphics, packed as a palette is), as a PQ palette gets them: bit 0 converts them
++//! with ConvertPQPaletteToSRGB(), once per distinct colour, bit 1 encodes limited range.
++void PreparePQPixels(std::vector<uint32_t>& pixels, unsigned outputState);
++
+ //! paletteOverride, when non-null, is used in place of o.palette - e.g.
+ //! a palette already converted by ConvertPQPaletteToSRGB() above. o.pixels
+ //! (the per-pixel palette indices) is always taken from o itself either way.
