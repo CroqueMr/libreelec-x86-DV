@@ -1,0 +1,76 @@
+# Hardware support
+
+## Integrated graphics
+
+| Family | Dolby Vision support |
+| --- | --- |
+| Intel mobile processors with integrated graphics: Core 8th generation and newer, Core Ultra Series 1 / 2 including 200V, and N-series including N100 / N150 | Supported on native HDMI |
+| Intel desktop processors with integrated graphics: Core 8th generation and newer, and Core Ultra 200S | Supported on the motherboard’s native HDMI output |
+| Intel Core 7th generation, Kaby Lake | Supported on selected paths. [HDMI qualification](INTEL-KABY-LAKE.md) |
+| AMD Ryzen mobile APUs with Radeon graphics: 2000, 3000, 4000, 5000, 6000, 7030, 7035, 7040, 8040 and Ryzen AI 300 | Supported on native HDMI |
+| AMD Ryzen desktop APUs with Radeon graphics: 2000G, 3000G, 4000G, 5000G and 8000G | Supported on the motherboard’s native HDMI output |
+
+## Dedicated graphics
+
+| Family | Representative models | Status |
+| --- | --- | --- |
+| AMD Radeon RX 5000, RDNA 1 | RX 5500 XT, 5600 XT, 5700 / 5700 XT | Supported |
+| AMD Radeon RX 6000, RDNA 2 | RX 6400, 6600, 6700 XT, 6800, 6900 XT | Supported |
+| AMD Radeon RX 7000, RDNA 3 | RX 7600, 7700 XT, 7800 XT, 7900 XT / XTX | Supported |
+| AMD Radeon RX 9000, RDNA 4 | RX 9070 / 9070 XT | DCN4 transport implemented; physical qualification pending |
+| AMD Radeon RX Vega M, DCE 11.22 | Vega M GL / GH | Supported, [transport](VEGA-M.md) |
+| Intel Arc A / B | A750, A770, B570, B580 | Supported, [firmware and HDMI](INTEL-ARC.md) |
+| Intel Iris Xe MAX, DG1 | Iris Xe MAX | Supported on an admitted native HDMI path. [Driver and HDMI](INTEL-ARC.md) |
+| NVIDIA GeForce GTX 10, Pascal | GTX 1050, 1060, 1070, 1080 | Supported; matched [R580 driver](PASCAL.md), same image |
+| NVIDIA GeForce GTX 16, Turing | GTX 1650, 1660 | Supported |
+| NVIDIA GeForce RTX 20, Turing | RTX 2060, 2070, 2080 | Supported |
+| NVIDIA GeForce RTX 30, Ampere | RTX 3060, 3070, 3080, 3090 | Supported |
+| NVIDIA GeForce RTX 40, Ada | RTX 4060, 4070, 4080, 4090 | Supported |
+| NVIDIA GeForce RTX 50, Blackwell | RTX 5060, 5070, 5080, 5090 | Supported |
+
+The AMD Dolby Vision driver admits selected DCN1.x,2.x,3.x and DCN4.01/4.2/4.2B
+display engines. DCN4's native color blocks and atomic admission are software
+tested; RX9000 HDMI byte preservation is not physically qualified here.
+Polaris RX400/500 and discrete Vega remain outside the general allowlist. The experimental RX 550 path applies to device 1002:699f at UHD 23.976 Hz in standard TV-led Dolby Vision. Vega-based Ryzen APUs use a different display path.
+
+NVIDIA uses matched 615.78.08 open kernel modules, firmware, proprietary userspace
+and a VAAPI-to-NVDEC bridge. The default open-module stack requires Turing or
+newer. Pascal automatically selects the matched R580 stack in the same image.
+[NVIDIA driver requirements](https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus)
+and [licensing](LICENSING.md).
+
+Native HDR10/HLG, HDR10+, converted HDR10+ and DV V1/V2 use distinct admission
+checks. See the [driver/output matrix](DRIVER-COVERAGE.md), including the
+supported NVIDIA packet routes and route-specific restrictions.
+
+## Output and performance
+
+Dolby Vision output requires a compatible HDMI display and an admitted driver
+route. Unavailable Dolby Vision outputs retain eligible HDR10 conversions or
+native Kodi playback. DP adapters and active converters are not generally
+supported for Dolby Vision signaling.
+
+Other GPUs can use Dolby Vision processing to HDR10 where decoding and GPU
+processing are available, without custom Dolby Vision HDMI output.
+
+Performance depends on hardware, content and rendering mode. Report problems
+with the exact CPU/GPU, display, connection chain, build version and `kodi.log`.
+
+## Performance benchmarks
+
+[RC3 benchmark](BENCHMARKS.md): Intel N100 and AMD Ryzen 5 7430U,
+without the playback GUI. The report includes source profiles, output
+formats, CPU/GPU load, presentation cadence, headroom and missed frames.
+
+## AMD HDMI 3D
+
+MVC Blu-ray ISO, HDMI frame packing, side-by-side and top-and-bottom use a
+separate native Kodi path. The additional HDMI 3D driver support is AMD-specific;
+it is not an Intel or NVIDIA 3D-output claim.
+
+Beta4 feedback confirms MVC frame-packed 1080p24 and half-SBS 1080p60 on an
+RX 7600 with a JVC projector. This is a 3D validation, not validation of Dolby
+Vision on a physical Dolby Vision display.
+[Reported setup](https://forum.libreelec.tv/thread/30362-x86-64-dolby-vision-w-fel-full-3d-for-pc-intel-amd-nvidia/?postID=208017#post208017).
+
+[3D setup](3D.md) · [Playback settings](PLAYBACK.md)

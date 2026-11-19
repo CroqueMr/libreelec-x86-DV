@@ -1,0 +1,976 @@
+{
+  "image": {
+    "release": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-PreviewG",
+    "source_commit": "44f921cabae5e1ca36c19c49d911c12896f9aee0",
+    "sha": {
+      "/flash/SYSTEM": "6ef1e89ed4a1981a6a8d0a1c3e4e8915f32d879ab15cb5ab92abdba409f9c0c9",
+      "/flash/KERNEL": "aeb1ae81643c30b215a35509981e1710979829ff6dccb9c766517baff697ad48",
+      "/usr/lib/kodi/kodi.bin": "4ef24e007e503146f25a0d5c394e487308631bfc2a617cf8b07d353d9588514f",
+      "/usr/lib/libplacebo.so.372": "9a49f77777b30f4652c492f43cf817b2a36bca2a07ca2aa1885a79e8596d89fe",
+      "/usr/lib/libavcodec.so.63": "8a7f442fd7d205882d40150d9c0c9d59a2567cae95d33cba15c32f62ef2c2e60",
+      "/usr/lib/libavformat.so.63": "c45f3d929f92581ed06a64a188bdd871007a200347c8008753a4db83bb713bdd",
+      "/usr/lib/libavutil.so.61": "510c325935b8754a4dcfee9a4d4e0380b38767c1f0bf5cbf6823c7b5ac5fb716",
+      "/usr/share/kodi/system/settings/settings.xml": "7602f755c3fc842d1eedf300b3c64e9dabcb22522ef25453bde7a5894780d63b"
+    },
+    "artifacts": [
+      {
+        "name": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-PreviewG.tar",
+        "bytes": 492226560,
+        "sha256": "bb8ede04a529ad1d92ae8e63a88d4e9698a12853caeb9063497fe7f1a62c7ec9"
+      },
+      {
+        "name": "LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-PreviewG.img.gz",
+        "bytes": 492050082,
+        "sha256": "7900eccdf08b6f0bb6acb3d9e8fa3c73e3dc78e72c9792c42e0651c787e7fa88"
+      }
+    ],
+    "image": "//wsl.localhost/DVBuild/home/dvbuild/beta5-gpl2-image-20261022/source/target/LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-PreviewG.tar",
+    "native_image": "/home/dvbuild/beta5-gpl2-image-20261022/source/target/LibreELEC-Generic.x86_64-13.0-DV-R1.0.0-RC1-PreviewG.tar",
+    "delivered_disk_payloads": {
+      "KERNEL": "aeb1ae81643c30b215a35509981e1710979829ff6dccb9c766517baff697ad48",
+      "SYSTEM": "6ef1e89ed4a1981a6a8d0a1c3e4e8915f32d879ab15cb5ab92abdba409f9c0c9"
+    },
+    "kernel_boot": {
+      "kernel_sha256": "aeb1ae81643c30b215a35509981e1710979829ff6dccb9c766517baff697ad48",
+      "initramfs_sha256": "e78026add64dd6b289db17bb3cffde31e396caa6a23a413155243f6a11d2a9d5",
+      "initramfs_bytes": 5998592,
+      "entry_count": 56,
+      "required_paths": {
+        "/init": "/init",
+        "/bin/sh": "/usr/bin/busybox",
+        "/usr/bin/busybox": "/usr/bin/busybox",
+        "/lib64/ld-linux-x86-64.so.2": "/usr/lib/ld.so"
+      },
+      "required_modes": {
+        "/init": "0o100755",
+        "/usr/bin/busybox": "0o100755",
+        "/usr/lib/ld.so": "0o100755"
+      }
+    },
+    "normal_boundaries": "passed",
+    "linked_outputs": {
+      "/usr/lib/libplacebo.so.372": {
+        "linked_sha256": "088055a813bd78be7c9586a52545151e18d137d11f9e742b95600cb2996d07d4",
+        "stripped_sha256": "9a49f77777b30f4652c492f43cf817b2a36bca2a07ca2aa1885a79e8596d89fe"
+      },
+      "/usr/lib/kodi/kodi.bin": {
+        "linked_sha256": "e126d4875255d276d7a11af9ecbee08cfc996e951d45c9cb340d3739d826505d",
+        "stripped_sha256": "4ef24e007e503146f25a0d5c394e487308631bfc2a617cf8b07d353d9588514f"
+      }
+    },
+    "delivered_abi": [
+      660320,
+      1,
+      70568
+    ],
+    "installed_header_abi": [
+      660320,
+      1,
+      70568
+    ],
+    "hardware_qualified": true,
+    "published": false
+  },
+  "restoration": {
+  "n100": {
+    "players": [],
+    "labels": {
+      "System.ScreenResolution": "3840x2160 @ 60.00 Hz - Full screen"
+    },
+    "transport": {
+      "dv_value": 0,
+      "hdr_value": 0
+    }
+  },
+  "amd": {
+    "players": [],
+    "labels": {
+      "System.ScreenResolution": "3840x2160 @ 60.00 Hz - Full screen"
+    },
+    "transport": {
+      "dv_value": 0,
+      "hdr_value": 0
+    }
+  }
+},
+  "software": {
+    "integration_passed": 202,
+    "engine_passed": 223,
+    "engine_skipped": 15
+  },
+  "hardware": [
+    {
+      "host": "n100",
+      "attempt": "delivered1080",
+      "case": "hdr-1080p60-vanilla-fna",
+      "gate": "valid",
+      "fps": 59.979223442097464,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 10.187720366909108,
+        "p01": 10.166604594571064,
+        "min": 10.166400167569625,
+        "max": 10.245748846953399,
+        "whole_window_percent": 10.192960534394606,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-adaptive-f1",
+      "gate": "valid",
+      "fps": 59.974393854835924,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 69.46761726397105,
+        "p01": 64.64943886961784,
+        "min": 64.4998653327282,
+        "max": 74.03684529009676,
+        "whole_window_percent": 69.8688528734897,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-master-f0",
+      "gate": "valid",
+      "fps": 60.06077010872024,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 31.024132185346453,
+        "p01": 30.659820260594426,
+        "min": 30.637451644833934,
+        "max": 31.46521209350309,
+        "whole_window_percent": 31.061551607332323,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-standard-f1",
+      "gate": "valid",
+      "fps": 59.99748996813158,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 39.442491592499614,
+        "p01": 39.204214967902764,
+        "min": 39.20373110765462,
+        "max": 39.84681715834983,
+        "whole_window_percent": 39.45200810638806,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivered1080",
+      "case": "sdr-vanilla-fna",
+      "gate": "Native limited-range control unchanged; intentional24-to60 pulldown, no cadence claim",
+      "fps": 59.994198391596676,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 9.7390938077856,
+        "p01": 9.584576379293921,
+        "min": 9.58449033958776,
+        "max": 9.892872980581075,
+        "whole_window_percent": 9.733024307898381,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivereduhd",
+      "case": "fel30-master-f0",
+      "gate": "valid",
+      "fps": 29.989139023816314,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 73.61182030033405,
+        "p01": 71.7114893770139,
+        "min": 71.66715692260624,
+        "max": 75.22939032626705,
+        "whole_window_percent": 73.48837790512985,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivereduhd",
+      "case": "gemini-master-f0",
+      "gate": "valid",
+      "fps": 59.95194532502389,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 66.14492529967131,
+        "p01": 65.33734674399368,
+        "min": 65.30754290193288,
+        "max": 67.21133136989337,
+        "whole_window_percent": 66.31214224523285,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivereduhd",
+      "case": "hdr-4k30-airef-f1",
+      "gate": "valid",
+      "fps": 23.423680012439675,
+      "cadence": false,
+      "extra_refresh_intervals": 65,
+      "render": {
+        "count": 10,
+        "median": 88.95030513265004,
+        "p01": 85.30723949564691,
+        "min": 85.19672861291622,
+        "max": 90.30570348191664,
+        "whole_window_percent": 88.39945632013632,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivereduhd",
+      "case": "hdr-4k60-vanilla-fna",
+      "gate": "valid",
+      "fps": 59.95107796251195,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 43.34824190946201,
+        "p01": 42.0897405352806,
+        "min": 42.08220572747608,
+        "max": 44.423325907877185,
+        "whole_window_percent": 43.20754010017484,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "n100",
+      "attempt": "delivereduhd",
+      "case": "p5-1080p60-standard-f1",
+      "gate": "valid",
+      "fps": 59.94136683656739,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 79.72939795967736,
+        "p01": 78.96204066454438,
+        "min": 78.96133198866518,
+        "max": 81.11322357493295,
+        "whole_window_percent": 79.82318534670854,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivered1080",
+      "case": "hdr-1080p60-vanilla-fna",
+      "gate": "valid",
+      "fps": 59.910486332828825,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 14.360192851914418,
+        "p01": 14.262131130792277,
+        "min": 14.26033749459608,
+        "max": 14.549490351451732,
+        "whole_window_percent": 14.362258160896996,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-adaptive-f1",
+      "gate": "valid",
+      "fps": 59.9043649360165,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 69.5899618575163,
+        "p01": 69.12150814959678,
+        "min": 69.12071791146656,
+        "max": 70.53972945796664,
+        "whole_window_percent": 69.67322875550902,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-master-f0",
+      "gate": "valid",
+      "fps": 60.003354097788,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 41.60619946833251,
+        "p01": 41.39486874710147,
+        "min": 41.37666392158424,
+        "max": 41.68923635231666,
+        "whole_window_percent": 41.59861874994192,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivered1080",
+      "case": "p5-1080p60-standard-f1",
+      "gate": "valid",
+      "fps": 60.00093341518529,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 29.161227912314132,
+        "p01": 28.97402358297658,
+        "min": 28.96226465447086,
+        "max": 29.3312409727258,
+        "whole_window_percent": 29.16767527070292,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivered1080",
+      "case": "sdr-vanilla-fna",
+      "gate": "Native limited-range control unchanged; intentional24-to60 pulldown, no cadence claim",
+      "fps": 59.913348566099216,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 10.039426292833465,
+        "p01": 9.985078173025169,
+        "min": 9.983491251857156,
+        "max": 10.083838691947587,
+        "whole_window_percent": 10.036155238771617,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivereduhd",
+      "case": "fel30-master-f0",
+      "gate": "valid",
+      "fps": 29.986466532830104,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 68.10879707090712,
+        "p01": 66.66986780364932,
+        "min": 66.58645493698323,
+        "max": 68.64722435577916,
+        "whole_window_percent": 67.95157211586313,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivereduhd",
+      "case": "gemini-master-f0",
+      "gate": "valid",
+      "fps": 59.8828919881559,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 68.56689203380505,
+        "p01": 66.61759587452492,
+        "min": 66.4934117458463,
+        "max": 70.1331271132405,
+        "whole_window_percent": 68.55312932390466,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivereduhd",
+      "case": "hdr-4k30-airef-f1",
+      "gate": "valid",
+      "fps": 29.983417298511643,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 66.35875817791694,
+        "p01": 65.62986765603499,
+        "min": 65.61004621850887,
+        "max": 66.92391312767737,
+        "whole_window_percent": 66.32064212390083,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivereduhd",
+      "case": "hdr-4k60-vanilla-fna",
+      "gate": "valid",
+      "fps": 59.90565494883747,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 54.10323413812189,
+        "p01": 53.889332063088,
+        "min": 53.88214078460386,
+        "max": 54.295605461872974,
+        "whole_window_percent": 54.10273540100597,
+        "interval_coverage": 1
+      }
+    },
+    {
+      "host": "amd",
+      "attempt": "delivereduhd",
+      "case": "p5-1080p60-standard-f1",
+      "gate": "valid",
+      "fps": 59.92608235001795,
+      "cadence": true,
+      "extra_refresh_intervals": 0,
+      "render": {
+        "count": 10,
+        "median": 79.13699149705977,
+        "p01": 78.10275860107676,
+        "min": 78.07994624062896,
+        "max": 80.45839742998815,
+        "whole_window_percent": 79.11894429780574,
+        "interval_coverage": 1
+      }
+    }
+  ],
+  "paused": {
+    "n100": {
+      "steps": [
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 409
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        },
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 410
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        },
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 409
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 242,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        }
+      ],
+      "journey": [
+        "running-native",
+        "running-ai",
+        "running-native",
+        "running-ai",
+        "seek",
+        "info-close",
+        "home-video"
+      ],
+      "same_pid": true,
+      "settings_restored": true,
+      "drm_samples": [
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 419
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 409
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 409
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 410
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 410
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 409
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 409
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 410
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 409
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 415
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        }
+      ]
+    },
+    "amd": {
+      "steps": [
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 122
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        },
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 121
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        },
+        {
+          "output": 0,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 0,
+            "hdr_value": 123
+          }
+        },
+        {
+          "output": 1,
+          "ready": true,
+          "properties": {
+            "speed": 0,
+            "time": {
+              "hours": 0,
+              "milliseconds": 238,
+              "minutes": 0,
+              "seconds": 1
+            }
+          },
+          "transport": {
+            "dv_value": 1,
+            "hdr_value": 0
+          }
+        }
+      ],
+      "journey": [
+        "running-native",
+        "running-ai",
+        "running-native",
+        "running-ai",
+        "seek",
+        "info-close",
+        "home-video"
+      ],
+      "same_pid": true,
+      "settings_restored": true,
+      "drm_samples": [
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 130
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 122
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 122
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 121
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 121
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 123
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 123
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 129
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 120
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 128
+        },
+        {
+          "dv_value": 0,
+          "hdr_value": 0
+        },
+        {
+          "dv_value": 1,
+          "hdr_value": 0
+        }
+      ]
+    }
+  },
+  "n100_ai_30_control": {
+    "delivereduhd": {
+      "accepted_commit_fps": 23.423680012439675,
+      "cadence_pass": false,
+      "render_occupancy_percent": {
+        "count": 10,
+        "median": 88.95030513265004,
+        "p01": 85.30723949564691,
+        "min": 85.19672861291622,
+        "max": 90.30570348191664,
+        "whole_window_percent": 88.39945632013632,
+        "interval_coverage": 1
+      },
+      "readiness": {
+        "ready_to_present_ms": {
+          "count": 235,
+          "median": 24.371597,
+          "p01": 1.71807838,
+          "p95": 34.14593,
+          "p99": 34.71751536,
+          "p999": 34.859118948,
+          "min": 1.558,
+          "max": 34.866672
+        },
+        "cadence_deadline_margin_ms": {
+          "count": 234,
+          "median": 5.815874833312988,
+          "p01": -3.987417756687012,
+          "p95": 28.394620833312988,
+          "p99": 29.61020898331299,
+          "p999": 33.38787753431297,
+          "min": -5.236008666687011,
+          "max": 34.430716333312986
+        },
+        "submission_deadline_margin_ms": {
+          "count": 234,
+          "median": 5.815874833312988,
+          "p01": -3.987417756687012,
+          "p95": 28.394620833312988,
+          "p99": 29.61020898331299,
+          "p999": 33.18290675531297,
+          "min": -5.236008666687011,
+          "max": 34.163479333312985
+        },
+        "submission_late_count": 39,
+        "late_ready_count": 39,
+        "basis_counts": {
+          "gpu_fence": 235
+        },
+        "coverage": 1
+      }
+    },
+    "ai-control226": {
+      "accepted_commit_fps": 23.11157866383739,
+      "cadence_pass": false,
+      "render_occupancy_percent": {
+        "count": 10,
+        "median": 88.81208407380657,
+        "p01": 86.58423426856291,
+        "min": 86.50868516692312,
+        "max": 91.1498399129035,
+        "whole_window_percent": 88.76933449395197,
+        "interval_coverage": 1
+      },
+      "readiness": {
+        "ready_to_present_ms": {
+          "count": 232,
+          "median": 24.3455765,
+          "p01": 1.74554455,
+          "p95": 34.52552625,
+          "p99": 34.79533066,
+          "p999": 34.897118904,
+          "min": 1.560633,
+          "max": 34.905993
+        },
+        "cadence_deadline_margin_ms": {
+          "count": 231,
+          "median": 5.950916333374024,
+          "p01": -3.9031286666259764,
+          "p95": 28.440753833374025,
+          "p99": 29.792625533374014,
+          "p999": 33.41879468337406,
+          "min": -5.540904666625977,
+          "max": 34.34492533337402
+        },
+        "submission_deadline_margin_ms": {
+          "count": 231,
+          "median": 5.950916333374024,
+          "p01": -3.9031286666259764,
+          "p95": 28.440753833374025,
+          "p99": 29.792625533374014,
+          "p999": 33.207133233374066,
+          "min": -5.540904666625977,
+          "max": 34.070040333374024
+        },
+        "submission_late_count": 42,
+        "late_ready_count": 42,
+        "basis_counts": {
+          "gpu_fence": 232
+        },
+        "coverage": 1
+      }
+    }
+  },
+  "rulings": [
+  "- Task1: Ruling: resolve only HDMI timing aliases differing in polarity at CDRMUtils::GetModes, retaining the display-advertised CTA member : this lets Kodi's unchanged picker/whitelist select a valid timing without forced UHD or driver relaxation : cost if wrong: ordinary HDMI playback may select a different advertised polarity alias; all distinct timing/layout/rate choices must remain, and vanilla output is part of qualification.",
+  "- Final: Ruling: supersede generic catalog canonicalization with a transaction- local advertised CTA alias, returning to the original timing on ordinary exit. Native GetModes, whitelist, selection and automatic range remain unchanged. Cost if wrong: a rejected alias transition could prevent DV activation; strict atomic test/real commit, retained mode blob and accepted receipt remain required.",
+  "- Final: Ruling: unrelated historical branch changes remain outside this bounded review; preserve them rather than reopen the whole release. Cost if wrong: pre-existing unrelated defects are not newly ruled out.",
+  "- Final: Ruling: executor owns complete-image and extended hardware journeys; reviewer did not contact machines. Cost if wrong: bounded observations cannot establish indefinite stability; retain windows and exact image receipts.",
+  "- Final: Ruling: physical calibration/wire levels and every720p/limited-GUI/ fractional-display combination are not claimed certified. Preserve native catalog/timing for ordinary playback and run matched limited-range1080p controls. Cost if wrong: an untested display setup can retain a baseline defect.",
+  "- Final: Ruling: unchanged render/model libraries plus executable exactness tests and physical HDMI windows are the fidelity gate, not external Dolby capture certification. Cost if wrong: an issue outside these witnesses can remain.",
+  "- Final: Ruling: qualification is limited to pinned N100 and3200U displays; do not claim universal GPU/TV coverage. Cost if wrong: another driver may reject the advertised alias and needs its own report, without weakening checks."
+],
+  "review": {
+    "model": "Astra xhigh",
+    "important": 1,
+    "fixed": 1,
+    "critical": 0,
+    "minor": 0
+  },
+  "published": false
+}
