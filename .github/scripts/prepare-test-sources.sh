@@ -24,7 +24,8 @@ ffmpeg_version=$(pin PKG_VERSION "$ffmpeg_recipe")
 ffmpeg_fork=$(pin CB1_FFMPEG_SOURCE_REPOSITORY "$ffmpeg_recipe")
 ffmpeg_revision=$(pin CB1_FFMPEG_SOURCE_COMMIT "$ffmpeg_recipe")
 placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk
-placebo_version=$(pin PKG_VERSION "$placebo_recipe")
+placebo_fork=$(pin CB1_PLACEBO_SOURCE_REPOSITORY "$placebo_recipe")
+placebo_revision=$(pin CB1_PLACEBO_SOURCE_COMMIT "$placebo_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
 bluray_version=$(pin PKG_VERSION "$bluray_recipe")
 # Generic kernel fixtures use the recipe's default branch, not its board forks.
@@ -38,7 +39,7 @@ read -r linux_version linux_sha < <(
 )
 test -n "$linux_version" && test -n "$linux_sha"
 
-test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_version" && test -n "$bluray_version"
+test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_revision" && test -n "$bluray_version"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
   "$test_root/kodi.tar.gz" "$(pin PKG_SHA256 "$kodi_recipe")"
 download "$kodi_fork/archive/$kodi_revision.tar.gz" \
@@ -48,8 +49,8 @@ download "https://ffmpeg.org/releases/ffmpeg-$ffmpeg_version.tar.xz" \
   "$test_root/ffmpeg.tar.xz" "$(pin PKG_SHA256 "$ffmpeg_recipe")"
 download "$ffmpeg_fork/archive/$ffmpeg_revision.tar.gz" \
   "$test_root/ffmpeg-cb1.tar.gz" "$(pin CB1_FFMPEG_SOURCE_SHA256 "$ffmpeg_recipe")"
-download "https://github.com/haasn/libplacebo/archive/$placebo_version.tar.gz" \
-  "$test_root/libplacebo.tar.gz" "$(pin PKG_SHA256 "$placebo_recipe")"
+download "$placebo_fork/archive/$placebo_revision.tar.gz" \
+  "$test_root/libplacebo.tar.gz" "$(pin CB1_PLACEBO_SOURCE_SHA256 "$placebo_recipe")"
 download "https://download.videolan.org/pub/videolan/libbluray/$bluray_version/libbluray-$bluray_version.tar.xz" \
   "$test_root/libbluray.tar.xz" "$(pin PKG_SHA256 "$bluray_recipe")"
 
@@ -69,9 +70,6 @@ for patch_file in packages/linux/patches/default/*.patch projects/Generic/patche
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/linux" < "$patch_file"
 done
 
-for patch_file in CB1/patches/libplacebo/*.patch; do
-  patch --batch --forward --fuzz=0 -p1 -d "$test_root/libplacebo" < "$patch_file"
-done
 python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
   --libplacebo-source "$test_root/libplacebo"
 # Build the pinned OpenGL backend for CPU probes and the native EGL surface regression.

@@ -12,6 +12,18 @@ PKG_DEPENDS_UNPACK="vulkan-headers"
 PKG_LONGDESC="Reusable library for GPU-accelerated image/video processing primitives and shaders"
 PKG_BUILD_FLAGS=""
 
+CB1_PLACEBO_SOURCE_REPOSITORY="https://github.com/CroqueMr/libplacebo"
+CB1_PLACEBO_SOURCE_COMMIT="7ee715018f35a33c1b03f0084abc769731202956"
+CB1_PLACEBO_SOURCE_SHA256="720f7c9bdb4ada80751f742f371388399cf7571f0d27056870a93bc1b6227e31"
+
+if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+  # The pinned fork contains the equivalent CB1 shader and renderer patches.
+  PKG_URL="${CB1_PLACEBO_SOURCE_REPOSITORY}/archive/${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"
+  PKG_SOURCE_NAME="${PKG_NAME}-${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"
+  PKG_SHA256="${CB1_PLACEBO_SOURCE_SHA256}"
+  PKG_SKIP_PATCHES="yes"
+fi
+
 PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dprefer_static=true \
                        -Dvulkan=disabled \
