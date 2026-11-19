@@ -30,7 +30,7 @@
     "packages/multimedia/libbluray/package.mk": "4925e8384c27bf8d3cc15a10ab9f3ce8b87e2cd4674934687ab7bd4d3b4a0d73",
     "packages/multimedia/libbluray/patches/0001-set-headless-false.patch": "698a7effc1f88e4614097dd94b2db5ef9a0615bd3f94acdf3296510011cfb114",
     "packages/addons/tools/jre.zulu/package.mk": "fb12aa9f046378d8e2026a2a6c27445c0b2883731937343b7f7029512b3c6378",
-    "tests/cb1/test_bdj_runtime_packaging.py": "bb651a75f30e6b1265e19b47a9d46bc6307be2c76e8d2e214ad95f133ae78088",
+    "tests/cb1/test_bdj_runtime_packaging.py": "fe6ce557c5d06869e106735668955eff34bf170c7af19bff51df0fb723bdfe91",
     "tests/cb1/test_audio_passthrough_diagnostics.py": "5c426ced21fe3871acf681c896921f3acb4a6fc9576a417c4f3b51a12654d784",
     "projects/Generic/patches/linux/linux-9900-00-drivers__gpu__drm__i915__display__intel_atomic.c.patch": "3b9dffaf988e37bc36c3c654aaa2f729b46ce6dbd069452b0e68ad261fa288eb",
     "packages/sysutils/busybox/scripts/init": "95ff41ddec9fc457eb2a14104d1c8d168ee33cb02c9db0672dd87b5c3366a4c4",
