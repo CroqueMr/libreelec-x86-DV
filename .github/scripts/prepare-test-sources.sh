@@ -27,7 +27,8 @@ placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo
 placebo_fork=$(pin CB1_PLACEBO_SOURCE_REPOSITORY "$placebo_recipe")
 placebo_revision=$(pin CB1_PLACEBO_SOURCE_COMMIT "$placebo_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
-bluray_version=$(pin PKG_VERSION "$bluray_recipe")
+bluray_fork=$(pin CB1_BLURAY_SOURCE_REPOSITORY "$bluray_recipe")
+bluray_revision=$(pin CB1_BLURAY_SOURCE_COMMIT "$bluray_recipe")
 # Generic kernel fixtures use the recipe's default branch, not its board forks.
 linux_recipe=packages/linux/package.mk
 read -r linux_version linux_sha < <(
@@ -39,7 +40,7 @@ read -r linux_version linux_sha < <(
 )
 test -n "$linux_version" && test -n "$linux_sha"
 
-test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_revision" && test -n "$bluray_version"
+test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_revision" && test -n "$bluray_revision"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
   "$test_root/kodi.tar.gz" "$(pin PKG_SHA256 "$kodi_recipe")"
 download "$kodi_fork/archive/$kodi_revision.tar.gz" \
@@ -51,8 +52,8 @@ download "$ffmpeg_fork/archive/$ffmpeg_revision.tar.gz" \
   "$test_root/ffmpeg-cb1.tar.gz" "$(pin CB1_FFMPEG_SOURCE_SHA256 "$ffmpeg_recipe")"
 download "$placebo_fork/archive/$placebo_revision.tar.gz" \
   "$test_root/libplacebo.tar.gz" "$(pin CB1_PLACEBO_SOURCE_SHA256 "$placebo_recipe")"
-download "https://download.videolan.org/pub/videolan/libbluray/$bluray_version/libbluray-$bluray_version.tar.xz" \
-  "$test_root/libbluray.tar.xz" "$(pin PKG_SHA256 "$bluray_recipe")"
+download "$bluray_fork/archive/$bluray_revision.tar.gz" \
+  "$test_root/libbluray.tar.gz" "$(pin CB1_BLURAY_SOURCE_SHA256 "$bluray_recipe")"
 
 download "https://www.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/linux-$linux_version.tar.xz" \
   "$test_root/linux.tar.xz" "$linux_sha"
@@ -62,7 +63,7 @@ mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/
 tar -xf "$test_root/kodi-cb1.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg-cb1.tar.gz" -C "$test_root/ffmpeg" --strip-components=1
 tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
-tar -xf "$test_root/libbluray.tar.xz" -C "$test_root/libbluray" --strip-components=1
+tar -xf "$test_root/libbluray.tar.gz" -C "$test_root/libbluray" --strip-components=1
 tar -xf "$test_root/linux.tar.xz" -C "$test_root/linux" --strip-components=1
 
 # Match Generic's shipped default kernel stack; retain full source dependencies.

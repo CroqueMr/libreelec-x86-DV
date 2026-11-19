@@ -27,7 +27,7 @@
     "docs/cb1/PLAYBACK.md": "e70bf30b633ade3f3b99c8bc4652900a0e16b7cf027631072418b380108c0df4",
     "packages/multimedia/bdj-runtime/package.mk": "1c0e1163651be3f08d75c1524bea594f6ab8bd8b11849cfa141e8018a18d8638",
     "packages/multimedia/bdj-runtime/profile.d/90-bdj.conf": "a1328b1ad9daf6f7710b53cc10686e7b6329cdb497d3fabb6f7b7585a1924a56",
-    "packages/multimedia/libbluray/package.mk": "09e7c3604ddb5623300d05fe9e57fe771b32124139e83b364696a59948dbee91",
+    "packages/multimedia/libbluray/package.mk": "f5d23fdbc279ca1373d14bffd447492072b858dd66ac38999ca071a7fcb6cdcd",
     "packages/multimedia/libbluray/patches/0001-set-headless-false.patch": "698a7effc1f88e4614097dd94b2db5ef9a0615bd3f94acdf3296510011cfb114",
     "packages/addons/tools/jre.zulu/package.mk": "fb12aa9f046378d8e2026a2a6c27445c0b2883731937343b7f7029512b3c6378",
     "tests/cb1/test_bdj_runtime_packaging.py": "bb651a75f30e6b1265e19b47a9d46bc6307be2c76e8d2e214ad95f133ae78088",
@@ -229,7 +229,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": "6f3e0313da94604ddae1cbba600339c89273d3651eab9b29a82b6b81f0cb7337",
     "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": "2181477fd5c9d0df4ba28635ed52e7013313d078ff031040d451b71a8e895408",
     "docs/cb1/RELEASE-RC4-PREVIEW.md": "cb4a86f57b21d6ba3f63c6f1acc30b6f862e90df237c8d386a50002064436a1b",
-    ".github/scripts/prepare-test-sources.sh": "486e56ed447d0f2360b31950488029a6b79ff61294d846ddc4ad3755d067519f",
+    ".github/scripts/prepare-test-sources.sh": "dcc6aa70e56a8db2b177282be7c6130b118f6a48e51f2b2a8a3dc264c6832132",
     ".github/workflows/cb1-source-checks.yml": "888b4deb6a374b8e0e94883f134fac60a4ac9b663fa9db7237a01c9bc0cf46d9",
     "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": "5158f22790955e72b99bd6f8d6c7feb87bb44176ff06a5a4882cccdb5ea8e940",
     "projects/Generic/patches/linux/linux-9950-01-wcl-single-scaler.patch": "013646a5e7f11abe825ed7e9d4c8b6b0b6c49c96105d56b2c843238e782e6f40",
@@ -503,7 +503,8 @@
     "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
     "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
     "packages/multimedia/ffmpeg/package.mk": "0ae09daa1517a4f61d2d04ba84b2bd05f5cdb54c9bd152cab56b278007691d56",
-    "packages/multimedia/cb1-engine/package.mk": "403b6f41772618b676e9f0119fcf82fc9fdc8720ed3a2bfb84a7e0fc00609e4e"
+    "packages/multimedia/cb1-engine/package.mk": "403b6f41772618b676e9f0119fcf82fc9fdc8720ed3a2bfb84a7e0fc00609e4e",
+    "packages/multimedia/cb1-udfread-source/package.mk": "ec6796161396523fbcee60e9b370d80950fbf1ddb284ada1e53efa93ec648566"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
