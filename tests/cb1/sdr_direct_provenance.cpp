@@ -7,6 +7,7 @@ extern "C" {
 #include "task3_fixture.h"
 }
 constexpr int LOGWARNING=2,DVP_FLAG_DROPPED=1;
+constexpr unsigned CODEC_BLURAY_NAVIGATION=0x04;
 struct CLog {template<class...T>static void Log(T...){}};
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
 struct Picture {
@@ -34,7 +35,8 @@ static AVDOVIDecoderConfigurationRecord copied(AVStream*pStream){
  return hints.dovi;
 }
 static void decoded(Picture*pVideoPicture,AVFrame*m_pFrame,AVDOVIDecoderConfigurationRecord decodedConfig,unsigned generation,bool joined=true){
- struct {AVDOVIDecoderConfigurationRecord dovi;StreamHdrType hdrType;bool preferHybridHDR10Plus{};}m_hints{decodedConfig,pVideoPicture->hdrType};
+ struct {AVDOVIDecoderConfigurationRecord dovi;StreamHdrType hdrType;bool preferHybridHDR10Plus{};unsigned codecOptions{};}m_hints{decodedConfig,pVideoPicture->hdrType};
+ const bool m_dvFel = decodedConfig.dv_profile == 7 && decodedConfig.el_present_flag;
  DVBRIDGE::SourceOwner m_dvSourceOwner;m_dvSourceOwner.BeginStream();
  unsigned m_videoProcessingGeneration=generation;bool m_dvLayerEpoch=joined,m_dvVideoWindow=true;
  static int presentableDVPacket,decodeOnlyDVPacket;

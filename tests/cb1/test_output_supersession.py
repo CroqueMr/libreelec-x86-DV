@@ -27,6 +27,7 @@ class OutputSupersessionTests(unittest.TestCase):
   status_enum=status_header[status_start:status_header.index('};',status_start)+2]
   program=r'''
 #include <memory>
+#include <functional>
 #include <cassert>
 #include <array>
 #include <atomic>
@@ -136,7 +137,9 @@ struct CEGLContextUtils{
  EGLConfig m_eglConfig=24,m_priorConfig=0,m_eglHDRConfig=0,m_priorHDRConfig=0;
  int m_eglDisplay=1,m_eglContext=1;
  bool BeginOutputSurface();bool StageOutputSurface(void*,EGLNativeWindowType);
- bool BindPriorOutputSurface();bool CompleteOutputSurface(bool);
+ bool BindPriorOutputSurface();bool CompleteOutputSurface(bool,const std::function<void()>& = {});
+ EGLConfig GetEGLConfig() const{return m_eglConfig;}
+ void RestoreEGLConfig(EGLConfig config){m_eglConfig=config;}
  unsigned GetConfigAttrib(int attr){return attr==EGL_RED_SIZE?(m_eglConfig==30?10:8):m_eglConfig;}
  bool CreatePlatformSurface(void*,uintptr_t){m_eglSurface=nextSurface++;surfaces[m_eglSurface]=m_eglConfig;return true;}
  void DestroySurface(){}bool BindContext(){currentSurface=m_eglSurface;return true;}bool TrySwapBuffers(){return true;}
@@ -208,6 +211,7 @@ struct GBM {
  struct Lease{gbm_bo*value;gbm_bo*Get(){return value;}};
  GBM&GetDevice(){return *this;}GBM&GetSurface(){return *this;}void*Get(){return this;}
  void UseDVOutputLifetime(){++lifetime;}
+ void ReleaseSurfaceBuffers(bool){assert(false);}
  bool CreateSurface(int,int,unsigned format,const uint64_t*,size_t,bool transaction){if(transaction){prior=front;pending=true;}front.format=format;return true;}
  void CompleteOutputSurface(bool accepted){if(pending&&!accepted)front=prior;pending=false;}
 gbm_bo*LockTransactionalBuffer(){return &front;}void CompleteTransactionalBuffer(bool){}void EndTransactionalMode(){}
@@ -234,6 +238,8 @@ struct CWinSystemGbmEGLContext:CWinSystemGbm {
  std::vector<uint64_t>OutputModifiers(unsigned){return {0};}
  bool ChooseEGLConfig(int,int depth){m_eglContext.m_eglConfig=depth>8?30:24;return true;}
  bool SetVideoOutput(const VideoPicture*);bool CompleteDVOutputSurface(bool);
+ bool UsesNvidiaGbm() const{return false;}
+ bool DestroyOutputSurface(){m_eglContext.DestroySurface();return true;}
 };
 struct CWinSystemGbmGLESContext : CWinSystemGbmEGLContext {
  bool requested=true,m_dvStopPending=false,m_dvOrdinaryFrame=false;
@@ -342,7 +348,7 @@ bool CWinSystemGbmEGLContext::CompleteDVOutputSurface(bool submitted)__ACTUAL_BO
 bool CEGLContextUtils::BeginOutputSurface()__ACTUAL_BODY_22_END__
 bool CEGLContextUtils::StageOutputSurface(void* nativeWindow, EGLNativeWindowType legacy)__ACTUAL_BODY_23_END__
 bool CEGLContextUtils::BindPriorOutputSurface()__ACTUAL_BODY_24_END__
-bool CEGLContextUtils::CompleteOutputSurface(bool presented)__ACTUAL_BODY_25_END__
+bool CEGLContextUtils::CompleteOutputSurface(bool presented,const std::function<void()>& releaseBuffers)__ACTUAL_BODY_25_END__
 int main(){
  using Route=DVBRIDGE::OutputRoute;using Mode=DVBRIDGE::OutputMode;
  int failed=0;
@@ -470,7 +476,7 @@ int main(){
   program=program.replace('__ACTUAL_BODY_22_END__',body(utils,'bool CEGLContextUtils::BeginOutputSurface()'))
   program=program.replace('__ACTUAL_BODY_23_END__',body(utils,'bool CEGLContextUtils::StageOutputSurface(void* nativeWindow, EGLNativeWindowType legacy)'))
   program=program.replace('__ACTUAL_BODY_24_END__',body(utils,'bool CEGLContextUtils::BindPriorOutputSurface()'))
-  program=program.replace('__ACTUAL_BODY_25_END__',body(utils,'bool CEGLContextUtils::CompleteOutputSurface(bool presented)'))
+  program=program.replace('__ACTUAL_BODY_25_END__',body(utils,'bool CEGLContextUtils::CompleteOutputSurface('))
   with tempfile.TemporaryDirectory() as temporary:
    root=Path(temporary);code=root/'check.cpp';binary=root/'check'
    code.write_text(program,encoding='utf-8')

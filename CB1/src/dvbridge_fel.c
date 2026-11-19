@@ -14,6 +14,8 @@
 #define PACKET_BYTES_MAX (64u * 1024u * 1024u)
 #define MAP_MAX (QUEUE_MAX * 2)
 
+enum unpaired_mel { MEL_UNVERIFIED, MEL_VERIFIED, MEL_REQUIRES_EL };
+
 /* Independently coded layers can have different decode
  * order and IDR boundaries. Use FFmpeg's HEVC parser rather than assigning
  * the BL packet timestamp blindly to the encapsulated EL access unit. */
@@ -24,10 +26,25 @@ struct picture_order {
     bool seen;
 };
 
-/* Splitter output is Annex-B; only identify the first VCL NAL header. The
- * native HEVC parser still validates the complete access unit below. */
-static int vcl_type(const AVPacket *packet)
+/* dovi_split preserves the EL configuration's NAL framing, independently
+ * of the BL input. Inspect the first VCL header in the declared format. */
+static int vcl_type(const AVPacket *packet, const AVCodecParameters *parameters)
 {
+    if (parameters->extradata_size >= 23 && parameters->extradata[0] == 1) {
+        const int length_size = (parameters->extradata[21] & 3) + 1;
+        for (int i = 0; i <= packet->size - length_size;) {
+            uint32_t length = 0;
+            for (int j = 0; j < length_size; ++j)
+                length = (length << 8) | packet->data[i++];
+            if (length < 2 || length > (uint32_t)(packet->size - i))
+                return -1;
+            int type = (packet->data[i] >> 1) & 63;
+            if (type < 32)
+                return type;
+            i += length;
+        }
+        return -1;
+    }
     for (int i=0;i+4<packet->size;++i)
         if (!packet->data[i] && !packet->data[i+1] && packet->data[i+2]==1) {
             int type=(packet->data[i+3]>>1)&63;
@@ -70,7 +87,7 @@ struct dvbridge_fel {
     bool opened, failed, draining, sent_eof, eof, recovering, harvesting, epoch_uncertain;
     struct picture_order base_order, enhancement_order;
     int64_t packet_order[MEL_PACKET_MAX];
-    bool packet_key[MEL_PACKET_MAX];
+    enum { FEL_NONKEY, FEL_KEY, FEL_CONTINUOUS_CRA } packet_key[MEL_PACKET_MAX];
     struct { int64_t order, pts; bool key, presentable; } times[MAP_MAX];
     unsigned num_times;
     bool synchronizing;
@@ -83,6 +100,7 @@ struct dvbridge_fel {
     bool source_no_rasl;
     int64_t source_taken;
     bool mel_deferred, el_started;
+    enum unpaired_mel unpaired_mel;
 };
 
 static bool self_contained_idr(const AVPacket *packet)
@@ -185,6 +203,7 @@ static void clear_queues(struct dvbridge_fel *f)
     f->source_no_rasl = false;
     f->source_taken = AV_NOPTS_VALUE;
     f->mel_deferred = f->el_started = false;
+    f->unpaired_mel = MEL_UNVERIFIED;
 }
 
 void dvbridge_fel_reset(struct dvbridge_fel *f)
@@ -393,16 +412,16 @@ static bool pump(struct dvbridge_fel *f)
             ++match;
         /* With reordered BL, an EL epoch starting on a nonkey BL is ambiguous:
          * a lost terminal EL AU can make its max+1 counter one picture early.
-         * Non-reordered independently coded IDRs keep their existing admission.
+         * A CRA continuing the verified POC sequence did not start such an epoch.
          * Never decode an ambiguous IDR into a previous BL's exact-time slot. */
-        if (!f->source_timed && f->packet_key[0] && match < f->num_times && !f->times[match].key &&
-            f->base_order.context->has_b_frames > 0) {
+        if (!f->source_timed && f->packet_key[0] == FEL_KEY && match < f->num_times &&
+            !f->times[match].key && f->base_order.context->has_b_frames > 0) {
             av_log(f->decoder, AV_LOG_ERROR,
-                   "FEL decode: ambiguous enhancement epoch at picture %lld; refusing an unproven pair\n",
-                   (long long)f->packet_order[0]);
+                   "FEL decode: ambiguous enhancement epoch at picture %lld (EL NAL type %d); refusing an unproven pair\n",
+                   (long long)f->packet_order[0], vcl_type(packet, f->split->par_out));
             goto fail;
         }
-        const int type=f->source_timed ? vcl_type(packet) : -1;
+        const int type=f->source_timed ? vcl_type(packet, f->split->par_out) : -1;
         if (f->recovering || (f->source_timed && f->source_no_rasl && (type==8 || type==9))) {
             if (!f->source_timed && f->packet_key[0] && match == f->num_times && !f->draining)
                 break; /* Independent EL IDR can precede the matching BL key. */
@@ -599,8 +618,12 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
                     /* All EL from this AU has been examined. Before the
                      * first accepted anchor these BL identities are preroll. */
                     f->num_times = 0;
-                    if (++f->preroll_packets > 1024)
+                    if (++f->preroll_packets > 1024) {
+                        av_log(f->decoder, AV_LOG_ERROR,
+                               "FEL decode: no usable enhancement anchor after %u preroll packets (EL received: %s)\n",
+                               f->preroll_packets, f->enhancement_order.seen ? "yes" : "no");
                         goto fail;
+                    }
                 }
                 return true; /* Submit EL when a decoded BL requests its matching picture. */
             }
@@ -615,6 +638,7 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
                 av_packet_free(&copy);
                 goto fail;
             }
+        const int64_t previous_maximum = f->enhancement_order.maximum;
         if (f->num_packets >= limit || copy->size <= 0 ||
             (size_t)copy->size > PACKET_BYTES_MAX - f->packet_bytes ||
             !picture_identity(&f->enhancement_order, copy, &f->packet_order[f->num_packets])) {
@@ -641,7 +665,7 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
                 f->source_no_rasl = true;
                 f->synchronizing = false;
             }
-            f->packet_key[f->num_packets] = key;
+            f->packet_key[f->num_packets] = key ? FEL_KEY : FEL_NONKEY;
             f->packet_bytes += copy->size;
             f->packets[f->num_packets++] = copy;
             continue;
@@ -685,7 +709,14 @@ static bool submit(struct dvbridge_fel *f, const AVPacket *packet,
             f->anchor_pts = packet->pts;
             f->synchronizing = false;
         }
-        f->packet_key[f->num_packets] = f->enhancement_order.parser->key_frame == 1;
+        f->packet_key[f->num_packets] = ep->key_frame == 1 ? FEL_KEY : FEL_NONKEY;
+        /* Unlike IDR, CRA carries its POC. Accept the immediate successor of
+         * the established EL sequence; the BL timestamp still comes from
+         * the picture-order map, independently of this packet's decode order. */
+        if (ep->key_frame == 1 && !common_key && ep->output_picture_number > 0 &&
+            previous_maximum < INT64_MAX && f->packet_order[f->num_packets] == previous_maximum + 1 &&
+            vcl_type(copy, f->split->par_out) == 21 /* CRA_NUT */)
+            f->packet_key[f->num_packets] = FEL_CONTINUOUS_CRA;
         f->packet_bytes += copy->size;
         f->packets[f->num_packets++] = copy;
     }
@@ -712,6 +743,10 @@ bool dvbridge_fel_drain(struct dvbridge_fel *f, const char **reason)
     if (!f)
         return false;
     if (f->synchronizing) {
+        if (!f->failed && f->unpaired_mel == MEL_VERIFIED && !f->enhancement_order.seen) {
+            f->draining = f->eof = true;
+            return true;
+        }
         if (reason && !f->failed && f->base_order.seen && !f->enhancement_order.seen)
             *reason = "no enhancement video received before drain";
         f->failed = true;
@@ -761,7 +796,7 @@ static int take_source(struct dvbridge_fel *f, int64_t pts, AVFrame **frame, boo
         source >= f->anchor_pts) {
         for (unsigned i = 0; i < f->num_packets; ++i)
             if (f->packet_order[i] == source) {
-                const int type = vcl_type(f->packets[i]);
+                const int type = vcl_type(f->packets[i], f->split->par_out);
                 metadata_only = !f->source_no_rasl || (type != 8 && type != 9);
                 break;
             }
@@ -808,6 +843,8 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
         return 1;
     if (f->failed || (f->eof && f->recovering))
         return -1;
+    if (f->synchronizing && !f->enhancement_order.seen)
+        f->unpaired_mel = MEL_REQUIRES_EL;
     if (f->synchronizing || (f->anchor_pts != AV_NOPTS_VALUE && pts < f->anchor_pts))
         return 2; /* Preroll before a recoverable EL picture, not a substitute. */
     bool ok = pump(f);
@@ -849,18 +886,32 @@ int dvbridge_fel_take(struct dvbridge_fel *f, int64_t pts, AVFrame **frame)
 int dvbridge_fel_take_mel(struct dvbridge_fel *f, int64_t pts, AVFrame **frame,
                          const void *data, size_t size)
 {
-    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE || !f->source_timed ||
+    if (!f || !frame || *frame || pts == AV_NOPTS_VALUE ||
         !dvbridge_metadata_bounds(data, size))
         return dvbridge_fel_take(f, pts, frame);
     const AVDOVIMetadata *metadata = data;
     const AVDOVIRpuDataHeader *header = av_dovi_get_header(metadata);
-    return take_source(f, pts, frame, header->disable_residual_flag == 1 ||
-                       dvbridge_dv_is_mel(metadata));
+    const bool no_residual = header->disable_residual_flag == 1 || dvbridge_dv_is_mel(metadata);
+    if (f->source_timed)
+        return take_source(f, pts, frame, no_residual);
+    if (no_residual && !f->failed && !f->draining && f->synchronizing &&
+        f->base_order.seen && !f->enhancement_order.seen && f->unpaired_mel != MEL_REQUIRES_EL) {
+        /* This picture is progress even though there is no EL to anchor. */
+        f->preroll_packets = 0;
+        f->unpaired_mel = MEL_VERIFIED;
+        return 3;
+    }
+    return dvbridge_fel_take(f, pts, frame);
 }
 
 bool dvbridge_fel_failed(const struct dvbridge_fel *f)
 {
     return !f || f->failed;
+}
+
+bool dvbridge_fel_has_enhancement(const struct dvbridge_fel *f)
+{
+    return f && f->enhancement_order.seen;
 }
 
 bool dvbridge_fel_exhausted(const struct dvbridge_fel *f)

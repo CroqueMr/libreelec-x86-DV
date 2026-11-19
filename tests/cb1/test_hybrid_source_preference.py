@@ -216,12 +216,14 @@ enum VCReturn {VC_PICTURE,VC_BUFFER,VC_NONE,VC_FATAL,VC_EOF};
 enum { LOGERROR };
 struct CLog { template<class... Args> static void Log(Args...) {} };
 enum { DVD_CODEC_CTRL_POLL=1, DVD_CODEC_CTRL_DRAIN=2, DVEnhancementPendingPictures=16 };
+constexpr int CODEC_BLURAY_NAVIGATION=4;
 struct AVHWFramesContext { void* device_ref{}; };
 struct HWBuffer { void* data{}; };
 struct Context { HWBuffer* hw_frames_ctx{}; };
 struct Fel { bool deviceOK=false, failed=false; };
 bool dvbridge_fel_device(Fel* f, void*) { return f->deviceOK; }
 bool dvbridge_fel_failed(Fel* f) { return f->failed; }
+bool dvbridge_fel_has_enhancement(Fel*) { return true; }
 bool dvbridge_fel_drain(Fel*,const char**) { return true; }
 struct VideoPicture {
   StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
@@ -236,11 +238,12 @@ struct Input { VCReturn result; bool eligible=false, hdr=false; };
 struct Manager {
   bool m_dvNativeOutput=true, m_dvFailed=false, required=true;
   Context ctx; Context* m_pCodecContext=&ctx;
-  struct { bool preferHybridHDR10Plus=true; } m_hints;
+  struct { bool preferHybridHDR10Plus=true; int codecOptions{}; } m_hints;
   bool hdr=false;
   bool NeedsDVEnhancement() const { return required && !hdr; }
   std::unique_ptr<Fel> m_dvFel=std::make_unique<Fel>();
   std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
+  uint64_t m_dvLayerEpoch{};
   int m_codecControlFlags=0, reads=0;
   std::vector<Input> sequence;
   VCReturn GetBasePicture(VideoPicture* pic) {

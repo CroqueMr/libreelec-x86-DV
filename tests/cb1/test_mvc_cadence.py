@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Run decoder cadence accounting and the real MVC pairer/filter without a display."""
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -48,15 +49,20 @@ struct CLog {
         source = (VIDEO / 'DVDVideoCodecFFmpeg.cpp').read_text()
         header = (VIDEO / 'DVDVideoCodecFFmpeg.h').read_text()
         control = 'struct CDropControl ' + body(header, 'struct CDropControl') + ' m_dropCtrl;'
-        accounting = source.split('// here we got a frame\n', 1)[1]
-        accounting = accounting.split('  if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)', 1)[0]
+        helper = 'void CDVDVideoCodecFFmpeg::UpdateDropControl(int64_t pts)'
+        if helper in source:
+            decoded = body(source, 'CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(')
+            accounting = re.search(
+                r'(?m)^  if \(!m_multiview\)\n    UpdateDropControl\([^\n]+\);', decoded
+            ).group()
+        else:
+            decoded = source.split('// here we got a frame\n', 1)[1]
+            accounting = decoded.split('  if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)', 1)[0]
         functions = '\n'.join(signature + body(source, signature) for signature in (
             'CDVDVideoCodecFFmpeg::CDropControl::CDropControl()',
             'void CDVDVideoCodecFFmpeg::CDropControl::Reset(bool init)',
             'void CDVDVideoCodecFFmpeg::CDropControl::Process(int64_t pts, bool drop)',
             'CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)'))
-        # Compile the same harness before and after introducing the accounting helper.
-        helper = 'void CDVDVideoCodecFFmpeg::UpdateDropControl(int64_t pts)'
         if helper in source:
             functions += '\n' + helper + body(source, helper)
         program = r'''
@@ -77,7 +83,7 @@ extern "C" {
 }
 constexpr int DVD_CODEC_CTRL_DRAIN=1;
 class CDVDVideoCodec {
-public: enum VCReturn {VC_ERROR, VC_BUFFER, VC_PICTURE};
+public: enum VCReturn {VC_ERROR, VC_BUFFER, VC_PICTURE, VC_NONE};
 };
 class CDVDVideoCodecFFmpeg : public CDVDVideoCodec {
 public:
@@ -130,6 +136,7 @@ public:
   void UpdateDropControl(int64_t pts);
   void AccountDecoded() { ACCOUNTING }
   VCReturn Startup() {
+    [[maybe_unused]] constexpr bool continueBaseDrain = false; // No FEL decoder on this path.
     m_pDecodedFrame->pict_type=AV_PICTURE_TYPE_I;
     if (!m_started) STARTUP return VC_PICTURE;
   }
@@ -229,8 +236,7 @@ int main(int argc,char** argv) {
   }
 }
 '''.replace('CONTROL', control).replace('ACCOUNTING', accounting).replace('FUNCTIONS', functions)
-        program = program.replace('STARTUP', body(source.split('// here we got a frame', 1)[1],
-                                                  'if (!m_started)'))
+        program = program.replace('STARTUP', body(decoded, 'if (!m_started)'))
         (root / 'test.cpp').write_text(program)
         cls.executable = root / 'test'
         command = ['c++', '-std=c++20', '-D__STDC_CONSTANT_MACROS',

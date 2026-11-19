@@ -37,6 +37,7 @@ Blob* drmModeGetPropertyBlob(int,uint64_t){return nullptr;}void drmModeFreePrope
 struct CWinSystemGbmGLESContext {
  std::shared_ptr<CDRMUtils> m_DRM=std::make_shared<CDRMAtomic>();
  CDVBridgeState m_dvState,m_cb1ConnectorState;
+ bool m_dvStopPending=false;
  bool m_cb1RestoringPreferences=false,m_hdrConversion=false,m_sdrConversion=false,m_dvOrdinaryFrame=false,m_dvEndPending=false;
  bool pendingRestore=false,m_dvOutputSurface=false,pendingSurface=false;
  bool requestedLimited=false,ordinaryLimited=false;int deferred=0,colorSpaceRefreshes=0;
@@ -50,6 +51,7 @@ struct CWinSystemGbmGLESContext {
  std::optional<uint64_t> DefaultMaxBpc() const{return 12;}
  void DeferConnectorPreferences(){++deferred;}
  void ApplyColorspace(){++colorSpaceRefreshes;}
+ void SetHDR(std::nullptr_t){assert(false);}
  bool CaptureCB1ConnectorPreferences();bool StageCB1ConnectorPreferences(bool);
  bool StageTransportPreferences();bool ConnectorPreferencesAllowed() const;
  std::optional<bool> TransportLimitedColor() const;

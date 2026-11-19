@@ -2077,6 +2077,12 @@
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Expose a pending output stop to the renderer."
     }
   },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stop-sdr-gui.patch": {
+    "owner": "Restore the GUI signal when playback stops with a captured DV transport.",
+    "files": {
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Clear captured movie HDR metadata in each stopped transport restore."
+    }
+  },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-native-sdr-shader-colorimetry.patch": {
     "owner": "Signal the output gamut of native SDR Kodi shaders on GBM.",
     "files": {
@@ -2398,6 +2404,49 @@
       "xbmc/windowing/gbm/DVBridgeCapture.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Guard video-only screenshots of composed frames.",
       "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Refresh paused native captures and select the correctly decoded video output."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-terminal-layer-drain.patch": {
+    "owner": "Drain joined Blu-ray layers without presenting a base picture whose metadata is missing.",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDDemuxers/BlurayDovi.h": "Keep terminal base references in decode order and signal EOF only after all pending layers are drained.",
+      "xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp": "Preserve terminal layer errors at the FFmpeg demux boundary.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Keep reference-only layer pictures out of the base-only video output."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-unpaired-mel.patch": {
+    "component": "kodi",
+    "files": {
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h": "Carry own-frame RPU provenance with decoded and reordered pictures.",
+      "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp": "Present verified metadata-only MEL pictures and classify the final base pictures before closing an absent EL."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-print-screen-sdr.patch": {
+    "component": "kodi",
+    "files": {
+      "xbmc/rendering/capture/CaptureReadback.h": "Track whether the readback matches the advertised color encoding.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Mark only known SDR and PQ readback paths as color verified.",
+      "xbmc/utils/IScreenshotSurface.h": "Expose color verification alongside the captured surface.",
+      "xbmc/rendering/gles/ScreenshotSurfaceGLES.cpp": "Transfer readback color verification to the screenshot surface.",
+      "xbmc/rendering/capture/CaptureTypes.h": "Keep verified surface encoding with the capture result.",
+      "xbmc/application/Application.cpp": "Snapshot color verification before delivering the composite.",
+      "xbmc/rendering/capture/CaptureConvert.h": "Expose an explicit display SDR conversion for the screenshot writer.",
+      "xbmc/rendering/capture/CaptureConvert.cpp": "Reuse FFmpeg CMS to convert verified HDR composites to display sRGB.",
+      "xbmc/utils/Screenshot.cpp": "Normalize standard Print Screen exports on the capture worker."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": {
+    "owner": "Preserve NVIDIA EGL/GBM buffer ownership through surface replacement and shutdown.",
+    "files": {
+      "xbmc/utils/EGLUtils.cpp": "Keep live drawables during NVIDIA config errors and release their buffers before retirement.",
+      "xbmc/utils/EGLUtils.h": "Expose ordered drawable retirement and optional preservation on config errors.",
+      "xbmc/windowing/gbm/DVWindowRetirement.h": "Return display buffers before deferred EGL teardown.",
+      "xbmc/windowing/gbm/GBMUtils.cpp": "Drain the discarded surface's owned buffers without destroying its native window.",
+      "xbmc/windowing/gbm/GBMUtils.h": "Expose the matching GBM buffer queue to the window owner.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.cpp": "Apply ordered retirement only to the NVIDIA DRM backend.",
+      "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Declare NVIDIA drawable retirement helpers.",
+      "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Recognize the NVIDIA DRM backend from the selected device.",
+      "xbmc/windowing/gbm/drm/DRMUtils.h": "Keep the EGL/GBM ownership quirk scoped to NVIDIA."
     }
   }
 }

@@ -54,6 +54,7 @@ bool dvbridge_fel_submit(Fel* f,AVPacket*){return f->submit;}
 bool dvbridge_fel_submit_source(Fel* f,AVPacket*,const dvbridge_fel_source*){return f->submit;}
 bool dvbridge_fel_failed(Fel* f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*){return false;}
+bool dvbridge_fel_has_enhancement(Fel*){return true;}
 constexpr int CODEC_BLURAY_NAVIGATION=4;
 int dvbridge_fel_take_mel(Fel*,int64_t,AVFrame**,const void*,size_t){return 3;}
 bool dvbridge_fel_device(Fel*,void*){return true;}
@@ -71,6 +72,7 @@ struct VideoPicture{
  int64_t doviSourcePts=AV_NOPTS_VALUE;int pixels=123;
  std::shared_ptr<AVFrame> doviEnhancement;int doviEnhancementBinding{};
  int doviSourceBinding=17;
+ struct {bool frameRpu=false;} doviSourceInfo;
  struct Metadata{bool valid=true;int Binding()const{return 17;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}}doviMetadata;
  void Reset(){*this={};}void CopyRef(const VideoPicture& p){*this=p;}
 };

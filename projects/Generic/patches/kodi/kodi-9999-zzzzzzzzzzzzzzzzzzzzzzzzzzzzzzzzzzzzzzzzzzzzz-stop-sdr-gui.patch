@@ -1,0 +1,15 @@
+Subject: [PATCH] GBM: restore GUI signaling with the transport on playback stop
+
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -2825,6 +2825,10 @@
+ bool CWinSystemGbmGLESContext::StageCB1ConnectorPreferences(bool restore)
+ {
+   m_cb1RestoringPreferences = restore;
++  // A quick switch may have captured the movie's native HDR metadata.
++  // Stage GUI signaling on each stop restore, including an NVIDIA head restart.
++  if (restore && m_dvStopPending)
++    SetHDR(nullptr);
+   if (!m_cb1ConnectorState.Captured()) return true;
+   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+   return drm && m_cb1ConnectorState.Stage(*drm, restore,
