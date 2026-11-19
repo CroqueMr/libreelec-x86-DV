@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Run decoder cadence accounting and the real MVC pairer/filter without a display."""
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -48,15 +49,19 @@ struct CLog {
         source = (VIDEO / 'DVDVideoCodecFFmpeg.cpp').read_text()
         header = (VIDEO / 'DVDVideoCodecFFmpeg.h').read_text()
         control = 'struct CDropControl ' + body(header, 'struct CDropControl') + ' m_dropCtrl;'
-        accounting = source.split('// here we got a frame\n', 1)[1]
-        accounting = accounting.split('  if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)', 1)[0]
+        helper = 'void CDVDVideoCodecFFmpeg::UpdateDropControl(int64_t pts)'
+        if helper in source:
+            accounting = re.search(
+                r'(?m)^  if \(!m_multiview\)\n    UpdateDropControl\([^\n]+\);', source
+            ).group()
+        else:
+            accounting = source.split('// here we got a frame\n', 1)[1]
+            accounting = accounting.split('  if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)', 1)[0]
         functions = '\n'.join(signature + body(source, signature) for signature in (
             'CDVDVideoCodecFFmpeg::CDropControl::CDropControl()',
             'void CDVDVideoCodecFFmpeg::CDropControl::Reset(bool init)',
             'void CDVDVideoCodecFFmpeg::CDropControl::Process(int64_t pts, bool drop)',
             'CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)'))
-        # Compile the same harness before and after introducing the accounting helper.
-        helper = 'void CDVDVideoCodecFFmpeg::UpdateDropControl(int64_t pts)'
         if helper in source:
             functions += '\n' + helper + body(source, helper)
         program = r'''

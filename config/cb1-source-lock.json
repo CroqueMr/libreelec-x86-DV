@@ -339,7 +339,7 @@
     "tests/cb1/test_kodi_skin_package.py": "f451d055bab0e05b94dbe4bb84d333e641fb5669b9e3a87cab93e937cccb1078",
     "tests/cb1/test_ci_patch_inputs.py": "f019f56f3da4593e01e3221f6e02bee64825f5ce5d322ba2b6791265f59282ce",
     "tests/cb1/test_hlg_startup.py": "daf3d8c10e4ae1a12a1cdb9788d433cab300f1e553b4fe5bc0a0aadda8041496",
-    "tests/cb1/sdr_direct_provenance.cpp": "3fd74e5d704a5596d6216545596bd8a0fe5afd23f1cd62961fe450b05c2071f5",
+    "tests/cb1/sdr_direct_provenance.cpp": "5d7fc2c881e10a86bd8ea9e7ad49fd880c823b260065531e76fc7f2f66b2a61b",
     "tests/cb1/test_sdr_direct_integration.py": "e4845b25655a02e42d0199e90878b4a1a7fab57d8b49594139bd80c9858d2bc1",
     "tests/cb1/test_sdr_render.py": "6c5cbdd57b424333a5e51ad87a82272e296318bfc5d4bcbc5171ef21d99bf258",
     "tests/cb1/sdr_direct_owners.cpp": "20f892bba6e379292998d3c031bc07552cda4dabc9aa793b781a7578b406a679",
@@ -491,7 +491,8 @@
     "projects/Generic/patches/linux/0104-wifi-mt76-mt7925-track-join-roc-ownership.patch": "959074567d193b64107070207fce565164f1cae63df2dea1f37eee93438e8d9f",
     "tests/cb1/test_mt7925_roc.py": "ebd1df398e41d912fc018d97b269ffa2b11ac10fb1d9ef79ce89ebdaa5426cf9",
     "tests/cb1/mt7925_roc.c": "0f4154d64644eeed97fe50e71a1d5b69c47c278e444a132c7133eb42bd5dee69",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-unpaired-mel.patch": "c38fb838d7bf5a082dc563828c551fcc2d76e5cd9d94fe273b201c7a7686f193"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-unpaired-mel.patch": "c38fb838d7bf5a082dc563828c551fcc2d76e5cd9d94fe273b201c7a7686f193",
+    "tests/cb1/test_mvc_cadence.py": "66a35d4e1f0bd9f0492be07c271b1828c339f95fccfe4c7c10504b415f1bfe03"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
