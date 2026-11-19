@@ -167,8 +167,10 @@ int main(){assert(admit(1920,1080) && admit(2560,1440) && admit(3840,2160));
 #include <cassert>
 #include <cstdint>
 #include <initializer_list>
-constexpr int DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2;
-struct drmModeModeInfo {int hdisplay,vdisplay,clock=148500,htotal=2200,vtotal=1125,flags=0;};
+constexpr int DRM_MODE_FLAG_INTERLACE=1,DRM_MODE_FLAG_DBLSCAN=2,DRM_MODE_FLAG_3D_MASK=0xf<<14;
+struct drmModeModeInfo {
+ int hdisplay,vdisplay,clock=148500,htotal=2200,vtotal=1125,flags=0,vscan=0;
+};
 struct CResolutionUtils {static bool IsCB1RefreshRate(double value){return value>=10 && value<=60;}};
 double usable(const drmModeModeInfo* mode) PREDICATE
 int main(){
