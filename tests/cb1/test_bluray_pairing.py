@@ -23,7 +23,7 @@ class BlurayPairingTests(unittest.TestCase):
                 '-I'+str(TREE/'xbmc'), '-I'+str(prefix/'include'), '-I'+str(root), str(fixture),
                 '-L'+str(prefix/'lib'), '-lavcodec', '-lavutil',
                 '-o', str(binary)], check=True)
-            for case in ('gap', 'final-bl'):
+            for case in ('gap', 'final-bl', 'base-only'):
                 with self.subTest(case=case):
                     run = subprocess.run([str(binary), case], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stderr)

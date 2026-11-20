@@ -37,7 +37,8 @@ def matroska(tracks, el=-1, configured=None, packet_pair=None, dimensions=None, 
     cluster = number(0xe7,0)
     for i in range(tracks):
         payload = packet_pair[i] if packet_pair is not None else b'\0\0\0\3\x26\1\x55'
-        cluster += element(0xa3,bytes([0x81+i,0,0,0x80])+payload)
+        if payload is not None:
+            cluster += element(0xa3,bytes([0x81+i,0,0,0x80])+payload)
     return element(0x1a45dfa3,header)+element(0x18538067,
         element(0x1549a966,number(0x2ad7b1,1000000))+element(0x1654ae6b,entries)+element(0x1f43b675,cluster))
 
@@ -55,15 +56,16 @@ class MatroskaDualTrack(unittest.TestCase):
         dimensions = [(1920, 1080)] * 2
         with tempfile.TemporaryDirectory() as temporary:
             sample = Path(temporary) / "equal-size.mkv"
-            for declared, sizes, vps_ids in (
-                (False, dimensions, None),
-                (True, dimensions, None),
-                (False, [(3840, 2160), (1920, 1080)], [0x80, 0x90]),
+            for declared, sizes, vps_ids, peer in (
+                (False, dimensions, None, base),
+                (True, dimensions, None, base),
+                (False, [(3840, 2160), (1920, 1080)], [0x80, 0x90], base),
+                (False, [(3840, 2160), (1920, 1080)], None, None),
             ):
-                with self.subTest(declared=declared, sizes=sizes, vps_ids=vps_ids):
+                with self.subTest(declared=declared, sizes=sizes, vps_ids=vps_ids, peer=peer):
                     sample.write_bytes(matroska(
                         2, configured={0, 1} if declared else {0}, el_only=1 if declared else None,
-                        packet_pair=[base + rpu, base], dimensions=sizes, vps_ids=vps_ids,
+                        packet_pair=[base + rpu, peer], dimensions=sizes, vps_ids=vps_ids,
                     ))
                     result = subprocess.run(
                         [str(ffprobe), "-v", "quiet", "-show_packets", "-show_stream_groups",
