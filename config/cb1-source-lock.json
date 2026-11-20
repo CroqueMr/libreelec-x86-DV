@@ -366,7 +366,7 @@
     "tests/cb1/test_pascal_hdr10_scanout.py": "d065254563c1a94c03d08cd24dd9c47a6269f868c741cc1dc67788c9e0fd6ed4",
     "tests/cb1/test_output_window_teardown.py": "e5927c0750c9544b44c6be08d307ac9dc2d0f5cfb691c6048be31f6e2126e987",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9008-optional-vsif-reference.patch": "5b1f0fea996844004f837559ce7acd714a23bbf5017a1cf12f1950c23bfceeb7",
-    "config/cb1-patch-index.json": "8f39699f38657437d93edb74d8023ad2195729854828bb4d984976688ecec332",
+    "config/cb1-patch-index.json": "b809ea2735bbde0b70d3947b4b610c586ce07e3303f151df70a43730f29d4708",
     "projects/Generic/patches/linux/linux-9948-intel-hdmi-ready-recovery.patch": "c10f4aa258ca6d2be95a175006389362ccfad3566cff1e892f0b162faf486780",
     "projects/Generic/patches/linux/linux-9970-rx550-native-dv.patch": "27964d48331d2e49380d1104c40e1e857d02a75671148ca206929a757f218b3b",
     "tests/cb1/test_bluray_overlay_order.py": "538775e911baa402d135669964fb31e021a121bf66ee06d95e1068777a9bf27c",
@@ -501,7 +501,11 @@
     "tests/cb1/test_print_screen_sdr.py": "bc60a2f7b435972f8a4ebec3221951fef91ed43a5c2c4fd6f950c0788eb2bf35",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nvidia-egl-gbm-retirement.patch": "957170369482dd2e74d3665aa49d003d599347257ec6bf0502eb90823571eaa4",
     "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
-    "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51"
+    "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
+    "projects/Generic/patches/linux/linux-9955-dp-pcon-dv.patch": "d7b2afd371ec45028688174f0db14c4a61b67fcc4d40511c06d6fad30fca0d49",
+    "projects/Generic/patches/linux/linux-9956-pcon-hbr-audio.patch": "bffd2fd0ef3045991ff13f1fdb53993bbbbe31a812e52412c2532f45b8511483",
+    "projects/Generic/patches/linux/linux-9980-dp-pcon-dv-bridge.patch": "5599adbb04bdc71749e447619bf673b4568d60351ad95559943bbfd89bd9a2e1",
+    "packages/audio/alsa-lib/patches/0002-hda-intel-disable-iec958-preserve.patch": "8a26a3ece08dcd29af6f3482a1fa52c9f208d8407684f267220deb5ed6869e53"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {

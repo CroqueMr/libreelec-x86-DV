@@ -1,0 +1,36 @@
+From: Snuffpig <181518943+Snuffpig@users.noreply.github.com>
+Subject: [PATCH] conf: HDA-Intel: disable preserve on IEC958 Playback Default hooks
+
+Prevent alsa-lib from restoring a stale IEC958 Playback Default (AES0=0x04
+LPCM) status when closing a stream during HBR/passthrough track switches or
+pause/resume transitions.
+
+--- a/src/conf/cards/HDA-Intel.conf
++++ b/src/conf/cards/HDA-Intel.conf
+@@ -117,7 +117,7 @@
+ 				index 16
+ 				optional true
+ 				lock true
+-				preserve true
++				preserve false
+ 				value [ $AES0 $AES1 $AES2 $AES3 ]
+ 			}
+ 			{
+@@ -131,7 +131,7 @@
+ 			{
+ 				name "IEC958 Playback Default"
+ 				lock true
+-				preserve true
++				preserve false
+ 				value [ $AES0 $AES1 $AES2 $AES3 ]
+ 			}
+ 			{
+@@ -199,7 +199,7 @@
+ 			name "IEC958 Playback Default"
+ 			index $CTLINDEX
+ 			lock true
+-			preserve true
++			preserve false
+ 			value [ $AES0 $AES1 $AES2 $AES3 ]
+ 		}
+ 		{

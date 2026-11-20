@@ -2448,5 +2448,43 @@
       "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Recognize the NVIDIA DRM backend from the selected device.",
       "xbmc/windowing/gbm/drm/DRMUtils.h": "Keep the EGL/GBM ownership quirk scoped to NVIDIA."
     }
+  },
+  "projects/Generic/patches/linux/linux-9955-dp-pcon-dv.patch": {
+    "owner": "Standard Dolby Vision through an onboard DP-to-HDMI protocol converter (gen11+).",
+    "files": {
+      "drivers/gpu/drm/i915/display/intel_atomic.c": "Allow DisplayPort connectors carrying the DV property to set dv_lab_standard.",
+      "drivers/gpu/drm/i915/display/intel_display_params.c": "Expose the i915.dv_pcon module parameter for DP-to-HDMI converter DV.",
+      "drivers/gpu/drm/i915/display/intel_display_params.h": "Declare the dv_pcon parameter in INTEL_DISPLAY_PARAMS_FOR_EACH.",
+      "drivers/gpu/drm/i915/display/intel_dp.c": "Validate and emit DP AVI/GMP InfoFrame SDPs for Standard DV through verified converters.",
+      "drivers/gpu/drm/i915/display/intel_dp.h": "Declare intel_dp_pcon_dv_allowed() for HDMI DIP hook setup.",
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Read back DP AVI and GMP SDPs as computed HDMI InfoFrames for state checking."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9956-pcon-hbr-audio.patch": {
+    "owner": "Fix HBR passthrough and multichannel LPCM over Gen12 DP-to-HDMI protocol converters.",
+    "files": {
+      "include/drm/drm_audio_component.h": "Add wait_vblank and bus_reset_notify component hooks for PCON audio synchronization.",
+      "include/sound/hda_component.h": "Declare snd_hdac_acomp_wait_vblank() helper and stub.",
+      "sound/hda/core/component.c": "Implement snd_hdac_acomp_wait_vblank() to invoke the display wait_vblank hook.",
+      "drivers/gpu/drm/i915/display/intel_audio_regs.h": "Define TGL_AUD_BE_FAULT_STATUS (0x65f20) and TGL_AUD_BE_FAULT_LATCHED (bit 5).",
+      "drivers/gpu/drm/i915/display/intel_display_core.h": "Add fault_check_work, last_fault_recovery, fault_retry_count, and wakeref to struct intel_audio.",
+      "drivers/gpu/drm/i915/display/intel_audio.c": "Preserve DP AUD_CONFIG bit 29, sequence offline DIP and 45 ms drain/VBlank timing, keep DP ELD connection type, and detect/resync latched Gen12 backend faults.",
+      "sound/hda/common/codec.c": "Explicitly select device 0 on single-device Intel (0x8086) HDA pins.",
+      "sound/hda/codecs/hdmi/hdmi_local.h": "Track cached per-pin hardware transport state and deferred unmute/reset flags.",
+      "sound/hda/codecs/hdmi/hdmi.c": "Gate HBR/EPT/ICT/chmap and stream reset sequencing on Intel Haswell+ codecs (intel_hsw_fixup) without altering non-Intel or AMD paths.",
+      "sound/hda/codecs/hdmi/intelhdmi.c": "Disable sticky streams and AC_DIG3_KAE on Intel HDMI codecs and wait for VBlank before unmuting."
+    }
+  },
+  "projects/Generic/patches/linux/linux-9980-dp-pcon-dv-bridge.patch": {
+    "owner": "Permit verified DP-to-HDMI bridge routes in drm_dvbridge_validate_link() after R1.0.1 linux-9971 split.",
+    "files": {
+      "include/drm/drm_dvbridge.h": "Add verified_bridge to struct drm_dvbridge_link and accept verified DP-to-HDMI bridges alongside native HDMI."
+    }
+  },
+  "packages/audio/alsa-lib/patches/0002-hda-intel-disable-iec958-preserve.patch": {
+    "owner": "Disable IEC958 Playback Default state restoration on close for HDA-Intel.",
+    "files": {
+      "src/conf/cards/HDA-Intel.conf": "Set preserve false on IEC958 Playback Default hooks to avoid resetting AES0 during passthrough switches."
+    }
   }
 }
