@@ -48,6 +48,7 @@ struct AVCodecContext{AVBufferRef* hw_frames_ctx{};};
 struct AVPacket{int64_t pts{};};
 struct AVRational{int num,den;};
 struct dvbridge_fel_source{int64_t base_pts,enhancement_pts;AVRational time_base;uint64_t epoch;bool presentable;};
+constexpr int AV_PKT_FLAG_DISCARD = 4;
 struct DemuxPacket{bool videoWindowed=false;struct{int64_t basePts{},enhancementPts{};int clockNum{},clockDen{};uint64_t epoch{};bool valid{},presentable{};std::shared_ptr<AVPacket> enhancement;int baseFlags{};}doviLayerTimes;};
 struct Fel{bool ready=false,failed=false,submit=true;int takes=0,discardUntil=0;};
 bool dvbridge_fel_submit(Fel* f,AVPacket*){return f->submit;}
