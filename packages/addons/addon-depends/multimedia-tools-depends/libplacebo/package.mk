@@ -13,8 +13,8 @@ PKG_LONGDESC="Reusable library for GPU-accelerated image/video processing primit
 PKG_BUILD_FLAGS=""
 
 CB1_PLACEBO_SOURCE_REPOSITORY="https://github.com/CroqueMr/libplacebo"
-CB1_PLACEBO_SOURCE_COMMIT="e165abc89c64e44a80fe32a97605723b8a7db4b8"
-CB1_PLACEBO_SOURCE_SHA256="f42f59db056d9231322655f5a96fa7edaa0f8faae609b0c8e07624c8f4c0033b"
+CB1_PLACEBO_SOURCE_COMMIT="f7d8a9b9a0a80c7f21fd1c44849b92e3bcca847f"
+CB1_PLACEBO_SOURCE_SHA256="0fa8f705f1a02dd8c9ebc6861d61ec45b935ffff9e0c210536147bdaa2fa608d"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
   PKG_VERSION="7.387.0"
