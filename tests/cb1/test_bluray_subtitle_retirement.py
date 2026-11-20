@@ -19,6 +19,8 @@ class BluraySubtitleRetirement(unittest.TestCase):
         retire = body(process, marker) if marker in process else '{}'
         close = body(source, 'bool CVideoPlayer::CloseStream(')
         enable = body(source, 'void CVideoPlayer::SetEnableStream(')
+        bluray = (TREE / 'xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxBluray3D.cpp').read_text()
+        enable_bluray = body(bluray, 'bool CDVDDemuxBluray3D::EnableStream(')
         better = body(source, 'bool CVideoPlayer::IsBetterStream(')
         sub_source = (TREE / 'xbmc/cores/VideoPlayer/VideoPlayerSubtitle.cpp').read_text()
         sub_close = body(sub_source, 'void CVideoPlayerSubtitle::CloseStream(')
@@ -83,11 +85,19 @@ struct CDemuxStream {
 };
 struct Demuxer {
  CDemuxStream full,forced{4771,20};
+ struct Base {
+  bool supportsEnable=false,lastEnable=false;
+  bool EnableStream(long demuxerId,int id,bool enable) {
+   assert(demuxerId==7 && (id==19 || id==20));
+   lastEnable=enable;
+   return supportsEnable;
+  }
+ } base, *m_base=&base;
  CDemuxStream* GetStream(long demux,int id) {
   if (demux!=7) return nullptr;
   return id==19 ? &full : id==20 ? &forced : nullptr;
  }
- bool EnableStream(long,int,bool) { return false; } // pinned CDVDDemux implementation
+ bool EnableStream(long demuxerId,int id,bool enable) BLURAY_ROUTE
 };
 struct CVideoPlayer {
  std::shared_ptr<CDVDInputStream> m_pInputStream=std::make_shared<Input>();
@@ -107,6 +117,18 @@ struct CVideoPlayer {
  void Boundary() RETIRE
 };
 int main() {
+ CVideoPlayer routes;
+ routes.SetEnableStream(routes.m_CurrentSubtitle,false);
+ assert(!routes.m_CurrentSubtitle.demuxDisabled);
+ routes.m_pDemuxer->base.supportsEnable=true;
+ routes.SetEnableStream(routes.m_CurrentSubtitle,false);
+ assert(routes.m_CurrentSubtitle.demuxDisabled && !routes.m_pDemuxer->base.lastEnable);
+ routes.SetEnableStream(routes.m_CurrentSubtitle,true);
+ assert(!routes.m_CurrentSubtitle.demuxDisabled && routes.m_pDemuxer->base.lastEnable);
+ routes.m_pDemuxer->m_base=nullptr;
+ routes.SetEnableStream(routes.m_CurrentSubtitle,false);
+ assert(!routes.m_CurrentSubtitle.demuxDisabled);
+
  // The old cue and menu are both present. No forced-track packet is needed.
  CVideoPlayer p;p.Boundary();
  assert(p.m_CurrentSubtitle.id==-1 && !p.subtitle.m_pOverlayContainer->Has(DVDOverlaySource::SUBTITLE)
@@ -149,7 +171,7 @@ int main() {
 '''
         program = program.replace('struct CDVDInputStream {', 'enum class MenuType {NONE,NATIVE};\nstruct CDVDInputStream {')
         for tag, value in [('SUB_CLOSE', sub_close), ('ENABLE', enable), ('CLOSE', close),
-                           ('BETTER', better), ('RETIRE', retire)]:
+                           ('BETTER', better), ('RETIRE', retire), ('BLURAY_ROUTE', enable_bluray)]:
             program = program.replace(tag, value)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
