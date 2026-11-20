@@ -16,8 +16,8 @@ PKG_LONGDESC="A free and open source cross-platform media player."
 PKG_BUILD_FLAGS="+speed"
 
 CB1_KODI_SOURCE_REPOSITORY="https://github.com/CroqueMr/xbmc"
-CB1_KODI_SOURCE_COMMIT="2bff0eacbedd0f1f5855ed72e2718620468bab2a"
-CB1_KODI_SOURCE_SHA256="8aa03a7b3c53ad0b632a35fe7e7a9f9c13b7041285a6c53699564b93e0b10e88"
+CB1_KODI_SOURCE_COMMIT="a6ef1bca9e8d7afb2b3724ad142695de92fe686c"
+CB1_KODI_SOURCE_SHA256="a64a335cba38b043921d1ee6e0fc79e19d09d784dc15b5fa67ca4486d045f847"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ] && [ "${DISPLAYSERVER}" = "no" ]; then
   # This fork already contains the package and Generic GBM patch series.

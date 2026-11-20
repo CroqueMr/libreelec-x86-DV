@@ -9,6 +9,38 @@ from test_native_video_source import TREE, body
 
 
 class FELTerminalTests(unittest.TestCase):
+    def test_declared_fel_drain_waits_after_native_base_frame_advances(self):
+        source = (TREE / "xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp").read_text()
+        base = body(source, "CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetBasePicture(")
+        start = base.index("  const bool continueBaseDrain")
+        end = base.index("#else", start)
+        disposition = base[base.index("    return ret == VC_BUFFER && continueBaseDrain"):]
+        disposition = disposition.splitlines()[0]
+        program = r"""
+#include <cassert>
+#include <memory>
+enum Result { VC_NONE, VC_BUFFER, VC_PICTURE };
+constexpr unsigned CODEC_BLURAY_NAVIGATION = 1, DVD_CODEC_CTRL_DRAIN = 2, DVD_CODEC_CTRL_POLL = 4;
+bool dvbridge_fel_has_enhancement(const bool*) { return true; }
+Result nativeBaseOutput(bool fel, unsigned epoch, unsigned options, unsigned flags) {
+  std::unique_ptr<bool> m_dvFel = fel ? std::make_unique<bool>() : nullptr;
+  auto m_dvLayerEpoch = epoch;
+  struct { unsigned codecOptions; } m_hints{options};
+  auto m_codecControlFlags = flags;
+  // VAAPI accepted a BL frame and has not exposed output from its queue yet.
+  auto ret = VC_BUFFER;
+@PROGRESS@
+@DISPOSITION@
+}
+int main() {
+  assert(nativeBaseOutput(true, 1, CODEC_BLURAY_NAVIGATION, DVD_CODEC_CTRL_DRAIN) == VC_NONE);
+  assert(nativeBaseOutput(true, 1, 0, DVD_CODEC_CTRL_DRAIN) == VC_NONE);
+  assert(nativeBaseOutput(false, 0, 0, DVD_CODEC_CTRL_DRAIN) == VC_BUFFER);
+  assert(nativeBaseOutput(true, 1, 0, DVD_CODEC_CTRL_POLL) == VC_BUFFER);
+}
+""".replace("@PROGRESS@", base[start:end]).replace("@DISPOSITION@", disposition)
+        self.compile_run(program)
+
     def test_selected_engine_preserves_exact_shared_seek_anchors(self):
         engine = os.environ.get("CB1_TEST_ENGINE")
         prefix = os.environ.get("FFMPEG_TEST_PREFIX")
@@ -161,7 +193,7 @@ struct CLog{
  template<class... T>static void Log(T...){}
  static void Log(decltype(LOGERROR),const char* format,const char*){if(std::string(format).find("Kodi Default")!=std::string::npos)++missingEnhancementLogs;}
 };
-struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL};};
+struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_BUFFER,VC_PICTURE,VC_ERROR,VC_EOF,VC_FATAL,VC_REOPEN,VC_FLUSHED};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  struct {int codecOptions{};bool preferHybridHDR10Plus{};}m_hints;
  bool NeedsDVEnhancement() const {return false;}

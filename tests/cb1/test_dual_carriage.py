@@ -336,8 +336,10 @@ int main(int argc,char**argv) {
     status=d.ReadBlurayDovi(joined);
     assert(status==0 && joined->stream_index==0 && joined->pts==savedPts+((startsEl||startsAudio)?3754:0));
     const uint8_t marker=startsAudio?0x22:0xbb;
-    std::vector<uint8_t> expected={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,marker,0,0,0,1,0x7c,1,0xcc};
+    std::vector<uint8_t> expected={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7c,1,0xcc};
     assert(joined->size==int(expected.size()) && !memcmp(joined->data,expected.data(),expected.size()));
+    const auto& companion=d.m_blurayTiming.enhancement;
+    assert(companion && companion->size==7 && companion->data[6]==marker);
     av_packet_free(&joined);
    }else assert(d.m_pkt.result==0 && d.m_pkt.pkt.data && !d.m_blurayDovi);
    for(auto* p:scripted)av_packet_free(&p);scripted.clear();
@@ -399,8 +401,12 @@ int main(int argc,char**argv) {
    AVPacket* packet=av_packet_alloc();int count=0,ret;
    const bool mov=strstr(d.m_pFormatContext->iformat->name,"mov");
    while((ret=d.ReadBlurayDovi(packet))==0){
-    const uint8_t expected[]={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,0xbb,0,0,0,1,0x7c,1,0xcc};
+    const uint8_t expected[]={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7c,1,0xcc};
+    const uint8_t expectedEL[]={0,0,0,1,0x26,1,0xbb};
     assert(packet->stream_index==bl && packet->size==sizeof(expected) && !memcmp(packet->data,expected,sizeof(expected)));
+    const auto& companion=d.m_blurayTiming.enhancement;
+    assert(companion && companion->size==sizeof(expectedEL) &&
+           !memcmp(companion->data,expectedEL,sizeof(expectedEL)));
     const bool clocks=strstr(argv[i],"clocks-paired");
     const int64_t timestamp=mov ? count*(clocks?1001:1000) : 90000+count*3754;
     assert(packet->pts==timestamp && packet->dts==timestamp);

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 PKG_NAME="cb1-engine"
-PKG_VERSION="5ee9dcbf34b3804dd47238310ffb1bba963ec1c7"
-PKG_SHA256="0792bc9d7f4f8f9788ab58dbad8ae0e01687cb3e8c702afa2dd1b375fa4b1f4f"
+PKG_VERSION="5d7beba1370021d20a3b3c6468f47f5dcfba0e04"
+PKG_SHA256="c583d485e6f3bde19e79906c3364a78bfc6af0638c81e9e3bc508b83a1e5bedb"
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="https://github.com/CroqueMr/CB1"
 PKG_URL="${PKG_SITE}/archive/${PKG_VERSION}.tar.gz"
