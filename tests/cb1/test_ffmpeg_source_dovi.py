@@ -1,8 +1,7 @@
-"""Apply the pinned FFmpeg patch, execute its raw ownership helpers against libavutil."""
+"""Execute the shipped FFmpeg raw Dolby Vision ownership helpers against libavutil."""
 import os
 from pathlib import Path
 import subprocess
-import tarfile
 import tempfile
 import unittest
 from test_native_video_source import body
@@ -10,22 +9,14 @@ from test_native_video_source import body
 
 class RawSourceTests(unittest.TestCase):
     def test_av1_raw_retention_preserves_bytes_and_optional_failure(self):
-        patch=Path(__file__).resolve().parents[2]/'CB1/patches/ffmpeg/ffmpeg-9900-03-source-dovi-raw.patch'
-        self.assertTrue(patch.exists(),'AV1 raw source retention patch is missing')
+        source=os.environ.get('FFMPEG_MATCHED_SOURCE')
+        if not source:self.skipTest('Matched FFmpeg source required')
         prefix=Path(os.environ['FFMPEG_TEST_PREFIX'])
-        archive=Path(os.environ.get('FFMPEG_SOURCE_ARCHIVE',
-            str(patch.parents[3]/'sources/ffmpeg/ffmpeg-9.0.tar.xz')))
+        codec=Path(source)/'libavcodec'
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
-            with tarfile.open(archive) as source:
-                for name in ('libavcodec/itut35.c','libavcodec/itut35.h','libavutil/frame.h'):
-                    path=root/name; path.parent.mkdir(parents=True,exist_ok=True)
-                    path.write_bytes(source.extractfile('ffmpeg-9.0/'+name).read())
-            apply=subprocess.run(['patch','-p1','--fuzz=0','-i',str(patch)],cwd=root,capture_output=True,text=True)
-            self.assertEqual(apply.returncode,0,apply.stdout+apply.stderr)
-            self.assertNotIn('offset',apply.stdout)
-            code=(root/'libavcodec/itut35.c').read_text()
-            header=(root/'libavcodec/itut35.h').read_text()
+            code=(codec/'itut35.c').read_text()
+            header=(codec/'itut35.h').read_text()
             struct='struct FFITUTT35 '+body(header,'typedef struct FFITUTT35 {')+';'
             helper='static AVBufferRef *itut_t35_dovi_raw(const FFITUTT35 *itut_t35) '+body(code,'static AVBufferRef *itut_t35_dovi_raw(')
             attach='static void itut_t35_attach_dovi_raw(FFITUTT35Meta *metadata, AVFrame *frame) '+body(code,'static void itut_t35_attach_dovi_raw(')

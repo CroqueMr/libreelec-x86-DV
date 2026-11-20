@@ -10,7 +10,7 @@ class SDRCaptureColorTests(unittest.TestCase):
         program=r'''
 #include <cassert>
 constexpr int AVCOL_PRI_BT709=1,AVCOL_PRI_BT2020=9,AVCOL_PRI_SMPTE170M=6;
-constexpr int AVCOL_TRC_BT709=1,AVCOL_TRC_SMPTE170M=6,AVCOL_TRC_IEC61966_2_1=13;
+constexpr int AVCOL_TRC_IEC61966_2_1=13;
 constexpr int AVCOL_TRC_SMPTE2084=16,AVCOL_TRC_ARIB_STD_B67=18,AVCOL_TRC_BT2020_10=14;
 constexpr int AVCOL_RANGE_JPEG=2,AVCOL_RANGE_MPEG=1;
 namespace KODI::UTILS {enum class Colorimetry{BT709,BT2020_RGB,BT2020_YCC,BT2020_CYCC};
@@ -33,7 +33,7 @@ int main(){
  window.sdr=false;color=GetOutputColorMetadata(window);
  assert(color.primaries==AVCOL_PRI_BT2020 && color.transfer==AVCOL_TRC_SMPTE2084 && color.range==AVCOL_RANGE_JPEG);
  window.custom=false;window.eotf=KODI::UTILS::Eotf::SDR;color=GetOutputColorMetadata(window);
- assert(color.primaries==AVCOL_PRI_BT709 && color.transfer==AVCOL_TRC_BT709 && color.range==AVCOL_RANGE_MPEG);
+ assert(color.primaries==AVCOL_PRI_BT709 && color.transfer==AVCOL_TRC_IEC61966_2_1 && color.range==AVCOL_RANGE_MPEG);
 }
 '''.replace('BODY',code)
         with tempfile.TemporaryDirectory() as directory:

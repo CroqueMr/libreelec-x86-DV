@@ -322,7 +322,7 @@ int main() {
  list({uhd30});assert(choose(3832,1600,30)==uhd30); // Explicit 30 Hz permitted.
  component.settings.whitelist.clear();assert(choose(3832,1600,30)==uhd60);
  list({uhd});
- assert(choose(3832,1600,film,true,RenderStereoMode::MONO)==RES_DESKTOP);
+ assert(choose(3832,1600,film,true,RenderStereoMode::MONO)==uhd); // RC2 matches the cropped eye to a flat mode.
  assert(choose(3832,1600,film,true,RenderStereoMode::SPLIT_VERTICAL)==sbs);
  component.advanced.m_videoAdjustRefreshOverrides.push_back({false,23,24,120,120});
  assert(choose(3832,1600)==RES_DESKTOP); // Native override remains authoritative.

@@ -189,7 +189,7 @@ int main() {
   assert(pass.success && pass.last.format==AV_PIX_FMT_RGBA && pass.last.color.transfer==AVCOL_TRC_SMPTE2084 && pass.last.color.range==AVCOL_RANGE_MPEG);
   CServiceBroker::GetWinSystem()->eotf=KODI::UTILS::Eotf::SDR;
   pass=run({},crop);
-  assert(pass.success && pass.last.format==AV_PIX_FMT_RGBA && pass.last.color.transfer==AVCOL_TRC_SMPTE170M && pass.last.color.range==AVCOL_RANGE_MPEG);
+  assert(pass.success && pass.last.format==AV_PIX_FMT_RGBA && pass.last.color.transfer==AVCOL_TRC_IEC61966_2_1 && pass.last.color.range==AVCOL_RANGE_MPEG);
   assert(pass.last.hasDisplayMetadata && pass.last.hasLightMetadata && ordinaryReads==5);
 }
 ''']

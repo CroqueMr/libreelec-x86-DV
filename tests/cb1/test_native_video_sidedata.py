@@ -36,6 +36,7 @@ enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS};
 struct CLog {template<class... Args> static void Log(Args...) {}};
 static bool HybridProbePicture(const AVFrame* frame,int codecFlags) @@PROBE@@
 struct CVideoBuffer {int refs=1; void Release(){--refs;} void Acquire(){++refs;}};
+struct DoviRpu;
 @@PICTURE@@
 @@METHODS@@
 struct Decoder {
