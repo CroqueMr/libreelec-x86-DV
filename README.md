@@ -166,6 +166,8 @@ For new features, [send your suggestion privately](https://docs.google.com/forms
 - NVIDIA GeForce GTX 10-series (Pascal) support includes work adapted from [LibreELEC Hades by hadesdevls](https://github.com/hadesdevls/LibreELEC-Hades).
 - Passthrough Dialnorm controls adapted from [CoreELEC p3i work by pannal](https://github.com/CroqueMr/libreelec-x86-DV/pull/155).
 - Development assistance from OpenAI GPT-6 Astra, GPT-6.1 Sol.
+- **ashlar** contributed the idea and part of the code for shader-based CNN upscaling.
+- Thank you to everyone who tests the builds, reports issues, shares logs and samples, and retests fixes. Your feedback helps improve each release.
 
 LibreELEC × CB1 is an unofficial community build made possible by the LibreELEC project. It is independent of Dolby, Intel, AMD, and NVIDIA.
 
