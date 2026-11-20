@@ -1,7 +1,7 @@
 """Execute navigation retirement and the real subtitle close/selection code.
 
 The fixture models packet/queue boundaries and overlay ownership, not rendering.
-FFmpeg's inherited EnableStream is deliberately a no-op, as in the pinned tree.
+FFmpeg reports that it did not disable the stream, as in the pinned tree.
 """
 from pathlib import Path
 import re
@@ -72,6 +72,7 @@ struct CCurrentStream {
  StreamType type=StreamType::SUBTITLE;
  int id=19,source=STREAM_SOURCE_DEMUX,player=1,syncState=0;
  long demuxerId=7;
+ bool demuxDisabled{};
  void Clear() { id=-1;source=STREAM_SOURCE_NONE; }
 };
 struct CDemuxStream {
@@ -86,7 +87,7 @@ struct Demuxer {
   if (demux!=7) return nullptr;
   return id==19 ? &full : id==20 ? &forced : nullptr;
  }
- void EnableStream(long,int,bool) {} // pinned CDVDDemux implementation
+ bool EnableStream(long,int,bool) { return false; } // pinned CDVDDemux implementation
 };
 struct CVideoPlayer {
  std::shared_ptr<CDVDInputStream> m_pInputStream=std::make_shared<Input>();

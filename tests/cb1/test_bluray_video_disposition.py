@@ -24,7 +24,7 @@ constexpr int AV_PKT_FLAG_DISCARD=4,AV_FRAME_FLAG_CORRUPT=1,DVP_FLAG_DROPPED=8;
 constexpr int64_t AV_NOPTS_VALUE=INT64_MIN;
 constexpr int AV_FRAME_DATA_DOVI_RPU_BUFFER=1;
 char presentableDVPacket,decodeOnlyDVPacket;
-struct Packet {bool videoDecodeOnly=false,videoWindowed=false; struct {bool valid{},presentable{true};} doviLayerTimes;};
+struct Packet {bool videoDecodeOnly=false,videoWindowed=false; struct {bool valid{},presentable{true};int baseFlags{};} doviLayerTimes;};
 struct AVPacket {int flags=0;void* opaque=nullptr;};
 struct AVFrame {int64_t pts=200;int decode_error_flags=0,flags=0;void* opaque=nullptr;};
 struct Raw {uint8_t bytes[5]={25,8,1,2,3};uint8_t* data=bytes;int size=5;}raw;

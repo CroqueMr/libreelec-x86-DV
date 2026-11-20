@@ -38,6 +38,7 @@ struct CDVDInputStreamBluray {
   struct { std::vector<PlayItem> playItems; } m_playlistInfo;
   uint32_t m_playItem{0};
   int m_hold{HOLD_NONE};
+  bool m_aborted{};
   struct { int event{BD_EVENT_PLAYITEM}; uint32_t param{1}; } m_event;
   bool IsStereoscopic() const { return stereo; }
   bool CanContinuePlayItem(uint32_t next) const;

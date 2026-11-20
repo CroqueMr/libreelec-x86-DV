@@ -22,6 +22,8 @@ class BlurayNavigationDrain(unittest.TestCase):
         definitions = '\n'.join(s + '\n' + body(source, s) for s in signatures)
         hold_signature = 'bool CDVDInputStreamBluray::HoldEvent()'
         definitions += '\n' + hold_signature + '\n' + (body(source, hold_signature) if hold_signature in source else '{return false;}')
+        limit_signature = 'bool CDVDInputStreamBluray::HasGivenUpReading() const'
+        definitions += '\n' + limit_signature + '\n' + body(source, limit_signature)
         prologue=body(source,'void CDVDInputStreamBluray::ProcessEvent()').split('  int pid = -1;',1)[0][1:]
         program = r'''
 #include <cassert>
@@ -31,7 +33,8 @@ class BlurayNavigationDrain(unittest.TestCase):
 enum { BD_EVENT_NONE,BD_EVENT_SEEK,BD_EVENT_TITLE,BD_EVENT_ANGLE,BD_EVENT_PLAYLIST,
        BD_EVENT_PLAYITEM,BD_EVENT_STILL_TIME,BD_EVENT_DISCONTINUITY,BD_EVENT_MENU,
        BD_EVENT_AUDIO_STREAM,BD_EVENT_PG_TEXTST,BD_EVENT_ERROR,BD_EVENT_ENCRYPTED };
-enum {HOLD_NONE,HOLD_DATA,HOLD_HELD,HOLD_ERROR,HOLD_EXIT,HOLD_STILL,LOGDEBUG};
+enum {HOLD_NONE,HOLD_DATA,HOLD_HELD,HOLD_ERROR,HOLD_STILL,LOGDEBUG};
+constexpr unsigned MAX_CONSECUTIVE_READ_ERRORS = 1000;
 using bd_vk_key_e=int;
 struct BD_EVENT {int event{},param{};};
 struct Fake {std::deque<BD_EVENT> queue;int calls{},clip{},seekResult{};};
@@ -62,6 +65,8 @@ struct CDVDInputStreamBluray : CDVDInputStream {
  Fake fake;Fake* m_bd{&fake};bool m_navmode{true};int m_hold{HOLD_NONE};
  BD_EVENT m_event{};int m_dispTimeBeforeRead{};void* m_titleInfo{this};
  std::vector<int> processed;
+ bool m_aborted{};
+ unsigned m_readErrors{};
  void ProcessEvent() {
   PROLOGUE
   if(!m_event.event)return;processed.push_back(m_event.event*10+m_event.param);
@@ -73,6 +78,7 @@ struct CDVDInputStreamBluray : CDVDInputStream {
  }
  int Read(uint8_t*,int);bool PosTime(int);bool SeekChapter(int);ENextStream NextStream();
  void UserInput(int);void SkipStill();bool HoldEvent();
+ bool HasGivenUpReading() const;
  bool CanContinuePlayItem(uint32_t) const { return false; } // non-seamless fixture
 };
 DEFINITIONS
@@ -120,12 +126,21 @@ int main() {
  still.fake.queue.push_back({BD_EVENT_STILL_TIME,0});
  assert(still.NextStream()==CDVDInputStream::NEXTSTREAM_RETRY&&still.m_hold==HOLD_STILL);
  // Abort/error remains terminal even if a remote key or seek arrives late.
- for(int terminal:{HOLD_EXIT,HOLD_ERROR}) {
-  CDVDInputStreamBluray stopped;stopped.m_hold=terminal;
+ for(bool aborted:{false,true}) {
+  CDVDInputStreamBluray stopped;
+  stopped.m_aborted=aborted;
+  stopped.m_hold=aborted?HOLD_HELD:HOLD_ERROR;
+  const int terminal=stopped.m_hold;
   stopped.UserInput(8);assert(stopped.m_hold==terminal&&stopped.fake.queue.empty());
   assert(!stopped.PosTime(50)&&!stopped.SeekChapter(2)&&stopped.m_hold==terminal);
+  assert(stopped.Read(&byte,1)==-1&&stopped.fake.calls==0);
   assert(stopped.NextStream()==CDVDInputStream::NEXTSTREAM_NONE);
  }
+ CDVDInputStreamBluray unreadable;
+ unreadable.m_readErrors=MAX_CONSECUTIVE_READ_ERRORS;
+ unreadable.m_hold=HOLD_HELD;
+ assert(unreadable.Read(&byte,1)==-1&&unreadable.fake.calls==0);
+ assert(unreadable.NextStream()==CDVDInputStream::NEXTSTREAM_NONE);
  // A fatal event encountered during a drain cannot be undone by a later event.
  for(int error:{BD_EVENT_ERROR,BD_EVENT_ENCRYPTED})for(bool later:{false,true}) {
   CDVDInputStreamBluray bad;bad.m_hold=HOLD_HELD;bad.m_event={BD_EVENT_PLAYITEM,4};
