@@ -3,8 +3,8 @@
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="ffmpeg"
-PKG_VERSION="9.0"
-PKG_SHA256="7f607a00dd0d28a729d5a4811205812eef01cf6ef6155025febb6f36a9062d52"
+PKG_VERSION="9.0.2"
+PKG_SHA256="8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://ffmpeg.org"
 PKG_URL="http://ffmpeg.org/releases/ffmpeg-${PKG_VERSION}.tar.xz"
@@ -22,10 +22,11 @@ PKG_FFMPEG_REQUEST_ENABLE="--enable-libudev --enable-v4l2-request"
 
 case "${PROJECT}" in
   Amlogic)
-    PKG_VERSION="c68aea78e6753be0099f1e4fabfe60cda75909b8"
-    PKG_FFMPEG_BRANCH="test/9.0/main"
-    PKG_SHA256="8837c510614ab5e2eb3045eb3bb3da41bb0a1e16f206f5c32c6eda2c1333af9d"
-    PKG_URL="https://github.com/jc-kynesim/rpi-ffmpeg/archive/${PKG_VERSION}.tar.gz"
+    PKG_VERSION="ad8c2e36ee2d5a30442f6e4ca0e82df2622f8958"
+    PKG_SHA256="eed6678e9a1877a5bd36b7ea85c510a41f17c172f045153ec8f177bf477f4fc1"
+    PKG_URL="https://github.com/chewitt/ffmpeg/archive/${PKG_VERSION}.tar.gz"
+    PKG_FFMPEG_BRANCH="armsoc-9.0.2"
+    PKG_SOURCE_NAME="ffmpeg-${PKG_VERSION}.tar.gz"
     ;;
   Generic)
     PKG_VERSION="9.0.2"
@@ -40,10 +41,10 @@ case "${PROJECT}" in
   Rockchip)
     case "${DEVICE}" in
       RK3288|RK3328|RK3399)
-        PKG_PATCH_DIRS+=" v4l2-request vf-deinterlace-v4l2m2m"
+        PKG_PATCH_DIRS+=" v4l2-request v4l2-drmprime vf-deinterlace-v4l2m2m"
         ;;
       RK356X|RK3576|RK3588)
-        PKG_PATCH_DIRS+=" v4l2-request detlev vf-deinterlace-v4l2m2m"
+        PKG_PATCH_DIRS+=" v4l2-request detlev v4l2-drmprime vf-deinterlace-v4l2m2m"
         ;;
     esac
     ;;
@@ -52,7 +53,7 @@ case "${PROJECT}" in
     PKG_PATCH_DIRS+=" rpi"
     ;;
   *)
-    PKG_PATCH_DIRS+=" v4l2-request"
+    PKG_PATCH_DIRS+=" v4l2-request v4l2-drmprime"
     case "${PROJECT}" in
       Allwinner | Rockchip)
         PKG_PATCH_DIRS+=" vf-deinterlace-v4l2m2m"
@@ -80,7 +81,7 @@ if [ "${V4L2_SUPPORT}" = "yes" ]; then
   PKG_NEED_UNPACK+=" $(get_pkg_directory libdrm)"
   PKG_FFMPEG_V4L2="--enable-v4l2_m2m --enable-libdrm"
 
-  if [ "${PROJECT}" = "Allwinner" -o "${PROJECT}" = "Rockchip" -o "${DEVICE}" = "iMX8" -o "${DEVICE}" = "RPi4" -o "${DEVICE}" = "RPi5" ]; then
+  if [ "${PROJECT}" = "Allwinner" -o "${PROJECT}" = "Amlogic" -o "${PROJECT}" = "Rockchip" -o "${DEVICE}" = "iMX8" -o "${DEVICE}" = "RPi4" -o "${DEVICE}" = "RPi5" ]; then
     PKG_DEPENDS_TARGET+=" systemd"
     PKG_NEED_UNPACK+=" $(get_pkg_directory systemd)"
     PKG_FFMPEG_V4L2+=" ${PKG_FFMPEG_REQUEST_ENABLE}"

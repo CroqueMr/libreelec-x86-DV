@@ -3,8 +3,8 @@
 # Copyright (C) 2018-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="systemd"
-PKG_VERSION="261.3"
-PKG_SHA256="3f8d3d3969af7214bda600930e14c6a24135eb3dce1ba7f1b980b74e6dc15b72"
+PKG_VERSION="262.2"
+PKG_SHA256="116432ee9dce9bfef4c7da7963c6de41899ab44197f2876ee99545707a5c7c1f"
 PKG_LICENSE="LGPL-2.1-or-later"
 PKG_SITE="http://www.freedesktop.org/wiki/Software/systemd"
 PKG_URL="https://github.com/systemd/systemd/archive/v${PKG_VERSION}.tar.gz"
@@ -122,6 +122,7 @@ post_makeinstall_target() {
   safe_remove ${INSTALL}/usr/lib/systemd/user
   safe_remove ${INSTALL}/usr/lib/tmpfiles.d/etc.conf
   safe_remove ${INSTALL}/usr/lib/tmpfiles.d/home.conf
+  safe_remove ${INSTALL}/usr/lib/tmpfiles.d/root.conf
   safe_remove ${INSTALL}/usr/share/factory
 
   # remove Network adapter renaming rule, this is confusing

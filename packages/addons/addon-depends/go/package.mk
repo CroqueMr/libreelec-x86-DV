@@ -2,8 +2,8 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="go"
-PKG_VERSION="1.27.1"
-PKG_SHA256="a24144ffcbdc359ba27165ab092d0dc1f58d30a203c1d3cf1f16298e3770cfac"
+PKG_VERSION="1.27.4"
+PKG_SHA256="89c2891539e2d372572836ede46d5073d54f356cba062cc0b39c1fffaf724a89"
 PKG_LICENSE="BSD-3-Clause"
 PKG_SITE="https://golang.org"
 PKG_URL="https://github.com/golang/go/archive/${PKG_NAME}${PKG_VERSION}.tar.gz"

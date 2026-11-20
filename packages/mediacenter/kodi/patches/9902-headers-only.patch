@@ -1,8 +1,14 @@
+From 7cf21f41e09a3ebfa5270c9a427ba75bd715983b Mon Sep 17 00:00:00 2001
 From: Jernej Skrabec <jernej.skrabec@gmail.com>
-Subject: [PATCH] Add host target for addon headers (Kodi RC1 rebase)
+Date: Sun, 24 Apr 2022 21:04:04 +0200
+Subject: [PATCH] Add host target for addon headers
 
-Rebase the existing LibreELEC build-only patch without changing its scope.
-Keep addon CMake installation outside the optional Python stub section.
+Backported from upstream kodi.
+---
+ CMakeLists.txt                         | 3 +++
+ cmake/scripts/linux/ExtraTargets.cmake | 4 +++-
+ cmake/scripts/linux/Install.cmake      | 2 ++
+ 3 files changed, 8 insertions(+), 1 deletion(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index eba3ff8..3747529 100644
@@ -46,7 +52,7 @@ index f51a7b7..c22ba91 100644
 +  endif()
  endif()
 diff --git a/cmake/scripts/linux/Install.cmake b/cmake/scripts/linux/Install.cmake
-index cfb3d4b..6a9e898 100644
+index cfb3d4b..aa21217 100644
 --- a/cmake/scripts/linux/Install.cmake
 +++ b/cmake/scripts/linux/Install.cmake
 @@ -45,6 +45,7 @@ configure_file(${CMAKE_SOURCE_DIR}/tools/Linux/kodi.desktop.in
@@ -65,19 +71,6 @@ index cfb3d4b..6a9e898 100644
  
  # Install kodi-addon-dev headers
  include(${CMAKE_SOURCE_DIR}/xbmc/addons/AddonBindings.cmake)
-@@ -176,6 +178,7 @@ install(FILES ${CORE_ADDON_BINDINGS_FILES}
-         DESTINATION ${includedir}/${APP_NAME_LC}
-         COMPONENT kodi-addon-dev)
- 
-+if(NOT HEADERS_ONLY)
- # Install kodi-addon-dev python api stub files
- set(python_stubs "")
- foreach(module xbmc xbmcaddon xbmcdrm xbmcgui xbmcplugin xbmcvfs)
-@@ -189,6 +192,7 @@ install(FILES ${python_stubs}
-         DESTINATION ${datarootdir}/${APP_NAME_LC}/python-stubs
-         COMPONENT kodi-addon-dev
-         OPTIONAL)
-+endif()
- 
- # Install kodi-addon-dev add-on bindings
- install(FILES ${CMAKE_SOURCE_DIR}/cmake/scripts/common/AddonHelpers.cmake
+-- 
+2.53.0
+

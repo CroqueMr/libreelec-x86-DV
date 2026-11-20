@@ -19,6 +19,9 @@ PKG_ADDON_PROJECTS="any !Generic-legacy"
 PKG_ADDON_PROVIDES="executable"
 PKG_ADDON_REQUIRES="tools.flatpak:0.0.0"
 
+PKG_IS_FLATPAK_ADDON="yes"
+PKG_FLATPAK_APPID="org.mozilla.firefox"
+
 addon() {
   :
 }
