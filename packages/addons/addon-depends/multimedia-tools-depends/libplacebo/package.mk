@@ -4,7 +4,7 @@
 PKG_NAME="libplacebo"
 PKG_VERSION="e2972fdd09adacd383656738d7d280f0cd84a761"
 PKG_SHA256="2dc029b7686455054fb5e76dd8c084cbf4fa4159f33364c5b7f9afc8b3611811"
-PKG_LICENSE="LGPL-2.1-or-later"
+PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://code.videolan.org/videolan/libplacebo"
 PKG_URL="https://github.com/haasn/libplacebo/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain glad:host Jinja2:host"
@@ -13,8 +13,8 @@ PKG_LONGDESC="Reusable library for GPU-accelerated image/video processing primit
 PKG_BUILD_FLAGS=""
 
 CB1_PLACEBO_SOURCE_REPOSITORY="https://github.com/CroqueMr/libplacebo"
-CB1_PLACEBO_SOURCE_COMMIT="7ee715018f35a33c1b03f0084abc769731202956"
-CB1_PLACEBO_SOURCE_SHA256="720f7c9bdb4ada80751f742f371388399cf7571f0d27056870a93bc1b6227e31"
+CB1_PLACEBO_SOURCE_COMMIT="fb16299e087e225e1e052f52f505314ac1d0e15f"
+CB1_PLACEBO_SOURCE_SHA256="71367068307142a559810aa28450f6ff42fc1ef80fb129fd2746cb57b4389d3e"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
   PKG_VERSION="7.387.0"
@@ -22,7 +22,6 @@ if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
   PKG_URL="${CB1_PLACEBO_SOURCE_REPOSITORY}/archive/${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"
   PKG_SOURCE_NAME="${PKG_NAME}-${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"
   PKG_SHA256="${CB1_PLACEBO_SOURCE_SHA256}"
-  PKG_LICENSE="GPL-3.0-or-later"
   PKG_SKIP_PATCHES="yes"
 fi
 
