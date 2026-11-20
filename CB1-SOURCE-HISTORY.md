@@ -39,3 +39,7 @@ The 12 source replay PRs reproduce the exact integration tree dd60140119d9f00baa
 
 Propose general correctness fixes and performance improvements against the owning project. Separate Dolby Vision policy from generic API changes and retain the original attribution.
 See the linked PRs for their DV Patch, Upstream Fix or Performance Improvement category.
+
+## wlroots
+
+The [wlroots source mirror](https://github.com/CroqueMr/wlroots-cb1) preserves the official source and the [Generic Wayland DRM fix](https://github.com/CroqueMr/wlroots-cb1/pull/1).
