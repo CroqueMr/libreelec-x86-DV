@@ -32,7 +32,7 @@ extern "C" {
 }
 constexpr double DVD_NOPTS_VALUE=-1;
 constexpr int DVD_CODEC_CTRL_DROP=1, LOGINFO=1;
-enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS};
+enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
 struct CLog {template<class... Args> static void Log(Args...) {}};
 static bool HybridProbePicture(const AVFrame* frame,int codecFlags) @@PROBE@@
 struct CVideoBuffer {int refs=1; void Release(){--refs;} void Acquire(){++refs;}};
