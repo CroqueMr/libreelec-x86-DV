@@ -3,7 +3,11 @@
 #include "cb1_hdr10_ingress.h"
 #include "cb1_hdr10_grid.h"
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 #include <fenv.h>
 #include <math.h>
 #include <stdlib.h>
@@ -106,8 +110,12 @@ static GLuint program_create(void)
 struct cb1_hdr10_statistics *cb1_hdr10_statistics_create(pl_gpu gpu)
 {
     pl_opengl gl=gpu?pl_opengl_get(gpu):NULL;
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if (!gl || !dvbridge_gl_glsl_es(gl,310) || glGetError()!=GL_NO_ERROR) return NULL;
+#else
     if (!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1) ||
         glGetError()!=GL_NO_ERROR) return NULL;
+#endif
     GLint invocations,size,bindings,shared; GLint64 storage;
     glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,&invocations);
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE,0,&size);

@@ -268,8 +268,8 @@ int main(){
  assert(output.picture.colorBits==10 && output.picture.color_transfer==1);
 }
 '''.replace('STAGE', stage))
-            configure = method(renderer, f"CLinuxRenderer{backend}::" +
-                               ("Configure" if backend == "GL" else "ConfigureVideoOutput"))
+            # The GL renderer configures its output in ConfigureVideoOutput(), as GLES does
+            configure = method(renderer, f"CLinuxRenderer{backend}::ConfigureVideoOutput")
             output = "!m_ColorManager->IsEnabled()" if backend == "GL" else "true"
             self.assertIn(f"SetColorimetry(&picture, {output})", configure)
 

@@ -27,8 +27,14 @@
 #include <libplacebo/filters.h>
 #include <libplacebo/dispatch.h>
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#define DVBRIDGE_BUFFER_STORAGE "glBufferStorage"
+#else
 #include <GLES3/gl31.h>
 #include <GLES2/gl2ext.h>
+#define DVBRIDGE_BUFFER_STORAGE "glBufferStorageEXT"
+#endif
 #include <EGL/egl.h>
 #include <math.h>
 #include <stdlib.h>
@@ -3090,10 +3096,15 @@ bool dvbridge_retirement_owner_destroy(struct dvbridge_retirement_owner **owner)
 static bool dv_gpu_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || gl->major<3 || (gl->major==3 && gl->minor<2) ||
+       !pl_opengl_has_ext(gl,"GL_ARB_buffer_storage"))return false;
+#else
     const char *version=(const char *)glGetString(GL_VERSION);
     if(!gl || !version || strncmp(version,"OpenGL ES ",10) ||
        gl->major<3 || (gl->major==3 && gl->minor<1) ||
        !pl_opengl_has_ext(gl,"GL_EXT_buffer_storage"))return false;
+#endif
     GLint precision,range[2],size,groups,invocations,bindings;GLint64 storage;
     for(unsigned i=0;i<2;i++){
         glGetShaderPrecisionFormat(i?GL_FRAGMENT_SHADER:GL_VERTEX_SHADER,GL_HIGH_FLOAT,range,&precision);
@@ -3104,7 +3115,7 @@ static bool dv_gpu_requirements(pl_gpu gpu)
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS,&bindings);
     glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,&storage);
     if(invocations<128 || size<128 || groups<16200 || bindings<3 || storage<259200 || glGetError()!=GL_NO_ERROR)return false;
-    return eglGetProcAddress("glBufferStorageEXT") && eglGetProcAddress("glClientWaitSync") &&
+    return eglGetProcAddress(DVBRIDGE_BUFFER_STORAGE) && eglGetProcAddress("glClientWaitSync") &&
            eglGetProcAddress("glDeleteSync") && eglGetProcAddress("glFenceSync") &&
            eglGetProcAddress("glMapBufferRange") && eglGetProcAddress("glDispatchCompute") &&
            eglGetProcAddress("glMemoryBarrier");
@@ -3113,8 +3124,12 @@ static bool dv_gpu_requirements(pl_gpu gpu)
 static bool dv_transport_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || gl->major<3 || (gl->major==3 && gl->minor<2))return false;
+#else
     const char *version=(const char *)glGetString(GL_VERSION);
     if(!gl || !version || strncmp(version,"OpenGL ES ",10) || gl->major<3)return false;
+#endif
     GLint precision,range[2];
     glGetShaderPrecisionFormat(GL_FRAGMENT_SHADER,GL_HIGH_FLOAT,range,&precision);
     return precision>=23 && range[0]>=127 && range[1]>=127 && glGetError()==GL_NO_ERROR &&
@@ -3142,7 +3157,11 @@ bool dvbridge_renderer_supports_mode(struct dvbridge_renderer *r,enum dvbridge_m
 static bool hdr10_ai_gpu_requirements(pl_gpu gpu)
 {
     pl_opengl gl=pl_opengl_get(gpu);
+#if defined(DVBRIDGE_DESKTOP_GL)
+    if(!gl || !dvbridge_gl_glsl_es(gl,310))return false;
+#else
     if(!gl || !gpu->glsl.gles || gl->major<3 || (gl->major==3 && gl->minor<1))return false;
+#endif
     if(!pl_find_fmt(gpu,PL_FMT_UNORM,4,16,16,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE) ||
        !pl_find_fmt(gpu,PL_FMT_FLOAT,4,32,32,PL_FMT_CAP_SAMPLEABLE|PL_FMT_CAP_RENDERABLE|PL_FMT_CAP_HOST_READABLE) ||
        !pl_find_fmt(gpu,PL_FMT_FLOAT,1,32,32,PL_FMT_CAP_SAMPLEABLE))return false;
@@ -3188,7 +3207,7 @@ static bool dv_allocate(struct dvbridge_renderer *r,size_t scratch_bytes)
     struct dvbridge_dv_slot *s=&r->dv;
     bool reuse=r->enhanced_authored && r->reuse_authored_storage;
     if(reuse && (s->active || s->fence || s->mapped || s->buffers[0] || s->sampler))return false;
-    s->buffer_storage=(PFNGLBUFFERSTORAGEEXTPROC)eglGetProcAddress("glBufferStorageEXT");
+    s->buffer_storage=(PFNGLBUFFERSTORAGEEXTPROC)eglGetProcAddress(DVBRIDGE_BUFFER_STORAGE);
     s->wait_sync=(PFNGLCLIENTWAITSYNCPROC)eglGetProcAddress("glClientWaitSync");
     s->delete_sync=(PFNGLDELETESYNCPROC)eglGetProcAddress("glDeleteSync");
     s->fence_sync=(PFNGLFENCESYNCPROC)eglGetProcAddress("glFenceSync");
@@ -4060,12 +4079,17 @@ static bool dv_final_framebuffer(unsigned framebuffer,unsigned alpha_bits)
     GLint draw,read,bits[4],encoding=0;
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&draw);glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&read);
     glBindFramebuffer(GL_FRAMEBUFFER,framebuffer);
-    const GLenum channels[4]={GL_RED_BITS,GL_GREEN_BITS,GL_BLUE_BITS,GL_ALPHA_BITS};
     bool valid=glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE;
     if(valid){
+#if defined(DVBRIDGE_DESKTOP_GL)
+        dvbridge_gl_color_bits(framebuffer,bits,&encoding);
+        for(unsigned i=0;i<4;i++)valid=valid && bits[i]==(i==3?alpha_bits:8);
+#else
+        const GLenum channels[4]={GL_RED_BITS,GL_GREEN_BITS,GL_BLUE_BITS,GL_ALPHA_BITS};
         for(unsigned i=0;i<4;i++){glGetIntegerv(channels[i],&bits[i]);valid=valid && bits[i]==(i==3?alpha_bits:8);}
         glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER,framebuffer?GL_COLOR_ATTACHMENT0:GL_BACK,
             GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING,&encoding);
+#endif
         valid=valid && encoding==GL_LINEAR;
     }
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER,draw);glBindFramebuffer(GL_READ_FRAMEBUFFER,read);

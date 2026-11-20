@@ -175,6 +175,7 @@ struct Window {
  std::optional<RESOLUTION> PlayerLedResolution(double, bool) const {return {};}
 };
 namespace KODI::WINDOWING::GBM {using CWinSystemGbmGLESContext=Window;}
+#define CWinSystemGbmDVContext CWinSystemGbmGLESContext  // GL/GLES alias in the tree
 using namespace KODI::WINDOWING::GBM;
 struct Stereo {bool IsStereoModeSettled()const{return true;}};
 struct GUI {Stereo stereo;Stereo& GetStereoscopicsManager(){return stereo;}};

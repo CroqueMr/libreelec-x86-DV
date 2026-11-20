@@ -3,7 +3,11 @@
 #define CB1_HDR10_GRID_H
 #include "cb1_hdr10_extrema.h"
 #include <libplacebo/opengl.h>
+#if defined(DVBRIDGE_DESKTOP_GL)
+#include "dvbridge_gl_api.h"
+#else
 #include <GLES3/gl31.h>
+#endif
 
 /* Private GPU dependency. The extrema owner retains this texture until collection. */
 #define CB1_HDR10_GRID_GLSL \
