@@ -28,6 +28,20 @@ struct Source {
  void DiscardBefore(Binding binding,uint64_t now) DISCARD
 };
 int main() {
+ Activation progressing;
+ progressing.Begin(7,9,0);
+ for (uint64_t picture=1; picture<=20; ++picture) {
+   const cb1_ai_identity id{7,picture,9};
+   const uint64_t now=(picture-1)*240;
+   assert(progressing.Observe(CB1_AI_PENDING,id,now)==Decision::Wait);
+   assert(progressing.Observe(CB1_AI_READY,id,now+120)==Decision::Prepare);
+   assert(progressing.Presented(id,true));
+ }
+ const cb1_ai_identity stalled{7,21,9};
+ assert(progressing.Observe(CB1_AI_PENDING,stalled,4800)==Decision::Wait);
+ assert(progressing.Observe(CB1_AI_PENDING,stalled,5799)==Decision::Wait);
+ assert(progressing.Observe(CB1_AI_PENDING,stalled,5800)==Decision::Native);
+
  Source s;
  cb1_ai_identity first{7,1,9}, next{7,2,9}, future{7,3,9};
  s.m_activation.Begin(7,9,0);
@@ -46,18 +60,18 @@ int main() {
  assert(s.m_activation.Observe(CB1_AI_READY,future,1800,false)==Decision::Prepare);
  assert(s.m_activation.Presented(future,true));
  // Cancellation must not refund real waiting or reset the cumulative budget.
- for(unsigned i=4;i<=9;++i) {
+ for(unsigned i=4;i<=13;++i) {
    cb1_ai_identity id{7,i,9};const uint64_t due=2000+i*1000;
    assert(s.m_activation.Observe(CB1_AI_READY,id,due-200)==Decision::Prepare);
    s.m_prepared=Result{id};s.m_preparedBinding={7,i,8};
    s.m_activation.SetPresentationDeadline(due);
    assert(s.m_activation.Observe(CB1_AI_PENDING,id,due-100)==Decision::Wait);
    s.DiscardBefore({7,i+1,8},due+100);
-   assert(s.m_fallback==(i==9));
+   assert(s.m_fallback==(i==13));
  }
  assert(s.m_activation.TakeFallbackEvent());
  assert(!s.m_activation.TakeFallbackEvent());
- assert(s.m_activation.Observe(CB1_AI_READY,{7,10,9},20000)==Decision::Native);
+ assert(s.m_activation.Observe(CB1_AI_READY,{7,14,9},20000)==Decision::Native);
  Activation a;cb1_ai_identity id{7,1,9};
  a.Begin(7,9,0);assert(a.Observe(CB1_AI_READY,id,100)==Decision::Prepare);
  assert(a.Presented(id,true));++id.picture;
@@ -75,8 +89,8 @@ int main() {
  assert(a.Observe(CB1_AI_READY,id,5100)==Decision::Prepare);
  assert(a.Presented(id,true));++id.picture;a.SetPresentationDeadline(6000);
  assert(a.Observe(CB1_AI_PENDING,id,6000)==Decision::Wait);
- assert(a.Observe(CB1_AI_PENDING,id,6899)==Decision::Wait);
- assert(a.Observe(CB1_AI_PENDING,id,6900)==Decision::Native);
+ assert(a.Observe(CB1_AI_PENDING,id,6999)==Decision::Wait);
+ assert(a.Observe(CB1_AI_PENDING,id,7000)==Decision::Native);
  // Cancelling during pause charges only the overdue time before the pause.
  a.Begin(7,9,0);id={7,1,9};assert(a.Observe(CB1_AI_READY,id,100)==Decision::Prepare);
  assert(a.Presented(id,true));++id.picture;
@@ -84,11 +98,10 @@ int main() {
  a.SetPresentationDeadline(1000);assert(a.Observe(CB1_AI_PENDING,id,900)==Decision::Wait);
  a.SetPaused(true,1100);assert(a.CancelPrepared(id,10000)==Decision::Wait);
  a.SetPaused(false,10001);++id.picture;
- assert(a.Observe(CB1_AI_READY,id,10100)==Decision::Prepare);assert(a.Presented(id,true));
- ++id.picture;a.SetPresentationDeadline(11000);
+ a.SetPresentationDeadline(11000);
  assert(a.Observe(CB1_AI_PENDING,id,11000)==Decision::Wait);
- assert(a.Observe(CB1_AI_PENDING,id,11799)==Decision::Wait);
- assert(a.Observe(CB1_AI_PENDING,id,11800)==Decision::Native);
+ assert(a.Observe(CB1_AI_PENDING,id,11899)==Decision::Wait);
+ assert(a.Observe(CB1_AI_PENDING,id,11900)==Decision::Native);
 }
 '''.replace('DISCARD', discard)
         with tempfile.TemporaryDirectory() as temporary:
