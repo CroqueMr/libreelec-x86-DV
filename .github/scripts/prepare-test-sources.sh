@@ -72,9 +72,9 @@ tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-compon
 tar -xf "$test_root/libbluray.tar.gz" -C "$test_root/libbluray" --strip-components=1
 tar -xf "$test_root/linux.tar.xz" -C "$test_root/linux" --strip-components=1
 
-# Match Generic's shipped default kernel stack; retain full source dependencies.
+# Replay the Generic kernel stack with the same patch context handling as scripts/unpack.
 for patch_file in packages/linux/patches/default/*.patch projects/Generic/patches/linux/*.patch; do
-  patch --batch --forward --fuzz=0 -p1 -d "$test_root/linux" < "$patch_file"
+  patch --batch --forward -p1 -d "$test_root/linux" < "$patch_file"
 done
 
 python3 "$test_root/engine/tools/verify.py" --ffmpeg-source "$test_root/ffmpeg" \
