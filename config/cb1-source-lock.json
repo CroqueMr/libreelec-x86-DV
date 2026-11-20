@@ -55,7 +55,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9001-dv-v1-legacy.patch": "09c2da66eddfc83b1ca16aaa12f8d1e8c3c3278c30b3bf2b17372674ce5db070",
     "packages/graphics/nvidia-open-kernel-modules/package.mk": "a67b746b44a5daad57df3f285570bd1b630b577f31741a8f9b2690b22dc52569",
     "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "c22e0a8aa5d70710885d04df891a40dbe5b0e173417e9318f2bba940984acfd4",
-    "packages/mediacenter/kodi/package.mk": "90c2708dd4c99f4be215ed3d10b8276e8d1a08da6eae6e5fe5ed796466ea2e57",
+    "packages/mediacenter/kodi/package.mk": "7ea89034698540aacb16eb042039e19f338c5cc6d79a1fbdd0b81826a084fb6f",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "f46665ad8db5131cc6e155b295fe3de8d33c4eadb2f7df8f62dac238967eefab",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9003-dv-v1-legacy.patch": "11c5225c7f882c72bd42f3f972a5c29c7b9f57ed209da2abbe0de1b8e36ba48f",
