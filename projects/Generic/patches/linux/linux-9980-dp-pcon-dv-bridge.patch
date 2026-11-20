@@ -1,0 +1,27 @@
+From: Bryan Hoban <bryan.hoban@gmail.com>
+Subject: [PATCH] drm/dvbridge: Permit verified DP-to-HDMI bridge routes on R1.0.1
+
+Allow verified DP-to-HDMI converter routes (link.verified_bridge) alongside
+native HDMI in drm_dvbridge_validate_link() after R1.0.1's linux-9971 split.
+
+--- a/include/drm/drm_dvbridge.h
++++ b/include/drm/drm_dvbridge.h
+@@ -13,6 +13,8 @@
+ 
+ struct drm_dvbridge_link {
+ 	bool requested, lab_enabled, sink_standard, hdmi, native_hdmi;
++	/* A DP-to-HDMI converter whose DV signalling was verified on hardware. */
++	bool verified_bridge;
+ 	bool rgb, limited_range, hdr_blob, cloned, progressive;
+ 	unsigned int requested_bpc, pipe_bpp, colorspace;
+ 	unsigned int width, height, rounded_refresh;
+@@ -37,7 +39,8 @@
+ {
+ 	if (!s->requested)
+ 		return 0;
+-	if (!s->lab_enabled || !s->sink_standard || !s->native_hdmi)
++	if (!s->lab_enabled || !s->sink_standard ||
++	    !(s->native_hdmi || s->verified_bridge))
+ 		return -EOPNOTSUPP;
+ 	if (!s->hdmi || !s->rgb || s->limited_range || s->hdr_blob || s->cloned ||
+ 	    !s->progressive ||

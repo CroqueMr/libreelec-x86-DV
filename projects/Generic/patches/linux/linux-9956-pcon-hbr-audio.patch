@@ -1,0 +1,1271 @@
+From: Snuffpig <181518943+Snuffpig@users.noreply.github.com>
+Subject: [PATCH] drm/i915, ALSA: hda/hdmi: Fix HBR passthrough and multichannel LPCM over Gen12 DP-to-HDMI PCON
+
+Fix HBR bitstream passthrough (TrueHD Atmos, DTS-HD MA) and multichannel
+LPCM transitions on Intel Gen12 Tiger Lake systems routed through a DP-to-HDMI
+PCON (Parade PS185):
+
+- Preserve HSW_AUD_CFG bit 29 (AUD_CONFIG_N_VALUE_INDEX = 1 for DP mode) and
+  restore timestamps before enabling AUDIO_OUTPUT_ENABLE, waiting >= 45 ms on
+  drain and one VBlank on 0 -> 1 transitions and post-InfoFrame DIP arming.
+- Gate AUDIO_OUTPUT_ENABLE teardown on actual per-pin transport transitions
+  (non_pcm, hbr, rate, channels), invalidating cached state on hotplug/ELD
+  notifications, bus resets, suspend, and teardown errors.
+- Mute pin output amps on cleanup/close and across transport transitions
+  until post-InfoFrame VBlank completes, while reconciling AC_DIG1_NONAUDIO,
+  AC_DIG3_ICT, AC_PINCTL_EPT, full 32-byte InfoFrames, and DEV_SEL=0.
+
+--- a/include/drm/drm_audio_component.h
++++ b/include/drm/drm_audio_component.h
+@@ -49,6 +49,12 @@
+ 	 */
+ 	int (*sync_audio_rate)(struct device *, int port, int pipe, int rate);
+ 	/**
++	 * @wait_vblank: wait for the next vertical blank on the active pipe
++	 *
++	 * Called after arming InfoFrame DIPs before unmuting audio output.
++	 */
++	void (*wait_vblank)(struct device *, int port, int pipe);
++	/**
+ 	 * @get_eld: fill the audio state and ELD bytes for the given port
+ 	 *
+ 	 * Called from audio driver to get the HDMI/DP audio state of the given
+@@ -81,6 +87,7 @@
+ 	 * mode).
+ 	 */
+ 	void (*pin_eld_notify)(void *audio_ptr, int port, int pipe);
++	void (*bus_reset_notify)(void *audio_ptr, int stage);
+ 	/**
+ 	 * @pin2port: Check and convert from pin node to port number
+ 	 *
+--- a/include/sound/hda_component.h
++++ b/include/sound/hda_component.h
+@@ -16,6 +16,8 @@
+ 			    bool enable);
+ int snd_hdac_sync_audio_rate(struct hdac_device *codec, hda_nid_t nid,
+ 			     int dev_id, int rate);
++void snd_hdac_acomp_wait_vblank(struct hdac_device *codec, hda_nid_t nid,
++				int dev_id);
+ int snd_hdac_acomp_get_eld(struct hdac_device *codec, hda_nid_t nid, int dev_id,
+ 			   bool *audio_enabled, char *buffer, int max_bytes);
+ int snd_hdac_acomp_init(struct hdac_bus *bus,
+@@ -39,6 +41,10 @@
+ {
+ 	return 0;
+ }
++static inline void snd_hdac_acomp_wait_vblank(struct hdac_device *codec,
++					      hda_nid_t nid, int dev_id)
++{
++}
+ static inline int snd_hdac_acomp_get_eld(struct hdac_device *codec, hda_nid_t nid,
+ 					 int dev_id, bool *audio_enabled,
+ 					 char *buffer, int max_bytes)
+--- a/sound/hda/core/component.c
++++ b/sound/hda/core/component.c
+@@ -135,6 +135,25 @@
+ }
+ EXPORT_SYMBOL_GPL(snd_hdac_sync_audio_rate);
+ 
++void snd_hdac_acomp_wait_vblank(struct hdac_device *codec, hda_nid_t nid,
++				int dev_id)
++{
++	struct hdac_bus *bus = codec->bus;
++	struct drm_audio_component *acomp = bus->audio_component;
++	int port;
++
++	if (!acomp || !acomp->ops || !acomp->ops->wait_vblank)
++		return;
++	port = nid;
++	if (acomp->audio_ops && acomp->audio_ops->pin2port) {
++		port = acomp->audio_ops->pin2port(codec, nid);
++		if (port < 0)
++			return;
++	}
++	acomp->ops->wait_vblank(acomp->dev, port, dev_id);
++}
++EXPORT_SYMBOL_GPL(snd_hdac_acomp_wait_vblank);
++
+ /**
+  * snd_hdac_acomp_get_eld - Get the audio state and ELD via component
+  * @codec: HDA codec
+--- a/drivers/gpu/drm/i915/display/intel_audio_regs.h
++++ b/drivers/gpu/drm/i915/display/intel_audio_regs.h
+@@ -167,4 +167,8 @@
+ #define AUD_CHICKENBIT_REG3		_MMIO(0x65F1C)
+ #define  DACBE_DISABLE_MIN_HBLANK_FIX	REG_BIT(18)
+ 
++/* Display 12 audio backend status: bit 5 latches on HBR->PCM/AC3 teardown race */
++#define TGL_AUD_BE_FAULT_STATUS		_MMIO(0x65f20)
++#define   TGL_AUD_BE_FAULT_LATCHED	REG_BIT(5)
++
+ #endif /* __INTEL_AUDIO_REGS_H__ */
+--- a/drivers/gpu/drm/i915/display/intel_display_core.h
++++ b/drivers/gpu/drm/i915/display/intel_display_core.h
+@@ -111,6 +111,11 @@
+ 	int power_refcount;
+ 	u32 freq_cntrl;
+ 
++	struct delayed_work fault_check_work;
++	unsigned long last_fault_recovery;
++	u8 fault_retry_count;
++	struct ref_tracker *wakeref;
++
+ 	/* current audio state for the audio component hooks */
+ 	struct intel_audio_state state[I915_MAX_TRANSCODERS];
+ 
+--- a/drivers/gpu/drm/i915/display/intel_audio.c
++++ b/drivers/gpu/drm/i915/display/intel_audio.c
+@@ -22,6 +22,7 @@
+  */
+ 
+ #include <linux/component.h>
++#include <linux/delay.h>
+ #include <linux/kernel.h>
+ 
+ #include <drm/drm_edid.h>
+@@ -36,6 +37,8 @@
+ #include "intel_cdclk.h"
+ #include "intel_crtc.h"
+ #include "intel_de.h"
++#include "intel_display_power.h"
++#include "intel_display_reset.h"
+ #include "intel_display_types.h"
+ #include "intel_display_wa.h"
+ #include "intel_lpe_audio.h"
+@@ -85,6 +88,110 @@
+ 	int cts;
+ };
+ 
++static bool tgl_audio_fault_latched(struct intel_display *display, u32 *status_out)
++{
++	u32 val;
++
++	if (DISPLAY_VER(display) != 12)
++		return false;
++
++	val = intel_de_read(display, TGL_AUD_BE_FAULT_STATUS);
++	if (status_out)
++		*status_out = val;
++
++	return val && (val & TGL_AUD_BE_FAULT_LATCHED);
++}
++
++static void intel_audio_power_enable(struct intel_display *display, bool pulse_wake);
++
++static void intel_audio_fault_check_work(struct work_struct *work)
++{
++	struct intel_display *display =
++		container_of(to_delayed_work(work), struct intel_display,
++			     audio.fault_check_work);
++	struct i915_audio_component *acomp = display->audio.component;
++	struct ref_tracker *wakeref;
++	u32 val = 0, post_val = 0;
++	bool latched;
++
++	if (DISPLAY_VER(display) != 12 || !display->audio.component_registered)
++		return;
++
++	wakeref = intel_display_power_get_if_enabled(display, POWER_DOMAIN_AUDIO_MMIO);
++	if (!wakeref)
++		return;
++
++	latched = tgl_audio_fault_latched(display, &val);
++	intel_display_power_put(display, POWER_DOMAIN_AUDIO_MMIO, wakeref);
++	if (!latched) {
++		display->audio.fault_retry_count = 0;
++		return;
++	}
++
++	if (display->audio.fault_retry_count >= 2) {
++		drm_dbg_kms(display->drm,
++			    "Gen12 display audio fault still present (0x65f20=0x%08x), retry limit reached\n",
++			    val);
++		return;
++	}
++
++	if (display->audio.last_fault_recovery &&
++	    time_before(jiffies, display->audio.last_fault_recovery + msecs_to_jiffies(10000))) {
++		drm_dbg_kms(display->drm,
++			    "Gen12 display audio fault still present (0x65f20=0x%08x), cooldown active\n",
++			    val);
++		return;
++	}
++	display->audio.last_fault_recovery = jiffies;
++	display->audio.fault_retry_count++;
++
++	drm_warn(display->drm,
++		 "Gen12 display audio fault latched (0x65f20=0x%08x); power-cycling display to resync (attempt %u/2)\n",
++		 val, display->audio.fault_retry_count);
++
++	intel_display_reset_prepare(display);
++	if (acomp && acomp->base.audio_ops &&
++	    acomp->base.audio_ops->bus_reset_notify)
++		acomp->base.audio_ops->bus_reset_notify(acomp->base.audio_ops->audio_ptr,
++							0);
++	{
++		struct ref_tracker *aud_wakeref;
++
++		mutex_lock(&display->audio.mutex);
++		aud_wakeref = display->audio.wakeref;
++		display->audio.wakeref = NULL;
++		mutex_unlock(&display->audio.mutex);
++		if (aud_wakeref)
++			intel_display_power_put(display, POWER_DOMAIN_AUDIO_PLAYBACK,
++						aud_wakeref);
++	}
++	intel_display_power_flush_work(display);
++	msleep(400);
++	mutex_lock(&display->audio.mutex);
++	if (display->audio.power_refcount > 0)
++		intel_audio_power_enable(display, true);
++	mutex_unlock(&display->audio.mutex);
++	if (acomp && acomp->base.audio_ops &&
++	    acomp->base.audio_ops->bus_reset_notify)
++		acomp->base.audio_ops->bus_reset_notify(acomp->base.audio_ops->audio_ptr,
++							1);
++	intel_display_reset_finish(display, true);
++	if (acomp && acomp->base.audio_ops &&
++	    acomp->base.audio_ops->bus_reset_notify)
++		acomp->base.audio_ops->bus_reset_notify(acomp->base.audio_ops->audio_ptr,
++							2);
++
++	msleep(50);
++	wakeref = intel_display_power_get_if_enabled(display, POWER_DOMAIN_AUDIO_MMIO);
++	if (wakeref) {
++		tgl_audio_fault_latched(display, &post_val);
++		intel_display_power_put(display, POWER_DOMAIN_AUDIO_MMIO, wakeref);
++	}
++	drm_info(display->drm,
++		 "Gen12 display audio resync complete (0x65f20=0x%08x)\n",
++		 post_val);
++}
++
+ static const struct {
+ 	int clock;
+ 	u32 config;
+@@ -430,6 +537,13 @@
+ 	intel_de_rmw(display, HSW_AUD_PIN_ELD_CP_VLD,
+ 		     AUDIO_OUTPUT_ENABLE(cpu_transcoder), 0);
+ 
++	/* Enforce VESA DP 1.4 Single-VSync (>= 45 ms) drain interval */
++	msleep(45);
++
++	/* Cycle AUD_CONFIG_N_VALUE_INDEX off during teardown to prevent 0x65f20 fault latch */
++	intel_de_rmw(display, HSW_AUD_CFG(cpu_transcoder),
++		     AUD_CONFIG_N_VALUE_INDEX, 0);
++
+ 	/*
+ 	 * WA_14020863754: Implement Audio Workaround
+ 	 * Corner case with Min Hblank Fix can cause audio hang
+@@ -573,6 +687,12 @@
+ 	if (intel_display_wa(display, INTEL_DISPLAY_WA_14020863754))
+ 		intel_de_rmw(display, AUD_CHICKENBIT_REG3, 0, DACBE_DISABLE_MIN_HBLANK_FIX);
+ 
++	/* Ensure timestamps / DP N_VALUE_INDEX are armed before enabling output */
++	hsw_audio_config_update(encoder, crtc_state);
++
++	/* Clear latched AUD_HDMI_FIFO_STATUS bits (RW1C) before enabling audio output */
++	intel_de_write(display, _MMIO(0x650d4), intel_de_read(display, _MMIO(0x650d4)));
++
+ 	/* Enable audio presence detect */
+ 	intel_de_rmw(display, HSW_AUD_PIN_ELD_CP_VLD,
+ 		     0, AUDIO_OUTPUT_ENABLE(cpu_transcoder));
+@@ -583,14 +703,6 @@
+ 	intel_de_rmw(display, HSW_AUD_PIN_ELD_CP_VLD,
+ 		     AUDIO_ELD_VALID(cpu_transcoder), 0);
+ 
+-	/*
+-	 * The audio component is used to convey the ELD
+-	 * instead using of the hardware ELD buffer.
+-	 */
+-
+-	/* Enable timestamps */
+-	hsw_audio_config_update(encoder, crtc_state);
+-
+ 	mutex_unlock(&display->audio.mutex);
+ }
+ 
+@@ -779,6 +891,10 @@
+ 	intel_lpe_audio_notify(display, cpu_transcoder, port, crtc_state->eld,
+ 			       crtc_state->port_clock,
+ 			       intel_crtc_has_dp_encoder(crtc_state));
++
++	if (DISPLAY_VER(display) == 12)
++		mod_delayed_work(system_dfl_wq, &display->audio.fault_check_work,
++				 msecs_to_jiffies(250));
+ }
+ 
+ /**
+@@ -801,6 +917,7 @@
+ 	enum transcoder cpu_transcoder = old_crtc_state->cpu_transcoder;
+ 	struct intel_audio_state *audio_state;
+ 	enum port port = encoder->port;
++	int notify_transcoder;
+ 
+ 	if (!old_crtc_state->has_audio)
+ 		return;
+@@ -811,9 +928,6 @@
+ 		    encoder->base.base.id, encoder->base.name,
+ 		    crtc->base.base.id, crtc->base.name);
+ 
+-	if (display->audio.funcs)
+-		display->audio.funcs->audio_codec_disable(encoder, old_crtc_state, old_conn_state);
+-
+ 	mutex_lock(&display->audio.mutex);
+ 
+ 	audio_state = &display->audio.state[cpu_transcoder];
+@@ -823,16 +937,19 @@
+ 
+ 	mutex_unlock(&display->audio.mutex);
+ 
++	notify_transcoder = cpu_transcoder;
++	if (!intel_crtc_has_type(old_crtc_state, INTEL_OUTPUT_DP_MST))
++		notify_transcoder = -1;
++
+ 	if (acomp && acomp->base.audio_ops &&
+-	    acomp->base.audio_ops->pin_eld_notify) {
+-		/* audio drivers expect cpu_transcoder = -1 to indicate Non-MST cases */
+-		if (!intel_crtc_has_type(old_crtc_state, INTEL_OUTPUT_DP_MST))
+-			cpu_transcoder = -1;
++	    acomp->base.audio_ops->pin_eld_notify)
+ 		acomp->base.audio_ops->pin_eld_notify(acomp->base.audio_ops->audio_ptr,
+-						      (int)port, (int)cpu_transcoder);
+-	}
++						      (int)port, notify_transcoder);
++
++	intel_lpe_audio_notify(display, notify_transcoder, port, NULL, 0, false);
+ 
+-	intel_lpe_audio_notify(display, cpu_transcoder, port, NULL, 0, false);
++	if (display->audio.funcs)
++		display->audio.funcs->audio_codec_disable(encoder, old_crtc_state, old_conn_state);
+ }
+ 
+ static void intel_acomp_get_config(struct intel_encoder *encoder,
+@@ -1033,49 +1150,76 @@
+ 	return min_cdclk;
+ }
+ 
+-static unsigned long intel_audio_component_get_power(struct device *kdev)
++static void intel_audio_power_enable(struct intel_display *display, bool pulse_wake)
+ {
+-	struct intel_display *display = to_intel_display(kdev);
+-	struct ref_tracker *wakeref;
++	if (!display->audio.wakeref)
++		display->audio.wakeref =
++			intel_display_power_get(display, POWER_DOMAIN_AUDIO_PLAYBACK);
+ 
+-	/* Catch potential impedance mismatches before they occur! */
+-	BUILD_BUG_ON(sizeof(wakeref) > sizeof(unsigned long));
++	if (DISPLAY_VER(display) >= 9) {
++		intel_de_write(display, AUD_FREQ_CNTRL,
++			       display->audio.freq_cntrl);
++		drm_dbg_kms(display->drm,
++			    "restored AUD_FREQ_CNTRL to 0x%x\n",
++			    display->audio.freq_cntrl);
++	}
+ 
+-	wakeref = intel_display_power_get(display, POWER_DOMAIN_AUDIO_PLAYBACK);
++	/* Force CDCLK to 2*BCLK as long as we need audio powered. */
++	if (display->platform.geminilake)
++		glk_force_audio_cdclk(display, true);
+ 
+-	if (display->audio.power_refcount++ == 0) {
+-		if (DISPLAY_VER(display) >= 9) {
+-			intel_de_write(display, AUD_FREQ_CNTRL,
+-				       display->audio.freq_cntrl);
+-			drm_dbg_kms(display->drm,
+-				    "restored AUD_FREQ_CNTRL to 0x%x\n",
+-				    display->audio.freq_cntrl);
+-		}
++	if (DISPLAY_VER(display) >= 10)
++		intel_de_rmw(display, AUD_PIN_BUF_CTL,
++			     0, AUD_PIN_BUF_ENABLE);
+ 
+-		/* Force CDCLK to 2*BCLK as long as we need audio powered. */
+-		if (display->platform.geminilake)
+-			glk_force_audio_cdclk(display, true);
+-
+-		if (DISPLAY_VER(display) >= 10)
+-			intel_de_rmw(display, AUD_PIN_BUF_CTL,
+-				     0, AUD_PIN_BUF_ENABLE);
++	if (pulse_wake && DISPLAY_VER(display) >= 9) {
++		intel_de_rmw(display, HSW_AUD_CHICKENBIT,
++			     SKL_AUD_CODEC_WAKE_SIGNAL, 0);
++		usleep_range(1000, 1500);
++		intel_de_rmw(display, HSW_AUD_CHICKENBIT,
++			     0, SKL_AUD_CODEC_WAKE_SIGNAL);
++		usleep_range(1000, 1500);
++		intel_de_rmw(display, HSW_AUD_CHICKENBIT,
++			     SKL_AUD_CODEC_WAKE_SIGNAL, 0);
++		usleep_range(1000, 1500);
+ 	}
++}
+ 
+-	return (unsigned long)wakeref;
++static unsigned long intel_audio_component_get_power(struct device *kdev)
++{
++	struct intel_display *display = to_intel_display(kdev);
++
++	mutex_lock(&display->audio.mutex);
++
++	if (display->audio.power_refcount++ == 0)
++		intel_audio_power_enable(display, false);
++
++	mutex_unlock(&display->audio.mutex);
++
++	return 1;
+ }
+ 
+ static void intel_audio_component_put_power(struct device *kdev,
+ 					    unsigned long cookie)
+ {
+ 	struct intel_display *display = to_intel_display(kdev);
+-	struct ref_tracker *wakeref = (struct ref_tracker *)cookie;
++
++	mutex_lock(&display->audio.mutex);
+ 
+ 	/* Stop forcing CDCLK to 2*BCLK if no need for audio to be powered. */
+-	if (--display->audio.power_refcount == 0)
++	if (--display->audio.power_refcount == 0) {
+ 		if (display->platform.geminilake)
+ 			glk_force_audio_cdclk(display, false);
++		if (display->audio.wakeref) {
++			struct ref_tracker *aud_wakeref = display->audio.wakeref;
++
++			display->audio.wakeref = NULL;
++			intel_display_power_put(display, POWER_DOMAIN_AUDIO_PLAYBACK,
++						aud_wakeref);
++		}
++	}
+ 
+-	intel_display_power_put(display, POWER_DOMAIN_AUDIO_PLAYBACK, wakeref);
++	mutex_unlock(&display->audio.mutex);
+ }
+ 
+ static void intel_audio_component_codec_wake_override(struct device *kdev,
+@@ -1191,15 +1335,60 @@
+ 	}
+ 
+ 	encoder = audio_state->encoder;
++	if (!encoder || !encoder->base.crtc) {
++		err = -ENODEV;
++		goto unlock;
++	}
+ 
+ 	/* FIXME stop using the legacy crtc pointer */
+ 	crtc = to_intel_crtc(encoder->base.crtc);
+ 
+-	/* port must be valid now, otherwise the cpu_transcoder will be invalid */
+-	acomp->aud_sample_rate[port] = rate;
++	if (DISPLAY_VER(display) == 12 && crtc->config &&
++	    intel_crtc_has_dp_encoder(crtc->config)) {
++		enum transcoder cpu_transcoder = crtc->config->cpu_transcoder;
++		u32 vld;
++		bool was_enabled;
++
++		if (rate == 0) {
++			vld = intel_de_read(display, HSW_AUD_PIN_ELD_CP_VLD);
++
++			if (vld & AUDIO_OUTPUT_ENABLE(cpu_transcoder)) {
++				intel_de_rmw(display, HSW_AUD_PIN_ELD_CP_VLD,
++					     AUDIO_OUTPUT_ENABLE(cpu_transcoder), 0);
++				msleep(45);
++			}
++			intel_de_rmw(display, HSW_AUD_CFG(cpu_transcoder),
++				     AUD_CONFIG_N_VALUE_INDEX, 0);
++			msleep(45);
++			/* Restore DP N_VALUE_INDEX=1 while AUDIO_OUTPUT_ENABLE=0 so stream=1 never runs with bit 29=0 */
++			hsw_audio_config_update(encoder, crtc->config);
++			goto unlock;
++		}
++
++		vld = intel_de_read(display, HSW_AUD_PIN_ELD_CP_VLD);
++		was_enabled = vld & AUDIO_OUTPUT_ENABLE(cpu_transcoder);
++
++		/* port must be valid now, otherwise the cpu_transcoder will be invalid */
++		acomp->aud_sample_rate[port] = rate;
++		intel_de_write(display, _MMIO(0x650d4),
++			       intel_de_read(display, _MMIO(0x650d4)));
++		hsw_audio_config_update(encoder, crtc->config);
++		intel_de_rmw(display, HSW_AUD_PIN_ELD_CP_VLD,
++			     0, AUDIO_OUTPUT_ENABLE(cpu_transcoder));
++		if (!was_enabled && crtc->active)
++			intel_crtc_wait_for_next_vblank(crtc);
++	} else {
++		acomp->aud_sample_rate[port] = rate;
++		/* FIXME get rid of the crtc->config stuff */
++		hsw_audio_config_update(encoder, crtc->config);
++	}
++
++	if (DISPLAY_VER(display) == 12) {
++		unsigned long delay = tgl_audio_fault_latched(display, NULL) ? 150 : 250;
+ 
+-	/* FIXME get rid of the crtc->config stuff */
+-	hsw_audio_config_update(encoder, crtc->config);
++		mod_delayed_work(system_dfl_wq, &display->audio.fault_check_work,
++				 msecs_to_jiffies(delay));
++	}
+ 
+  unlock:
+ 	mutex_unlock(&display->audio.mutex);
+@@ -1207,6 +1396,39 @@
+ 	return err;
+ }
+ 
++static void intel_audio_component_wait_vblank(struct device *kdev, int port,
++					      int cpu_transcoder)
++{
++	struct intel_display *display = to_intel_display(kdev);
++	const struct intel_audio_state *audio_state;
++	struct intel_encoder *encoder;
++	struct intel_crtc *crtc;
++	unsigned long cookie;
++
++	if (!HAS_DDI(display))
++		return;
++
++	cookie = intel_audio_component_get_power(kdev);
++	mutex_lock(&display->audio.mutex);
++
++	audio_state = find_audio_state(display, port, cpu_transcoder);
++	if (!audio_state)
++		goto unlock;
++
++	encoder = audio_state->encoder;
++	if (!encoder || !encoder->base.crtc)
++		goto unlock;
++
++	crtc = to_intel_crtc(encoder->base.crtc);
++	if (crtc->active && crtc->config &&
++	    intel_crtc_has_dp_encoder(crtc->config))
++		intel_crtc_wait_for_next_vblank(crtc);
++
++unlock:
++	mutex_unlock(&display->audio.mutex);
++	intel_audio_component_put_power(kdev, cookie);
++}
++
+ static int intel_audio_component_get_eld(struct device *kdev, int port,
+ 					 int cpu_transcoder, bool *enabled,
+ 					 unsigned char *buf, int max_bytes)
+@@ -1244,6 +1466,7 @@
+ 	.codec_wake_override = intel_audio_component_codec_wake_override,
+ 	.get_cdclk_freq = intel_audio_component_get_cdclk_freq,
+ 	.sync_audio_rate = intel_audio_component_sync_audio_rate,
++	.wait_vblank = intel_audio_component_wait_vblank,
+ 	.get_eld = intel_audio_component_get_eld,
+ };
+ 
+@@ -1393,6 +1616,8 @@
+  */
+ void intel_audio_init(struct intel_display *display)
+ {
++	INIT_DELAYED_WORK(&display->audio.fault_check_work,
++			  intel_audio_fault_check_work);
+ 	if (intel_lpe_audio_init(display) < 0)
+ 		intel_audio_component_init(display);
+ }
+@@ -1409,6 +1634,7 @@
+  */
+ void intel_audio_deinit(struct intel_display *display)
+ {
++	cancel_delayed_work_sync(&display->audio.fault_check_work);
+ 	if (display->audio.lpe.platdev)
+ 		intel_lpe_audio_teardown(display);
+ 	else
+--- a/sound/hda/common/codec.c
++++ b/sound/hda/common/codec.c
+@@ -398,11 +398,14 @@
+ 	/* AC_PAR_DEVLIST_LEN is 0 based. */
+ 	num_devices = snd_hda_get_num_devices(codec, nid) + 1;
+ 	/* If Device List Length is 0 (num_device = 1),
+-	 * the pin is not multi stream capable.
+-	 * Do nothing in this case.
++	 * the pin is not multi stream capable. On Intel (0x8086) display
++	 * codecs, explicitly select dev 0 to clear any firmware-latched DEV_SEL.
+ 	 */
+-	if (num_devices == 1)
++	if (num_devices == 1) {
++		if ((codec->core.vendor_id >> 16) == 0x8086)
++			snd_hda_codec_write(codec, nid, 0, AC_VERB_SET_DEVICE_SEL, 0);
+ 		return 0;
++	}
+ 
+ 	/* Behavior of setting index being equal to or greater than
+ 	 * Device List Length is not predictable
+--- a/sound/hda/codecs/hdmi/hdmi_local.h
++++ b/sound/hda/codecs/hdmi/hdmi_local.h
+@@ -52,11 +52,25 @@
+ 	bool non_pcm;
+ 	bool chmap_set;		/* channel-map override by ALSA API? */
+ 	unsigned char chmap[8]; /* ALSA API channel-map */
++	bool hw_state_valid;
++	bool hw_non_pcm;
++	bool hw_hbr;
++	int hw_rate;
++	int hw_channels;
++	bool hw_chmap_set;
++	unsigned char hw_chmap[8];
++	int pending_rate;
++	bool need_bridge_reset;
++	bool defer_unmute;
+ #ifdef CONFIG_SND_PROC_FS
+ 	struct snd_info_entry *proc_entry;
+ #endif
+ };
+ 
++/* HBR should be Non-PCM, 8 channels */
++#define is_hbr_format(format) \
++	(((format) & AC_FMT_TYPE_NON_PCM) && ((format) & AC_FMT_CHAN_MASK) == 7)
++
+ /* operations used by generic code that can be overridden by codec drivers */
+ struct hdmi_ops {
+ 	int (*pin_get_eld)(struct hda_codec *codec, hda_nid_t pin_nid,
+@@ -74,6 +88,9 @@
+ 			    hda_nid_t pin_nid, int dev_id, u32 stream_tag,
+ 			    int format);
+ 
++	void (*set_chmap)(struct hda_codec *codec,
++			  struct hdmi_spec_per_pin *per_pin);
++
+ 	/*
+ 	 * Optional hook invoked at the beginning of the PCM prepare
+ 	 * sequence, before the audio infoframe and stream format are
+--- a/sound/hda/codecs/hdmi/hdmi.c
++++ b/sound/hda/codecs/hdmi/hdmi.c
+@@ -429,14 +429,23 @@
+ 				      hda_nid_t pin_nid,
+ 				      u8 *dip, int size)
+ {
++	struct hdmi_spec *spec = codec->spec;
+ 	int i;
+ 
+ 	hdmi_debug_dip_size(codec, pin_nid);
+ 	hdmi_clear_dip_buffers(codec, pin_nid); /* be paranoid */
+ 
+ 	hdmi_set_dip_index(codec, pin_nid, 0x0, 0x0);
+-	for (i = 0; i < size; i++)
+-		hdmi_write_dip_byte(codec, pin_nid, dip[i]);
++	if (spec->intel_hsw_fixup) {
++		for (i = 0; i < 32; i++)
++			hdmi_write_dip_byte(codec, pin_nid,
++					    (i < size) ? dip[i] : 0x00);
++		/* Reset DIP index to 0x00 so transmitter begins at header */
++		hdmi_set_dip_index(codec, pin_nid, 0x0, 0x0);
++	} else {
++		for (i = 0; i < size; i++)
++			hdmi_write_dip_byte(codec, pin_nid, dip[i]);
++	}
+ }
+ 
+ static bool hdmi_infoframe_uptodate(struct hda_codec *codec, hda_nid_t pin_nid,
+@@ -514,8 +523,8 @@
+ 	 * sizeof(*dp_ai) to avoid partial match/update problems when
+ 	 * the user switches between HDMI/DP monitors.
+ 	 */
+-	if (!hdmi_infoframe_uptodate(codec, pin_nid, ai.bytes,
+-					sizeof(ai))) {
++	if (spec->intel_hsw_fixup ||
++	    !hdmi_infoframe_uptodate(codec, pin_nid, ai.bytes, sizeof(ai))) {
+ 		codec_dbg(codec, "%s: pin NID=0x%x channels=%d ca=0x%02x\n",
+ 			  __func__, pin_nid, active_channels, ca);
+ 		hdmi_stop_infoframe_trans(codec, pin_nid);
+@@ -544,7 +553,7 @@
+ 	snd_hda_set_dev_select(codec, pin_nid, dev_id);
+ 
+ 	/* some HW (e.g. HSW+) needs reprogramming the amp at each time */
+-	if (get_wcaps(codec, pin_nid) & AC_WCAP_OUT_AMP)
++	if (!per_pin->defer_unmute && (get_wcaps(codec, pin_nid) & AC_WCAP_OUT_AMP))
+ 		snd_hda_codec_write(codec, pin_nid, 0,
+ 					    AC_VERB_SET_AMP_GAIN_MUTE,
+ 					    AMP_OUT_UNMUTE);
+@@ -676,13 +685,10 @@
+  * Callbacks
+  */
+ 
+-/* HBR should be Non-PCM, 8 channels */
+-#define is_hbr_format(format) \
+-	((format & AC_FMT_TYPE_NON_PCM) && (format & AC_FMT_CHAN_MASK) == 7)
+-
+ static int hdmi_pin_hbr_setup(struct hda_codec *codec, hda_nid_t pin_nid,
+ 			      int dev_id, bool hbr)
+ {
++	struct hdmi_spec *spec = codec->spec;
+ 	int pinctl, new_pinctl;
+ 
+ 	if (snd_hda_query_pin_caps(codec, pin_nid) & AC_PINCAP_HBR) {
+@@ -693,7 +699,7 @@
+ 		if (pinctl < 0)
+ 			return hbr ? -EINVAL : 0;
+ 
+-		new_pinctl = pinctl & ~AC_PINCTL_EPT;
++		new_pinctl = (spec->intel_hsw_fixup ? (pinctl | PIN_OUT) : pinctl) & ~AC_PINCTL_EPT;
+ 		if (hbr)
+ 			new_pinctl |= AC_PINCTL_EPT_HBR;
+ 		else
+@@ -705,10 +711,14 @@
+ 			    pinctl == new_pinctl ? "" : "new-",
+ 			    new_pinctl);
+ 
+-		if (pinctl != new_pinctl)
++		if (pinctl != new_pinctl) {
+ 			snd_hda_codec_write(codec, pin_nid, 0,
+ 					    AC_VERB_SET_PIN_WIDGET_CONTROL,
+ 					    new_pinctl);
++			if (spec->intel_hsw_fixup &&
++			    ((pinctl & AC_PINCTL_EPT) != (new_pinctl & AC_PINCTL_EPT)))
++				msleep(45);
++		}
+ 	} else if (hbr)
+ 		return -EINVAL;
+ 
+@@ -724,30 +734,31 @@
+ 	unsigned int param;
+ 	int err;
+ 
+-	err = spec->ops.pin_hbr_setup(codec, pin_nid, dev_id,
+-				      is_hbr_format(format));
++	bool hbr = is_hbr_format(format);
++
++	if (spec->intel_hsw_fixup && !hbr) {
++		param = snd_hda_codec_read(codec, cvt_nid, 0,
++					   AC_VERB_GET_DIGI_CONVERT_1, 0);
++		param = (param >> 16) & ~(AC_DIG3_ICT | AC_DIG3_KAE);
++		snd_hda_codec_write(codec, cvt_nid, 0,
++				    AC_VERB_SET_DIGI_CONVERT_3, param);
++	}
+ 
++	err = spec->ops.pin_hbr_setup(codec, pin_nid, dev_id, hbr);
+ 	if (err) {
+ 		codec_dbg(codec, "hdmi_setup_stream: HBR is not supported\n");
+ 		return err;
+ 	}
+ 
+-	if (spec->intel_hsw_fixup) {
+-
++	if (spec->intel_hsw_fixup && hbr) {
+ 		/*
+ 		 * on recent platforms IEC Coding Type is required for HBR
+ 		 * support, read current Digital Converter settings and set
+-		 * ICT bitfield if needed.
++		 * ICT bitfield after pin EPT settles.
+ 		 */
+ 		param = snd_hda_codec_read(codec, cvt_nid, 0,
+ 					   AC_VERB_GET_DIGI_CONVERT_1, 0);
+-
+-		param = (param >> 16) & ~(AC_DIG3_ICT);
+-
+-		/* on recent platforms ICT mode is required for HBR support */
+-		if (is_hbr_format(format))
+-			param |= 0x1;
+-
++		param = ((param >> 16) & ~(AC_DIG3_ICT | AC_DIG3_KAE)) | 0x1;
+ 		snd_hda_codec_write(codec, cvt_nid, 0,
+ 				    AC_VERB_SET_DIGI_CONVERT_3, param);
+ 	}
+@@ -1112,9 +1123,24 @@
+ 	if (per_pin->pcm_idx >= 0 && per_pin->pcm_idx < spec->pcm_used)
+ 		snd_hda_spdif_ctls_unassign(per_pin->codec, per_pin->pcm_idx);
+ 
++	if (spec->intel_hsw_fixup && per_pin->setup &&
++	    pm_runtime_get_if_in_use(hda_codec_dev(per_pin->codec)) > 0) {
++		if (get_wcaps(per_pin->codec, per_pin->pin_nid) & AC_WCAP_OUT_AMP) {
++			snd_hda_set_dev_select(per_pin->codec, per_pin->pin_nid,
++					       per_pin->dev_id);
++			snd_hda_codec_write(per_pin->codec, per_pin->pin_nid, 0,
++					    AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE);
++		}
++		if (per_pin->cvt_nid)
++			snd_hda_codec_cleanup_stream(per_pin->codec, per_pin->cvt_nid);
++		pm_runtime_put_noidle(hda_codec_dev(per_pin->codec));
++	}
++
+ 	per_pin->chmap_set = false;
+ 	memset(per_pin->chmap, 0, sizeof(per_pin->chmap));
+ 
++	per_pin->hw_state_valid = false;
++	per_pin->defer_unmute = false;
+ 	per_pin->setup = false;
+ 	per_pin->channels = 0;
+ }
+@@ -1679,13 +1705,23 @@
+ 
+ 	/* Call sync_audio_rate to set the N/CTS/M manually if necessary */
+ 	/* Todo: add DP1.2 MST audio support later */
+-	if (codec_has_acomp(codec))
++	if (!spec->ops.prepare && codec_has_acomp(codec))
+ 		snd_hdac_sync_audio_rate(&codec->core, per_pin->pin_nid,
+ 					 per_pin->dev_id, runtime->rate);
+ 
+ 	non_pcm = check_non_pcm_per_cvt(codec, cvt_nid);
+ 	scoped_guard(mutex, &per_pin->lock) {
++		bool hbr = is_hbr_format(format);
++
+ 		per_pin->channels = substream->runtime->channels;
++		per_pin->non_pcm = non_pcm;
++		per_pin->pending_rate = runtime->rate;
++		per_pin->need_bridge_reset =
++			!per_pin->hw_state_valid ||
++			per_pin->hw_non_pcm != non_pcm ||
++			per_pin->hw_hbr != hbr ||
++			per_pin->hw_rate != runtime->rate ||
++			per_pin->hw_channels != substream->runtime->channels;
+ 		per_pin->setup = true;
+ 
+ 		if (spec->ops.prepare)
+@@ -1729,8 +1765,9 @@
+ 					    stripe);
+ 		}
+ 
+-		snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, non_pcm);
++		if (!spec->intel_hsw_fixup)
++			snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, non_pcm);
+ 		adlp_restore_pin_out(codec, per_pin);
+ 	}
+ 	if (spec->dyn_pin_out) {
+ 		snd_hda_set_dev_select(codec, per_pin->pin_nid,
+@@ -1721,6 +1758,29 @@
+ 				     struct hda_codec *codec,
+ 				     struct snd_pcm_substream *substream)
+ {
++	struct hdmi_spec *spec = codec->spec;
++
++	if (spec->intel_hsw_fixup) {
++		int pin_idx;
++
++		scoped_guard(mutex, &spec->pcm_lock) {
++			pin_idx = hinfo_to_pin_index(codec, hinfo);
++			if (pin_idx >= 0) {
++				struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
++
++				scoped_guard(mutex, &per_pin->lock) {
++					if (get_wcaps(codec, per_pin->pin_nid) & AC_WCAP_OUT_AMP) {
++						snd_hda_set_dev_select(codec, per_pin->pin_nid,
++								       per_pin->dev_id);
++						snd_hda_codec_write(codec, per_pin->pin_nid, 0,
++								    AC_VERB_SET_AMP_GAIN_MUTE,
++								    AMP_OUT_MUTE);
++					}
++				}
++			}
++		}
++	}
++
+ 	snd_hda_codec_cleanup_stream(codec, hinfo->nid);
+ 	return 0;
+ }
+@@ -1773,6 +1833,14 @@
+ 		}
+ 
+ 		guard(mutex)(&per_pin->lock);
++		if (spec->intel_hsw_fixup &&
++		    (get_wcaps(codec, per_pin->pin_nid) & AC_WCAP_OUT_AMP)) {
++			snd_hda_set_dev_select(codec, per_pin->pin_nid,
++					       per_pin->dev_id);
++			snd_hda_codec_write(codec, per_pin->pin_nid, 0,
++					    AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_MUTE);
++		}
++		per_pin->defer_unmute = false;
+ 		per_pin->chmap_set = false;
+ 		memset(per_pin->chmap, 0, sizeof(per_pin->chmap));
+ 
+@@ -1828,8 +1896,12 @@
+ 	guard(mutex)(&per_pin->lock);
+ 	per_pin->chmap_set = true;
+ 	memcpy(per_pin->chmap, chmap, ARRAY_SIZE(per_pin->chmap));
+-	if (prepared)
+-		snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, per_pin->non_pcm);
++	if (prepared) {
++		if (spec->ops.set_chmap)
++			spec->ops.set_chmap(codec, per_pin);
++		else
++			snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, per_pin->non_pcm);
++	}
+ }
+ 
+ static bool is_hdmi_pcm_attached(struct hdac_device *hdac, int pcm_idx)
+@@ -2257,6 +2329,7 @@
+ 	wmb();
+ 	spec->drm_audio_ops.pin2port = ops->pin2port;
+ 	spec->drm_audio_ops.pin_eld_notify = ops->pin_eld_notify;
++	spec->drm_audio_ops.bus_reset_notify = ops->bus_reset_notify;
+ 	spec->drm_audio_ops.master_bind = ops->master_bind;
+ 	spec->drm_audio_ops.master_unbind = ops->master_unbind;
+ }
+--- a/sound/hda/codecs/hdmi/intelhdmi.c
++++ b/sound/hda/codecs/hdmi/intelhdmi.c
+@@ -6,9 +6,11 @@
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/module.h>
++#include <linux/regmap.h>
+ #include <sound/core.h>
+ #include <sound/hdaudio.h>
+ #include <sound/hda_i915.h>
++#include <sound/pcm.h>
+ #include <sound/hda_codec.h>
+ #include "hda_local.h"
+ #include "hdmi_local.h"
+@@ -170,12 +172,83 @@
+ 		return;
+ 
+ 	snd_hdac_i915_set_bclk(&codec->bus->core);
++	{
++		struct hdmi_spec *spec = codec->spec;
++		int pin_idx = pin_id_to_pin_index(codec, pin_nid, dev_id);
++
++		if (pin_idx >= 0) {
++			struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
++
++			scoped_guard(mutex, &per_pin->lock)
++				per_pin->hw_state_valid = false;
++		}
++	}
+ 	snd_hda_hdmi_check_presence_and_report(codec, pin_nid, dev_id);
+ }
+ 
++static int i915_hdmi_resume(struct hda_codec *codec);
++
++static void intel_bus_reset_notify(void *audio_ptr, int stage)
++{
++	struct hda_codec *codec = audio_ptr;
++	struct hdac_bus *bus = &codec->bus->core;
++	struct hdmi_spec *spec = codec->spec;
++	struct hda_pcm *pcm;
++	int i;
++
++	if (stage == 0) {
++		mutex_lock(&bus->cmd_mutex);
++		snd_hdac_bus_stop_chip(bus);
++		return;
++	}
++
++	if (stage == 1) {
++		snd_hdac_i915_set_bclk(bus);
++		snd_hdac_bus_init_chip(bus, true);
++		mutex_unlock(&bus->cmd_mutex);
++		return;
++	}
++
++	for (i = 0; i < spec->num_pins; i++) {
++		struct hdmi_spec_per_pin *per_pin = get_pin(spec, i);
++
++		scoped_guard(mutex, &per_pin->lock) {
++			per_pin->hw_state_valid = false;
++			per_pin->defer_unmute = false;
++		}
++	}
++
++	if (codec->core.regmap)
++		regcache_mark_dirty(codec->core.regmap);
++
++	if (spec->vendor_nid) {
++		intel_haswell_enable_all_pins(codec, false);
++		intel_haswell_fixup_enable_dp12(codec);
++	}
++
++	if (codec->core.afg) {
++		snd_hda_codec_write(codec, codec->core.afg, 0,
++				    AC_VERB_SET_POWER_STATE, AC_PWRST_D0);
++		msleep(10);
++		snd_hda_codec_set_power_to_all(codec, codec->core.afg, AC_PWRST_D0);
++	}
++	i915_hdmi_resume(codec);
++
++	list_for_each_entry(pcm, &codec->pcm_list_head, list) {
++		struct snd_pcm_substream *substream;
++
++		if (!pcm->pcm)
++			continue;
++		for (substream = pcm->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
++		     substream; substream = substream->next)
++			snd_pcm_stop_xrun(substream);
++	}
++}
++
+ static const struct drm_audio_component_audio_ops intel_audio_ops = {
+ 	.pin2port = intel_pin2port,
+ 	.pin_eld_notify = intel_pin_eld_notify,
++	.bus_reset_notify = intel_bus_reset_notify,
+ };
+ 
+ /* register i915 component pin_eld_notify callback */
+@@ -428,16 +501,100 @@
+  * sequence. It is re-enabled once the new stream has been set up, in
+  * i915_hsw_setup_stream().
+  */
++static void intel_set_pin_mute(struct hda_codec *codec, hda_nid_t pin_nid,
++			       int dev_id, bool mute)
++{
++	if (!(get_wcaps(codec, pin_nid) & AC_WCAP_OUT_AMP))
++		return;
++
++	snd_hda_set_dev_select(codec, pin_nid, dev_id);
++	snd_hda_codec_write(codec, pin_nid, 0, AC_VERB_SET_AMP_GAIN_MUTE,
++			    mute ? AMP_OUT_MUTE : AMP_OUT_UNMUTE);
++}
++
+ static void i915_hsw_prepare(struct hda_codec *codec,
+ 			     struct hdmi_spec_per_pin *per_pin)
+ {
+-	struct hdmi_spec *spec = codec->spec;
++	if (!per_pin->cvt_nid)
++		return;
++
++	silent_stream_set_kae(codec, per_pin, false);
++
++	/*
++	 * Routine pause/resume and seeks on an unchanged transport must not
++	 * yank AUDIO_OUTPUT_ENABLE out from under the PCON/sink state machine.
++	 */
++	if (!per_pin->need_bridge_reset)
++		return;
++
++	per_pin->defer_unmute = true;
++	intel_set_pin_mute(codec, per_pin->pin_nid, per_pin->dev_id, true);
++	snd_hda_codec_cleanup_stream(codec, per_pin->cvt_nid);
++	usleep_range(100, 200);
++
++	per_pin->hw_state_valid = false;
++	if (codec_has_acomp(codec))
++		snd_hdac_sync_audio_rate(&codec->core, per_pin->pin_nid,
++					 per_pin->dev_id, 0);
++}
++
++static void i915_hsw_commit_infoframe(struct hda_codec *codec,
++				      struct hdmi_spec_per_pin *per_pin,
++				      int rate)
++{
++	int conv = 0;
++
++	per_pin->defer_unmute = true;
++	intel_set_pin_mute(codec, per_pin->pin_nid, per_pin->dev_id, true);
++
++	if (per_pin->cvt_nid) {
++		conv = snd_hda_codec_read(codec, per_pin->cvt_nid, 0,
++					  AC_VERB_GET_CONV, 0);
++		if (conv > 0) {
++			snd_hda_codec_write(codec, per_pin->cvt_nid, 0,
++					    AC_VERB_SET_CHANNEL_STREAMID, 0);
++			usleep_range(100, 200);
++		}
++	}
+ 
+-	if (spec->silent_stream_type == SILENT_STREAM_KAE && per_pin->silent_stream) {
+-		silent_stream_set_kae(codec, per_pin, false);
+-		/* wait for pending transfers in codec to clear */
+-		usleep_range(100, 200);
++	if (codec_has_acomp(codec)) {
++		per_pin->hw_state_valid = false;
++		snd_hdac_sync_audio_rate(&codec->core, per_pin->pin_nid,
++					 per_pin->dev_id, 0);
+ 	}
++
++	if (conv > 0)
++		snd_hda_codec_write(codec, per_pin->cvt_nid, 0,
++				    AC_VERB_SET_CHANNEL_STREAMID, conv & 0xff);
++
++	snd_hda_hdmi_setup_audio_infoframe(codec, per_pin, per_pin->non_pcm);
++
++	if (codec_has_acomp(codec)) {
++		snd_hdac_sync_audio_rate(&codec->core, per_pin->pin_nid,
++					 per_pin->dev_id, rate);
++		snd_hdac_acomp_wait_vblank(&codec->core, per_pin->pin_nid,
++					   per_pin->dev_id);
++	}
++
++	per_pin->hw_state_valid = true;
++	per_pin->defer_unmute = false;
++	intel_set_pin_mute(codec, per_pin->pin_nid, per_pin->dev_id, false);
++}
++
++static void i915_hsw_set_chmap(struct hda_codec *codec,
++			       struct hdmi_spec_per_pin *per_pin)
++{
++	int rate = per_pin->pending_rate ? per_pin->pending_rate : per_pin->hw_rate;
++
++	if (!per_pin->hw_state_valid || !rate)
++		return;
++	if (per_pin->hw_chmap_set &&
++	    !memcmp(per_pin->hw_chmap, per_pin->chmap, sizeof(per_pin->chmap)))
++		return;
++
++	i915_hsw_commit_infoframe(codec, per_pin, rate);
++	per_pin->hw_chmap_set = true;
++	memcpy(per_pin->hw_chmap, per_pin->chmap, sizeof(per_pin->hw_chmap));
+ }
+ 
+ /* setup_stream ops override for HSW+ */
+@@ -447,32 +604,88 @@
+ {
+ 	struct hdmi_spec *spec = codec->spec;
+ 	int pin_idx = pin_id_to_pin_index(codec, pin_nid, dev_id);
+-	struct hdmi_spec_per_pin *per_pin;
++	struct hdmi_spec_per_pin *per_pin =
++		pin_idx >= 0 ? get_pin(spec, pin_idx) : NULL;
++	bool hbr = is_hbr_format(format);
++	bool chmap_changed = false;
+ 	int res;
+ 
+-	if (pin_idx < 0)
+-		per_pin = NULL;
+-	else
+-		per_pin = get_pin(spec, pin_idx);
+-
+ 	haswell_verify_D0(codec, cvt_nid, pin_nid);
+ 
++	if (!per_pin)
++		return snd_hda_hdmi_setup_stream(codec, cvt_nid, pin_nid,
++						 dev_id, stream_tag, format);
++
++	guard(mutex)(&per_pin->lock);
++
++	if (per_pin->need_bridge_reset) {
++		int dig1;
++
++		/* Keep pin muted and NONAUDIO coherent while bridge is OFF */
++		per_pin->defer_unmute = true;
++		intel_set_pin_mute(codec, pin_nid, dev_id, true);
++
++		dig1 = snd_hda_codec_read(codec, cvt_nid, 0,
++					  AC_VERB_GET_DIGI_CONVERT_1, 0);
++		if (dig1 >= 0) {
++			u8 new_dig1 = per_pin->non_pcm ? (dig1 | AC_DIG1_NONAUDIO)
++						       : (dig1 & ~AC_DIG1_NONAUDIO);
++			if (new_dig1 != (dig1 & 0xff))
++				snd_hda_codec_write(codec, cvt_nid, 0,
++						    AC_VERB_SET_DIGI_CONVERT_1,
++						    new_dig1);
++		}
++	}
++
+ 	res = snd_hda_hdmi_setup_stream(codec, cvt_nid, pin_nid, dev_id,
+ 					stream_tag, format);
++	if (res) {
++		per_pin->defer_unmute = false;
++		return res;
++	}
+ 
+-	/*
+-	 * Keep-alive was disabled in i915_hsw_prepare(), re-enable it now.
+-	 * The pin lookup above resolves to the same per_pin that prepare
+-	 * used (pin_nid comes from that per_pin), so this stays balanced; a
+-	 * NULL per_pin only occurs on a lookup failure that also implies no
+-	 * active keep-alive stream to restore.
+-	 */
+-	if (spec->silent_stream_type == SILENT_STREAM_KAE && per_pin && per_pin->silent_stream) {
+-		usleep_range(100, 200);
+-		silent_stream_set_kae(codec, per_pin, true);
++	chmap_changed = (per_pin->hw_chmap_set != per_pin->chmap_set) ||
++			(per_pin->chmap_set &&
++			 memcmp(per_pin->hw_chmap, per_pin->chmap,
++				sizeof(per_pin->chmap)));
++
++	if (per_pin->need_bridge_reset) {
++		per_pin->defer_unmute = true;
++		if (!hbr && (snd_hda_query_pin_caps(codec, pin_nid) & AC_PINCAP_HBR)) {
++			int pinctl;
++
++			snd_hda_set_dev_select(codec, pin_nid, dev_id);
++			pinctl = snd_hda_codec_read(codec, pin_nid, 0,
++						    AC_VERB_GET_PIN_WIDGET_CONTROL, 0);
++			if (pinctl >= 0)
++				snd_hda_codec_write(codec, pin_nid, 0,
++						    AC_VERB_SET_PIN_WIDGET_CONTROL,
++						    (pinctl | PIN_OUT) & ~AC_PINCTL_EPT);
++		}
++		snd_hda_hdmi_setup_audio_infoframe(codec, per_pin,
++						   per_pin->non_pcm);
++		if (codec_has_acomp(codec)) {
++			snd_hdac_sync_audio_rate(&codec->core, pin_nid, dev_id,
++						 per_pin->pending_rate);
++			snd_hdac_acomp_wait_vblank(&codec->core, pin_nid, dev_id);
++		}
++	} else if (chmap_changed) {
++		i915_hsw_commit_infoframe(codec, per_pin, per_pin->pending_rate);
+ 	}
+ 
+-	return res;
++	per_pin->defer_unmute = false;
++	intel_set_pin_mute(codec, pin_nid, dev_id, false);
++
++	per_pin->hw_state_valid = true;
++	per_pin->hw_non_pcm = per_pin->non_pcm;
++	per_pin->hw_hbr = hbr;
++	per_pin->hw_rate = per_pin->pending_rate;
++	per_pin->hw_channels = per_pin->channels;
++	per_pin->hw_chmap_set = per_pin->chmap_set;
++	memcpy(per_pin->hw_chmap, per_pin->chmap, sizeof(per_pin->hw_chmap));
++	per_pin->need_bridge_reset = false;
++
++	return 0;
+ }
+ 
+ /* pin_cvt_fixup ops override for HSW+ and VLV+ */
+@@ -498,6 +711,15 @@
+ 	bool silent_streams = false;
+ 	int pin_idx, res;
+ 
++	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
++		struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
++
++		scoped_guard(mutex, &per_pin->lock) {
++			per_pin->hw_state_valid = false;
++			per_pin->defer_unmute = false;
++		}
++	}
++
+ 	res = snd_hda_hdmi_generic_suspend(codec);
+ 	if (spec->silent_stream_type != SILENT_STREAM_KAE)
+ 		return res;
+@@ -533,12 +755,27 @@
+ 	return res;
+ }
+ 
++static void intel_clear_all_kae(struct hda_codec *codec)
++{
++	struct hdmi_spec *spec = codec->spec;
++	int i;
++
++	for (i = 0; i < spec->num_cvts; i++) {
++		unsigned int param = snd_hda_codec_read(codec, spec->cvt_nids[i], 0,
++							AC_VERB_GET_DIGI_CONVERT_1, 0);
++		param = ((param >> 16) & 0xff) & ~AC_DIG3_KAE;
++		snd_hda_codec_write(codec, spec->cvt_nids[i], 0,
++				    AC_VERB_SET_DIGI_CONVERT_3, param);
++	}
++}
++
+ static int i915_hdmi_resume(struct hda_codec *codec)
+ {
+ 	struct hdmi_spec *spec = codec->spec;
+ 	int pin_idx, res;
+ 
+ 	res = snd_hda_hdmi_generic_resume(codec);
++	intel_clear_all_kae(codec);
+ 	if (spec->silent_stream_type != SILENT_STREAM_KAE)
+ 		return res;
+ 
+@@ -602,6 +839,14 @@
+ 	if (err < 0)
+ 		return err;
+ 
++	codec->no_sticky_stream = 1;
++
++	/*
++	 * Intel hardware powers on with AC_DIG3_KAE set on all converters.
++	 * Disable it here so keep-alive frames are not emitted.
++	 */
++	intel_clear_all_kae(codec);
++
+ 	snd_hda_hdmi_generic_init_per_pins(codec);
+ 	register_i915_notifier(codec);
+ 	return 0;
+@@ -632,6 +877,7 @@
+ 
+ 	spec->ops.prepare = i915_hsw_prepare;
+ 	spec->ops.setup_stream = i915_hsw_setup_stream;
++	spec->ops.set_chmap = i915_hsw_set_chmap;
+ 	spec->ops.pin_cvt_fixup = i915_pin_cvt_fixup;
+ 	spec->ops.silent_stream = i915_set_silent_stream;
+ 
