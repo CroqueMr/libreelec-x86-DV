@@ -27,7 +27,7 @@ class DecoderReplayTests(unittest.TestCase):
 #include <mutex>
 #include <string>
 using namespace std::chrono_literals;
-constexpr int LOGWARNING=0,LOGFATAL=1,OUTPUT_AGAIN=1,DVD_PLAYSPEED_PAUSE=0;constexpr double DVD_NOPTS_VALUE=1e20;
+constexpr int LOGWARNING=0,LOGFATAL=1,OUTPUT_AGAIN=1,OUTPUT_ABORT=2,DVD_CODEC_CTRL_DRAIN=1,DVD_PLAYSPEED_PAUSE=0;constexpr double DVD_NOPTS_VALUE=1e20;
 namespace IDVDStreamPlayer{enum {SYNC_WAITSYNC, SYNC_INSYNC};}
 enum MsgQueueReturnCode{MSGQ_OK=1,MSGQ_TIMEOUT=0,MSGQ_ABORT=-1,MSGQ_NOT_INITIALIZED=-2,MSGQ_INVALID_MSG=-3};
 struct CDVDMsg{enum{DEMUXER_PACKET,VIDEO_DRAIN};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
@@ -56,6 +56,9 @@ struct Player{
  Queue m_messageQueue;struct{void SetLevelVQ(int){}bool IsFrameAdvance(){return false;}}m_processInfo;
  int m_outputSate=0,m_speed=1,m_syncState=IDVDStreamPlayer::SYNC_INSYNC,drains=0;
  bool m_paused=false,decoderReady=false;
+ enum class DrainState { Idle, Draining, Complete };
+ DrainState drain=DrainState::Idle;
+ struct Codec{void SetCodecControl(int){}} codec,*m_pVideoCodec=&codec;
  struct Picture{void*videoBuffer=nullptr;}m_picture;
  int OutputPicture(Picture*){return 0;}
  bool ProcessDecoderOutput(double,double){decoderReady=true;drains++;return false;}

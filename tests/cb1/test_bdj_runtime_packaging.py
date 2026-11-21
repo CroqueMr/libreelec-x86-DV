@@ -1,7 +1,6 @@
 """Run the native Java addon recipe against matched and stale BD-J staging."""
 from pathlib import Path
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -40,13 +39,16 @@ get_pkg_version() { . "$BLURAY_RECIPE"; printf '%s\n' "$PKG_VERSION"; }
 . "$PKG_DIR/package.mk"
 addon
 '''], env=dict(os.environ, FIXTURE=str(root), PKG_DIR=str(ADDON),
-              BLURAY_RECIPE=str(BLURAY), TARGET_ARCH='x86_64', DISPLAYSERVER='gbm',
+              BLURAY_RECIPE=str(BLURAY), PROJECT='Generic', TARGET_ARCH='x86_64', DISPLAYSERVER='gbm',
               ADDON_BUILD=str(root / 'output'), PKG_ADDON_ID='tools.jre.zulu'),
             capture_output=True, text=True)
         return result, root / 'output/tools.jre.zulu'
 
     def matched(self):
-        version = re.search(r'^PKG_VERSION="([^"]+)"', BLURAY.read_text(), re.M)[1]
+        version = subprocess.check_output(
+            ['bash', '-ec', '. "$BLURAY_RECIPE"; printf "%s" "$PKG_VERSION"'],
+            env=dict(os.environ, BLURAY_RECIPE=str(BLURAY), PROJECT='Generic',
+                     TARGET_ARCH='x86_64', MACHINE_HARDWARE_NAME='x86_64'), text=True)
         return {f'libbluray-j2se-{version}.jar', f'libbluray-awt-j2se-{version}.jar'}
 
     def test_only_the_pair_matching_the_native_library_is_packaged(self):
