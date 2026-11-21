@@ -32,7 +32,7 @@ namespace IDVDStreamPlayer{enum {SYNC_WAITSYNC, SYNC_INSYNC};}
 enum MsgQueueReturnCode{MSGQ_OK=1,MSGQ_TIMEOUT=0,MSGQ_ABORT=-1,MSGQ_NOT_INITIALIZED=-2,MSGQ_INVALID_MSG=-3};
 struct CDVDMsg{enum{DEMUXER_PACKET,VIDEO_DRAIN};char name;explicit CDVDMsg(char c):name(c){}virtual~CDVDMsg()=default;
  bool IsType(int)const{return true;}};
-struct DemuxPacket{int iSize=1;};
+struct DemuxPacket{int iSize=1;struct{int enhancementSize=0;}doviLayerTimes;};
 struct CDVDMsgDemuxerPacket:CDVDMsg{using CDVDMsg::CDVDMsg;DemuxPacket data;DemuxPacket*GetPacket(){return &data;}};
 struct DVDMessageListItem{std::shared_ptr<CDVDMsg>message;int priority;
  DVDMessageListItem(std::shared_ptr<CDVDMsg>m,int p):message(std::move(m)),priority(p){}};

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include "cores/VideoPlayer/DVDDemuxers/BlurayDovi.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
 
 #include <cassert>
 #include <string_view>
@@ -7,13 +8,6 @@
 extern "C"
 {
 #include <libavformat/avformat.h>
-AVPacket* __real_av_packet_clone(const AVPacket*);
-}
-
-static bool failClone{};
-extern "C" AVPacket* __wrap_av_packet_clone(const AVPacket* packet)
-{
-  return failClone ? nullptr : __real_av_packet_clone(packet);
 }
 
 enum { LOGINFO, LOGWARNING, LOGERROR };
@@ -33,13 +27,7 @@ struct Reader
   const int m_blurayBase{0}, m_blurayEnhancement{1};
   bool m_blurayAwaitBase{};
   int inputResult{AVERROR_EOF};
-  struct
-  {
-    int64_t basePts, enhancementPts;
-    uint64_t epoch;
-    int num, den;
-    bool valid, presentable;
-  } m_blurayTiming{};
+  DemuxPacket::DoviLayerTimes m_blurayTiming{};
 
   Reader() { format.streams = streams; base.time_base = {1, 24}; }
   int av_read_frame(AVFormatContext*, AVPacket*) { return inputResult; }
@@ -73,12 +61,6 @@ int main(int argc, char** argv)
       r.Push(pts, true, pts != 1);
     for (int pts = 0; pts <= 2; ++pts)
     {
-      if (pts == 1)
-      {
-        r.inputResult = AVERROR(EAGAIN);
-        assert(r.Read(packet) == AVERROR(EAGAIN)); // Further input can still supply this RPU.
-        r.inputResult = AVERROR_EOF;
-      }
       assert(r.Read(packet) == 0 && "An unpresentable BL must not truncate the tail");
       assert(r.m_blurayTiming.basePts == pts && r.m_blurayTiming.enhancementPts == pts);
       assert(r.m_blurayTiming.presentable == (pts != 1));
@@ -87,13 +69,23 @@ int main(int argc, char** argv)
     }
     assert(r.Read(packet) == AVERROR_EOF && !r.layers.Pending());
   }
+  else if (std::string_view(argv[1]) == "base-only")
+  {
+    r.inputResult = AVERROR(EAGAIN);
+    for (int pts = 0; pts != 96; ++pts)
+    {
+      r.Push(pts, false, true);
+      assert(r.Read(packet) == 0 && r.m_blurayTiming.presentable);
+      assert(r.m_blurayTiming.basePts == pts && !r.m_blurayTiming.enhancement);
+      av_packet_unref(packet);
+    }
+    r.inputResult = AVERROR_EOF;
+    assert(r.Read(packet) == AVERROR_EOF && !r.layers.Pending());
+  }
   else
   {
-    // The last BL has its own RPU. Without a queued EL a normal take waits.
+    // The last BL has its own RPU and can reach the decoder without an EL.
     r.Push(2, false, true);
-    failClone = true;
-    assert(r.Read(packet) == AVERROR(ENOMEM) && "Terminal allocation failure is a demux error");
-    failClone = false;
     assert(r.Read(packet) == 0 && r.m_blurayTiming.basePts == 2 && r.m_blurayTiming.presentable);
     av_packet_unref(packet);
     assert(r.Read(packet) == AVERROR_EOF);

@@ -15,7 +15,7 @@ class DualClockLifecycle(unittest.TestCase):
         common=body(source,'bool CDVDVideoCodecFFmpeg::GetPictureCommon(')
         start=common.rfind('  if (m_dvLayerEpoch)')
         guard=body(common[start:],'  if (m_dvLayerEpoch)')
-        frame_rpu=body(common, '        if (m_dvFel && !m_dvLayerEpoch &&')
+        frame_rpu=body(common, '        if (m_dvFel && (m_dvLayerEpoch ||')
         program=r'''
 #include "cores/VideoPlayer/DVDCodecs/Video/DVMetadataBuffer.h"
 extern "C" {
@@ -78,8 +78,10 @@ int main(){
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
+#include <map>
 #include <memory>
 #include <cstring>
+#include <vector>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include "dvbridge_fel.h"
@@ -93,16 +95,25 @@ int calls=0,submits=0;bool again=false;
 extern "C" int __wrap_avcodec_send_packet(AVCodecContext*,const AVPacket*) {
  ++calls;if(again){again=false;return AVERROR(EAGAIN);}return 0;
 }
-extern "C" bool dvbridge_fel_submit_source(dvbridge_fel*,const AVPacket*,const dvbridge_fel_source*){++submits;return true;}
+extern "C" bool dvbridge_fel_submit_layers(dvbridge_fel*,const AVPacket* el,const dvbridge_fel_source* timing){
+ assert(el && el->pts==2 && timing->enhancement_pts==1);
+ ++submits;return true;
+}
 extern "C" bool dvbridge_fel_submit(dvbridge_fel*,const AVPacket*){++submits;return true;}
 struct Hardware{int Check(AVCodecContext*){return 0;}};
+namespace KODI::UTILS::DOLBYVISION {
+ std::vector<uint8_t> ExtractAv1Rpu(const uint8_t*, int) { return {}; }
+}
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
 struct CDVDVideoCodecFFmpeg {
  struct {
   struct {unsigned dv_profile{7};} dovi;
   bool preferHybridHDR10Plus{};
+  AVCodecID codec=AV_CODEC_ID_HEVC;
   StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
  } m_hints;
+ bool m_exportDoviRpu=false;
+ std::map<int64_t,std::vector<uint8_t>> m_av1DoviRpus;
  AVCodecContext context{};AVCodecContext* m_pCodecContext=&context;
  std::shared_ptr<dvbridge_fel> m_dvFel=std::make_shared<dvbridge_fel>();
  uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,m_dvFailed=false,m_eof=false,m_started=false,m_startedInput=false;
@@ -136,6 +147,8 @@ struct CVideoPlayer{
 int main(){
  uint8_t bytes[]={0,0,1,0x26,1,0xaa};DemuxPacket p;p.pData=bytes;p.iSize=sizeof(bytes);
  p.pts=p.dts=1000;p.doviLayerTimes={1,1,1,1,90000,true,true};
+ AVPacket* el=av_packet_alloc();assert(el);el->pts=2;
+ p.doviLayerTimes.enhancement={el,[](AVPacket* pkt){av_packet_free(&pkt);}};
  CDVDVideoCodecFFmpeg c;
  p.videoWindowed=true;p.videoDecodeOnly=true;
  again=true;assert(!c.AddData(p)&&calls==1&&submits==0&&c.resets==0);
@@ -148,6 +161,7 @@ int main(){
  assert(c.AddData(p)&&c.resets==1&&submits==2&&c.m_dvLayerEpoch==2);
  assert(!c.m_dvVideoWindow);
  p.doviLayerTimes.basePts=AV_NOPTS_VALUE;p.doviLayerTimes.presentable=false;
+ p.pData=nullptr;p.iSize=0;
  int before=c.m_iLastKeyframe;
  assert(c.AddData(p)&&calls==4&&submits==3&&c.m_iLastKeyframe==before);
  CVideoPlayer player;player.ProcessVideoData(nullptr,&p);

@@ -48,10 +48,11 @@ struct AVCodecContext{AVBufferRef* hw_frames_ctx{};};
 struct AVPacket{int64_t pts{};};
 struct AVRational{int num,den;};
 struct dvbridge_fel_source{int64_t base_pts,enhancement_pts;AVRational time_base;uint64_t epoch;bool presentable;};
-struct DemuxPacket{bool videoWindowed=false;struct{int64_t basePts{},enhancementPts{};int clockNum{},clockDen{};uint64_t epoch{};bool valid{},presentable{};}doviLayerTimes;};
+constexpr int AV_PKT_FLAG_DISCARD = 4;
+struct DemuxPacket{bool videoWindowed=false;struct{int64_t basePts{},enhancementPts{};int clockNum{},clockDen{};uint64_t epoch{};bool valid{},presentable{};std::shared_ptr<AVPacket> enhancement;int baseFlags{};}doviLayerTimes;};
 struct Fel{bool ready=false,failed=false,submit=true;int takes=0,discardUntil=0;};
 bool dvbridge_fel_submit(Fel* f,AVPacket*){return f->submit;}
-bool dvbridge_fel_submit_source(Fel* f,AVPacket*,const dvbridge_fel_source*){return f->submit;}
+bool dvbridge_fel_submit_layers(Fel* f,AVPacket*,const dvbridge_fel_source*){return f->submit;}
 bool dvbridge_fel_failed(Fel* f){return f->failed;}
 bool dvbridge_fel_exhausted(Fel*){return false;}
 bool dvbridge_fel_has_enhancement(Fel*){return true;}
@@ -76,7 +77,7 @@ struct VideoPicture{
  struct Metadata{bool valid=true;int Binding()const{return 17;}const void* Data()const{return valid?this:nullptr;}size_t Size()const{return 16;}}doviMetadata;
  void Reset(){*this={};}void CopyRef(const VideoPicture& p){*this=p;}
 };
-struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL};};
+struct CDVDVideoCodec{enum VCReturn{VC_NONE,VC_ERROR,VC_BUFFER,VC_EOF,VC_PICTURE,VC_FATAL,VC_REOPEN,VC_FLUSHED};};
 struct CDVDVideoCodecFFmpeg:CDVDVideoCodec{
  struct {int codecOptions{};bool preferHybridHDR10Plus{};}m_hints;
  bool NeedsDVEnhancement() const {return false;}

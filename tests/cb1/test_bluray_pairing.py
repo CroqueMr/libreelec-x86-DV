@@ -21,9 +21,9 @@ class BlurayPairingTests(unittest.TestCase):
             binary = root/'test'
             subprocess.run(['c++', '-std=c++20', '-fsanitize=address,undefined',
                 '-I'+str(TREE/'xbmc'), '-I'+str(prefix/'include'), '-I'+str(root), str(fixture),
-                '-L'+str(prefix/'lib'), '-Wl,--wrap=av_packet_clone', '-lavcodec', '-lavutil',
+                '-L'+str(prefix/'lib'), '-lavcodec', '-lavutil',
                 '-o', str(binary)], check=True)
-            for case in ('gap', 'allocation'):
+            for case in ('gap', 'final-bl', 'base-only'):
                 with self.subTest(case=case):
                     run = subprocess.run([str(binary), case], capture_output=True, text=True)
                     self.assertEqual(run.returncode, 0, run.stderr)
@@ -45,7 +45,14 @@ int main() {
  for(int sign : {-1,1}) {
   CBlurayDovi join;assert(join.Configure(cp,cp,{1,90000},{1,24000}));
   e->pts=e->dts=sign;
-  assert(!join.Push(e,true)&&!strcmp(join.LastError(),"layer-time-base"));
+  b->pts=b->dts=sign;
+  assert(join.Push(e,true) && join.Push(b,false));
+  assert(join.Take(out)==AVERROR(EAGAIN));
+  assert(join.Take(out,true)==0 && !join.Timing().presentable);
+  const auto metadata=join.Timing();
+  assert(metadata.basePts==4*sign && metadata.enhancementPts==15*sign);
+  assert(metadata.enhancement->pts==sign && metadata.enhancement->time_base.den==24000);
+  av_packet_unref(out);
  }
  CBlurayDovi join;join.Reset(true);
  // No data loss merely because the BL window fills before its delayed RPU.
@@ -159,9 +166,10 @@ int main() {
     const int pts=presentation(emitted,false);
     assert(out->pts==pts && out->dts==emitted-1);
     const uint8_t expected[]={0,0,1,0x02,1,uint8_t(1+emitted),
-      0,0,0,1,0x7e,1,0x02,1,uint8_t(100+emitted),
       0,0,0,1,0x7c,1,uint8_t(pts)};
     assert(out->size==sizeof(expected) && !memcmp(out->data,expected,sizeof(expected)));
+    const auto& el=join.Timing().enhancement;
+    assert(el && el->size==7 && el->data[6]==100+emitted && el->dts==emitted-elDelay);
     ++emitted;av_packet_unref(out);
    }
   }
@@ -202,7 +210,7 @@ int main() {
  e->pts=111;e->dts=107;e->data[12]=111;
  assert(join.Push(e,true) && join.Take(out)==0);
  auto timing=join.Timing();
- assert(out->pts==106 && out->dts==104 && out->size==15);
+ assert(out->pts==106 && out->dts==104 && out->size==6);
  assert(timing.basePts==106 && timing.enhancementPts==110 && !timing.presentable);
  const auto epoch=timing.epoch;
  av_packet_unref(out);
@@ -311,11 +319,11 @@ int main() {
    assert(join.Push(peer,!enhancementFirst));assert(join.Take(out)==AVERROR(EAGAIN));
    peer->pts=peer->dts=20;el->data[6]=el->data[12]=20;
    assert(join.Push(peer,!enhancementFirst));
-   assert(join.Take(out)==0 && out->pts==20 && out->data[5]==0xaa && out->data[14]==20 && out->data[out->size-1]==20);
+   assert(join.Take(out)==0 && out->pts==20 && out->data[5]==0xaa && join.Timing().enhancement->data[6]==20 && out->data[out->size-1]==20);
    av_packet_unref(out);
    p->pts=p->dts=21;el->pts=el->dts=21;el->data[6]=el->data[12]=21;
    assert(join.Push(p,false) && join.Push(el,true));
-   assert(join.Take(out)==0 && out->pts==21 && out->data[14]==21 && out->data[out->size-1]==21);
+   assert(join.Take(out)==0 && out->pts==21 && join.Timing().enhancement->data[6]==21 && out->data[out->size-1]==21);
    av_packet_unref(out);
  }
  // Unknown peer clocks cannot complete a restart; explicit flush clears the barrier.

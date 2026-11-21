@@ -1,4 +1,5 @@
 """Exercise real Matroska groups, Kodi admission and HEVC packet normalization."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -7,7 +8,8 @@ import unittest
 from test_native_video_source import TREE
 
 
-def matroska(tracks, el=-1, configured=None, packet_pair=None):
+def matroska(tracks, el=-1, configured=None, packet_pair=None, dimensions=None, el_only=None,
+             vps_ids=None, include_vps=True):
     def raw(n):
         return n.to_bytes(max(1, (n.bit_length()+7)//8), 'big')
     def element(n, data):
@@ -17,12 +19,15 @@ def matroska(tracks, el=-1, configured=None, packet_pair=None):
         return element(n, raw(value))
     entries = b''
     for i in range(tracks):
-        hvcc = bytes([1])+bytes(20)+bytes([3, 0])
+        vps = b'\x40\x01' + bytes([vps_ids[i] if vps_ids else 0x80])
+        config_arrays = bytes([1, 32, 0, 1, 0, len(vps)]) + vps if include_vps else b'\0'
+        hvcc = bytes([1])+bytes(20)+bytes([3])+config_arrays
         entry = number(0xd7,i+1)+number(0x73c5,100+i)+number(0x83,1)
         entry += element(0x86,b'V_MPEGH/ISO/HEVC')+element(0x63a2,hvcc)
-        entry += element(0xe0,number(0xb0,1920 if i else 3840)+number(0xba,1080 if i else 2160))
+        width, height = dimensions[i] if dimensions else ((1920, 1080) if i else (3840, 2160))
+        entry += element(0xe0,number(0xb0,width)+number(0xba,height))
         if i in (configured if configured is not None else {el}):
-            flags = (7<<9)|(6<<3)|7
+            flags = (7<<9)|(6<<3)|(6 if i == el_only else 7)
             config = bytes([1,0,flags>>8,flags&255,0x60])+bytes(19)
             entry += element(0x41e4,number(0x41e7,0x64766343)+element(0x41ed,config))
         entries += element(0xae,entry)
@@ -32,12 +37,46 @@ def matroska(tracks, el=-1, configured=None, packet_pair=None):
     cluster = number(0xe7,0)
     for i in range(tracks):
         payload = packet_pair[i] if packet_pair is not None else b'\0\0\0\3\x26\1\x55'
-        cluster += element(0xa3,bytes([0x81+i,0,0,0x80])+payload)
+        if payload is not None:
+            cluster += element(0xa3,bytes([0x81+i,0,0,0x80])+payload)
     return element(0x1a45dfa3,header)+element(0x18538067,
         element(0x1549a966,number(0x2ad7b1,1000000))+element(0x1654ae6b,entries)+element(0x1f43b675,cluster))
 
 
 class MatroskaDualTrack(unittest.TestCase):
+    def test_equal_dimensions_require_an_explicit_enhancement_role(self):
+        prefix = os.environ.get("FFMPEG_TEST_PREFIX")
+        if not prefix:
+            self.skipTest("Matched FFmpeg required")
+        ffprobe = Path(prefix) / "bin/ffprobe"
+        if not ffprobe.exists():
+            self.skipTest("Matched ffprobe required")
+        base = b'\0\0\0\3\x26\1\xaa'
+        rpu = b'\0\0\0\3\x7c\1\xcc'
+        dimensions = [(1920, 1080)] * 2
+        with tempfile.TemporaryDirectory() as temporary:
+            sample = Path(temporary) / "equal-size.mkv"
+            for declared, sizes, vps_ids, peer in (
+                (False, dimensions, None, base),
+                (True, dimensions, None, base),
+                (False, [(3840, 2160), (1920, 1080)], [0x80, 0x90], base),
+                (False, [(3840, 2160), (1920, 1080)], None, None),
+            ):
+                with self.subTest(declared=declared, sizes=sizes, vps_ids=vps_ids, peer=peer):
+                    sample.write_bytes(matroska(
+                        2, configured={0, 1} if declared else {0}, el_only=1 if declared else None,
+                        packet_pair=[base + rpu, peer], dimensions=sizes, vps_ids=vps_ids,
+                    ))
+                    result = subprocess.run(
+                        [str(ffprobe), "-v", "quiet", "-show_packets", "-show_stream_groups",
+                         "-show_entries", "stream_group=index:stream=index", "-of", "json", str(sample)],
+                        check=True, capture_output=True, text=True,
+                    )
+                    groups = json.loads(result.stdout)["stream_groups"]
+                    self.assertEqual(len(groups), int(declared))
+                    if declared:
+                        self.assertEqual([stream["index"] for stream in groups[0]["streams"]], [0, 1])
+
     def test_group_admission_normalized_layers_and_vanilla_rejection(self):
         if not os.environ.get('FFMPEG_TEST_PREFIX'):
             self.skipTest('Matched FFmpeg libraries required')
@@ -119,8 +158,12 @@ int main(int argc,char**argv) {
     base->duration=layer->duration=1;base->flags=layer->flags=AV_PKT_FLAG_KEY;
     assert(d.m_blurayDovi->Push(base,false) && d.m_blurayDovi->Push(layer,true));
     assert(d.m_blurayDovi->Take(out)==0);
-    const unsigned char expected[]={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,0xbb,0,0,0,1,0x7c,1,0xcc};
+    const unsigned char expected[]={0,0,0,1,0x26,1,0xaa,0,0,0,1,0x7c,1,0xcc};
+    const unsigned char expectedEL[]={0,0,0,1,0x26,1,0xbb};
     assert(out->size==sizeof(expected) && !memcmp(out->data,expected,sizeof(expected)));
+    auto layerOut=d.m_blurayDovi->Timing().enhancement;
+    assert(layerOut && layerOut->size==sizeof(expectedEL) &&
+           !memcmp(layerOut->data,expectedEL,sizeof(expectedEL)));
     assert(out->pts==base->pts && out->dts==base->dts && out->duration==1 && (out->flags&AV_PKT_FLAG_KEY));
     av_packet_unref(out);
    }
@@ -164,7 +207,8 @@ int main(int argc,char**argv) {
   e->data[length-1]=100;assert(!pair.Push(e,true));
   assert(!strcmp(pair.LastError(),"hevc-normalization"));
   pair.Reset();e->data[length-1]=3;e->pts=42001;
-  assert(!pair.Push(e,true) && !strcmp(pair.LastError(),"layer-time-base"));
+  assert(pair.Push(e,true) && pair.Push(b,false));
+  assert(pair.Take(out)==AVERROR(EAGAIN)); // A fractional tick never aliases the BL PTS.
   av_packet_free(&b);av_packet_free(&e);av_packet_free(&out);
  }
  avcodec_parameters_free(&base);avcodec_parameters_free(&el);
@@ -175,7 +219,8 @@ int main(int argc,char**argv) {
             inputs=[('paired',2,1),('independent',2,-1),('ambiguous',3,1),('single',1,0)]
             for name,n,el in inputs:
                 packets=[b'\0\0\0\3\x26\1\xaa', b'\0\0\0\3\x26\1\xbb\0\0\0\3\x7c\1\xcc'] if name=='paired' else None
-                (root/(name+'.mkv')).write_bytes(matroska(n,el,packet_pair=packets))
+                (root/(name+'.mkv')).write_bytes(matroska(n,el,packet_pair=packets,
+                    el_only=el if name == 'paired' else None, include_vps=False))
             source=root/'test.cpp';source.write_text(program)
             build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined','-I'+str(TREE/'xbmc'),
                 '-I'+str(prefix/'include'),str(source),
