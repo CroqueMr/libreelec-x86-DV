@@ -13,10 +13,11 @@ PKG_LONGDESC="Reusable library for GPU-accelerated image/video processing primit
 PKG_BUILD_FLAGS=""
 
 CB1_PLACEBO_SOURCE_REPOSITORY="https://github.com/CroqueMr/libplacebo"
-CB1_PLACEBO_SOURCE_COMMIT="7ee715018f35a33c1b03f0084abc769731202956"
-CB1_PLACEBO_SOURCE_SHA256="720f7c9bdb4ada80751f742f371388399cf7571f0d27056870a93bc1b6227e31"
+CB1_PLACEBO_SOURCE_COMMIT="f7d8a9b9a0a80c7f21fd1c44849b92e3bcca847f"
+CB1_PLACEBO_SOURCE_SHA256="0fa8f705f1a02dd8c9ebc6861d61ec45b935ffff9e0c210536147bdaa2fa608d"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+  PKG_VERSION="7.387.0"
   # The pinned fork contains the equivalent CB1 shader and renderer patches.
   PKG_URL="${CB1_PLACEBO_SOURCE_REPOSITORY}/archive/${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"
   PKG_SOURCE_NAME="${PKG_NAME}-${CB1_PLACEBO_SOURCE_COMMIT}.tar.gz"

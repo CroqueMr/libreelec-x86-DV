@@ -2,8 +2,8 @@
 # Copyright (C) 2021-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="espeak-ng"
-PKG_VERSION="84a37de583d0b2d4eb36b1f2cfe573c2f86c463d"
-PKG_SHA256="5cdd7621b7ccfb9868a29eb0ad873f655f8554bdc8c764f0c4b86b66e2925b96"
+PKG_VERSION="688cb60368d6e0998f3632af8d1c3c2ad4191fc2"
+PKG_SHA256="e02e7c31577cb0e5c05a9c1e7fcda90e571b56e7b2401e1f2bf333c1ee9d8388"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://github.com/espeak-ng/espeak-ng"
 PKG_URL="https://github.com/espeak-ng/espeak-ng/archive/${PKG_VERSION}.tar.gz"
@@ -24,10 +24,6 @@ PKG_CMAKE_OPTS_TARGET="-DBUILD_SHARED_LIBS=ON \
                        -DESPEAK_COMPAT=OFF \
                        -DUSE_LIBSONIC=ON \
                        -DNativeBuild_DIR=${TOOLCHAIN}/bin"
-
-pre_configure_target() {
-  unset VALGRIND
-}
 
 post_makeinstall_target() {
   safe_remove ${INSTALL}/usr/share/vim

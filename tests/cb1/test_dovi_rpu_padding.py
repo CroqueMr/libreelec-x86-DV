@@ -3,25 +3,16 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tarfile
 import tempfile
 import unittest
 
-ROOT=Path(__file__).resolve().parents[2]
-
 class DoviRpuPadding(unittest.TestCase):
     def test_zero_padding_and_real_cm4_extension_boundary(self):
-        archive=os.environ.get('FFMPEG_SOURCE_ARCHIVE')
-        if not archive:self.skipTest('Pinned FFmpeg source archive required')
+        source=os.environ.get('FFMPEG_MATCHED_SOURCE')
+        if not source:self.skipTest('Matched FFmpeg source required')
         with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);source=root/'libavcodec/dovi_rpudec.c';source.parent.mkdir()
-            with tarfile.open(archive) as tar:
-                entry=next(m for m in tar if m.name.endswith('/libavcodec/dovi_rpudec.c'))
-                source.write_bytes(tar.extractfile(entry).read())
-            patch=ROOT/'projects/Generic/patches/ffmpeg/ffmpeg-9900-00-libavcodec__dovi_rpudec.c.patch'
-            result=subprocess.run(['patch','-p1','--fuzz=0','--batch','-i',str(patch)],cwd=root,capture_output=True,text=True)
-            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-            text=source.read_text()
+            root=Path(temporary)
+            text=(Path(source)/'libavcodec/dovi_rpudec.c').read_text()
             start=text.index('        /* NAL unit with prefix and trailing zeroes */')
             branch=text[start:text.index('\n    }',start)]
             predicate=re.search(r'if \((get_bits_left\(gb\) [^\n]+?)\) \{\n\s+if \(\(ret = parse_ext_blocks\(s, gb, 2,',text)[1]

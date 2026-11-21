@@ -3,9 +3,9 @@
 # Copyright (C) 2017-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="kodi"
-PKG_VERSION="28ea2eac1eb7af8fdcbd2672d933ce87f594be79"
-PKG_SHA256="34ef5ef2345763588c17f1d2065d63ada4f6016d249a47f8c98ee3c64efaedb4"
-PKG_LICENSE="GPL-3.0-only"
+PKG_VERSION="22.0rc2-Piers"
+PKG_SHA256="e704ca70bcccd41baf409f6d54119add52a03f34e6eea3f11c6304f1553b4397"
+PKG_LICENSE="GPL-2.0-or-later"
 PKG_SITE="http://www.kodi.tv"
 PKG_URL="https://github.com/xbmc/xbmc/archive/${PKG_VERSION}.tar.gz"
 PKG_DEPENDS_TARGET="toolchain libplacebo JsonSchemaBuilder:host TexturePacker:host Python3 zlib systemd lzo pcre2 swig:host libass curl exiv2 fontconfig fribidi tinyxml tinyxml2 libjpeg-turbo freetype libcdio taglib libxml2 libxslt nlohmann-json sqlite ffmpeg crossguid libdvdnav libfmt libfstrcmp flatbuffers:host flatbuffers libudfread spdlog libxkbcommon"
@@ -16,14 +16,15 @@ PKG_LONGDESC="A free and open source cross-platform media player."
 PKG_BUILD_FLAGS="+speed"
 
 CB1_KODI_SOURCE_REPOSITORY="https://github.com/CroqueMr/xbmc"
-CB1_KODI_SOURCE_COMMIT="9ec7b948a8b5f24d56900d2030f2620fcae4ddeb"
-CB1_KODI_SOURCE_SHA256="ca1d95ccf2517004c471f559536fbceb96bd9fdc6b623a6d39cd27bd6c4e25cb"
+CB1_KODI_SOURCE_COMMIT="a0876684e8ba6c5e71c75b8ebc8fb994a9d6b1a9"
+CB1_KODI_SOURCE_SHA256="ecb7543199e68695a75c6b0222881a09d4fb377f18b9b0dcc270b09269dac56c"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ] && [ "${DISPLAYSERVER}" = "no" ]; then
   # This fork already contains the package and Generic GBM patch series.
   PKG_URL="${CB1_KODI_SOURCE_REPOSITORY}/archive/${CB1_KODI_SOURCE_COMMIT}.tar.gz"
   PKG_SOURCE_NAME="${PKG_NAME}-${CB1_KODI_SOURCE_COMMIT}.tar.gz"
   PKG_SHA256="${CB1_KODI_SOURCE_SHA256}"
+  PKG_LICENSE="GPL-3.0-or-later"
   PKG_SKIP_PATCHES="yes"
   PKG_DEPENDS_UNPACK+=" cb1-engine"
 fi
@@ -33,9 +34,11 @@ if [ "${TARGET_ARCH}" = "arm" ]; then
 fi
 
 configure_package() {
+  KODI_BUILD_REVISION="${PKG_VERSION}"
   CB1_ENGINE_SOURCE="${PKG_DIR}/cb1"
   CB1_ENGINE_MODEL="${PKG_DIR}/cb1-model"
   if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ] && [ "${DISPLAYSERVER}" = "no" ]; then
+    KODI_BUILD_REVISION="${CB1_KODI_SOURCE_COMMIT}"
     CB1_ENGINE_SOURCE="$(get_build_dir cb1-engine)"
     CB1_ENGINE_MODEL="${CB1_ENGINE_SOURCE}/models/l1l3"
   fi
@@ -265,7 +268,7 @@ configure_package() {
     KODI_LIRCCLIENT="-DENABLE_LIRCCLIENT=OFF"
   fi
 
-  if [ "${PROJECT}" = "Allwinner" -o "${PROJECT}" = "Rockchip" ]; then
+  if [ "${PROJECT}" = "Allwinner" -o "${PROJECT}" = "Amlogic" -o "${PROJECT}" = "Rockchip" ]; then
     PKG_PATCH_DIRS+=" drmprime-filter"
   fi
 
@@ -283,7 +286,7 @@ configure_package() {
                          -DWITH_JSONSCHEMABUILDER=${TOOLCHAIN}/bin/JsonSchemaBuilder \
                          -DSWIG_EXECUTABLE=${TOOLCHAIN}/bin/swig \
                          -DPYTHON_EXECUTABLE=${TOOLCHAIN}/bin/${PKG_PYTHON_VERSION} \
-                         -DGIT_VERSION=${PKG_VERSION} \
+                         -DGIT_VERSION=${KODI_BUILD_REVISION} \
                          -DFFMPEG_PATH=${SYSROOT_PREFIX}/usr \
                          -DENABLE_INTERNAL_CROSSGUID=OFF \
                          -DENABLE_INTERNAL_EXIV2=OFF \

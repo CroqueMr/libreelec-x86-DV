@@ -2,8 +2,8 @@
 # Copyright (C) 2016-present Team LibreELEC (https://libreelec.tv)
 
 PKG_NAME="rsync"
-PKG_VERSION="3.5.0"
-PKG_SHA256="c7ffd1ef653e99540f661e47cb00b7f9cad1ee6b972399b16f93d672656e0d33"
+PKG_VERSION="3.5.2"
+PKG_SHA256="a10d591825251e070f74c98df3daad195def4ed81b4a2de16169026aea33f6c8"
 PKG_LICENSE="GPL-3.0-or-later"
 PKG_SITE="https://rsync.samba.org"
 PKG_URL="https://download.samba.org/pub/rsync/src/${PKG_NAME}-${PKG_VERSION}.tar.gz"

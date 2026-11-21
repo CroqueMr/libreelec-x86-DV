@@ -48,7 +48,7 @@ struct Engine{
  struct{double atempoThreshold=1;}m_settings;
  std::list<CActiveAEStream*>m_streams;
  struct{int updates=0;void UpdateStream(CActiveAEStream*){++updates;}}m_stats;
- void FlushEngine(){++engineFlushes;}
+ void FlushEngine(bool discardOutput){assert(discardOutput);++engineFlushes;}
  void SFlushStream(CActiveAEStream*stream) @@FLUSH@@
  void control(int signal,Message*msg) CONTROL
 };
