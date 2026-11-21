@@ -8,7 +8,7 @@ class AdaptiveSynchronousPending(unittest.TestCase):
         code=shipped_code('xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp')
         function=code.index('bool CWinSystemGbmGLESContext::RenderDVBridge(')
         assignment=code.index('  m_cb1FramePending =',code.index('  // A paused final surface',function))
-        start=code.rfind('  const bool renderPending =',function,assignment)
+        start=code.rfind('  m_cb1SourcePreparing =',function,assignment)
         end=code.index('  if (std::getenv("CB1_PRESENTATION_AUDIT"))',assignment)
         program=r'''
 #include <cassert>
@@ -21,7 +21,7 @@ bool run(bool authored,int mode,Status status,bool allowAsync=false,bool setting
  struct Context{bool value;bool AsyncPreparation(int){return value;}}context{setting};
  auto* m_dvContext=&context;struct{struct{int stream=1;}binding;}layer;
  CDVBridgeGLES bridge;auto* m_dvBridge=&bridge;
- bool m_dvFrame=status==Status::Ready,m_cb1FramePending=false;
+ bool m_dvFrame=status==Status::Ready,m_cb1FramePending=false,m_cb1SourcePreparing=false;
  @@BRANCH@@
  return m_cb1FramePending;
 }

@@ -111,6 +111,8 @@ struct Window {
  }
  void SetColorimetry(const VideoPicture* picture){assert(!picture);}
  double m_preparedRenderPts{};
+ unsigned m_preparedSource{7},m_cb1PageSource{},m_cb1DisplayedSource{};
+ void TrackCB1VideoPage(bool pending) @TRACK@
  std::optional<uint64_t>m_hdrDeepColorPrevious;
  enum class PascalHDRMode {None,Conversion,Native};
  PascalHDRMode m_pascalHDRMode=PascalHDRMode::None;
@@ -173,12 +175,14 @@ int main(){
    auto& surface=*window.m_GBM;
    assert(drm->acceptedBuffer==(nvidia?surface.m_buffers.back()->Get():surface.m_scanoutBuffer->Get()));
    assert(window.scanout.accepted==(alternate?1u:0u));
+   assert(window.m_cb1DisplayedSource==(hdr?window.m_preparedSource:0));
    if(carrier) assert(drm->acceptedBuffer==carrier.get());
    assert(nvidia ? !window.m_dvState.captured : window.m_dvState.captured);
    Window failed;auto fd=std::dynamic_pointer_cast<CDRMAtomic>(failed.m_DRM);
    fd->commitOK=false;
    assert(!(hdr?failed.HDR(carrier):failed.Ordinary(true)) && failed.m_dvState.captured);
    assert(failed.scanout.accepted==0);
+   assert(failed.m_cb1DisplayedSource==0 && failed.m_cb1PageSource==0);
    assert(!failed.m_GBM->m_pendingBuffer);
    fd->commitOK=true;
    assert(hdr?failed.HDR(carrier):failed.Ordinary(true));
@@ -194,6 +198,7 @@ int main(){
             'END': body(surface, 'void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode('),
             'SIGNATURE': signature, 'ORDINARY': ordinary, 'HDR': hdr,
             'IMMEDIATE': immediate,
+            'TRACK': body(context, 'void CWinSystemGbmGLESContext::TrackCB1VideoPage('),
             'TRANSPORT': body(context, 'bool CWinSystemGbmGLESContext::StageTransportPreferences('),
             'PREFERENCES': body(context, 'bool CWinSystemGbmGLESContext::StageCB1ConnectorPreferences('),
             'FLIP': 'bool Window::FlipDVBridgePage' +
