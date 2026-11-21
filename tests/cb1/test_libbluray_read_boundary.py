@@ -36,19 +36,22 @@ enum {CONNECT_NON_SEAMLESS=5,HDMV_PID_PCR=4097,
  GC_CTRL_PG_UPDATE,GC_CTRL_NOP,BDJ_EVENT_END_OF_PLAYLIST,PSR_PLAYLIST};
 typedef struct clip {uint32_t end_pkt,title_pkt,in_time;int still_mode,still_time,connection,ref;} NAV_CLIP;
 typedef struct {NAV_CLIP* clip;void* fp;uint64_t clip_pos;unsigned int_buf_off;
- int ig_pid,pg_pid,seek_flag;} BD_STREAM;
+ int ig_pid,pg_pid,seek_flag,lead_check;} BD_STREAM;
 struct bluray {
  BD_STREAM st0,st_textst;uint64_t s_pos;unsigned char int_buf[6144];
  int seamless_angle_change;uint32_t angle_change_pkt;uint64_t angle_change_time;
  void* title;void* graphics_controller;void* hdmv_vm;void* regs;void* event_queue;
  int title_type,hdmv_suspended,gc_status,end_of_playlist,bdj_wait_start;
  int bdj_pt_enabled,bdj_pt_releasing;void* bdjava;
+ int hdmv_hold_graphics,hdmv_hold_end,hdmv_end_pending;
+ int hdmv_ig_count,hdmv_ig_pid,hdmv_ig_read;
  int next_mark;uint64_t next_mark_pos;int mutex;
  NAV_CLIP clips[2];BD_EVENT events[16];int event_count,reads,opens,angles,angle;
 };
-static void _queue_event(BLURAY* b,uint32_t type,uint32_t value){
- if(!b->event_queue)return;
+static int _queue_event(BLURAY* b,uint32_t type,uint32_t value){
+ if(!b->event_queue)return 0;
  assert(b->event_count<16);b->events[b->event_count++]=(BD_EVENT){type,value};
+ return 1;
 }
 static int _get_event(BLURAY* b,BD_EVENT* event){
  *event=(BD_EVENT){0};if(!b->event_queue||!b->event_count)return 0;
@@ -79,6 +82,13 @@ static int _run_hdmv(BLURAY*b){b->hdmv_suspended=1;return 0;}
 static void hdmv_vm_resume(void* p){}static int hdmv_vm_running(void* p){return 0;}
 static void _bdj_event(BLURAY*b,int e,int p){}
 static uint32_t bd_psr_read(void*r,int p){return 0;}
+/* The fixture has no graphics PID or DV lead. Keep those paths out of the reader stubs. */
+static int _dv_lead(BLURAY* b,BD_STREAM* st){assert(0);return -1;}
+static void gc_queue_ts(void* gc,int pid,unsigned char* buf,int blocks,int ref){assert(0);}
+static void _hdmv_graphics_init(BLURAY* b,int preloaded){assert(0);}
+static int _hdmv_release_graphics(BLURAY* b,int64_t time){assert(0);return 0;}
+static int _hold_hdmv_graphics(const BLURAY* bd) @HOLD_GRAPHICS@
+static void _end_of_title(BLURAY* bd) @END_TITLE@
 static int _bd_read(BLURAY *bd,unsigned char *buf,int len@@NAV@@) READ
 static int _bd_read_locked(BLURAY *bd,unsigned char *buf,int len@@NAV@@) LOCKED
 int bd_read(BLURAY *bd,unsigned char *buf,int len) PLAIN
@@ -121,6 +131,19 @@ int main(){
  for(int angle_case=0;angle_case<3;++angle_case)
  for(int type=title_hdmv;type<=title_bdj;++type)
   check(fragments[i],connection?CONNECT_NON_SEAMLESS:0,angle_case,type);
+ /* A partial aligned unit at the end must not overrun the authored clip. */
+ {
+  BLURAY b;init(&b,0,0,title_bdj);
+  b.clips[0].end_pkt=21;b.clips[1].title_pkt=21;
+  unsigned char bytes[4096];BD_EVENT event={0};
+  assert(_read_ext(&b,bytes,sizeof(bytes),&event)==4032);
+  assert(event.event==BD_EVENT_NONE&&b.s_pos==4032);
+  for(int i=0;i<4032;++i)assert(bytes[i]==sample(0,0,i));
+  assert(_read_ext(&b,bytes,sizeof(bytes),&event)==0);
+  assert(event.event==BD_EVENT_PLAYITEM&&b.s_pos==4032);
+  assert(_read_ext(&b,bytes,sizeof(bytes),&event)==4096);
+  for(int i=0;i<4096;++i)assert(bytes[i]==sample(1,0,i));
+ }
  /* bd_select_playlist callers may use bd_read_ext without enabling events.
   * No observable boundary exists there: zero must not masquerade as EOF. */
  {
@@ -144,6 +167,8 @@ int main(){
 }
 '''
             program=program.replace('@@NAV@@',', int nav_boundary' if navigation else '')
+            program=program.replace('@HOLD_GRAPHICS@',body(source,'static int _hold_hdmv_graphics('))
+            program=program.replace('@END_TITLE@',body(source,'static void _end_of_title('))
             program=program.replace('BDJ_ACTIVE',body(source,'static int _bdj_pt_active(BLURAY *bd)\n'))
             for token,signature in [('READ','static int _bd_read('),('LOCKED','static int _bd_read_locked('),
                                     ('PLAIN','int bd_read('),('EXTENDED','static int _read_ext(')]:

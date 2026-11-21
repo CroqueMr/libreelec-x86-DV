@@ -16,35 +16,53 @@ class BlurayNavigationDrain(unittest.TestCase):
             'CDVDInputStream::ENextStream CDVDInputStreamBluray::NextStream()',
             'void CDVDInputStreamBluray::UserInput(bd_vk_key_e vk)',
             'void CDVDInputStreamBluray::SkipStill()',
+            'bool CDVDInputStreamBluray::HoldEvent(bool sequentialRead)',
+            'bool CDVDInputStreamBluray::HasGivenUpReading() const',
+            'bool CDVDInputStreamBluray::IsSequentialClipRead(uint64_t position) const',
+            'bool CDVDInputStreamBluray::WaitingForReadablePlaylist() const',
         )
-        user = next(line.strip() for line in source.splitlines() if line.startswith('void CDVDInputStreamBluray::UserInput('))
-        signatures = signatures[:4] + (user,) + signatures[5:]
         definitions = '\n'.join(s + '\n' + body(source, s) for s in signatures)
-        hold_signature = 'bool CDVDInputStreamBluray::HoldEvent()'
-        definitions += '\n' + hold_signature + '\n' + (body(source, hold_signature) if hold_signature in source else '{return false;}')
-        limit_signature = 'bool CDVDInputStreamBluray::HasGivenUpReading() const'
-        definitions += '\n' + limit_signature + '\n' + body(source, limit_signature)
         prologue=body(source,'void CDVDInputStreamBluray::ProcessEvent()').split('  int pid = -1;',1)[0][1:]
+        header = (TREE/'xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.h').read_text()
         program = r'''
 #include <cassert>
 #include <cstdint>
 #include <deque>
 #include <vector>
+#include "BlurayClipClock.h"
+#define BD_BDJ_WAITING_FOR_PLAYLIST
 enum { BD_EVENT_NONE,BD_EVENT_SEEK,BD_EVENT_TITLE,BD_EVENT_ANGLE,BD_EVENT_PLAYLIST,
        BD_EVENT_PLAYITEM,BD_EVENT_STILL_TIME,BD_EVENT_DISCONTINUITY,BD_EVENT_MENU,
-       BD_EVENT_AUDIO_STREAM,BD_EVENT_PG_TEXTST,BD_EVENT_ERROR,BD_EVENT_ENCRYPTED };
+       BD_EVENT_AUDIO_STREAM,BD_EVENT_PG_TEXTST,BD_EVENT_ERROR,BD_EVENT_ENCRYPTED,
+       BD_EVENT_IDLE,BD_EVENT_HDMV_PROGRAM_END };
 enum {HOLD_NONE,HOLD_DATA,HOLD_HELD,HOLD_ERROR,HOLD_STILL,LOGDEBUG};
 constexpr unsigned MAX_CONSECUTIVE_READ_ERRORS = 1000;
 using bd_vk_key_e=int;
 struct BD_EVENT {int event{},param{};};
-struct Fake {std::deque<BD_EVENT> queue;int calls{},clip{},seekResult{};};
+struct Fake {
+ std::deque<BD_EVENT> queue, pollEvents;
+ int calls{},clip{},seekResult{};
+ uint64_t position{};
+ bool waitingForPlaylist{};
+};
 struct CLog {template<class... T> static void Log(T...) {}};
 static int bd_get_event(Fake* f,BD_EVENT* e) {
  if(f->queue.empty()){*e={};return 0;}*e=f->queue.front();f->queue.pop_front();return 1;
 }
 static uint64_t bd_tell_time(Fake*) {return 0;}
-static int bd_read_ext(Fake* f,uint8_t* bytes,int,BD_EVENT* e) {
- ++f->calls;if(bd_get_event(f,e))return 0;*bytes=f->clip;return 1;
+static uint64_t bd_tell(Fake* f) {return f->position;}
+static bool bd_bdj_waiting_for_playlist(Fake* f) {return f->waitingForPlaylist;}
+static int bd_read_ext(Fake* f,uint8_t* bytes,int size,BD_EVENT* e) {
+ ++f->calls;
+ if(bd_get_event(f,e))return 0;
+ if(!size) {
+  assert(!bytes);
+  if(!f->pollEvents.empty()){*e=f->pollEvents.front();f->pollEvents.pop_front();}
+  return 0;
+ }
+ *bytes=f->clip;
+ ++f->position;
+ return 1;
 }
 static int bd_read(Fake* f,uint8_t* bytes,int size){BD_EVENT e;return bd_read_ext(f,bytes,size,&e);}
 static int bd_user_input(Fake* f,int,int key) {
@@ -63,23 +81,33 @@ static void bd_read_skip_still(Fake* f) {
 struct CDVDInputStream {enum ENextStream {NEXTSTREAM_NONE,NEXTSTREAM_RETRY,NEXTSTREAM_OPEN};};
 struct CDVDInputStreamBluray : CDVDInputStream {
  Fake fake;Fake* m_bd{&fake};bool m_navmode{true};int m_hold{HOLD_NONE};
- BD_EVENT m_event{};int m_dispTimeBeforeRead{};void* m_titleInfo{this};
+ BD_EVENT m_event{};int m_dispTimeBeforeRead{};
+ struct {unsigned clip_count{8};struct {unsigned pkt_count{1};} clips[8];} title;
+ decltype(title)* m_titleInfo{&title};
  std::vector<int> processed;
  bool m_aborted{};
- unsigned m_readErrors{};
+ unsigned m_readErrors{},m_playlist{};
+ uint64_t m_lastReadEnd{};
+ bool m_hdmvEndPending{},m_hdmvEndReleased{},m_hdmvProgramEnded{};
+ bool compatibleNextClip{};
  void ProcessEvent() {
   PROLOGUE
   if(!m_event.event)return;processed.push_back(m_event.event*10+m_event.param);
   if(m_event.event==BD_EVENT_PLAYITEM)fake.clip=m_event.param;
+  if(m_event.event==BD_EVENT_PLAYLIST)m_hdmvEndPending=m_hdmvEndReleased=m_hdmvProgramEnded=false;
+  if(m_event.event==BD_EVENT_HDMV_PROGRAM_END){m_hdmvEndReleased=false;m_hdmvProgramEnded=true;}
   if(m_event.event==BD_EVENT_DISCONTINUITY)m_hold=HOLD_NONE;
   if(m_event.event==BD_EVENT_STILL_TIME)m_hold=HOLD_STILL;
   if(m_event.event==BD_EVENT_ERROR||m_event.event==BD_EVENT_ENCRYPTED)m_hold=HOLD_ERROR;
   m_event={};
  }
  int Read(uint8_t*,int);bool PosTime(int);bool SeekChapter(int);ENextStream NextStream();
- void UserInput(int);void SkipStill();bool HoldEvent();
+ void UserInput(bd_vk_key_e);void SkipStill();bool HoldEvent(bool sequentialRead=false);
  bool HasGivenUpReading() const;
- bool CanContinuePlayItem(uint32_t) const { return false; } // non-seamless fixture
+ bool IsSequentialClipRead(uint64_t) const;
+ bool WaitingForReadablePlaylist() const;
+ bool WaitingForHdmvProgram() const WAITING_HDMV
+ bool CanContinuePlayItem(uint32_t next) const { return compatibleNextClip && next==1; }
 };
 DEFINITIONS
 int main() {
@@ -151,12 +179,47 @@ int main() {
  CDVDInputStreamBluray badKey;badKey.UserInput(98);
  assert(badKey.m_hold==HOLD_ERROR&&badKey.fake.queue.size()==1);
  assert(badKey.NextStream()==CDVDInputStream::NEXTSTREAM_NONE);
+ // The same compatible clip can be reached by a read or by a menu command.
+ for(bool menuJump:{false,true}) {
+  CDVDInputStreamBluray compatible;
+  compatible.compatibleNextClip=true;compatible.fake.position=191;
+  assert(compatible.Read(&byte,1)==1&&compatible.m_lastReadEnd==192&&byte==0);
+  if(menuJump) {
+   compatible.UserInput(1);
+   assert(compatible.Read(&byte,1)==0&&compatible.m_hold==HOLD_HELD);
+   assert(compatible.NextStream()==CDVDInputStream::NEXTSTREAM_OPEN);
+  } else {
+   compatible.fake.queue.push_back({BD_EVENT_PLAYITEM,1});
+  }
+  assert(compatible.Read(&byte,1)==1&&compatible.m_hold==HOLD_NONE&&byte==1);
+ }
+ // The released VM is polled without consuming the next playlist's bytes.
+ CDVDInputStreamBluray hdmv;
+ hdmv.m_hdmvEndPending=true;
+ assert(hdmv.Read(&byte,1)==0&&hdmv.fake.calls==0);
+ assert(hdmv.NextStream()==CDVDInputStream::NEXTSTREAM_RETRY&&hdmv.fake.calls==0);
+ hdmv.m_hdmvEndPending=false;hdmv.m_hdmvEndReleased=true;
+ assert(hdmv.NextStream()==CDVDInputStream::NEXTSTREAM_RETRY&&hdmv.fake.position==0);
+ hdmv.fake.pollEvents.push_back({BD_EVENT_PLAYLIST,1});
+ assert(hdmv.NextStream()==CDVDInputStream::NEXTSTREAM_OPEN&&hdmv.fake.position==0);
+ assert(hdmv.Read(&byte,1)==1&&hdmv.fake.position==1);
+ hdmv.m_hdmvEndReleased=true;
+ hdmv.fake.pollEvents.push_back({BD_EVENT_HDMV_PROGRAM_END,0});
+ assert(hdmv.NextStream()==CDVDInputStream::NEXTSTREAM_NONE);
+ // BD-J can signal idle while the next playlist is still being authored.
+ CDVDInputStreamBluray bdj;
+ bdj.fake.waitingForPlaylist=true;bdj.fake.queue.push_back({BD_EVENT_IDLE,0});
+ assert(bdj.Read(&byte,1)==0&&bdj.fake.position==0);
+ assert(bdj.NextStream()==CDVDInputStream::NEXTSTREAM_RETRY);
+ bdj.fake.waitingForPlaylist=false;
+ assert(bdj.NextStream()==CDVDInputStream::NEXTSTREAM_OPEN);
 }
-'''.replace('DEFINITIONS', definitions).replace('PROLOGUE',prologue)
-        program = program.replace('bd_vk_key_e vk', 'int vk')
+'''.replace('DEFINITIONS', definitions).replace('PROLOGUE',prologue).replace(
+            'WAITING_HDMV', body(header, 'bool WaitingForHdmvProgram() const'))
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary);(folder/'test.cpp').write_text(program)
             build = subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-I', str(TREE/'xbmc/cores/VideoPlayer/DVDInputStreams'),
                 str(folder/'test.cpp'),'-o',str(folder/'test')],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             result=subprocess.run([str(folder/'test')],capture_output=True,text=True)

@@ -644,6 +644,7 @@ struct PG_DISPLAY_SET {
 struct GRAPHICS_CONTROLLER {
   PG_DISPLAY_SET* pgs{};
   int pg_open{}, ig_open{};
+  unsigned ig_kept{};
   void* regs{};
   void (*overlay_proc)(void*, const BD_OVERLAY*){};
   void* overlay_proc_handle{};

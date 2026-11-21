@@ -13,7 +13,7 @@
     "version": "22.0 RC2",
     "revision": "d686683a55d50e576dd282f53fb2bf9914931b38",
     "modified": true,
-    "source_revision": "084545b4a9becaf9a35b297b479d0225e879731f"
+    "source_revision": "00a899fd2144eecf28d35abdc774edc29bf14b03"
   },
   "Linux": {
     "version": "7.2.6",
@@ -76,6 +76,7 @@
   },
   "libbluray": {
     "version": "1.5.1",
-    "modified": true
+    "modified": true,
+    "source_revision": "7b18d8f440c85fa4f96d4c65daba5c4dffcfd720"
   }
 }
