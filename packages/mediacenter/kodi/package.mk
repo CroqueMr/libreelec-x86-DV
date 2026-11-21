@@ -25,6 +25,7 @@ if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ] && [ "${DISPL
   PKG_SOURCE_NAME="${PKG_NAME}-${CB1_KODI_SOURCE_COMMIT}.tar.gz"
   PKG_SHA256="${CB1_KODI_SOURCE_SHA256}"
   PKG_SKIP_PATCHES="yes"
+  PKG_DEPENDS_UNPACK+=" cb1-engine"
 fi
 
 if [ "${TARGET_ARCH}" = "arm" ]; then
@@ -32,6 +33,13 @@ if [ "${TARGET_ARCH}" = "arm" ]; then
 fi
 
 configure_package() {
+  CB1_ENGINE_SOURCE="${PKG_DIR}/cb1"
+  CB1_ENGINE_MODEL="${PKG_DIR}/cb1-model"
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ] && [ "${DISPLAYSERVER}" = "no" ]; then
+    CB1_ENGINE_SOURCE="$(get_build_dir cb1-engine)"
+    CB1_ENGINE_MODEL="${CB1_ENGINE_SOURCE}/models/l1l3"
+  fi
+
   if [ "${CB1_HDR10_AI}" = "yes" ]; then
     PKG_DEPENDS_TARGET+=" lightgbm"
   fi
@@ -269,7 +277,7 @@ configure_package() {
 
   PKG_CMAKE_OPTS_TARGET="-DENABLE_DVBRIDGE=ON \
                          -DCORE_COMPILE_OPTIONS=-Werror=missing-field-initializers;-Werror=sign-compare \
-                         -DDVBRIDGE_SOURCE_DIR=${PKG_DIR}/cb1/src \
+                         -DDVBRIDGE_SOURCE_DIR=${CB1_ENGINE_SOURCE}/src \
                          -DNATIVEPREFIX=${TOOLCHAIN} \
                          -DWITH_TEXTUREPACKER=${TOOLCHAIN}/bin/TexturePacker \
                          -DWITH_JSONSCHEMABUILDER=${TOOLCHAIN}/bin/JsonSchemaBuilder \
@@ -322,7 +330,7 @@ configure_package() {
 
   if [ "${CB1_HDR10_AI}" = "yes" ]; then
     PKG_CMAKE_OPTS_TARGET+=" -DCB1_ENABLE_HDR10_AI=ON \
-                           -DCB1_L1L3_BUNDLE_CONTRACT=${PKG_DIR}/cb1-model/contract \
+                           -DCB1_L1L3_BUNDLE_CONTRACT=${CB1_ENGINE_MODEL}/contract \
                            -DCB1_LIGHTGBM_INCLUDE_DIR=${SYSROOT_PREFIX}/usr/include \
                            -DCB1_LIGHTGBM_LIBRARY=${SYSROOT_PREFIX}/usr/lib/lib_lightgbm.so"
   else
@@ -337,7 +345,7 @@ configure_host() {
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
     -DHEADERS_ONLY=ON \
-    -DDVBRIDGE_SOURCE_DIR=${PKG_DIR}/cb1/src \
+    -DDVBRIDGE_SOURCE_DIR=${CB1_ENGINE_SOURCE}/src \
     ${KODI_ARCH} \
     ${KODI_NEON} \
     ${KODI_PLATFORM} ..
@@ -369,8 +377,8 @@ pre_configure_target() {
 post_makeinstall_target() {
   if [ "${CB1_HDR10_AI}" = "yes" ]; then
     mkdir -p ${INSTALL}/usr/share/cb1/l1l3
-    cp ${PKG_DIR}/cb1-model/data/* ${INSTALL}/usr/share/cb1/l1l3/
-    cp ${PKG_DIR}/cb1-model/LICENSE.md ${INSTALL}/usr/share/cb1/l1l3/
+    cp ${CB1_ENGINE_MODEL}/data/* ${INSTALL}/usr/share/cb1/l1l3/
+    cp ${CB1_ENGINE_MODEL}/LICENSE.md ${INSTALL}/usr/share/cb1/l1l3/
   fi
   mkdir -p ${INSTALL}/.noinstall
   mv ${INSTALL}/usr/share/kodi/addons/skin.estuary \
