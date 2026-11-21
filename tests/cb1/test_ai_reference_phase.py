@@ -56,9 +56,11 @@ inline KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
 struct CServiceBroker {static Window* GetWinSystem(){return &window;}};
 struct Renderer {bool lookahead=true;bool HDR10AILookahead(){return lookahead;}
  bool VideoBypassesFramebuffer(){return false;}};
-struct Port {void UpdateRenderBuffers(size_t,size_t,size_t){}};
+struct Port {void UpdateRenderBuffers(size_t,size_t,size_t){} void UpdateVideoRender(bool){}};
 struct Event {void notifyAll(){}};
 struct CRenderManager {
+ bool m_discMenuOnly=false;
+ void SetDiscMenuOnly(bool enabled){m_discMenuOnly=enabled;}
  enum class StreamHdrType {HDR_TYPE_HDR10,HDR_TYPE_HDR10PLUS,HDR_TYPE_HLG};
  struct ConfigPicture {StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;} m_picture;
  ConfigPicture* m_pConfigPicture=nullptr; // Configure has retired its temporary picture.

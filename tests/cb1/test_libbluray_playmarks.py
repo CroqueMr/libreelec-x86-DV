@@ -25,12 +25,14 @@ class LibblurayPlaymarks(unittest.TestCase):
             program = r'''
 #include <assert.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <libbluray/bluray.h>
 #define BD_DEBUG(...) ((void)0)
-enum {BDJ_EVENT_MARK=1, BDJ_EVENT_SEEK=2, GC_CTRL_PG_RESET=3};
+enum {BDJ_EVENT_MARK=1, BDJ_EVENT_SEEK, GC_CTRL_PG_RESET, GC_CTRL_IG_RESET};
+enum {title_bdj, title_hdmv};
 typedef struct {uint32_t title_pkt;} NAV_MARK;
 typedef struct {uint32_t in_time, title_time;} NAV_CLIP;
 typedef struct {unsigned count; NAV_MARK mark[64];} MARKS;
@@ -41,6 +43,10 @@ struct bluray {
  int next_mark, mutex, fail, chapters, seeks, java_seeks;
  unsigned events[128], java[128], count, java_count;
  void* graphics_controller;
+ int title_type,hdmv_hold_graphics,hdmv_hold_end;
+ int hdmv_ig_count,hdmv_ig_pid,hdmv_ig_read,st_ig;
+ int hdmv_end_pending,end_of_playlist;
+ unsigned bdj_pt_clock_epoch;
 };
 static void _update_chapter_psr(BLURAY* b) {++b->chapters;}
 static void _queue_event(BLURAY* b, uint32_t type, uint32_t value) {
@@ -63,14 +69,20 @@ static int64_t _seek_stream(BLURAY* b, BD_STREAM* s, const NAV_CLIP* c, uint32_t
 static uint32_t _update_time_psr_from_stream(BLURAY* b) {return b->st0.clip->in_time;}
 static int gc_run(void* c, int a, int b, void* d) {return 0;}
 static void _init_textst_timer(BLURAY* b) {}
-static void _find_next_playmark(BLURAY* bd) @FIND@
+/* These seeks use BD-J titles, so HDMV graphics must not be reset. */
+static void _run_gc(BLURAY* b, int cmd, int param) {assert(0);}
+static void _close_preload(int* preload) {assert(0);}
+static void _init_ig_stream(BLURAY* b) {assert(0);}
+static void _hdmv_graphics_init(BLURAY* b, int preloaded) {assert(0);}
+static void _find_next_playmark(BLURAY* bd, int last_passed) @FIND@
 static void _playmark_reached(BLURAY* bd) @REACHED@
 static int64_t _seek_internal(BLURAY* bd, const NAV_CLIP* clip,
-                             uint32_t title_pkt, uint32_t clip_pkt) @SEEK@
+                             uint32_t title_pkt, uint32_t clip_pkt, int last_passed_mark) @SEEK@
 int64_t bd_seek_mark(BLURAY* bd, unsigned mark) @MARK@
 
 static BLURAY init(TITLE* title) {
- BLURAY b={0};b.title=title;b.next_mark=-1;b.next_mark_pos=UINT64_MAX;return b;
+ BLURAY b={0};b.title=title;b.title_type=title_bdj;
+ b.next_mark=-1;b.next_mark_pos=UINT64_MAX;return b;
 }
 static void check(TITLE* title, unsigned wanted) {
  BLURAY b=init(title);
@@ -103,14 +115,14 @@ int main(void) {
   * Seeking mark 3 must not replay mark 2 from that same access packet. */
  unsigned order[]={2,3,0,1};
  for(unsigned i=0;i<4;++i)check(&avatar,order[i]);
- BLURAY failed=init(&avatar);failed.s_pos=1920;_find_next_playmark(&failed);
+ BLURAY failed=init(&avatar);failed.s_pos=1920;_find_next_playmark(&failed,INT_MAX);
  int next=failed.next_mark;uint64_t pos=failed.next_mark_pos;failed.fail=1;
  bd_seek_mark(&failed,2);
  assert(failed.s_pos==1920 && failed.next_mark==next && failed.next_mark_pos==pos);
  assert(!failed.seeks && !failed.java_seeks && !failed.count && !failed.java_count);
  bd_seek_mark(&failed,4);assert(failed.next_mark==next && !failed.count);
- /* Ordinary byte/time/playitem seeks retain their existing boundary policy. */
- BLURAY ordinary=init(&avatar);_seek_internal(&ordinary,&avatar.clip,1509892,1509892);
+ /* Byte seeks do not select a mark at the access packet. */
+ BLURAY ordinary=init(&avatar);_seek_internal(&ordinary,&avatar.clip,1509892,1509892,INT_MAX);
  ordinary.s_pos+=192;_playmark_reached(&ordinary);assert(!ordinary.count && !ordinary.java_count);
  /* Vary duplicate groups and packet positions, including offsets beyond 4GB. */
  uint32_t seed=1297;
