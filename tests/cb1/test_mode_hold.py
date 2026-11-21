@@ -289,6 +289,8 @@ struct Window {
  void OnLostDevice(){if(!m_dispReset){m_dispReset=true;++lost;}}
  void PresentFrame(bool,bool){}
  void RefreshHDR10LinkDepth(){}
+ bool PendingDVStartupEdid() const {return false;}
+ bool GetDisplayInfo() const {return false;}
  bool RefreshDisplayInfoForVideo(){return false;}
  void RefreshDVOutputCapabilities(){}
  bool HasPendingDVOutputSurface(){return pending;}
