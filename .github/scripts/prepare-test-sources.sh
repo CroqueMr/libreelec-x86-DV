@@ -32,16 +32,11 @@ engine_revision=$(pin PKG_VERSION "$engine_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
 bluray_fork=$(pin CB1_BLURAY_SOURCE_REPOSITORY "$bluray_recipe")
 bluray_revision=$(pin CB1_BLURAY_SOURCE_COMMIT "$bluray_recipe")
-# Generic kernel fixtures use the recipe's default branch, not its board forks.
-linux_recipe=packages/linux/package.mk
-read -r linux_version linux_sha < <(
-  awk -F '"' '
-    /^  \*\)/ { generic=1 }
-    generic && $1 ~ /^[[:space:]]*PKG_VERSION=/ { version=$2 }
-    generic && $1 ~ /^[[:space:]]*PKG_SHA256=/ { print version, $2; exit }
-  ' "$linux_recipe"
-)
-test -n "$linux_version" && test -n "$linux_sha"
+# Generic kernel fixtures use the same pinned source as the Generic image.
+PROJECT=Generic DEVICE=Generic ARCH=x86_64 bash tools/pkginfo linux PKG_SHA256 > "$test_root/linux-recipe"
+linux_url=$(pin PKG_URL "$test_root/linux-recipe")
+linux_sha=$(pin PKG_SHA256 "$test_root/linux-recipe")
+test -n "$linux_url" && test -n "$linux_sha"
 
 test -n "$kodi_version" && test -n "$ffmpeg_version" && test -n "$placebo_revision" && test -n "$bluray_revision"
 download "https://github.com/xbmc/xbmc/archive/$kodi_version.tar.gz" \
@@ -60,19 +55,22 @@ download "$engine_fork/archive/$engine_revision.tar.gz" \
 download "$bluray_fork/archive/$bluray_revision.tar.gz" \
   "$test_root/libbluray.tar.gz" "$(pin CB1_BLURAY_SOURCE_SHA256 "$bluray_recipe")"
 
-download "https://www.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/linux-$linux_version.tar.xz" \
+download "$linux_url" \
   "$test_root/linux.tar.xz" "$linux_sha"
 
 python3 scripts/cb1-stage.py
 mkdir "$test_root/engine" "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray" "$test_root/linux"
 tar -xf "$test_root/engine.tar.gz" -C "$test_root/engine" --strip-components=1
+for patch_file in packages/multimedia/cb1-engine/patches/"$engine_revision"/*.patch; do
+  patch --batch --forward --fuzz=0 -p1 -d "$test_root/engine" < "$patch_file"
+done
 tar -xf "$test_root/kodi-cb1.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg-cb1.tar.gz" -C "$test_root/ffmpeg" --strip-components=1
 tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
 tar -xf "$test_root/libbluray.tar.gz" -C "$test_root/libbluray" --strip-components=1
 tar -xf "$test_root/linux.tar.xz" -C "$test_root/linux" --strip-components=1
 
-# Match Generic's shipped default kernel stack; retain full source dependencies.
+# Verify the Generic kernel stack against the same pinned source as the package build.
 for patch_file in packages/linux/patches/default/*.patch projects/Generic/patches/linux/*.patch; do
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/linux" < "$patch_file"
 done

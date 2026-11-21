@@ -36,14 +36,22 @@ void exact_clock() {
   b->pts=15*sign;b->dts=-15;e->pts=4*sign;e->dts=-5;e->duration=1;
   assert(join.Push(b,false)&&join.Push(e,true));
   assert(join.Take(out)==0&&out->pts==15*sign&&out->dts==-15);
-  assert(join.Timing().basePts==15*sign&&join.Timing().enhancementPts==15*sign);
-  assert(join.Timing().presentable&&!join.Pending());
+  const auto timing=join.Timing();
+  assert(!av_compare_ts(timing.basePts,timing.clock,15*sign,AVRational{1,90000}));
+  assert(!av_compare_ts(timing.enhancementPts,timing.clock,4*sign,AVRational{1,24000}));
+  assert(timing.enhancement && timing.enhancement->pts==4*sign && timing.enhancement->dts==-5);
+  assert(timing.presentable&&!join.Pending());
   av_packet_free(&b);av_packet_free(&e);av_packet_free(&out);
  }
- // A fractional presentation instant must still be rejected, not rounded into a match.
+ // A near peer time must not copy its RPU onto a different BL picture.
  CBlurayDovi join;assert(join.Configure(cp,cp,{1,90000},{1,24000}));
- AVPacket* e=packet(false,true);e->pts=1;e->dts=0;
- assert(!join.Push(e,true));av_packet_free(&e);avcodec_parameters_free(&cp);
+ AVPacket* b=packet(true,false);b->pts=4;
+ AVPacket* e=packet(false,true);e->pts=1;
+ AVPacket* out=av_packet_alloc();assert(out);
+ assert(join.Push(b,false)&&join.Push(e,true));
+ assert(join.Take(out)==AVERROR(EAGAIN));
+ assert(join.Take(out,true)==0&&!join.Timing().presentable&&out->size==sizeof(bl));
+ av_packet_free(&out);av_packet_free(&b);av_packet_free(&e);avcodec_parameters_free(&cp);
 }
 void carriage() {
  for(bool onBase : {false,true})for(bool elFirst : {false,true})for(bool duplicate : {false,true}) {
@@ -54,9 +62,12 @@ void carriage() {
    join.Reset(restart);
    assert(join.Push(elFirst?e:b,elFirst)&&join.Push(elFirst?b:e,!elFirst));
    assert(join.Take(out)==0&&join.Timing().presentable);
-   const uint8_t expected[]={0,0,1,0x26,1,0xaa,0,0,0,1,0x7e,1,0x26,1,0xbb,0,0,0,1,0x7c,1,0xcc};
-   assert(out->size==sizeof(expected)&&!memcmp(out->data,expected,sizeof(expected)));
-   assert(b->size==6+((onBase||duplicate)?7:0)); // Caller packet must remain untouched.
+   assert(out->size==sizeof(bl)+sizeof(rpu));
+   assert(!memcmp(out->data,bl,sizeof(bl))&&!memcmp(out->data+sizeof(bl),rpu,sizeof(rpu)));
+   const auto& peer=join.Timing().enhancement;
+   assert(peer&&peer->size==sizeof(el)&&!memcmp(peer->data,el,sizeof(el)));
+   assert(b->size==6+((onBase||duplicate)?7:0)); // Caller packets stay untouched.
+   assert(e->size==6+((!onBase||duplicate)?7:0));
    av_packet_unref(out);assert(!join.Pending());
   }
   av_packet_free(&b);av_packet_free(&e);av_packet_free(&out);

@@ -78,8 +78,10 @@ int main(){
 #define HAVE_DVBRIDGE 1
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
+#include <map>
 #include <memory>
 #include <cstring>
+#include <vector>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include "dvbridge_fel.h"
@@ -99,13 +101,19 @@ extern "C" bool dvbridge_fel_submit_layers(dvbridge_fel*,const AVPacket* el,cons
 }
 extern "C" bool dvbridge_fel_submit(dvbridge_fel*,const AVPacket*){++submits;return true;}
 struct Hardware{int Check(AVCodecContext*){return 0;}};
+namespace KODI::UTILS::DOLBYVISION {
+ std::vector<uint8_t> ExtractAv1Rpu(const uint8_t*, int) { return {}; }
+}
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10PLUS};
 struct CDVDVideoCodecFFmpeg {
  struct {
   struct {unsigned dv_profile{7};} dovi;
   bool preferHybridHDR10Plus{};
+  AVCodecID codec=AV_CODEC_ID_HEVC;
   StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
  } m_hints;
+ bool m_exportDoviRpu=false;
+ std::map<int64_t,std::vector<uint8_t>> m_av1DoviRpus;
  AVCodecContext context{};AVCodecContext* m_pCodecContext=&context;
  std::shared_ptr<dvbridge_fel> m_dvFel=std::make_shared<dvbridge_fel>();
  uint64_t m_dvLayerEpoch{};bool m_dvVideoWindow=false,m_dvFailed=false,m_eof=false,m_started=false,m_startedInput=false;

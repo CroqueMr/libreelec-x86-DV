@@ -41,8 +41,10 @@ int main() {
   assert(join.Take(out)==0);
   const auto timing=join.Timing();
   assert(timing.basePts==bases[i] && timing.enhancementPts==times[i]);
-  assert(out->data[14]==times[i]);
-  assert(timing.presentable && out->size==22);
+  assert(timing.enhancement && timing.enhancement->size==7);
+  assert(timing.enhancement->pts==times[i] && timing.enhancement->dts==i);
+  assert(timing.enhancement->data[6]==times[i]);
+  assert(timing.presentable && out->size==13);
   assert(out->data[out->size-1]==bases[i]);
   av_packet_unref(out);
  }
