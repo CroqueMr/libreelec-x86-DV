@@ -32,6 +32,11 @@ class TVProfileAdmissionTests(unittest.TestCase):
 #include <vector>
 #include <utility>
 struct Option {std::string label="Adaptive",label2;std::vector<std::pair<std::string,bool>> properties;};
+struct StringUtils {
+ static std::string Format(const std::string& label,const std::string& rate) {
+   return label+" "+rate;
+ }
+};
 Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double peak,int gamut,bool guided=false,bool hlgMenu=false,int requestedMode=4,bool hdr10PlusMenu=false) {
  struct {double peak;int gamut;double expertPeak;int expertGamut;} preferences{peak,gamut,peak,gamut};
  struct Localizer {std::string Get(int id) {return std::to_string(id);}} localizer;
@@ -40,6 +45,7 @@ Option annotate(DVBRIDGE::OutputReason reason,bool menu,bool hdr10Menu,double pe
  caps.lldvUnavailableLabel=41300;
  const auto& processing=caps.processing;
  constexpr int DVBRIDGE_MODE_PLAYER_LED=8;
+ constexpr double lldvUnsupportedRate=0.0;
  int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
  SECTION
  return option;
