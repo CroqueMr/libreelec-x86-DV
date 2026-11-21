@@ -267,8 +267,18 @@ int main(){for(bool videoLayer:{false,true})for(bool reusable:{false,true})for(b
             prefixes.append(prefix)
         self.run_cpp(r'''
 #include <cassert>
+#include <chrono>
 #include <memory>
 #include <optional>
+using namespace std::chrono_literals;
+namespace KODI::TIME {
+unsigned idleWaits = 0;
+void Sleep(std::chrono::milliseconds duration)
+{
+  assert(duration == 10ms);
+  ++idleWaits;
+}
+}
 void glFinish(){}
 enum dvbridge_gamut { DVBRIDGE_GAMUT_BT709, DVBRIDGE_GAMUT_BT2020 };
 constexpr int PL_COLOR_PRIM_BT_2020=3;
@@ -282,7 +292,7 @@ struct CDVBridgeGLES{
  Submission CaptureSubmission(){return {};}bool Advanced(){return true;}
 };
 struct Window{
- bool m_dvFrame=true;int m_nWidth=3840,m_nHeight=2160,m_videoSourceSideData=1;
+ bool m_dvFrame=true,m_cb1FramePending=false;int m_nWidth=3840,m_nHeight=2160,m_videoSourceSideData=1;
  bool m_sdrConversion=false;
  std::optional<dvbridge_gamut> m_sdrSignal;
  enum class PascalHDRMode { None, Conversion, Native };
@@ -301,11 +311,19 @@ struct Window{
  void DV(bool rendered) @DV@
 };
 int main(){for(bool rendered:{false,true}){Window w;
+ KODI::TIME::idleWaits=0;
  for(unsigned film=0;film<3;film++){w.HDR(rendered);w.DV(rendered);}
- assert(w.swaps==6&&w.swapped==6&&w.bridge.resolves==6);
+ assert(w.swaps==6&&w.swapped==6&&w.bridge.resolves==6&&KODI::TIME::idleWaits==0);
  w.m_pascalHDRMode=Window::PascalHDRMode::Conversion;w.HDR(rendered);
  assert(w.scanout.blits==1&&w.swaps==6&&w.swapped==7);
- w.m_dvFrame=false;w.HDR(rendered);w.DV(rendered);assert(w.swaps==6);
+ w.m_dvFrame=false;
+ w.HDR(rendered);
+ w.m_cb1FramePending=true;
+ w.DV(rendered);
+ assert(w.swaps==6&&KODI::TIME::idleWaits==0);
+ w.m_cb1FramePending=false;
+ w.DV(rendered);
+ assert(w.swaps==6&&KODI::TIME::idleWaits==1);
 }}
 '''.replace('@HDR@',prefixes[0]).replace('@DV@',prefixes[1]))
 
