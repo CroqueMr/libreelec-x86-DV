@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3a98afddff5b38120e34487da8851558425b06cf",
   "integration_files": {
-    "packages/multimedia/cb1-engine/patches/44b2b94c418c49b2682f30d954350601dcc1bed6/0001-match-selected-source-receipts.patch": "4ed215a8815d80220f88eedf1ecaa84a99dff4ff173d7d6dea69c93aad1df239",
+    "packages/multimedia/cb1-engine/patches/44b2b94c418c49b2682f30d954350601dcc1bed6/0001-match-selected-source-receipts.patch": "7d2678b396e06e7ceddfb1136a0700bd2a15ebbadc9222264491780a673d99d4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": "853b8fb11746f7949c1e93b91fc096140c3114655594c5a734d169c8605d2be2",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": "41071577c5512c7e04e2b9707c45831574b98522ac1125527821fec3ebc8cb3f",
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
