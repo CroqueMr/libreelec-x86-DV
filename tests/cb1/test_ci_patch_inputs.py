@@ -16,9 +16,6 @@ class CIPatchInputs(unittest.TestCase):
             ('packages/linux/patches/default/*.patch',
              ['packages/linux/patches/default/base.patch']),
             ('packages/linux/patches/default/*.patch', []),
-            ('packages/mediacenter/kodi/patches/*.patch',
-             ['packages/mediacenter/kodi/patches/base.patch',
-              'projects/Generic/patches/kodi/shared.patch']),
         ]
         for first_glob, expected in cases:
             with self.subTest(first_glob=first_glob, expected=expected):

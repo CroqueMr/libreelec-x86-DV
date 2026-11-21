@@ -10,12 +10,13 @@ constexpr int LOGWARNING=2,DVP_FLAG_DROPPED=1;
 constexpr unsigned CODEC_BLURAY_NAVIGATION=0x04;
 struct CLog {template<class...T>static void Log(T...){}};
 enum class StreamHdrType {HDR_TYPE_DOLBYVISION,HDR_TYPE_HDR10,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
+struct FELBaseIdentity @FEL_IDENTITY@;
 struct Picture {
  CDVMetadataBuffer doviMetadata;DVBRIDGE::SourceBinding doviSourceBinding;DVBRIDGE::SourceInfo doviSourceInfo;
  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION,hdrTypeAlt=StreamHdrType::HDR_TYPE_HDR10;
  int colorBits=10;bool hasLightMetadata=false,hasDisplayMetadata=false;
  AVContentLightMetadata lightMetadata{};AVMasteringDisplayMetadata displayMetadata{};
- int64_t doviSourcePts{};std::string strDVELType;unsigned iFlags{};
+ int64_t doviSourcePts{},doviPairPts=AV_NOPTS_VALUE;std::string strDVELType;unsigned iFlags{};
  std::shared_ptr<const VideoSourceSideData>sourceSideData;
 };
 static void admitted(AVStream *bl,AVStream *el,bool transport){

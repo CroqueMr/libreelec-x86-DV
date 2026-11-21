@@ -40,12 +40,12 @@ namespace DVBRIDGE{
  bool DiagnosticsEnabled(){return enabled;}
  void DiagnosticStartup(uint64_t,uint64_t,const char* stage,bool,size_t){events.emplace_back(stage);}
 }
-struct AVFrame{int pixels=123;};
+struct AVFrame{int pixels=123;int64_t pts{},best_effort_timestamp{};};
 void av_frame_free(AVFrame** p){delete *p;*p=nullptr;}
 struct AVBufferRef{unsigned char* data{};};
 struct AVHWFramesContext{void* device_ref{};};
 struct AVCodecContext{AVBufferRef* hw_frames_ctx{};};
-struct AVPacket{};
+struct AVPacket{int64_t pts{};};
 struct AVRational{int num,den;};
 struct dvbridge_fel_source{int64_t base_pts,enhancement_pts;AVRational time_base;uint64_t epoch;bool presentable;};
 struct DemuxPacket{bool videoWindowed=false;struct{int64_t basePts{},enhancementPts{};int clockNum{},clockDen{};uint64_t epoch{};bool valid{},presentable{};}doviLayerTimes;};
@@ -69,7 +69,7 @@ struct VideoPicture{
  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
  std::shared_ptr<SourceSideData> sourceSideData;
 
- int64_t doviSourcePts=AV_NOPTS_VALUE;int pixels=123;
+ int64_t doviSourcePts=AV_NOPTS_VALUE,doviPairPts=AV_NOPTS_VALUE;int pixels=123;
  std::shared_ptr<AVFrame> doviEnhancement;int doviEnhancementBinding{};
  int doviSourceBinding=17;
  struct {bool frameRpu=false;} doviSourceInfo;

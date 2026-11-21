@@ -71,6 +71,7 @@ int main(){
         if not prefix:self.skipTest('Matched FFmpeg required')
         source=(TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
         add=body(source,'bool CDVDVideoCodecFFmpeg::AddData(')
+        identity=body(source,'struct FELBaseIdentity')
         player=(TREE/'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
         dispatch=body(player,'void CVideoPlayer::ProcessVideoData(')
         program=r'''
@@ -78,12 +79,14 @@ int main(){
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include <cassert>
 #include <memory>
+#include <cstring>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include "dvbridge_fel.h"
 }
 constexpr int LOGERROR=1,VC_NOBUFFER=2;
 char presentableDVPacket,decodeOnlyDVPacket;
+struct FELBaseIdentity IDENTITY;
 struct CLog{template<class... T>static void Log(T...){}};
 struct dvbridge_fel{};
 int calls=0,submits=0;bool again=false;
@@ -152,7 +155,7 @@ int main(){
  p.doviLayerTimes.epoch=1;
  assert(c.AddData(p)&&c.m_dvFailed&&calls==4&&submits==3);
 }
-'''.replace(' ADD',add).replace(' DISPATCH',dispatch)
+'''.replace(' ADD',add).replace(' DISPATCH',dispatch).replace(' IDENTITY',identity)
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);(root/'test.cpp').write_text(program)
             result=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
