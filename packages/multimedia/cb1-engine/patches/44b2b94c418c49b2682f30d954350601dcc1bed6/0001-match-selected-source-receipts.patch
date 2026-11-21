@@ -1,0 +1,86 @@
+From: Codex <codex@localhost>
+Subject: [PATCH] Verify the released BL/EL source and dependency receipts
+
+Record the exact FEL source and the FFmpeg and libplacebo archives
+selected by the 1.1 Generic package recipes.
+
+--- a/config/owned-sources.json
++++ b/config/owned-sources.json
+@@ -1,5 +1,5 @@
+ {
+-  "src/dvbridge_fel.c": "8331e85a4041ba2cbc84fac07f9ee0c23363df83a62f0789a09e3ba01c94f3f7",
++  "src/dvbridge_fel.c": "4384d046e26da6674feffe0c4433539f3575cf1d82dd356c834c5e3fa450f200",
+   "src/dvbridge_gl_pack.h": "2ccd974503fbcbb33678ee2eff076a7a086bcd1796efa97010a1eebb901143f5",
+   "src/dvbridge_gl_pack.c": "e872527f20d4e56c1da39a1d591c829bc54174ad8fb2fa94c61cfe2a0043d996",
+   "src/cb1_circuit.c": "b3dc96ad27a802680811858862f67c4921f595ce042e3df6cd19c286f8872e56",
+@@ -63,7 +63,7 @@
+   "src/cb1_trim_math.h": "178b7ef0b567b61c7d73cea702971b10299a04931367c090be0a3c8561c8cfcc",
+   "src/cb1_transport_glsl.h": "1d775ef6306e76a831fc192ef9c7b7989fef97cb5c001903f2ab674e89445566",
+   "src/cb1_composite_glsl.h": "65e462c80246b0e44ecf31f5f957a53cc48dd9924009b3461cd008fbdc124916",
+-  "src/dvbridge_fel.h": "bf5cac0924338fe29f933cd23a3abd836bddd4d187d3cd9dd7e4f85928e91dad",
++  "src/dvbridge_fel.h": "05e19fc1c114a5da78133b9a41a1707f49b87571332519445d44eca22a6ab863",
+   "src/cb1_master_ipt.c": "2793976a1a49187658ab0c6f3eb4c3cdce056b61497ac2939612c4bba49b5ea6",
+   "src/cb1_master_ipt.h": "3efb1f79bf2340c10ada773267b792b5d5e33256e7ae73055b19f80fdb5a3ae1",
+   "src/cb1_master_ipt_shader.h": "92e41f052f975a44bb3404a5ec8f44380729b070507af918c40f40d52f446e95",
+--- a/config/dependencies.json
++++ b/config/dependencies.json
+@@ -2,7 +2,7 @@
+   "schema": 1,
+   "ownership": {
+     "ffmpeg": "CroqueMr/FFmpeg source fork",
+-    "libplacebo": "CB1 canonical patches"
++    "libplacebo": "CroqueMr/libplacebo source fork"
+   },
+   "ffmpeg": {
+     "version": "9.0.2",
+@@ -11,9 +11,9 @@
+     "upstream_tag_object": "ce8f11b9fac4cd7ccfb41ca7c01bc17f5cda8cc3",
+     "inherited_notice_revision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+     "source_authority": "The pinned source fork archive selects the exact compiled sources. The inherited 9.0 release archive divergence remains documented in the RC3 source inventory.",
+-    "source_url": "https://github.com/CroqueMr/FFmpeg/archive/91adfbb2f53a742e75c3925be5f4d5c15f2305f0.tar.gz",
+-    "archive": "FFmpeg-91adfbb2f53a742e75c3925be5f4d5c15f2305f0.tar.gz",
+-    "archive_sha256": "925cfd029d6c2d2156052174523b4e2e7b5848bb50c7dd5d14d25f21addda381",
++    "source_url": "https://github.com/CroqueMr/FFmpeg/archive/b3cb7d8dbaffa676a2227370bbf368c3c3f9c1af.tar.gz",
++    "archive": "FFmpeg-b3cb7d8dbaffa676a2227370bbf368c3c3f9c1af.tar.gz",
++    "archive_sha256": "edf82f0da7a17b3225126058e99bd55f7c574868322e5bc45c554656a1240bab",
+     "modified": true,
+     "interfaces": [
+       "AVDOVIDmData.dvbridge_raw_magic",
+@@ -23,14 +23,14 @@
+       "ff_dovi_attach_side_data"
+     ],
+     "compatibility": "Matched pinned modified headers and producer/consumer only; arbitrary binary mixes unsupported",
+-    "fork_revision": "91adfbb2f53a742e75c3925be5f4d5c15f2305f0"
++    "fork_revision": "b3cb7d8dbaffa676a2227370bbf368c3c3f9c1af"
+   },
+   "libplacebo": {
+     "version": "7.372.0",
+     "upstream_revision": "e2972fdd09adacd383656738d7d280f0cd84a761",
+-    "source_url": "https://github.com/haasn/libplacebo/archive/e2972fdd09adacd383656738d7d280f0cd84a761.tar.gz",
+-    "archive": "libplacebo-e2972fdd09adacd383656738d7d280f0cd84a761.tar.gz",
+-    "archive_sha256": "2dc029b7686455054fb5e76dd8c084cbf4fa4159f33364c5b7f9afc8b3611811",
++    "source_url": "https://github.com/CroqueMr/libplacebo/archive/7ee715018f35a33c1b03f0084abc769731202956.tar.gz",
++    "archive": "libplacebo-7ee715018f35a33c1b03f0084abc769731202956.tar.gz",
++    "archive_sha256": "720f7c9bdb4ada80751f742f371388399cf7571f0d27056870a93bc1b6227e31",
+     "modified": true,
+     "numerical_realization": "Existing default-off cb1_stable_pq uses the original ST2084 operator/constants/domain. Its shared inverse helper uses a fixed general expm1 P5(z/16) seed and four deficit doublings, an explicitly bounded primitive approximation, not an exact identity or fitted curve. Original nonpositive-to-zero behavior is retained with positive-only log; negative super-white deficits and the final power remain. Forward emission and native/Basic are unchanged.",
+     "interfaces": [
+@@ -53,7 +53,8 @@
+       "pl_dovi_metadata.cb1_native_bounds and cb1_nlq_max (default off, matched processing ABI 10)",
+       "pl_render_params.cb1_dovi_reference (default null, contract 1, matched processing ABI 10)",
+       "pl_color_map_args.cb1_tone_map (Expert opt-in; PL_CB1_EXPERT_TONE_ABI; rebuild all consumers)"
+-    ]
++    ],
++    "fork_revision": "7ee715018f35a33c1b03f0084abc769731202956"
+   },
+   "patches": {
+     "patches/libplacebo/libplacebo-9919-player-led-host.patch": "a6de071a3a0b8d9e4ce0e4e2dcb31dc5124838aaaf33948adc903346019cfb24",
+@@ -115,7 +116,7 @@
+     "libplacebo/src/shaders.h": "22fc30757f176594a552acacad4c41f7a947be177e2ac88c6aef69bc3c3bc040",
+     "ffmpeg/libavformat/mpegts.c": "954bdc5076ab1a96b560b5d49633be00964b97964488b24336a413fb667a28e5",
+     "libplacebo/src/mmr_lut.h": "7d72e001b9c94b6b71aec11d76c19f686296b3fece23ab0123fc7061b4fefc8e",
+-    "ffmpeg/libavformat/matroskadec.c": "e8fbe599ef8be450b6ae1818b7392186155ec4e7ce4f5bc422786d9a7c2517c5",
++    "ffmpeg/libavformat/matroskadec.c": "2fb80649290ddc27d275d1128f9122469014bc51c17df3a68eead9fdf5356b38",
+     "ffmpeg/libavcodec/pgssubdec.c": "46f628e57af1c998b3654b11fe46d984db3f13e23127fd4044726216d91cf836"
+   }
+ }

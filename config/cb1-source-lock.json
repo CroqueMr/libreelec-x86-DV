@@ -9,6 +9,7 @@
   },
   "libreelec_revision": "3a98afddff5b38120e34487da8851558425b06cf",
   "integration_files": {
+    "packages/multimedia/cb1-engine/patches/44b2b94c418c49b2682f30d954350601dcc1bed6/0001-match-selected-source-receipts.patch": "4ed215a8815d80220f88eedf1ecaa84a99dff4ff173d7d6dea69c93aad1df239",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": "853b8fb11746f7949c1e93b91fc096140c3114655594c5a734d169c8605d2be2",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": "41071577c5512c7e04e2b9707c45831574b98522ac1125527821fec3ebc8cb3f",
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
@@ -229,7 +230,7 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": "6f3e0313da94604ddae1cbba600339c89273d3651eab9b29a82b6b81f0cb7337",
     "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": "2181477fd5c9d0df4ba28635ed52e7013313d078ff031040d451b71a8e895408",
     "docs/cb1/RELEASE-RC4-PREVIEW.md": "cb4a86f57b21d6ba3f63c6f1acc30b6f862e90df237c8d386a50002064436a1b",
-    ".github/scripts/prepare-test-sources.sh": "e3d0c19ef8e8583b23209d1b0417a868ebb14eb7a389e676245a08821cb8bce4",
+    ".github/scripts/prepare-test-sources.sh": "0d432efb6ec854b6aaa4062183487dd5c47c3a41626c868fb7a70bb48a52bbdf",
     ".github/workflows/cb1-source-checks.yml": "2965c3997e6233052233168cf4786291b07c51643a0d29de41ef54a197ad34a9",
     "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": "5158f22790955e72b99bd6f8d6c7feb87bb44176ff06a5a4882cccdb5ea8e940",
     "projects/Generic/patches/linux/linux-9950-01-wcl-single-scaler.patch": "013646a5e7f11abe825ed7e9d4c8b6b0b6c49c96105d56b2c843238e782e6f40",
