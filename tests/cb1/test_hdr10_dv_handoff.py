@@ -19,23 +19,50 @@ class HDR10DVHandoffTests(unittest.TestCase):
         process = body(source, "void CVideoPlayer::Process()")
         start = process.index("    // should we open a new demuxer?")
         end = process.index("    // handle eventual seeks", start)
+        wait = body(source, "bool CVideoPlayer::WaitForBlurayPlaylist()")
+        wait = wait.split("#if defined(HAVE_LIBBLURAY)", 1)[1].split("  m_HasVideo = true;", 1)[0]
         execute(r'''
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <vector>
+using namespace std::chrono_literals;
+struct CThread
+{
+  static void Sleep(std::chrono::milliseconds duration) { assert(duration == 50ms); }
+};
 struct CDVDMsg { enum Message { GENERAL_FLUSH }; };
 enum class StreamType { AUDIO };
 struct CDemuxStream { StreamType type; bool disabled; int dvdNavId; };
 struct Player
 {
-  struct CDVDInputStream { enum { NEXTSTREAM_NONE, NEXTSTREAM_OPEN, DVDSTREAM_TYPE_PVRMANAGER }; };
+  struct CDVDInputStream
+  { enum { NEXTSTREAM_NONE, NEXTSTREAM_OPEN, NEXTSTREAM_RETRY, DVDSTREAM_TYPE_PVRMANAGER }; };
   static constexpr int DVDSTREAM_TYPE_PVRMANAGER = CDVDInputStream::DVDSTREAM_TYPE_PVRMANAGER;
-  struct Input
+  struct CDVDInputStreamBluray
   {
-    int NextStream() const { return CDVDInputStream::NEXTSTREAM_OPEN; }
+    int waits = 0, polls = 0;
+    bool pending = true;
+    int NextStream()
+    {
+      ++polls;
+      if (waits > 0)
+      {
+        --waits;
+        return CDVDInputStream::NEXTSTREAM_RETRY;
+      }
+      return CDVDInputStream::NEXTSTREAM_OPEN;
+    }
     bool IsEOF() const { return false; }
     bool IsStreamType(int) const { return false; }
+    bool HdmvEndPending() const { return pending; }
+    void ReleaseHdmvEnd() { pending = false; }
+    bool WaitingForHdmvProgram() const { return true; }
+    bool WaitingForReadablePlaylist() const { return false; }
   } input, *m_pInputStream = &input;
+  struct Worker { bool HasData() const { return false; } } worker;
+  Worker *m_VideoPlayerVideo = &worker, *m_VideoPlayerAudio = &worker;
+  struct { bool HasPendingVideoPresentation() const { return false; } } m_renderManager;
   struct { struct { bool empty() const { return true; } } m_Streams; } m_SelectionStreams;
   struct ProcessInfo { void SetStateStreaming(bool){} } *m_processInfo = nullptr;
   struct Queue
@@ -51,12 +78,22 @@ struct Player
   int m_CurrentAudio{};
   bool m_bdjAudioHandoff = false;
   bool bluray, probeFlush, m_bAbortRequest = false;
+  bool m_blurayDemuxDeferred = false;
+  int opens = 0, packets = 0, expectedPolls = 1;
   void CloseStream(int&, bool) { m_bdjAudioHandoff = false; }
   bool flushedBeforeRead = false;
   bool IsBlurayInput() const { return bluray; }
   bool EvaluateIsStreaming() const { return false; }
+  bool WaitForBlurayPlaylist()
+  {
+    WAIT_FOR_PLAYLIST
+    assert(false && "This fixture only covers the drain and selection states");
+    return false;
+  }
   bool OpenDemuxStream()
   {
+    assert(input.polls == expectedPolls && packets == 0);
+    assert(++opens == 1);
     m_pDemuxer = &demuxer;
     m_messenger.flush = probeFlush;
     return true;
@@ -65,12 +102,13 @@ struct Player
   void UpdatePlayState(int) {}
   void Reopen()
   {
-    for (int pass=0; pass<2; ++pass)
+    for (int pass=0; pass<expectedPolls+1; ++pass)
     {
       const bool flushed = m_messenger.flush;
       m_messenger.flush = false;
       REOPEN
       flushedBeforeRead = flushed;
+      ++packets;
       return;
     }
     assert(false);
@@ -80,12 +118,17 @@ int main()
 {
   Player disc{.bluray=true, .probeFlush=true};
   disc.Reopen(); assert(disc.flushedBeforeRead);
+  Player waiting{.bluray=true, .probeFlush=true, .expectedPolls=3};
+  waiting.input.waits=2;
+  waiting.Reopen();
+  assert(!waiting.input.pending && waiting.input.polls==3 &&
+         waiting.opens==1 && waiting.packets==1 && waiting.flushedBeforeRead);
   Player ordinary{.bluray=true, .probeFlush=false};
   ordinary.Reopen(); assert(!ordinary.flushedBeforeRead);
   Player other{.bluray=false, .probeFlush=true};
   other.Reopen(); assert(!other.flushedBeforeRead);
 }
-'''.replace("REOPEN", process[start:end]))
+'''.replace("REOPEN", process[start:end]).replace("WAIT_FOR_PLAYLIST", wait))
 
     def test_flush_waits_only_for_running_stream_players(self):
         source = (TREE / "xbmc/cores/VideoPlayer/VideoPlayer.cpp").read_text()
