@@ -32,8 +32,8 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dlibxml2=enabled"
 
 CB1_BLURAY_SOURCE_REPOSITORY="https://github.com/CroqueMr/libbluray-cb1"
-CB1_BLURAY_SOURCE_COMMIT="93addf91e6b9447bf523f3cb383fb36d25b53087"
-CB1_BLURAY_SOURCE_SHA256="19850f976567a51a275d231ae15b5814878782ef79e644157e9bdb3d107a06f0"
+CB1_BLURAY_SOURCE_COMMIT="7b18d8f440c85fa4f96d4c65daba5c4dffcfd720"
+CB1_BLURAY_SOURCE_SHA256="4db8fecf28ca80e64db9327cd9326ce7d082ef9570110da1638041ed6df1a553"
 
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
   PKG_VERSION="1.5.1"
