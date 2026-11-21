@@ -182,7 +182,7 @@
     "tests/cb1/test_bdj_controls.py": "727f56eb29988a6f5992a34d8cd564a69ddd5593d218fce34cbc56a489088915",
     "tests/cb1/BdjControls.java": "44b02c5b0583fe6282644867ce4e6a3ecdc7a03b4afb00a9f2b9d909730bfdea",
     "packages/multimedia/libbluray/patches/0002-bdj-video-and-stream-controls.patch": "11c7993c844830fda36c068f006211ecabf39b9b083f5cb673a193e13f78bc8e",
-    "tests/cb1/test_fel_terminal.py": "893e07be5d07481a1599432d57e19ba429d4d1d8acf6789f1a3d74b538315193",
+    "tests/cb1/test_fel_terminal.py": "2fabe9c0d948b3d56b4390379920d9cbcfd55c6dfb3e215031fef2ad5a68610b",
     "tests/cb1/test_mel_reference_history.py": "037f9020ba75efa6c0a01de983bf9ba8701a7d9b40a0c836a3260497b4e443c8",
     "tests/cb1/test_optional_gui.py": "cd34349c3b323eb87c51c024bd71ca7e98757e1f501c70340c21bca26554800a",
     "tests/cb1/test_software_dv_import.py": "539cc08623dd1f54c98e117525eff4e4fe99ca7a18f79550ef3ff3784d4e2e90",
@@ -229,8 +229,8 @@
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9006-integer-rate-twins.patch": "6f3e0313da94604ddae1cbba600339c89273d3651eab9b29a82b6b81f0cb7337",
     "packages/graphics/nvidia_egl-gbm/patches/nvidia_egl-gbm-9000-hook-safety.patch": "2181477fd5c9d0df4ba28635ed52e7013313d078ff031040d451b71a8e895408",
     "docs/cb1/RELEASE-RC4-PREVIEW.md": "cb4a86f57b21d6ba3f63c6f1acc30b6f862e90df237c8d386a50002064436a1b",
-    ".github/scripts/prepare-test-sources.sh": "dcc6aa70e56a8db2b177282be7c6130b118f6a48e51f2b2a8a3dc264c6832132",
-    ".github/workflows/cb1-source-checks.yml": "888b4deb6a374b8e0e94883f134fac60a4ac9b663fa9db7237a01c9bc0cf46d9",
+    ".github/scripts/prepare-test-sources.sh": "9050f1cb04dbf77021166976fc5fe1996d0c8e93033132c7e6fcc6625921ab57",
+    ".github/workflows/cb1-source-checks.yml": "2965c3997e6233052233168cf4786291b07c51643a0d29de41ef54a197ad34a9",
     "projects/Generic/patches/linux/linux-9947-amd-hdmi-rgb-range.patch": "5158f22790955e72b99bd6f8d6c7feb87bb44176ff06a5a4882cccdb5ea8e940",
     "projects/Generic/patches/linux/linux-9950-01-wcl-single-scaler.patch": "013646a5e7f11abe825ed7e9d4c8b6b0b6c49c96105d56b2c843238e782e6f40",
     "projects/Generic/patches/linux/linux-9950-02-wcl-disable-joiner.patch": "e2819b535ce138cef5937ac2e80719c350bfcbdf55dc0070d39e0b8daf929339",
@@ -503,7 +503,7 @@
     "tests/cb1/test_nvidia_surface_retirement.py": "8587cb6e34f243482a92d0f0aadc818f91a440cbfcab846da012df222c47dd86",
     "tests/cb1/test_nvidia_hdr_surface.py": "013198969815435818089ab28d8b0a2bd19698976641996d4f50ad9e94b9fe51",
     "packages/multimedia/ffmpeg/package.mk": "0ae09daa1517a4f61d2d04ba84b2bd05f5cdb54c9bd152cab56b278007691d56",
-    "packages/multimedia/cb1-engine/package.mk": "403b6f41772618b676e9f0119fcf82fc9fdc8720ed3a2bfb84a7e0fc00609e4e",
+    "packages/multimedia/cb1-engine/package.mk": "a099abbe1a45b38df1d483f67002bf0abd25dd84f10f140d35f632bc6f859f33",
     "packages/multimedia/cb1-udfread-source/package.mk": "ec6796161396523fbcee60e9b370d80950fbf1ddb284ada1e53efa93ec648566"
   },
   "staging": {

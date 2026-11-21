@@ -26,6 +26,9 @@ ffmpeg_revision=$(pin CB1_FFMPEG_SOURCE_COMMIT "$ffmpeg_recipe")
 placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk
 placebo_fork=$(pin CB1_PLACEBO_SOURCE_REPOSITORY "$placebo_recipe")
 placebo_revision=$(pin CB1_PLACEBO_SOURCE_COMMIT "$placebo_recipe")
+engine_recipe=packages/multimedia/cb1-engine/package.mk
+engine_fork=$(pin PKG_SITE "$engine_recipe")
+engine_revision=$(pin PKG_VERSION "$engine_recipe")
 bluray_recipe=packages/multimedia/libbluray/package.mk
 bluray_fork=$(pin CB1_BLURAY_SOURCE_REPOSITORY "$bluray_recipe")
 bluray_revision=$(pin CB1_BLURAY_SOURCE_COMMIT "$bluray_recipe")
@@ -52,6 +55,8 @@ download "$ffmpeg_fork/archive/$ffmpeg_revision.tar.gz" \
   "$test_root/ffmpeg-cb1.tar.gz" "$(pin CB1_FFMPEG_SOURCE_SHA256 "$ffmpeg_recipe")"
 download "$placebo_fork/archive/$placebo_revision.tar.gz" \
   "$test_root/libplacebo.tar.gz" "$(pin CB1_PLACEBO_SOURCE_SHA256 "$placebo_recipe")"
+download "$engine_fork/archive/$engine_revision.tar.gz" \
+  "$test_root/engine.tar.gz" "$(pin PKG_SHA256 "$engine_recipe")"
 download "$bluray_fork/archive/$bluray_revision.tar.gz" \
   "$test_root/libbluray.tar.gz" "$(pin CB1_BLURAY_SOURCE_SHA256 "$bluray_recipe")"
 
@@ -59,7 +64,8 @@ download "https://www.kernel.org/pub/linux/kernel/v${linux_version%%.*}.x/linux-
   "$test_root/linux.tar.xz" "$linux_sha"
 
 python3 scripts/cb1-stage.py
-mkdir "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray" "$test_root/linux"
+mkdir "$test_root/engine" "$test_root/kodi" "$test_root/ffmpeg" "$test_root/libplacebo" "$test_root/libbluray" "$test_root/linux"
+tar -xf "$test_root/engine.tar.gz" -C "$test_root/engine" --strip-components=1
 tar -xf "$test_root/kodi-cb1.tar.gz" -C "$test_root/kodi" --strip-components=1
 tar -xf "$test_root/ffmpeg-cb1.tar.gz" -C "$test_root/ffmpeg" --strip-components=1
 tar -xf "$test_root/libplacebo.tar.gz" -C "$test_root/libplacebo" --strip-components=1
@@ -71,7 +77,7 @@ for patch_file in packages/linux/patches/default/*.patch projects/Generic/patche
   patch --batch --forward --fuzz=0 -p1 -d "$test_root/linux" < "$patch_file"
 done
 
-python3 CB1/tools/verify.py --ffmpeg-source "$test_root/ffmpeg" \
+python3 "$test_root/engine/tools/verify.py" --ffmpeg-source "$test_root/ffmpeg" \
   --libplacebo-source "$test_root/libplacebo"
 # Build the pinned OpenGL backend for CPU probes and the native EGL surface regression.
 meson setup "$test_root/placebo-build" "$test_root/libplacebo" --wrap-mode=nofallback \
@@ -93,6 +99,7 @@ meson install -C "$test_root/placebo-build"
   make install
 )
 printf '%s\n' \
+  "CB1_TEST_ENGINE=$test_root/engine" \
   "KODI_NATIVE_SOURCE_TREE=$test_root/kodi" \
   "KODI_UPSTREAM_ARCHIVE=$test_root/kodi.tar.gz" \
   "CB1_DRM_STATE_SOURCE=$test_root/kodi" \

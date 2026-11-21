@@ -13,9 +13,9 @@ jobs:
         run: bash .github/scripts/prepare-test-sources.sh
       - name: Test source staging
         run: python3 -m unittest discover -s tests/cb1 -p 'test_*.py'
-      - name: Verify bundled engine and model
+      - name: Verify selected engine and staged sources
         run: |
-          python3 CB1/tools/verify.py
+          python3 "$CB1_TEST_ENGINE/tools/verify.py"
           python3 scripts/cb1-stage.py --check
       - name: Check whitespace
         run: git diff --check
