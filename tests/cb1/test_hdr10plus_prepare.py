@@ -42,7 +42,7 @@ int main(){
 
     def test_pending_analysis_retains_picture_with_async_disabled(self):
         source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
-        start=source.index('  const bool renderPending = status',source.index('// A paused final surface'))
+        start=source.index('  m_cb1SourcePreparing = status',source.index('// A paused final surface'))
         code=source[start:source.index('  if (std::getenv',start)]
         program=r'''
 #include <cassert>
@@ -52,7 +52,7 @@ struct Metadata{bool authored=true;bool Data()const{return authored;}};
 struct Context{bool AsyncPreparation(int){return false;}};
 bool holds(dvbridge_mode mode,CDVBridgeGLES::FrameStatus status,bool authored=true){
  Metadata metadata{authored};struct{dvbridge_mode mode;}policy{mode};
- const bool allowAsync=false,m_dvFrame=false;bool m_cb1FramePending=false;
+ const bool allowAsync=false,m_dvFrame=false;bool m_cb1FramePending=false,m_cb1SourcePreparing=false;
  Context ctx;auto*m_dvContext=&ctx;CDVBridgeGLES bridge;auto*m_dvBridge=&bridge;struct{struct{int stream;}binding;}layer{};
  BODY
  return m_cb1FramePending;
