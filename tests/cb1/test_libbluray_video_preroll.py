@@ -13,17 +13,12 @@ class LibblurayVideoPreroll(unittest.TestCase):
         if not include:
             self.skipTest('Matched libbluray sources required')
         original = Path(include)
-        repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             for name in ('bluray.c', 'bluray.h', 'decoders/m2ts_filter.c', 'decoders/m2ts_filter.h'):
                 target = folder / 'src/libbluray' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(original / 'libbluray' / name, target)
-            patched = subprocess.run(['patch', '--batch', '--fuzz=0', '-p1', '-i',
-                str(repo/'packages/multimedia/libbluray/patches/0002-navigation-read-boundary.patch')],
-                cwd=folder, capture_output=True, text=True)
-            self.assertEqual(patched.returncode, 0, patched.stdout + patched.stderr)
             native = folder/'src/libbluray/decoders/m2ts_filter.c'
             source = native.read_text()
             signature = source.split('M2TS_FILTER *m2ts_filter_init(', 1)[1].split('{', 1)[0]

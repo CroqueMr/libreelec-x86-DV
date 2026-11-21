@@ -30,9 +30,25 @@ PKG_MESON_OPTS_TARGET="-Ddefault_library=shared \
                        -Dfreetype=enabled \
                        -Dlibxml2=enabled"
 
+CB1_BLURAY_SOURCE_REPOSITORY="https://github.com/CroqueMr/libbluray-cb1"
+CB1_BLURAY_SOURCE_COMMIT="ae3017f3cb97ec9052041b1cebb570c35d523a08"
+CB1_BLURAY_SOURCE_SHA256="58d96fa60e62a500d9d231c560fa166c495bdfc68214a5a612176aafd1f88d8a"
+
 if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
-  PKG_DEPENDS_UNPACK+=" jdk-${MACHINE_HARDWARE_NAME}-zulu"
+  PKG_URL="${CB1_BLURAY_SOURCE_REPOSITORY}/archive/${CB1_BLURAY_SOURCE_COMMIT}.tar.gz"
+  PKG_SOURCE_NAME="${PKG_NAME}-${CB1_BLURAY_SOURCE_COMMIT}.tar.gz"
+  PKG_SOURCE_DIR="libbluray-cb1-${CB1_BLURAY_SOURCE_COMMIT}"
+  PKG_SHA256="${CB1_BLURAY_SOURCE_SHA256}"
+  PKG_SKIP_PATCHES="yes"
+  PKG_DEPENDS_UNPACK+=" jdk-${MACHINE_HARDWARE_NAME}-zulu cb1-udfread-source"
 fi
+
+post_unpack() {
+  if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
+    # Source archives do not include Git submodules. Keep the original vendored revision.
+    cp -a "$(get_build_dir cb1-udfread-source)/." "${PKG_BUILD}/contrib/libudfread/"
+  fi
+}
 
 configure_package() {
   if [ "${PROJECT}" = "Generic" ] && [ "${TARGET_ARCH}" = "x86_64" ]; then
