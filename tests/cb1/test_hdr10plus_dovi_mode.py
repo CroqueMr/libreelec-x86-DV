@@ -768,6 +768,7 @@ struct Picture {
  StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10PLUS;
  StreamHdrType hdrTypeAlt=StreamHdrType::HDR_TYPE_NONE;
  DVBRIDGE::SourceInfo doviSourceInfo{};DVBRIDGE::SourceBinding doviSourceBinding{5,6,7};
+ bool IsLimitedHLG8() const {return false;}
  int64_t doviSourcePts=1000;unsigned iFlags=0;std::string stereoMode;
  std::shared_ptr<const VideoSourceSideData> sourceSideData;
 };

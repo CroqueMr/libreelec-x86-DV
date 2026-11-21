@@ -387,8 +387,10 @@ int main(){
         selection=source[source.index('  auto& buffer ='):source.index('  const auto texture =')]
         hdr_types=body((TREE/'xbmc/cores/VideoPlayer/Interface/StreamInfo.h').read_text(),
                        'enum class StreamHdrType')
-        eligible=body((TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text(),
-                      'inline bool IsHDR10AIInput(')
+        source_type = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/HDR10SourceType.h').read_text()
+        eligible = body(source_type, 'inline bool IsHDR10AIInput(')
+        picture_type = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h').read_text()
+        limited_hlg = body(picture_type, 'bool IsLimitedHLG8() const') if 'bool IsLimitedHLG8() const' in picture_type else '{return false;}'
         execute(r'''
 #include <cassert>
 #include <cmath>
@@ -409,9 +411,14 @@ inline bool IsHDR10AIInput(StreamHdrType source,bool guided) ELIGIBLE
 inline bool IsHDR10Family(StreamHdrType source){return IsHDR10AIInput(source,true) || source==StreamHdrType::HDR_TYPE_HLG;}
 }
 struct Binding{bool Valid()const{return true;}};
+enum{AVCOL_TRC_ARIB_STD_B67=1,AVCOL_PRI_BT2020=2,AVCOL_SPC_BT2020_NCL=3};
 struct Picture{StreamHdrType hdrType=StreamHdrType::HDR_TYPE_HDR10;
  Binding doviSourceBinding;struct{int profile=0;}doviSourceInfo;
- int64_t doviSourcePts=1000000;double pts=1000000;};
+ int64_t doviSourcePts=1000000;double pts=1000000;
+ int colorBits=8,color_range=0,color_transfer=AVCOL_TRC_ARIB_STD_B67;
+ int color_primaries=AVCOL_PRI_BT2020,color_space=AVCOL_SPC_BT2020_NCL;
+ bool colorPrimariesGuessed=false;
+ bool IsLimitedHLG8() const LIMITED_HLG};
 struct Metadata{const void* Data(){return this;}::Binding Binding(){return {};}};
 struct Layer{int width,height,layout,scalingMethod,autoScalingMethod;double pts;::Binding binding;};
 struct Renderer{
@@ -432,8 +439,20 @@ int main(){
  r.m_buffers[0].doviSourcePicture->hdrType=StreamHdrType::HDR_TYPE_DOLBYVISION;
  r.m_buffers[0].doviSourcePicture->doviSourceInfo.profile=7;
  assert(r.Build(replayed) && replayed.pts==1.25);
+ auto& picture=*r.m_buffers[0].doviSourcePicture;
+ picture.doviSourceInfo.profile=0;picture.hdrType=StreamHdrType::HDR_TYPE_HLG;
+ picture.pts=1000000;r.m_vaapiFourcc=VA_FOURCC_NV12;
+ #if SOURCE_SUPPORTS_HLG8
+ assert(r.Build(replayed) && replayed.layout==DVBRIDGE_NV12);
+ picture.color_range=1;assert(!r.Build(replayed));
+ picture.color_range=0;picture.color_transfer=0;assert(!r.Build(replayed));
+ picture.color_transfer=AVCOL_TRC_ARIB_STD_B67;picture.colorPrimariesGuessed=true;
+ assert(!r.Build(replayed));
+ picture.colorPrimariesGuessed=false;picture.color_space=0;assert(!r.Build(replayed));
+ #endif
 }
-'''.replace('SELECTION',selection).replace('HDR_TYPES',hdr_types).replace('ELIGIBLE',eligible))
+'''.replace('SELECTION',selection).replace('HDR_TYPES',hdr_types).replace('ELIGIBLE',eligible)
+   .replace('LIMITED_HLG',limited_hlg).replace('SOURCE_SUPPORTS_HLG8',str(int(limited_hlg != '{return false;}'))))
 
     def test_ai_capture_horizon_uses_the_same_repaired_presentation_timeline(self):
         source=body((TREE/'xbmc/cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.cpp').read_text(),
