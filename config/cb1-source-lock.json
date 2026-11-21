@@ -342,7 +342,7 @@
     "tests/cb1/test_ci_patch_inputs.py": "d9731468cd6fb269db2d135c89e4a7542f9c5bdb1fe90e00f28cbffd19e310a3",
     "tests/cb1/test_hlg_startup.py": "daf3d8c10e4ae1a12a1cdb9788d433cab300f1e553b4fe5bc0a0aadda8041496",
     "tests/cb1/sdr_direct_provenance.cpp": "9ed06395cd659bd766d47791b11393ad892d84506c1cfdadc640f3db4f7e8fb9",
-    "tests/cb1/test_sdr_direct_integration.py": "f701374d9c8088e7872a4b094f2b30e246e879dbdecb56a65b625d903a324ac8",
+    "tests/cb1/test_sdr_direct_integration.py": "24a9bf35020a48c36d9d369a68a3e0bacffafd6fb0ce4bf9deba0bffe9d64521",
     "tests/cb1/test_sdr_render.py": "6743c46e6c3bc73e3b345b856bec00f6ef5f1415bb05251276ccc68e320c5029",
     "tests/cb1/sdr_direct_owners.cpp": "20f892bba6e379292998d3c031bc07552cda4dabc9aa793b781a7578b406a679",
     "CB1/tests/gui_coverage_alpha.cpp": "f0e2113976cffe282fec7ce527ae09c8c7f0a45ee8f5979978ba682f36f5470e",

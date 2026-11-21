@@ -38,9 +38,10 @@ class SDRDirectIntegration(unittest.TestCase):
         start = decoder.index('  pVideoPicture->doviMetadata.Reset();')
         decoded = decoder[start:decoder.index('  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_HDR10 ||',start)]
         # The Generic fixture exercises CB1 source ownership without native RPU export.
-        native_export = decoded.index('  pVideoPicture->doviRpu.reset();')
-        metadata_owner = decoded.index('  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)\n  {', native_export)
-        decoded = decoded[:native_export] + decoded[metadata_owner:]
+        native_export = decoded.find('  pVideoPicture->doviRpu.reset();')
+        if native_export != -1:
+            metadata_owner = decoded.index('  if (pVideoPicture->hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION)\n  {', native_export)
+            decoded = decoded[:native_export] + decoded[metadata_owner:]
         start = producer.index('  layer.lease=buffer.doviSourcePicture;')
         layer_copy = producer[start:producer.index('  layer.sourceSerial=',start)]
         hints = (TREE/'xbmc/cores/VideoPlayer/DVDStreamInfo.cpp').read_text()
