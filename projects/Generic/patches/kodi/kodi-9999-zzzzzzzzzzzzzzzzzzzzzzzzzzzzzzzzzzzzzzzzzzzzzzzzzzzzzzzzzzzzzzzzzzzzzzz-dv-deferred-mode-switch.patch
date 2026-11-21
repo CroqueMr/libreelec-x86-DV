@@ -1,0 +1,121 @@
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h
+@@ -218,6 +218,7 @@
+   CCriticalSection m_datalock;
+   bool m_bTriggerUpdateResolution = false;
+   std::atomic_bool m_nativeDVRate{false};
++  std::atomic_bool m_bResetDVModeSwitchDeferral{false};
+   bool m_bRenderGUI = true;
+   bool m_renderedDebugOverlay = false;
+   bool m_renderDebug = false;
+--- a/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
++++ b/xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp
+@@ -1326,14 +1326,19 @@
+         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+ #ifdef HAVE_DVBRIDGE
+         DVBRIDGE::guiModeChangeResolution = previous;
+-        if (m_nativeDVRate)
+-          if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+-          {
+-            // A deferred retirement has not attempted the selected modeset yet.
+-            if (window->GetGfxContext().GetVideoResolution() != res &&
+-                window->DVModeSwitchDeferred()) return;
++        if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
++                CServiceBroker::GetWinSystem()))
++        {
++          if (m_bResetDVModeSwitchDeferral.exchange(false))
++            window->ResetDVModeSwitchDeferral();
++          // A deferred retirement has not attempted the selected modeset yet.
++          if (window->GetGfxContext().GetVideoResolution() != res &&
++              window->DVModeSwitchDeferred())
++            return;
++          window->ResetDVModeSwitchDeferral();
++          if (m_nativeDVRate)
+             m_nativeDVRate = window->CompleteDVModeSwitch(m_picture);
+-          }
++        }
+ #endif
+         UpdateLatencyTweak();
+         if (m_pRenderer)
+@@ -1358,6 +1363,7 @@
+     m_picture.iHeight = height;
+     m_picture.stereoMode = stereomode;
+   }
++  m_bResetDVModeSwitchDeferral = true;
+   m_bTriggerUpdateResolution = true;
+ }
+ 
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.h
+@@ -104,11 +104,8 @@
+   std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,
+                                                            int preference) const;
+   bool LldvSupportsPlaybackTiming(double fps, bool requireCurrentMode = false) const;
+-  bool DVModeSwitchDeferred()
+-  {
+-    return !m_dvRollbackFailed && m_dvShutdownFence && m_dvContext &&
+-        m_dvContext->Poll() != DVBRIDGE_DV_FAILED;
+-  }
++  bool DVModeSwitchDeferred();
++  void ResetDVModeSwitchDeferral() { m_dvModeSwitchDeferStartMs.reset(); }
+   void ObserveDVImport(DVBRIDGE::SourceBinding binding, dvbridge_geometry geometry, bool usable);
+   DVBRIDGE::OutputSelection SelectedDVOutput(const VideoPicture* picture) const;
+   DVBRIDGE::OutputReason ConsumeDVPlaybackFailure(DVBRIDGE::SourceBinding binding);
+@@ -276,6 +273,7 @@
+   double m_preparedSourcePts{};
+   double m_cb1RenderPts{}, m_preparedRenderPts{};
+   bool m_dvShutdownFence{};
++  std::optional<uint64_t> m_dvModeSwitchDeferStartMs;
+   bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
+   bool PollRejectedDVSurface();
+   bool PrepareOrdinaryDVOutput(const VideoPicture* picture);
+--- a/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
++++ b/xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp
+@@ -2034,6 +2034,39 @@
+   return false;
+ }
+ 
++bool CWinSystemGbmGLESContext::DVModeSwitchDeferred()
++{
++  constexpr uint64_t DEFER_TIMEOUT_MS = 2000;
++  const bool pending =
++      !m_dvRollbackFailed &&
++      (m_dvEndPending ||
++       (m_dvShutdownFence && m_dvContext && m_dvContext->Poll() != DVBRIDGE_DV_FAILED));
++  if (!pending)
++  {
++    m_dvModeSwitchDeferStartMs.reset();
++    return false;
++  }
++  const uint64_t now = DVBRIDGE::DiagnosticNowMs();
++  if (!m_dvModeSwitchDeferStartMs)
++  {
++    m_dvModeSwitchDeferStartMs = now;
++    CLog::Log(LOGINFO,
++              "CB1: deferring mode switch pending DV retirement (end_pending={} shutdown_fence={})",
++              m_dvEndPending, m_dvShutdownFence);
++  }
++  const uint64_t elapsed =
++      now >= *m_dvModeSwitchDeferStartMs ? now - *m_dvModeSwitchDeferStartMs : 0;
++  if (elapsed >= DEFER_TIMEOUT_MS)
++  {
++    CLog::Log(LOGWARNING,
++              "CB1: deferred mode switch timed out after {} ms (end_pending={} shutdown_fence={})",
++              elapsed, m_dvEndPending, m_dvShutdownFence);
++    m_dvModeSwitchDeferStartMs.reset();
++    return false;
++  }
++  return true;
++}
++
+ void CWinSystemGbmGLESContext::ObserveDVImport(DVBRIDGE::SourceBinding binding,
+                                               dvbridge_geometry geometry, bool usable)
+ {
+@@ -4102,6 +4135,7 @@
+ bool CWinSystemGbmGLESContext::DestroyWindowSystem()
+ {
+   m_modeHold.Cancel();
++  m_dvModeSwitchDeferStartMs.reset();
+   if (!EndDVBridge())
+     return false;
+   m_dvBridge.reset();

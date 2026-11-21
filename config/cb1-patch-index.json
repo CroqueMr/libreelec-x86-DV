@@ -1950,7 +1950,7 @@
     "owner": "Keep the Stable video settings and LLDV output readable.",
     "files": {
       "addons/resource.language.en_gb/resources/strings.po": "Keep subordinate labels consistent.",
-      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuaryâ€™s native dialog controls.",
+      "addons/skin.estuary/xml/DialogTextViewer.xml": "Lay out the optional LLDV display facts using Estuary\u00e2\u20ac\u2122s native dialog controls.",
       "addons/skin.estuary/xml/Includes.xml": "Show optional inline format notes in the compact select list.",
       "addons/skin.estuary/xml/Includes_DialogSelect.xml": "Show EDID diagnostics beside the LLDV format list.",
       "system/settings/settings.xml": "Group playback and scaling settings and expose SDR controls only for applicable defaults.",
@@ -1958,7 +1958,7 @@
       "xbmc/cores/VideoPlayer/VideoRenderers/DVBridgeGLES.cpp": "Keep asynchronous preparation enabled and present CPU-packed LLDV in scanout order.",
       "xbmc/dialogs/DVPlaybackModes.cpp": "Keep connector diagnostics outside the selectable items.",
       "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Show the signal, HDMI format and one coordinate pair per primary.",
-      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodiâ€™s native text viewer without closing the LLDV selector."
+      "xbmc/dialogs/GUIDialogSelect.cpp": "Open Kodi\u00e2\u20ac\u2122s native text viewer without closing the LLDV selector."
     }
   },
   "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-stable-playback-circuits.patch": {
@@ -2324,7 +2324,7 @@
   "projects/Generic/patches/linux/linux-9973-intel-legacy-lldv.patch": {
     "owner": "Reuse the experimental packed LLDV path on additional Intel HDMI engines.",
     "files": {
-      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit Display9â€“12 and Battlemage under the existing link guards, with bounded connector diagnostics."
+      "drivers/gpu/drm/i915/display/intel_hdmi.c": "Admit Display9\u00e2\u20ac\u201c12 and Battlemage under the existing link guards, with bounded connector diagnostics."
     }
   },
   "projects/Generic/patches/linux/linux-9972-rx550-lldv.patch": {
@@ -2447,6 +2447,15 @@
       "xbmc/windowing/gbm/WinSystemGbmEGLContext.h": "Declare NVIDIA drawable retirement helpers.",
       "xbmc/windowing/gbm/drm/DRMUtils.cpp": "Recognize the NVIDIA DRM backend from the selected device.",
       "xbmc/windowing/gbm/drm/DRMUtils.h": "Keep the EGL/GBM ownership quirk scoped to NVIDIA."
+    }
+  },
+  "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-dv-deferred-mode-switch.patch": {
+    "owner": "Retry deferred DV context retirement on non-DV refresh-rate switches and bound deferral duration.",
+    "files": {
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.h": "Track fresh resolution triggers so the deferral timeout budget resets across streams.",
+      "xbmc/cores/VideoPlayer/VideoRenderers/RenderManager.cpp": "Keep deferred DV mode-switch retries active for non-DV targets and reset the deferral timer when resolved.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.h": "Declare out-of-line DVModeSwitchDeferred(), ResetDVModeSwitchDeferral(), and deferral start timestamp.",
+      "xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp": "Defer on pending EndDVBridge() pageflips as well as RetireDVContext() fences, bounded by a 2,000 ms timeout."
     }
   }
 }
