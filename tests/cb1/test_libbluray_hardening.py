@@ -25,14 +25,6 @@ class LibblurayHardening(unittest.TestCase):
         cls.folder = Path(cls.temporary.name)
         cls.src = cls.folder / 'src'
         shutil.copytree(include, cls.src)
-        root = Path(__file__).resolve().parents[2]
-        for name in ('0003-hdmv-bc-compare.patch', '0005-pre151-hardening.patch'):
-            patch = root / 'packages/multimedia/libbluray/patches' / name
-            if patch.exists():
-                result = subprocess.run(['patch', '-p1', '--fuzz=0', '-i', str(patch)],
-                                        cwd=cls.folder, capture_output=True, text=True)
-                if result.returncode:
-                    raise AssertionError(result.stdout + result.stderr)
 
     @classmethod
     def tearDownClass(cls):

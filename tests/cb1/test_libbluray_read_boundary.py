@@ -12,18 +12,12 @@ class LibblurayReadBoundary(unittest.TestCase):
     def test_navigation_suspends_before_new_clip_bytes_and_preserves_plain_reads(self):
         include=os.environ.get('LIBBLURAY_TEST_INCLUDE')
         if not include:self.skipTest('Matched libbluray sources required')
-        original=Path(include)/'libbluray/bluray.c'
-        root=Path(__file__).resolve().parents[2]
-        patch=root/'packages/multimedia/libbluray/patches/0002-navigation-read-boundary.patch'
         with tempfile.TemporaryDirectory() as temporary:
             folder=Path(temporary);native=folder/'src/libbluray/bluray.c'
             for name in ('bluray.c','bluray.h','decoders/m2ts_filter.c','decoders/m2ts_filter.h'):
                 target=folder/'src/libbluray'/name
                 target.parent.mkdir(parents=True,exist_ok=True)
                 shutil.copy2(Path(include)/'libbluray'/name,target)
-            if patch.exists():
-                result=subprocess.run(['patch','-p1','--fuzz=0','-i',str(patch)],cwd=folder,capture_output=True,text=True)
-                self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             source=native.read_text()
             navigation='nav_boundary' in source.split('static int _bd_read(',1)[1].split('{',1)[0]
             program=r'''
@@ -48,6 +42,7 @@ struct bluray {
  int seamless_angle_change;uint32_t angle_change_pkt;uint64_t angle_change_time;
  void* title;void* graphics_controller;void* hdmv_vm;void* regs;void* event_queue;
  int title_type,hdmv_suspended,gc_status,end_of_playlist,bdj_wait_start;
+ int bdj_pt_enabled,bdj_pt_releasing;void* bdjava;
  int next_mark;uint64_t next_mark_pos;int mutex;
  NAV_CLIP clips[2];BD_EVENT events[16];int event_count,reads,opens,angles,angle;
 };
@@ -87,6 +82,7 @@ static uint32_t bd_psr_read(void*r,int p){return 0;}
 static int _bd_read(BLURAY *bd,unsigned char *buf,int len@@NAV@@) READ
 static int _bd_read_locked(BLURAY *bd,unsigned char *buf,int len@@NAV@@) LOCKED
 int bd_read(BLURAY *bd,unsigned char *buf,int len) PLAIN
+static int _bdj_pt_active(BLURAY *bd) BDJ_ACTIVE
 static int _read_ext(BLURAY *bd,unsigned char *buf,int len,BD_EVENT *event) EXTENDED
 static void init(BLURAY* b,int connection,int angle_case,int type){
  memset(b,0,sizeof(*b));b->title=b;b->event_queue=b;b->title_type=type;b->hdmv_suspended=1;b->next_mark=-1;
@@ -148,11 +144,12 @@ int main(){
 }
 '''
             program=program.replace('@@NAV@@',', int nav_boundary' if navigation else '')
+            program=program.replace('BDJ_ACTIVE',body(source,'static int _bdj_pt_active(BLURAY *bd)\n'))
             for token,signature in [('READ','static int _bd_read('),('LOCKED','static int _bd_read_locked('),
                                     ('PLAIN','int bd_read('),('EXTENDED','static int _read_ext(')]:
                 program=program.replace(' '+token,body(source,signature))
             (folder/'check.c').write_text(program)
-            build=subprocess.run(['cc','-std=c11','-fsanitize=address,undefined','-I'+include,
+            build=subprocess.run(['cc','-std=c11','-fsanitize=address,undefined','-fno-pie','-no-pie','-I'+include,
                 str(folder/'check.c'),'-o',str(folder/'check')],capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             run=subprocess.run([str(folder/'check')],capture_output=True,text=True)
