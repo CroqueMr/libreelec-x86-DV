@@ -47,6 +47,7 @@ struct CRenderManager{
  bool m_aiQueuePreparationStale=false,m_showVideo=false,m_aiStartupBuffered=false;
  double m_aiStartPts=40000000;
  Slot m_Queue[3];std::deque<int> m_queued,m_discard,m_free;
+ bool m_discMenuBufferInvalidated=false;
  int m_presentsource=1,m_presentsourcePast=0,m_presentstep=PRESENT_FRAME,m_QueueSize=3;
  bool m_cb1PresentPending=true,m_cb1OutputPending=true;
  std::deque<int> observed;
@@ -60,6 +61,7 @@ int main(){
  CRenderManager retained;retained.Flush(true);
  assert(retained.m_aiQueueGeneration==9 && retained.m_aiStartPts==40000000);
  assert(retained.m_aiFullscreenRequested && !retained.m_aiGuiReady);
+ assert(retained.m_discMenuBufferInvalidated);
  assert(retained.m_presentstep==PRESENT_FRAME && retained.m_presentsource==1);
  assert(retained.m_cb1PresentPending);
  assert(!retained.m_clockSync.m_cb1Phase && retained.m_clockSync.offset==0);
