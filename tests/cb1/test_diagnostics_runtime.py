@@ -712,7 +712,8 @@ struct CServiceBroker {
 struct Admission {bool usable=false; DVBRIDGE::OutputReason reason{};};
 struct Caps {unsigned generation=1;bool nativeDV=false,hdr10=false,hdr10plus=false,processingKnown=false;
   std::array<Admission,7> processing{},hdr10Processing{};};
-inline int eglGetCurrentContext() {return 1;}
+inline int currentEglContext = 1;
+inline int eglGetCurrentContext() {return currentEglContext;}
 inline bool pl_opengl_has_ext(int,const char*) {return true;}
 inline bool dvbridge_renderer_supports_mode(int*,dvbridge_mode) {return true;}
 inline bool dvbridge_renderer_supports_hdr10_ai(int*,dvbridge_mode) {return true;}
@@ -766,6 +767,9 @@ struct CWinSystemGbmGLESContext:CWinSystemGbm,CRenderSystemGLES {
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool m_dvAvailableNativeDV=false,m_dvAvailableHDR10=false;
+  uint64_t m_dvStartupEdidUntil{};
+  uint32_t m_lastMasterConnector{42};
+  bool PendingDVStartupEdid() const {return m_dvStartupEdidUntil != 0;}
   DVBRIDGE::LldvConnectorStatus m_dvLldvStatus{};
   std::vector<DVOutputTiming> m_dvOutputTimings;
   DVBRIDGE::LldvConnectorStatus GetLldvConnectorStatus(bool = false) const {return m_dvLldvStatus;}
@@ -798,6 +802,18 @@ int main() {
   w.m_DRM->accept=true; w.m_DRM->receipt=false;
   assert(w.SetFullScreen(true,film,false));
   assert(!w.m_dvCapabilities.nativeDV); // A test/request is not an accepted mode.
+  w.m_dvStartupEdidUntil=1;
+  w.m_dvLldvStatus.display.expected=256;
+  w.m_dvLldvStatus.display.received=128;
+  w.RefreshDVOutputCapabilities();
+  assert(w.PendingDVStartupEdid());
+  w.m_dvLldvStatus.display.received=256;
+  currentEglContext=EGL_NO_CONTEXT;
+  w.RefreshDVOutputCapabilities();
+  assert(w.PendingDVStartupEdid());
+  currentEglContext=1;
+  w.RefreshDVOutputCapabilities();
+  assert(!w.PendingDVStartupEdid());
 }
 ''')
 
