@@ -209,7 +209,10 @@ struct Gfx {
 };
 namespace KODI::WINDOWING::GBM {struct CWinSystemGbmGLESContext {
  Gfx gfx;Gfx& GetGfxContext(){return gfx;}
- bool DVModeSwitchDeferred(){return gfx.deferred;}bool CompleteDVModeSwitch(const Picture&){return true;}
+ int completeCalls=0,deferralResets=0;
+ bool DVModeSwitchDeferred(){return gfx.deferred;}
+ void ResetDVModeSwitchDeferral(){++deferralResets;}
+ bool CompleteDVModeSwitch(const Picture&){++completeCalls;return true;}
 };}
 struct Settings {int adjust=2;Settings* GetSettings(){return this;}int GetInt(const char*){return adjust;}};
 struct CServiceBroker {
@@ -220,14 +223,17 @@ struct CResolutionUtils {static int ChooseBestResolution(float,int,int,bool){ret
 struct Renderer {int updates=0;void Update(){++updates;}};
 struct Port {int changes=0;void VideoParamsChange(){++changes;}};
 struct Manager {
- bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;float m_fps=24;Picture m_picture;
+ bool m_bTriggerUpdateResolution=true,m_nativeDVRate=true;
+ std::atomic_bool m_bResetDVModeSwitchDeferral{false};
+ float m_fps=24;Picture m_picture;
  Renderer renderer,*m_pRenderer=&renderer;Port port,*m_playerPort=&port;
  int ChoosePlaybackResolution(double fps,int width,int height,bool stereo,bool,bool,const Picture*)const{return CResolutionUtils::ChooseBestResolution(fps,width,height,stereo);}
  void UpdateLatencyTweak(){}
  void update() METHOD
 };
 int main(){
- auto& gfx=CServiceBroker::GetWinSystem()->gfx;
+ auto& win=*CServiceBroker::GetWinSystem();
+ auto& gfx=win.gfx;
  // The initial request can be a no-op; the render manager owns the later switch.
  Manager native;native.update();assert(gfx.intent==24 && gfx.resolution==24);
  assert(DVBRIDGE::modeChangeResolution.load()==-1 && !native.m_bTriggerUpdateResolution);
@@ -237,7 +243,18 @@ int main(){
  assert(gfx.intent==-1 && DVBRIDGE::modeChangeResolution.load()==90);
  gfx.deferred=true;gfx.resolution=60;Manager deferred;deferred.update();
  assert(gfx.intent==24 && DVBRIDGE::modeChangeResolution.load()==90 && deferred.m_bTriggerUpdateResolution);
- gfx.deferred=false;
+ // Non-DV incoming transitions (e.g., DV -> 60p HDR10/SDR) also preserve retry until retirement completes.
+ gfx.deferred=true;gfx.resolution=60;
+ int beforeComplete=win.completeCalls,beforeReset=win.deferralResets;
+ Manager ordinaryDeferred;ordinaryDeferred.m_nativeDVRate=false;
+ ordinaryDeferred.m_bResetDVModeSwitchDeferral=true;
+ ordinaryDeferred.update();
+ assert(gfx.intent==-1 && ordinaryDeferred.m_bTriggerUpdateResolution);
+ assert(!ordinaryDeferred.m_bResetDVModeSwitchDeferral.load());
+ assert(win.deferralResets==beforeReset+1 && win.completeCalls==beforeComplete);
+ gfx.deferred=false;ordinaryDeferred.update();
+ assert(gfx.resolution==24 && !ordinaryDeferred.m_bTriggerUpdateResolution);
+ assert(win.deferralResets==beforeReset+2 && win.completeCalls==beforeComplete);
  DVBRIDGE::modeChangeResolution.store(-1);gfx.interleave=true;Manager overlap;overlap.update();
  assert(gfx.intent==24 && DVBRIDGE::modeChangeResolution.load()==90);
  assert(!DVBRIDGE::guiModeChangeResolution.has_value());gfx.interleave=false;
@@ -250,6 +267,75 @@ int main(){
             root=Path(temporary);(root/'test.cpp').write_text(program)
             build=subprocess.run(['c++','-std=c++20',str(root/'test.cpp'),'-o',str(root/'test')],
                                  capture_output=True,text=True)
+            self.assertEqual(build.returncode,0,build.stderr)
+            result=subprocess.run([str(root/'test')],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_dv_mode_switch_deferred_timeout_and_reset(self):
+        source=(TREE/'xbmc/windowing/gbm/WinSystemGbmGLESContext.cpp').read_text()
+        method=body(source,'bool CWinSystemGbmGLESContext::DVModeSwitchDeferred()')
+        program=r'''
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <optional>
+constexpr int LOGINFO=0,LOGWARNING=1;
+constexpr int DVBRIDGE_DV_IDLE=0,DVBRIDGE_DV_BUSY=1,DVBRIDGE_DV_FAILED=2;
+struct CLog {
+ static inline int info=0,warn=0;
+ template<class... T> static void Log(int level,const char*,T...) {
+  if(level==LOGINFO)++info; else if(level==LOGWARNING)++warn;
+ }
+};
+namespace DVBRIDGE {
+ inline uint64_t nowMs=0;
+ inline uint64_t DiagnosticNowMs(){return nowMs;}
+}
+struct Context { int status=DVBRIDGE_DV_BUSY; int Poll() const {return status;} };
+struct Window {
+ bool m_dvRollbackFailed=false,m_dvEndPending=false,m_dvShutdownFence=false;
+ std::optional<uint64_t> m_dvModeSwitchDeferStartMs;
+ std::shared_ptr<Context> m_dvContext=std::make_shared<Context>();
+ void ResetDVModeSwitchDeferral(){m_dvModeSwitchDeferStartMs.reset();}
+ bool DVModeSwitchDeferred() METHOD
+};
+int main(){
+ Window w;
+ DVBRIDGE::nowMs=100;
+ assert(!w.DVModeSwitchDeferred());
+ // Fence busy: arms timer once, retries up to 2000 ms, times out at >= 2000 ms.
+ w.m_dvShutdownFence=true;
+ assert(w.DVModeSwitchDeferred() && CLog::info==1 && CLog::warn==0);
+ DVBRIDGE::nowMs=1000;
+ assert(w.DVModeSwitchDeferred() && CLog::info==1 && CLog::warn==0);
+ DVBRIDGE::nowMs=2099;
+ assert(w.DVModeSwitchDeferred() && CLog::info==1 && CLog::warn==0);
+ DVBRIDGE::nowMs=2100;
+ assert(!w.DVModeSwitchDeferred() && CLog::info==1 && CLog::warn==1);
+ assert(!w.m_dvModeSwitchDeferStartMs.has_value());
+ // Pending EndDVBridge KMS pageflip also defers cleanly with fresh budget after timeout/reset.
+ w.m_dvShutdownFence=false;w.m_dvEndPending=true;
+ DVBRIDGE::nowMs=5000;
+ assert(w.DVModeSwitchDeferred() && CLog::info==2 && CLog::warn==1);
+ DVBRIDGE::nowMs=6500;
+ assert(w.DVModeSwitchDeferred());
+ w.ResetDVModeSwitchDeferral();
+ assert(!w.m_dvModeSwitchDeferStartMs.has_value());
+ // Immediate abort on DVBRIDGE_DV_FAILED or m_dvRollbackFailed.
+ w.m_dvEndPending=false;w.m_dvShutdownFence=true;
+ DVBRIDGE::nowMs=7000;
+ assert(w.DVModeSwitchDeferred() && CLog::info==3);
+ w.m_dvContext->status=DVBRIDGE_DV_FAILED;
+ assert(!w.DVModeSwitchDeferred() && !w.m_dvModeSwitchDeferStartMs.has_value());
+ w.m_dvContext->status=DVBRIDGE_DV_BUSY;w.m_dvRollbackFailed=true;
+ assert(!w.DVModeSwitchDeferred() && !w.m_dvModeSwitchDeferStartMs.has_value());
+}
+'''.replace('METHOD',method)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'test.cpp').write_text(program)
+            build=subprocess.run(['c++','-std=c++20','-fsanitize=address,undefined',
+                '-fno-omit-frame-pointer',str(root/'test.cpp'),'-o',str(root/'test')],
+                capture_output=True,text=True)
             self.assertEqual(build.returncode,0,build.stderr)
             result=subprocess.run([str(root/'test')],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
