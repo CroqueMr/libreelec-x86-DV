@@ -334,7 +334,13 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
         self.assertLess(opening.index('window->PendingDVStartupEdid()'), capture_at_open)
         self.assertLess(capture_at_open, opening.index('ChoosePlaybackResolution('))
         self.assertLess(capture_at_open, opening.index('player->OpenStream(hint)'))
-        self.assertEqual(video.count('SelectDVStartupOutput('), 3)
+        expected = 3
+        if 'm_dvStartupPlaybackPending' in video:
+            retry = body(opening, 'if (lldvRateFallback &&')
+            self.assertIn('SelectDVStartupOutput(', retry)
+            self.assertIn('PlaybackNotification::StartVideo()', retry)
+            expected += 1
+        self.assertEqual(video.count('SelectDVStartupOutput('), expected)
         hits=[]
         for source in (TREE/'xbmc').rglob('*.cpp'):
             if 'SelectOutputSettings(' in source.read_text(errors='replace'): hits.append(source.relative_to(TREE).as_posix())

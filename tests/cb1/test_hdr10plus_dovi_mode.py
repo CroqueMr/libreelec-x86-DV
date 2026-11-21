@@ -528,10 +528,16 @@ struct Setting {std::string id;const std::string& GetId()const{return id;}};
 struct Option {explicit Option(int n):value(n){} int value;std::string label,label2;
  std::vector<std::pair<std::string,bool>> properties;};
 struct Localizer {std::string Get(int id)const{return std::to_string(id);}};
+struct StringUtils {
+ static std::string Format(const std::string& label,const std::string& rate) {
+   return label+" "+rate;
+ }
+};
 void admit(const std::shared_ptr<const Setting>& setting,std::vector<Option>& list,
  const DVBRIDGE::OutputCapabilities& caps){
  const DVBRIDGE::OutputPreferences preferences;const Localizer localizer;
  constexpr bool pending=false;
+ constexpr double lldvUnsupportedRate=0.0;
  ADMISSION
 }
 int main(){

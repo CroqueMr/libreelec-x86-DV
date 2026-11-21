@@ -14,10 +14,20 @@ class ModeHoldTests(unittest.TestCase):
         trigger = opening.index('m_renderManager.TriggerUpdateResolution', resolve)
         mode = opening[resolve:trigger]
         synchronous = body(mode, 'if (!pMenus && !dvStartupModeSet)')
-        startup = body(opening, 'if (window && !m_HasVideo && !pMenus && !hint.interlaced')
-        callback = body(startup, 'auto setStartupMode = [&]')
+        if 'm_dvStartupPlaybackPending' in opening:
+            startup = body(opening, 'if (window && m_dvStartupPlaybackPending && !pMenus && !hint.interlaced')
+            callback = body(startup, 'auto setStartupMode = [&]')
+            selector = body(startup, 'auto selectPlayerLedFallback = [&]')
+            self.assertIn('selectPlayerLedFallback(', callback)
+            self.assertIn('PlayerLedStartupHDR10Resolution(', selector)
+            self.assertIn('GetDVOutputCapabilities(nullptr, true).playerLed', selector)
+            self.assertIn('m_dvStartupPlaybackPending = true;', body(source, 'void CVideoPlayer::Prepare('))
+            self.assertIn('m_dvStartupPlaybackPending = false;', opening)
+        else:
+            startup = body(opening, 'if (window && !m_HasVideo && !pMenus && !hint.interlaced')
+            callback = body(startup, 'auto setStartupMode = [&]')
+            self.assertIn('PlayerLedStartupHDR10Resolution(', callback)
         self.assertIn('ChoosePlaybackResolution(', callback)
-        self.assertIn('PlayerLedStartupHDR10Resolution(', callback)
         self.assertIn('SetVideoResolution(resolution, false)', callback)
         self.assertIn('SendMsg(TMSG_CALLBACK', startup)
         self.assertEqual(mode.count('SetVideoResolution('), 1)

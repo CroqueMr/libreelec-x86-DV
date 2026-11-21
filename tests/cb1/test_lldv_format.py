@@ -522,7 +522,7 @@ struct Window
   bool LldvSupportsPlaybackTiming(double) const{return true;}
   std::optional<RESOLUTION> Choose(double fps,bool atStartup=false) const CHOOSE_BODY
   int PlayerLedResolutionReason(RESOLUTION resolution,int preference) const REASON_BODY
-  std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,int preference) const FALLBACK_BODY
+  std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution,int preference,bool sourceRateTooHigh=false) const FALLBACK_BODY
 };
 
 int main()
@@ -581,6 +581,12 @@ int main()
   assert(!window.Choose(film,true));
 }
 '''.replace('CHOOSE_BODY', choose).replace('REASON_BODY', reason).replace('FALLBACK_BODY', fallback)
+        if 'sourceRateTooHigh' in fallback:
+            program = program.replace(
+                '  assert(!window.PlayerLedStartupHDR10Resolution(4,0));',
+                '  assert(window.PlayerLedStartupHDR10Resolution(4,0,true)==4);\n'
+                '  assert(!window.PlayerLedStartupHDR10Resolution(4,0));',
+            )
         run(self, {'test.cpp': program})
 
     def test_menu_keeps_live_forced_format_when_auto_is_unavailable(self):

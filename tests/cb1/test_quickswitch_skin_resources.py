@@ -144,7 +144,7 @@ int main(){
 #include <vector>
 constexpr int LOGINFO=1;
 namespace DVBRIDGE {
-enum class OutputMode{PlayerLed};
+enum class OutputMode{PlayerLed,MasterReference};
 template<class... T>void DiagnosticLog(T...) {}
 }
 struct Value {
@@ -165,7 +165,7 @@ struct Option {int value;std::string label,label2;std::vector<std::pair<std::str
 struct Dialog {std::vector<CFileItem> items;void Add(const CFileItem& i){items.push_back(i);}};
 int main(){
  Dialog d;auto* dialog=&d;
- const bool settingsMenu=false, cb1Active=true, recommendMaster=false;
+ const bool settingsMenu=false, cb1Active=true, recommendMaster=false, recommendLldv=false;
  const int current=2;
  struct {int label,output;} choices[]{{10,0},{11,0},{12,0}};
  struct Strings {std::string Get(int id){return std::to_string(id);}} strings;
