@@ -212,7 +212,7 @@ int main() {
 #include <memory>
 #include <vector>
 enum class StreamHdrType { HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10PLUS };
-enum VCReturn {VC_PICTURE,VC_BUFFER,VC_NONE,VC_FATAL,VC_EOF};
+enum VCReturn {VC_PICTURE,VC_BUFFER,VC_NONE,VC_FATAL,VC_EOF,VC_ERROR,VC_REOPEN,VC_FLUSHED};
 enum { LOGERROR };
 struct CLog { template<class... Args> static void Log(Args...) {} };
 enum { DVD_CODEC_CTRL_POLL=1, DVD_CODEC_CTRL_DRAIN=2, DVEnhancementPendingPictures=16 };

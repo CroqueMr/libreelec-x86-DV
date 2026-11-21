@@ -9,7 +9,7 @@
   },
   "libreelec_revision": "3de4708704041ead8ae1531092efb7ea5da9d355",
   "integration_files": {
-    "packages/multimedia/cb1-engine/patches/44b2b94c418c49b2682f30d954350601dcc1bed6/0001-match-selected-source-receipts.patch": "4ed215a8815d80220f88eedf1ecaa84a99dff4ff173d7d6dea69c93aad1df239",
+    "packages/multimedia/cb1-engine/patches/44b2b94c418c49b2682f30d954350601dcc1bed6/0001-match-selected-source-receipts.patch": "7d2678b396e06e7ceddfb1136a0700bd2a15ebbadc9222264491780a673d99d4",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-player-led-gui-composition.patch": "853b8fb11746f7949c1e93b91fc096140c3114655594c5a734d169c8605d2be2",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-gui-presentation-cadence.patch": "41071577c5512c7e04e2b9707c45831574b98522ac1125527821fec3ebc8cb3f",
     "tests/cb1/test_enhanced_gui_epoch.py": "fea99b62ed10004c2391ceebe77ab81adce8d877888a670d9227c7a0dbbd3b76",
@@ -215,7 +215,7 @@
     "tests/cb1/test_libbluray_video_preroll.py": "50c1d554f9ef905df0c1ae76db2f22f99f8045562f0ca6033874994764655897",
     "tests/cb1/test_bluray_navigation_drain.py": "1ffd4050d99c38b51d5d61b209ad9b4370a7c7af04c85844ca8c9fb8ba2ce1b8",
     "tests/cb1/test_bluray_video_window.py": "db8b191acece4e078689ad0c40c9bf3f8b4ade70a01b75250de3f2f740dac036",
-    "tests/cb1/test_bluray_video_disposition.py": "63d11a7fe8ba157371b40080500b660d20e6a7f7a6b9350d15eb963dd881472d",
+    "tests/cb1/test_bluray_video_disposition.py": "161ee66fe86202a80f4f26490d506690fcc6f4c536d4f5f6f37bc453ddbdd734",
     "tests/cb1/test_decode_startup_diagnostics.py": "0cd5b54cdd366bf153a3d90b9cfb03ab869437a1407c0edd54269cbb49748483",
     "tests/cb1/test_bluray_image_root.py": "f0a6a37b799d386cd28304a7b65adcc163f757ec7a44b4a6db5e3225af7e0dcb",
     "tests/cb1/test_bluray_display_capabilities.py": "0aa81084211675718ea3f3b805de83b2011634852e97d3efbc984de6ba08e747",
@@ -452,7 +452,7 @@
     "projects/Generic/patches/kodi/kodi-9998-blur-label-dirty-region.patch": "ce5919154dec4d314318ea15ebfb59c5dbdabfad5484c96eebed25d1ab2fe5dc",
     "tests/cb1/test_blurred_label_region.py": "2f80f19b5b8e543e32f732c2cd607aed82e728c636687b4b0fca81baaf0a77bf",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-hybrid-input-preference.patch": "20e56e02e1852a5a4f82b61ac475bb37c156b3aded2bf101a8e33e787d518a9f",
-    "tests/cb1/test_hybrid_source_preference.py": "3f885665818660bd68ff9ffda878d50a886d49b2f4e77546795a7f773b9fe629",
+    "tests/cb1/test_hybrid_source_preference.py": "4af246a1d31513d984734d02475d641a0bce6e6ca1827cd498944bc16ce01271",
     "projects/Generic/patches/kodi/kodi-9998-background-playback.patch": "a3399f38cee9cbecd97d97f635f145b942807cca0979f959e7c46017a1b4ffd6",
     "projects/Generic/patches/kodi/kodi-9998-blur-font-style.patch": "a8c40d82c2fd2b2426feb79b1c9bf64f9a8477e5868f94c64964cae046e8fb23",
     "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-lldv-rejected-transport.patch": "7a0a7f1d79d73108fd6ed814480ac0dc3cf2428d460a392eb7ee70ebf71e55f6",
@@ -506,7 +506,7 @@
     "packages/multimedia/ffmpeg/package.mk": "e558754edd73b8ff2daed9594b0c179682fd275a515c9543162258f6ec138ef9",
     "packages/multimedia/cb1-engine/package.mk": "f9f2d9c397b38b0169e886214385933fe1f73b52e2f442fc42e9702f32d17d1f",
     "packages/multimedia/cb1-udfread-source/package.mk": "ec6796161396523fbcee60e9b370d80950fbf1ddb284ada1e53efa93ec648566",
-    "tests/cb1/test_decoder_replay.py": "b59fe23e408bb31abda626849dc498510657cba15594573513492773321262d3"
+    "tests/cb1/test_decoder_replay.py": "5945e13c1edba4e42e5368ef11471681a821cfe652ad2cdc7049979e9d2f3a34"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
