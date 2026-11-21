@@ -20,6 +20,7 @@ struct Picture {
  std::shared_ptr<const VideoSourceSideData>sourceSideData;
 };
 static void admitted(AVStream *bl,AVStream *el,bool transport){
+ constexpr bool bluray=false;
  bool normalize=true;std::unique_ptr<AVCodecParameters,void(*)(AVCodecParameters*)> combined(avcodec_parameters_alloc(),[](AVCodecParameters*p){avcodec_parameters_free(&p);});
  struct Join {AVCodecParameters*p;bool Configure(AVCodecParameters*,AVCodecParameters*,AVRational,AVRational,bool){return true;}AVCodecParameters*BaseParameters(){return p;}}instance{bl->codecpar},*join=&instance;
  auto report=[](const char*){};
