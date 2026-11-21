@@ -320,11 +320,21 @@ int main(int argc,char** argv){assert(argc==2);using namespace DVBRIDGE;std::str
                         ran=subprocess.run([str(binary),scenario],capture_output=True,text=True)
                         self.assertEqual(ran.returncode,0,ran.stdout+ran.stderr)
 
-    def test_native_prepare_is_the_only_selector_capture_boundary(self):
+    def test_native_selector_capture_is_limited_to_file_startup(self):
         video=(TREE/'xbmc/cores/VideoPlayer/VideoPlayer.cpp').read_text()
+        capture = body(video, 'static void SelectDVStartupOutput(')
+        self.assertIn('DVBRIDGE::SelectOutputSettings(', capture)
+        self.assertIn('caps.hdr10 && !caps.HDR10DepthLimited()', capture)
+
         prepare = body(video, 'void CVideoPlayer::Prepare()')
-        self.assertLess(prepare.index('DVBRIDGE::SelectOutputSettings('), prepare.index('OpenInputStream()'))
-        self.assertIn('caps.hdr10 && !caps.HDR10DepthLimited()', prepare)
+        self.assertLess(prepare.index('SelectDVStartupOutput('), prepare.index('OpenInputStream()'))
+
+        opening = body(video, 'bool CVideoPlayer::OpenVideoStream(')
+        capture_at_open = opening.index('SelectDVStartupOutput(window)')
+        self.assertLess(opening.index('window->PendingDVStartupEdid()'), capture_at_open)
+        self.assertLess(capture_at_open, opening.index('ChoosePlaybackResolution('))
+        self.assertLess(capture_at_open, opening.index('player->OpenStream(hint)'))
+        self.assertEqual(video.count('SelectDVStartupOutput('), 3)
         hits=[]
         for source in (TREE/'xbmc').rglob('*.cpp'):
             if 'SelectOutputSettings(' in source.read_text(errors='replace'): hits.append(source.relative_to(TREE).as_posix())

@@ -350,7 +350,7 @@
     "tests/cb1/test_gui_coverage_alpha.py": "54960062fc34c8220a558ac9df73c5ec801ff08c5f9476bd595148e8ad321d72",
     "tests/cb1/test_master_fallback.py": "b491d2ca9a92fbf9e4f5afe454b0f674d0741dc503574021956e7f67bc9b407e",
     "tests/cb1/test_master_reference.py": "faee4d550cf30521222e1a568fc697bfc36345c465f0f225feaec70c4c67092f",
-    "tests/cb1/test_playback_defaults.py": "968cce47cd8e10d2477f157be1d6b71766e8c9229fe6e154dc0035b2f0f42687",
+    "tests/cb1/test_playback_defaults.py": "b9ccaa5882d11f722e1382d5c9a51b945ccff2c01a7820107d54ff268aa7a3cb",
     "tests/cb1/test_playback_layout_ownership.py": "9698464123bf11208b12d0fca93c51ed2b2725481f346efd91ecb4614e8bd54c",
     "tests/cb1/test_strict_playback_admission.py": "48f286fd2f87747f86cc90704015592c37c9c839a6f04676a2c7c0f4866a1858",
     "tests/cb1/test_cb1_presentation_sync.py": "dc6b814a12a90bf276f55e5bdbe8f55c88d7991756a60480c9c1bba49d0e554e",
