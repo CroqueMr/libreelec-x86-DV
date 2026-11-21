@@ -170,7 +170,7 @@ struct Window {
  } caps;
  Caps GetDVOutputCapabilities(const void*, bool) const {return caps;}
  RESOLUTION ChooseHDR10FallbackResolution(RESOLUTION chosen) const;
- std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference) const;
+ std::optional<RESOLUTION> PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference, bool sourceRateTooHigh=false) const;
  int PlayerLedResolutionReason(RESOLUTION, int) const {return 41212;}
  std::optional<RESOLUTION> PlayerLedResolution(double, bool) const {return {};}
 };
@@ -203,7 +203,7 @@ double DVOutputTimingRate(const drmModeModeInfo* mode) TIMING_CODE
 std::vector<Window::DVOutputTiming> Window::GetDVOutputTimings() const SNAPSHOT_CODE
 bool Window::SupportsDVOutputTiming(const RESOLUTION_INFO& mode) const SUPPORT_CODE
 RESOLUTION Window::ChooseHDR10FallbackResolution(RESOLUTION chosen) const SELECT_FALLBACK_CODE
-std::optional<RESOLUTION> Window::PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference) const FALLBACK_CODE
+std::optional<RESOLUTION> Window::PlayerLedStartupHDR10Resolution(RESOLUTION resolution, int preference, bool sourceRateTooHigh) const FALLBACK_CODE
 enum class StreamHdrType {HDR_TYPE_NONE, HDR_TYPE_DOLBYVISION, HDR_TYPE_HDR10};
 struct VideoPicture {
  int iWidth=3840,iHeight=2160;

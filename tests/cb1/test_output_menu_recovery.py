@@ -24,6 +24,14 @@ class OutputMenuRecoveryTests(unittest.TestCase):
 #include <memory>
 #include <mutex>
 #include <vector>
+#ifdef TEST_LLDV_RATE_FALLBACK
+#include "utils/DVBridgeLldv.h"
+struct StringUtils {
+ static std::string Format(const std::string& label,const std::string& rate) {
+   return label+" "+rate;
+ }
+};
+#endif
 using dvbridge_mode=int;
 constexpr int DVBRIDGE_MODE_DISABLED=0, DVBRIDGE_MODE_STANDARD=1, DVBRIDGE_MODE_MASTER_REFERENCE=5, DVBRIDGE_MODE_SDR=7, DVBRIDGE_MODE_PLAYER_LED=8;
 enum class StreamHdrType {HDR_TYPE_NONE,HDR_TYPE_HDR10,HDR_TYPE_DOLBYVISION,HDR_TYPE_HLG,HDR_TYPE_HDR10PLUS};
@@ -61,7 +69,7 @@ KODI::WINDOWING::GBM::CWinSystemGbmGLESContext window;
 struct Localizer {std::string Get(int id) const {return std::to_string(id);}};
 struct Resources { Localizer localizer; const Localizer& GetLocalizeStrings() {return localizer;} };
 struct CServiceBroker {static Window* GetWinSystem() {return &window;}
- struct Cache {double GetVideoFps() const {return 24.0;}};
+ struct Cache {static inline double fps=24.0; double GetVideoFps() const {return fps;}};
  static Cache GetDataCacheCore() {return {};}
  static Resources& GetResourcesComponent() {static Resources value;return value;} };
 struct CSetting {std::string id="dvbridge.outputmode"; const std::string& GetId() const {return id;}};
@@ -93,6 +101,22 @@ int main() {
  window.available.lldvUnavailableLabel=LLDV_CHOOSE_FORMAT_LABEL;
  assert(!disabled(8,quickSwitch) && modeProperty(8,quickSwitch,"cb1ChooseLldv"));
  window.current=window.available;
+#ifdef TEST_LLDV_RATE_FALLBACK
+ for(const double fps : {60000.0/1001,60.0}) {
+   CServiceBroker::Cache::fps=fps;
+   std::vector<IntegerSettingOption> list(1);list[0].value=8;
+   auto setting=std::make_shared<CSetting>();setting->id=quickSwitch;
+   CSettingConditions::DVOutputOptions(setting,list,true);
+   assert(list[0].label2=="41504 "+LldvFrameRateLabel(fps));
+   assert(modeProperty(8,quickSwitch,"disabled",true));
+   assert(!modeProperty(8,"dvbridge.playback","disabled"));
+ }
+ assert(!LldvFrameRateTooHigh(30));
+ assert(!LldvFrameRateTooHigh(30000.0/1001));
+ assert(LldvFrameRateLabel(60000.0/1001)=="59.94");
+ assert(LldvFrameRateLabel(60)=="60");
+ CServiceBroker::Cache::fps=24.0;
+#endif
  window.lldvPlaybackRateAllowed=false;
  assert(modeProperty(8,quickSwitch,"disabled",true));
  assert(!modeProperty(8,quickSwitch,"cb1ChooseLldv",true));
@@ -272,7 +296,7 @@ int main() {
             (root / 'test.cpp').write_text(program)
             for flags in ([], ['-DCB1_HAS_HDR10_AI']):
                 with self.subTest(flags=flags):
-                    built = subprocess.run(['c++', '-std=c++20', *flags, '-I' + str(tree / 'xbmc'),
+                    built = subprocess.run(['c++', '-std=c++20',*(['-DTEST_LLDV_RATE_FALLBACK'] if 'LldvFrameRateTooHigh' in source else []), *flags, '-I' + str(tree / 'xbmc'),
                                         str(root / 'test.cpp'), '-o', str(root / 'test')],
                                        capture_output=True, text=True)
                     self.assertEqual(built.returncode, 0, built.stderr)
